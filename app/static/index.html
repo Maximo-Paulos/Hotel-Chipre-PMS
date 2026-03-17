@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hotel PMS — Sistema de Gestión Hotelera</title>
+  <meta name="description" content="Sistema de gestión de propiedades hoteleras con asignación inteligente, pagos multi-pasarela e integración OTA.">
+  <link rel="stylesheet" href="/static/css/styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏨</text></svg>">
+</head>
+<body>
+  <div class="app-layout">
+
+    <!-- ═══ SIDEBAR ═══ -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-icon">🏨</div>
+        <div>
+          <div class="brand-text" id="hotelNameSidebar">Hotel PMS</div>
+          <div class="brand-sub">Management System</div>
+        </div>
+      </div>
+      <nav class="sidebar-nav">
+        <div class="nav-section-label">Principal</div>
+        <div class="nav-item active" data-section="dashboard" onclick="navigate('dashboard')">
+          <span class="nav-icon">📊</span> Dashboard
+        </div>
+        <div class="nav-item" data-section="calendar" onclick="navigate('calendar')">
+          <span class="nav-icon">🗓️</span> Calendario
+        </div>
+
+        <div class="nav-section-label">Operaciones</div>
+        <div class="nav-item" data-section="reservations" onclick="navigate('reservations')">
+          <span class="nav-icon">📋</span> Reservas
+          <span class="nav-badge" id="pendingBadge" style="display:none">0</span>
+        </div>
+        <div class="nav-item" data-section="guests" onclick="navigate('guests')">
+          <span class="nav-icon">👤</span> Huéspedes
+        </div>
+        <div class="nav-item" data-section="checkin" onclick="navigate('checkin')">
+          <span class="nav-icon">🛎️</span> Check-in / Out
+        </div>
+
+        <div class="nav-section-label">Finanzas</div>
+        <div class="nav-item" data-section="payments" onclick="navigate('payments')">
+          <span class="nav-icon">💰</span> Pagos
+        </div>
+
+        <div class="nav-section-label">Gestión</div>
+        <div class="nav-item" data-section="housekeeping" onclick="navigate('housekeeping')">
+          <span class="nav-icon">🧹</span> Housekeeping
+        </div>
+        <div class="nav-item" data-section="rooms" onclick="navigate('rooms')">
+          <span class="nav-icon">🚪</span> Habitaciones
+        </div>
+        <div class="nav-item" data-section="reports" onclick="navigate('reports')">
+          <span class="nav-icon">📈</span> Reportes
+        </div>
+
+        <div class="nav-section-label">Sistema</div>
+        <div class="nav-item" data-section="config" onclick="navigate('config')">
+          <span class="nav-icon">⚙️</span> Configuración
+        </div>
+      </nav>
+    </aside>
+
+    <!-- ═══ MAIN ═══ -->
+    <main class="main-content">
+
+      <!-- ═══ DASHBOARD ═══ -->
+      <div class="section active" id="sec-dashboard">
+        <div class="page-header">
+          <div><h1>Dashboard</h1><div class="header-subtitle" id="dashDateLabel"></div></div>
+          <div class="page-header-actions">
+            <button class="btn btn-primary" onclick="openNewReservationModal()">➕ Nueva Reserva</button>
+          </div>
+        </div>
+        <div class="page-body">
+          <div class="stats-grid" id="dashStats"></div>
+          <div class="quick-actions">
+            <div class="quick-action-btn" onclick="navigate('reservations'); setTimeout(openNewReservationModal,300);">
+              <span class="qa-icon">📝</span><span class="qa-label">Nueva Reserva</span>
+            </div>
+            <div class="quick-action-btn" onclick="navigate('checkin')">
+              <span class="qa-icon">🛎️</span><span class="qa-label">Check-in Rápido</span>
+            </div>
+            <div class="quick-action-btn" onclick="navigate('guests'); setTimeout(openNewGuestModal,300);">
+              <span class="qa-icon">👤</span><span class="qa-label">Nuevo Huésped</span>
+            </div>
+            <div class="quick-action-btn" onclick="navigate('calendar')">
+              <span class="qa-icon">🗓️</span><span class="qa-label">Ver Calendario</span>
+            </div>
+            <div class="quick-action-btn" onclick="navigate('reports')">
+              <span class="qa-icon">📈</span><span class="qa-label">Auditoría Diaria</span>
+            </div>
+            <div class="quick-action-btn" onclick="navigate('housekeeping')">
+              <span class="qa-icon">🧹</span><span class="qa-label">Housekeeping</span>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+            <div class="card"><div class="card-header"><h3>🛬 Llegadas de Hoy</h3></div><div class="card-body" id="dashArrivals"><div class="empty-state"><p>Cargando...</p></div></div></div>
+            <div class="card"><div class="card-header"><h3>🛫 Salidas de Hoy</h3></div><div class="card-body" id="dashDepartures"><div class="empty-state"><p>Cargando...</p></div></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ CALENDAR ═══ -->
+      <div class="section" id="sec-calendar">
+        <div class="page-header">
+          <div><h1>Calendario de Ocupación</h1><div class="header-subtitle">Vista de 14 días</div></div>
+          <div class="page-header-actions">
+            <button class="btn btn-outline btn-sm" onclick="calendarPrev()">◀ Anterior</button>
+            <button class="btn btn-outline btn-sm" onclick="calendarToday()">Hoy</button>
+            <button class="btn btn-outline btn-sm" onclick="calendarNext()">Siguiente ▶</button>
+          </div>
+        </div>
+        <div class="page-body"><div class="calendar-container"><div id="calendarGrid"></div></div></div>
+      </div>
+
+      <!-- ═══ RESERVATIONS ═══ -->
+      <div class="section" id="sec-reservations">
+        <div class="page-header">
+          <div><h1>Reservas</h1><div class="header-subtitle">Gestión completa de reservas</div></div>
+          <div class="page-header-actions"><button class="btn btn-primary" onclick="openNewReservationModal()">➕ Nueva Reserva</button></div>
+        </div>
+        <div class="page-body">
+          <div class="toolbar">
+            <div class="search-box"><input type="text" id="resSearch" placeholder="Buscar por código o huésped..." oninput="filterReservations()"></div>
+            <select class="filter-select" id="resStatusFilter" onchange="filterReservations()">
+              <option value="">Todos los estados</option>
+              <option value="pending">Pendiente</option><option value="deposit_paid">Seña pagada</option>
+              <option value="fully_paid">Pago total</option><option value="checked_in">Check-in</option>
+              <option value="checked_out">Check-out</option><option value="cancelled">Cancelada</option>
+            </select>
+          </div>
+          <div class="card"><div class="table-wrap"><table><thead><tr>
+            <th>Código</th><th>Huésped</th><th>Hab.</th><th>Check-in</th><th>Check-out</th><th>Total</th><th>Saldo</th><th>Estado</th><th>Acciones</th>
+          </tr></thead><tbody id="resTbody"></tbody></table></div></div>
+        </div>
+      </div>
+
+      <!-- ═══ GUESTS ═══ -->
+      <div class="section" id="sec-guests">
+        <div class="page-header">
+          <div><h1>Huéspedes</h1><div class="header-subtitle">Registro y gestión de clientes</div></div>
+          <div class="page-header-actions"><button class="btn btn-primary" onclick="openNewGuestModal()">➕ Nuevo Huésped</button></div>
+        </div>
+        <div class="page-body">
+          <div class="toolbar"><div class="search-box"><input type="text" id="guestSearch" placeholder="Buscar por nombre, documento o email..." oninput="loadGuests()"></div></div>
+          <div class="card"><div class="table-wrap"><table><thead><tr>
+            <th>Nombre</th><th>Documento</th><th>Nacionalidad</th><th>Email</th><th>Teléfono</th><th>Términos</th><th>Acciones</th>
+          </tr></thead><tbody id="guestsTbody"></tbody></table></div></div>
+        </div>
+      </div>
+
+      <!-- ═══ CHECK-IN ═══ -->
+      <div class="section" id="sec-checkin">
+        <div class="page-header"><div><h1>Check-in / Check-out</h1><div class="header-subtitle">Gestión de llegadas y salidas</div></div></div>
+        <div class="page-body">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+            <div class="card"><div class="card-header"><h3>🟢 Pendientes de Check-in</h3><span class="badge badge-fully_paid" id="ciCount">0</span></div><div class="card-body" id="checkinList"></div></div>
+            <div class="card"><div class="card-header"><h3>🔵 Actualmente Alojados</h3><span class="badge badge-checked_in" id="coCount">0</span></div><div class="card-body" id="checkoutList"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ PAYMENTS ═══ -->
+      <div class="section" id="sec-payments">
+        <div class="page-header"><div><h1>Pagos y Finanzas</h1><div class="header-subtitle">Cobros, señas y transacciones</div></div></div>
+        <div class="page-body">
+          <div class="toolbar">
+            <div class="search-box"><input type="text" id="paySearch" placeholder="Buscar reserva por código..." oninput="searchPayment()"></div>
+          </div>
+          <div id="paymentDetail"><div class="empty-state"><div class="empty-icon">🔍</div><h3>Buscar Reserva</h3><p>Ingrese un código de reserva para ver su detalle financiero</p></div></div>
+        </div>
+      </div>
+
+      <!-- ═══ HOUSEKEEPING ═══ -->
+      <div class="section" id="sec-housekeeping">
+        <div class="page-header"><div><h1>🧹 Housekeeping</h1><div class="header-subtitle">Estado de limpieza y mantenimiento</div></div></div>
+        <div class="page-body"><div id="housekeepingGrid"></div></div>
+      </div>
+
+      <!-- ═══ ROOMS ═══ -->
+      <div class="section" id="sec-rooms">
+        <div class="page-header"><div><h1>Habitaciones</h1><div class="header-subtitle">Inventario de 38 habitaciones</div></div></div>
+        <div class="page-body"><div id="roomsGrid"></div></div>
+      </div>
+
+      <!-- ═══ REPORTS ═══ -->
+      <div class="section" id="sec-reports">
+        <div class="page-header">
+          <div><h1>📈 Reportes y Auditoría</h1><div class="header-subtitle">Night Audit, ocupación e ingresos</div></div>
+          <div class="page-header-actions">
+            <input type="date" class="form-control" id="reportDate" style="width:auto" onchange="loadDailyReport()">
+            <button class="btn btn-outline btn-sm" onclick="printReport()">🖨️ Imprimir</button>
+          </div>
+        </div>
+        <div class="page-body" id="reportsContent"></div>
+      </div>
+
+      <!-- ═══ CONFIG ═══ -->
+      <div class="section" id="sec-config">
+        <div class="page-header"><div><h1>Configuración del Hotel</h1><div class="header-subtitle">Reglas de negocio y políticas</div></div></div>
+        <div class="page-body"><div id="configPanel"></div></div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- ═══ MODALS ═══ -->
+  <div class="modal-overlay" id="modalOverlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal" id="modalContent"></div>
+  </div>
+
+  <!-- ═══ CONFIRM DIALOG ═══ -->
+  <div class="modal-overlay" id="confirmOverlay" onclick="if(event.target===this)closeConfirm()">
+    <div class="modal" style="max-width:440px">
+      <div class="modal-header"><h2 id="confirmTitle">Confirmar</h2></div>
+      <div class="modal-body"><p id="confirmMessage"></p></div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" onclick="closeConfirm()">Cancelar</button>
+        <button class="btn" id="confirmBtn" onclick="executeConfirm()">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ TOAST CONTAINER ═══ -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="/static/js/core.js"></script>
+  <script src="/static/js/sections1.js"></script>
+  <script src="/static/js/sections2.js"></script>
+</body>
+</html>
