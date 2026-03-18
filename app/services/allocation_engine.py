@@ -39,6 +39,11 @@ class ReservationSlot:
     allowed_category_ids: list[int] = field(default_factory=list)
 
     @property
+    def effective_allowed_category_ids(self) -> list[int]:
+        """Return allowed categories, falling back to [category_id] if empty."""
+        return self.allowed_category_ids if self.allowed_category_ids else [self.category_id]
+
+    @property
     def nights(self) -> int:
         return (self.check_out - self.check_in).days
 
@@ -128,7 +133,7 @@ def run_allocation(
     # ── Hard Constraint 2: Category match (including upgrades with same bath type) ──
     for r_idx, res in enumerate(reservations):
         for h_idx, room in enumerate(rooms):
-            if room.category_id not in res.allowed_category_ids:
+            if room.category_id not in res.effective_allowed_category_ids:
                 model.Add(x[r_idx, h_idx] == 0)
 
     # ── Hard Constraint 3: No temporal overlap on the same room ──
@@ -277,7 +282,7 @@ def run_allocation(
                 unassigned.append(res.reservation_id)
 
         return AllocationResult(
-            success=True,
+            success=len(unassigned) == 0,
             assignments=assignments,
             unassigned_reservations=unassigned,
             moved_reservations=moved,
@@ -325,7 +330,7 @@ def _run_allocation_greedy(
 
         # Find available rooms from all allowed categories
         candidate_rooms = []
-        for cat_id in res.allowed_category_ids:
+        for cat_id in res.effective_allowed_category_ids:
             candidate_rooms.extend(rooms_by_category.get(cat_id, []))
 
         # Prefer current room for stability, then exact category match, then rooms partially occupied
@@ -361,10 +366,11 @@ def _run_allocation_greedy(
                 assigned = True
                 break
 
+    unassigned = list(set(r.reservation_id for r in reservations) - set(assignments.keys()))
     return AllocationResult(
-        success=True,
+        success=len(unassigned) == 0,
         assignments=assignments,
-        unassigned_reservations=list(set(r.reservation_id for r in reservations) - set(assignments.keys())),
+        unassigned_reservations=unassigned,
         moved_reservations=moved,
     )
 
@@ -377,8 +383,8 @@ def apply_allocation_result(
     Apply the solver's assignments to the database.
     Updates room_id on each reservation.
     """
-    if not result.success:
-        raise AllocationError(result.error or "Allocation failed")
+    if result.error:
+        raise AllocationError(result.error)
 
     updated = []
     for reservation_id, room_id in result.assignments.items():

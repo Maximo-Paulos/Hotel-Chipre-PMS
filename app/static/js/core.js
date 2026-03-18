@@ -1,5 +1,5 @@
 /* ═══ CORE: API, Navigation, Modals, Toast, Confirm ═══ */
-const API = 'http://localhost:8000/api';
+const API = '/api';
 let _confirmCb = null;
 let _allReservations = [];
 let _allGuests = [];
@@ -75,7 +75,7 @@ function fmtStatus(s) {
   return `<span class="badge badge-${s}">${m[s] || s}</span>`;
 }
 function fmtRoomStatus(s) {
-  const m = { available: 'Disponible', occupied: 'Ocupada', maintenance: 'Mantenimiento', blocked: 'Bloqueada' };
+  const m = { available: 'Disponible', occupied: 'Ocupada', cleaning: 'Limpieza', maintenance: 'Mantenimiento', blocked: 'Bloqueada' };
   return m[s] || s;
 }
 function todayStr() { return new Date().toISOString().split('T')[0]; }

@@ -54,10 +54,17 @@ async function loadCalendar() {
     html += `<div class="calendar-header-cell${isToday?' today':''}">${d.toLocaleDateString('es-AR',{weekday:'short'})}<br>${d.getDate()}/${d.getMonth()+1}</div>`;
   });
   const catColors = ['#6366f1','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899'];
-  const catMap = {}; _categories.forEach((c,i)=>catMap[c.id]=catColors[i%catColors.length]);
-  rooms.forEach(room => {
+  const catMap = {}; 
+  let legendHtml = '<div style="display:flex;gap:15px;margin-bottom:15px;flex-wrap:wrap;padding:10px;background:var(--bg-body);border-radius:var(--radius-md);border:1px solid var(--border-light)">';
+  _categories.forEach((c,i) => {
+    catMap[c.id]=catColors[i%catColors.length];
+    legendHtml += `<div style="display:flex;align-items:center;font-size:0.85rem;"><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${catColors[i%catColors.length]};margin-right:6px;"></span><strong>${c.code}</strong> <span style="color:var(--text-muted);margin-left:4px">- ${c.name}</span></div>`;
+  });
+  legendHtml += '</div>';
+
+  rooms.sort((a,b) => parseInt(a.room_number) - parseInt(b.room_number)).forEach(room => {
     const cat = _categories.find(c=>c.id===room.category_id);
-    html += `<div class="calendar-room-label"><span class="room-cat-dot" style="background:${catMap[room.category_id]||'#999'}"></span>${room.room_number}</div>`;
+    html += `<div class="calendar-room-label"><span class="room-cat-dot" style="background:${catMap[room.category_id]||'#999'}"></span><strong style="font-size:1.1em">${room.room_number}</strong> <span style="font-size:0.75rem;color:var(--text-secondary);font-weight:normal;margin-left:6px">(${cat ? cat.code : ''})</span></div>`;
     dates.forEach(d => {
       const ds = d.toISOString().split('T')[0];
       const res = reservations.find(r => r.room_id===room.id && r.check_in_date<=ds && r.check_out_date>ds && r.status!=='cancelled' && r.status!=='checked_out');
@@ -69,7 +76,7 @@ async function loadCalendar() {
     });
   });
   html += '</div>';
-  document.getElementById('calendarGrid').innerHTML = html;
+  document.getElementById('calendarGrid').innerHTML = legendHtml + html;
 }
 
 // ══════════════ RESERVATIONS ══════════════

@@ -83,13 +83,13 @@ async function loadHousekeeping() {
       <button class="btn btn-primary" onclick="triggerReallocation()">🔄 Reasignar Habitaciones (Motor IA)</button>
     </div>
     <div class="hk-grid">`;
-    data.rooms.forEach(r => {
+    data.rooms.sort((a,b) => parseInt(a.room_number) - parseInt(b.room_number)).forEach(r => {
       let cls = 's-' + r.status;
       let extraStyle = '';
       if (r.status === 'cleaning') {
         extraStyle = 'background:#fff3cd;border-color:#ffc107;';
       }
-      html += `<div class="hk-room ${cls}" style="${extraStyle}" onclick="cycleRoomStatus(${r.id},'${r.status}')">
+      html += `<div class="hk-room ${cls}" style="${extraStyle}" onclick="openRoomStatusModal(${r.id}, '${r.status}', '${r.room_number}')">
         ${r.has_guest ? '<div class="hk-guest-dot" title="Huésped alojado"></div>' : ''}
         <div class="hk-number">${r.room_number}</div>
         <div class="hk-label">${fmtRoomStatus(r.status)}</div>
@@ -101,23 +101,44 @@ async function loadHousekeeping() {
   } catch (e) { toast(e.message, 'error'); }
 }
 
-async function cycleRoomStatus(roomId, current) {
-  const cycle = { available: 'cleaning', cleaning: 'maintenance', maintenance: 'blocked', blocked: 'available', occupied: 'available' };
-  const next = cycle[current] || 'available';
-  showConfirm('Cambiar Estado', `¿Cambiar habitación a "${fmtRoomStatus(next)}"?`, '✅ Confirmar', 'btn-primary', async () => {
-    try {
-      const resp = await PATCH(`/rooms/${roomId}/status`, { status: next });
-      let msg = `Estado cambiado a ${fmtRoomStatus(next)}`;
-      if (resp.reallocation && resp.reallocation.moved > 0) {
-        msg += ` · ${resp.reallocation.moved} reserva(s) reubicadas`;
-      }
-      if (resp.reallocation && resp.reallocation.unassigned > 0) {
-        msg += ` · ⚠️ ${resp.reallocation.unassigned} sin asignar`;
-      }
-      toast(msg);
-      loadHousekeeping();
-    } catch (e) { toast(e.message, 'error'); }
-  });
+function openRoomStatusModal(roomId, currentStatus, roomNum) {
+  const statuses = [
+    {val: 'available', label: '🟢 Disponible'},
+    {val: 'occupied', label: '🔵 Ocupada'},
+    {val: 'cleaning', label: '🧹 Limpieza'},
+    {val: 'maintenance', label: '🔴 Mantenimiento'},
+    {val: 'blocked', label: '⚫ Bloqueada'}
+  ];
+  const opts = statuses.map(s => `<option value="${s.val}" ${s.val === currentStatus ? 'selected' : ''}>${s.label}</option>`).join('');
+  
+  openModal(`<div class="modal-header"><h2>Estado - Habitación ${roomNum}</h2><button class="modal-close" onclick="closeModal()">✕</button></div>
+  <div class="modal-body">
+    <div class="form-group">
+      <label>Nuevo Estado</label>
+      <select class="form-control" id="editRoomStatus">${opts}</select>
+    </div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-outline" onclick="closeModal()">Cancelar</button>
+    <button class="btn btn-primary" onclick="submitRoomStatus(${roomId})">Guardar Cambios</button>
+  </div>`);
+}
+
+async function submitRoomStatus(roomId) {
+  const next = document.getElementById('editRoomStatus').value;
+  try {
+    const resp = await PATCH(`/rooms/${roomId}/status`, { status: next });
+    let msg = `Estado cambiado a ${fmtRoomStatus(next)}`;
+    if (resp.reallocation && resp.reallocation.moved > 0) {
+      msg += ` · ${resp.reallocation.moved} reserva(s) reubicadas`;
+    }
+    if (resp.reallocation && resp.reallocation.unassigned > 0) {
+      msg += ` · ⚠️ ${resp.reallocation.unassigned} sin asignar`;
+    }
+    toast(msg);
+    closeModal();
+    loadHousekeeping();
+  } catch (e) { toast(e.message, 'error'); }
 }
 
 async function triggerReallocation() {
@@ -139,8 +160,13 @@ async function loadRooms() {
   const reservations = await GET('/reservations/');
   const catColors = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
   let html = '';
-  cats.forEach((cat, i) => {
-    const catRooms = rooms.filter(r => r.category_id === cat.id);
+  const order = ['DBC', 'DBP', 'TBC', 'TBP', 'CBC', 'CBP'];
+  cats.sort((a, b) => {
+    let ia = order.indexOf(a.code); let ib = order.indexOf(b.code);
+    if(ia === -1) ia = 99; if(ib === -1) ib = 99;
+    return ia - ib;
+  }).forEach((cat, i) => {
+    const catRooms = rooms.filter(r => r.category_id === cat.id).sort((a,b) => parseInt(a.room_number) - parseInt(b.room_number));
     html += `<div class="card" style="margin-bottom:24px"><div class="card-header"><h3><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${catColors[i % catColors.length]}"></span> ${cat.name} <span style="font-weight:400;color:var(--text-muted)">(${cat.code})</span></h3><span style="color:var(--text-secondary);font-size:0.85rem">${fmtMoney(cat.base_price_per_night)}/noche · Máx ${cat.max_occupancy} personas · ${catRooms.length} hab.</span></div><div class="card-body"><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px">`;
     catRooms.forEach(room => {
       const isOcc = reservations.some(r => r.room_id === room.id && r.status === 'checked_in');
