@@ -25,6 +25,10 @@ def _to_read(r: Reservation) -> ReservationRead:
     result = ReservationRead.model_validate(r)
     result.balance_due = r.balance_due
     result.nights = r.nights
+    result.additional_guests = [
+        {"id": g.id, "first_name": g.first_name, "last_name": g.last_name, "document_type": g.document_type, "document_number": g.document_number}
+        for g in r.additional_guests
+    ]
     return result
 
 
@@ -59,6 +63,40 @@ def list_reservations(
 
 @router.get("/{reservation_id}", response_model=ReservationRead)
 def get_reservation(reservation_id: int, db: Session = Depends(get_db)):
+    reservation = db.query(Reservation).filter(Reservation.id == reservation_id).first()
+    if not reservation:
+        raise HTTPException(status_code=404, detail="Reservation not found")
+    return _to_read(reservation)
+
+
+from app.schemas.guest import GuestCreate
+from app.models.guest import Guest
+
+@router.post("/{reservation_id}/guests", response_model=ReservationRead)
+def add_reservation_guests(reservation_id: int, guests: list[GuestCreate], db: Session = Depends(get_db)):
+    reservation = db.query(Reservation).filter(Reservation.id == reservation_id).first()
+    if not reservation:
+        raise HTTPException(status_code=404, detail="Reservation not found")
+        
+    for guest_data in guests:
+        # Check if guest already exists by DocNum
+        guest = None
+        if guest_data.document_number:
+            guest = db.query(Guest).filter(Guest.document_number == guest_data.document_number).first()
+        
+        if not guest:
+            guest = Guest(**guest_data.model_dump(exclude={"companions"}))
+            db.add(guest)
+            db.flush()
+        
+        # Link if not linked
+        if guest not in reservation.additional_guests:
+            reservation.additional_guests.append(guest)
+            
+    db.commit()
+    db.refresh(reservation)
+    return _to_read(reservation)
+def get_reservation(reservation_id: int, db: Session = Depends(get_db)):
     r = db.query(Reservation).filter(Reservation.id == reservation_id).first()
     if not r:
         raise HTTPException(status_code=404, detail="Reservation not found")
@@ -66,16 +104,25 @@ def get_reservation(reservation_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/{reservation_id}/cancel", response_model=ReservationRead)
-def cancel_reservation(reservation_id: int, db: Session = Depends(get_db)):
-    """Cancel a reservation. Only allowed for pre-check-in states."""
+def cancel_reservation(reservation_id: int, manager_pin: str = None, db: Session = Depends(get_db)):
+    """Cancel a reservation. Requires PIN for checked-in or checked-out states."""
+    from app.config import get_settings
+    settings = get_settings()
+    
     r = db.query(Reservation).filter(Reservation.id == reservation_id).first()
     if not r:
         raise HTTPException(status_code=404, detail="Reservation not found")
+        
     if r.status in (ReservationStatusEnum.CHECKED_IN, ReservationStatusEnum.CHECKED_OUT):
-        raise HTTPException(
-            status_code=400,
-            detail=f"Cannot cancel: reservation is '{r.status.value}'. Only pre-check-in reservations can be cancelled."
-        )
+        if manager_pin != settings.MANAGER_PIN:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Se requiere el Código de Dueño (PIN) para cancelar/reembolsar reservas que ya ingresaron o salieron."
+            )
+        # Clear the room association to release the room completely
+        if r.room_id is not None:
+            r.room_id = None
+            
     if r.status == ReservationStatusEnum.CANCELLED:
         raise HTTPException(status_code=400, detail="Reservation is already cancelled")
     try:

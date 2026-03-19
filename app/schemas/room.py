@@ -45,3 +45,23 @@ class RoomRead(RoomBase):
     id: int
     category: Optional[RoomCategoryRead] = None
     model_config = {"from_attributes": True}
+
+
+# ── Category Pricing ──
+
+class CategoryPricingSchema(BaseModel):
+    price_cash: Optional[float] = None
+    price_transfer: Optional[float] = None
+    price_mercadopago: Optional[float] = None
+    price_paypal: Optional[float] = None
+    price_credit_card: Optional[float] = None
+    price_debit_card: Optional[float] = None
+    price_booking: Optional[float] = None
+    price_expedia: Optional[float] = None
+
+
+class CategoryPricingRead(CategoryPricingSchema):
+    category_id: int
+    model_config = {"from_attributes": True}
+
+    model_config = {"from_attributes": True}

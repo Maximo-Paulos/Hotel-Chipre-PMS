@@ -82,6 +82,22 @@ def process_payment(
     # 2. Validate payment method
     validate_payment_method_enabled(db, request.payment_method)
 
+    # 2.5 Dynamic Pricing Override
+    from app.models.pricing import CategoryPricing
+    pricing = db.query(CategoryPricing).filter(CategoryPricing.category_id == reservation.category_id).first()
+    if pricing and request.transaction_type != TransactionTypeEnum.REFUND:
+        method_key = request.payment_method.value
+        if method_key == "bank_transfer": method_key = "transfer"
+        elif method_key == "mercado_pago": method_key = "mercadopago"
+        
+        method_price = getattr(pricing, f"price_{method_key}", None)
+        if method_price is not None and method_price > 0:
+            reservation.total_amount = round(method_price * reservation.nights, 2)
+            config = get_hotel_config(db)
+            dep_pct = config.deposit_percentage if config else 30.0
+            reservation.deposit_amount = round(reservation.total_amount * (dep_pct / 100.0), 2)
+            db.flush()
+
     # 3. Validate amount
     balance = reservation.balance_due
     if request.amount > balance + 0.01:  # Small tolerance for float arithmetic

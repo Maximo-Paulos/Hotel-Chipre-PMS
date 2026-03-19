@@ -7,7 +7,7 @@ Also supports: cancelled (from any pre-checkin state)
 import enum
 from sqlalchemy import (
     Column, Integer, Float, String, ForeignKey, Enum, Text, DateTime, Date,
-    CheckConstraint, UniqueConstraint, Index
+    CheckConstraint, UniqueConstraint, Index, Table
 )
 from sqlalchemy.orm import relationship, validates
 from datetime import datetime, timezone
@@ -48,10 +48,21 @@ VALID_TRANSITIONS: dict[ReservationStatusEnum, set[ReservationStatusEnum]] = {
     },
     ReservationStatusEnum.CHECKED_IN: {
         ReservationStatusEnum.CHECKED_OUT,
+        ReservationStatusEnum.CANCELLED,
     },
-    ReservationStatusEnum.CHECKED_OUT: set(),   # Terminal state
+    ReservationStatusEnum.CHECKED_OUT: {
+        ReservationStatusEnum.CANCELLED,
+    },
     ReservationStatusEnum.CANCELLED: set(),     # Terminal state
 }
+
+
+reservation_additional_guests = Table(
+    "reservation_additional_guests",
+    Base.metadata,
+    Column("reservation_id", Integer, ForeignKey("reservations.id", ondelete="CASCADE"), primary_key=True),
+    Column("guest_id", Integer, ForeignKey("guests.id", ondelete="CASCADE"), primary_key=True)
+)
 
 
 class Reservation(Base):
@@ -111,6 +122,7 @@ class Reservation(Base):
 
     # Relationships
     guest = relationship("Guest", back_populates="reservations", lazy="joined")
+    additional_guests = relationship("Guest", secondary=reservation_additional_guests, lazy="selectin")
     room = relationship("Room", back_populates="reservations", lazy="joined")
     category = relationship("RoomCategory", lazy="joined")
     transactions = relationship("Transaction", back_populates="reservation", lazy="selectin", cascade="all, delete-orphan")

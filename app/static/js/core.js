@@ -6,6 +6,7 @@ let _allGuests = [];
 let _categories = [];
 let _rooms = [];
 let _config = {};
+let _pricings = [];
 
 // ── API helpers ──
 async function api(path, opts = {}) {
@@ -87,7 +88,7 @@ function printReport() { window.print(); }
 // ── Boot ──
 document.addEventListener('DOMContentLoaded', async () => {
   try {
-    [_categories, _rooms, _config] = await Promise.all([GET('/rooms/categories'), GET('/rooms'), GET('/config/')]);
+    [_categories, _rooms, _config, _pricings] = await Promise.all([GET('/rooms/categories'), GET('/rooms'), GET('/config/'), GET('/rooms/categories/pricing/all').catch(()=>[])]);
     document.getElementById('hotelNameSidebar').textContent = _config.hotel_name || 'Hotel PMS';
   } catch(e) { console.warn('Boot fetch error', e); }
   navigate('dashboard');

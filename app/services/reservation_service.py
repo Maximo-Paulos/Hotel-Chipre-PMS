@@ -70,7 +70,7 @@ def find_available_rooms(
     candidate_rooms = db.query(Room).filter(
         Room.category_id == category_id,
         Room.is_active == True,
-        Room.status.in_([RoomStatusEnum.AVAILABLE, RoomStatusEnum.OCCUPIED]),
+        Room.status.in_([RoomStatusEnum.AVAILABLE, RoomStatusEnum.OCCUPIED, RoomStatusEnum.CLEANING]),
     ).all()
 
     available = []
@@ -108,7 +108,10 @@ def create_reservation(db: Session, data: ReservationCreate) -> Reservation:
     if nights <= 0:
         raise ReservationError("Check-out date must be after check-in date")
 
-    total_amount = category.base_price_per_night * nights
+    from app.models.pricing import CategoryPricing
+    pricing = db.query(CategoryPricing).filter(CategoryPricing.category_id == data.category_id).first()
+    price_night = pricing.price_cash if pricing and pricing.price_cash is not None else category.base_price_per_night
+    total_amount = price_night * nights
 
     # 3/4. Room assignment with locking
     room_id = data.room_id

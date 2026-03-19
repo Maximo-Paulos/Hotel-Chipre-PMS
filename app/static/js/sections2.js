@@ -14,7 +14,7 @@ async function loadCheckin() {
     const g = guests.find(x => x.id === r.guest_id);
     const gn = g ? g.first_name + ' ' + g.last_name : '--';
     const room = _rooms.find(rm => rm.id === r.room_id);
-    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--border-light)"><div><strong>${gn}</strong><br><small>${r.confirmation_code} · Hab. ${room ? room.room_number : '--'} · ${fmtDate(r.check_in_date)}</small></div><button class="btn btn-sm btn-success" onclick="doCheckin(${r.id})">🛎️ Check-in</button></div>`;
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--border-light)"><div><strong>${gn}</strong><br><small>${r.confirmation_code} · Hab. ${room ? room.room_number : '--'} · ${fmtDate(r.check_in_date)}</small></div><button class="btn btn-sm btn-success" onclick="openCheckinModal(${r.id}, ${r.guest_id}, '${r.confirmation_code}')">🛎️ Iniciar Check-in</button></div>`;
   }).join('') : '<div class="empty-state"><p>No hay check-ins pendientes</p></div>';
 
   document.getElementById('checkoutList').innerHTML = checkedIn.length ? checkedIn.map(r => {
@@ -28,6 +28,79 @@ async function loadCheckin() {
 async function doCheckin(id) {
   try { await POST(`/checkin/${id}`); toast('Check-in realizado exitosamente'); loadCheckin(); } catch (e) { toast(e.message, 'error'); }
 }
+
+async function openCheckinModal(resId, guestId, code) {
+  const g = _allGuests.find(x => x.id === guestId);
+  const gn = g ? g.first_name + ' ' + g.last_name : 'Huésped Principal';
+  
+  openModal(`<div class="modal-header"><h2>Check-in: ${code}</h2><button class="modal-close" onclick="closeModal()">✕</button></div>
+  <div class="modal-body">
+    <div style="background:var(--bg-body);padding:15px;border-radius:var(--radius-md);margin-bottom:20px;border:1px solid var(--border-light)">
+        <h3 style="margin-bottom:10px;color:var(--accent);">Titular de la Reserva</h3>
+        <p><strong>Nombres:</strong> ${gn}</p>
+        <p><strong>Documento:</strong> ${g && g.document_number ? (g.document_type || 'DNI') + ' ' + g.document_number : 'No registrado'}</p>
+    </div>
+    
+    <div style="background:var(--bg-body);padding:15px;border-radius:var(--radius-md);border:1px solid var(--border-light)">
+        <h3 style="margin-bottom:10px;color:var(--info);">Acompañantes en la Habitación</h3>
+        <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:15px">¿Se aloja alguien más en la habitación junto al titular? Ingresa sus datos para el registro hotelero.</p>
+        
+        <div id="companionsList"></div>
+        <button class="btn btn-sm btn-outline" style="margin-top:10px;width:100%" onclick="addCompanionRow()">+ Añadir Acompañante a esta habitación</button>
+    </div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-outline" onclick="closeModal()">Cancelar</button>
+    <button class="btn btn-success" onclick="processCheckinFlow(${resId}, ${guestId})">🛎️ Confirmar Check-in</button>
+  </div>`);
+}
+
+function addCompanionRow() {
+    const div = document.createElement('div');
+    div.className = 'companion-row';
+    div.style = 'display:grid;grid-template-columns:1fr 1fr 100px 100px 40px;gap:10px;margin-bottom:10px;align-items:end;background:#f9fafb;padding:10px;border-radius:var(--radius-md);border:1px solid var(--border-light);';
+    div.innerHTML = `
+        <div class="form-group" style="margin:0"><label style="font-size:0.75rem">Nombres</label><input type="text" class="form-control comp-fn" placeholder="Juan"></div>
+        <div class="form-group" style="margin:0"><label style="font-size:0.75rem">Apellidos</label><input type="text" class="form-control comp-ln" placeholder="Pérez"></div>
+        <div class="form-group" style="margin:0"><label style="font-size:0.75rem">Documento</label><select class="form-control comp-dt"><option value="DNI">DNI</option><option value="PASSPORT">Pasaporte</option></select></div>
+        <div class="form-group" style="margin:0"><label style="font-size:0.75rem">Número</label><input type="text" class="form-control comp-dn"></div>
+        <button class="btn btn-sm btn-danger" style="margin:0;height:42px" onclick="this.parentElement.remove()" title="Quitar">✕</button>
+    `;
+    document.getElementById('companionsList').appendChild(div);
+}
+
+async function processCheckinFlow(resId, guestId) {
+    const rows = document.querySelectorAll('.companion-row');
+    const companions = [];
+    rows.forEach(r => {
+        const fn = r.querySelector('.comp-fn').value.trim();
+        const ln = r.querySelector('.comp-ln').value.trim();
+        const dt = r.querySelector('.comp-dt').value;
+        const dn = r.querySelector('.comp-dn').value.trim();
+        if(fn && ln) {
+            companions.push({
+                first_name: fn,
+                last_name: ln,
+                document_type: dt || "DNI",
+                document_number: dn || null
+            });
+        }
+    });
+    
+    try {
+        if(companions.length > 0) {
+            await POST(`/reservations/${resId}/guests`, companions);
+        }
+        await POST(`/checkin/${resId}`);
+        toast('Check-in completado exitosamente con acompañantes registrados');
+        closeModal();
+        loadCheckin();
+        if (typeof loadDashboard === 'function') loadDashboard();
+    } catch(e) {
+        toast(e.message, 'error');
+    }
+}
+
 function confirmCheckout(id, code) {
   showConfirm('Confirmar Check-out', `¿Realizar check-out de la reserva ${code}?`, '🛫 Check-out', 'btn-warning', async () => {
     try { await POST(`/checkin/checkout/${id}`); toast('Check-out realizado exitosamente'); loadCheckin(); } catch (e) { toast(e.message, 'error'); }
@@ -35,30 +108,88 @@ function confirmCheckout(id, code) {
 }
 
 // ══════════════ PAYMENTS ══════════════
+// Global temporary state to calculate pricing
+window.currentPaymentPricing = null;
+window.currentResData = null;
+window.currentSummary = null;
+
+window.updatePaymentFormPricing = function() {
+    if(!window.currentPaymentPricing || !window.currentSummary) return;
+    const method = document.getElementById('payMethod').value;
+    let key = method;
+    if(key === 'bank_transfer') key = 'transfer';
+    if(key === 'mercado_pago') key = 'mercadopago';
+    
+    const dynPrice = window.currentPaymentPricing['price_' + key];
+    let newTotal = window.currentSummary.total_amount;
+    let usedOverride = false;
+    
+    if(dynPrice && dynPrice > 0) {
+        newTotal = dynPrice * window.currentResData.nights;
+        usedOverride = true;
+    }
+    
+    const newBalance = Math.max(0, newTotal - window.currentSummary.amount_paid);
+    
+    // Update visual values safely if they exist
+    const elReq = document.getElementById('dynaRequired');
+    if(elReq) elReq.textContent = fmtMoney(newTotal);
+    const elBal = document.getElementById('dynaBalance');
+    if(elBal) elBal.textContent = fmtMoney(newBalance);
+    
+    const badge = document.getElementById('dynaTariffBadge');
+    if(badge) {
+        if(usedOverride) {
+            badge.innerHTML = `<span class="badge badge-info">💰 Tarifa ${method.toUpperCase()}: ${fmtMoney(dynPrice)}/noche</span>`;
+        } else {
+            badge.innerHTML = '';
+        }
+    }
+    
+    const payType = document.getElementById('payType').value;
+    const amountInput = document.getElementById('payAmount');
+    if(amountInput && (payType === 'full_payment' || payType === 'balance' || payType === 'deposit')) {
+        amountInput.value = newBalance;
+    }
+};
+
 async function searchPayment() {
   const q = document.getElementById('paySearch').value.trim();
   if (!q) return;
   const all = _allReservations.length ? _allReservations : await GET('/reservations/');
   const res = all.find(r => r.confirmation_code.toLowerCase().includes(q.toLowerCase()));
   if (!res) { document.getElementById('paymentDetail').innerHTML = '<div class="empty-state"><div class="empty-icon">🔍</div><h3>No encontrada</h3><p>No se encontró una reserva con ese código</p></div>'; return; }
+  
   try {
+    window.currentResData = res;
+    // Fetch pricing configs
+    try { window.currentPaymentPricing = await GET(`/rooms/categories/${res.category_id}/pricing`); } 
+    catch(e) { window.currentPaymentPricing = null; }
+    
     const summary = await GET(`/payments/summary/${res.id}`);
+    window.currentSummary = summary;
+    
     const g = _allGuests.find(x => x.id === res.guest_id);
     const gn = g ? g.first_name + ' ' + g.last_name : '--';
     let txHtml = summary.transactions.length ? '<table><thead><tr><th>Monto</th><th>Método</th><th>Tipo</th><th>Estado</th><th>Fecha</th></tr></thead><tbody>' +
       summary.transactions.map(t => `<tr><td>${fmtMoney(t.amount)}</td><td>${t.method}</td><td>${t.type}</td><td><span class="badge badge-${t.status === 'completed' ? 'checked_in' : 'pending'}">${t.status}</span></td><td>${t.created_at ? new Date(t.created_at).toLocaleString('es-AR') : '-'}</td></tr>`).join('') +
       '</tbody></table>' : '<p style="color:var(--text-muted)">Sin pagos registrados</p>';
+    
     let payForm = '';
     if (summary.balance_due > 0) {
-      payForm = `<div style="margin-top:20px;padding:20px;background:var(--bg-body);border-radius:var(--radius-md)"><h4 style="margin-bottom:12px">💳 Registrar Pago</h4>
-        <div class="form-row-3"><div class="form-group"><label>Monto</label><input type="number" class="form-control" id="payAmount" value="${summary.balance_due}" step="0.01" min="0.01" max="${summary.balance_due}"></div>
-        <div class="form-group"><label>Método</label><select class="form-control" id="payMethod"><option value="cash">Efectivo</option><option value="credit_card">Tarjeta Crédito</option><option value="debit_card">Tarjeta Débito</option><option value="mercado_pago">MercadoPago</option><option value="paypal">PayPal</option><option value="bank_transfer">Transferencia</option></select></div>
-        <div class="form-group"><label>Tipo</label><select class="form-control" id="payType"><option value="deposit">Seña</option><option value="balance">Saldo</option><option value="full_payment">Pago Total</option></select></div></div>
+      payForm = `<div style="margin-top:20px;padding:20px;background:var(--bg-body);border-radius:var(--radius-md)"><h4 style="margin-bottom:12px;display:flex;align-items:center;">💳 Registrar Pago <span id="dynaTariffBadge" style="margin-left:15px"></span></h4>
+        <div class="form-row-3"><div class="form-group"><label>Monto</label><input type="number" class="form-control" id="payAmount" value="${summary.balance_due}" step="0.01" min="0.01"></div>
+        <div class="form-group"><label>Método</label><select class="form-control" id="payMethod" onchange="window.updatePaymentFormPricing()"><option value="cash">Efectivo</option><option value="credit_card">Tarjeta Crédito</option><option value="debit_card">Tarjeta Débito</option><option value="mercado_pago">MercadoPago</option><option value="paypal">PayPal</option><option value="bank_transfer">Transferencia</option></select></div>
+        <div class="form-group"><label>Tipo</label><select class="form-control" id="payType" onchange="window.updatePaymentFormPricing()"><option value="deposit">Seña</option><option value="balance">Saldo</option><option value="full_payment">Pago Total</option></select></div></div>
         <button class="btn btn-success" onclick="submitPayment(${res.id})">💰 Registrar Pago</button></div>`;
     }
+    
     document.getElementById('paymentDetail').innerHTML = `<div class="card"><div class="card-header"><h3>Reserva ${summary.confirmation_code} · ${gn}</h3>${fmtStatus(summary.status)}</div><div class="card-body">
-      <div class="stats-grid" style="margin-bottom:20px"><div class="stat-card accent"><div class="stat-value">${fmtMoney(summary.total_amount)}</div><div class="stat-label">Total</div></div><div class="stat-card success"><div class="stat-value">${fmtMoney(summary.amount_paid)}</div><div class="stat-label">Pagado</div></div><div class="stat-card ${summary.balance_due > 0 ? 'warning' : 'teal'}"><div class="stat-value">${fmtMoney(summary.balance_due)}</div><div class="stat-label">Saldo</div></div><div class="stat-card info"><div class="stat-value">${fmtMoney(summary.deposit_required)}</div><div class="stat-label">Seña Requerida</div></div></div>
+      <div class="stats-grid" style="margin-bottom:20px"><div class="stat-card accent"><div class="stat-value" id="dynaRequired">${fmtMoney(summary.total_amount)}</div><div class="stat-label">Total</div></div><div class="stat-card success"><div class="stat-value">${fmtMoney(summary.amount_paid)}</div><div class="stat-label">Pagado</div></div><div class="stat-card ${summary.balance_due > 0 ? 'warning' : 'teal'}"><div class="stat-value" id="dynaBalance">${fmtMoney(summary.balance_due)}</div><div class="stat-label">Saldo</div></div><div class="stat-card info"><div class="stat-value">${fmtMoney(summary.deposit_required)}</div><div class="stat-label">Seña Requerida</div></div></div>
       <h4 style="margin-bottom:12px">📋 Historial de Transacciones</h4>${txHtml}${payForm}</div></div>`;
+      
+    // Trigger it initially to show any defaults (most likely cash if first)
+    if(summary.balance_due > 0) window.updatePaymentFormPricing();
   } catch (e) { toast(e.message, 'error'); }
 }
 async function submitPayment(resId) {
@@ -158,6 +289,9 @@ async function loadRooms() {
   const cats = _categories.length ? _categories : await GET('/rooms/categories');
   const rooms = await GET('/rooms/');
   const reservations = await GET('/reservations/');
+  let pricings = [];
+  try { pricings = await GET('/rooms/categories/pricing/all'); } catch(e) {}
+  
   const catColors = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
   let html = '';
   const order = ['DBC', 'DBP', 'TBC', 'TBP', 'CBC', 'CBP'];
@@ -167,7 +301,22 @@ async function loadRooms() {
     return ia - ib;
   }).forEach((cat, i) => {
     const catRooms = rooms.filter(r => r.category_id === cat.id).sort((a,b) => parseInt(a.room_number) - parseInt(b.room_number));
-    html += `<div class="card" style="margin-bottom:24px"><div class="card-header"><h3><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${catColors[i % catColors.length]}"></span> ${cat.name} <span style="font-weight:400;color:var(--text-muted)">(${cat.code})</span></h3><span style="color:var(--text-secondary);font-size:0.85rem">${fmtMoney(cat.base_price_per_night)}/noche · Máx ${cat.max_occupancy} personas · ${catRooms.length} hab.</span></div><div class="card-body"><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px">`;
+    
+    // Calculate occupied rooms
+    let occCount = 0;
+    catRooms.forEach(room => {
+       if(reservations.some(r => r.room_id === room.id && r.status === 'checked_in')) {
+           occCount++;
+       }
+    });
+    const availCount = catRooms.length - occCount;
+    
+    // Choose pricing strategy
+    const pr = pricings.find(p => p.category_id === cat.id);
+    const priEfectivo = pr && pr.price_cash ? pr.price_cash : cat.base_price_per_night;
+    const priStr = `<strong>Efectivo: ${fmtMoney(priEfectivo)}/noche</strong>`;
+
+    html += `<div class="card" style="margin-bottom:24px"><div class="card-header"><div style="display:flex;justify-content:space-between;align-items:center;width:100%"><div><h3><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${catColors[i % catColors.length]}"></span> ${cat.name} <span style="font-weight:400;color:var(--text-muted)">(${cat.code})</span></h3><span style="color:var(--text-secondary);font-size:0.85rem">${priStr} <br>Máx ${cat.max_occupancy} personas · <span style="color:var(--accent);font-weight:600">${availCount} de ${catRooms.length} disponibles</span></span></div><button class="btn btn-sm btn-outline" onclick="openPricingModal(${cat.id}, '${cat.name}')">⚙️ Tarifas y Precios</button></div></div><div class="card-body"><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px">`;
     catRooms.forEach(room => {
       const isOcc = reservations.some(r => r.room_id === room.id && r.status === 'checked_in');
       html += `<div style="position:relative;padding:14px;text-align:center;border:1.5px ${isOcc ? 'solid var(--success)' : 'dashed var(--border)'};border-radius:var(--radius-md);background:${isOcc ? 'var(--success-light)' : 'var(--bg-body)'}">
@@ -203,6 +352,59 @@ async function submitEditRoom(roomId) {
     closeModal();
     loadRooms(); // reload categories and rooms
   } catch(e) { toast(e.message, 'error'); }
+}
+
+async function openPricingModal(catId, catName) {
+  let p = {};
+  try {
+    p = await GET(`/rooms/categories/${catId}/pricing`);
+  } catch(e) { /* Not found means default is used, form fields empty */ }
+  
+  openModal(`<div class="modal-header"><h2>Configuración de Tarifas: ${catName}</h2><button class="modal-close" onclick="closeModal()">✕</button></div>
+  <div class="modal-body">
+    <div style="background:var(--bg-body);padding:15px;border-radius:var(--radius-md);margin-bottom:20px;border:1px solid var(--border-light)">
+        <h3 style="margin-bottom:12px;color:var(--accent);font-size:1.1rem">🏢 Venta Directa (Tarifarios Internos)</h3>
+        <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:15px">Establezca los precios por noche para cada medio de pago. Si deja un campo vacío, el sistema utilizará la tarifa base de la categoría.</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:15px;">
+            <div class="form-group"><label>💵 Efectivo</label><div style="display:flex;align-items:center;gap:8px">$ <input type="number" step="0.01" class="form-control" id="p_cash" value="${p.price_cash||''}"></div></div>
+            <div class="form-group"><label>🏦 Transferencia</label><div style="display:flex;align-items:center;gap:8px">$ <input type="number" step="0.01" class="form-control" id="p_transfer" value="${p.price_transfer||''}"></div></div>
+            <div class="form-group"><label>🟦 MercadoPago</label><div style="display:flex;align-items:center;gap:8px">$ <input type="number" step="0.01" class="form-control" id="p_mp" value="${p.price_mercadopago||''}"></div></div>
+            <div class="form-group"><label>🅿️ PayPal</label><div style="display:flex;align-items:center;gap:8px">$ <input type="number" step="0.01" class="form-control" id="p_pp" value="${p.price_paypal||''}"></div></div>
+            <div class="form-group"><label>💳 Tarjeta de Crédito</label><div style="display:flex;align-items:center;gap:8px">$ <input type="number" step="0.01" class="form-control" id="p_cc" value="${p.price_credit_card||''}"></div></div>
+            <div class="form-group"><label>💳 Tarjeta de Débito</label><div style="display:flex;align-items:center;gap:8px">$ <input type="number" step="0.01" class="form-control" id="p_dc" value="${p.price_debit_card||''}"></div></div>
+        </div>
+    </div>
+    
+    <div style="background:var(--bg-body);padding:15px;border-radius:var(--radius-md);border:1px solid var(--border-light)">
+        <h3 style="margin-bottom:12px;color:var(--info);font-size:1.1rem">🌐 Canales de Venta (OTAs)</h3>
+        <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:15px">Configure las tarifas netas o finales sincronizadas con el motor de reservas y canales de distribución.</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:15px;">
+            <div class="form-group"><label>🔵 Booking.com (Tarifa Host)</label><div style="display:flex;align-items:center;gap:8px">$ <input type="number" step="0.01" class="form-control" id="p_booking" value="${p.price_booking||''}"></div></div>
+            <div class="form-group"><label>🟡 Expedia (Tarifa Externa)</label><div style="display:flex;align-items:center;gap:8px">$ <input type="number" step="0.01" class="form-control" id="p_expedia" value="${p.price_expedia||''}"></div></div>
+        </div>
+    </div>
+  </div>
+  <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="savePricing(${catId})">💾 Guardar Tarifas</button></div>`);
+}
+
+async function savePricing(catId) {
+    const payload = {
+        price_cash: parseFloat(document.getElementById('p_cash').value) || null,
+        price_transfer: parseFloat(document.getElementById('p_transfer').value) || null,
+        price_mercadopago: parseFloat(document.getElementById('p_mp').value) || null,
+        price_paypal: parseFloat(document.getElementById('p_pp').value) || null,
+        price_credit_card: parseFloat(document.getElementById('p_cc').value) || null,
+        price_debit_card: parseFloat(document.getElementById('p_dc').value) || null,
+        price_booking: parseFloat(document.getElementById('p_booking').value) || null,
+        price_expedia: parseFloat(document.getElementById('p_expedia').value) || null,
+    };
+    try {
+        await POST(`/rooms/categories/${catId}/pricing`, payload);
+        toast('Tarifas actualizadas correctamente');
+        closeModal();
+    } catch(e) {
+        toast(e.message, 'error');
+    }
 }
 
 // ══════════════ REPORTS ══════════════

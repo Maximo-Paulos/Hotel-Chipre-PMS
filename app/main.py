@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.database import init_db, get_db
 from app.api import rooms, guests, reservations, payments, checkin, ota_webhooks, config, reports
 from app.models.room import Room, RoomCategory, RoomStatusEnum
+from app.models.pricing import CategoryPricing
 from app.models.hotel_config import HotelConfiguration
 
 

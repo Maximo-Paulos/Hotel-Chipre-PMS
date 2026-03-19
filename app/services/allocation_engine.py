@@ -220,8 +220,10 @@ def run_allocation(
     # Simplified but effective objective: maximize continuous usage per room
     # Score = sum of occupied days per room (encourages packing)
     # + bonus for keeping current assignments (stability)
+    # + bonus for exact category match (avoids unnecessary upgrades)
     occupancy_score = []
     stability_bonus = []
+    category_match_bonus = []
 
     for r_idx, res in enumerate(reservations):
         for h_idx, room in enumerate(rooms):
@@ -230,7 +232,11 @@ def run_allocation(
 
             # Stability: prefer keeping reservation in current room (if one exists)
             if res.current_room_id == room.room_id and not res.is_locked:
-                stability_bonus.append((x[r_idx, h_idx], 1))  # Small bonus
+                stability_bonus.append((x[r_idx, h_idx], 5))  # Boosted stability bonus
+
+            # Category match bonus: heavily penalize upgrading if original category is available
+            if room.category_id == res.category_id:
+                category_match_bonus.append((x[r_idx, h_idx], 500))
 
     # Concentration bonus: penalize spreading across many rooms
     # For each room, add penalty if it has any reservation (encourages packing)
@@ -244,12 +250,13 @@ def run_allocation(
             model.Add(room_has_any == 0)
         room_usage[h_idx] = room_has_any
 
-    # Objective: maximize occupancy score + stability, minimize rooms used, and HEAVILY penalize unassigned
-    # The room usage penalty (50/room) must dominate stability bonus (1/res)
+    # Objective: maximize occupancy score + stability + category match, minimize rooms used
+    # Category match bonus (500) prevents unnecessary upgrades.
     # Unassigned penalty (10000/res) must dominate everything else to try to fit everyone.
     model.Maximize(
         sum(var * coeff for var, coeff in occupancy_score)
         + sum(var * coeff for var, coeff in stability_bonus)
+        + sum(var * coeff for var, coeff in category_match_bonus)
         - sum(room_usage[h_idx] * 50 for h_idx in range(len(rooms)))
         - sum((1 - is_assigned[r_idx]) * 10000 for r_idx in range(len(reservations)))
     )
@@ -467,10 +474,10 @@ def build_slots_from_db(
         )
         reservation_slots.append(slot)
 
-    # Load all active rooms — EXCLUDE cleaning, maintenance, blocked
+    # Load all active rooms — EXCLUDE maintenance, blocked, but include CLEANING as it's a temporary state
     rooms = db.query(Room).filter(
         Room.is_active == True,
-        Room.status.in_([RoomStatusEnum.AVAILABLE, RoomStatusEnum.OCCUPIED]),
+        Room.status.in_([RoomStatusEnum.AVAILABLE, RoomStatusEnum.OCCUPIED, RoomStatusEnum.CLEANING]),
     ).all()
 
     room_slots = [

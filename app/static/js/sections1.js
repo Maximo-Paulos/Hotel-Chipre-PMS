@@ -25,8 +25,8 @@ async function loadDashboard() {
     // Arrivals & Departures
     const arrList = reservations.filter(r=>r.check_in_date===today&&r.status!=='cancelled');
     const depList = reservations.filter(r=>r.check_out_date===today);
-    document.getElementById('dashArrivals').innerHTML = arrList.length ? arrList.map(r=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border-light)"><div><strong>${r.confirmation_code}</strong><br><small>Hab. ${r.room_id||'--'}</small></div>${fmtStatus(r.status)}</div>`).join('') : '<div class="empty-state"><div class="empty-icon">🛬</div><p>No hay llegadas programadas para hoy</p></div>';
-    document.getElementById('dashDepartures').innerHTML = depList.length ? depList.map(r=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border-light)"><div><strong>${r.confirmation_code}</strong><br><small>Hab. ${r.room_id||'--'}</small></div>${fmtStatus(r.status)}</div>`).join('') : '<div class="empty-state"><div class="empty-icon">🛫</div><p>No hay salidas programadas para hoy</p></div>';
+    document.getElementById('dashArrivals').innerHTML = arrList.length ? arrList.map(r=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border-light)"><div><strong>${r.confirmation_code}</strong>${r.additional_guests && r.additional_guests.length ? ' <span style="font-size:0.8rem;color:var(--text-muted)">(+'+r.additional_guests.length+' acomp.)</span>' : ''}<br><small>Hab. ${r.room_id||'--'}</small></div>${fmtStatus(r.status)}</div>`).join('') : '<div class="empty-state"><div class="empty-icon">🛬</div><p>No hay llegadas programadas para hoy</p></div>';
+    document.getElementById('dashDepartures').innerHTML = depList.length ? depList.map(r=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border-light)"><div><strong>${r.confirmation_code}</strong>${r.additional_guests && r.additional_guests.length ? ' <span style="font-size:0.8rem;color:var(--text-muted)">(+'+r.additional_guests.length+' acomp.)</span>' : ''}<br><small>Hab. ${r.room_id||'--'}</small></div>${fmtStatus(r.status)}</div>`).join('') : '<div class="empty-state"><div class="empty-icon">🛫</div><p>No hay salidas programadas para hoy</p></div>';
     // Badge
     const pending = reservations.filter(r=>r.status==='pending').length;
     const badge = document.getElementById('pendingBadge');
@@ -64,12 +64,15 @@ async function loadCalendar() {
 
   rooms.sort((a,b) => parseInt(a.room_number) - parseInt(b.room_number)).forEach(room => {
     const cat = _categories.find(c=>c.id===room.category_id);
-    html += `<div class="calendar-room-label"><span class="room-cat-dot" style="background:${catMap[room.category_id]||'#999'}"></span><strong style="font-size:1.1em">${room.room_number}</strong> <span style="font-size:0.75rem;color:var(--text-secondary);font-weight:normal;margin-left:6px">(${cat ? cat.code : ''})</span></div>`;
+    const isCleaning = room.status === 'cleaning';
+    const cleaningIcon = isCleaning ? `<span title="En Limpieza" style="color:#f59e0b; margin-left:4px; font-size:0.9em">🧹</span>` : '';
+    html += `<div class="calendar-room-label"><span class="room-cat-dot" style="background:${catMap[room.category_id]||'#999'}"></span><strong style="font-size:1.1em">${room.room_number}</strong>${cleaningIcon} <span style="font-size:0.75rem;color:var(--text-secondary);font-weight:normal;margin-left:6px">(${cat ? cat.code : ''})</span></div>`;
     dates.forEach(d => {
       const ds = d.toISOString().split('T')[0];
       const res = reservations.find(r => r.room_id===room.id && r.check_in_date<=ds && r.check_out_date>ds && r.status!=='cancelled' && r.status!=='checked_out');
       if(res) {
-        html += `<div class="calendar-cell occupied"><div class="calendar-booking status-${res.status}" title="${res.confirmation_code}" onclick="showReservationDetail(${res.id})">${res.confirmation_code.slice(-4)}</div></div>`;
+        let ex = res.additional_guests && res.additional_guests.length ? ` (+${res.additional_guests.length})` : '';
+        html += `<div class="calendar-cell occupied"><div class="calendar-booking status-${res.status}" title="${res.confirmation_code}${ex}" onclick="showReservationDetail(${res.id})">${res.confirmation_code.slice(-4)}${ex}</div></div>`;
       } else {
         html += `<div class="calendar-cell"></div>`;
       }
@@ -108,15 +111,23 @@ function renderReservations(list) {
     let actions = `<button class="btn btn-sm btn-outline" onclick="showReservationDetail(${r.id})" title="Ver detalle">👁️</button>`;
     if(r.status==='pending'||r.status==='deposit_paid')
       actions += ` <button class="btn btn-sm btn-warning" onclick="navigate('payments');document.getElementById('paySearch').value='${r.confirmation_code}';searchPayment()" title="Cobrar">💰</button>`;
-    if(r.status!=='cancelled'&&r.status!=='checked_out'&&r.status!=='checked_in')
-      actions += ` <button class="btn btn-sm btn-danger" onclick="confirmCancelReservation(${r.id},'${r.confirmation_code}')" title="Cancelar">✕</button>`;
+    if(r.status!=='cancelled')
+      actions += ` <button class="btn btn-sm btn-danger" onclick="confirmCancelReservation(${r.id},'${r.confirmation_code}','${r.status}')" title="Cancelar">✕</button>`;
     return `<tr><td><strong style="color:var(--accent)">${r.confirmation_code}</strong></td><td>${gn}</td><td>${rn}</td><td>${fmtDate(r.check_in_date)}</td><td>${fmtDate(r.check_out_date)}</td><td>${fmtMoney(r.total_amount)}</td><td style="color:${r.balance_due>0?'var(--danger)':'var(--success)'}"><strong>${fmtMoney(r.balance_due)}</strong></td><td>${fmtStatus(r.status)}</td><td><div class="btn-group">${actions}</div></td></tr>`;
   }).join('');
 }
-function confirmCancelReservation(id, code) {
-  showConfirm('Cancelar Reserva', `¿Estás seguro de cancelar la reserva ${code}? Esta acción no se puede deshacer.`, '❌ Cancelar Reserva', 'btn-danger', async()=>{
-    try { await POST(`/reservations/${id}/cancel`); toast('Reserva cancelada','warning'); loadReservations(); } catch(e){ toast(e.message,'error'); }
-  });
+function confirmCancelReservation(id, code, status) {
+  if (status === 'checked_in' || status === 'checked_out') {
+    showConfirm('Reembolso Premium', `¿Cancelar/Reembolsar ${code}? Esta acción liberará la habitación y requiere PIN de autorización del dueño.`, '💰 Autorizar Reembolso', 'btn-danger', async()=>{
+      const pin = prompt('Ingrese PIN de Dueño para reembolsar:');
+      if(pin===null) return;
+      try { await POST(`/reservations/${id}/cancel?manager_pin=${pin}`); toast('Reembolso Autorizado','warning'); loadReservations(); loadDashboard(); } catch(e){ toast(e.message,'error'); }
+    });
+  } else {
+    showConfirm('Cancelar Reserva', `¿Estás seguro de cancelar ${code}? Esta acción no se puede deshacer.`, '❌ Cancelar Reserva', 'btn-danger', async()=>{
+      try { await POST(`/reservations/${id}/cancel`); toast('Reserva cancelada','warning'); loadReservations(); loadDashboard(); } catch(e){ toast(e.message,'error'); }
+    });
+  }
 }
 async function showReservationDetail(id) {
   try {
@@ -126,8 +137,8 @@ async function showReservationDetail(id) {
     const cat = _categories.find(c=>c.id===r.category_id);
     const gn = g?g.first_name+' '+g.last_name:'--';
     let actionsHtml = '';
-    if(r.status==='pending'||r.status==='deposit_paid'||r.status==='fully_paid')
-      actionsHtml += `<button class="btn btn-danger btn-sm" onclick="confirmCancelReservation(${r.id},'${r.confirmation_code}');closeModal()">❌ Cancelar</button>`;
+    if(r.status!=='cancelled')
+      actionsHtml += `<button class="btn btn-danger btn-sm" onclick="confirmCancelReservation(${r.id},'${r.confirmation_code}','${r.status}');closeModal()">❌ Cancelar</button>`;
     if(r.status==='pending'||r.status==='deposit_paid')
       actionsHtml += ` <button class="btn btn-warning btn-sm" onclick="closeModal();navigate('payments');document.getElementById('paySearch').value='${r.confirmation_code}';searchPayment()">💰 Cobrar</button>`;
     if(r.status==='pending'||r.status==='deposit_paid')
@@ -138,7 +149,9 @@ async function showReservationDetail(id) {
     <div class="modal-body">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
         <div><h4 style="margin-bottom:12px">🏷️ Información</h4>
-          <p><strong>Huésped:</strong> ${gn}</p><p><strong>Habitación:</strong> ${room?room.room_number:'--'} (${cat?cat.name:'--'})</p>
+          <p><strong>Titular:</strong> ${gn}</p>
+          ${r.additional_guests && r.additional_guests.length ? `<p><strong>Acompañantes en la Habitación:</strong><br>` + r.additional_guests.map(ag => `• ${ag.first_name} ${ag.last_name}`).join('<br>') + `</p>` : ''}
+          <p><strong>Habitación:</strong> ${room?room.room_number:'--'} (${cat?cat.name:'--'})</p>
           <p><strong>Check-in:</strong> ${fmtDate(r.check_in_date)}</p><p><strong>Check-out:</strong> ${fmtDate(r.check_out_date)}</p>
           <p><strong>Noches:</strong> ${r.nights}</p><p><strong>Adultos:</strong> ${r.num_adults} / Niños: ${r.num_children}</p>
           <p><strong>Fuente:</strong> ${r.source}</p>${r.notes?'<p><strong>Notas:</strong> '+r.notes+'</p>':''}
@@ -175,8 +188,13 @@ async function doExtend(id) {
 async function openNewReservationModal() {
   if(!_allGuests.length) _allGuests = await GET('/guests/');
   if(!_categories.length) _categories = await GET('/rooms/categories');
+  if(!_pricings.length) try{_pricings = await GET('/rooms/categories/pricing/all');}catch(e){}
   const gOpts = _allGuests.map(g=>`<option value="${g.id}">${g.first_name} ${g.last_name} (${g.document_type||''}:${g.document_number||''})</option>`).join('');
-  const cOpts = _categories.map(c=>`<option value="${c.id}">${c.name} - ${fmtMoney(c.base_price_per_night)}/noche</option>`).join('');
+  const cOpts = _categories.map(c=>{
+    const p = _pricings.find(x=>x.category_id===c.id);
+    const pri = p && p.price_cash ? p.price_cash : c.base_price_per_night;
+    return `<option value="${c.id}">${c.name} - ${fmtMoney(pri)}/noche</option>`;
+  }).join('');
   openModal(`<div class="modal-header"><h2>Nueva Reserva</h2><button class="modal-close" onclick="closeModal()">✕</button></div>
   <div class="modal-body"><form id="resForm">
     <div class="form-group"><label>Titular de la Reserva <span class="required">*</span></label><select class="form-control" id="resGuest" required>${gOpts}</select></div>
@@ -245,11 +263,6 @@ async function submitReservation() {
         }
     }
     
-    // First, add companions to the guest titular
-    if (companions.length > 0) {
-        await POST(`/guests/${guestId}/companions`, companions);
-    }
-    
     // Create reservation
     const r = await POST('/reservations/', { 
         guest_id: guestId, 
@@ -260,6 +273,12 @@ async function submitReservation() {
         num_children: +document.getElementById('resChildren').value, 
         notes: document.getElementById('resNotes').value || null 
     });
+    
+    // Add companions to the reservation (if any)
+    if (companions.length > 0) {
+        await POST(`/reservations/${r.id}/guests`, companions);
+    }
+    
     toast(`Reserva ${r.confirmation_code} creada exitosamente`);
     closeModal(); loadReservations(); loadDashboard();
   } catch(e){ toast(e.message, 'error'); }

@@ -15,6 +15,7 @@ from app.models.guest import Guest
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.hotel_config import HotelConfiguration
 from app.services.reservation_service import transition_reservation_status, ReservationError
+from app.models.room import Room, RoomStatusEnum
 
 
 class CheckInError(Exception):
@@ -142,6 +143,13 @@ def perform_checkout(
         raise CheckInError(str(e))
 
     reservation.actual_check_out = datetime.now(timezone.utc)
+    
+    # Mark room for cleaning
+    if reservation.room_id is not None:
+        room = db.query(Room).filter(Room.id == reservation.room_id).first()
+        if room:
+            room.status = RoomStatusEnum.CLEANING
+            
     db.flush()
 
     return reservation

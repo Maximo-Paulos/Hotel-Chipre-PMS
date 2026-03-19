@@ -9,7 +9,8 @@ from typing import Optional
 from app.database import get_db
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.reservation import Reservation, ReservationStatusEnum
-from app.schemas.room import RoomCreate, RoomRead, RoomCategoryCreate, RoomCategoryRead
+from app.models.pricing import CategoryPricing
+from app.schemas.room import RoomCreate, RoomRead, RoomCategoryCreate, RoomCategoryRead, CategoryPricingSchema, CategoryPricingRead
 
 router = APIRouter(prefix="/api/rooms", tags=["Rooms"])
 
@@ -31,6 +32,38 @@ def create_category(data: RoomCategoryCreate, db: Session = Depends(get_db)):
 @router.get("/categories", response_model=list[RoomCategoryRead])
 def list_categories(db: Session = Depends(get_db)):
     return db.query(RoomCategory).all()
+
+
+@router.get("/categories/pricing/all", response_model=list[CategoryPricingRead])
+def get_all_category_pricing(db: Session = Depends(get_db)):
+    return db.query(CategoryPricing).all()
+
+
+@router.get("/categories/{category_id}/pricing", response_model=CategoryPricingSchema)
+def get_category_pricing(category_id: int, db: Session = Depends(get_db)):
+    pricing = db.query(CategoryPricing).filter(CategoryPricing.category_id == category_id).first()
+    if not pricing:
+        raise HTTPException(status_code=404, detail="Pricing config not found")
+    return pricing
+
+
+@router.post("/categories/{category_id}/pricing", response_model=CategoryPricingSchema)
+def update_category_pricing(category_id: int, data: CategoryPricingSchema, db: Session = Depends(get_db)):
+    category = db.query(RoomCategory).filter(RoomCategory.id == category_id).first()
+    if not category:
+        raise HTTPException(status_code=404, detail="Category not found")
+    pricing = db.query(CategoryPricing).filter(CategoryPricing.category_id == category_id).first()
+    if not pricing:
+        pricing = CategoryPricing(category_id=category_id)
+        db.add(pricing)
+    
+    for k, v in data.model_dump().items():
+        setattr(pricing, k, v)
+    
+    db.commit()
+    db.refresh(pricing)
+    return pricing
+
 
 
 @router.post("/", response_model=RoomRead, status_code=status.HTTP_201_CREATED)

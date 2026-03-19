@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     DEFAULT_DEPOSIT_PERCENT: float = 30.0
     HOTEL_NAME: str = "Hotel PMS"
     HOTEL_TIMEZONE: str = "America/Argentina/Buenos_Aires"
+    MANAGER_PIN: str = "1234"
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
