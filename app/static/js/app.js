@@ -186,7 +186,7 @@ function renderCalendar() {
       const res = allReservations.find(r =>
         r.room_id === room.id &&
         r.check_in_date <= ds && r.check_out_date > ds &&
-        !['cancelled', 'checked_out'].includes(r.status)
+        r.status !== 'cancelled'
       );
       if (res) {
         const isStart = res.check_in_date === ds;

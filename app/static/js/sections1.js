@@ -69,7 +69,7 @@ async function loadCalendar() {
     html += `<div class="calendar-room-label"><span class="room-cat-dot" style="background:${catMap[room.category_id]||'#999'}"></span><strong style="font-size:1.1em">${room.room_number}</strong>${cleaningIcon} <span style="font-size:0.75rem;color:var(--text-secondary);font-weight:normal;margin-left:6px">(${cat ? cat.code : ''})</span></div>`;
     dates.forEach(d => {
       const ds = d.toISOString().split('T')[0];
-      const res = reservations.find(r => r.room_id===room.id && r.check_in_date<=ds && r.check_out_date>ds && r.status!=='cancelled' && r.status!=='checked_out');
+      const res = reservations.find(r => r.room_id===room.id && r.check_in_date<=ds && r.check_out_date>ds && r.status!=='cancelled');
       if(res) {
         let ex = res.additional_guests && res.additional_guests.length ? ` (+${res.additional_guests.length})` : '';
         html += `<div class="calendar-cell occupied"><div class="calendar-booking status-${res.status}" title="${res.confirmation_code}${ex}" onclick="showReservationDetail(${res.id})">${res.confirmation_code.slice(-4)}${ex}</div></div>`;
