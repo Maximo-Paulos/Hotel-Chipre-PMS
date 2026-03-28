@@ -1,5 +1,6 @@
 """
-HotelConfiguration — singleton pattern for hotel-wide business rules.
+HotelConfiguration — per-hotel business rules.
+No global/singleton: one row per hotel (id == hotel_id).
 Admin Panel controls: deposit %, enabled gateways, cancellation policy, etc.
 """
 import json
@@ -10,13 +11,11 @@ from app.database import Base
 
 
 class HotelConfiguration(Base):
-    """
-    Singleton configuration table for hotel business rules.
-    Only ONE row should exist (id=1). The system enforces this at the service layer.
-    """
+    """Configuration table scoped by hotel (id == hotel_id)."""
     __tablename__ = "hotel_configuration"
 
-    id = Column(Integer, primary_key=True, default=1)
+    # hotel_id is the primary key; no auto-assigned default to avoid implicit singletons
+    id = Column(Integer, primary_key=True, autoincrement=False)
 
     # Financial policies
     deposit_percentage = Column(Float, nullable=False, default=30.0)  # % of total required as deposit
@@ -81,4 +80,4 @@ class HotelConfiguration(Base):
         return mapping.get(method_name, False)
 
     def __repr__(self) -> str:
-        return f"<HotelConfiguration(deposit={self.deposit_percentage}%, hotel='{self.hotel_name}')>"
+        return f"<HotelConfiguration(hotel_id={self.id}, deposit={self.deposit_percentage}%, hotel='{self.hotel_name}')>"

@@ -10,6 +10,8 @@ Tests the complete payment lifecycle including:
 import pytest
 from datetime import date
 
+from app.models.hotel_config import HotelConfiguration
+from app.models.pricing import CategoryPricing
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.transaction import Transaction, PaymentMethodEnum, TransactionStatusEnum, TransactionTypeEnum
 from app.schemas.reservation import ReservationCreate
@@ -20,6 +22,22 @@ from app.services.payment_service import (
     get_reservation_financial_summary,
     PaymentError,
 )
+
+DEFAULT_HOTEL_ID = 1
+ALT_HOTEL_ID = 2
+
+
+@pytest.fixture(autouse=True)
+def ensure_category_pricing_table(db_engine):
+    """Create CategoryPricing table for tests (not included in Base metadata)."""
+    CategoryPricing.__table__.create(bind=db_engine, checkfirst=True)
+    yield
+
+
+def _assign_hotel(reservation: Reservation, hotel_id: int, db):
+    """Assign hotel scope to reservation (hotel_id column provided by A1)."""
+    setattr(reservation, "hotel_id", hotel_id)
+    db.flush()
 
 
 class TestDepositPayment:
@@ -39,6 +57,13 @@ class TestDepositPayment:
         )
         res = create_reservation(db, data)
         db.flush()
+        _assign_hotel(res, DEFAULT_HOTEL_ID, db)
+        _assign_hotel(res, DEFAULT_HOTEL_ID, db)
+        _assign_hotel(res, DEFAULT_HOTEL_ID, db)
+        _assign_hotel(res, DEFAULT_HOTEL_ID, db)
+        _assign_hotel(res, DEFAULT_HOTEL_ID, db)
+        _assign_hotel(res, DEFAULT_HOTEL_ID, db)
+        _assign_hotel(res, DEFAULT_HOTEL_ID, db)
 
         assert res.total_amount == 1000.0  # 10 × $100
         assert res.deposit_amount == 300.0  # 30% of $1000
@@ -60,7 +85,7 @@ class TestDepositPayment:
             gateway_response='{"id": "mp_pref_12345", "status": "approved"}',
         )
 
-        tx = process_payment(db, payment, gateway_response=gateway_resp)
+        tx = process_payment(db, payment, hotel_id=DEFAULT_HOTEL_ID, gateway_response=gateway_resp)
         db.flush()
 
         # Verify transaction
@@ -87,6 +112,7 @@ class TestDepositPayment:
         )
         res = create_reservation(db, data)
         db.flush()
+        _assign_hotel(res, DEFAULT_HOTEL_ID, db)
 
         # Pay only $100 (deposit is $300)
         payment = PaymentRequest(
@@ -95,7 +121,7 @@ class TestDepositPayment:
             payment_method=PaymentMethodEnum.CASH,
             transaction_type=TransactionTypeEnum.PARTIAL_PAYMENT,
         )
-        process_payment(db, payment)
+        process_payment(db, payment, hotel_id=DEFAULT_HOTEL_ID)
         db.flush()
 
         db.refresh(res)
@@ -128,7 +154,7 @@ class TestFullPayment:
             payment_method=PaymentMethodEnum.CASH,
             transaction_type=TransactionTypeEnum.FULL_PAYMENT,
         )
-        process_payment(db, payment)
+        process_payment(db, payment, hotel_id=DEFAULT_HOTEL_ID)
         db.flush()
 
         db.refresh(res)
@@ -176,7 +202,7 @@ class TestBalancePaymentAtCheckin:
             external_payment_id="mp_dep_001",
             external_status="approved",
         )
-        tx1 = process_payment(db, deposit_payment, gateway_response=gateway_resp)
+        tx1 = process_payment(db, deposit_payment, hotel_id=DEFAULT_HOTEL_ID, gateway_response=gateway_resp)
         db.flush()
 
         db.refresh(res)
@@ -191,7 +217,7 @@ class TestBalancePaymentAtCheckin:
             payment_method=PaymentMethodEnum.CASH,
             transaction_type=TransactionTypeEnum.BALANCE_PAYMENT,
         )
-        tx2 = process_payment(db, balance_payment)
+        tx2 = process_payment(db, balance_payment, hotel_id=DEFAULT_HOTEL_ID)
         db.flush()
 
         db.refresh(res)
@@ -200,7 +226,7 @@ class TestBalancePaymentAtCheckin:
         assert res.balance_due == 0.0
 
         # Step 4: Verify financial summary
-        summary = get_reservation_financial_summary(db, res.id)
+        summary = get_reservation_financial_summary(db, DEFAULT_HOTEL_ID, res.id)
         assert summary["total_amount"] == 1000.0
         assert summary["amount_paid"] == 1000.0
         assert summary["balance_due"] == 0.0
@@ -211,6 +237,56 @@ class TestBalancePaymentAtCheckin:
         tx_methods = [t["method"] for t in summary["transactions"]]
         assert "mercado_pago" in tx_methods
         assert "cash" in tx_methods
+
+
+class TestHotelIsolation:
+    """Multi-hotel safety: scope payments and methods by hotel_id."""
+
+    def test_payment_rejected_for_other_hotel(self, db, sample_guest, sample_rooms, sample_categories, hotel_config):
+        data = ReservationCreate(
+            guest_id=sample_guest.id,
+            category_id=sample_categories[0].id,
+            check_in_date=date(2026, 9, 1),
+            check_out_date=date(2026, 9, 3),
+        )
+        res = create_reservation(db, data)
+        db.flush()
+        _assign_hotel(res, DEFAULT_HOTEL_ID, db)
+
+        payment = PaymentRequest(
+            reservation_id=res.id,
+            amount=100.0,
+            payment_method=PaymentMethodEnum.CASH,
+            transaction_type=TransactionTypeEnum.FULL_PAYMENT,
+        )
+        with pytest.raises(PaymentError, match="does not belong to hotel"):
+            process_payment(db, payment, hotel_id=2)
+
+    def test_payment_methods_are_scoped_by_hotel(self, db, sample_guest, sample_rooms, sample_categories, hotel_config):
+        hotel_config.enable_bank_transfer = False
+        config_h2 = HotelConfiguration(id=2, enable_bank_transfer=True, deposit_percentage=30.0)
+        db.add(config_h2)
+        db.flush()
+
+        data = ReservationCreate(
+            guest_id=sample_guest.id,
+            category_id=sample_categories[0].id,
+            check_in_date=date(2026, 10, 1),
+            check_out_date=date(2026, 10, 4),
+        )
+        res = create_reservation(db, data)
+        db.flush()
+        _assign_hotel(res, ALT_HOTEL_ID, db)
+
+        payment = PaymentRequest(
+            reservation_id=res.id,
+            amount=res.total_amount,
+            payment_method=PaymentMethodEnum.BANK_TRANSFER,
+            transaction_type=TransactionTypeEnum.FULL_PAYMENT,
+        )
+
+        tx = process_payment(db, payment, hotel_id=2)
+        assert tx.payment_method == PaymentMethodEnum.BANK_TRANSFER
 
 
 class TestPaymentEdgeCases:
@@ -234,7 +310,7 @@ class TestPaymentEdgeCases:
             transaction_type=TransactionTypeEnum.FULL_PAYMENT,
         )
         with pytest.raises(PaymentError, match="exceeds balance due"):
-            process_payment(db, payment)
+            process_payment(db, payment, hotel_id=DEFAULT_HOTEL_ID)
 
     def test_payment_on_cancelled_reservation(self, db, sample_guest, sample_rooms, sample_categories, hotel_config):
         """Cannot pay for a cancelled reservation."""
@@ -247,6 +323,7 @@ class TestPaymentEdgeCases:
         res = create_reservation(db, data)
         res.status = ReservationStatusEnum.CANCELLED
         db.flush()
+        _assign_hotel(res, DEFAULT_HOTEL_ID, db)
 
         payment = PaymentRequest(
             reservation_id=res.id,
@@ -255,7 +332,7 @@ class TestPaymentEdgeCases:
             transaction_type=TransactionTypeEnum.DEPOSIT,
         )
         with pytest.raises(PaymentError, match="Cannot process payment"):
-            process_payment(db, payment)
+            process_payment(db, payment, hotel_id=DEFAULT_HOTEL_ID)
 
     def test_disabled_payment_method_rejected(self, db, sample_guest, sample_rooms, sample_categories, hotel_config):
         """Cannot use a disabled payment method."""
@@ -278,7 +355,7 @@ class TestPaymentEdgeCases:
             transaction_type=TransactionTypeEnum.DEPOSIT,
         )
         with pytest.raises(PaymentError, match="currently disabled"):
-            process_payment(db, payment)
+            process_payment(db, payment, hotel_id=DEFAULT_HOTEL_ID)
 
     def test_failed_gateway_payment(self, db, sample_guest, sample_rooms, sample_categories, hotel_config):
         """Failed gateway payment should not update reservation financials."""
@@ -301,7 +378,7 @@ class TestPaymentEdgeCases:
             success=False,
             error_message="PayPal declined",
         )
-        tx = process_payment(db, payment, gateway_response=failed_resp)
+        tx = process_payment(db, payment, hotel_id=DEFAULT_HOTEL_ID, gateway_response=failed_resp)
         db.flush()
 
         assert tx.status == TransactionStatusEnum.FAILED

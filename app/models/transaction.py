@@ -46,6 +46,7 @@ class Transaction(Base):
     __tablename__ = "transactions"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    hotel_id = Column(Integer, nullable=False, index=True)
     reservation_id = Column(Integer, ForeignKey("reservations.id", ondelete="CASCADE"), nullable=False)
 
     # Financial details
@@ -92,6 +93,6 @@ class Transaction(Base):
 
     def __repr__(self) -> str:
         return (
-            f"<Transaction(id={self.id}, reservation_id={self.reservation_id}, "
+            f"<Transaction(id={self.id}, hotel_id={self.hotel_id}, reservation_id={self.reservation_id}, "
             f"amount={self.amount}, method={self.payment_method}, status={self.status})>"
         )

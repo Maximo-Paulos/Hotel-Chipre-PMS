@@ -13,9 +13,10 @@ from app.models.reservation import Reservation, ReservationStatusEnum, Reservati
 from app.models.transaction import Transaction
 from app.models.hotel_config import HotelConfiguration
 from app.models.ota import OTAReservationMapping
+from app.models.pricing import CategoryPricing
 
 
-# ── SQLite in-memory engine for tests ──
+# â”€â”€ SQLite in-memory engine for tests â”€â”€
 
 TEST_DATABASE_URL = "sqlite:///:memory:"
 
@@ -34,6 +35,7 @@ def db_engine():
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.close()
 
+    # Ensure all mapped tables (including CategoryPricing) exist for tests
     Base.metadata.create_all(bind=engine)
     yield engine
     Base.metadata.drop_all(bind=engine)
@@ -52,7 +54,7 @@ def db(db_engine) -> Session:
         session.close()
 
 
-# ── Seed data fixtures ──
+# â”€â”€ Seed data fixtures â”€â”€
 
 @pytest.fixture
 def sample_categories(db: Session) -> list[RoomCategory]:
@@ -147,7 +149,7 @@ def sample_guest(db: Session) -> Guest:
     """Create a sample guest with full check-in data."""
     guest = Guest(
         first_name="Carlos",
-        last_name="Pérez",
+        last_name="PÃ©rez",
         document_type="DNI",
         document_number="30456789",
         nationality="Argentina",
@@ -164,8 +166,8 @@ def sample_guest(db: Session) -> Guest:
 def sample_guest_incomplete(db: Session) -> Guest:
     """Create a guest WITHOUT identity documents (for check-in validation tests)."""
     guest = Guest(
-        first_name="María",
-        last_name="López",
+        first_name="MarÃ­a",
+        last_name="LÃ³pez",
         email="maria@email.com",
         terms_accepted=False,
         # No document_type, no document_number

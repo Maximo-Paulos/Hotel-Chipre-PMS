@@ -26,26 +26,85 @@ class PaymentError(Exception):
     pass
 
 
-def get_hotel_config(db: Session) -> HotelConfiguration:
-    """Get or create the singleton hotel configuration."""
-    config = db.query(HotelConfiguration).filter(HotelConfiguration.id == 1).first()
+DEFAULT_DEPOSIT_PERCENTAGE = 30.0
+
+
+def get_hotel_config(db: Session, hotel_id: int) -> HotelConfiguration:
+    """
+    Get or create the per-hotel configuration.
+    No global/singleton fallback â€” requires explicit hotel_id.
+    """
+    if hotel_id is None:
+        raise PaymentError("hotel_id is required for finance operations")
+
+    config = db.query(HotelConfiguration).filter(HotelConfiguration.id == hotel_id).first()
     if not config:
-        config = HotelConfiguration(id=1)
+        config = HotelConfiguration(id=hotel_id)
         db.add(config)
         db.flush()
+
+    # Defensive defaults (transitional only, not hardcoded product behavior)
+    if config.deposit_percentage is None:
+        config.deposit_percentage = DEFAULT_DEPOSIT_PERCENTAGE
+    if config.enable_cash is None:
+        config.enable_cash = True
+    if config.enable_mercado_pago is None:
+        config.enable_mercado_pago = True
+    if config.enable_paypal is None:
+        config.enable_paypal = True
+    if config.enable_credit_card is None:
+        config.enable_credit_card = True
+    if config.enable_debit_card is None:
+        config.enable_debit_card = True
+    if config.enable_bank_transfer is None:
+        config.enable_bank_transfer = False
+
     return config
 
 
-def validate_payment_method_enabled(db: Session, method: PaymentMethodEnum) -> None:
+def validate_payment_method_enabled(db: Session, method: PaymentMethodEnum, hotel_id: int) -> None:
     """Check that the requested payment method is enabled in hotel config."""
-    config = get_hotel_config(db)
+    config = get_hotel_config(db, hotel_id)
     if not config.is_payment_method_enabled(method.value):
         raise PaymentError(f"Payment method '{method.value}' is currently disabled")
+
+
+def _resolve_reservation_hotel(
+    reservation: Reservation,
+    hotel_id: Optional[int],
+    existing_tx_hotel_id: Optional[int] = None,
+) -> int:
+    """
+    Resolve hotel scope using caller input or existing transactions.
+    No reservation/room fields are available for scoping in this slice.
+    """
+    reservation_hotel_id = getattr(reservation, "hotel_id", None)
+
+    if reservation_hotel_id is not None and hotel_id is not None and reservation_hotel_id != hotel_id:
+        raise PaymentError(
+            f"Reservation {reservation.id} does not belong to hotel {hotel_id} (belongs to {reservation_hotel_id})"
+        )
+
+    if reservation_hotel_id is not None and existing_tx_hotel_id is not None and reservation_hotel_id != existing_tx_hotel_id:
+        raise PaymentError(
+            f"Reservation {reservation.id} already has payments for hotel {existing_tx_hotel_id}"
+        )
+
+    if existing_tx_hotel_id is not None and hotel_id is not None and hotel_id != existing_tx_hotel_id:
+        raise PaymentError(f"Reservation {reservation.id} already has payments for hotel {existing_tx_hotel_id}")
+
+    resolved = reservation_hotel_id or hotel_id or existing_tx_hotel_id
+
+    if resolved is None:
+        raise PaymentError("hotel_id is required for finance operations")
+
+    return resolved
 
 
 def process_payment(
     db: Session,
     request: PaymentRequest,
+    hotel_id: Optional[int] = None,
     gateway_response: Optional[PaymentGatewayResponse] = None,
 ) -> Transaction:
     """
@@ -64,12 +123,28 @@ def process_payment(
     For gateway payments, the caller provides the gateway_response.
     """
     # 1. Validate reservation
-    reservation = db.query(Reservation).filter(
-        Reservation.id == request.reservation_id
-    ).with_for_update().first()
+    reservation = (
+        db.query(Reservation)
+        .filter(Reservation.id == request.reservation_id)
+        .with_for_update()
+        .first()
+    )
 
     if not reservation:
         raise PaymentError(f"Reservation {request.reservation_id} not found")
+
+    existing_tx = (
+        db.query(Transaction.hotel_id)
+        .filter(Transaction.reservation_id == request.reservation_id)
+        .first()
+    )
+    existing_tx_hotel_id = existing_tx[0] if existing_tx else None
+
+    resolved_hotel_id = _resolve_reservation_hotel(
+        reservation,
+        hotel_id,
+        existing_tx_hotel_id=existing_tx_hotel_id,
+    )
 
     if reservation.status in (
         ReservationStatusEnum.CHECKED_OUT,
@@ -80,7 +155,7 @@ def process_payment(
         )
 
     # 2. Validate payment method
-    validate_payment_method_enabled(db, request.payment_method)
+    validate_payment_method_enabled(db, request.payment_method, resolved_hotel_id)
 
     # 2.5 Dynamic Pricing Override
     from app.models.pricing import CategoryPricing
@@ -93,8 +168,8 @@ def process_payment(
         method_price = getattr(pricing, f"price_{method_key}", None)
         if method_price is not None and method_price > 0:
             reservation.total_amount = round(method_price * reservation.nights, 2)
-            config = get_hotel_config(db)
-            dep_pct = config.deposit_percentage if config else 30.0
+            config = get_hotel_config(db, resolved_hotel_id)
+            dep_pct = config.deposit_percentage if config else DEFAULT_DEPOSIT_PERCENTAGE
             reservation.deposit_amount = round(reservation.total_amount * (dep_pct / 100.0), 2)
             db.flush()
 
@@ -130,6 +205,7 @@ def process_payment(
         raw_response = gateway_response.gateway_response
 
     transaction = Transaction(
+        hotel_id=resolved_hotel_id,
         reservation_id=request.reservation_id,
         amount=request.amount,
         currency=request.currency,
@@ -184,7 +260,7 @@ def _update_reservation_financials(
     db.flush()
 
 
-def get_reservation_financial_summary(db: Session, reservation_id: int) -> dict:
+def get_reservation_financial_summary(db: Session, hotel_id: Optional[int], reservation_id: int) -> dict:
     """
     Get a full financial summary for a reservation.
     Returns total, paid, balance, deposit required, and all transactions.
@@ -193,9 +269,25 @@ def get_reservation_financial_summary(db: Session, reservation_id: int) -> dict:
     if not reservation:
         raise PaymentError(f"Reservation {reservation_id} not found")
 
+    existing_tx = (
+        db.query(Transaction.hotel_id)
+        .filter(Transaction.reservation_id == reservation_id)
+        .first()
+    )
+    existing_tx_hotel_id = existing_tx[0] if existing_tx else None
+
+    resolved_hotel_id = _resolve_reservation_hotel(
+        reservation,
+        hotel_id,
+        existing_tx_hotel_id=existing_tx_hotel_id,
+    )
+
     transactions = (
         db.query(Transaction)
-        .filter(Transaction.reservation_id == reservation_id)
+        .filter(
+            Transaction.reservation_id == reservation_id,
+            Transaction.hotel_id == resolved_hotel_id,
+        )
         .order_by(Transaction.created_at)
         .all()
     )

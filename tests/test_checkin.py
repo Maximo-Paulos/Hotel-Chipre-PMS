@@ -49,7 +49,7 @@ class TestCheckIn:
             payment_method=PaymentMethodEnum.CASH,
             transaction_type=TransactionTypeEnum.FULL_PAYMENT,
         )
-        process_payment(db, payment)
+        process_payment(db, payment, hotel_id=config.id)
         db.flush()
         return res
 
@@ -83,7 +83,7 @@ class TestCheckIn:
             payment_method=PaymentMethodEnum.CASH,
             transaction_type=TransactionTypeEnum.FULL_PAYMENT,
         )
-        process_payment(db, payment)
+        process_payment(db, payment, hotel_id=hotel_config.id)
         db.flush()
         db.refresh(res)
         with pytest.raises(CheckInError, match="missing required guest data"):
@@ -103,7 +103,7 @@ class TestCheckOut:
             payment_method=PaymentMethodEnum.CASH,
             transaction_type=TransactionTypeEnum.FULL_PAYMENT,
         )
-        process_payment(db, payment)
+        process_payment(db, payment, hotel_id=hotel_config.id)
         db.flush()
         perform_checkin(db, res.id)
         db.flush()

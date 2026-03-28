@@ -48,6 +48,8 @@ def init_db(database_url: str | None = None):
     global _engine, _SessionLocal
     _engine = get_engine(database_url)
     _SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_engine)
+    # Import models so Base.metadata is fully populated (e.g., CategoryPricing)
+    import app.models  # noqa: F401
     Base.metadata.create_all(bind=_engine)
     return _engine
 

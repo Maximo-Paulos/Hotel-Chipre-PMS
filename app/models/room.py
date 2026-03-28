@@ -1,11 +1,19 @@
 """
 Room and RoomCategory models.
-38-room hotel with multiple categories (Standard, Superior, Suite, etc.).
 """
 import enum
+
 from sqlalchemy import (
-    Column, Integer, String, Float, Boolean, ForeignKey, Enum, Text,
-    CheckConstraint, UniqueConstraint
+    Column,
+    Integer,
+    String,
+    Float,
+    Boolean,
+    ForeignKey,
+    Enum,
+    Text,
+    CheckConstraint,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
 
@@ -21,12 +29,13 @@ class RoomStatusEnum(str, enum.Enum):
 
 
 class RoomCategory(Base):
-    """Room category/type — e.g. Standard, Superior, Suite, Penthouse."""
+    """Room category/type â€” e.g. Standard, Superior, Suite, Penthouse."""
+
     __tablename__ = "room_categories"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(100), nullable=False, unique=True)  # "Standard Double"
-    code = Column(String(20), nullable=False, unique=True)   # "STD_DBL"
+    code = Column(String(20), nullable=False, unique=True)  # "STD_DBL"
     description = Column(Text, nullable=True)
     base_price_per_night = Column(Float, nullable=False)
     max_occupancy = Column(Integer, nullable=False, default=2)
@@ -46,6 +55,7 @@ class RoomCategory(Base):
 
 class Room(Base):
     """Physical room in the hotel."""
+
     __tablename__ = "rooms"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -64,9 +74,7 @@ class Room(Base):
     category = relationship("RoomCategory", back_populates="rooms", lazy="joined")
     reservations = relationship("Reservation", back_populates="room", lazy="selectin")
 
-    __table_args__ = (
-        CheckConstraint("floor >= 0", name="ck_room_floor_positive"),
-    )
+    __table_args__ = (CheckConstraint("floor >= 0", name="ck_room_floor_positive"),)
 
     def __repr__(self) -> str:
         return f"<Room(id={self.id}, number='{self.room_number}', category_id={self.category_id})>"

@@ -1,7 +1,7 @@
 """
 Reservation model with strict state machine.
-States: pending → deposit_paid → fully_paid → checked_in → checked_out
-                                                ↗ (skip deposit)
+States: pending â†’ deposit_paid â†’ fully_paid â†’ checked_in â†’ checked_out
+                                                â†— (skip deposit)
 Also supports: cancelled (from any pre-checkin state)
 """
 import enum

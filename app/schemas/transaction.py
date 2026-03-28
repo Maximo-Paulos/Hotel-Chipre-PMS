@@ -19,6 +19,7 @@ class PaymentRequest(BaseModel):
 
 class TransactionRead(BaseModel):
     id: int
+    hotel_id: int
     reservation_id: int
     amount: float
     currency: str
