@@ -197,6 +197,7 @@ class TestTransactionModel:
         db.flush()
 
         tx = Transaction(
+            hotel_id=1,
             reservation_id=res.id,
             amount=200.0,
             currency="ARS",
@@ -227,6 +228,7 @@ class TestTransactionModel:
         db.flush()
 
         tx = Transaction(
+            hotel_id=1,
             reservation_id=res.id,
             amount=100.0,
             currency="ARS",
