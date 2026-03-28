@@ -5,6 +5,8 @@ from app.models.transaction import Transaction, PaymentMethodEnum, TransactionSt
 from app.models.hotel_config import HotelConfiguration
 from app.models.ota import OTAReservationMapping
 from app.models.pricing import CategoryPricing
+from app.models.connection import Connection
+from app.models.onboarding import OnboardingState
 
 __all__ = [
     "Room", "RoomCategory",
@@ -14,4 +16,6 @@ __all__ = [
     "HotelConfiguration",
     "OTAReservationMapping",
     "CategoryPricing",
+    "Connection",
+    "OnboardingState",
 ]

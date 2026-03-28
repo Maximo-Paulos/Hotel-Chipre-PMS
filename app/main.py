@@ -3,17 +3,30 @@ Hotel PMS — FastAPI Main Application.
 Serves the API + static frontend files.
 """
 import os
-from fastapi import FastAPI, Depends
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, Depends, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from contextlib import asynccontextmanager
 from sqlalchemy.orm import Session
 
 from app.database import init_db, get_db
-from app.api import rooms, guests, reservations, payments, checkin, ota_webhooks, config, reports
+from app.api import (
+    rooms,
+    guests,
+    reservations,
+    payments,
+    checkin,
+    ota_webhooks,
+    config,
+    reports,
+    connections,
+    onboarding,
+)
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.pricing import CategoryPricing
 from app.models.hotel_config import HotelConfiguration
+from app.services import onboarding_service
 
 
 @asynccontextmanager
@@ -34,6 +47,7 @@ app = FastAPI(
 )
 
 # Register all API routers
+app.include_router(onboarding.router)
 app.include_router(rooms.router)
 app.include_router(guests.router)
 app.include_router(reservations.router)
@@ -42,6 +56,7 @@ app.include_router(checkin.router)
 app.include_router(ota_webhooks.router)
 app.include_router(config.router)
 app.include_router(reports.router)
+app.include_router(connections.router)
 
 # Mount static files
 static_dir = os.path.join(os.path.dirname(__file__), "static")
@@ -54,8 +69,18 @@ def health_check():
 
 
 @app.get("/")
-def serve_frontend():
-    """Serve the main frontend page."""
+def serve_frontend(db: Session = Depends(get_db)):
+    """Serve the main frontend page, gated by onboarding completion."""
+    status = onboarding_service.get_status(db)
+    if not status["completed"]:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "onboarding_required": True,
+                "missing_steps": status["missing_steps"],
+                "steps": status["steps"],
+            },
+        )
     return FileResponse(os.path.join(static_dir, "index.html"))
 
 
@@ -67,6 +92,7 @@ def reset_db(db: Session = Depends(get_db)):
     Base.metadata.create_all(bind=engine)
     db.commit()
     return {"status": "reset", "message": "Database wiped and recreated. Please call /api/seed"}
+
 
 @app.post("/api/seed")
 def seed_database(db: Session = Depends(get_db)):
@@ -91,19 +117,19 @@ def seed_database(db: Session = Depends(get_db)):
 
     # Exact room mapping from user input, grouped by an inferred floor (1, 2, 3) based on format
     rooms_data = [
-        ("1", "DBC", 1), ("2", "DBC", 1), ("3", "DBC", 1), ("4", "DBC", 1), ("5", "DBC", 1), 
+        ("1", "DBC", 1), ("2", "DBC", 1), ("3", "DBC", 1), ("4", "DBC", 1), ("5", "DBC", 1),
         ("6", "CBP", 1), ("7", "TBP", 1), ("9", "DBP", 1), ("10", "TBC", 1), ("11", "DBC", 1),
-        ("101", "DBP", 2), ("102", "DBC", 2), ("103", "TBP", 2), ("104", "DBP", 2), 
-        ("105", "TBP", 2), ("106", "DBC", 2), ("107", "DBC", 2), ("108", "DBC", 2), 
-        ("109", "TBC", 2), ("110", "DBP", 2), ("111", "TBP", 2), ("112", "TBC", 2), 
+        ("101", "DBP", 2), ("102", "DBC", 2), ("103", "TBP", 2), ("104", "DBP", 2),
+        ("105", "TBP", 2), ("106", "DBC", 2), ("107", "DBC", 2), ("108", "DBC", 2),
+        ("109", "TBC", 2), ("110", "DBP", 2), ("111", "TBP", 2), ("112", "TBC", 2),
         ("113", "DBP", 2), ("114", "DBP", 2), ("115", "DBP", 2), ("116", "DBC", 2),
-        ("201", "CBP", 3), ("202", "TBC", 3), ("203", "CBP", 3), ("204", "TBP", 3), 
-        ("205", "DBC", 3), ("206", "DBC", 3), ("207", "TBP", 3), ("208", "CBP", 3), 
+        ("201", "CBP", 3), ("202", "TBC", 3), ("203", "CBP", 3), ("204", "TBP", 3),
+        ("205", "DBC", 3), ("206", "DBC", 3), ("207", "TBP", 3), ("208", "CBP", 3),
         ("209", "TBC", 3), ("210", "TBP", 3), ("211", "CBC", 3), ("212", "TBC", 3)
     ]
-    
+
     rooms_list = [
-        Room(room_number=r[0], floor=r[2], category_id=cat_dict[r[1]].id) 
+        Room(room_number=r[0], floor=r[2], category_id=cat_dict[r[1]].id)
         for r in rooms_data
     ]
     db.add_all(rooms_list)
