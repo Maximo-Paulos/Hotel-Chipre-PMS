@@ -1,39 +1,127 @@
-import { Link } from "react-router-dom";
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+
+import { ApiError } from "../../api/client";
+import { setOwner } from "../../api/onboarding";
+import { safeHotelId, useSession } from "../../state/session";
 
 export function RegisterOwnerPage() {
+  const navigate = useNavigate();
+  const { login } = useSession();
+  const [form, setForm] = useState({ name: "", lastName: "", email: "", password: "", phone: "" });
+  const [hotelId, setHotelId] = useState("1");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleChange = (field: string, value: string) => setForm((prev) => ({ ...prev, [field]: value }));
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    const sessionData = { userId: form.email || "owner", email: form.email, hotelId: safeHotelId(hotelId) };
+    login(sessionData);
+
+    try {
+      await setOwner(
+        {
+          name: `${form.name} ${form.lastName}`.trim(),
+          email: form.email,
+          phone: form.phone,
+          role: "Owner",
+        },
+        sessionData
+      );
+      navigate("/verify-email", { replace: true });
+    } catch (err) {
+      if (err instanceof ApiError) setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
       <div className="w-full max-w-2xl rounded-2xl bg-white p-8 shadow-lg ring-1 ring-slate-100">
         <div className="mb-6 flex items-start justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-slate-900">Crear cuenta de dueño</h1>
-            <p className="text-sm text-slate-600">Pasos mínimos: email verificado + onboarding completo antes del dashboard.</p>
+            <h1 className="text-2xl font-semibold text-slate-900">Crear cuenta de dueÃ±o</h1>
+            <p className="text-sm text-slate-600">
+              Guardamos el owner en /api/onboarding/owner y forzamos onboarding antes del dashboard.
+            </p>
           </div>
           <Link to="/login" className="text-sm text-brand-700 hover:underline">
             Ya tengo cuenta
           </Link>
         </div>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <form className="grid grid-cols-1 gap-4 md:grid-cols-2" onSubmit={handleSubmit}>
           <label className="text-sm font-medium text-slate-700">
             Nombre
-            <input className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 shadow-sm focus:border-brand-500 focus:ring-brand-500" />
+            <input
+              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 shadow-sm focus:border-brand-500 focus:ring-brand-500"
+              value={form.name}
+              onChange={(e) => handleChange("name", e.target.value)}
+              required
+            />
           </label>
           <label className="text-sm font-medium text-slate-700">
             Apellido
-            <input className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 shadow-sm focus:border-brand-500 focus:ring-brand-500" />
+            <input
+              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 shadow-sm focus:border-brand-500 focus:ring-brand-500"
+              value={form.lastName}
+              onChange={(e) => handleChange("lastName", e.target.value)}
+              required
+            />
           </label>
           <label className="text-sm font-medium text-slate-700">
             Email corporativo
-            <input className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 shadow-sm focus:border-brand-500 focus:ring-brand-500" />
+            <input
+              type="email"
+              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 shadow-sm focus:border-brand-500 focus:ring-brand-500"
+              value={form.email}
+              onChange={(e) => handleChange("email", e.target.value)}
+              required
+            />
           </label>
           <label className="text-sm font-medium text-slate-700">
-            Contraseña
-            <input type="password" className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 shadow-sm focus:border-brand-500 focus:ring-brand-500" />
+            TelÃ©fono
+            <input
+              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 shadow-sm focus:border-brand-500 focus:ring-brand-500"
+              value={form.phone}
+              onChange={(e) => handleChange("phone", e.target.value)}
+            />
           </label>
-        </div>
-        <button className="mt-6 w-full rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700">
-          Crear cuenta y verificar email
-        </button>
+          <label className="text-sm font-medium text-slate-700">
+            ContraseÃ±a
+            <input
+              type="password"
+              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 shadow-sm focus:border-brand-500 focus:ring-brand-500"
+              value={form.password}
+              onChange={(e) => handleChange("password", e.target.value)}
+            />
+          </label>
+          <label className="text-sm font-medium text-slate-700">
+            Hotel ID (X-Hotel-Id)
+            <input
+              type="number"
+              min={1}
+              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 shadow-sm focus:border-brand-500 focus:ring-brand-500"
+              value={hotelId}
+              onChange={(e) => setHotelId(e.target.value)}
+            />
+          </label>
+          {error && <p className="col-span-2 rounded-md bg-rose-50 p-3 text-rose-700">{error}</p>}
+          <div className="col-span-2">
+            <button
+              className="mt-2 w-full rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-70"
+              disabled={loading}
+              type="submit"
+            >
+              {loading ? "Creando..." : "Crear cuenta y verificar email"}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );

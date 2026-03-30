@@ -96,33 +96,25 @@ def add_reservation_guests(reservation_id: int, guests: list[GuestCreate], db: S
     db.commit()
     db.refresh(reservation)
     return _to_read(reservation)
-def get_reservation(reservation_id: int, db: Session = Depends(get_db)):
-    r = db.query(Reservation).filter(Reservation.id == reservation_id).first()
-    if not r:
-        raise HTTPException(status_code=404, detail="Reservation not found")
-    return _to_read(r)
 
 
 @router.post("/{reservation_id}/cancel", response_model=ReservationRead)
-def cancel_reservation(reservation_id: int, manager_pin: str = None, db: Session = Depends(get_db)):
-    """Cancel a reservation. Requires PIN for checked-in or checked-out states."""
-    from app.config import get_settings
-    settings = get_settings()
-    
+def cancel_reservation(
+    reservation_id: int,
+    manager_pin: str | None = None,
+    db: Session = Depends(get_db),
+):
+    """Cancel a reservation. Post check-in cancellations are not allowed."""
     r = db.query(Reservation).filter(Reservation.id == reservation_id).first()
     if not r:
         raise HTTPException(status_code=404, detail="Reservation not found")
-        
+
     if r.status in (ReservationStatusEnum.CHECKED_IN, ReservationStatusEnum.CHECKED_OUT):
-        if manager_pin != settings.MANAGER_PIN:
-            raise HTTPException(
-                status_code=403,
-                detail=f"Se requiere el Código de Dueño (PIN) para cancelar/reembolsar reservas que ya ingresaron o salieron."
-            )
-        # Clear the room association to release the room completely
-        if r.room_id is not None:
-            r.room_id = None
-            
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot cancel a reservation that is already checked-in or checked-out",
+        )
+
     if r.status == ReservationStatusEnum.CANCELLED:
         raise HTTPException(status_code=400, detail="Reservation is already cancelled")
     try:

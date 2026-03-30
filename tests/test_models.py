@@ -120,6 +120,8 @@ class TestReservationModel:
         # From CHECKED_IN — only checkout
         assert ReservationStatusEnum.CHECKED_OUT in VALID_TRANSITIONS[ReservationStatusEnum.CHECKED_IN]
         assert len(VALID_TRANSITIONS[ReservationStatusEnum.CHECKED_IN]) == 1
+        assert ReservationStatusEnum.CANCELLED not in VALID_TRANSITIONS[ReservationStatusEnum.CHECKED_IN]
+        assert ReservationStatusEnum.CANCELLED not in VALID_TRANSITIONS[ReservationStatusEnum.CHECKED_OUT]
 
         # Terminal states
         assert len(VALID_TRANSITIONS[ReservationStatusEnum.CHECKED_OUT]) == 0

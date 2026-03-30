@@ -229,3 +229,28 @@ class TestStateTransitions:
         transition_reservation_status(db, res, ReservationStatusEnum.CANCELLED)
         with pytest.raises(ReservationError, match="Cannot transition"):
             transition_reservation_status(db, res, ReservationStatusEnum.PENDING)
+
+    def test_cancel_not_allowed_after_checkin(self, db, sample_guest, sample_rooms, sample_categories, hotel_config):
+        data = ReservationCreate(
+            guest_id=sample_guest.id,
+            category_id=sample_categories[0].id,
+            check_in_date=date(2026, 4, 1),
+            check_out_date=date(2026, 4, 3),
+        )
+        res = create_reservation(db, data)
+
+        # Move through the normal flow up to check-in
+        transition_reservation_status(db, res, ReservationStatusEnum.FULLY_PAID)
+        transition_reservation_status(db, res, ReservationStatusEnum.CHECKED_IN)
+        original_room = res.room_id
+
+        with pytest.raises(ReservationError, match="Cannot transition"):
+            transition_reservation_status(db, res, ReservationStatusEnum.CANCELLED)
+
+        assert res.status == ReservationStatusEnum.CHECKED_IN
+        assert res.room_id == original_room  # Room link is preserved
+
+        # Once checked-out, cancellation is still blocked
+        transition_reservation_status(db, res, ReservationStatusEnum.CHECKED_OUT)
+        with pytest.raises(ReservationError, match="Cannot transition"):
+            transition_reservation_status(db, res, ReservationStatusEnum.CANCELLED)
