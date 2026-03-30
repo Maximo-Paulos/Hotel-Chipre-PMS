@@ -3,7 +3,7 @@
    Complete SPA logic for the hotel management system.
    ═══════════════════════════════════════════════════════════════ */
 
-const API = 'http://localhost:8000';
+const API = '';
 let allReservations = [];
 let allRooms = [];
 let allCategories = [];
@@ -14,15 +14,10 @@ calendarStart.setHours(0, 0, 0, 0);
 
 // ── INITIALIZATION ──
 document.addEventListener('DOMContentLoaded', async () => {
-  await seedIfNeeded();
   await loadAllData();
   renderDashboard();
   setInterval(() => { if (document.querySelector('#sec-dashboard.active')) renderDashboard(); }, 30000);
 });
-
-async function seedIfNeeded() {
-  try { await api('/api/seed', 'POST'); } catch (e) { }
-}
 
 // ── API HELPER ──
 async function api(path, method = 'GET', body = null) {

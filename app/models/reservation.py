@@ -145,6 +145,12 @@ class Reservation(Base):
 
     def can_transition_to(self, new_status: ReservationStatusEnum) -> bool:
         """Check if a state transition is valid."""
+        if (
+            self.status in (ReservationStatusEnum.CHECKED_IN, ReservationStatusEnum.CHECKED_OUT)
+            and new_status == ReservationStatusEnum.CANCELLED
+        ):
+            # Defensive guard: never allow cancellations after check-in/checkout
+            return False
         return new_status in VALID_TRANSITIONS.get(self.status, set())
 
     def __repr__(self) -> str:

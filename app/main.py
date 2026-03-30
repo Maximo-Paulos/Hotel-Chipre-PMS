@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
-from app.database import init_db, get_db
+from app.database import init_db, get_db, Base
 from app.api import (
     rooms,
     guests,
@@ -27,6 +27,19 @@ from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.pricing import CategoryPricing
 from app.models.hotel_config import HotelConfiguration
 from app.services import onboarding_service
+
+
+def _is_demo_mode_enabled() -> bool:
+    """Check whether demo-only utilities should be exposed."""
+    return os.getenv("DEMO_MODE", "").lower() in {"1", "true", "yes", "on"}
+
+
+def _require_demo_mode():
+    if not _is_demo_mode_enabled():
+        raise HTTPException(
+            status_code=403,
+            detail="Demo mode is disabled. Set DEMO_MODE=true to use this endpoint.",
+        )
 
 
 @asynccontextmanager
@@ -60,7 +73,10 @@ app.include_router(connections.router)
 
 # Mount static files
 static_dir = os.path.join(os.path.dirname(__file__), "static")
+frontend_dist = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "frontend", "dist"))
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
+if os.path.exists(os.path.join(frontend_dist, "assets")):
+    app.mount("/assets", StaticFiles(directory=os.path.join(frontend_dist, "assets")), name="frontend-assets")
 
 
 @app.get("/health")
@@ -81,13 +97,33 @@ def serve_frontend(db: Session = Depends(get_db)):
                 "steps": status["steps"],
             },
         )
-    return FileResponse(os.path.join(static_dir, "index.html"))
+    index_candidates = [
+        os.path.join(frontend_dist, "index.html"),
+        os.path.join(static_dir, "dist", "index.html"),
+        os.path.join(static_dir, "index.html"),
+    ]
+    for path in index_candidates:
+        if os.path.exists(path):
+            return FileResponse(path)
+    raise HTTPException(status_code=404, detail="Frontend build no encontrado")
+
+
+@app.get("/{full_path:path}")
+def serve_spa(full_path: str, db: Session = Depends(get_db)):
+    """
+    SPA fallback for React Router.
+    Skips API/static paths to avoid shadowing.
+    """
+    if full_path.startswith(("api", "static", "health", "assets")):
+        raise HTTPException(status_code=404)
+    return serve_frontend(db)
 
 
 @app.post("/api/reset")
 def reset_db(db: Session = Depends(get_db)):
     """Hard reset of development database."""
-    from app.database import engine, Base
+    _require_demo_mode()
+    engine = db.get_bind()
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
     db.commit()
@@ -97,6 +133,7 @@ def reset_db(db: Session = Depends(get_db)):
 @app.post("/api/seed")
 def seed_database(db: Session = Depends(get_db)):
     """Populate the database with initial hotel data (categories, rooms, config)."""
+    _require_demo_mode()
     # Check if already seeded
     existing = db.query(RoomCategory).first()
     if existing:
