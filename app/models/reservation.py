@@ -48,11 +48,8 @@ VALID_TRANSITIONS: dict[ReservationStatusEnum, set[ReservationStatusEnum]] = {
     },
     ReservationStatusEnum.CHECKED_IN: {
         ReservationStatusEnum.CHECKED_OUT,
-        ReservationStatusEnum.CANCELLED,
     },
-    ReservationStatusEnum.CHECKED_OUT: {
-        ReservationStatusEnum.CANCELLED,
-    },
+    ReservationStatusEnum.CHECKED_OUT: set(),
     ReservationStatusEnum.CANCELLED: set(),     # Terminal state
 }
 

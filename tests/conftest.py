@@ -149,7 +149,7 @@ def sample_guest(db: Session) -> Guest:
     """Create a sample guest with full check-in data."""
     guest = Guest(
         first_name="Carlos",
-        last_name="PÃ©rez",
+        last_name="Pérez",
         document_type="DNI",
         document_number="30456789",
         nationality="Argentina",
@@ -166,8 +166,8 @@ def sample_guest(db: Session) -> Guest:
 def sample_guest_incomplete(db: Session) -> Guest:
     """Create a guest WITHOUT identity documents (for check-in validation tests)."""
     guest = Guest(
-        first_name="MarÃ­a",
-        last_name="LÃ³pez",
+        first_name="María",
+        last_name="López",
         email="maria@email.com",
         terms_accepted=False,
         # No document_type, no document_number
