@@ -41,6 +41,13 @@ class Settings(BaseSettings):
     HOTEL_TIMEZONE: str = "America/Argentina/Buenos_Aires"
     MANAGER_PIN: str = "1234"
 
+    # SMTP / Email
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASS: str = ""
+    SMTP_FROM: str = "Hotel PMS <noreply@example.com>"
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 

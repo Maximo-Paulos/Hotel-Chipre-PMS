@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies.auth import AuthContext, require_permission
+from app.config import get_settings
 from app.models.hotel_config import HotelConfiguration
 from app.schemas.hotel_config import HotelConfigRead, HotelConfigUpdate
 from app.services.payment_service import get_hotel_config
@@ -36,3 +37,16 @@ def update_configuration(
     db.commit()
     db.refresh(config)
     return config
+
+
+@router.get("/smtp")
+def smtp_status():
+    """
+    Lightweight status so the frontend can check if SMTP is configured.
+    """
+    settings = get_settings()
+    return {
+        "configured": bool(settings.SMTP_HOST and settings.SMTP_USER and settings.SMTP_PASS),
+        "from": settings.SMTP_FROM,
+        "host": settings.SMTP_HOST,
+    }

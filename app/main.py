@@ -24,6 +24,7 @@ from app.api import (
     connections,
     bookings,
     onboarding,
+    email,
 )
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.pricing import CategoryPricing
@@ -73,6 +74,7 @@ app.include_router(ota_webhooks.router)
 app.include_router(config.router)
 app.include_router(reports.router)
 app.include_router(connections.router)
+app.include_router(email.router)
 
 # Frontend build paths
 BASE_DIR = Path(__file__).resolve().parent
