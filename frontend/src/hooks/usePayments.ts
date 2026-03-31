@@ -7,9 +7,10 @@ const summaryKey = (hotelId: number, reservationId: number) => ["payment-summary
 
 export function usePaymentSummary(reservationId?: number) {
   const { session } = useSession();
+  const queryKey = reservationId ? summaryKey(session.hotelId, reservationId) : ["payment-summary", "none"];
 
   return useQuery<PaymentSummary>({
-    queryKey: reservationId ? summaryKey(session.hotelId, reservationId) : [],
+    queryKey,
     queryFn: () => getPaymentSummary(reservationId!, session),
     enabled: Boolean(reservationId),
     staleTime: 1000 * 30
