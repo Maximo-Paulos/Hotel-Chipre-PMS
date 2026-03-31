@@ -16,6 +16,7 @@ from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.guest import Guest
 from app.models.reservation import Reservation, ReservationStatusEnum, ReservationSourceEnum
 from app.models.hotel_config import HotelConfiguration
+from app.models.pricing import CategoryPricing
 from app.schemas.reservation import ReservationCreate
 
 
@@ -28,6 +29,36 @@ def generate_confirmation_code(prefix: str = "RES") -> str:
     """Generate a unique, human-readable confirmation code."""
     random_part = "".join(random.choices(string.ascii_uppercase + string.digits, k=8))
     return f"{prefix}-{random_part}"
+
+
+def compute_reservation_pricing(
+    db: Session,
+    category_id: int,
+    check_in: date,
+    check_out: date,
+) -> tuple[int, float, float, float]:
+    """
+    Calculate nights, nightly rate, total amount, and deposit amount for a stay.
+    Raises ReservationError for invalid dates or missing category.
+    """
+    category = db.query(RoomCategory).filter(RoomCategory.id == category_id).first()
+    if not category:
+        raise ReservationError(f"Room category with id={category_id} not found")
+
+    nights = (check_out - check_in).days
+    if nights <= 0:
+        raise ReservationError("Check-out date must be after check-in date")
+
+    pricing = db.query(CategoryPricing).filter(CategoryPricing.category_id == category_id).first()
+    nightly_rate = pricing.price_cash if pricing and pricing.price_cash is not None else category.base_price_per_night
+
+    total_amount = round(nightly_rate * nights, 2)
+
+    config = db.query(HotelConfiguration).filter(HotelConfiguration.id == 1).first()
+    deposit_pct = config.deposit_percentage if config else 30.0
+    deposit_amount = round(total_amount * (deposit_pct / 100.0), 2)
+
+    return nights, nightly_rate, total_amount, deposit_amount
 
 
 def check_room_availability(
@@ -104,14 +135,9 @@ def create_reservation(db: Session, data: ReservationCreate) -> Reservation:
     if not category:
         raise ReservationError(f"Room category with id={data.category_id} not found")
 
-    nights = (data.check_out_date - data.check_in_date).days
-    if nights <= 0:
-        raise ReservationError("Check-out date must be after check-in date")
-
-    from app.models.pricing import CategoryPricing
-    pricing = db.query(CategoryPricing).filter(CategoryPricing.category_id == data.category_id).first()
-    price_night = pricing.price_cash if pricing and pricing.price_cash is not None else category.base_price_per_night
-    total_amount = price_night * nights
+    nights, price_night, total_amount, deposit_amount = compute_reservation_pricing(
+        db, data.category_id, data.check_in_date, data.check_out_date
+    )
 
     # 3/4. Room assignment with locking
     room_id = data.room_id
@@ -137,11 +163,6 @@ def create_reservation(db: Session, data: ReservationCreate) -> Reservation:
                 f"No rooms available in category {category.name} for the requested dates"
             )
         room_id = available[0].id
-
-    # Get hotel config for deposit calculation
-    config = db.query(HotelConfiguration).filter(HotelConfiguration.id == 1).first()
-    deposit_pct = config.deposit_percentage if config else 30.0
-    deposit_amount = round(total_amount * (deposit_pct / 100.0), 2)
 
     # 5. Create reservation
     confirmation_code = generate_confirmation_code()

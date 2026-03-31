@@ -74,3 +74,8 @@ class CategoryPricingRead(CategoryPricingSchema):
     model_config = {"from_attributes": True}
 
     model_config = {"from_attributes": True}
+
+# ── Housekeeping responses ──
+class RoomStatusUpdateResponse(BaseModel):
+    room: RoomRead
+    reallocation: Optional[dict] = None

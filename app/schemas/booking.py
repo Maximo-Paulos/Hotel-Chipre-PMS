@@ -7,6 +7,7 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 from app.models.reservation import ReservationStatusEnum, ReservationSourceEnum
+from app.schemas.reservation import GuestSummary
 
 
 class BookingCreate(BaseModel):
@@ -58,5 +59,10 @@ class BookingRead(BaseModel):
     notes: Optional[str]
     created_at: Optional[datetime]
     updated_at: Optional[datetime]
+    actual_check_in: Optional[datetime] = None
+    actual_check_out: Optional[datetime] = None
+    balance_due: float = 0.0
+    nights: int = 0
+    additional_guests: list[GuestSummary] = []
 
     model_config = {"from_attributes": True}

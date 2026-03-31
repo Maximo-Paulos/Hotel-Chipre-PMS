@@ -19,6 +19,7 @@ from app.schemas.room import (
     CategoryPricingSchema,
     CategoryPricingRead,
     RoomUpdate,
+    RoomStatusUpdateResponse,
 )
 from app.services.reservation_service import find_available_rooms
 
@@ -42,6 +43,14 @@ def create_category(data: RoomCategoryCreate, db: Session = Depends(get_db)):
 @router.get("/categories", response_model=list[RoomCategoryRead])
 def list_categories(db: Session = Depends(get_db)):
     return db.query(RoomCategory).all()
+
+
+@router.get("/categories/{category_id}", response_model=RoomCategoryRead)
+def get_category(category_id: int, db: Session = Depends(get_db)):
+    category = db.query(RoomCategory).filter(RoomCategory.id == category_id).first()
+    if not category:
+        raise HTTPException(status_code=404, detail="Category not found")
+    return category
 
 
 @router.get("/categories/pricing/all", response_model=list[CategoryPricingRead])
@@ -158,7 +167,7 @@ def update_room(room_id: int, data: RoomUpdate, db: Session = Depends(get_db)):
     return room
 
 
-@router.patch("/{room_id}/status")
+@router.patch("/{room_id}/status", response_model=RoomStatusUpdateResponse)
 def update_room_status(room_id: int, data: RoomStatusUpdate, db: Session = Depends(get_db)):
     """Update room status for housekeeping. When a room is set to cleaning/maintenance/blocked,
     any reservations assigned to it are automatically relocated by the allocation engine."""
@@ -191,13 +200,7 @@ def update_room_status(room_id: int, data: RoomStatusUpdate, db: Session = Depen
         except Exception as e:
             realloc_result = {"error": str(e)}
     
-    return {
-        "id": room.id, 
-        "room_number": room.room_number, 
-        "status": room.status.value, 
-        "notes": room.notes,
-        "reallocation": realloc_result,
-    }
+    return {"room": room, "reallocation": realloc_result}
 
 
 class RoomCategoryUpdate(BaseModel):

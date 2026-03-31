@@ -107,6 +107,11 @@ def perform_checkin(
         raise CheckInError(str(e))
 
     reservation.actual_check_in = datetime.now(timezone.utc)
+    # Mark room as occupied for housekeeping dashboard
+    if reservation.room_id is not None:
+        room = db.query(Room).filter(Room.id == reservation.room_id).first()
+        if room:
+            room.status = RoomStatusEnum.OCCUPIED
     db.flush()
 
     return reservation

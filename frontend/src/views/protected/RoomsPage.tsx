@@ -1,19 +1,49 @@
-import { mockRooms } from "../../data/mock";
+import { useMemo, useState } from "react";
 
-const statusColors: Record<string, string> = {
-  Libre: "bg-emerald-100 text-emerald-800",
-  Ocupada: "bg-rose-100 text-rose-800",
-  Limpieza: "bg-amber-100 text-amber-800"
+import { type RoomStatus } from "../../api/rooms";
+import { roomStatusLabel, useRooms } from "../../hooks/useRooms";
+
+const statusColors: Record<RoomStatus, string> = {
+  available: "bg-emerald-100 text-emerald-800",
+  occupied: "bg-rose-100 text-rose-800",
+  cleaning: "bg-amber-100 text-amber-800",
+  maintenance: "bg-orange-100 text-orange-800",
+  blocked: "bg-slate-200 text-slate-700"
 };
 
+const statusOptions: RoomStatus[] = ["available", "occupied", "cleaning"];
+
 export function RoomsPage() {
-  const stats = mockRooms.reduce(
-    (acc, room) => {
-      acc[room.status] = (acc[room.status] || 0) + 1;
-      return acc;
-    },
-    {} as Record<string, number>
-  );
+  const { roomsQuery, categoriesQuery, updateStatusMutation } = useRooms();
+  const rooms = roomsQuery.data || [];
+  const categories = categoriesQuery.data || [];
+  const [pendingRoom, setPendingRoom] = useState<number | null>(null);
+
+  const categoryById = useMemo(() => {
+    const map = new Map<number, { name: string; code: string; base_price_per_night: number }>();
+    categories.forEach((cat) => map.set(cat.id, { name: cat.name, code: cat.code, base_price_per_night: cat.base_price_per_night }));
+    return map;
+  }, [categories]);
+
+  const stats = useMemo(() => {
+    return rooms.reduce(
+      (acc, room) => {
+        acc[room.status] = (acc[room.status] || 0) + 1;
+        return acc;
+      },
+      {} as Record<RoomStatus, number>
+    );
+  }, [rooms]);
+
+  const handleStatusUpdate = (roomId: number, status: RoomStatus) => {
+    setPendingRoom(roomId);
+    updateStatusMutation.mutate(
+      { roomId, status },
+      {
+        onSettled: () => setPendingRoom(null)
+      }
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -21,44 +51,73 @@ export function RoomsPage() {
         <div>
           <p className="text-xs uppercase tracking-wide text-slate-500">Operación</p>
           <h1 className="text-2xl font-semibold text-slate-900">Habitaciones</h1>
-          <p className="text-sm text-slate-600">Inventario rápido con estado mockeado (libre, ocupada, limpieza).</p>
+          <p className="text-sm text-slate-600">Inventario en vivo con actualización de estado (libre, ocupada, limpieza).</p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <button className="rounded-lg border border-brand-200 bg-brand-50 px-4 py-2 text-sm font-semibold text-brand-700 hover:border-brand-300 hover:bg-brand-100">
-            Agregar habitación
-          </button>
-          <button className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:border-slate-300">
-            Reasignar limpieza
-          </button>
-        </div>
+        {roomsQuery.isFetching && <p className="text-xs text-slate-500">Actualizando estado...</p>}
       </header>
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <StatusBadge label="Libres" value={stats.Libre ?? 0} className={statusColors.Libre} />
-        <StatusBadge label="Ocupadas" value={stats.Ocupada ?? 0} className={statusColors.Ocupada} />
-        <StatusBadge label="En limpieza" value={stats.Limpieza ?? 0} className={statusColors.Limpieza} />
+        <StatusBadge label="Libres" value={stats.available ?? 0} className={statusColors.available} />
+        <StatusBadge label="Ocupadas" value={stats.occupied ?? 0} className={statusColors.occupied} />
+        <StatusBadge label="En limpieza" value={stats.cleaning ?? 0} className={statusColors.cleaning} />
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {mockRooms.map((room) => (
-          <div key={room.number} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-xs uppercase tracking-wide text-slate-500">Hab. {room.number}</p>
-                <h2 className="text-lg font-semibold text-slate-900">{room.category}</h2>
-                <p className="text-xs text-slate-500">Piso {room.floor}</p>
-              </div>
-              <span className={`rounded-full px-2 py-1 text-xs font-semibold ${statusColors[room.status]}`}>
-                {room.status}
-              </span>
-            </div>
-            <p className="mt-3 text-sm text-slate-700">{room.note || "Sin notas"}</p>
-            <div className="mt-4 flex gap-2 text-xs text-slate-600">
-              <button className="rounded-lg border border-slate-200 px-2 py-1 hover:border-slate-300">Detalle</button>
-              <button className="rounded-lg border border-slate-200 px-2 py-1 hover:border-slate-300">Mover</button>
-            </div>
+      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-wide text-slate-500">Inventario</p>
+            <h2 className="text-lg font-semibold text-slate-900">Habitaciones ({rooms.length})</h2>
+            {roomsQuery.error && <p className="text-xs text-rose-700">No se pudo cargar: {(roomsQuery.error as Error).message}</p>}
           </div>
-        ))}
+        </div>
+
+        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {rooms.map((room) => {
+            const category = categoryById.get(room.category_id);
+            return (
+              <div key={room.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-slate-500">Hab. {room.room_number}</p>
+                    <h2 className="text-lg font-semibold text-slate-900">{category?.name || room.category?.name || `Categoría ${room.category_id}`}</h2>
+                    <p className="text-xs text-slate-500">
+                      Piso {room.floor} · {category?.code || room.category?.code || "sin código"} · $
+                      {category?.base_price_per_night || room.category?.base_price_per_night || "?"}/noche
+                    </p>
+                  </div>
+                  <span className={`rounded-full px-2 py-1 text-xs font-semibold ${statusColors[room.status]}`}>
+                    {roomStatusLabel[room.status]}
+                  </span>
+                </div>
+                <p className="mt-3 text-sm text-slate-700">{room.notes || "Sin notas"}</p>
+                <div className="mt-4 text-xs text-slate-600">
+                  <select
+                    value={room.status}
+                    onChange={(e) => handleStatusUpdate(room.id, e.target.value as RoomStatus)}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-brand-400 focus:outline-none disabled:bg-slate-50"
+                    disabled={pendingRoom === room.id && updateStatusMutation.isLoading}
+                  >
+                    {statusOptions.map((status) => (
+                      <option key={status} value={status}>
+                        {roomStatusLabel[status]}
+                      </option>
+                    ))}
+                    <option value="maintenance">Mantenimiento</option>
+                    <option value="blocked">Bloqueada</option>
+                  </select>
+                  {pendingRoom === room.id && updateStatusMutation.isLoading && (
+                    <p className="mt-2 text-xs text-slate-500">Guardando...</p>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+          {!roomsQuery.isLoading && rooms.length === 0 && (
+            <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-600">
+              No hay habitaciones cargadas en el sistema.
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

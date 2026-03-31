@@ -11,6 +11,7 @@ import app.main as main_module
 from app.database import Base, get_db
 from app.models.guest import Guest
 from app.models.room import Room, RoomCategory, RoomStatusEnum
+from app.models.reservation import Reservation, ReservationStatusEnum
 
 
 @pytest.fixture
@@ -94,6 +95,36 @@ def test_rooms_crud_smoke(api_client):
     assert list_resp.json() == []
 
 
+def test_room_status_and_category_fetch(api_client):
+    client, SessionLocal = api_client
+    with SessionLocal() as db:
+        cat = RoomCategory(
+            name="Status Cat",
+            code="STAT_CAT",
+            base_price_per_night=90.0,
+            max_occupancy=2,
+        )
+        db.add(cat)
+        db.flush()
+        room = Room(room_number="401", floor=4, category_id=cat.id, status=RoomStatusEnum.AVAILABLE)
+        db.add(room)
+        db.commit()
+        db.refresh(cat)
+        db.refresh(room)
+        cat_id, room_id = cat.id, room.id
+
+    cat_resp = client.get(f"/api/rooms/categories/{cat_id}")
+    assert cat_resp.status_code == 200
+    assert cat_resp.json()["code"] == "STAT_CAT"
+
+    status_resp = client.patch(f"/api/rooms/{room_id}/status", json={"status": RoomStatusEnum.MAINTENANCE.value, "notes": "Deep clean"})
+    assert status_resp.status_code == 200
+    body = status_resp.json()
+    assert body["room"]["id"] == room_id
+    assert body["room"]["status"] == RoomStatusEnum.MAINTENANCE.value
+    assert body["room"]["notes"] == "Deep clean"
+    assert "reallocation" in body
+
 def test_bookings_basic_flow(api_client):
     client, SessionLocal = api_client
     today = date.today()
@@ -145,3 +176,81 @@ def test_bookings_basic_flow(api_client):
     listing_after = client.get("/api/bookings/")
     assert listing_after.status_code == 200
     assert listing_after.json() == []
+
+
+def test_booking_status_and_overlap(api_client):
+    client, SessionLocal = api_client
+    start = date(2026, 4, 1)
+    end = start + timedelta(days=2)  # 2 nights
+
+    with SessionLocal() as db:
+        cat = RoomCategory(
+            name="Standard API",
+            code="STD_API",
+            base_price_per_night=120.0,
+            max_occupancy=2,
+        )
+        guest = Guest(first_name="API", last_name="Tester", email="api@test.com")
+        room1 = Room(room_number="301", floor=3, category_id=1, status=RoomStatusEnum.AVAILABLE)
+        room2 = Room(room_number="302", floor=3, category_id=1, status=RoomStatusEnum.AVAILABLE)
+        db.add_all([cat, guest])
+        db.flush()
+        room1.category_id = cat.id
+        room2.category_id = cat.id
+        db.add_all([room1, room2])
+        db.commit()
+        db.refresh(cat)
+        db.refresh(guest)
+        db.refresh(room1)
+        db.refresh(room2)
+        cat_id, guest_id, room1_id, room2_id = cat.id, guest.id, room1.id, room2.id
+
+    quote = client.get(
+        "/api/bookings/price-quote",
+        params={"category_id": cat_id, "check_in_date": start.isoformat(), "check_out_date": end.isoformat()},
+    )
+    assert quote.status_code == 200
+    payload = quote.json()
+    assert payload["nights"] == 2
+    assert payload["total_amount"] == 240.0
+    assert payload["deposit_amount"] == pytest.approx(72.0)
+
+    base_payload = {
+        "guest_id": guest_id,
+        "category_id": cat_id,
+        "check_in_date": start.isoformat(),
+        "check_out_date": end.isoformat(),
+        "num_adults": 2,
+    }
+    create1 = client.post("/api/bookings/", json=base_payload | {"room_id": room1_id})
+    assert create1.status_code == 201
+    booking1_id = create1.json()["id"]
+    assert create1.json()["balance_due"] == pytest.approx(240.0)
+
+    # Overlap on same room should fail
+    overlap = client.post("/api/bookings/", json=base_payload | {"room_id": room1_id})
+    assert overlap.status_code == 400
+
+    # Use second room for status flow
+    create2 = client.post("/api/bookings/", json=base_payload | {"room_id": room2_id})
+    assert create2.status_code == 201
+    booking2_id = create2.json()["id"]
+
+    # Cancel booking1
+    cancel = client.post(f"/api/bookings/{booking1_id}/cancel")
+    assert cancel.status_code == 200
+    assert cancel.json()["status"] == ReservationStatusEnum.CANCELLED.value
+
+    # Mark booking2 as fully paid and perform check-in/out
+    with SessionLocal() as db:
+        res = db.query(Reservation).filter(Reservation.id == booking2_id).first()
+        res.status = ReservationStatusEnum.FULLY_PAID
+        db.commit()
+
+    checkin = client.post(f"/api/bookings/{booking2_id}/checkin")
+    assert checkin.status_code == 200
+    assert checkin.json()["status"] == ReservationStatusEnum.CHECKED_IN.value
+
+    checkout_resp = client.post(f"/api/bookings/{booking2_id}/checkout")
+    assert checkout_resp.status_code == 200
+    assert checkout_resp.json()["status"] == ReservationStatusEnum.CHECKED_OUT.value

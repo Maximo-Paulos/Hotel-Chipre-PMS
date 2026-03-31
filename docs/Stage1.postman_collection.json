@@ -1,0 +1,261 @@
+{
+  "info": {
+    "name": "Hotel PMS Stage 1",
+    "_postman_id": "c2f67162-1c1e-4c7c-b4e4-7e6744f6a9c2",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Core Stage 1 flow: onboarding, guest, reservation, payment, check-in/out."
+  },
+  "item": [
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/health",
+          "path": [
+            "health"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Onboarding - Status",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "X-Hotel-Id", "value": "{{hotelId}}" },
+          { "key": "X-User-Id", "value": "{{userId}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/onboarding/status",
+          "path": ["api", "onboarding", "status"]
+        }
+      }
+    },
+    {
+      "name": "Onboarding - Owner",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Hotel-Id", "value": "{{hotelId}}" },
+          { "key": "X-User-Id", "value": "{{userId}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Ana Owner\",\n  \"email\": \"ana@chipre.test\",\n  \"phone\": \"+54 11 5555 1234\",\n  \"role\": \"Owner\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/onboarding/owner",
+          "path": ["api", "onboarding", "owner"]
+        }
+      }
+    },
+    {
+      "name": "Onboarding - Categories",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Hotel-Id", "value": "{{hotelId}}" },
+          { "key": "X-User-Id", "value": "{{userId}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"categories\": [\n    {\"name\": \"Doble\", \"code\": \"DBL\", \"base_price_per_night\": 45, \"max_occupancy\": 2},\n    {\"name\": \"Triple\", \"code\": \"TPL\", \"base_price_per_night\": 70, \"max_occupancy\": 3}\n  ]\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/onboarding/categories",
+          "path": ["api", "onboarding", "categories"]
+        }
+      }
+    },
+    {
+      "name": "Onboarding - Rooms",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Hotel-Id", "value": "{{hotelId}}" },
+          { "key": "X-User-Id", "value": "{{userId}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"rooms\": [\n    {\"room_number\": \"101\", \"floor\": 1, \"category_code\": \"DBL\"},\n    {\"room_number\": \"102\", \"floor\": 1, \"category_code\": \"TPL\"}\n  ]\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/onboarding/rooms",
+          "path": ["api", "onboarding", "rooms"]
+        }
+      }
+    },
+    {
+      "name": "Onboarding - Staff",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Hotel-Id", "value": "{{hotelId}}" },
+          { "key": "X-User-Id", "value": "{{userId}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"staff\": [\n    {\"name\": \"Recepcion\", \"role\": \"Front Desk\", \"email\": \"fd@chipre.test\"}\n  ]\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/onboarding/staff",
+          "path": ["api", "onboarding", "staff"]
+        }
+      }
+    },
+    {
+      "name": "Onboarding - Finish",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "X-Hotel-Id", "value": "{{hotelId}}" },
+          { "key": "X-User-Id", "value": "{{userId}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/onboarding/finish",
+          "path": ["api", "onboarding", "finish"]
+        }
+      }
+    },
+    {
+      "name": "Rooms - List categories",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "X-Hotel-Id", "value": "{{hotelId}}" },
+          { "key": "X-User-Id", "value": "{{userId}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/rooms/categories",
+          "path": ["api", "rooms", "categories"]
+        }
+      }
+    },
+    {
+      "name": "Rooms - Availability",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "X-Hotel-Id", "value": "{{hotelId}}" },
+          { "key": "X-User-Id", "value": "{{userId}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/rooms/availability?category_id={{categoryId}}&check_in_date=2026-04-05&check_out_date=2026-04-07",
+          "query": [
+            { "key": "category_id", "value": "{{categoryId}}" },
+            { "key": "check_in_date", "value": "2026-04-05" },
+            { "key": "check_out_date", "value": "2026-04-07" }
+          ],
+          "path": ["api", "rooms", "availability"]
+        }
+      }
+    },
+    {
+      "name": "Guests - Create",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Hotel-Id", "value": "{{hotelId}}" },
+          { "key": "X-User-Id", "value": "{{userId}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"first_name\": \"Juan\",\n  \"last_name\": \"Perez\",\n  \"email\": \"juan@test.com\",\n  \"phone\": \"+54 9 11 4444 0000\",\n  \"terms_accepted\": true\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/guests",
+          "path": ["api", "guests"]
+        }
+      }
+    },
+    {
+      "name": "Reservations - Create",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Hotel-Id", "value": "{{hotelId}}" },
+          { "key": "X-User-Id", "value": "{{userId}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"guest_id\": {{guestId}},\n  \"category_id\": {{categoryId}},\n  \"room_id\": {{roomId}},\n  \"check_in_date\": \"2026-04-05\",\n  \"check_out_date\": \"2026-04-07\",\n  \"num_adults\": 2,\n  \"num_children\": 0,\n  \"notes\": \"Chipre Stage 1 demo\",\n  \"source\": \"direct\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/reservations",
+          "path": ["api", "reservations"]
+        }
+      }
+    },
+    {
+      "name": "Payments - Deposit",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Hotel-Id", "value": "{{hotelId}}" },
+          { "key": "X-User-Id", "value": "{{userId}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"reservation_id\": {{reservationId}},\n  \"amount\": 30,\n  \"payment_method\": \"cash\",\n  \"transaction_type\": \"deposit\",\n  \"currency\": \"ARS\",\n  \"description\": \"Deposit for stay\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/payments",
+          "path": ["api", "payments"]
+        }
+      }
+    },
+    {
+      "name": "Check-in",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "X-Hotel-Id", "value": "{{hotelId}}" },
+          { "key": "X-User-Id", "value": "{{userId}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/checkin/{{reservationId}}",
+          "path": ["api", "checkin", "{{reservationId}}"]
+        }
+      }
+    },
+    {
+      "name": "Checkout",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "X-Hotel-Id", "value": "{{hotelId}}" },
+          { "key": "X-User-Id", "value": "{{userId}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/checkin/checkout/{{reservationId}}",
+          "path": ["api", "checkin", "checkout", "{{reservationId}}"]
+        }
+      }
+    }
+  ],
+  "variable": [
+    { "key": "baseUrl", "value": "http://127.0.0.1:8000" },
+    { "key": "hotelId", "value": "1" },
+    { "key": "userId", "value": "owner-1" },
+    { "key": "categoryId", "value": "1" },
+    { "key": "roomId", "value": "1" },
+    { "key": "guestId", "value": "1" },
+    { "key": "reservationId", "value": "1" }
+  ]
+}
