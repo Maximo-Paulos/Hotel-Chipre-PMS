@@ -14,6 +14,13 @@ npm install
 - `npm run preview` -> Preview del build.
 - `npm run lint` -> ESLint sobre `src`.
 
+## Arranque único (backend + UI nueva)
+1. Asegurate de tener el build listo (`cd frontend && npm run build`). Si el build falla por `EPERM`, ver el workaround más abajo.
+2. En la raíz del repo ejecutá `nodemon`. Usa `.venv\\Scripts\\python.exe -m uvicorn app.main:app --reload` y sirve `frontend/dist`.
+   - UI y API en `http://127.0.0.1:8000`.
+   - `DEMO_MODE` queda desactivado por defecto (configurado en `nodemon.json`). Si necesitás las rutas de seed/reset, exportá `DEMO_MODE=true` antes de correr `nodemon`.
+   - Si no tenés nodemon instalado, podés usar `npx nodemon` o instalarlo global/localmente (`npm i -g nodemon`).
+
 ## Headers/Contexto
 - Todas las peticiones incluyen `X-User-Id` y `X-Hotel-Id` (persisten en `localStorage`).
 - Selector de hotel en el header; persiste la selección y cae a `1` si el valor es inválido.

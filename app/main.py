@@ -1,13 +1,14 @@
 """
 Hotel PMS — FastAPI Main Application.
-Serves the API + static frontend files.
+Serves the API + bundled frontend files.
 """
 import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from sqlalchemy.orm import Session
 
 from app.database import init_db, get_db, Base
@@ -71,12 +72,38 @@ app.include_router(config.router)
 app.include_router(reports.router)
 app.include_router(connections.router)
 
-# Mount static files
-static_dir = os.path.join(os.path.dirname(__file__), "static")
-frontend_dist = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "frontend", "dist"))
-app.mount("/static", StaticFiles(directory=static_dir), name="static")
-if os.path.exists(os.path.join(frontend_dist, "assets")):
-    app.mount("/assets", StaticFiles(directory=os.path.join(frontend_dist, "assets")), name="frontend-assets")
+# Frontend build paths
+BASE_DIR = Path(__file__).resolve().parent
+FRONTEND_DIST = BASE_DIR.parent / "frontend" / "dist"
+ASSETS_DIR = FRONTEND_DIST / "assets"
+
+if ASSETS_DIR.exists():
+    app.mount("/assets", StaticFiles(directory=ASSETS_DIR), name="frontend-assets")
+
+
+def _frontend_placeholder() -> HTMLResponse:
+    """Fallback page shown when the Vite build is missing."""
+    return HTMLResponse(
+        """
+        <!doctype html>
+        <html lang="es">
+            <head>
+                <meta charset="utf-8" />
+                <title>Hotel PMS</title>
+                <style>
+                    body { font-family: Arial, sans-serif; margin: 2rem; color: #1f2933; }
+                    code { background: #f3f4f6; padding: 0.15rem 0.35rem; border-radius: 4px; }
+                </style>
+            </head>
+            <body>
+                <h1>Frontend build no encontrado</h1>
+                <p>Ejecutá <code>npm run build</code> dentro de <code>frontend/</code> para generar <code>frontend/dist</code>.</p>
+                <p>Mientras tanto se muestra este placeholder.</p>
+            </body>
+        </html>
+        """,
+        status_code=200,
+    )
 
 
 @app.get("/health")
@@ -97,25 +124,23 @@ def serve_frontend(db: Session = Depends(get_db)):
                 "steps": status["steps"],
             },
         )
-    index_candidates = [
-        os.path.join(frontend_dist, "index.html"),
-        os.path.join(static_dir, "dist", "index.html"),
-        os.path.join(static_dir, "index.html"),
-    ]
-    for path in index_candidates:
-        if os.path.exists(path):
-            return FileResponse(path)
-    raise HTTPException(status_code=404, detail="Frontend build no encontrado")
+    index_path = FRONTEND_DIST / "index.html"
+    if index_path.exists():
+        return FileResponse(index_path)
+    return _frontend_placeholder()
 
 
 @app.get("/{full_path:path}")
 def serve_spa(full_path: str, db: Session = Depends(get_db)):
     """
     SPA fallback for React Router.
-    Skips API/static paths to avoid shadowing.
+    Skips API/asset paths to avoid shadowing.
     """
-    if full_path.startswith(("api", "static", "health", "assets")):
+    if full_path.startswith(("api", "health", "assets", "docs", "openapi", "redoc")):
         raise HTTPException(status_code=404)
+    candidate = (FRONTEND_DIST / full_path).resolve()
+    if candidate.is_file() and candidate.is_relative_to(FRONTEND_DIST):
+        return FileResponse(candidate)
     return serve_frontend(db)
 
 
