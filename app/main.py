@@ -77,8 +77,19 @@ BASE_DIR = Path(__file__).resolve().parent
 FRONTEND_DIST = BASE_DIR.parent / "frontend" / "dist"
 ASSETS_DIR = FRONTEND_DIST / "assets"
 
+class SafeStaticFiles(StaticFiles):
+    """StaticFiles that returns 404 on invalid filenames (e.g., containing wildcards on Windows)."""
+
+    async def get_response(self, path: str, scope):
+        try:
+            return await super().get_response(path, scope)
+        except OSError:
+            # Invalid path (e.g., contains '*' after unquote on Windows). Return 404 instead of 500.
+            raise HTTPException(status_code=404)
+
+
 if ASSETS_DIR.exists():
-    app.mount("/assets", StaticFiles(directory=ASSETS_DIR), name="frontend-assets")
+    app.mount("/assets", SafeStaticFiles(directory=ASSETS_DIR), name="frontend-assets")
 
 
 def _frontend_placeholder() -> HTMLResponse:
