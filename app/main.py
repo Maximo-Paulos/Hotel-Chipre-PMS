@@ -22,6 +22,7 @@ from app.api import (
     config,
     reports,
     connections,
+    bookings,
     onboarding,
 )
 from app.models.room import Room, RoomCategory, RoomStatusEnum
@@ -65,6 +66,7 @@ app.include_router(onboarding.router)
 app.include_router(rooms.router)
 app.include_router(guests.router)
 app.include_router(reservations.router)
+app.include_router(bookings.router)
 app.include_router(payments.router)
 app.include_router(checkin.router)
 app.include_router(ota_webhooks.router)

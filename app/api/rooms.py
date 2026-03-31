@@ -1,6 +1,7 @@
 """
 FastAPI routes for Room management + Housekeeping.
 """
+from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -10,7 +11,16 @@ from app.database import get_db
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.pricing import CategoryPricing
-from app.schemas.room import RoomCreate, RoomRead, RoomCategoryCreate, RoomCategoryRead, CategoryPricingSchema, CategoryPricingRead
+from app.schemas.room import (
+    RoomCreate,
+    RoomRead,
+    RoomCategoryCreate,
+    RoomCategoryRead,
+    CategoryPricingSchema,
+    CategoryPricingRead,
+    RoomUpdate,
+)
+from app.services.reservation_service import find_available_rooms
 
 router = APIRouter(prefix="/api/rooms", tags=["Rooms"])
 
@@ -83,11 +93,68 @@ def list_rooms(db: Session = Depends(get_db)):
     return db.query(Room).all()
 
 
+@router.get("/availability")
+def room_availability(
+    category_id: int | None = None,
+    check_in_date: date | None = None,
+    check_out_date: date | None = None,
+    db: Session = Depends(get_db),
+):
+    """
+    Simple availability helper. Returns a placeholder message if required
+    parameters are missing; otherwise returns available room ids.
+    """
+    if not (category_id and check_in_date and check_out_date):
+        return {
+            "status": "placeholder",
+            "available_rooms": [],
+            "message": "Provide category_id, check_in_date, and check_out_date to check availability.",
+        }
+    available = find_available_rooms(db, category_id, check_in_date, check_out_date)
+    return {
+        "status": "ok",
+        "count": len(available),
+        "available_rooms": [room.id for room in available],
+    }
+
+
 @router.get("/{room_id}", response_model=RoomRead)
 def get_room(room_id: int, db: Session = Depends(get_db)):
     room = db.query(Room).filter(Room.id == room_id).first()
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
+    return room
+
+
+@router.patch("/{room_id}", response_model=RoomRead)
+def update_room(room_id: int, data: RoomUpdate, db: Session = Depends(get_db)):
+    """Generic room update (number, floor, notes, status, etc.)."""
+    room = db.query(Room).filter(Room.id == room_id).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+
+    payload = data.model_dump(exclude_unset=True)
+    if "category_id" in payload and payload["category_id"] is not None:
+        category = db.query(RoomCategory).filter(RoomCategory.id == payload["category_id"]).first()
+        if not category:
+            raise HTTPException(status_code=400, detail="Category not found")
+        room.category_id = payload["category_id"]
+
+    for field in ("room_number", "floor", "status", "is_active", "notes"):
+        if field in payload:
+            setattr(room, field, payload[field])
+
+    # When deactivating, ensure no active reservations remain assigned
+    if payload.get("is_active") is False:
+        active_res = db.query(Reservation).filter(
+            Reservation.room_id == room_id,
+            Reservation.status.notin_([ReservationStatusEnum.CANCELLED, ReservationStatusEnum.CHECKED_OUT]),
+        ).count()
+        if active_res > 0:
+            raise HTTPException(status_code=400, detail="Room has active reservations and cannot be deactivated")
+
+    db.commit()
+    db.refresh(room)
     return room
 
 
@@ -218,3 +285,22 @@ def housekeeping_summary(db: Session = Depends(get_db)):
             "notes": room.notes,
         })
     return summary
+
+
+@router.delete("/{room_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_room(room_id: int, db: Session = Depends(get_db)):
+    """Delete a room when no active reservations are attached."""
+    room = db.query(Room).filter(Room.id == room_id).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+
+    in_use = db.query(Reservation).filter(
+        Reservation.room_id == room_id,
+        Reservation.status.notin_([ReservationStatusEnum.CANCELLED, ReservationStatusEnum.CHECKED_OUT]),
+    ).count()
+    if in_use > 0:
+        raise HTTPException(status_code=400, detail="Room has active reservations and cannot be deleted")
+
+    db.delete(room)
+    db.commit()
+    return None

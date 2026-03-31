@@ -47,6 +47,15 @@ class RoomRead(RoomBase):
     model_config = {"from_attributes": True}
 
 
+class RoomUpdate(BaseModel):
+    room_number: Optional[str] = Field(default=None, min_length=1, max_length=10)
+    floor: Optional[int] = Field(default=None, ge=0)
+    category_id: Optional[int] = None
+    status: Optional[RoomStatusEnum] = None
+    is_active: Optional[bool] = None
+    notes: Optional[str] = None
+
+
 # ── Category Pricing ──
 
 class CategoryPricingSchema(BaseModel):
