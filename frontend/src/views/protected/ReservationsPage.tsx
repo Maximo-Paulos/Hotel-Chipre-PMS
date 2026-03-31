@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation } from "@tanstack/react-query";
 
@@ -7,7 +7,7 @@ import { checkRoomAvailability, type RoomAvailabilityResponse } from "../../api/
 import { type PaymentMethod } from "../../api/payments";
 import { apiFetch } from "../../api/client";
 import { useCategories } from "../../hooks/useCategories";
-import { useGuestCreate } from "../../hooks/useGuests";
+import { useGuest, useGuestCreate } from "../../hooks/useGuests";
 import { useReservationMutations, useReservations } from "../../hooks/useReservations";
 import { usePaymentMutation, usePaymentSummary } from "../../hooks/usePayments";
 import { useRooms } from "../../hooks/useRooms";
@@ -86,10 +86,11 @@ export function ReservationsPage() {
       return d.toISOString().slice(0, 10);
     })()
   });
-  const toastTimeout = useRef<number | null>(null);
-  const [toast, setToast] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
   const [calendarRange, setCalendarRange] = useState<"week" | "month">("week");
   const [detailsReservation, setDetailsReservation] = useState<Reservation | null>(null);
+  const [guestIdOpen, setGuestIdOpen] = useState<number | null>(null);
+  const toastTimeout = useRef<number | null>(null);
+  const [toast, setToast] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
 
   const filters = {
     status: statusFilter,
@@ -101,6 +102,7 @@ export function ReservationsPage() {
   const { roomsQuery } = useRooms();
   const { data: categoriesData = [] } = useCategories();
   const guestMutation = useGuestCreate();
+  const guestQuery = useGuest(guestIdOpen ?? undefined);
   const paymentSummaryQuery = usePaymentSummary(editing?.id || undefined);
   const detailsSummaryQuery = usePaymentSummary(detailsReservation?.id || undefined);
   const paymentMutation = usePaymentMutation(editing?.id || undefined);
@@ -347,6 +349,7 @@ export function ReservationsPage() {
 
   const paymentSummary = paymentSummaryQuery.data;
   const detailsSummary = detailsSummaryQuery.data;
+  const detailsGuest = useGuest(detailsReservation?.guest_id || undefined).data;
 
   const handlePayDeposit = () => {
     if (!editing || !paymentSummary) return;
@@ -390,11 +393,10 @@ export function ReservationsPage() {
     );
   };
 
-  const openDetails = (reservation: Reservation) => {
-    setDetailsReservation(reservation);
-  };
-
+  const openDetails = (reservation: Reservation) => setDetailsReservation(reservation);
   const closeDetails = () => setDetailsReservation(null);
+  const openGuest = (guestId: number) => setGuestIdOpen(guestId);
+  const closeGuest = () => setGuestIdOpen(null);
 
   const handleSeed = () =>
     seedMutation.mutate(undefined, {
@@ -407,6 +409,73 @@ export function ReservationsPage() {
       onSuccess: () => showToast("success", "Base restablecida"),
       onError: (err: unknown) => showToast("error", err instanceof Error ? err.message : "No se pudo resetear")
     });
+
+  const exportVoucher = () => {
+    if (!detailsReservation) return;
+    const summary = detailsSummary;
+    const guest = detailsGuest;
+    const win = window.open("", "_blank");
+    if (!win) return;
+    const html = `
+      <html>
+        <head>
+          <title>Voucher ${detailsReservation.confirmation_code}</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 16px; color: #0f172a; }
+            h1 { margin: 0 0 8px 0; }
+            .grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px; }
+            .card { border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; }
+            .muted { color: #475569; font-size: 12px; margin: 0; }
+            .label { font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.02em; }
+          </style>
+        </head>
+        <body>
+          <h1>Voucher / Confirmación</h1>
+          <p class="muted">Código ${detailsReservation.confirmation_code}</p>
+          <div class="grid">
+            <div class="card">
+              <p class="label">Reserva</p>
+              <p>Ingreso: <strong>${detailsReservation.check_in_date}</strong></p>
+              <p>Salida: <strong>${detailsReservation.check_out_date}</strong></p>
+              <p>Hab/Cat: <strong>${detailsReservation.room_id ?? "Sin asignar"} / ${detailsReservation.category_id}</strong></p>
+              <p>Estado: <strong>${statusConfig[detailsReservation.status]?.label ?? detailsReservation.status}</strong></p>
+            </div>
+            <div class="card">
+              <p class="label">Huésped</p>
+              <p>${guest ? `${guest.first_name} ${guest.last_name}` : `ID ${detailsReservation.guest_id}`}</p>
+              <p>Email: ${guest?.email ?? "-"}</p>
+              <p>Tel: ${guest?.phone ?? "-"}</p>
+            </div>
+          </div>
+          <div class="card" style="margin-top:12px;">
+            <p class="label">Finanzas</p>
+            <p>Total: <strong>${currency.format(summary?.total_amount ?? detailsReservation.total_amount ?? 0)}</strong></p>
+            <p>Pagado: <strong>${currency.format(summary?.amount_paid ?? detailsReservation.amount_paid ?? 0)}</strong></p>
+            <p>Saldo: <strong>${currency.format(summary?.balance_due ?? detailsReservation.balance_due ?? 0)}</strong></p>
+          </div>
+        </body>
+      </html>`;
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    win.print();
+    win.close();
+  };
+
+  const guestHistory = useMemo(
+    () => (guestIdOpen ? reservations.filter((r) => r.guest_id === guestIdOpen) : []),
+    [guestIdOpen, reservations]
+  );
+
+  const reservationsByRoom = useMemo(() => {
+    const map: Record<number, Reservation[]> = {};
+    reservations.forEach((r) => {
+      if (!r.room_id) return;
+      if (!map[r.room_id]) map[r.room_id] = [];
+      map[r.room_id].push(r);
+    });
+    return map;
+  }, [reservations]);
 
   return (
     <div className="space-y-6">
@@ -514,8 +583,8 @@ export function ReservationsPage() {
               </div>
               <span className="w-12 text-xs text-right font-semibold text-slate-700">{day.occupancy}%</span>
               <div className="flex gap-2 text-[11px]">
-                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-emerald-700">+{day.arrivals} arrivos</span>
-                <span className="rounded-full bg-sky-100 px-2 py-0.5 text-sky-700">{day.departures} salidas</span>
+                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-emerald-700">+{day.arrivals} lleg.</span>
+                <span className="rounded-full bg-sky-100 px-2 py-0.5 text-sky-700">{day.departures} sal.</span>
               </div>
             </div>
           ))}
@@ -650,6 +719,66 @@ export function ReservationsPage() {
         )}
       </div>
 
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+          <div>
+            <p className="text-xs uppercase tracking-wide text-slate-500">Matriz</p>
+            <h2 className="text-lg font-semibold text-slate-900">Habitación vs fechas</h2>
+            <p className="text-xs text-slate-500">Marcadores de estadía, check-in (verde) y check-out (celeste).</p>
+          </div>
+        </div>
+        <div className="mt-3 overflow-x-auto">
+          <table className="min-w-full text-xs">
+            <thead>
+              <tr>
+                <th className="sticky left-0 z-10 bg-white px-2 py-1 text-left font-semibold text-slate-600">Hab</th>
+                {calendarDays.map((d) => (
+                  <th key={d.iso} className="px-2 py-1 text-center font-semibold text-slate-500">
+                    {d.label.split(" ").slice(0, 2).join(" ")}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {(roomsQuery.data ?? []).map((room) => {
+                const roomRes = reservationsByRoom[room.id] ?? [];
+                return (
+                  <tr key={room.id} className="border-t border-slate-100">
+                    <td className="sticky left-0 z-10 bg-white px-2 py-1 text-left font-semibold text-slate-800">
+                      Hab {room.room_number || room.id}
+                    </td>
+                    {calendarDays.map((day) => {
+                      const target = new Date(day.iso);
+                      const res = roomRes.find(
+                        (r) => new Date(r.check_in_date) <= target && new Date(r.check_out_date) > target
+                      );
+                      const isArrival = res?.check_in_date === day.iso;
+                      const isDeparture = res?.check_out_date === day.iso;
+                      return (
+                        <td key={day.iso} className="px-1 py-1 text-center align-middle">
+                          {res ? (
+                            <div className="flex flex-col items-center gap-1">
+                              <span className="h-1 w-full rounded-full bg-brand-300" />
+                              <span className="text-[10px] text-slate-600">{res.confirmation_code}</span>
+                              <div className="flex gap-1">
+                                {isArrival && <span className="rounded-full bg-emerald-100 px-1 text-[10px] text-emerald-700">I</span>}
+                                {isDeparture && <span className="rounded-full bg-sky-100 px-1 text-[10px] text-sky-700">O</span>}
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-slate-300">·</span>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
           <div>
@@ -687,7 +816,11 @@ export function ReservationsPage() {
                 return (
                   <tr key={reservation.id} className="hover:bg-slate-50/60">
                     <td className="px-4 py-2 font-semibold text-slate-900">{reservation.confirmation_code}</td>
-                    <td className="px-4 py-2 text-slate-700">Huésped #{reservation.guest_id}</td>
+                    <td className="px-4 py-2 text-slate-700">
+                      <button className="text-left font-semibold text-brand-700 hover:underline" onClick={() => openGuest(reservation.guest_id)} type="button">
+                        Huésped #{reservation.guest_id}
+                      </button>
+                    </td>
                     <td className="px-4 py-2 text-slate-600">
                       {reservation.room_id ? `Hab ${reservation.room_id}` : "Sin asignar"} · Cat {reservation.category_id}
                     </td>
@@ -1053,7 +1186,7 @@ export function ReservationsPage() {
       )}
 
       {detailsReservation && (
-        <div className="fixed inset-0 z-20 flex items-center justify-center bg-slate-900/30 px-4 py-6">
+        <div className="fixed inset-0 z-30 flex items-center justify-center bg-slate-900/30 px-4 py-6">
           <div className="w-full max-w-3xl rounded-xl border border-slate-200 bg-white p-6 shadow-xl">
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -1064,9 +1197,18 @@ export function ReservationsPage() {
                   {detailsReservation.room_id ? `Hab ${detailsReservation.room_id}` : "Sin asignar"}
                 </p>
               </div>
-              <button onClick={closeDetails} type="button" className="text-sm text-slate-500 hover:text-slate-800">
-                Cerrar
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={exportVoucher}
+                  className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-xs font-semibold text-brand-700 hover:border-brand-300 hover:bg-brand-100"
+                >
+                  Exportar voucher PDF
+                </button>
+                <button onClick={closeDetails} type="button" className="text-sm text-slate-500 hover:text-slate-800">
+                  Cerrar
+                </button>
+              </div>
             </div>
 
             <div className="mt-4 grid gap-4 md:grid-cols-2">
@@ -1141,16 +1283,59 @@ export function ReservationsPage() {
           </div>
         </div>
       )}
-    </div>
-  );
-}
 
-function StatCard({ label, value, helper }: { label: string; value: number; helper: string }) {
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
-      <div className="mt-2 text-2xl font-semibold text-slate-900">{value}</div>
-      <p className="text-xs text-slate-500">{helper}</p>
+      {guestIdOpen && (
+        <div className="fixed inset-0 z-30 flex items-center justify-center bg-slate-900/30 px-4 py-6">
+          <div className="w-full max-w-2xl rounded-xl border border-slate-200 bg-white p-6 shadow-xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-500">Ficha de huésped</p>
+                <h3 className="text-lg font-semibold text-slate-900">
+                  {guestQuery.data ? `${guestQuery.data.first_name} ${guestQuery.data.last_name}` : `Huésped #${guestIdOpen}`}
+                </h3>
+                <p className="text-xs text-slate-500">Contacto y reservas asociadas.</p>
+              </div>
+              <button onClick={closeGuest} type="button" className="text-sm text-slate-500 hover:text-slate-800">
+                Cerrar
+              </button>
+            </div>
+
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-800">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Contacto</p>
+                <p className="mt-1">{guestQuery.data?.email ?? "Sin email"}</p>
+                <p>{guestQuery.data?.phone ?? "Sin teléfono"}</p>
+                <p className="text-xs text-slate-500">
+                  Doc: {guestQuery.data?.document_type ?? "-"} {guestQuery.data?.document_number ?? ""}
+                </p>
+                <p className="text-xs text-slate-500">
+                  {guestQuery.data?.city ?? ""} {guestQuery.data?.country ?? ""}
+                </p>
+              </div>
+
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-800">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Histórico</p>
+                {guestHistory.length ? (
+                  <ul className="mt-2 space-y-2">
+                    {guestHistory.map((r) => (
+                      <li key={r.id} className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-2 py-1">
+                        <span className="text-xs text-slate-600">
+                          {r.check_in_date} → {r.check_out_date} · {statusConfig[r.status]?.label ?? r.status}
+                        </span>
+                        <button className="text-xs font-semibold text-brand-700 hover:underline" onClick={() => openDetails(r)} type="button">
+                          Ver
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-2 text-xs text-slate-600">Sin reservas asociadas en esta vista.</p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
