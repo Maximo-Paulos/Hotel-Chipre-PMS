@@ -2,7 +2,10 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { type Reservation, type ReservationSource, type ReservationStatus } from "../../api/reservations";
+import { useCategories } from "../../hooks/useCategories";
+import { useGuestCreate } from "../../hooks/useGuests";
 import { useReservationMutations, useReservations } from "../../hooks/useReservations";
+import { useRooms } from "../../hooks/useRooms";
 
 type FormState = {
   guest_id: string;
@@ -51,6 +54,7 @@ export function ReservationsPage() {
   const [editing, setEditing] = useState<Reservation | null>(null);
   const [formValues, setFormValues] = useState<FormState>(defaultFormState);
   const [formError, setFormError] = useState<string | null>(null);
+  const [guestForm, setGuestForm] = useState({ first_name: "", last_name: "", email: "", phone: "" });
 
   const filters = {
     status: statusFilter,
@@ -59,6 +63,9 @@ export function ReservationsPage() {
   };
 
   const { data: reservations = [], isLoading, isFetching, error } = useReservations(filters);
+  const { roomsQuery } = useRooms();
+  const { data: categoriesData = [] } = useCategories();
+  const guestMutation = useGuestCreate();
   const { createMutation, updateMutation, cancelMutation, checkInMutation, checkOutMutation } = useReservationMutations(filters);
 
   const today = todayIso();
