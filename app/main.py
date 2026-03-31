@@ -124,17 +124,11 @@ def health_check():
 
 @app.get("/")
 def serve_frontend(db: Session = Depends(get_db)):
-    """Serve the main frontend page, gated by onboarding completion."""
-    status = onboarding_service.get_status(db)
-    if not status["completed"]:
-        raise HTTPException(
-            status_code=403,
-            detail={
-                "onboarding_required": True,
-                "missing_steps": status["missing_steps"],
-                "steps": status["steps"],
-            },
-        )
+    """
+    Serve the SPA shell. We no longer block by onboarding here to avoid
+    returning a 403 that would render the page en blanco. The UI ya consulta
+    /api/onboarding/status y redirige según corresponda.
+    """
     index_path = FRONTEND_DIST / "index.html"
     if index_path.exists():
         return FileResponse(index_path)

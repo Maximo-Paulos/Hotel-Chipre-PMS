@@ -101,12 +101,9 @@ def _complete_minimal_onboarding(client: TestClient):
 
 
 def test_dashboard_is_blocked_until_onboarding_finishes(client: TestClient):
-    # Dashboard gated initially
+    # El frontend ahora siempre devuelve la SPA (200) aunque falte onboarding
     resp = client.get("/")
-    assert resp.status_code == 403
-    detail = resp.json()["detail"]
-    assert detail["onboarding_required"] is True
-    assert "owner" in detail["missing_steps"]
+    assert resp.status_code == 200
 
     # Status reflects missing steps
     status = client.get("/api/onboarding/status")
