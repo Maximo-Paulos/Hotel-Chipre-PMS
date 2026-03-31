@@ -10,6 +10,32 @@
 - 6. Start API + UI shell from repo root: `npx nodemon` (uses `nodemon.json` -> uvicorn with reload). Set `DEMO_MODE=true` before running if you need `/api/seed` or `/api/reset`.
 - 7. UI + API live at `http://127.0.0.1:8000`. Dev-only UI at `npm run dev` still works via Vite proxy to the backend on port 8000.
 
+## Deploy (Docker / Compose)
+1) Build imagenes  
+```bash
+docker compose build
+```
+- El frontend corre `npm run build` dentro de la imagen y se sirve con Nginx (puerto 8080).  
+- El backend usa `uvicorn` y expone 8000.
+
+2) Levantar stack  
+```bash
+docker compose up -d
+```
+Servicios: frontend http://localhost:8080, backend http://localhost:8000, Postgres con credenciales `pms/pms` (puerto 5432, DB `hotel_pms`).
+
+3) Migraciones Alembic  
+```bash
+docker compose run --rm backend alembic upgrade head
+```
+Toma `DATABASE_URL` del compose. Para SQLite local: `DATABASE_URL=sqlite:///./dev.db alembic upgrade head`.
+
+4) Seed/reset demo (opcional, solo si `DEMO_MODE=true`)  
+```bash
+curl -X POST http://localhost:8000/api/seed
+curl -X POST http://localhost:8000/api/reset
+```
+
 ## Headers
 - Add `X-Hotel-Id` on every mutating call (defaults to the first persisted hotel if omitted).
 - Add `X-User-Id` for auditing; values are free-form.
