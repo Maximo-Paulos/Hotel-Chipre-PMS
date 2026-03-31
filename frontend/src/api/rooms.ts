@@ -34,3 +34,27 @@ export const updateRoomStatus = (roomId: number, status: RoomStatus, notes?: str
     data: { status, notes },
     session
   });
+
+export type RoomAvailabilityResponse =
+  | {
+      status: "placeholder";
+      available_rooms: number[];
+      message: string;
+    }
+  | {
+      status: "ok";
+      count: number;
+      available_rooms: number[];
+    };
+
+export const checkRoomAvailability = (
+  params: { category_id: number; check_in_date: string; check_out_date: string },
+  session?: SessionLike
+) => {
+  const search = new URLSearchParams({
+    category_id: String(params.category_id),
+    check_in_date: params.check_in_date,
+    check_out_date: params.check_out_date
+  });
+  return apiFetch<RoomAvailabilityResponse>(`/api/rooms/availability?${search.toString()}`, { session });
+};
