@@ -12,6 +12,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from sqlalchemy.orm import Session
 
 from app.database import init_db, get_db, Base
+from app.config import get_settings
 from app.api import (
     rooms,
     guests,
@@ -26,6 +27,7 @@ from app.api import (
     onboarding,
     email,
 )
+from app.services.email_service import mailer
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.pricing import CategoryPricing
 from app.models.hotel_config import HotelConfiguration
@@ -45,10 +47,31 @@ def _require_demo_mode():
         )
 
 
+def _maybe_send_startup_email():
+    """
+    Sends a lightweight startup email to the configured SMTP user/from.
+    Only fires if SMTP is configured; otherwise no-ops.
+    """
+    if not mailer.configured:
+        return
+    settings = get_settings()
+    recipient = settings.SMTP_USER or settings.SMTP_FROM
+    if not recipient:
+        return
+    subject = "Hotel PMS iniciado"
+    body = (
+        "Hola,\n\n"
+        "El servicio Hotel PMS se inició correctamente.\n"
+        "Si no esperabas este mensaje, revisá las credenciales SMTP.\n"
+    )
+    mailer.send(recipient, subject, body)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize database on application startup."""
     init_db()
+    _maybe_send_startup_email()
     yield
 
 
