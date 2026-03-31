@@ -47,6 +47,7 @@ class Settings(BaseSettings):
     SMTP_USER: str = ""
     SMTP_PASS: str = ""
     SMTP_FROM: str = "Hotel PMS <noreply@example.com>"
+    SMTP_STARTUP_NOTIFY: bool = False
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

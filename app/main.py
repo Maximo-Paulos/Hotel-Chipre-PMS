@@ -33,6 +33,7 @@ from app.models.pricing import CategoryPricing
 from app.models.hotel_config import HotelConfiguration
 from app.services import onboarding_service
 
+_startup_email_sent = False
 
 def _is_demo_mode_enabled() -> bool:
     """Check whether demo-only utilities should be exposed."""
@@ -50,11 +51,17 @@ def _require_demo_mode():
 def _maybe_send_startup_email():
     """
     Sends a lightweight startup email to the configured SMTP user/from.
-    Only fires if SMTP is configured; otherwise no-ops.
+    Only fires if SMTP is configured AND SMTP_STARTUP_NOTIFY is True.
+    Guards against multiple sends per process.
     """
+    global _startup_email_sent
+    if _startup_email_sent:
+        return
     if not mailer.configured:
         return
     settings = get_settings()
+    if not settings.SMTP_STARTUP_NOTIFY:
+        return
     recipient = settings.SMTP_USER or settings.SMTP_FROM
     if not recipient:
         return
@@ -65,6 +72,7 @@ def _maybe_send_startup_email():
         "Si no esperabas este mensaje, revisá las credenciales SMTP.\n"
     )
     mailer.send(recipient, subject, body)
+    _startup_email_sent = True
 
 
 @asynccontextmanager
