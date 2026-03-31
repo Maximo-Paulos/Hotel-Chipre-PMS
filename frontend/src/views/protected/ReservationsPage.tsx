@@ -63,6 +63,8 @@ const todayIso = () => new Date().toISOString().slice(0, 10);
 export function ReservationsPage() {
   const { session } = useSession();
   const [statusFilter, setStatusFilter] = useState<ReservationStatus | "all" | "">("");
+  const [sourceFilter, setSourceFilter] = useState<ReservationSource | "all" | "">("");
+  const [roomFilter, setRoomFilter] = useState<string>("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [formOpen, setFormOpen] = useState(false);
@@ -130,8 +132,20 @@ export function ReservationsPage() {
     return grouped;
   }, [roomsQuery.data]);
 
+  const filteredReservations = useMemo(() => {
+    return reservations.filter((item) => {
+      const bySource = sourceFilter === "" || sourceFilter === "all" || item.source === sourceFilter;
+      const byRoom =
+        roomFilter === "" ||
+        (roomFilter === "sin_asignar" && !item.room_id) ||
+        (item.room_id && String(item.room_id) === roomFilter) ||
+        String(item.category_id) === roomFilter;
+      return bySource && byRoom;
+    });
+  }, [reservations, roomFilter, sourceFilter]);
+
   const totals = useMemo(() => {
-    return reservations.reduce(
+    return filteredReservations.reduce(
       (acc, item) => {
         if (item.status !== "cancelled" && item.status !== "checked_out") acc.active += 1;
         if (item.check_in_date === today) acc.checkInsToday += 1;
@@ -141,7 +155,7 @@ export function ReservationsPage() {
       },
       { active: 0, checkInsToday: 0, checkOutsToday: 0, cancelled: 0 }
     );
-  }, [reservations, today]);
+  }, [filteredReservations, today]);
 
   const openCreate = () => {
     setEditing(null);
@@ -244,6 +258,47 @@ export function ReservationsPage() {
   const canCancel = (status: ReservationStatus) => status !== "cancelled" && status !== "checked_out" && status !== "checked_in";
   const canCheckIn = (status: ReservationStatus) => ["pending", "deposit_paid", "fully_paid"].includes(status);
   const canCheckOut = (status: ReservationStatus) => status === "checked_in";
+
+  const exportCsv = () => {
+    const headers = [
+      "id",
+      "confirmation_code",
+      "guest_id",
+      "room_id",
+      "category_id",
+      "check_in_date",
+      "check_out_date",
+      "status",
+      "source",
+      "total_amount",
+      "amount_paid",
+      "balance_due"
+    ];
+    const rows = filteredReservations.map((r) =>
+      [
+        r.id,
+        r.confirmation_code,
+        r.guest_id,
+        r.room_id ?? "",
+        r.category_id,
+        r.check_in_date,
+        r.check_out_date,
+        r.status,
+        r.source,
+        r.total_amount ?? "",
+        r.amount_paid ?? "",
+        r.balance_due ?? ""
+      ].join(",")
+    );
+    const csv = [headers.join(","), ...rows].join("\\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `reservas-${today}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const handleCancel = (id: number) =>
     cancelMutation.mutate(id, {
@@ -396,7 +451,7 @@ export function ReservationsPage() {
             <p className="text-xs uppercase tracking-wide text-slate-500">Filtros</p>
             <h2 className="text-lg font-semibold text-slate-900">Fecha y estado</h2>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-5">
             <label className="flex flex-col text-xs font-semibold text-slate-600">
               Desde
               <input
@@ -431,12 +486,49 @@ export function ReservationsPage() {
                 <option value="cancelled">Cancelada</option>
               </select>
             </label>
+            <label className="flex flex-col text-xs font-semibold text-slate-600">
+              Canal
+              <select
+                value={sourceFilter}
+                onChange={(e) => setSourceFilter(e.target.value as ReservationSource | "all" | "")}
+                className="mt-1 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-brand-400 focus:outline-none"
+              >
+                <option value="">Todos</option>
+                <option value="direct">Directo</option>
+                <option value="booking">Booking.com</option>
+                <option value="expedia">Expedia</option>
+                <option value="other_ota">Otra OTA</option>
+              </select>
+            </label>
+            <label className="flex flex-col text-xs font-semibold text-slate-600">
+              Hab./CategorÃ­a
+              <select
+                value={roomFilter}
+                onChange={(e) => setRoomFilter(e.target.value)}
+                className="mt-1 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-brand-400 focus:outline-none"
+              >
+                <option value="">Todas</option>
+                <option value="sin_asignar">Sin asignar</option>
+                {(roomsQuery.data ?? []).map((room) => (
+                  <option key={`room-${room.id}`} value={String(room.id)}>
+                    Hab {room.room_number} (cat {room.category_id})
+                  </option>
+                ))}
+                {categoryOptions.map((cat) => (
+                  <option key={`cat-${cat.value}`} value={cat.value}>
+                    Cat {cat.label}
+                  </option>
+                ))}
+              </select>
+            </label>
             <button
               type="button"
               onClick={() => {
                 setFromDate("");
                 setToDate("");
                 setStatusFilter("");
+                setSourceFilter("");
+                setRoomFilter("");
               }}
               className="self-end rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:border-slate-300"
             >
@@ -526,7 +618,16 @@ export function ReservationsPage() {
             {isFetching && <p className="text-xs text-slate-500">Actualizando...</p>}
             {error && <p className="text-xs text-rose-700">No se pudo cargar: {(error as Error).message}</p>}
           </div>
-          <span className="text-xs text-slate-500">Total: {reservations.length}</span>
+          <div className="flex items-center gap-3 text-xs text-slate-500">
+            <button
+              type="button"
+              onClick={exportCsv}
+              className="rounded-lg border border-slate-200 px-3 py-2 font-semibold text-slate-700 hover:border-slate-300"
+            >
+              Exportar CSV
+            </button>
+            <span>Total: {filteredReservations.length}</span>
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-slate-200 text-sm">
