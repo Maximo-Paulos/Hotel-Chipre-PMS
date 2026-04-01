@@ -7,6 +7,7 @@ from app.models.ota import OTAReservationMapping
 from app.models.pricing import CategoryPricing
 from app.models.connection import Connection
 from app.models.onboarding import OnboardingState
+from app.models.user import User
 
 __all__ = [
     "Room", "RoomCategory",
@@ -18,4 +19,5 @@ __all__ = [
     "CategoryPricing",
     "Connection",
     "OnboardingState",
+    "User",
 ]

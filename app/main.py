@@ -26,6 +26,7 @@ from app.api import (
     bookings,
     onboarding,
     email,
+    auth,
 )
 from app.services.email_service import mailer
 from app.models.room import Room, RoomCategory, RoomStatusEnum
@@ -106,6 +107,7 @@ app.include_router(config.router)
 app.include_router(reports.router)
 app.include_router(connections.router)
 app.include_router(email.router)
+app.include_router(auth.router)
 
 # Frontend build paths
 BASE_DIR = Path(__file__).resolve().parent

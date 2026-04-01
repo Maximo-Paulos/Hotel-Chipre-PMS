@@ -3,6 +3,7 @@ import type { HeadersInit } from "react";
 export type SessionLike = {
   hotelId?: number | null;
   userId?: string | null;
+  accessToken?: string | null;
 };
 
 export class ApiError extends Error {
@@ -26,10 +27,14 @@ const normalizeHotelId = (hotelId?: number | string | null) => {
 export const buildAuthHeaders = (session?: SessionLike): Record<string, string> => {
   const hotelId = normalizeHotelId(session?.hotelId);
   const userId = session?.userId || "guest";
-  return {
+  const headers: Record<string, string> = {
     "X-Hotel-Id": String(hotelId),
     "X-User-Id": userId
   };
+  if (session?.accessToken) {
+    headers.Authorization = `Bearer ${session.accessToken}`;
+  }
+  return headers;
 };
 
 type RequestOptions = {

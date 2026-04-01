@@ -7,6 +7,8 @@ export type SessionState = {
   email?: string;
   hotelId: number;
   role: "owner" | "receptionist";
+  accessToken?: string;
+  isVerified?: boolean;
 };
 
 type SessionContextValue = {
@@ -39,6 +41,8 @@ const loadSession = (): SessionState => {
       email: parsed.email,
       hotelId: safeHotelId(parsed.hotelId),
       role: parsed.role === "receptionist" ? "receptionist" : "owner",
+      accessToken: parsed.accessToken,
+      isVerified: parsed.isVerified ?? false
     };
   } catch {
     return DEFAULT_SESSION;
@@ -58,6 +62,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       email: partial.email ?? partial.userId ?? prev.email,
       hotelId: safeHotelId(partial.hotelId ?? prev.hotelId),
       role: partial.role ?? prev.role ?? DEFAULT_SESSION.role,
+      accessToken: partial.accessToken ?? prev.accessToken,
+      isVerified: partial.isVerified ?? prev.isVerified ?? false
     }));
   };
 
@@ -67,6 +73,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       email: undefined,
       hotelId: safeHotelId(prev.hotelId),
       role: DEFAULT_SESSION.role,
+      accessToken: undefined,
+      isVerified: false
     }));
   };
 

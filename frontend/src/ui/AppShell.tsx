@@ -35,7 +35,7 @@ export function AppShell() {
   const location = useLocation();
   const navigate = useNavigate();
   const { session } = useSession();
-  const isAuthenticated = session.userId !== "guest";
+  const isAuthenticated = session.accessToken !== undefined && session.userId !== "guest";
 
   const { data: onboarding, isFetching, error } = useOnboardingStatus({
     enabled: isAuthenticated
