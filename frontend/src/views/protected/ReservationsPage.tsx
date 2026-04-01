@@ -12,6 +12,7 @@ import { useReservationMutations, useReservations } from "../../hooks/useReserva
 import { usePaymentMutation, usePaymentSummary } from "../../hooks/usePayments";
 import { useRooms } from "../../hooks/useRooms";
 import { useSession } from "../../state/session";
+import StatCard from "../../components/StatCard";
 
 type FormState = {
   guest_id: string;
