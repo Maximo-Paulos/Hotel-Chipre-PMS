@@ -6,9 +6,15 @@
 - 2. `.\\.venv\\Scripts\\activate`
 - 3. `pip install -r requirements.txt`
 - 4. `cd frontend && npm install`
-- 5. Build UI: `npm run build` (served from `frontend/dist`). If `spawn EPERM` appears on this OneDrive host, run the build in WSL/outside OneDrive or allow `esbuild.exe` in AV/Controlled Folder Access.
-- 6. Start API + UI shell from repo root: `npx nodemon` (uses `nodemon.json` -> uvicorn with reload). Set `DEMO_MODE=true` before running if you need `/api/seed` or `/api/reset`.
-- 7. UI + API live at `http://127.0.0.1:8000`. Dev-only UI at `npm run dev` still works via Vite proxy to the backend on port 8000.
+- 5. Build UI: `npm run build` (served from `frontend/dist`). If `spawn EPERM` aparece en OneDrive, corré el build en WSL/fuera de OneDrive o permití `esbuild.exe`.
+- 6. Volvé al root y levantá todo con `npx nodemon` (lee `nodemon.json` -> uvicorn con reload). UI + API en `http://127.0.0.1:8000`. Dev UI sigue en `npm run dev`.
+
+### Base de datos y seeds
+- Migraciones: `alembic upgrade head` (usa `DATABASE_URL` de `.env`).
+- Seed demo para probar ya mismo (crea hotel_id=1, categorías, rooms y usuario verificado demo@hotel.test / Demo123!):
+```bash
+python -m app.scripts.seed_demo
+```
 
 ## Deploy (Docker / Compose)
 1) Build imagenes  
@@ -38,6 +44,12 @@ curl -X POST http://localhost:8000/api/reset
 
 ## Headers
 - Add `X-Hotel-Id` on every mutating call (defaults to the first persisted hotel if omitted).
+
+## Auth & Email
+- Registro/Login/Verificación/Reset: `/api/auth/*` (envía emails si `SMTP_*` está configurado; si `DEMO_MODE=true` devuelve el código en la respuesta).
+- JWT: header `Authorization: Bearer <token>`. Claves en `.env`: `JWT_SECRET`, `JWT_EXPIRES_MINUTES`, `JWT_ALGORITHM`.
+- Rate limit de login (in-memory): `LOGIN_RATE_LIMIT` intentos por ventana de 15 min.
+- SMTP env vars: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`, `SMTP_STARTUP_NOTIFY` (default False, así no spamea al iniciar).
 - Add `X-User-Id` for auditing; values are free-form.
 
 ## Key Stage 1 Endpoints
