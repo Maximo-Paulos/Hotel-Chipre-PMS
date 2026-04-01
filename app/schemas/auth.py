@@ -1,35 +1,35 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 
 
 class RegisterRequest(BaseModel):
-    email: EmailStr
+    email: str
     password: str = Field(min_length=6)
     role: str | None = "owner"
 
 
 class LoginRequest(BaseModel):
-    email: EmailStr
+    email: str
     password: str
 
 
 class RequestCode(BaseModel):
-    email: EmailStr
+    email: str
 
 
 class VerifyCodeRequest(BaseModel):
-    email: EmailStr
+    email: str
     code: str
 
 
 class ResetPasswordRequest(BaseModel):
-    email: EmailStr
+    email: str
     code: str
     new_password: str = Field(min_length=6)
 
 
 class UserInfo(BaseModel):
     id: int
-    email: EmailStr
+    email: str
     role: str
     is_verified: bool
     is_active: bool
