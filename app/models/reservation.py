@@ -71,6 +71,7 @@ class Reservation(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     confirmation_code = Column(String(30), nullable=False, unique=True, index=True)
+    hotel_id = Column(Integer, ForeignKey("hotel_configuration.id"), nullable=False)
 
     # Guest and Room linkage
     guest_id = Column(Integer, ForeignKey("guests.id"), nullable=False)
@@ -131,6 +132,7 @@ class Reservation(Base):
         CheckConstraint("num_adults > 0", name="ck_reservation_adults_positive"),
         CheckConstraint("num_children >= 0", name="ck_reservation_children_positive"),
         Index("ix_reservation_dates", "check_in_date", "check_out_date"),
+        Index("ix_reservation_hotel_id", "hotel_id"),
     )
 
     @property

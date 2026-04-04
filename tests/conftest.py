@@ -59,6 +59,22 @@ def db(db_engine) -> Session:
 @pytest.fixture
 def sample_categories(db: Session) -> list[RoomCategory]:
     """Create sample room categories."""
+    # Ensure hotel configuration exists for FK integrity
+    if not db.query(HotelConfiguration).filter(HotelConfiguration.id == 1).first():
+        config = HotelConfiguration(
+            id=1,
+            deposit_percentage=30.0,
+            enable_full_payment=True,
+            enable_deposit_payment=True,
+            enable_cash=True,
+            enable_mercado_pago=True,
+            enable_paypal=True,
+            enable_credit_card=True,
+            enable_debit_card=True,
+        )
+        db.add(config)
+        db.flush()
+
     categories = [
         RoomCategory(
             name="Standard Double",
@@ -66,6 +82,7 @@ def sample_categories(db: Session) -> list[RoomCategory]:
             base_price_per_night=100.0,
             max_occupancy=2,
             description="Standard room with double bed",
+            hotel_id=1,
         ),
         RoomCategory(
             name="Superior Double",
@@ -73,6 +90,7 @@ def sample_categories(db: Session) -> list[RoomCategory]:
             base_price_per_night=150.0,
             max_occupancy=3,
             description="Superior room with king bed and city view",
+            hotel_id=1,
         ),
         RoomCategory(
             name="Suite Premium",
@@ -80,6 +98,7 @@ def sample_categories(db: Session) -> list[RoomCategory]:
             base_price_per_night=250.0,
             max_occupancy=4,
             description="Premium suite with living area and balcony",
+            hotel_id=1,
         ),
     ]
     db.add_all(categories)
@@ -102,6 +121,7 @@ def sample_rooms(db: Session, sample_categories: list[RoomCategory]) -> list[Roo
             floor=1,
             category_id=cat_std.id,
             status=RoomStatusEnum.AVAILABLE,
+            hotel_id=1,
         ))
 
     # Floor 2: 10 Standard rooms (201-210)
@@ -111,6 +131,7 @@ def sample_rooms(db: Session, sample_categories: list[RoomCategory]) -> list[Roo
             floor=2,
             category_id=cat_std.id,
             status=RoomStatusEnum.AVAILABLE,
+            hotel_id=1,
         ))
 
     # Floor 3: 10 Superior rooms (301-310)
@@ -120,6 +141,7 @@ def sample_rooms(db: Session, sample_categories: list[RoomCategory]) -> list[Roo
             floor=3,
             category_id=cat_sup.id,
             status=RoomStatusEnum.AVAILABLE,
+            hotel_id=1,
         ))
 
     # Floor 4: 5 Superior rooms (401-405) + 3 Suites (406-408)
@@ -129,6 +151,7 @@ def sample_rooms(db: Session, sample_categories: list[RoomCategory]) -> list[Roo
             floor=4,
             category_id=cat_sup.id,
             status=RoomStatusEnum.AVAILABLE,
+            hotel_id=1,
         ))
     for i in range(6, 9):
         rooms.append(Room(
@@ -136,6 +159,7 @@ def sample_rooms(db: Session, sample_categories: list[RoomCategory]) -> list[Roo
             floor=4,
             category_id=cat_suite.id,
             status=RoomStatusEnum.AVAILABLE,
+            hotel_id=1,
         ))
 
     db.add_all(rooms)
@@ -180,6 +204,10 @@ def sample_guest_incomplete(db: Session) -> Guest:
 @pytest.fixture
 def hotel_config(db: Session) -> HotelConfiguration:
     """Create default hotel configuration."""
+    existing = db.query(HotelConfiguration).filter(HotelConfiguration.id == 1).first()
+    if existing:
+        return existing
+
     config = HotelConfiguration(
         id=1,
         deposit_percentage=30.0,

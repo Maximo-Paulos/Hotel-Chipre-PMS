@@ -55,7 +55,7 @@ class TestDepositPayment:
             check_in_date=date(2026, 4, 1),
             check_out_date=date(2026, 4, 11),  # 10 nights
         )
-        res = create_reservation(db, data)
+        res = create_reservation(db, data, hotel_id=1)
         db.flush()
         _assign_hotel(res, DEFAULT_HOTEL_ID, db)
         _assign_hotel(res, DEFAULT_HOTEL_ID, db)
@@ -110,7 +110,7 @@ class TestDepositPayment:
             check_in_date=date(2026, 5, 1),
             check_out_date=date(2026, 5, 11),
         )
-        res = create_reservation(db, data)
+        res = create_reservation(db, data, hotel_id=1)
         db.flush()
         _assign_hotel(res, DEFAULT_HOTEL_ID, db)
 
@@ -143,7 +143,7 @@ class TestFullPayment:
             check_in_date=date(2026, 6, 1),
             check_out_date=date(2026, 6, 6),  # 5 nights → $500
         )
-        res = create_reservation(db, data)
+        res = create_reservation(db, data, hotel_id=1)
         db.flush()
 
         assert res.total_amount == 500.0
@@ -184,7 +184,7 @@ class TestBalancePaymentAtCheckin:
             check_in_date=date(2026, 4, 1),
             check_out_date=date(2026, 4, 11),  # 10 nights × $100
         )
-        res = create_reservation(db, data)
+        res = create_reservation(db, data, hotel_id=1)
         db.flush()
 
         assert res.total_amount == 1000.0
@@ -249,7 +249,7 @@ class TestHotelIsolation:
             check_in_date=date(2026, 9, 1),
             check_out_date=date(2026, 9, 3),
         )
-        res = create_reservation(db, data)
+        res = create_reservation(db, data, hotel_id=1)
         db.flush()
         _assign_hotel(res, DEFAULT_HOTEL_ID, db)
 
@@ -274,7 +274,7 @@ class TestHotelIsolation:
             check_in_date=date(2026, 10, 1),
             check_out_date=date(2026, 10, 4),
         )
-        res = create_reservation(db, data)
+        res = create_reservation(db, data, hotel_id=1)
         db.flush()
         _assign_hotel(res, ALT_HOTEL_ID, db)
 
@@ -300,7 +300,7 @@ class TestPaymentEdgeCases:
             check_in_date=date(2026, 7, 1),
             check_out_date=date(2026, 7, 3),  # $200
         )
-        res = create_reservation(db, data)
+        res = create_reservation(db, data, hotel_id=1)
         db.flush()
 
         payment = PaymentRequest(
@@ -320,7 +320,7 @@ class TestPaymentEdgeCases:
             check_in_date=date(2026, 7, 5),
             check_out_date=date(2026, 7, 7),
         )
-        res = create_reservation(db, data)
+        res = create_reservation(db, data, hotel_id=1)
         res.status = ReservationStatusEnum.CANCELLED
         db.flush()
         _assign_hotel(res, DEFAULT_HOTEL_ID, db)
@@ -345,7 +345,7 @@ class TestPaymentEdgeCases:
             check_in_date=date(2026, 8, 1),
             check_out_date=date(2026, 8, 3),
         )
-        res = create_reservation(db, data)
+        res = create_reservation(db, data, hotel_id=1)
         db.flush()
 
         payment = PaymentRequest(
@@ -365,7 +365,7 @@ class TestPaymentEdgeCases:
             check_in_date=date(2026, 8, 5),
             check_out_date=date(2026, 8, 8),
         )
-        res = create_reservation(db, data)
+        res = create_reservation(db, data, hotel_id=1)
         db.flush()
 
         payment = PaymentRequest(
@@ -385,3 +385,4 @@ class TestPaymentEdgeCases:
         db.refresh(res)
         assert res.amount_paid == 0.0  # No change
         assert res.status == ReservationStatusEnum.PENDING  # No transition
+

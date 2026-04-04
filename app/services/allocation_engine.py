@@ -385,6 +385,7 @@ def _run_allocation_greedy(
 def apply_allocation_result(
     db: Session,
     result: AllocationResult,
+    hotel_id: Optional[int] = None,
 ) -> list[Reservation]:
     """
     Apply the solver's assignments to the database.
@@ -395,10 +396,8 @@ def apply_allocation_result(
 
     updated = []
     for reservation_id, room_id in result.assignments.items():
-        reservation = db.query(Reservation).filter(
-            Reservation.id == reservation_id
-        ).first()
-        if reservation:
+        reservation = db.query(Reservation).filter(Reservation.id == reservation_id).first()
+        if reservation and (hotel_id is None or getattr(reservation, "hotel_id", None) == hotel_id):
             reservation.room_id = room_id
             updated.append(reservation)
             
@@ -406,7 +405,7 @@ def apply_allocation_result(
         reservation = db.query(Reservation).filter(
             Reservation.id == reservation_id
         ).first()
-        if reservation and reservation.room_id is not None:
+        if reservation and (hotel_id is None or getattr(reservation, "hotel_id", None) == hotel_id) and reservation.room_id is not None:
             reservation.room_id = None
             if reservation.status != ReservationStatusEnum.CHECKED_IN:
                 updated.append(reservation)
@@ -419,6 +418,7 @@ def build_slots_from_db(
     db: Session,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
+    hotel_id: Optional[int] = None,
 ) -> tuple[list[ReservationSlot], list[RoomSlot]]:
     """
     Load reservations and rooms from the database and convert to solver-friendly slots.
@@ -444,10 +444,15 @@ def build_slots_from_db(
         Reservation.check_in_date < end_date,
         Reservation.check_out_date > start_date,
     )
+    if hotel_id is not None:
+        reservations_query = reservations_query.filter(Reservation.hotel_id == hotel_id)
 
     # Discover allowed categories intelligently
     from app.models.room import RoomCategory
-    all_cat = db.query(RoomCategory).all()
+    all_cat_query = db.query(RoomCategory)
+    if hotel_id is not None:
+        all_cat_query = all_cat_query.filter(RoomCategory.hotel_id == hotel_id)
+    all_cat = all_cat_query.all()
     cat_map = {c.id: c for c in all_cat}
 
     reservation_slots = []
@@ -475,10 +480,13 @@ def build_slots_from_db(
         reservation_slots.append(slot)
 
     # Load all active rooms — EXCLUDE maintenance, blocked, but include CLEANING as it's a temporary state
-    rooms = db.query(Room).filter(
+    rooms_query = db.query(Room).filter(
         Room.is_active == True,
         Room.status.in_([RoomStatusEnum.AVAILABLE, RoomStatusEnum.OCCUPIED, RoomStatusEnum.CLEANING]),
-    ).all()
+    )
+    if hotel_id is not None:
+        rooms_query = rooms_query.filter(Room.hotel_id == hotel_id)
+    rooms = rooms_query.all()
 
     room_slots = [
         RoomSlot(

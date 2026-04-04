@@ -22,6 +22,7 @@ from app.schemas.room import (
     RoomStatusUpdateResponse,
 )
 from app.services.reservation_service import find_available_rooms
+from app.dependencies.auth import get_auth_context, AuthContext
 
 router = APIRouter(prefix="/api/rooms", tags=["Rooms"])
 
@@ -168,7 +169,12 @@ def update_room(room_id: int, data: RoomUpdate, db: Session = Depends(get_db)):
 
 
 @router.patch("/{room_id}/status", response_model=RoomStatusUpdateResponse)
-def update_room_status(room_id: int, data: RoomStatusUpdate, db: Session = Depends(get_db)):
+def update_room_status(
+    room_id: int,
+    data: RoomStatusUpdate,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(get_auth_context),
+):
     """Update room status for housekeeping. When a room is set to cleaning/maintenance/blocked,
     any reservations assigned to it are automatically relocated by the allocation engine."""
     room = db.query(Room).filter(Room.id == room_id).first()
@@ -187,10 +193,10 @@ def update_room_status(room_id: int, data: RoomStatusUpdate, db: Session = Depen
     if data.status in (RoomStatusEnum.CLEANING, RoomStatusEnum.MAINTENANCE, RoomStatusEnum.BLOCKED):
         from app.services.allocation_engine import build_slots_from_db, run_allocation, apply_allocation_result
         try:
-            res_slots, room_slots = build_slots_from_db(db)
+            res_slots, room_slots = build_slots_from_db(db, hotel_id=context.hotel_id)
             if res_slots:
                 result = run_allocation(res_slots, room_slots)
-                updated = apply_allocation_result(db, result)
+                updated = apply_allocation_result(db, result, hotel_id=context.hotel_id)
                 db.commit()
                 realloc_result = {
                     "moved": len(result.moved_reservations),
@@ -224,7 +230,10 @@ def update_room_category(room_id: int, data: RoomCategoryUpdate, db: Session = D
 
 
 @router.post("/reallocate")
-def trigger_reallocation(db: Session = Depends(get_db)):
+def trigger_reallocation(
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(get_auth_context),
+):
     """Manually trigger the allocation engine to optimally redistribute all reservations.
     This maximizes availability and profitability by packing rooms tightly and
     relocating reservations away from cleaning/maintenance rooms.
@@ -232,12 +241,12 @@ def trigger_reallocation(db: Session = Depends(get_db)):
     from app.services.allocation_engine import build_slots_from_db, run_allocation, apply_allocation_result, AllocationError
     
     try:
-        res_slots, room_slots = build_slots_from_db(db)
+        res_slots, room_slots = build_slots_from_db(db, hotel_id=context.hotel_id)
         if not res_slots:
             return {"status": "ok", "message": "No active reservations to reallocate", "moved": 0, "unassigned": []}
         
         result = run_allocation(res_slots, room_slots)
-        updated = apply_allocation_result(db, result)
+        updated = apply_allocation_result(db, result, hotel_id=context.hotel_id)
         db.commit()
         
         return {

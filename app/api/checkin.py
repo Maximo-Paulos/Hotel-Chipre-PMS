@@ -13,14 +13,19 @@ from app.services.checkin_service import (
     CheckInError,
 )
 from app.models.guest import Guest
+from app.dependencies.auth import get_auth_context, AuthContext
 
 router = APIRouter(prefix="/api/checkin", tags=["Check-in"])
 
 
 @router.post("/{reservation_id}", response_model=ReservationRead)
-def checkin(reservation_id: int, db: Session = Depends(get_db)):
+def checkin(
+    reservation_id: int,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(get_auth_context),
+):
     try:
-        reservation = perform_checkin(db, reservation_id)
+        reservation = perform_checkin(db, reservation_id, hotel_id=context.hotel_id)
         db.commit()
         db.refresh(reservation)
         result = ReservationRead.model_validate(reservation)
@@ -32,9 +37,13 @@ def checkin(reservation_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/checkout/{reservation_id}", response_model=ReservationRead)
-def checkout(reservation_id: int, db: Session = Depends(get_db)):
+def checkout(
+    reservation_id: int,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(get_auth_context),
+):
     try:
-        reservation = perform_checkout(db, reservation_id)
+        reservation = perform_checkout(db, reservation_id, hotel_id=context.hotel_id)
         db.commit()
         db.refresh(reservation)
         result = ReservationRead.model_validate(reservation)
@@ -46,11 +55,15 @@ def checkout(reservation_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/validate/{guest_id}")
-def validate_guest(guest_id: int, db: Session = Depends(get_db)):
+def validate_guest(
+    guest_id: int,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(get_auth_context),
+):
     guest = db.query(Guest).filter(Guest.id == guest_id).first()
     if not guest:
         raise HTTPException(status_code=404, detail="Guest not found")
-    errors = validate_guest_for_checkin(db, guest)
+    errors = validate_guest_for_checkin(db, guest, hotel_id=context.hotel_id)
     return {
         "guest_id": guest_id,
         "valid": len(errors) == 0,

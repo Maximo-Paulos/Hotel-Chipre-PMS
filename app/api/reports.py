@@ -32,43 +32,29 @@ def daily_report(
 
     next_day = report_date + timedelta(days=1)
 
-    reservation_scope = db.query(Reservation)
-    hotel_filter = lambda r: getattr(r, "hotel_id", None) == context.hotel_id
+    reservation_scope = db.query(Reservation).filter(Reservation.hotel_id == context.hotel_id)
 
-    # ── Arrivals (check-in date = report_date) ──
-    arrivals = [
-        r for r in reservation_scope.filter(
-            Reservation.check_in_date == report_date,
-            Reservation.status.notin_([ReservationStatusEnum.CANCELLED]),
-        ).all()
-        if hotel_filter(r)
-    ]
+    arrivals = reservation_scope.filter(
+        Reservation.check_in_date == report_date,
+        Reservation.status.notin_([ReservationStatusEnum.CANCELLED]),
+    ).all()
 
-    # ── Departures (check-out date = report_date) ──
-    departures = [
-        r for r in reservation_scope.filter(
-            Reservation.check_out_date == report_date,
-        ).all()
-        if hotel_filter(r)
-    ]
+    departures = reservation_scope.filter(
+        Reservation.check_out_date == report_date,
+    ).all()
 
-    # ── In-house guests (spanning this date) ──
-    in_house = [
-        r for r in reservation_scope.filter(
-            Reservation.check_in_date <= report_date,
-            Reservation.check_out_date > report_date,
-            Reservation.status.in_([
-                ReservationStatusEnum.CHECKED_IN,
-                ReservationStatusEnum.FULLY_PAID,
-                ReservationStatusEnum.DEPOSIT_PAID,
-                ReservationStatusEnum.PENDING,
-            ]),
-        ).all()
-        if hotel_filter(r)
-    ]
+    in_house = reservation_scope.filter(
+        Reservation.check_in_date <= report_date,
+        Reservation.check_out_date > report_date,
+        Reservation.status.in_([
+            ReservationStatusEnum.CHECKED_IN,
+            ReservationStatusEnum.FULLY_PAID,
+            ReservationStatusEnum.DEPOSIT_PAID,
+            ReservationStatusEnum.PENDING,
+        ]),
+    ).all()
 
-    # ── Total rooms and occupancy ──
-    total_rooms = len([room for room in db.query(Room).filter(Room.is_active == True).all() if getattr(room, "hotel_id", None) == context.hotel_id])
+    total_rooms = db.query(Room).filter(Room.is_active == True, Room.hotel_id == context.hotel_id).count()
     occupied = len([r for r in in_house if r.status == ReservationStatusEnum.CHECKED_IN])
 
     # ── Revenue today (completed transactions) ──
@@ -176,16 +162,14 @@ def occupancy_report(
     if end_date is None:
         end_date = date.today()
 
-    reservation_scope = db.query(Reservation)
-    hotel_filter = lambda r: getattr(r, "hotel_id", None) == context.hotel_id
-
-    total_rooms = len([room for room in db.query(Room).filter(Room.is_active == True).all() if getattr(room, "hotel_id", None) == context.hotel_id])
+    reservation_scope = db.query(Reservation).filter(Reservation.hotel_id == context.hotel_id)
+    total_rooms = db.query(Room).filter(Room.is_active == True, Room.hotel_id == context.hotel_id).count()
 
     days = []
     current = start_date
     while current <= end_date:
         # Count reservations spanning this date
-        occupied_count = len([r for r in reservation_scope.filter(
+        occupied_count = reservation_scope.filter(
             Reservation.check_in_date <= current,
             Reservation.check_out_date > current,
             Reservation.status.in_([
@@ -194,7 +178,7 @@ def occupancy_report(
                 ReservationStatusEnum.DEPOSIT_PAID,
                 ReservationStatusEnum.PENDING,
             ]),
-        ).all() if hotel_filter(r)])
+        ).count()
 
         days.append({
             "date": str(current),
@@ -228,8 +212,7 @@ def revenue_report(
     if end_date is None:
         end_date = date.today()
 
-    reservation_scope = db.query(Reservation)
-    hotel_filter = lambda r: getattr(r, "hotel_id", None) == context.hotel_id
+    reservation_scope = db.query(Reservation).filter(Reservation.hotel_id == context.hotel_id)
 
     day_start = datetime(start_date.year, start_date.month, start_date.day, 0, 0, 0)
     day_end = datetime(end_date.year, end_date.month, end_date.day, 23, 59, 59)
@@ -258,14 +241,11 @@ def revenue_report(
         total += t.amount
 
     # Get all reservations in period for expected revenue
-    reservations = [
-        r for r in reservation_scope.filter(
-            Reservation.check_in_date >= start_date,
-            Reservation.check_in_date <= end_date,
-            Reservation.status.notin_([ReservationStatusEnum.CANCELLED]),
-        ).all()
-        if hotel_filter(r)
-    ]
+    reservations = reservation_scope.filter(
+        Reservation.check_in_date >= start_date,
+        Reservation.check_in_date <= end_date,
+        Reservation.status.notin_([ReservationStatusEnum.CANCELLED]),
+    ).all()
     expected_total = sum(r.total_amount for r in reservations)
     total_pending = sum(r.balance_due for r in reservations)
 

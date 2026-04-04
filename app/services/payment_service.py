@@ -76,7 +76,6 @@ def _resolve_reservation_hotel(
 ) -> int:
     """
     Resolve hotel scope using caller input or existing transactions.
-    No reservation/room fields are available for scoping in this slice.
     """
     reservation_hotel_id = getattr(reservation, "hotel_id", None)
 
@@ -145,6 +144,8 @@ def process_payment(
         hotel_id,
         existing_tx_hotel_id=existing_tx_hotel_id,
     )
+    if reservation.hotel_id and reservation.hotel_id != resolved_hotel_id:
+        raise PaymentError("Reservation does not belong to selected hotel")
 
     if reservation.status in (
         ReservationStatusEnum.CHECKED_OUT,
@@ -223,7 +224,13 @@ def process_payment(
 
     # 5. If completed, update reservation financial state
     if tx_status == TransactionStatusEnum.COMPLETED:
-        _update_reservation_financials(db, reservation, request.amount, request.transaction_type)
+        _update_reservation_financials(
+            db,
+            reservation,
+            request.amount,
+            request.transaction_type,
+            resolved_hotel_id,
+        )
 
     return transaction
 
@@ -233,6 +240,7 @@ def _update_reservation_financials(
     reservation: Reservation,
     amount: float,
     tx_type: TransactionTypeEnum,
+    hotel_id: int,
 ) -> None:
     """
     Update reservation.amount_paid and transition status based on payment.
@@ -248,14 +256,14 @@ def _update_reservation_financials(
     if reservation.status == ReservationStatusEnum.PENDING:
         if new_balance <= 0.01:
             # Fully paid in one shot
-            transition_reservation_status(db, reservation, ReservationStatusEnum.FULLY_PAID)
+            transition_reservation_status(db, reservation, ReservationStatusEnum.FULLY_PAID, hotel_id)
         elif reservation.amount_paid >= reservation.deposit_amount - 0.01:
             # Deposit threshold reached
-            transition_reservation_status(db, reservation, ReservationStatusEnum.DEPOSIT_PAID)
+            transition_reservation_status(db, reservation, ReservationStatusEnum.DEPOSIT_PAID, hotel_id)
 
     elif reservation.status == ReservationStatusEnum.DEPOSIT_PAID:
         if new_balance <= 0.01:
-            transition_reservation_status(db, reservation, ReservationStatusEnum.FULLY_PAID)
+            transition_reservation_status(db, reservation, ReservationStatusEnum.FULLY_PAID, hotel_id)
 
     db.flush()
 
@@ -281,6 +289,8 @@ def get_reservation_financial_summary(db: Session, hotel_id: Optional[int], rese
         hotel_id,
         existing_tx_hotel_id=existing_tx_hotel_id,
     )
+    if reservation.hotel_id and reservation.hotel_id != resolved_hotel_id:
+        raise PaymentError(f"Reservation {reservation_id} does not belong to hotel {resolved_hotel_id}")
 
     transactions = (
         db.query(Transaction)
