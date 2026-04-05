@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies.auth import AuthContext, require_permission
+from app.dependencies.auth import AuthContext, require_roles
 from app.schemas.transaction import PaymentRequest, TransactionRead
 from app.services.payment_service import (
     process_payment,
@@ -20,7 +20,7 @@ router = APIRouter(prefix="/api/payments", tags=["Payments"])
 def make_payment(
     data: PaymentRequest,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission("payments:create")),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
 ):
     try:
         transaction = process_payment(db, data, hotel_id=context.hotel_id)
@@ -35,7 +35,7 @@ def make_payment(
 def financial_summary(
     reservation_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission("payments:view")),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
 ):
     try:
         return get_reservation_financial_summary(db, context.hotel_id, reservation_id)

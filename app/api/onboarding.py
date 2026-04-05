@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies.auth import AuthContext, get_auth_context
+from app.dependencies.auth import AuthContext, get_auth_context, require_roles
 from app.schemas.onboarding import (
     OnboardingStatus,
     OwnerPayload,

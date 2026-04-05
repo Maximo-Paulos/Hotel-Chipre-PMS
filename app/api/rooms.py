@@ -22,7 +22,7 @@ from app.schemas.room import (
     RoomStatusUpdateResponse,
 )
 from app.services.reservation_service import find_available_rooms
-from app.dependencies.auth import get_auth_context, AuthContext
+from app.dependencies.auth import get_auth_context, AuthContext, require_roles
 from app.services.subscription_service import ensure_room_within_limit
 
 router = APIRouter(prefix="/api/rooms", tags=["Rooms"])

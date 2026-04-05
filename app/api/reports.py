@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from app.database import get_db
-from app.dependencies.auth import AuthContext, require_permission
+from app.dependencies.auth import AuthContext, require_roles
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.transaction import Transaction, TransactionStatusEnum, PaymentMethodEnum
 from app.models.room import Room, RoomCategory
@@ -21,7 +21,7 @@ router = APIRouter(prefix="/api/reports", tags=["Reports"])
 def daily_report(
     report_date: date = Query(default=None, description="Date for the report (defaults to today)"),
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission("reports:view")),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
 ):
     """
     Night Audit / Daily Report.
