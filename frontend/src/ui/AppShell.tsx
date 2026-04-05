@@ -1,16 +1,16 @@
-import { useEffect } from "react";
 import clsx from "clsx";
 import { Link, NavLink, Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { useEffect } from "react";
 
 import { useOnboardingStatus } from "../hooks/useOnboardingStatus";
+import { useSubscriptionStatus } from "../hooks/useSubscription";
 import { useSession } from "../state/session";
-
 import { HotelSelector } from "./HotelSelector";
 import { UserBadge } from "./UserBadge";
 
 const navSections = [
   {
-    title: "OperaciÃ³n",
+    title: "Operación",
     items: [
       { label: "Dashboard", to: "/dashboard" },
       { label: "Reservas", to: "/reservas" },
@@ -22,7 +22,7 @@ const navSections = [
     items: [{ label: "Onboarding", to: "/onboarding" }]
   },
   {
-    title: "ConfiguraciÃ³n",
+    title: "Configuración",
     items: [
       { label: "Usuarios", to: "/settings/users" },
       { label: "Hotel", to: "/settings/hotel" },
@@ -38,33 +38,21 @@ export function AppShell() {
   const isLoggedIn = session.accessToken !== undefined && session.userId !== "guest";
   const isVerified = Boolean(session.isVerified);
 
-  const { data: onboarding, isFetching, error } = useOnboardingStatus({
-    enabled: isLoggedIn && isVerified
-  });
+  const { data: onboarding, isFetching, error } = useOnboardingStatus({ enabled: isLoggedIn && isVerified });
+  const { data: subscription } = useSubscriptionStatus();
 
   useEffect(() => {
-    if (!isLoggedIn) {
-      navigate("/login", { replace: true });
-    }
+    if (!isLoggedIn) navigate("/login", { replace: true });
   }, [isLoggedIn, navigate]);
 
   useEffect(() => {
-    if (isLoggedIn && !isVerified && location.pathname !== "/verify-email") {
-      navigate("/verify-email", { replace: true });
-    }
+    if (isLoggedIn && !isVerified && location.pathname !== "/verify-email") navigate("/verify-email", { replace: true });
   }, [isLoggedIn, isVerified, location.pathname, navigate]);
 
-  useEffect(() => {
-    if (
-      isLoggedIn &&
-      isVerified &&
-      onboarding &&
-      !onboarding.completed &&
-      !location.pathname.startsWith("/onboarding")
-    ) {
-      navigate("/onboarding", { replace: true });
-    }
-  }, [isLoggedIn, isVerified, onboarding, location.pathname, navigate]);
+  const role = session.role;
+  const path = location.pathname;
+  if (role === "housekeeping" && path.startsWith("/settings")) return <Navigate to="/reservas" replace />;
+  if (role === "manager" && path.startsWith("/settings")) return <Navigate to="/reservas" replace />;
 
   if (!isLoggedIn) return <Navigate to="/login" replace />;
   if (isLoggedIn && !isVerified) return <Navigate to="/verify-email" replace />;
@@ -77,14 +65,16 @@ export function AppShell() {
         <span className="ml-3 text-slate-200">Usuario {session.email || session.userId}</span>
       </div>
 
+      {subscription && subscription.status !== "active" && (
+        <div className="border-b border-amber-200 bg-amber-50 px-6 py-2 text-sm text-amber-900">
+          Suscripción inactiva. Reactivá tu plan. Plan: {subscription.plan || "sin plan"} · Habitaciones: {subscription.rooms_in_use}/{subscription.room_limit}
+        </div>
+      )}
+
       {!isFetching && onboarding && !onboarding.completed && !location.pathname.startsWith("/onboarding") && (
         <div className="border-b border-amber-200 bg-amber-50 px-6 py-2 text-sm text-amber-900">
-          Onboarding pendiente: {onboarding.missing_steps.join(", ") || "revisÃ¡ los pasos"}.
-          <button
-            className="ml-3 text-amber-800 underline"
-            onClick={() => navigate("/onboarding", { replace: true })}
-            type="button"
-          >
+          Onboarding pendiente: {onboarding.missing_steps.join(", ") || "revisá los pasos"}.
+          <button className="ml-3 text-amber-800 underline" onClick={() => navigate("/onboarding", { replace: true })} type="button">
             Completar ahora
           </button>
         </div>
@@ -92,7 +82,7 @@ export function AppShell() {
 
       {error && (
         <div className="border-b border-rose-200 bg-rose-50 px-6 py-2 text-sm text-rose-900">
-          Sin conexiÃ³n con el backend. Seguimos en modo offline para no bloquear la UI.
+          Sin conexión con el backend. Seguimos en modo offline para no bloquear la UI.
         </div>
       )}
 
@@ -102,7 +92,7 @@ export function AppShell() {
             <Link to="/dashboard" className="text-lg font-semibold text-slate-900">
               Hotel Chipre PMS
             </Link>
-            <p className="text-xs text-slate-500">Layout de navegaciÃ³n prototipo</p>
+            <p className="text-xs text-slate-500">Layout de navegación prototipo</p>
           </div>
           <nav className="flex-1 space-y-6 px-3 pb-6">
             {navSections.map((section) => (
