@@ -4,13 +4,12 @@ import { Link, useNavigate } from "react-router-dom";
 import { ApiError } from "../../api/client";
 import { register, requestVerification } from "../../api/auth";
 import { setOwner } from "../../api/onboarding";
-import { safeHotelId, useSession } from "../../state/session";
+import { useSession } from "../../state/session";
 
 export function RegisterOwnerPage() {
   const navigate = useNavigate();
   const { login } = useSession();
   const [form, setForm] = useState({ name: "", lastName: "", email: "", password: "", phone: "" });
-  const [hotelId, setHotelId] = useState("1");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
@@ -28,7 +27,7 @@ export function RegisterOwnerPage() {
       const sessionData = {
         userId: res.user.email,
         email: res.user.email,
-        hotelId: safeHotelId(hotelId),
+        hotelId: res.hotel_id ?? 1,
         role: "owner" as const,
         accessToken: res.access_token,
         isVerified: res.user.is_verified
@@ -118,16 +117,6 @@ export function RegisterOwnerPage() {
               value={form.password}
               onChange={(e) => handleChange("password", e.target.value)}
               required
-            />
-          </label>
-          <label className="text-sm font-medium text-slate-700">
-            Hotel ID (X-Hotel-Id)
-            <input
-              type="number"
-              min={1}
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 shadow-sm focus:border-brand-500 focus:ring-brand-500"
-              value={hotelId}
-              onChange={(e) => setHotelId(e.target.value)}
             />
           </label>
           {error && <p className="col-span-2 rounded-md bg-rose-50 p-3 text-rose-700">{error}</p>}

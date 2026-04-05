@@ -24,7 +24,7 @@ export function LoginPage() {
       const nextSession = {
         userId: res.user.email,
         email: res.user.email,
-        hotelId: 1, // el hotel se resuelve por cuenta; no pedimos al usuario
+        hotelId: res.hotel_id ?? 1,
         role: (res.user.role as "owner" | "receptionist") || "owner",
         accessToken: res.access_token,
         isVerified: res.user.is_verified

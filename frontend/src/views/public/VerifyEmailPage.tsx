@@ -44,14 +44,14 @@ export function VerifyEmailPage() {
       login({
         userId: res.user.email,
         email: res.user.email,
-        hotelId: session.hotelId,
+        hotelId: res.hotel_id ?? session.hotelId,
         role: (res.user.role as "owner" | "receptionist") || session.role,
         accessToken: res.access_token,
         isVerified: true
       });
       setMessage("Codigo correcto. Email verificado.");
       const status = await getOnboardingStatus({
-        hotelId: session.hotelId,
+        hotelId: res.hotel_id ?? session.hotelId,
         userId: res.user.email,
         accessToken: res.access_token
       });

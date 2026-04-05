@@ -16,6 +16,7 @@ from app.database import get_db
 from app.models.user import User
 from app.models.hotel_config import HotelConfiguration
 from app.services.security import decode_access_token
+from app.services.hotel_service import get_or_create_hotel_for_owner
 
 
 @dataclass
@@ -26,20 +27,24 @@ class AuthContext:
     permissions: Optional[Set[str]] = None
 
 
-def _resolve_hotel_id(db: Session, header_value: Optional[str]) -> int:
-    """Resolve the current hotel id, persisting a default if needed."""
+def _resolve_hotel_id(db: Session, header_value: Optional[str], user_email: Optional[str]) -> int:
+    """Resolve the current hotel id, preferring ownership by email, then header, then first/auto-create."""
+    if user_email:
+        hotel = get_or_create_hotel_for_owner(db, user_email)
+        return hotel.id
+
     if header_value:
         try:
             return int(header_value)
         except ValueError:
-            pass  # Ignore malformed header and fall back to persisted id
+            pass  # Ignore malformed header and fall back
 
     existing = db.query(HotelConfiguration.id).order_by(HotelConfiguration.id).first()
     if existing:
         return existing[0]
 
     # Persist a default row so future requests reuse the same id.
-    config = HotelConfiguration(id=1)
+    config = HotelConfiguration(id=1, owner_email=user_email)
     db.add(config)
     db.flush()
     return config.id
@@ -52,11 +57,13 @@ def get_auth_context(
     authorization: Optional[str] = Header(default=None, convert_underscores=False),
 ) -> AuthContext:
     """Return a minimal context with hotel scoping."""
-    hotel_id = _resolve_hotel_id(db, x_hotel_id)
+    payload = None
     user_id = x_user_id
     if authorization:
         payload = _decode_authorization_header(authorization)
         user_id = payload.get("email") or payload.get("sub") or user_id
+
+    hotel_id = _resolve_hotel_id(db, x_hotel_id, payload.get("email") if payload else None)
     # Enforce subscription state globally: no operaciones si está inactiva.
     config = db.query(HotelConfiguration).filter(HotelConfiguration.id == hotel_id).first()
     if config and not config.subscription_active:

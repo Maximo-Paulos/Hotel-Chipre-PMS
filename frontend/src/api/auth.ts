@@ -11,6 +11,7 @@ export type AuthUser = {
 export type AuthResponse = {
   access_token: string;
   token_type: string;
+  hotel_id: number;
   user: AuthUser;
   requires_verification?: boolean;
   code?: string;

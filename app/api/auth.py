@@ -30,6 +30,7 @@ from app.services.email_service import (
     send_verification_success_email,
 )
 from app.services.security import create_access_token, hash_password, verify_password
+from app.services.hotel_service import get_or_create_hotel_for_owner
 from app.dependencies.auth import get_current_user
 
 router = APIRouter(prefix="/api/auth", tags=["Auth"])
@@ -43,13 +44,15 @@ def _is_demo_mode() -> bool:
     return os.getenv("DEMO_MODE", "").lower() in {"1", "true", "yes", "on"}
 
 
-def _build_auth_response(user: User) -> AuthResponse:
+def _build_auth_response(db: Session, user: User) -> AuthResponse:
+    hotel = get_or_create_hotel_for_owner(db, user.email)
     token = create_access_token(
         subject=user.id,
-        extra={"email": user.email, "role": user.role, "verified": user.is_verified},
+        extra={"email": user.email, "role": user.role, "verified": user.is_verified, "hotel_id": hotel.id},
     )
     return AuthResponse(
         access_token=token,
+        hotel_id=hotel.id,
         user=UserInfo.model_validate(user),
         requires_verification=not user.is_verified,
     )
@@ -69,6 +72,7 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
     db.add(user)
     db.commit()
     db.refresh(user)
+    get_or_create_hotel_for_owner(db, user.email)
 
     # Send verification code when SMTP available; always store code for verify endpoint
     code = _generate_code()
@@ -76,7 +80,7 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
     if mailer.configured:
         send_verification_email(payload.email, code)
 
-    return _build_auth_response(user)
+    return _build_auth_response(db, user)
 
 
 @router.post("/request-verify")
@@ -113,9 +117,9 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
 
     if not user.is_verified:
         # Keep response but flag verification pending
-        return _build_auth_response(user)
+        return _build_auth_response(db, user)
 
-    return _build_auth_response(user)
+    return _build_auth_response(db, user)
 
 
 @router.post("/verify-email", response_model=AuthResponse)
@@ -131,7 +135,7 @@ def verify_email(payload: VerifyCodeRequest, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(user)
     send_verification_success_email(user.email)
-    return _build_auth_response(user)
+    return _build_auth_response(db, user)
 
 
 @router.post("/request-reset")
@@ -160,7 +164,7 @@ def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db))
     db.add(user)
     db.commit()
     db.refresh(user)
-    return _build_auth_response(user)
+    return _build_auth_response(db, user)
 
 
 @router.get("/me", response_model=UserInfo)
