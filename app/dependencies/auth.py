@@ -119,14 +119,13 @@ def require_roles(*roles: str):
         db: Session = Depends(get_db),
     ) -> AuthContext:
         # Fetch membership
-        membership = (
-            db.query(HotelMembership)
-            .filter(
-                HotelMembership.hotel_id == context.hotel_id,
-                HotelMembership.user_id == context.user_id if context.user_id else None,
-            )
-            .first()
-        )
+        if not context.user_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tenés permisos para esta acción")
+        membership = db.query(HotelMembership).filter(
+            HotelMembership.hotel_id == context.hotel_id,
+            HotelMembership.user_id == context.user_id,
+            HotelMembership.status == "active",
+        ).first()
         if not membership or membership.role not in roles:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tenés permisos para esta acción")
         return context

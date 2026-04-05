@@ -32,7 +32,7 @@ def onboarding_status(
 def set_owner(
     payload: OwnerPayload,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(get_auth_context),
+    context: AuthContext = Depends(require_roles("owner", "co_owner")),
 ):
     status_data = onboarding_service.set_owner(db, payload, hotel_id=context.hotel_id)
     db.commit()
@@ -43,7 +43,7 @@ def set_owner(
 def set_categories(
     payload: CategoriesPayload,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(get_auth_context),
+    context: AuthContext = Depends(require_roles("owner", "co_owner")),
 ):
     status_data = onboarding_service.upsert_categories(db, payload.categories, hotel_id=context.hotel_id)
     db.commit()
@@ -54,7 +54,7 @@ def set_categories(
 def set_rooms(
     payload: RoomsPayload,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(get_auth_context),
+    context: AuthContext = Depends(require_roles("owner", "co_owner")),
 ):
     try:
         # validate room cap before persisting
@@ -70,7 +70,7 @@ def set_rooms(
 def set_staff(
     payload: StaffPayload,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(get_auth_context),
+    context: AuthContext = Depends(require_roles("owner", "co_owner")),
 ):
     status_data = onboarding_service.store_staff(db, payload.staff, hotel_id=context.hotel_id)
     db.commit()
@@ -80,7 +80,7 @@ def set_staff(
 @router.post("/finish", response_model=OnboardingStatus)
 def finish(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(get_auth_context),
+    context: AuthContext = Depends(require_roles("owner", "co_owner")),
 ):
     try:
         status_data = onboarding_service.finish_onboarding(db, hotel_id=context.hotel_id)

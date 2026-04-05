@@ -34,7 +34,11 @@ class RoomStatusUpdate(BaseModel):
 
 
 @router.post("/categories", response_model=RoomCategoryRead, status_code=status.HTTP_201_CREATED)
-def create_category(data: RoomCategoryCreate, db: Session = Depends(get_db)):
+def create_category(
+    data: RoomCategoryCreate,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_roles("owner", "co_owner")),
+):
     category = RoomCategory(**data.model_dump())
     db.add(category)
     db.commit()
@@ -88,7 +92,11 @@ def update_category_pricing(category_id: int, data: CategoryPricingSchema, db: S
 
 
 @router.post("/", response_model=RoomRead, status_code=status.HTTP_201_CREATED)
-def create_room(data: RoomCreate, db: Session = Depends(get_db)):
+def create_room(
+    data: RoomCreate,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_roles("owner", "co_owner")),
+):
     category = db.query(RoomCategory).filter(RoomCategory.id == data.category_id).first()
     if not category:
         raise HTTPException(status_code=404, detail="Category not found")
@@ -140,7 +148,12 @@ def get_room(room_id: int, db: Session = Depends(get_db)):
 
 
 @router.patch("/{room_id}", response_model=RoomRead)
-def update_room(room_id: int, data: RoomUpdate, db: Session = Depends(get_db)):
+def update_room(
+    room_id: int,
+    data: RoomUpdate,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+):
     """Generic room update (number, floor, notes, status, etc.)."""
     room = db.query(Room).filter(Room.id == room_id).first()
     if not room:
@@ -152,6 +165,10 @@ def update_room(room_id: int, data: RoomUpdate, db: Session = Depends(get_db)):
         if not category:
             raise HTTPException(status_code=400, detail="Category not found")
         room.category_id = payload["category_id"]
+
+    # If reactivating a room, enforce plan room limit
+    if payload.get("is_active") is True and room.is_active is False:
+        ensure_room_within_limit(db, room.hotel_id)
 
     for field in ("room_number", "floor", "status", "is_active", "notes"):
         if field in payload:
@@ -176,7 +193,7 @@ def update_room_status(
     room_id: int,
     data: RoomStatusUpdate,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(get_auth_context),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
 ):
     """Update room status for housekeeping. When a room is set to cleaning/maintenance/blocked,
     any reservations assigned to it are automatically relocated by the allocation engine."""
@@ -235,7 +252,7 @@ def update_room_category(room_id: int, data: RoomCategoryUpdate, db: Session = D
 @router.post("/reallocate")
 def trigger_reallocation(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(get_auth_context),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
 ):
     """Manually trigger the allocation engine to optimally redistribute all reservations.
     This maximizes availability and profitability by packing rooms tightly and

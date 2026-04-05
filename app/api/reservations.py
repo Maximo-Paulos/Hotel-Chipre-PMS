@@ -43,7 +43,7 @@ def _to_read(r: Reservation) -> ReservationRead:
 def create_new_reservation(
     data: ReservationCreate,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(get_auth_context),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping")),
 ):
     config = db.get(HotelConfiguration, context.hotel_id)
     if config and not config.subscription_active:
@@ -129,7 +129,7 @@ def cancel_reservation(
     reservation_id: int,
     manager_pin: str | None = None,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(get_auth_context),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
 ):
     """Cancel a reservation. Post check-in cancellations are not allowed."""
     config = db.get(HotelConfiguration, context.hotel_id)
@@ -163,7 +163,7 @@ def cancel_reservation(
 def mark_no_show(
     reservation_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(get_auth_context),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
 ):
     """Mark a reservation as no-show (cancels it). Valid when guest doesn't arrive."""
     r = get_reservation_by_id(db, reservation_id, context.hotel_id)
@@ -186,7 +186,7 @@ def modify_reservation(
     reservation_id: int,
     data: ReservationUpdate,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(get_auth_context),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
 ):
     """Modify a reservation (dates, notes, room). Only allowed for pre-check-in states."""
     config = db.get(HotelConfiguration, context.hotel_id)
@@ -213,7 +213,7 @@ def extend_stay(
     reservation_id: int,
     new_checkout: date,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(get_auth_context),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
 ):
     """Extend a guest's stay to a new checkout date."""
     r = get_reservation_by_id(db, reservation_id, context.hotel_id)

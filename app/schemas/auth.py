@@ -42,5 +42,6 @@ class AuthResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     hotel_id: int
+    hotel_ids: list[int] | None = None
     user: UserInfo
     requires_verification: bool = False
