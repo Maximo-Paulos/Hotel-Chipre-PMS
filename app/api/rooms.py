@@ -23,6 +23,7 @@ from app.schemas.room import (
 )
 from app.services.reservation_service import find_available_rooms
 from app.dependencies.auth import get_auth_context, AuthContext
+from app.services.subscription_service import ensure_room_within_limit
 
 router = APIRouter(prefix="/api/rooms", tags=["Rooms"])
 
@@ -91,6 +92,8 @@ def create_room(data: RoomCreate, db: Session = Depends(get_db)):
     category = db.query(RoomCategory).filter(RoomCategory.id == data.category_id).first()
     if not category:
         raise HTTPException(status_code=404, detail="Category not found")
+    # Validate room limit for the hotel's subscription
+    ensure_room_within_limit(db, category.hotel_id)
     room = Room(**data.model_dump())
     db.add(room)
     db.commit()

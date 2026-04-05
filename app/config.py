@@ -53,6 +53,7 @@ class Settings(BaseSettings):
     JWT_SECRET: str = "change-me"
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRES_MINUTES: int = 60
+    DEFAULT_SUBSCRIPTION_PLAN: str = "starter"
     LOGIN_RATE_LIMIT: int = 5  # attempts per window
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}

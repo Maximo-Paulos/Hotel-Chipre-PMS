@@ -45,6 +45,7 @@ export function VerifyEmailPage() {
         userId: res.user.email,
         email: res.user.email,
         hotelId: res.hotel_id ?? session.hotelId,
+        hotelIds: res.hotel_ids ?? [res.hotel_id ?? session.hotelId],
         role: (res.user.role as "owner" | "receptionist") || session.role,
         accessToken: res.access_token,
         isVerified: true

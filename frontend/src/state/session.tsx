@@ -6,6 +6,7 @@ export type SessionState = {
   userId: string;
   email?: string;
   hotelId: number;
+  hotelIds?: number[];
   role: "owner" | "receptionist";
   accessToken?: string;
   isVerified?: boolean;

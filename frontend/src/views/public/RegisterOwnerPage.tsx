@@ -28,6 +28,7 @@ export function RegisterOwnerPage() {
         userId: res.user.email,
         email: res.user.email,
         hotelId: res.hotel_id ?? 1,
+        hotelIds: res.hotel_ids ?? [res.hotel_id ?? 1],
         role: "owner" as const,
         accessToken: res.access_token,
         isVerified: res.user.is_verified

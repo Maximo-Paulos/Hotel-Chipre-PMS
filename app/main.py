@@ -25,7 +25,9 @@ from app.api import (
     connections,
     bookings,
     onboarding,
+    users,
     email,
+    subscription,
     demo,
     auth,
 )
@@ -104,6 +106,8 @@ app.include_router(config.router)
 app.include_router(reports.router)
 app.include_router(connections.router)
 app.include_router(email.router)
+app.include_router(subscription.router)
+app.include_router(users.router)
 app.include_router(demo.router)
 app.include_router(auth.router)
 

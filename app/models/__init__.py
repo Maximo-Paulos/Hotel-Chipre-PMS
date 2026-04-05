@@ -8,6 +8,8 @@ from app.models.pricing import CategoryPricing
 from app.models.connection import Connection
 from app.models.onboarding import OnboardingState
 from app.models.user import User
+from app.models.hotel_membership import HotelMembership
+from app.models.subscription import SubscriptionPlan, HotelSubscription
 
 __all__ = [
     "Room", "RoomCategory",
@@ -20,4 +22,7 @@ __all__ = [
     "Connection",
     "OnboardingState",
     "User",
+    "HotelMembership",
+    "SubscriptionPlan",
+    "HotelSubscription",
 ]

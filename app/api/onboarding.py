@@ -14,6 +14,7 @@ from app.schemas.onboarding import (
     StaffPayload,
 )
 from app.services import onboarding_service
+from app.services.subscription_service import ensure_room_within_limit
 from app.services.onboarding_service import OnboardingError
 
 router = APIRouter(prefix="/api/onboarding", tags=["Onboarding"])
@@ -56,6 +57,8 @@ def set_rooms(
     context: AuthContext = Depends(get_auth_context),
 ):
     try:
+        # validate room cap before persisting
+        ensure_room_within_limit(db, context.hotel_id)
         status_data = onboarding_service.upsert_rooms(db, payload.rooms, hotel_id=context.hotel_id)
         db.commit()
         return status_data

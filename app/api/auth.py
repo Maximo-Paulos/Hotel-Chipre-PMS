@@ -30,7 +30,7 @@ from app.services.email_service import (
     send_verification_success_email,
 )
 from app.services.security import create_access_token, hash_password, verify_password
-from app.services.hotel_service import get_or_create_hotel_for_owner
+from app.services.hotel_service import get_or_create_hotel_for_owner, get_memberships_for_user
 from app.dependencies.auth import get_current_user
 
 router = APIRouter(prefix="/api/auth", tags=["Auth"])
@@ -44,17 +44,30 @@ def _is_demo_mode() -> bool:
     return os.getenv("DEMO_MODE", "").lower() in {"1", "true", "yes", "on"}
 
 
-def _build_auth_response(db: Session, user: User) -> AuthResponse:
-    hotel = get_or_create_hotel_for_owner(db, user.email)
+def _build_auth_response(db: Session, user: User, requested_hotel_id: int | None = None) -> AuthResponse:
+    memberships = get_memberships_for_user(db, user.id)
+    if not memberships:
+        hotel = get_or_create_hotel_for_owner(db, user.email)
+        memberships = get_memberships_for_user(db, user.id)  # refreshed
+    hotel_ids = [m.hotel_id for m in memberships]
+    hotel_id = requested_hotel_id if requested_hotel_id in hotel_ids else hotel_ids[0]
+    hotel = get_or_create_hotel_for_owner(db, user.email) if hotel_id is None else None
     token = create_access_token(
         subject=user.id,
-        extra={"email": user.email, "role": user.role, "verified": user.is_verified, "hotel_id": hotel.id},
+        extra={
+            "email": user.email,
+            "role": user.role,
+            "verified": user.is_verified,
+            "hotel_id": hotel_id,
+            "hotel_ids": hotel_ids,
+        },
     )
     return AuthResponse(
         access_token=token,
-        hotel_id=hotel.id,
+        hotel_id=hotel_id,
         user=UserInfo.model_validate(user),
         requires_verification=not user.is_verified,
+        hotel_ids=hotel_ids,
     )
 
 
@@ -72,6 +85,9 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
     db.add(user)
     db.commit()
     db.refresh(user)
+    # Create hotel + membership + subscription
+    get_or_create_hotel_for_owner(db, user.email)
+    db.commit()
     get_or_create_hotel_for_owner(db, user.email)
 
     # Send verification code when SMTP available; always store code for verify endpoint
@@ -117,9 +133,9 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
 
     if not user.is_verified:
         # Keep response but flag verification pending
-        return _build_auth_response(db, user)
+        return _build_auth_response(db, user, requested_hotel_id=x_hotel_id_int)
 
-    return _build_auth_response(db, user)
+    return _build_auth_response(db, user, requested_hotel_id=x_hotel_id_int)
 
 
 @router.post("/verify-email", response_model=AuthResponse)
