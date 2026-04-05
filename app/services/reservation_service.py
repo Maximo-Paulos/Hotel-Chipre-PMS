@@ -31,24 +31,37 @@ def generate_confirmation_code(prefix: str = "RES") -> str:
     return f"{prefix}-{random_part}"
 
 
+def _resolve_hotel_id(
+    hotel_id: Optional[int],
+    category: Optional[RoomCategory] = None,
+    room: Optional[Room] = None,
+) -> int:
+    """
+    Resolve hotel_id using explicit parameter first, then category/room defaults,
+    and finally fall back to single-hotel mode (id=1).
+    """
+    for candidate in (hotel_id, getattr(category, "hotel_id", None), getattr(room, "hotel_id", None), 1):
+        if candidate is not None:
+            return candidate
+    return 1
+
+
 def compute_reservation_pricing(
     db: Session,
     category_id: int,
     check_in: date,
     check_out: date,
-    hotel_id: int,
+    hotel_id: Optional[int] = None,
 ) -> tuple[int, float, float, float]:
     """
     Calculate nights, nightly rate, total amount, and deposit amount for a stay.
     Raises ReservationError for invalid dates or missing category.
     """
-    category = (
-        db.query(RoomCategory)
-        .filter(RoomCategory.id == category_id, RoomCategory.hotel_id == hotel_id)
-        .first()
-    )
+    category = db.query(RoomCategory).filter(RoomCategory.id == category_id).first()
     if not category:
         raise ReservationError(f"Room category with id={category_id} not found")
+
+    hotel_id = _resolve_hotel_id(hotel_id, category)
 
     nights = (check_out - check_in).days
     if nights <= 0:
@@ -69,15 +82,22 @@ def compute_reservation_pricing(
 def check_room_availability(
     db: Session,
     room_id: int,
-    hotel_id: int,
     check_in: date,
     check_out: date,
+    *,
+    hotel_id: Optional[int] = None,
     exclude_reservation_id: Optional[int] = None,
 ) -> bool:
     """
     Check if a specific room is available for the given date range.
     A room is unavailable if there is ANY overlapping active reservation.
     """
+    room = db.query(Room).filter(Room.id == room_id).first()
+    if not room:
+        raise ReservationError(f"Room with id={room_id} not found")
+
+    hotel_id = _resolve_hotel_id(hotel_id, room=room)
+
     query = db.query(Reservation).filter(
         Reservation.room_id == room_id,
         Reservation.hotel_id == hotel_id,
@@ -97,15 +117,23 @@ def check_room_availability(
 def find_available_rooms(
     db: Session,
     category_id: int,
-    hotel_id: int,
     check_in: date,
     check_out: date,
+    *,
+    hotel_id: Optional[int] = None,
+    exclude_reservation_id: Optional[int] = None,
 ) -> list[Room]:
     """
     Find all rooms of a given category that are available in the date range.
     Only considers rooms that are active and not in maintenance/blocked.
     """
     # Get rooms of the category that are active and available
+    category = db.query(RoomCategory).filter(RoomCategory.id == category_id).first()
+    if not category:
+        raise ReservationError(f"Room category with id={category_id} not found")
+
+    hotel_id = _resolve_hotel_id(hotel_id, category)
+
     candidate_rooms = db.query(Room).filter(
         Room.category_id == category_id,
         Room.hotel_id == hotel_id,
@@ -115,13 +143,20 @@ def find_available_rooms(
 
     available = []
     for room in candidate_rooms:
-        if check_room_availability(db, room.id, hotel_id, check_in, check_out):
+        if check_room_availability(
+            db,
+            room.id,
+            check_in,
+            check_out,
+            hotel_id=hotel_id,
+            exclude_reservation_id=exclude_reservation_id,
+        ):
             available.append(room)
 
     return available
 
 
-def create_reservation(db: Session, data: ReservationCreate, hotel_id: int) -> Reservation:
+def create_reservation(db: Session, data: ReservationCreate, hotel_id: Optional[int] = None) -> Reservation:
     """
     Create a new reservation with full validation.
     
@@ -140,13 +175,11 @@ def create_reservation(db: Session, data: ReservationCreate, hotel_id: int) -> R
         raise ReservationError(f"Guest with id={data.guest_id} not found")
 
     # 2. Validate category and compute price
-    category = (
-        db.query(RoomCategory)
-        .filter(RoomCategory.id == data.category_id, RoomCategory.hotel_id == hotel_id)
-        .first()
-    )
+    category = db.query(RoomCategory).filter(RoomCategory.id == data.category_id).first()
     if not category:
         raise ReservationError(f"Room category with id={data.category_id} not found")
+
+    hotel_id = _resolve_hotel_id(hotel_id, category)
 
     nights, price_night, total_amount, deposit_amount = compute_reservation_pricing(
         db, data.category_id, data.check_in_date, data.check_out_date, hotel_id
@@ -169,13 +202,25 @@ def create_reservation(db: Session, data: ReservationCreate, hotel_id: int) -> R
                 f"Room {room.room_number} belongs to category {room.category_id}, "
                 f"not {data.category_id}"
             )
-        if not check_room_availability(db, room_id, hotel_id, data.check_in_date, data.check_out_date):
+        if not check_room_availability(
+            db,
+            room_id,
+            data.check_in_date,
+            data.check_out_date,
+            hotel_id=hotel_id,
+        ):
             raise ReservationError(
                 f"Room {room.room_number} is not available for the requested dates"
             )
     else:
         # Auto-assign: find first available room with lock
-        available = find_available_rooms(db, data.category_id, hotel_id, data.check_in_date, data.check_out_date)
+        available = find_available_rooms(
+            db,
+            data.category_id,
+            data.check_in_date,
+            data.check_out_date,
+            hotel_id=hotel_id,
+        )
         if not available:
             raise ReservationError(
                 f"No rooms available in category {category.name} for the requested dates"
@@ -211,14 +256,16 @@ def transition_reservation_status(
     db: Session,
     reservation: Reservation,
     new_status: ReservationStatusEnum,
-    hotel_id: int,
+    hotel_id: Optional[int] = None,
 ) -> Reservation:
     """
     Transition a reservation to a new status following the state machine rules.
     Raises ReservationError if the transition is invalid.
     """
-    if reservation.hotel_id != hotel_id:
+    resolved_hotel_id = _resolve_hotel_id(hotel_id, room=reservation.room if hasattr(reservation, "room") else None)
+    if reservation.hotel_id not in (None, resolved_hotel_id):
         raise ReservationError("Cross-hotel status transition is not allowed")
+    reservation.hotel_id = reservation.hotel_id or resolved_hotel_id
     if not reservation.can_transition_to(new_status):
         raise ReservationError(
             f"Cannot transition from {reservation.status.value} to {new_status.value}"
@@ -257,9 +304,10 @@ def update_reservation_fields(
     db: Session,
     reservation: Reservation,
     data: ReservationUpdate,
-    hotel_id: int,
+    hotel_id: Optional[int] = None,
 ) -> Reservation:
     update_data = data.model_dump(exclude_unset=True)
+    hotel_id = _resolve_hotel_id(hotel_id, room=reservation.room if hasattr(reservation, "room") else None)
 
     new_ci = update_data.get("check_in_date", reservation.check_in_date)
     new_co = update_data.get("check_out_date", reservation.check_out_date)
@@ -274,7 +322,12 @@ def update_reservation_fields(
             .first()
         )
         if reservation.room_id and not check_room_availability(
-            db, reservation.room_id, hotel_id, new_ci, new_co, exclude_reservation_id=reservation.id
+            db,
+            reservation.room_id,
+            new_ci,
+            new_co,
+            hotel_id=hotel_id,
+            exclude_reservation_id=reservation.id,
         ):
             raise ReservationError("Room is not available for the new dates")
         reservation.check_in_date = new_ci
@@ -294,9 +347,9 @@ def update_reservation_fields(
         if not check_room_availability(
             db,
             new_room.id,
-            hotel_id,
             reservation.check_in_date,
             reservation.check_out_date,
+            hotel_id=hotel_id,
             exclude_reservation_id=reservation.id,
         ):
             raise ReservationError("New room is not available for these dates")

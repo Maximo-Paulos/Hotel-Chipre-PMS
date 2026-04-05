@@ -58,7 +58,7 @@ def db(db_engine) -> Session:
 
 @pytest.fixture
 def sample_categories(db: Session) -> list[RoomCategory]:
-    """Create sample room categories."""
+    """Create sample room categories for hotel 1."""
     # Ensure hotel configuration exists for FK integrity
     if not db.query(HotelConfiguration).filter(HotelConfiguration.id == 1).first():
         config = HotelConfiguration(
@@ -71,6 +71,7 @@ def sample_categories(db: Session) -> list[RoomCategory]:
             enable_paypal=True,
             enable_credit_card=True,
             enable_debit_card=True,
+            subscription_active=True,
         )
         db.add(config)
         db.flush()
@@ -107,8 +108,38 @@ def sample_categories(db: Session) -> list[RoomCategory]:
 
 
 @pytest.fixture
+def sample_categories_hotel2(db: Session) -> list[RoomCategory]:
+    """Minimal categories for a second hotel to verify isolation."""
+    if not db.query(HotelConfiguration).filter(HotelConfiguration.id == 2).first():
+        db.add(HotelConfiguration(id=2, deposit_percentage=20.0, subscription_active=True))
+        db.flush()
+
+    cats = [
+        RoomCategory(
+            name="Standard H2",
+            code="STD_H2",
+            base_price_per_night=80.0,
+            max_occupancy=2,
+            description="Standard room hotel 2",
+            hotel_id=2,
+        ),
+        RoomCategory(
+            name="Suite H2",
+            code="STE_H2",
+            base_price_per_night=180.0,
+            max_occupancy=4,
+            description="Suite hotel 2",
+            hotel_id=2,
+        ),
+    ]
+    db.add_all(cats)
+    db.flush()
+    return cats
+
+
+@pytest.fixture
 def sample_rooms(db: Session, sample_categories: list[RoomCategory]) -> list[Room]:
-    """Create the 38-room hotel layout."""
+    """Create the 38-room hotel layout for hotel 1."""
     rooms = []
     cat_std = sample_categories[0]  # STD_DBL
     cat_sup = sample_categories[1]  # SUP_DBL
@@ -169,8 +200,23 @@ def sample_rooms(db: Session, sample_categories: list[RoomCategory]) -> list[Roo
 
 
 @pytest.fixture
+def sample_rooms_hotel2(db: Session, sample_categories_hotel2: list[RoomCategory]) -> list[Room]:
+    """Create a small room layout for hotel 2 to test multi-hotel isolation."""
+    rooms = [
+        Room(room_number="201", floor=2, category_id=sample_categories_hotel2[0].id, status=RoomStatusEnum.AVAILABLE, hotel_id=2),
+        Room(room_number="202", floor=2, category_id=sample_categories_hotel2[1].id, status=RoomStatusEnum.AVAILABLE, hotel_id=2),
+    ]
+    db.add_all(rooms)
+    db.flush()
+    return rooms
+
+
+@pytest.fixture
 def sample_guest(db: Session) -> Guest:
     """Create a sample guest with full check-in data."""
+    if not db.query(HotelConfiguration).filter(HotelConfiguration.id == 1).first():
+        db.add(HotelConfiguration(id=1, subscription_active=True))
+        db.flush()
     guest = Guest(
         first_name="Carlos",
         last_name="Pérez",
@@ -180,6 +226,7 @@ def sample_guest(db: Session) -> Guest:
         email="carlos@email.com",
         phone="+54111234567",
         terms_accepted=True,
+        hotel_id=1,
     )
     db.add(guest)
     db.flush()
@@ -189,11 +236,15 @@ def sample_guest(db: Session) -> Guest:
 @pytest.fixture
 def sample_guest_incomplete(db: Session) -> Guest:
     """Create a guest WITHOUT identity documents (for check-in validation tests)."""
+    if not db.query(HotelConfiguration).filter(HotelConfiguration.id == 1).first():
+        db.add(HotelConfiguration(id=1, subscription_active=True))
+        db.flush()
     guest = Guest(
         first_name="María",
         last_name="López",
         email="maria@email.com",
         terms_accepted=False,
+        hotel_id=1,
         # No document_type, no document_number
     )
     db.add(guest)
@@ -206,6 +257,19 @@ def hotel_config(db: Session) -> HotelConfiguration:
     """Create default hotel configuration."""
     existing = db.query(HotelConfiguration).filter(HotelConfiguration.id == 1).first()
     if existing:
+        # Normalize to expected test defaults
+        existing.deposit_percentage = 30.0
+        existing.enable_full_payment = True
+        existing.enable_deposit_payment = True
+        existing.enable_cash = True
+        existing.enable_mercado_pago = True
+        existing.enable_paypal = True
+        existing.enable_credit_card = True
+        existing.enable_debit_card = True
+        existing.require_document_for_checkin = True
+        existing.require_terms_acceptance = True
+        existing.subscription_active = True
+        db.flush()
         return existing
 
     config = HotelConfiguration(
@@ -220,6 +284,7 @@ def hotel_config(db: Session) -> HotelConfiguration:
         enable_debit_card=True,
         require_document_for_checkin=True,
         require_terms_acceptance=True,
+        subscription_active=True,
     )
     db.add(config)
     db.flush()

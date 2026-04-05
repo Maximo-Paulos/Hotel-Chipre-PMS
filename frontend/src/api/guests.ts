@@ -22,7 +22,7 @@ export type GuestPayload = {
 };
 
 export const createGuest = (payload: GuestPayload, session?: SessionLike) =>
-  apiFetch<Guest>("/api/guests", { method: "POST", data: payload, session });
+  apiFetch<Guest>("/api/guests/", { method: "POST", data: payload, session });
 
 export const getGuest = (guestId: number, session?: SessionLike) =>
   apiFetch<Guest>(`/api/guests/${guestId}`, { session });

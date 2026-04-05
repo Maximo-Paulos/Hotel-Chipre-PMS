@@ -19,6 +19,7 @@ class Guest(Base):
     __tablename__ = "guests"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    hotel_id = Column(Integer, ForeignKey("hotel_configuration.id"), nullable=False, default=1, index=True)
 
     # Identity
     first_name = Column(String(120), nullable=False)

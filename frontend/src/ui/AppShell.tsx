@@ -35,30 +35,39 @@ export function AppShell() {
   const location = useLocation();
   const navigate = useNavigate();
   const { session } = useSession();
-  const isAuthenticated = session.accessToken !== undefined && session.userId !== "guest";
+  const isLoggedIn = session.accessToken !== undefined && session.userId !== "guest";
+  const isVerified = Boolean(session.isVerified);
 
   const { data: onboarding, isFetching, error } = useOnboardingStatus({
-    enabled: isAuthenticated
+    enabled: isLoggedIn && isVerified
   });
 
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (!isLoggedIn) {
       navigate("/login", { replace: true });
     }
-  }, [isAuthenticated, navigate]);
+  }, [isLoggedIn, navigate]);
+
+  useEffect(() => {
+    if (isLoggedIn && !isVerified && location.pathname !== "/verify-email") {
+      navigate("/verify-email", { replace: true });
+    }
+  }, [isLoggedIn, isVerified, location.pathname, navigate]);
 
   useEffect(() => {
     if (
-      isAuthenticated &&
+      isLoggedIn &&
+      isVerified &&
       onboarding &&
       !onboarding.completed &&
       !location.pathname.startsWith("/onboarding")
     ) {
       navigate("/onboarding", { replace: true });
     }
-  }, [isAuthenticated, onboarding, location.pathname, navigate]);
+  }, [isLoggedIn, isVerified, onboarding, location.pathname, navigate]);
 
-  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (!isLoggedIn) return <Navigate to="/login" replace />;
+  if (isLoggedIn && !isVerified) return <Navigate to="/verify-email" replace />;
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">

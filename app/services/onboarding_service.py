@@ -168,7 +168,7 @@ def upsert_rooms(
             room.category_id = category_id
             room.is_active = True
             if room.status is None:
-                room.status = RoomStatusEnum.AVAILABLE
+                room.status = RoomStatusEnum.AVAILABLE.value
             updated += 1
         else:
             room = Room(
@@ -176,7 +176,7 @@ def upsert_rooms(
                 room_number=room_payload.room_number,
                 floor=room_payload.floor,
                 category_id=category_id,
-                status=RoomStatusEnum.AVAILABLE,
+                status=RoomStatusEnum.AVAILABLE.value,
             )
             db.add(room)
             created += 1

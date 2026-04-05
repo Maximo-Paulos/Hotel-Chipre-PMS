@@ -4,15 +4,13 @@ import { Link, useNavigate } from "react-router-dom";
 import { ApiError } from "../../api/client";
 import { login as loginApi } from "../../api/auth";
 import { getOnboardingStatus } from "../../api/onboarding";
-import { safeHotelId, useSession } from "../../state/session";
+import { useSession } from "../../state/session";
 
 export function LoginPage() {
   const navigate = useNavigate();
   const { login } = useSession();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [hotelId, setHotelId] = useState("1");
-  const [role, setRole] = useState<"owner" | "receptionist">("owner");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -26,8 +24,8 @@ export function LoginPage() {
       const nextSession = {
         userId: res.user.email,
         email: res.user.email,
-        hotelId: safeHotelId(hotelId),
-        role: (res.user.role as "owner" | "receptionist") || role,
+        hotelId: 1, // el hotel se resuelve por cuenta; no pedimos al usuario
+        role: (res.user.role as "owner" | "receptionist") || "owner",
         accessToken: res.access_token,
         isVerified: res.user.is_verified
       };
@@ -79,27 +77,6 @@ export function LoginPage() {
               onChange={(e) => setPassword(e.target.value)}
               required
             />
-          </div>
-          <div>
-            <label className="text-sm font-medium text-slate-700">Hotel ID (header X-Hotel-Id)</label>
-            <input
-              type="number"
-              min={1}
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-900 shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-              value={hotelId}
-              onChange={(e) => setHotelId(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="text-sm font-medium text-slate-700">Rol</label>
-            <select
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-900 shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-              value={role}
-              onChange={(e) => setRole(e.target.value as "owner" | "receptionist")}
-            >
-              <option value="owner">Owner</option>
-              <option value="receptionist">Recepcionista</option>
-            </select>
           </div>
           {error && <p className="rounded-md bg-rose-50 p-2 text-sm text-rose-700">{error}</p>}
           <button

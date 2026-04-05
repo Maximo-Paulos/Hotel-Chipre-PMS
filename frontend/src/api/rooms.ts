@@ -23,7 +23,7 @@ export type Room = {
   category?: RoomCategory | null;
 };
 
-export const listRooms = (session?: SessionLike) => apiFetch<Room[]>("/api/rooms", { session });
+export const listRooms = (session?: SessionLike) => apiFetch<Room[]>("/api/rooms/", { session });
 
 export const listRoomCategories = (session?: SessionLike) =>
   apiFetch<RoomCategory[]>("/api/rooms/categories", { session });

@@ -401,14 +401,11 @@ def apply_allocation_result(
             reservation.room_id = room_id
             updated.append(reservation)
             
-    for reservation_id in result.unassigned_reservations:
-        reservation = db.query(Reservation).filter(
-            Reservation.id == reservation_id
-        ).first()
-        if reservation and (hotel_id is None or getattr(reservation, "hotel_id", None) == hotel_id) and reservation.room_id is not None:
-            reservation.room_id = None
-            if reservation.status != ReservationStatusEnum.CHECKED_IN:
-                updated.append(reservation)
+    if result.unassigned_reservations:
+        # No borres asignaciones existentes; informá al caller para que actúe.
+        raise AllocationError(
+            f"Sin habitaciones disponibles para las reservas: {', '.join(map(str, result.unassigned_reservations))}"
+        )
 
     db.flush()
     return updated

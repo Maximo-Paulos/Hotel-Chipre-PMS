@@ -43,6 +43,15 @@ class TestRoomModels:
         """Verify the hotel has exactly 38 rooms."""
         assert len(sample_rooms) == 38
 
+    def test_same_room_number_allowed_per_hotel(self, db, sample_rooms, sample_categories_hotel2, sample_rooms_hotel2):
+        """Same room_number can exist in different hotels without conflict."""
+        # room_number 201 exists in hotel 1 (floor 2) and hotel 2; uniqueness is per hotel.
+        room_h1 = db.query(Room).filter(Room.room_number == "201", Room.hotel_id == 1).first()
+        room_h2 = db.query(Room).filter(Room.room_number == "201", Room.hotel_id == 2).first()
+        assert room_h1 is not None
+        assert room_h2 is not None
+        assert room_h1.id != room_h2.id
+
     def test_room_repr(self, db, sample_rooms):
         """Verify room string representation."""
         room = sample_rooms[0]

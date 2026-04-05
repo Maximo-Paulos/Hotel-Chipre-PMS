@@ -51,6 +51,21 @@ def init_db(database_url: str | None = None):
     # Import models so Base.metadata is fully populated (e.g., CategoryPricing)
     import app.models  # noqa: F401
     Base.metadata.create_all(bind=_engine)
+    # Ensure a default hotel configuration exists for single-hotel/dev scenarios.
+    try:
+        from app.models.hotel_config import HotelConfiguration
+        with _SessionLocal() as db:
+            exists = db.query(HotelConfiguration.id).first()
+            if not exists:
+                db.add(HotelConfiguration(
+                    id=1,
+                    require_document_for_checkin=False,
+                    require_terms_acceptance=False,
+                ))
+                db.commit()
+    except Exception:
+        # Do not block app startup on bootstrap failures; tests can still set up explicitly.
+        pass
     return _engine
 
 

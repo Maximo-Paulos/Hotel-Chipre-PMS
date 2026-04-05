@@ -1,11 +1,10 @@
-import React, { useMemo, useRef, useState } from "react";
+﻿import React, { useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation } from "@tanstack/react-query";
 
 import { type Reservation, type ReservationSource, type ReservationStatus } from "../../api/reservations";
 import { checkRoomAvailability, type RoomAvailabilityResponse } from "../../api/rooms";
 import { type PaymentMethod } from "../../api/payments";
-import { apiFetch } from "../../api/client";
 import { useCategories } from "../../hooks/useCategories";
 import { useGuest, useGuestCreate } from "../../hooks/useGuests";
 import { useReservationMutations, useReservations } from "../../hooks/useReservations";
@@ -61,7 +60,6 @@ const defaultFormState = (): FormState => ({
 });
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
-const DEMO_MODE = (import.meta.env.VITE_DEMO_MODE ?? "").toString().toLowerCase() === "true";
 
 export function ReservationsPage() {
   const { session } = useSession();
@@ -109,12 +107,6 @@ export function ReservationsPage() {
   const paymentMutation = usePaymentMutation(editing?.id || undefined);
   const availabilityMutation = useMutation<RoomAvailabilityResponse, unknown, { category_id: number; check_in_date: string; check_out_date: string }>({
     mutationFn: (payload) => checkRoomAvailability(payload, session)
-  });
-  const seedMutation = useMutation({
-    mutationFn: () => apiFetch("/api/seed", { method: "POST", session })
-  });
-  const resetMutation = useMutation({
-    mutationFn: () => apiFetch("/api/reset", { method: "POST", session })
   });
   const { createMutation, updateMutation, cancelMutation, checkInMutation, checkOutMutation } = useReservationMutations(filters);
 
@@ -226,18 +218,44 @@ export function ReservationsPage() {
     setFormError(null);
   };
 
-  const handleSubmit = (event: React.FormEvent) => {
+  const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setFormError(null);
 
     const categoryIdNum = Number(formValues.category_id);
-    const guestIdNum = Number(formValues.guest_id);
+    let guestIdNum = Number(formValues.guest_id);
     if (!editing && (!guestIdNum || Number.isNaN(guestIdNum))) {
-      setFormError("Ingresá el ID del huésped (número entero).");
-      return;
-    }
-    if (!categoryIdNum || Number.isNaN(categoryIdNum)) {
-      setFormError("Seleccioná una categoría (ID numérico).");
+      const hasGuestData =
+        guestForm.first_name.trim() !== "" ||
+        guestForm.last_name.trim() !== "" ||
+        guestForm.email.trim() !== "" ||
+        guestForm.phone.trim() !== "";
+
+      if (!hasGuestData) {
+        setFormError("Ingresá el ID del huésped o completá los datos para crearlo automáticamente.");
+        return;
+      }
+
+      try {
+        const newGuest = await guestMutation.mutateAsync({
+          first_name: guestForm.first_name.trim() || "Invitado",
+          last_name: guestForm.last_name.trim() || "Sin apellido",
+          email: guestForm.email.trim() || undefined,
+          phone: guestForm.phone.trim() || undefined,
+          terms_accepted: true
+        } as any);
+        guestIdNum = newGuest.id;
+        setFormValues((prev) => ({ ...prev, guest_id: String(newGuest.id) }));
+        setGuestForm({ first_name: "", last_name: "", email: "", phone: "" });
+        showToast("success", "Huésped creado y asignado automáticamente");
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "No se pudo crear el huésped";
+        setFormError(msg);
+        showToast("error", msg);
+        return;
+      }
+    }    if (!categoryIdNum || Number.isNaN(categoryIdNum)) {
+      setFormError("Seleccioná una Categoría (ID numérico).");
       return;
     }
     if (!formValues.check_in_date || !formValues.check_out_date) {
@@ -317,7 +335,7 @@ export function ReservationsPage() {
 
   const handleCheckAvailability = () => {
     if (!availabilityForm.category_id || !availabilityForm.check_in_date || !availabilityForm.check_out_date) {
-      showToast("error", "Completá categoría y fechas para consultar disponibilidad.");
+      showToast("error", "Completá Categoría y fechas para consultar disponibilidad.");
       return;
     }
     const payload = {
@@ -344,7 +362,7 @@ export function ReservationsPage() {
         setGuestForm({ first_name: "", last_name: "", email: "", phone: "" });
         showToast("success", "Huésped creado y asignado");
       },
-      onError: (err: unknown) => showToast("error", err instanceof Error ? err.message : "No se pudo crear el huésped")
+      onError: (err: unknown) => showToast("error", err instanceof Error ? err.message : "No se pudo crear el Huésped")
     });
   };
 
@@ -356,7 +374,7 @@ export function ReservationsPage() {
     if (!editing || !paymentSummary) return;
     const due = Math.max(paymentSummary.deposit_required - paymentSummary.amount_paid, 0);
     if (due <= 0.01) {
-      showToast("info", "La seña ya está cubierta.");
+      showToast("info", "La Seña ya está cubierta.");
       return;
     }
     paymentMutation.mutate(
@@ -367,7 +385,7 @@ export function ReservationsPage() {
         transaction_type: "deposit"
       },
       {
-        onSuccess: () => showToast("success", "Se registró la seña"),
+        onSuccess: () => showToast("success", "Se registró la Seña"),
         onError: (err: unknown) => showToast("error", err instanceof Error ? err.message : "No se pudo registrar el pago")
       }
     );
@@ -398,18 +416,6 @@ export function ReservationsPage() {
   const closeDetails = () => setDetailsReservation(null);
   const openGuest = (guestId: number) => setGuestIdOpen(guestId);
   const closeGuest = () => setGuestIdOpen(null);
-
-  const handleSeed = () =>
-    seedMutation.mutate(undefined, {
-      onSuccess: () => showToast("success", "Base demo poblada"),
-      onError: (err: unknown) => showToast("error", err instanceof Error ? err.message : "No se pudo ejecutar seed")
-    });
-
-  const handleReset = () =>
-    resetMutation.mutate(undefined, {
-      onSuccess: () => showToast("success", "Base restablecida"),
-      onError: (err: unknown) => showToast("error", err instanceof Error ? err.message : "No se pudo resetear")
-    });
 
   const exportVoucher = () => {
     if (!detailsReservation) return;
@@ -513,26 +519,6 @@ export function ReservationsPage() {
           >
             Crear reserva
           </button>
-          {DEMO_MODE && (
-            <>
-              <button
-                type="button"
-                onClick={handleSeed}
-                disabled={seedMutation.isLoading}
-                className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 hover:border-emerald-300 disabled:opacity-60"
-              >
-                Seed demo
-              </button>
-              <button
-                type="button"
-                onClick={handleReset}
-                disabled={resetMutation.isLoading}
-                className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 hover:border-rose-300 disabled:opacity-60"
-              >
-                Reset demo
-              </button>
-            </>
-          )}
           <Link
             to="/dashboard"
             className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:border-slate-300"
@@ -652,7 +638,7 @@ export function ReservationsPage() {
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="text-xs uppercase tracking-wide text-slate-500">Disponibilidad</p>
-            <h2 className="text-lg font-semibold text-slate-900">Consulta rápida por categoría</h2>
+            <h2 className="text-lg font-semibold text-slate-900">Consulta rápida por Categoría</h2>
           </div>
           <div className="flex items-center gap-2 text-xs text-slate-500">
             {availabilityMutation.isPending && <span className="text-slate-600">Consultando...</span>}
@@ -890,7 +876,7 @@ export function ReservationsPage() {
               <div>
                 <p className="text-xs uppercase tracking-wide text-slate-500">{editing ? "Editar" : "Crear"}</p>
                 <h3 className="text-lg font-semibold text-slate-900">Reserva</h3>
-                <p className="text-xs text-slate-500">Completá los campos mínimos: huésped, categoría y fechas.</p>
+                <p className="text-xs text-slate-500">Completá los campos mínimos: Huésped, Categoría y fechas.</p>
               </div>
               <button onClick={closeForm} type="button" className="text-sm text-slate-500 hover:text-slate-800">
                 Cerrar
@@ -902,7 +888,7 @@ export function ReservationsPage() {
             <form className="mt-4 space-y-4" onSubmit={handleSubmit}>
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="text-xs font-semibold text-slate-600">
-                  ID huésped
+                  ID Huésped
                   <input
                     type="number"
                     min={1}
@@ -919,7 +905,7 @@ export function ReservationsPage() {
                     onChange={(e) => setFormValues((prev) => ({ ...prev, category_id: e.target.value, room_id: "" }))}
                     className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
                   >
-                    <option value="">Elegí una categoría</option>
+                    <option value="">Elegí una Categoría</option>
                     {categoryOptions.map((opt) => (
                       <option key={opt.value} value={opt.value}>
                         {opt.label}
@@ -970,9 +956,9 @@ export function ReservationsPage() {
                     disabled={guestMutation.isLoading || !guestForm.first_name || !guestForm.last_name}
                     className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-xs font-semibold text-brand-700 hover:border-brand-300 hover:bg-brand-100 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    Crear huésped y asignar ID
+                    Crear Huésped y asignar ID
                   </button>
-                  <span>Se asigna automáticamente al campo ID huésped</span>
+                  <span>Se asigna automáticamente al campo ID Huésped</span>
                 </div>
               </div>
 
@@ -1130,7 +1116,7 @@ export function ReservationsPage() {
                       disabled={paymentMutation.isLoading}
                       className="rounded-lg border border-amber-200 bg-amber-100 px-3 py-2 text-sm font-semibold text-amber-800 hover:border-amber-300 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      Registrar seña
+                      Registrar Seña
                     </button>
                     <button
                       type="button"
@@ -1290,7 +1276,7 @@ export function ReservationsPage() {
           <div className="w-full max-w-2xl rounded-xl border border-slate-200 bg-white p-6 shadow-xl">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-xs uppercase tracking-wide text-slate-500">Ficha de huésped</p>
+                <p className="text-xs uppercase tracking-wide text-slate-500">Ficha de Huésped</p>
                 <h3 className="text-lg font-semibold text-slate-900">
                   {guestQuery.data ? `${guestQuery.data.first_name} ${guestQuery.data.last_name}` : `Huésped #${guestIdOpen}`}
                 </h3>
@@ -1340,3 +1326,8 @@ export function ReservationsPage() {
     </div>
   );
 }
+
+
+
+
+

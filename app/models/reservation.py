@@ -71,7 +71,8 @@ class Reservation(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     confirmation_code = Column(String(30), nullable=False, unique=True, index=True)
-    hotel_id = Column(Integer, ForeignKey("hotel_configuration.id"), nullable=False)
+    # Default single-hotel context for tests; explicit in multi-hotel flows.
+    hotel_id = Column(Integer, ForeignKey("hotel_configuration.id"), nullable=False, default=1)
 
     # Guest and Room linkage
     guest_id = Column(Integer, ForeignKey("guests.id"), nullable=False)

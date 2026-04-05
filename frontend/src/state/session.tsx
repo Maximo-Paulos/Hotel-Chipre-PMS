@@ -30,31 +30,18 @@ const safeHotelId = (value?: number | string | null): number => {
   return Number.isInteger(parsed) && (parsed as number) > 0 ? (parsed as number) : 1;
 };
 
-const loadSession = (): SessionState => {
-  if (typeof localStorage === "undefined") return DEFAULT_SESSION;
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) return DEFAULT_SESSION;
-  try {
-    const parsed = JSON.parse(raw);
-    return {
-      userId: parsed.userId || DEFAULT_SESSION.userId,
-      email: parsed.email,
-      hotelId: safeHotelId(parsed.hotelId),
-      role: parsed.role === "receptionist" ? "receptionist" : "owner",
-      accessToken: parsed.accessToken,
-      isVerified: parsed.isVerified ?? false
-    };
-  } catch {
-    return DEFAULT_SESSION;
-  }
-};
+const loadSession = (): SessionState => DEFAULT_SESSION;
 
 export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<SessionState>(() => loadSession());
 
+  // Always require re-login on page reload: clear any stale persisted session.
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
-  }, [session]);
+    setSession(DEFAULT_SESSION);
+    if (typeof localStorage !== "undefined") {
+      localStorage.removeItem(STORAGE_KEY);
+    }
+  }, []);
 
   const login = (partial: Partial<SessionState>) => {
     setSession((prev) => ({

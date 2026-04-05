@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.room import Room, RoomCategory
+from app.models.hotel_config import HotelConfiguration
 from app.schemas.reservation import ReservationCreate, ReservationRead, ReservationUpdate
 from app.services.reservation_service import (
     create_reservation,
@@ -36,12 +37,20 @@ def _to_read(r: Reservation) -> ReservationRead:
     return result
 
 
+# Accept with and without trailing slash to avoid 405 when the FE omits it.
 @router.post("/", response_model=ReservationRead, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=ReservationRead, status_code=status.HTTP_201_CREATED, include_in_schema=False)
 def create_new_reservation(
     data: ReservationCreate,
     db: Session = Depends(get_db),
     context: AuthContext = Depends(get_auth_context),
 ):
+    config = db.get(HotelConfiguration, context.hotel_id)
+    if config and not config.subscription_active:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail="Suscripción inactiva. Reactivá el plan para crear nuevas reservas.",
+        )
     try:
         reservation = create_reservation(db, data, hotel_id=context.hotel_id)
         db.commit()
@@ -52,6 +61,7 @@ def create_new_reservation(
 
 
 @router.get("/", response_model=list[ReservationRead])
+@router.get("", response_model=list[ReservationRead], include_in_schema=False)
 def list_reservations(
     status_filter: str = "",
     from_date: date = None,
@@ -95,10 +105,13 @@ def add_reservation_guests(
         # Check if guest already exists by DocNum
         guest = None
         if guest_data.document_number:
-            guest = db.query(Guest).filter(Guest.document_number == guest_data.document_number).first()
+            guest = db.query(Guest).filter(
+                Guest.document_number == guest_data.document_number,
+                Guest.hotel_id == context.hotel_id,
+            ).first()
         
         if not guest:
-            guest = Guest(**guest_data.model_dump(exclude={"companions"}))
+            guest = Guest(**guest_data.model_dump(exclude={"companions"}), hotel_id=context.hotel_id)
             db.add(guest)
             db.flush()
         
@@ -119,6 +132,12 @@ def cancel_reservation(
     context: AuthContext = Depends(get_auth_context),
 ):
     """Cancel a reservation. Post check-in cancellations are not allowed."""
+    config = db.get(HotelConfiguration, context.hotel_id)
+    if config and not config.subscription_active:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail="Suscripción inactiva. Reactivá el plan para gestionar reservas.",
+        )
     r = get_reservation_by_id(db, reservation_id, context.hotel_id)
     if not r:
         raise HTTPException(status_code=404, detail="Reservation not found")
@@ -170,6 +189,12 @@ def modify_reservation(
     context: AuthContext = Depends(get_auth_context),
 ):
     """Modify a reservation (dates, notes, room). Only allowed for pre-check-in states."""
+    config = db.get(HotelConfiguration, context.hotel_id)
+    if config and not config.subscription_active:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail="Suscripción inactiva. Reactivá el plan para gestionar reservas.",
+        )
     r = get_reservation_by_id(db, reservation_id, context.hotel_id)
     if not r:
         raise HTTPException(status_code=404, detail="Reservation not found")
@@ -199,7 +224,12 @@ def extend_stay(
     if new_checkout <= r.check_out_date:
         raise HTTPException(status_code=400, detail="New checkout must be after current checkout")
     if r.room_id and not check_room_availability(
-        db, r.room_id, context.hotel_id, r.check_out_date, new_checkout, exclude_reservation_id=r.id
+        db,
+        r.room_id,
+        r.check_out_date,
+        new_checkout,
+        hotel_id=context.hotel_id,
+        exclude_reservation_id=r.id,
     ):
         raise HTTPException(status_code=400, detail="Room is not available for the extended dates")
 

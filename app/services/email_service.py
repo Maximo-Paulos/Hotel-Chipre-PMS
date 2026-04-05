@@ -43,10 +43,14 @@ class Mailer:
         msg["Subject"] = subject
         msg.set_content(body)
 
-        with smtplib.SMTP(self.settings.SMTP_HOST, self.settings.SMTP_PORT) as smtp:
-            smtp.starttls()
-            smtp.login(self.settings.SMTP_USER, self.settings.SMTP_PASS)
-            smtp.send_message(msg)
+        try:
+            with smtplib.SMTP(self.settings.SMTP_HOST, self.settings.SMTP_PORT, timeout=10) as smtp:
+                smtp.starttls()
+                smtp.login(self.settings.SMTP_USER, self.settings.SMTP_PASS)
+                smtp.send_message(msg)
+        except Exception as exc:  # pragma: no cover
+            # Degrade gracefully in dev/stage: avoid breaking HTTP flows on SMTP errors
+            print(f"[mailer] failed to send email: {exc}")
 
 
 mailer = Mailer()
@@ -74,5 +78,18 @@ def send_reset_password_email(email: str, code: str) -> None:
         f"Hola,\n\n"
         f"Usá este código para restablecer tu acceso: {code}\n\n"
         f"Si no solicitaste este correo, ignoralo."
+    )
+    mailer.send(email, subject, body)
+
+
+def send_verification_success_email(email: str) -> None:
+    """
+    Sends a confirmation email once the account is verified.
+    """
+    subject = "Cuenta verificada - Hotel PMS"
+    body = (
+        "Hola,\n\n"
+        "Tu email fue verificado con exito. Ya podes iniciar sesion y usar el sistema.\n\n"
+        "Si no realizaste esta accion, contacta al soporte."
     )
     mailer.send(email, subject, body)

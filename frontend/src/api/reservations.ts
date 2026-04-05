@@ -77,16 +77,16 @@ const buildQueryString = (filters: ReservationFilters = {}) => {
 };
 
 export const listReservations = (filters: ReservationFilters = {}, session?: SessionLike) =>
-  apiFetch<Reservation[]>(`/api/reservations${buildQueryString(filters)}`, { session });
+  apiFetch<Reservation[]>(`/api/reservations/${buildQueryString(filters)}`, { session });
 
 export const getReservation = (id: number, session?: SessionLike) =>
   apiFetch<Reservation>(`/api/reservations/${id}`, { session });
 
 export const createReservation = (payload: ReservationPayload, session?: SessionLike) =>
-  apiFetch<Reservation>("/api/bookings", { method: "POST", data: payload, session });
+  apiFetch<Reservation>("/api/reservations/", { method: "POST", data: payload, session });
 
 export const updateReservation = (id: number, payload: ReservationUpdatePayload, session?: SessionLike) =>
-  apiFetch<Reservation>(`/api/bookings/${id}`, { method: "PATCH", data: payload, session });
+  apiFetch<Reservation>(`/api/reservations/${id}`, { method: "PATCH", data: payload, session });
 
 export const cancelReservation = (id: number, session?: SessionLike) =>
   apiFetch<Reservation>(`/api/reservations/${id}/cancel`, { method: "POST", session });

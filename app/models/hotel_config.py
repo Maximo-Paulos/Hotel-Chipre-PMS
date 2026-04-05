@@ -39,6 +39,10 @@ class HotelConfiguration(Base):
     enable_booking_sync = Column(Boolean, nullable=False, default=True)
     enable_expedia_sync = Column(Boolean, nullable=False, default=True)
 
+    # Subscription / ownership
+    owner_email = Column(String(200), nullable=True)
+    subscription_active = Column(Boolean, nullable=False, default=True)
+
     # Check-in policies
     require_document_for_checkin = Column(Boolean, nullable=False, default=True)
     require_terms_acceptance = Column(Boolean, nullable=False, default=True)

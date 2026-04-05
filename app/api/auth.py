@@ -23,7 +23,12 @@ from app.schemas.auth import (
     UserInfo,
     VerifyCodeRequest,
 )
-from app.services.email_service import mailer, send_reset_password_email, send_verification_email
+from app.services.email_service import (
+    mailer,
+    send_reset_password_email,
+    send_verification_email,
+    send_verification_success_email,
+)
 from app.services.security import create_access_token, hash_password, verify_password
 from app.dependencies.auth import get_current_user
 
@@ -121,9 +126,11 @@ def verify_email(payload: VerifyCodeRequest, db: Session = Depends(get_db)):
     if not token_store.verify(payload.email, payload.code):
         raise HTTPException(status_code=400, detail="Código inválido o expirado")
     user.is_verified = True
+    user.last_login = datetime.now(timezone.utc)
     db.add(user)
     db.commit()
     db.refresh(user)
+    send_verification_success_email(user.email)
     return _build_auth_response(user)
 
 

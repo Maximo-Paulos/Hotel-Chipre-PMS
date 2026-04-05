@@ -17,7 +17,10 @@ export class ApiError extends Error {
   }
 }
 
-const API_BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "") || "";
+// Default to local backend so the dev/preview build doesn't hit the Vite preview origin.
+const DEFAULT_API_BASE = "http://127.0.0.1:8000/api";
+const API_BASE =
+  (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "") || DEFAULT_API_BASE;
 
 const normalizeHotelId = (hotelId?: number | string | null) => {
   const parsed = typeof hotelId === "string" ? parseInt(hotelId, 10) : hotelId;
@@ -45,6 +48,15 @@ type RequestOptions = {
   session?: SessionLike;
 };
 
+const buildUrl = (path: string) => {
+  const leading = path.startsWith("/") ? path : `/${path}`;
+  // Avoid duplicating /api when both the base and path contain it.
+  if (API_BASE.endsWith("/api") && leading.startsWith("/api/")) {
+    return `${API_BASE}${leading.replace(/^\/api/, "")}`;
+  }
+  return `${API_BASE}${leading}`;
+};
+
 export async function apiFetch<T = unknown>(path: string, options: RequestOptions = {}): Promise<T> {
   const { method = "GET", data, headers, signal, session } = options;
 
@@ -54,7 +66,7 @@ export async function apiFetch<T = unknown>(path: string, options: RequestOption
     ...headers
   };
 
-  const response = await fetch(`${API_BASE}${path}`, {
+  const response = await fetch(buildUrl(path), {
     method,
     headers: finalHeaders,
     body: data !== undefined ? JSON.stringify(data) : undefined,
