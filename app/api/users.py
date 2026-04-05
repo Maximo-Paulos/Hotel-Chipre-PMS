@@ -2,6 +2,7 @@
 User management per hotel (owners/co-owners).
 """
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.database import get_db

@@ -23,14 +23,14 @@ def ensure_room_within_limit(db: Session, hotel_id: int):
     if not sub or sub.status != "active":
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail="SuscripciÛn inactiva. Reactiv· tu plan para crear habitaciones.",
+            detail="Suscripci√≥n inactiva. Reactiv√° tu plan para crear habitaciones.",
         )
     limit = get_effective_room_limit(db, hotel_id)
     current = db.query(func.count()).select_from(Room).filter(Room.hotel_id == hotel_id).scalar()
     if current >= limit:
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail=f"Super·s el lÌmite de habitaciones de tu plan ({limit}). Actualiz· el plan para agregar m·s.",
+            detail=f"Super√°s el l√≠mite de habitaciones de tu plan ({limit}). Actualiz√° el plan para agregar m√°s.",
         )
 
 from sqlalchemy import func
