@@ -110,8 +110,11 @@ def create_room(
 
 
 @router.get("/", response_model=list[RoomRead])
-def list_rooms(db: Session = Depends(get_db)):
-    return db.query(Room).all()
+def list_rooms(
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping")),
+):
+    return db.query(Room).filter(Room.hotel_id == context.hotel_id).all()
 
 
 @router.get("/availability")
@@ -120,6 +123,7 @@ def room_availability(
     check_in_date: date | None = None,
     check_out_date: date | None = None,
     db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping")),
 ):
     """
     Simple availability helper. Returns a placeholder message if required
@@ -140,8 +144,12 @@ def room_availability(
 
 
 @router.get("/{room_id}", response_model=RoomRead)
-def get_room(room_id: int, db: Session = Depends(get_db)):
-    room = db.query(Room).filter(Room.id == room_id).first()
+def get_room(
+    room_id: int,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping")),
+):
+    room = db.query(Room).filter(Room.id == room_id, Room.hotel_id == context.hotel_id).first()
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
     return room
@@ -322,7 +330,11 @@ def housekeeping_summary(db: Session = Depends(get_db)):
 
 
 @router.delete("/{room_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_room(room_id: int, db: Session = Depends(get_db)):
+def delete_room(
+    room_id: int,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_roles("owner", "co_owner")),
+):
     """Delete a room when no active reservations are attached."""
     room = db.query(Room).filter(Room.id == room_id).first()
     if not room:
