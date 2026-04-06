@@ -1,4 +1,4 @@
-import clsx from "clsx";
+﻿import clsx from "clsx";
 import { Link, NavLink, Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useMemo } from "react";
 
@@ -11,7 +11,7 @@ import { UserBadge } from "./UserBadge";
 
 const baseNav = [
   {
-    title: "Operación",
+    title: "OperaciÃ³n",
     items: [
       { label: "Dashboard", to: "/dashboard" },
       { label: "Reservas", to: "/reservas" },
@@ -23,12 +23,12 @@ const baseNav = [
     items: [{ label: "Onboarding", to: "/onboarding" }]
   },
   {
-    title: "Configuración",
+    title: "ConfiguraciÃ³n",
     items: [
       { label: "Usuarios", to: "/settings/users", requiresRole: ["owner", "co_owner"] },
-      { label: "Suscripción", to: "/settings/subscription" },
-      { label: "Hotel", to: "/settings/hotel" },
-      { label: "Seguridad", to: "/settings/security" }
+      { label: "SuscripciÃ³n", to: "/settings/subscription", requiresRole: ["owner", "co_owner"] }
+      { label: "Hotel", to: "/settings/hotel", requiresRole: ["owner", "co_owner"] }
+      { label: "Seguridad", to: "/settings/security", requiresRole: ["owner", "co_owner"] }
     ]
   }
 ];
@@ -71,7 +71,7 @@ export function AppShell() {
     subscription && subscription.room_limit > 0 && subscription.rooms_in_use >= subscription.room_limit;
   const capBanner =
     capReached &&
-    `Límite de habitaciones alcanzado (${subscription.rooms_in_use}/${subscription.room_limit}). Ajustá tu plan en Configuración > Hotel.`;
+    `LÃ­mite de habitaciones alcanzado (${subscription.rooms_in_use}/${subscription.room_limit}). AjustÃ¡ tu plan en ConfiguraciÃ³n > Hotel.`;
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
@@ -83,7 +83,7 @@ export function AppShell() {
 
       {subscription && subscription.status !== "active" && (
         <div className="border-b border-amber-200 bg-amber-50 px-6 py-2 text-sm text-amber-900">
-          Suscripción inactiva. Reactivá tu plan. Plan: {subscription.plan || "sin plan"} · Habitaciones: {subscription.rooms_in_use}/{subscription.room_limit}
+          SuscripciÃ³n inactiva. ReactivÃ¡ tu plan. Plan: {subscription.plan || "sin plan"} Â· Habitaciones: {subscription.rooms_in_use}/{subscription.room_limit}
         </div>
       )}
       {capBanner && (
@@ -92,7 +92,7 @@ export function AppShell() {
 
       {!isFetching && onboarding && !onboarding.completed && !location.pathname.startsWith("/onboarding") && (
         <div className="border-b border-amber-200 bg-amber-50 px-6 py-2 text-sm text-amber-900">
-          Onboarding pendiente: {onboarding.missing_steps.join(", ") || "revisá los pasos"}.
+          Onboarding pendiente: {onboarding.missing_steps.join(", ") || "revisÃ¡ los pasos"}.
           <button className="ml-3 text-amber-800 underline" onClick={() => navigate("/onboarding", { replace: true })} type="button">
             Completar ahora
           </button>
@@ -102,10 +102,10 @@ export function AppShell() {
       {onboardingError && (
         <div className="border-b border-rose-200 bg-rose-50 px-6 py-2 text-sm text-rose-900">
           {onboardingError.status === 402
-            ? "Suscripción inactiva. Reactivá el plan para seguir usando el sistema."
+            ? "SuscripciÃ³n inactiva. ReactivÃ¡ el plan para seguir usando el sistema."
             : onboardingError.status === 403
               ? "Debes verificar tu email para continuar."
-              : "Sin conexión con el backend. Seguimos en modo offline para no bloquear la UI."}
+              : "Sin conexiÃ³n con el backend. Seguimos en modo offline para no bloquear la UI."}
         </div>
       )}
 
@@ -115,7 +115,7 @@ export function AppShell() {
             <Link to="/dashboard" className="text-lg font-semibold text-slate-900">
               Hotel Chipre PMS
             </Link>
-            <p className="text-xs text-slate-500">Layout de navegación prototipo</p>
+            <p className="text-xs text-slate-500">Layout de navegaciÃ³n prototipo</p>
           </div>
           <nav className="flex-1 space-y-6 px-3 pb-6">
             {useMemo(() => {
@@ -192,4 +192,5 @@ export function AppShell() {
       </div>
     </div>
   );
-}
+}
+

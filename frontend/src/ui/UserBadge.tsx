@@ -22,6 +22,7 @@ export function UserBadge() {
 
   const handleRoleChange = (event: ChangeEvent<HTMLSelectElement>) => {
     setRole(event.target.value as SessionState["role"]);
+    navigate("/dashboard");
   };
 
   const initials = (session.email || session.userId || "??").slice(0, 2).toUpperCase();
