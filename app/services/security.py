@@ -7,8 +7,17 @@ from typing import Any, Dict, Optional
 import jwt
 from fastapi import HTTPException, status
 from passlib.context import CryptContext
+import bcrypt as _bcrypt
 
 from app.config import get_settings
+
+# Compatibility shim: bcrypt 4.1.x removed the __about__ attribute that
+# passlib 1.7.x expects for backend version detection. Add it if missing to
+# avoid noisy warnings on startup.
+if not hasattr(_bcrypt, "__about__"):
+    class _About:
+        __version__ = getattr(_bcrypt, "__version__", "unknown")
+    _bcrypt.__about__ = _About()
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
