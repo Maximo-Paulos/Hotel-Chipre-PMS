@@ -125,7 +125,13 @@ def require_roles(*roles: str):
             HotelMembership.status == "active",
         ).first()
         if not membership or membership.role not in roles:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tenés permisos para esta acción")
+            # Si es owner/co_owner y no tiene membresía registrada en este hotel, la creamos on-the-fly
+            user = db.get(User, context.user_id)
+            if user and user.role in roles:
+                db.add(HotelMembership(hotel_id=context.hotel_id, user_id=user.id, role=user.role, status="active"))
+                db.commit()
+            else:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tenés permisos para esta acción")
         return context
 
     return dependency
