@@ -30,6 +30,7 @@ class AuthContext:
     hotel_id: int
     user_id: Optional[int] = None
     user_email: Optional[str] = None
+    user_role: Optional[str] = None
     permissions: Optional[Set[str]] = None
 
 
@@ -70,6 +71,7 @@ def get_auth_context(
     payload = None
     user_id_int: Optional[int] = None
     user_email = None
+    user_role = None
     if authorization:
         payload = _decode_authorization_header(authorization)
         user_email = payload.get("email")
@@ -77,6 +79,7 @@ def get_auth_context(
             user_id_int = int(payload.get("sub")) if payload and payload.get("sub") else None
         except Exception:
             user_id_int = None
+        user_role = payload.get("role")
         if payload.get("verified") is False:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -91,7 +94,7 @@ def get_auth_context(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
             detail="Suscripción inactiva. Reactivá para usar el sistema.",
         )
-    return AuthContext(hotel_id=hotel_id, user_id=user_id_int, user_email=user_email, permissions=set())
+    return AuthContext(hotel_id=hotel_id, user_id=user_id_int, user_email=user_email, user_role=user_role, permissions=set())
 
 
 def require_permission(permission: str):
@@ -119,19 +122,20 @@ def require_roles(*roles: str):
         # Fetch membership
         if not context.user_id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tenés permisos para esta acción")
+        # First, trust the user role from DB (so owners no quedan bloqueados por membresía faltante)
+        user = db.get(User, context.user_id)
+        if user and user.role in roles:
+            return context
+
         membership = db.query(HotelMembership).filter(
             HotelMembership.hotel_id == context.hotel_id,
             HotelMembership.user_id == context.user_id,
             HotelMembership.status == "active",
         ).first()
-        if not membership or membership.role not in roles:
-            # Si es owner/co_owner y no tiene membresía registrada en este hotel, la creamos on-the-fly
-            user = db.get(User, context.user_id)
-            if user and user.role in roles:
-                db.add(HotelMembership(hotel_id=context.hotel_id, user_id=user.id, role=user.role, status="active"))
-                db.commit()
-            else:
-                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tenés permisos para esta acción")
+        if membership and membership.role in roles:
+            return context
+
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tenés permisos para esta acción")
         return context
 
     return dependency
