@@ -915,13 +915,16 @@ export function ReservationsPage() {
             {formError && <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">{formError}</div>}
 
             <form className="mt-4 space-y-4" onSubmit={handleSubmit}>
+              <div className="rounded-lg bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700">
+                Datos de la reserva
+              </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="text-xs font-semibold text-slate-600">
                   ID Huésped
                   <input
                     type="number"
                     min={1}
-                    placeholder="ID de huésped (si ya está cargado)"
+                    placeholder="Ej: 12 (deja vacío y usa Huésped rápido)"
                     value={formValues.guest_id}
                     onChange={(e) => setFormValues((prev) => ({ ...prev, guest_id: e.target.value }))}
                     disabled={Boolean(editing)}
