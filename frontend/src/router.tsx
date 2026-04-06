@@ -17,7 +17,6 @@ import { SettingsSecurityPage } from "./views/protected/SettingsSecurityPage";
 import SettingsSubscriptionPage from "./views/protected/SettingsSubscriptionPage";
 import { useOnboardingStatus } from "./hooks/useOnboardingStatus";
 import { useSession } from "./state/session";
-import { Navigate } from "react-router-dom";
 
 function OnboardingGate() {
   const { session } = useSession();
