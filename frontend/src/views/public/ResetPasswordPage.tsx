@@ -20,7 +20,7 @@ export function ResetPasswordPage() {
     event.preventDefault();
     setError(null);
     if (!password || password !== confirm) {
-      setError("Las contrasenas no coinciden.");
+      setError("Las contraseñas no coinciden.");
       return;
     }
     setLoading(true);
@@ -29,7 +29,7 @@ export function ResetPasswordPage() {
       login({
         userId: res.user.email,
         email: res.user.email,
-        hotelId: session.hotelId,
+        hotelId: res.hotel_id ?? session.hotelId,
         role: (res.user.role as "owner" | "receptionist") || session.role,
         accessToken: res.access_token,
         isVerified: res.user.is_verified
@@ -46,44 +46,48 @@ export function ResetPasswordPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
       <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-lg ring-1 ring-slate-100">
-        <h1 className="text-2xl font-semibold text-slate-900">Restablecer contrasena</h1>
-        <p className="mb-4 text-sm text-slate-600">Ingresa el codigo que recibiste por correo.</p>
+        <h1 className="text-2xl font-semibold text-slate-900">Restablecer contraseña</h1>
+        <p className="mb-4 text-sm text-slate-600">Ingresá el código que recibiste por correo.</p>
         <form className="space-y-4" onSubmit={handleSubmit}>
           <label className="text-sm font-medium text-slate-700">
             Email
             <input
               type="email"
               className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 shadow-sm focus:border-brand-500 focus:ring-brand-500"
+              placeholder="tu@hotel.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
             />
           </label>
           <label className="text-sm font-medium text-slate-700">
-            Codigo
+            Código
             <input
               type="text"
               className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 shadow-sm focus:border-brand-500 focus:ring-brand-500"
+              placeholder="Ej: 123456"
               value={code}
               onChange={(e) => setCode(e.target.value)}
               required
             />
           </label>
           <label className="text-sm font-medium text-slate-700">
-            Nueva contrasena
+            Nueva contraseña
             <input
               type="password"
               className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 shadow-sm focus:border-brand-500 focus:ring-brand-500"
+              placeholder="Mínimo 6 caracteres"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
             />
           </label>
           <label className="text-sm font-medium text-slate-700">
-            Confirmar contrasena
+            Confirmar contraseña
             <input
               type="password"
               className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 shadow-sm focus:border-brand-500 focus:ring-brand-500"
+              placeholder="Repite la nueva contraseña"
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
               required
