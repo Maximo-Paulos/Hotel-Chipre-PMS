@@ -26,8 +26,8 @@ const baseNav = [
     title: "ConfiguraciÃ³n",
     items: [
       { label: "Usuarios", to: "/settings/users", requiresRole: ["owner", "co_owner"] },
-      { label: "SuscripciÃ³n", to: "/settings/subscription", requiresRole: ["owner", "co_owner"] }
-      { label: "Hotel", to: "/settings/hotel", requiresRole: ["owner", "co_owner"] }
+      { label: "SuscripciÃ³n", to: "/settings/subscription", requiresRole: ["owner", "co_owner"] },
+      { label: "Hotel", to: "/settings/hotel", requiresRole: ["owner", "co_owner"] },
       { label: "Seguridad", to: "/settings/security", requiresRole: ["owner", "co_owner"] }
     ]
   }
