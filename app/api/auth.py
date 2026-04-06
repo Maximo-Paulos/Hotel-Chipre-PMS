@@ -155,13 +155,17 @@ def verify_email(payload: VerifyCodeRequest, db: Session = Depends(get_db)):
 @router.post("/request-reset")
 def request_reset(payload: RequestCode, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email.ilike(payload.email)).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    if not user.is_verified:
+        raise HTTPException(status_code=403, detail="El email no está verificado. Verificá antes de resetear la contraseña.")
     code = _generate_code()
     token_store.set(payload.email, code, ttl_minutes=15)
     response = {"sent": True}
-    if user and mailer.configured:
+    if mailer.configured:
         send_reset_password_email(payload.email, code)
     elif _is_demo_mode():
-        response["code"] = code
+        response["code"] = code  # helper en entorno dev/demo
     return response
 
 
