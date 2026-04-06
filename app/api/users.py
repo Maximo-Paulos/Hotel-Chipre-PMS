@@ -10,7 +10,11 @@ from app.dependencies.auth import get_auth_context, AuthContext, require_roles
 from app.models.user import User
 from app.models.hotel_membership import HotelMembership
 from app.schemas.auth import UserInfo
-from app.services.security import hash_password
+from app.services.security import hash_password, create_signed_token, decode_signed_token
+from app.schemas.invitation import InvitationToken
+from app.services.email_service import mailer
+from app.config import get_settings
+from fastapi import Body
 
 router = APIRouter(prefix="/api/users", tags=["Users"])
 
@@ -70,7 +74,21 @@ def invite_user(
 
     db.commit()
     db.refresh(user)
-    return UserInfo.model_validate(user)
+
+    # Generate invitation token (JWT) with hotel_id/email/role
+    token = create_signed_token(
+        {"hotel_id": context.hotel_id, "email": user.email, "role": role, "type": "invite"},
+        expires_minutes=60 * 24 * 7,
+    )
+    base = get_settings().PUBLIC_BASE_URL or "http://localhost:8000"
+    invite_link = f"{base}/api/invitations/{token}"
+    if mailer.configured:
+        mailer.send(
+            user.email,
+            "Invitación al hotel",
+            f"Te invitaron al hotel (ID {context.hotel_id}) con rol {role}. Aceptá aquí: {invite_link}",
+        )
+    return {"user": UserInfo.model_validate(user), "invite_token": token}
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)

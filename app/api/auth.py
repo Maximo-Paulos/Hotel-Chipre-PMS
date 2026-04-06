@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.adapters.memory_tokens import token_store
-from app.adapters.rate_limiter import login_limiter
+from app.adapters.rate_limiter import login_limiter, reset_request_limiter
 from app.config import get_settings
 from app.database import get_db
 from app.models.user import User
@@ -22,6 +22,7 @@ from app.schemas.auth import (
     ResetPasswordRequest,
     UserInfo,
     VerifyCodeRequest,
+    ResetCodeValidationResponse,
 )
 from app.services.email_service import (
     mailer,
@@ -101,7 +102,8 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
 
 @router.post("/request-verify")
 def request_verify(payload: RequestCode):
-    code = _generate_code()
+    existing = token_store.get(payload.email)
+    code = existing or _generate_code()
     token_store.set(payload.email, code, ttl_minutes=15)
     response = {"sent": True, "code": code, "marker": "dev"}
     if mailer.configured:
@@ -154,12 +156,19 @@ def verify_email(payload: VerifyCodeRequest, db: Session = Depends(get_db)):
 
 @router.post("/request-reset")
 def request_reset(payload: RequestCode, db: Session = Depends(get_db)):
+    key = payload.email.lower()
+    settings = get_settings()
+    reset_request_limiter.limit = getattr(settings, "RESET_RATE_LIMIT", reset_request_limiter.limit)
+    if not reset_request_limiter.allow(key):
+        raise HTTPException(status_code=429, detail="Demasiados intentos de reset. EsperÃ¡ unos minutos.")
+
     user = db.query(User).filter(User.email.ilike(payload.email)).first()
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
     if not user.is_verified:
         raise HTTPException(status_code=403, detail="El email no está verificado. Verificá antes de resetear la contraseña.")
-    code = _generate_code()
+    existing = token_store.get(payload.email)
+    code = existing or _generate_code()
     token_store.set(payload.email, code, ttl_minutes=15)
     response = {"sent": True}
     if mailer.configured:
@@ -167,6 +176,13 @@ def request_reset(payload: RequestCode, db: Session = Depends(get_db)):
     elif _is_demo_mode():
         response["code"] = code  # helper en entorno dev/demo
     return response
+
+
+@router.post("/validate-reset", response_model=ResetCodeValidationResponse)
+def validate_reset(payload: VerifyCodeRequest):
+    """Validate reset code without changing password (paso previo en UI)."""
+    is_valid = token_store.verify(payload.email, payload.code)
+    return ResetCodeValidationResponse(valid=is_valid)
 
 
 @router.post("/reset-password", response_model=AuthResponse)

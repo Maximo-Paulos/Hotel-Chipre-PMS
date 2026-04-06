@@ -31,6 +31,7 @@ from app.api import (
     subscription,
     demo,
     auth,
+    invitations,
 )
 from app.services.email_service import mailer
 
@@ -124,6 +125,7 @@ app.include_router(subscription.router)
 app.include_router(users.router)
 app.include_router(demo.router)
 app.include_router(auth.router)
+app.include_router(invitations.router)
 
 # Frontend build paths
 BASE_DIR = Path(__file__).resolve().parent

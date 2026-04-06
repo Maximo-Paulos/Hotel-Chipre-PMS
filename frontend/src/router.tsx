@@ -6,6 +6,7 @@ import { RegisterOwnerPage } from "./views/public/RegisterOwnerPage";
 import { ForgotPasswordPage } from "./views/public/ForgotPasswordPage";
 import { ResetPasswordPage } from "./views/public/ResetPasswordPage";
 import { VerifyEmailPage } from "./views/public/VerifyEmailPage";
+import { AcceptInvitationPage } from "./views/public/AcceptInvitationPage";
 import { OnboardingWizard } from "./views/onboarding/OnboardingWizard";
 import { DashboardPage } from "./views/protected/DashboardPage";
 import { ReservationsPage } from "./views/protected/ReservationsPage";
@@ -39,6 +40,7 @@ export const router = createBrowserRouter([
   { path: "/register-owner", element: <RegisterOwnerPage /> },
   { path: "/forgot-password", element: <ForgotPasswordPage /> },
   { path: "/reset-password", element: <ResetPasswordPage /> },
+  { path: "/invitations/accept", element: <AcceptInvitationPage /> },
   { path: "/verify-email", element: <VerifyEmailPage /> },
   { path: "*", element: <Navigate to="/dashboard" replace /> }
 ]);

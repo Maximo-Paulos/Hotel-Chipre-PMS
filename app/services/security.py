@@ -53,3 +53,19 @@ def decode_access_token(token: str) -> Dict[str, Any]:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expirado")
     except jwt.PyJWTError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token inválido")
+
+
+def create_signed_token(payload: Dict[str, Any], expires_minutes: int = 60) -> str:
+    settings = get_settings()
+    expire = datetime.now(timezone.utc) + timedelta(minutes=expires_minutes)
+    body = {**payload, "exp": expire}
+    secret = getattr(settings, "JWT_SECRET", "change-me")
+    algorithm = getattr(settings, "JWT_ALGORITHM", "HS256")
+    return jwt.encode(body, secret, algorithm=algorithm)
+
+
+def decode_signed_token(token: str) -> Dict[str, Any]:
+    settings = get_settings()
+    secret = getattr(settings, "JWT_SECRET", "change-me")
+    algorithm = getattr(settings, "JWT_ALGORITHM", "HS256")
+    return jwt.decode(token, secret, algorithms=[algorithm])

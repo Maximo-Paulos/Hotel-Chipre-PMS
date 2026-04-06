@@ -45,3 +45,7 @@ class AuthResponse(BaseModel):
     hotel_ids: list[int] | None = None
     user: UserInfo
     requires_verification: bool = False
+
+
+class ResetCodeValidationResponse(BaseModel):
+    valid: bool

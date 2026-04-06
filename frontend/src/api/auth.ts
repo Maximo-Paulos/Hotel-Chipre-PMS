@@ -54,6 +54,13 @@ export const resetPassword = (email: string, code: string, newPassword: string) 
     data: { email, code, new_password: newPassword }
   });
 
+// Invitaciones: backend debe exponer /api/invitations/accept
+export const acceptInvitation = (token: string, password: string) =>
+  apiFetch<{ ok: boolean }>("/api/invitations/accept", {
+    method: "POST",
+    data: { token, password }
+  });
+
 export const currentUser = (session?: SessionLike) =>
   apiFetch<AuthUser>("/api/auth/me", {
     method: "GET",
