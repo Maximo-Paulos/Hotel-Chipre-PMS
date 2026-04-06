@@ -19,6 +19,10 @@ export type HotelConfig = {
   enable_booking_sync: boolean;
   enable_expedia_sync: boolean;
   allow_cancellation_after_checkin: boolean;
+  receptionist_view_past_days?: number;
+  receptionist_view_future_days?: number;
+  allow_revenue_manager?: boolean;
+  allow_revenue_receptionist?: boolean;
   require_document_for_checkin: boolean;
   require_terms_acceptance: boolean;
   extra_policies?: string | null;

@@ -125,6 +125,70 @@ export function SettingsHotelPage() {
             />
           </label>
 
+          {(session.role === "owner" || session.role === "co_owner") ? (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+              <div className="mb-3">
+                <p className="text-sm font-semibold text-slate-800">Visibilidad y permisos (solo dueño)</p>
+                <p className="text-xs text-slate-600">
+                  Controlá qué pueden ver y hacer recepcionistas y managers en este hotel.
+                </p>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <label className="text-sm font-semibold text-slate-700">
+                  Días pasados visibles al recepcionista
+                  <input
+                    type="range"
+                    min={0}
+                    max={90}
+                    step={1}
+                    className="mt-2 w-full"
+                    value={form.receptionist_view_past_days ?? 0}
+                    onChange={(e) => handleChange("receptionist_view_past_days", parseInt(e.target.value, 10))}
+                  />
+                  <span className="text-xs text-slate-600">
+                    Puede revisar hasta {form.receptionist_view_past_days ?? 0} días hacia atrás en el calendario.
+                  </span>
+                </label>
+                <label className="text-sm font-semibold text-slate-700">
+                  Días futuros visibles al recepcionista
+                  <input
+                    type="range"
+                    min={0}
+                    max={365}
+                    step={1}
+                    className="mt-2 w-full"
+                    value={form.receptionist_view_future_days ?? 30}
+                    onChange={(e) => handleChange("receptionist_view_future_days", parseInt(e.target.value, 10))}
+                  />
+                  <span className="text-xs text-slate-600">
+                    Puede ver reservas hasta {form.receptionist_view_future_days ?? 30} días hacia adelante.
+                  </span>
+                </label>
+              </div>
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                {[
+                  ["allow_revenue_manager", "Permitir a managers ver métricas de revenue"],
+                  ["allow_revenue_receptionist", "Permitir a recepcionistas ver métricas de revenue"],
+                  ["require_document_for_checkin", "Requerir documento para check-in"],
+                  ["require_terms_acceptance", "Requerir aceptación de términos en reservas"]
+                ].map(([key, label]) => (
+                  <label key={key} className="flex items-center gap-2 text-sm text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={Boolean((form as Record<string, unknown>)[key])}
+                      onChange={(e) => handleChange(key as keyof HotelConfig, e.target.checked)}
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+              Solo el dueño puede editar las opciones avanzadas de visibilidad y permisos.
+            </div>
+          )}
+
           <div className="flex items-center justify-end gap-3">
             {updateMutation.isError && (
               <p className="text-sm text-rose-700">No se pudo guardar. Revisá conexión o permisos.</p>
