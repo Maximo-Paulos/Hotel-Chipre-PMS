@@ -10,7 +10,11 @@ export type InvitePayload = {
 export const listUsers = (session?: SessionLike) => apiFetch<UserInfo[]>("/api/users/", { session });
 
 export const inviteUser = (payload: InvitePayload, session?: SessionLike) =>
-  apiFetch<UserInfo>("/api/users/invite", { method: "POST", data: payload, session });
+  apiFetch<{ user: UserInfo; invite_token: string; accept_url: string }>("/api/users/invite", {
+    method: "POST",
+    data: payload,
+    session
+  });
 
 export const revokeUser = (userId: number, session?: SessionLike) =>
   apiFetch<void>(`/api/users/${userId}`, { method: "DELETE", session });

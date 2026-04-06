@@ -33,6 +33,7 @@ export function SettingsUsersPage() {
   });
 
   const [inviteForm, setInviteForm] = useState({ email: "", role: "manager" });
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
 
   const canManage = ["owner", "co_owner"].includes(session.role);
 
@@ -65,13 +66,28 @@ export function SettingsUsersPage() {
             </select>
             <button
               type="button"
-              onClick={() => inviteMutation.mutate(inviteForm)}
+              onClick={() =>
+                inviteMutation.mutate(inviteForm, {
+                  onSuccess: (res: any) => {
+                    setInviteLink(res.accept_url || res.invite_token || null);
+                    setInviteForm({ email: "", role: "manager" });
+                  }
+                })
+              }
               disabled={inviteMutation.isLoading || !inviteForm.email}
               className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-60"
             >
               {inviteMutation.isLoading ? "Enviando..." : "Invitar"}
             </button>
           </div>
+          {inviteLink && (
+            <p className="mt-2 rounded-md bg-slate-50 p-3 text-xs text-slate-700">
+              Invitación creada. Comparte este enlace si el correo no llega:{" "}
+              <a className="text-brand-700 underline" href={inviteLink} target="_blank" rel="noreferrer">
+                {inviteLink}
+              </a>
+            </p>
+          )}
           {inviteMutation.isError && (
             <p className="mt-2 text-sm text-rose-600">
               {(inviteMutation.error as Error).message || "No se pudo invitar"}
