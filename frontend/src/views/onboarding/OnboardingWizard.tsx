@@ -15,6 +15,7 @@ import {
   type RoomPayload,
   type StaffPayload
 } from "../../api/onboarding";
+import { inviteUser } from "../../api/users";
 import { onboardingStatusKey, useOnboardingStatus } from "../../hooks/useOnboardingStatus";
 import { useSession } from "../../state/session";
 
@@ -42,6 +43,14 @@ export function OnboardingWizard() {
   const [categories, setCategoriesState] = useState<CategoryPayload[]>([]);
   const [rooms, setRoomsState] = useState<RoomPayload[]>([]);
   const [staff, setStaffState] = useState<StaffPayload[]>([]);
+
+  // Pre-cargar datos previos si el backend los devuelve
+  useEffect(() => {
+    const anyStatus = status as any;
+    if (anyStatus?.categories && !categories.length) setCategoriesState(anyStatus.categories as CategoryPayload[]);
+    if (anyStatus?.rooms && !rooms.length) setRoomsState(anyStatus.rooms as RoomPayload[]);
+    if (anyStatus?.staff && !staff.length) setStaffState(anyStatus.staff as StaffPayload[]);
+  }, [status, categories.length, rooms.length, staff.length]);
 
   useEffect(() => {
     if (
@@ -163,6 +172,7 @@ export function OnboardingWizard() {
             path="rooms"
             element={
               <RoomsStep
+                categories={categories}
                 rooms={rooms}
                 setRooms={setRoomsState}
                 onSave={async () => {
@@ -413,12 +423,14 @@ function CategoriesStep({
 }
 
 function RoomsStep({
+  categories,
   rooms,
   setRooms,
   onSave,
   loading,
   status
 }: {
+  categories: CategoryPayload[];
   rooms: RoomPayload[];
   setRooms: (data: RoomPayload[]) => void;
   onSave: () => Promise<void>;
@@ -430,8 +442,13 @@ function RoomsStep({
     setRooms(rooms.map((room, i) => (i === idx ? { ...room, [field]: parsed } as RoomPayload : room)));
   };
 
-  const addRoom = () =>
-    setRooms([...rooms, { room_number: `${rooms.length + 101}`, floor: 1, category_code: rooms[0]?.category_code || "STD" }]);
+  const addRoom = () => {
+    const defaultCat = categories[0]?.code || "STD";
+    setRooms([
+      ...rooms,
+      { room_number: `${rooms.length + 101}`, floor: 1, category_code: rooms[rooms.length - 1]?.category_code || defaultCat }
+    ]);
+  };
 
   return (
     <StepCard title="Habitaciones" status={status}>
@@ -459,12 +476,18 @@ function RoomsStep({
             </label>
             <label className="flex flex-col gap-1 text-xs font-semibold text-slate-600">
               Código de categoría
-              <input
+              <select
                 className="rounded border border-slate-200 px-3 py-2 text-sm"
                 value={room.category_code}
                 onChange={(e) => update(idx, "category_code", e.target.value)}
-                placeholder="Ej: STD"
-              />
+              >
+                <option value="">Seleccioná una categoría</option>
+                {categories.map((cat) => (
+                  <option key={cat.code} value={cat.code}>
+                    {cat.name} ({cat.code})
+                  </option>
+                ))}
+              </select>
             </label>
           </div>
         ))}
@@ -490,12 +513,14 @@ function StaffStep({
   staff,
   setStaff,
   onSave,
+  onSkip,
   loading,
   status
 }: {
   staff: StaffPayload[];
   setStaff: (data: StaffPayload[]) => void;
   onSave: () => Promise<void>;
+  onSkip?: () => void;
   loading: boolean;
   status?: StepProps["status"];
 }) {
@@ -506,7 +531,7 @@ function StaffStep({
   const addMember = () => setStaff([...staff, { name: "", role: "", email: "" }]);
 
   return (
-    <StepCard title="Staff inicial" status={status}>
+    <StepCard title="Staff inicial (opcional)" status={status}>
       <div className="space-y-3">
         {staff.map((member, idx) => (
           <div key={idx} className="grid gap-3 md:grid-cols-3">
@@ -543,14 +568,26 @@ function StaffStep({
           <button className="text-sm text-brand-700 hover:underline" type="button" onClick={addMember}>
             + Agregar staff
           </button>
-          <button
-            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-70"
-            onClick={onSave}
-            type="button"
-            disabled={loading}
-          >
-            {loading ? "Guardando..." : "Guardar y seguir"}
-          </button>
+          <div className="flex items-center gap-3">
+            {onSkip && (
+              <button
+                className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:border-brand-400"
+                onClick={onSkip}
+                type="button"
+                disabled={loading}
+              >
+                Saltar este paso
+              </button>
+            )}
+            <button
+              className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-70"
+              onClick={onSave}
+              type="button"
+              disabled={loading}
+            >
+              {loading ? "Guardando..." : "Guardar y seguir"}
+            </button>
+          </div>
         </div>
       </div>
     </StepCard>
