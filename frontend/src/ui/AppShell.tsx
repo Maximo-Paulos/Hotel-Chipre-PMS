@@ -62,6 +62,7 @@ export function AppShell() {
   const path = location.pathname;
   if (role === "housekeeping" && path.startsWith("/settings")) return <Navigate to="/reservas" replace />;
   if (role === "manager" && path.startsWith("/settings")) return <Navigate to="/reservas" replace />;
+  if (onboarding?.completed && path.startsWith("/onboarding")) return <Navigate to="/dashboard" replace />;
 
   if (!isLoggedIn) return <Navigate to="/login" replace />;
   if (isLoggedIn && !isVerified) return <Navigate to="/verify-email" replace />;
@@ -120,7 +121,9 @@ export function AppShell() {
             {useMemo(() => {
               return baseNav
                 .map((section) => {
-                  const items = section.items.filter((item: any) => !item.requiresRole || item.requiresRole.includes(role));
+                  const items = section.items
+                    .filter((item: any) => !item.requiresRole || item.requiresRole.includes(role))
+                    .filter((item: any) => !(item.to === "/onboarding" && onboarding?.completed));
                   if (!items.length) return null;
                   return (
                     <div key={section.title}>

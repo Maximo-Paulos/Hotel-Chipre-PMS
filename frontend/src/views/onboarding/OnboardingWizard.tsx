@@ -26,36 +26,6 @@ const steps = [
   { path: "finish", label: "Finalizar" }
 ];
 
-const defaultCategories: CategoryPayload[] = [
-  {
-    name: "Standard Doble",
-    code: "STD",
-    description: "Habitación doble estándar",
-    base_price_per_night: 100,
-    max_occupancy: 2,
-    amenities: "wifi"
-  },
-  {
-    name: "Suite",
-    code: "STE",
-    description: "Suite con balcón",
-    base_price_per_night: 180,
-    max_occupancy: 4,
-    amenities: "wifi,ac"
-  }
-];
-
-const defaultRooms: RoomPayload[] = [
-  { room_number: "101", floor: 1, category_code: "STD" },
-  { room_number: "102", floor: 1, category_code: "STD" },
-  { room_number: "201", floor: 2, category_code: "STE" }
-];
-
-const defaultStaff: StaffPayload[] = [
-  { name: "Lucia", role: "Front desk", email: "lucia@example.com" },
-  { name: "Javier", role: "Housekeeping" }
-];
-
 export function OnboardingWizard() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -69,9 +39,9 @@ export function OnboardingWizard() {
     phone: "",
     role: "Owner"
   });
-  const [categories, setCategoriesState] = useState<CategoryPayload[]>(defaultCategories);
-  const [rooms, setRoomsState] = useState<RoomPayload[]>(defaultRooms);
-  const [staff, setStaffState] = useState<StaffPayload[]>(defaultStaff);
+  const [categories, setCategoriesState] = useState<CategoryPayload[]>([]);
+  const [rooms, setRoomsState] = useState<RoomPayload[]>([]);
+  const [staff, setStaffState] = useState<StaffPayload[]>([]);
 
   useEffect(() => {
     if (
@@ -121,6 +91,12 @@ export function OnboardingWizard() {
     if (!status || status.completed) return null;
     return `Falta: ${status.missing_steps.join(", ")}`;
   }, [status]);
+
+  useEffect(() => {
+    if (status?.completed) {
+      navigate("/dashboard", { replace: true });
+    }
+  }, [status?.completed, navigate]);
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">

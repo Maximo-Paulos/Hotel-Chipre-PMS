@@ -27,6 +27,7 @@ export function LoginPage() {
         hotelId: res.hotel_id ?? 1,
         hotelIds: res.hotel_ids ?? [res.hotel_id ?? 1],
         role: (res.user.role as SessionState["role"]) || "owner",
+        baseRole: (res.user.role as SessionState["role"]) || "owner",
         accessToken: res.access_token,
         isVerified: res.user.is_verified
       };

@@ -28,6 +28,26 @@ export const listRooms = (session?: SessionLike) => apiFetch<Room[]>("/api/rooms
 export const listRoomCategories = (session?: SessionLike) =>
   apiFetch<RoomCategory[]>("/api/rooms/categories", { session });
 
+export const createRoomCategory = (category: Omit<RoomCategory, "id">, session?: SessionLike) =>
+  apiFetch<RoomCategory>("/api/rooms/categories", { method: "POST", data: category, session });
+
+export const updateRoomCategory = (
+  categoryId: number,
+  category: Partial<Omit<RoomCategory, "id">>,
+  session?: SessionLike
+) => apiFetch<RoomCategory>(`/api/rooms/categories/${categoryId}`, { method: "PATCH", data: category, session });
+
+export const createRoom = (
+  room: { room_number: string; floor: number; category_id: number; status?: RoomStatus; is_active?: boolean; notes?: string },
+  session?: SessionLike
+) => apiFetch<Room>("/api/rooms/", { method: "POST", data: room, session });
+
+export const updateRoom = (
+  roomId: number,
+  room: Partial<{ room_number: string; floor: number; category_id: number; status: RoomStatus; is_active: boolean; notes: string }>,
+  session?: SessionLike
+) => apiFetch<Room>(`/api/rooms/${roomId}`, { method: "PATCH", data: room, session });
+
 export const updateRoomStatus = (roomId: number, status: RoomStatus, notes?: string, session?: SessionLike) =>
   apiFetch(`/api/rooms/${roomId}/status`, {
     method: "PATCH",

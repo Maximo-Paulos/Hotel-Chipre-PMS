@@ -10,6 +10,7 @@ export type SessionState = {
   hotelId: number;
   hotelIds?: number[];
   role: Role;
+  baseRole?: Role;
   accessToken?: string;
   isVerified?: boolean;
 };
@@ -24,7 +25,7 @@ type SessionContextValue = {
 };
 
 const STORAGE_KEY = "hotel-pms-session";
-const DEFAULT_SESSION: SessionState = { userId: "guest", hotelId: 1, role: "owner" };
+const DEFAULT_SESSION: SessionState = { userId: "guest", hotelId: 1, role: "owner", baseRole: "owner" };
 
 const SessionContext = createContext<SessionContextValue | null>(null);
 
@@ -52,6 +53,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       email: partial.email ?? partial.userId ?? prev.email,
       hotelId: safeHotelId(partial.hotelId ?? prev.hotelId),
       role: (partial.role as Role | undefined) ?? prev.role ?? DEFAULT_SESSION.role,
+      baseRole: (partial.baseRole as Role | undefined) ?? (partial.role as Role | undefined) ?? prev.baseRole ?? DEFAULT_SESSION.baseRole,
       accessToken: partial.accessToken ?? prev.accessToken,
       isVerified: partial.isVerified ?? prev.isVerified ?? false,
       hotelIds: partial.hotelIds?.length
@@ -66,6 +68,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       email: undefined,
       hotelId: safeHotelId(prev.hotelId),
       role: DEFAULT_SESSION.role,
+      baseRole: DEFAULT_SESSION.baseRole,
       accessToken: undefined,
       isVerified: false
     }));

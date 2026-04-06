@@ -25,6 +25,15 @@ class RoomCategoryRead(RoomCategoryBase):
     id: int
     model_config = {"from_attributes": True}
 
+# Updates for editing categories
+class RoomCategoryUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    code: Optional[str] = Field(default=None, min_length=1, max_length=20)
+    description: Optional[str] = None
+    base_price_per_night: Optional[float] = Field(default=None, gt=0)
+    max_occupancy: Optional[int] = Field(default=None, gt=0)
+    amenities: Optional[str] = None
+
 
 # ── Room ──
 

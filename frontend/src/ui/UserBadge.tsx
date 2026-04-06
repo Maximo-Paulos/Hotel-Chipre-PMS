@@ -43,7 +43,7 @@ export function UserBadge() {
             Logout
           </button>
         </div>
-        {session.role === "owner" && (
+        {(session.baseRole === "owner") && (
           <label className="mt-2 block text-xs text-slate-600">
             <span className="mr-2 font-semibold text-slate-700">Cambiar vista</span>
             <select

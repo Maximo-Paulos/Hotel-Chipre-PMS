@@ -16,6 +16,7 @@ from app.schemas.room import (
     RoomRead,
     RoomCategoryCreate,
     RoomCategoryRead,
+    RoomCategoryUpdate,
     CategoryPricingSchema,
     CategoryPricingRead,
     RoomUpdate,
@@ -39,8 +40,26 @@ def create_category(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_roles("owner", "co_owner")),
 ):
-    category = RoomCategory(**data.model_dump())
+    category = RoomCategory(**data.model_dump(), hotel_id=context.hotel_id)
     db.add(category)
+    db.commit()
+    db.refresh(category)
+    return category
+
+
+@router.patch("/categories/{category_id}", response_model=RoomCategoryRead)
+def update_category(
+    category_id: int,
+    data: RoomCategoryUpdate,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_roles("owner", "co_owner")),
+):
+    category = db.query(RoomCategory).filter(RoomCategory.id == category_id, RoomCategory.hotel_id == context.hotel_id).first()
+    if not category:
+        raise HTTPException(status_code=404, detail="Category not found")
+    payload = data.model_dump(exclude_unset=True)
+    for field, value in payload.items():
+        setattr(category, field, value)
     db.commit()
     db.refresh(category)
     return category
@@ -100,12 +119,12 @@ def create_room(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_roles("owner", "co_owner")),
 ):
-    category = db.query(RoomCategory).filter(RoomCategory.id == data.category_id).first()
+    category = db.query(RoomCategory).filter(RoomCategory.id == data.category_id, RoomCategory.hotel_id == context.hotel_id).first()
     if not category:
         raise HTTPException(status_code=404, detail="Category not found")
     # Validate room limit for the hotel's subscription
     ensure_room_within_limit(db, category.hotel_id)
-    room = Room(**data.model_dump())
+    room = Room(**data.model_dump(), hotel_id=context.hotel_id)
     db.add(room)
     db.commit()
     db.refresh(room)
@@ -166,13 +185,13 @@ def update_room(
     context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
 ):
     """Generic room update (number, floor, notes, status, etc.)."""
-    room = db.query(Room).filter(Room.id == room_id).first()
+    room = db.query(Room).filter(Room.id == room_id, Room.hotel_id == context.hotel_id).first()
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
 
     payload = data.model_dump(exclude_unset=True)
     if "category_id" in payload and payload["category_id"] is not None:
-        category = db.query(RoomCategory).filter(RoomCategory.id == payload["category_id"]).first()
+        category = db.query(RoomCategory).filter(RoomCategory.id == payload["category_id"], RoomCategory.hotel_id == context.hotel_id).first()
         if not category:
             raise HTTPException(status_code=400, detail="Category not found")
         room.category_id = payload["category_id"]
@@ -250,7 +269,7 @@ def update_room_category(room_id: int, data: RoomCategoryUpdate, db: Session = D
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
     
-    category = db.query(RoomCategory).filter(RoomCategory.id == data.category_id).first()
+    category = db.query(RoomCategory).filter(RoomCategory.id == data.category_id, RoomCategory.hotel_id == room.hotel_id).first()
     if not category:
         raise HTTPException(status_code=400, detail="Target category does not exist")
 
@@ -299,6 +318,7 @@ def trigger_reallocation(
 @router.get("/housekeeping/summary")
 def housekeeping_summary(db: Session = Depends(get_db)):
     """Get housekeeping overview: how many rooms in each status."""
+    # Note: no auth context here; fallback to global summary.
     rooms = db.query(Room).all()
     summary = {
         "total": len(rooms),
