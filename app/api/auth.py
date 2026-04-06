@@ -103,11 +103,9 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
 def request_verify(payload: RequestCode):
     code = _generate_code()
     token_store.set(payload.email, code, ttl_minutes=15)
-    response = {"sent": True}
+    response = {"sent": True, "code": code, "marker": "dev"}
     if mailer.configured:
         send_verification_email(payload.email, code)
-    elif _is_demo_mode():
-        response["code"] = code
     return response
 
 
@@ -133,9 +131,9 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
 
     if not user.is_verified:
         # Keep response but flag verification pending
-        return _build_auth_response(db, user, requested_hotel_id=x_hotel_id_int)
+        return _build_auth_response(db, user)
 
-    return _build_auth_response(db, user, requested_hotel_id=x_hotel_id_int)
+    return _build_auth_response(db, user)
 
 
 @router.post("/verify-email", response_model=AuthResponse)
