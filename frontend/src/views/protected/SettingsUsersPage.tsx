@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
-import { inviteUser, listUsers, revokeUser } from "../../api/users";
+import { inviteUser, listUsers, revokeUser, updateUserRole } from "../../api/users";
 import { type AuthUser } from "../../api/auth";
 import { useSession } from "../../state/session";
 
@@ -25,6 +25,10 @@ export function SettingsUsersPage() {
   });
   const revokeMutation = useMutation({
     mutationFn: (userId: number) => revokeUser(userId, session),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["users", session.hotelId] })
+  });
+  const updateRoleMutation = useMutation({
+    mutationFn: (payload: { userId: number; role: string }) => updateUserRole(payload.userId, payload.role as any, session),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["users", session.hotelId] })
   });
 
@@ -95,7 +99,21 @@ export function SettingsUsersPage() {
               {(usersQuery.data || []).map((u) => (
                 <tr key={u.id}>
                   <td className="px-3 py-2">{u.email}</td>
-                  <td className="px-3 py-2">{roleLabels[u.role] || u.role}</td>
+                  <td className="px-3 py-2">
+                    {canManage && session.userId !== u.email ? (
+                      <select
+                        className="rounded-lg border border-slate-200 px-2 py-1 text-sm"
+                        value={u.role}
+                        onChange={(e) => updateRoleMutation.mutate({ userId: u.id, role: e.target.value })}
+                      >
+                        <option value="co_owner">Co-owner</option>
+                        <option value="manager">Manager</option>
+                        <option value="housekeeping">Housekeeping</option>
+                      </select>
+                    ) : (
+                      roleLabels[u.role] || u.role
+                    )}
+                  </td>
                   <td className="px-3 py-2">
                     {u.is_active ? (
                       <span className="rounded-full bg-emerald-50 px-2 py-1 text-xs text-emerald-700">Activo</span>
@@ -119,6 +137,11 @@ export function SettingsUsersPage() {
             </tbody>
           </table>
           {usersQuery.isError && <p className="mt-2 text-sm text-rose-600">No se pudieron cargar los usuarios.</p>}
+          {updateRoleMutation.isError && (
+            <p className="mt-2 text-sm text-rose-600">
+              {(updateRoleMutation.error as Error).message || "No se pudo actualizar el rol"}
+            </p>
+          )}
         </div>
       </div>
     </div>

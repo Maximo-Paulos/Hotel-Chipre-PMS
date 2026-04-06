@@ -1,19 +1,42 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import { ApiError } from "../../api/client";
-import { acceptInvitation } from "../../api/auth";
+import { acceptInvitation, getInvitationInfo } from "../../api/auth";
+import { useSession } from "../../state/session";
 
 export function AcceptInvitationPage() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const token = params.get("token") || "";
+  const { login, session } = useSession();
 
+  const [email, setEmail] = useState("");
+  const [hotelName, setHotelName] = useState("");
+  const [inviter, setInviter] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const load = async () => {
+      if (!token) {
+        setError("Token de invitación inválido.");
+        return;
+      }
+      try {
+        const data = await getInvitationInfo(token);
+        setEmail(data.email);
+        setHotelName(data.hotel_name);
+        setInviter(data.inviter_email);
+      } catch (err) {
+        setError(err instanceof ApiError ? err.message : "Invitación inválida o expirada");
+      }
+    };
+    load();
+  }, [token]);
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -28,9 +51,17 @@ export function AcceptInvitationPage() {
     }
     setLoading(true);
     try {
-      await acceptInvitation(token, password);
-      setInfo("Contraseña creada. Iniciá sesión para continuar.");
-      setTimeout(() => navigate("/login"), 800);
+      const res = await acceptInvitation(token, password);
+      login({
+        userId: res.user.email,
+        email: res.user.email,
+        hotelId: res.hotel_id ?? session.hotelId,
+        role: (res.user.role as "owner" | "receptionist" | "manager" | "housekeeping") || session.role,
+        accessToken: res.access_token,
+        isVerified: res.user.is_verified
+      });
+      setInfo("Cuenta creada. Redirigiendo...");
+      setTimeout(() => navigate("/dashboard"), 800);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "No se pudo aceptar la invitación");
     } finally {
@@ -44,7 +75,26 @@ export function AcceptInvitationPage() {
         <h1 className="text-2xl font-semibold text-slate-900">Aceptar invitación</h1>
         <p className="mb-4 text-sm text-slate-600">Creá tu contraseña para empezar a usar el sistema.</p>
 
+        <div className="mb-4 space-y-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+          {hotelName && <p><strong>Hotel:</strong> {hotelName}</p>}
+          {inviter && <p><strong>Invitado por:</strong> {inviter}</p>}
+          {email && (
+            <p>
+              <strong>Email:</strong> <span className="text-slate-900">{email}</span>
+            </p>
+          )}
+        </div>
+
         <form className="space-y-4" onSubmit={submit}>
+          <label className="text-sm font-medium text-slate-700">
+            Email
+            <input
+              type="email"
+              value={email}
+              readOnly
+              className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-sm text-slate-800"
+            />
+          </label>
           <label className="text-sm font-medium text-slate-700">
             Nueva contraseña
             <input
@@ -69,9 +119,10 @@ export function AcceptInvitationPage() {
           </label>
           <button
             className="w-full rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-60"
-            disabled={loading}
+            disabled={loading || !token}
+            type="submit"
           >
-            {loading ? "Guardando..." : "Aceptar invitación"}
+            {loading ? "Guardando..." : "Crear cuenta"}
           </button>
         </form>
 

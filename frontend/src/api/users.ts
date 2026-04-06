@@ -14,3 +14,6 @@ export const inviteUser = (payload: InvitePayload, session?: SessionLike) =>
 
 export const revokeUser = (userId: number, session?: SessionLike) =>
   apiFetch<void>(`/api/users/${userId}`, { method: "DELETE", session });
+
+export const updateUserRole = (userId: number, role: InvitePayload["role"], session?: SessionLike) =>
+  apiFetch<UserInfo>(`/api/users/${userId}/role`, { method: "PATCH", data: { role }, session });
