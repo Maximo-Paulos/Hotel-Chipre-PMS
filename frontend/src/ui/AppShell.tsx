@@ -26,6 +26,7 @@ const navSections = [
     title: "Configuración",
     items: [
       { label: "Usuarios", to: "/settings/users" },
+      { label: "Suscripción", to: "/settings/subscription" },
       { label: "Hotel", to: "/settings/hotel" },
       { label: "Seguridad", to: "/settings/security" }
     ]

@@ -17,3 +17,6 @@ export const listSubscriptionPlans = (session?: SessionLike) =>
     "/api/subscription/plans",
     { session }
   );
+
+export const changeSubscriptionPlan = (plan_code: string, session?: SessionLike) =>
+  apiFetch<SubscriptionStatus>("/api/subscription/plan", { method: "POST", data: { plan_code }, session });

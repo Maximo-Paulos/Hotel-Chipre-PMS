@@ -13,6 +13,7 @@ import { RoomsPage } from "./views/protected/RoomsPage";
 import { SettingsUsersPage } from "./views/protected/SettingsUsersPage";
 import { SettingsHotelPage } from "./views/protected/SettingsHotelPage";
 import { SettingsSecurityPage } from "./views/protected/SettingsSecurityPage";
+import SettingsSubscriptionPage from "./views/protected/SettingsSubscriptionPage";
 
 export const router = createBrowserRouter([
   {
@@ -26,6 +27,7 @@ export const router = createBrowserRouter([
       { path: "onboarding/*", element: <OnboardingWizard /> },
       { path: "settings", element: <Navigate to="/settings/users" replace /> },
       { path: "settings/users", element: <SettingsUsersPage /> },
+      { path: "settings/subscription", element: <SettingsSubscriptionPage /> },
       { path: "settings/hotel", element: <SettingsHotelPage /> },
       { path: "settings/security", element: <SettingsSecurityPage /> }
     ]
