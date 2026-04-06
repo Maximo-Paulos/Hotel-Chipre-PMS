@@ -21,7 +21,7 @@ from app.services.reservation_service import (
     get_reservation_by_id,
     update_reservation_fields,
 )
-from app.dependencies.auth import get_auth_context, AuthContext
+from app.dependencies.auth import get_auth_context, AuthContext, require_roles
 
 router = APIRouter(prefix="/api/reservations", tags=["Reservations"])
 

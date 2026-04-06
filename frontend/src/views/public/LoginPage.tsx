@@ -4,7 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { ApiError } from "../../api/client";
 import { login as loginApi } from "../../api/auth";
 import { getOnboardingStatus } from "../../api/onboarding";
-import { useSession } from "../../state/session";
+import { useSession, type SessionState } from "../../state/session";
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -21,12 +21,12 @@ export function LoginPage() {
 
     try {
       const res = await loginApi(email, password);
-      const nextSession = {
+      const nextSession: Partial<SessionState> = {
         userId: res.user.email,
         email: res.user.email,
         hotelId: res.hotel_id ?? 1,
         hotelIds: res.hotel_ids ?? [res.hotel_id ?? 1],
-        role: (res.user.role as "owner" | "receptionist") || "owner",
+        role: (res.user.role as SessionState["role"]) || "owner",
         accessToken: res.access_token,
         isVerified: res.user.is_verified
       };
@@ -69,7 +69,7 @@ export function LoginPage() {
             />
           </div>
           <div>
-            <label className="text-sm font-medium text-slate-700">Contrasena</label>
+            <label className="text-sm font-medium text-slate-700">Contraseña</label>
             <input
               type="password"
               className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-900 shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
@@ -91,10 +91,10 @@ export function LoginPage() {
         </form>
         <div className="mt-4 flex items-center justify-between text-sm">
           <Link to="/forgot-password" className="text-brand-700 hover:underline">
-            Olvide mi contrasena
+            Olvidé mi contraseña
           </Link>
           <Link to="/register-owner" className="text-brand-700 hover:underline">
-            Crear cuenta de dueno
+            Crear cuenta de dueño
           </Link>
         </div>
       </div>

@@ -154,7 +154,7 @@ def occupancy_report(
     start_date: date = Query(default=None),
     end_date: date = Query(default=None),
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission("reports:view")),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
 ):
     """Occupancy report for a date range (default: last 30 days)."""
     if start_date is None:
@@ -204,7 +204,7 @@ def revenue_report(
     start_date: date = Query(default=None),
     end_date: date = Query(default=None),
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission("reports:view")),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
 ):
     """Revenue report for a date range."""
     if start_date is None:

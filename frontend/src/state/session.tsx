@@ -2,12 +2,14 @@ import { createContext, useContext, useEffect, useMemo, useState } from "react";
 
 import { buildAuthHeaders } from "../api/client";
 
+type Role = "owner" | "co_owner" | "manager" | "housekeeping";
+
 export type SessionState = {
   userId: string;
   email?: string;
   hotelId: number;
   hotelIds?: number[];
-  role: "owner" | "receptionist";
+  role: Role;
   accessToken?: string;
   isVerified?: boolean;
 };
@@ -49,9 +51,12 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       userId: partial.userId?.trim() || prev.userId || DEFAULT_SESSION.userId,
       email: partial.email ?? partial.userId ?? prev.email,
       hotelId: safeHotelId(partial.hotelId ?? prev.hotelId),
-      role: partial.role ?? prev.role ?? DEFAULT_SESSION.role,
+      role: (partial.role as Role | undefined) ?? prev.role ?? DEFAULT_SESSION.role,
       accessToken: partial.accessToken ?? prev.accessToken,
-      isVerified: partial.isVerified ?? prev.isVerified ?? false
+      isVerified: partial.isVerified ?? prev.isVerified ?? false,
+      hotelIds: partial.hotelIds?.length
+        ? partial.hotelIds
+        : prev.hotelIds ?? [safeHotelId(partial.hotelId ?? prev.hotelId)]
     }));
   };
 
