@@ -1,6 +1,6 @@
 import clsx from "clsx";
 import { Link, NavLink, Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 
 import { useOnboardingStatus } from "../hooks/useOnboardingStatus";
 import { useSubscriptionStatus } from "../hooks/useSubscription";
@@ -9,7 +9,7 @@ import { ApiError } from "../api/client";
 import { HotelSelector } from "./HotelSelector";
 import { UserBadge } from "./UserBadge";
 
-const navSections = [
+const baseNav = [
   {
     title: "Operación",
     items: [
@@ -25,7 +25,7 @@ const navSections = [
   {
     title: "Configuración",
     items: [
-      { label: "Usuarios", to: "/settings/users" },
+      { label: "Usuarios", to: "/settings/users", requiresRole: ["owner", "co_owner"] },
       { label: "Suscripción", to: "/settings/subscription" },
       { label: "Hotel", to: "/settings/hotel" },
       { label: "Seguridad", to: "/settings/security" }
@@ -39,6 +39,7 @@ export function AppShell() {
   const { session } = useSession();
   const isLoggedIn = session.accessToken !== undefined && session.userId !== "guest";
   const isVerified = Boolean(session.isVerified);
+  const role = session.role;
 
   const { data: onboarding, isFetching, error } = useOnboardingStatus({ enabled: isLoggedIn && isVerified });
   const { data: subscription } = useSubscriptionStatus();
@@ -58,7 +59,6 @@ export function AppShell() {
     }
   }, [onboardingError, navigate]);
 
-  const role = session.role;
   const path = location.pathname;
   if (role === "housekeeping" && path.startsWith("/settings")) return <Navigate to="/reservas" replace />;
   if (role === "manager" && path.startsWith("/settings")) return <Navigate to="/reservas" replace />;
@@ -117,27 +117,35 @@ export function AppShell() {
             <p className="text-xs text-slate-500">Layout de navegación prototipo</p>
           </div>
           <nav className="flex-1 space-y-6 px-3 pb-6">
-            {navSections.map((section) => (
-              <div key={section.title}>
-                <p className="px-2 text-xs uppercase tracking-wide text-slate-500">{section.title}</p>
-                <div className="mt-2 flex flex-col gap-1">
-                  {section.items.map((item) => (
-                    <NavLink
-                      key={item.to}
-                      to={item.to}
-                      className={({ isActive }) =>
-                        clsx(
-                          "flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium",
-                          isActive ? "bg-brand-50 text-brand-700" : "text-slate-700 hover:bg-slate-100"
-                        )
-                      }
-                    >
-                      <span>{item.label}</span>
-                    </NavLink>
-                  ))}
-                </div>
-              </div>
-            ))}
+            {useMemo(() => {
+              return baseNav
+                .map((section) => {
+                  const items = section.items.filter((item: any) => !item.requiresRole || item.requiresRole.includes(role));
+                  if (!items.length) return null;
+                  return (
+                    <div key={section.title}>
+                      <p className="px-2 text-xs uppercase tracking-wide text-slate-500">{section.title}</p>
+                      <div className="mt-2 flex flex-col gap-1">
+                        {items.map((item) => (
+                          <NavLink
+                            key={item.to}
+                            to={item.to}
+                            className={({ isActive }) =>
+                              clsx(
+                                "flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium",
+                                isActive ? "bg-brand-50 text-brand-700" : "text-slate-700 hover:bg-slate-100"
+                              )
+                            }
+                          >
+                            <span>{item.label}</span>
+                          </NavLink>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })
+                .filter(Boolean);
+            }, [role])}
           </nav>
         </aside>
 
@@ -149,7 +157,7 @@ export function AppShell() {
                   Hotel Chipre PMS
                 </Link>
                 <nav className="flex items-center gap-2 md:hidden">
-                  {navSections[0]?.items.map((item) => (
+                  {baseNav[0]?.items.map((item) => (
                     <NavLink
                       key={item.to}
                       to={item.to}
