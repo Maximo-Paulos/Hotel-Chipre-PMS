@@ -148,7 +148,7 @@ export function AppShell() {
                   );
                 })
                 .filter(Boolean);
-            }, [role])}
+            }, [role, onboarding?.completed])}
           </nav>
         </aside>
 
