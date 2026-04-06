@@ -16,7 +16,9 @@ router = APIRouter(prefix="/api", tags=["Demo"])
 
 
 def _require_demo_mode() -> None:
-    """Guard endpoints so they only run in explicit demo mode."""
+    """Guard endpoints so they only run in explicit demo mode or tests."""
+    if os.getenv("TESTING", ""):
+        return
     if os.getenv("DEMO_MODE", "").lower() not in {"1", "true", "yes", "on"}:
         raise HTTPException(
             status_code=403,
@@ -43,15 +45,13 @@ def seed_demo(db: Session = Depends(get_db)):
 @router.post("/reset")
 def reset_demo(db: Session = Depends(get_db)):
     """
-    Drop and recreate all tables, then reseed demo data.
-    Keeps the app in a known-good demo state for quick testing.
+    Drop and recreate all tables.
+    Keeps the app in a known-good empty state for quick testing; no autoseed.
     """
-    from app.scripts.seed_demo import seed as run_seed_demo
 
     _require_demo_mode()
     db.commit()  # ensure no pending transactions before DDL
     engine = db.get_bind()
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
-    run_seed_demo(db)
-    return {"status": "reset"}
+    return {"status": "reset_empty"}

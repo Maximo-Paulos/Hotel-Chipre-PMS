@@ -47,8 +47,11 @@ def create_category(
 
 
 @router.get("/categories", response_model=list[RoomCategoryRead])
-def list_categories(db: Session = Depends(get_db)):
-    return db.query(RoomCategory).all()
+def list_categories(
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping")),
+):
+    return db.query(RoomCategory).filter(RoomCategory.hotel_id == context.hotel_id).all()
 
 
 @router.get("/categories/{category_id}", response_model=RoomCategoryRead)

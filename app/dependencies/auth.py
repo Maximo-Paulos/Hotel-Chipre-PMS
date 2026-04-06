@@ -34,7 +34,7 @@ class AuthContext:
 
 
 def _resolve_hotel_id(db: Session, header_value: Optional[str], user_email: Optional[str], user_id: Optional[int]) -> int:
-    """Resolve hotel id validating membership."""
+    """Resolve hotel id validating membership. No hotel is auto-created unless tied to owner email."""
     memberships = []
     if user_id:
         memberships = get_memberships_for_user(db, user_id)
@@ -57,14 +57,7 @@ def _resolve_hotel_id(db: Session, header_value: Optional[str], user_email: Opti
     if hotel_ids:
         return hotel_ids[0]
 
-    existing = db.query(HotelConfiguration.id).order_by(HotelConfiguration.id).first()
-    if existing:
-        return existing[0]
-
-    config = HotelConfiguration(id=1, owner_email=user_email)
-    db.add(config)
-    db.flush()
-    return config.id
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="hotel_id requerido")
 
 
 def get_auth_context(

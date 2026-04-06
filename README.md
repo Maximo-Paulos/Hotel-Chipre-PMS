@@ -9,12 +9,9 @@
 - 5. Build UI: `npm run build` (served from `frontend/dist`). If `spawn EPERM` aparece en OneDrive, corré el build en WSL/fuera de OneDrive o permití `esbuild.exe`.
 - 6. Volvé al root y levantá todo con `npx nodemon` (lee `nodemon.json` -> uvicorn con reload). UI + API en `http://127.0.0.1:8000`. Dev UI sigue en `npm run dev`.
 
-### Base de datos y seeds
+### Base de datos (arranca vacía)
 - Migraciones: `alembic upgrade head` (usa `DATABASE_URL` de `.env`).
-- Seed demo para probar ya mismo (crea hotel_id=1, categorías, rooms y usuario verificado demo@hotel.test / Demo123!):
-```bash
-python -m app.scripts.seed_demo
-```
+- (Opcional) Seed demo manual: `python -m app.scripts.seed_demo` — solo si querés datos de ejemplo.
 
 ## Deploy (Docker / Compose)
 1) Build imagenes  
@@ -37,10 +34,8 @@ docker compose run --rm backend alembic upgrade head
 Toma `DATABASE_URL` del compose. Para SQLite local: `DATABASE_URL=sqlite:///./dev.db alembic upgrade head`.
 
 4) Seed/reset demo (opcional, solo si `DEMO_MODE=true`)  
-```bash
-curl -X POST http://localhost:8000/api/seed
-curl -X POST http://localhost:8000/api/reset
-```
+   - Poblar datos demo: `curl -X POST http://localhost:8000/api/seed`
+   - Reset vacío (sin seed): `curl -X POST http://localhost:8000/api/reset`
 
 ## Headers
 - Add `X-Hotel-Id` on every mutating call (defaults to the first persisted hotel if omitted).
