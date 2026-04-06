@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.user import User
 from app.models.hotel_config import HotelConfiguration
+from app.config import get_settings
 from app.services.security import decode_access_token
 from app.services.hotel_service import (
     get_or_create_hotel_for_owner,
