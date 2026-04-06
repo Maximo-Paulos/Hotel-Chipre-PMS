@@ -15,6 +15,17 @@ import { SettingsUsersPage } from "./views/protected/SettingsUsersPage";
 import { SettingsHotelPage } from "./views/protected/SettingsHotelPage";
 import { SettingsSecurityPage } from "./views/protected/SettingsSecurityPage";
 import SettingsSubscriptionPage from "./views/protected/SettingsSubscriptionPage";
+import { useOnboardingStatus } from "./hooks/useOnboardingStatus";
+import { useSession } from "./state/session";
+import { Navigate } from "react-router-dom";
+
+function OnboardingGate() {
+  const { session } = useSession();
+  const { data, isFetching } = useOnboardingStatus({ enabled: Boolean(session.accessToken) });
+  if (isFetching) return null;
+  if (data?.completed) return <Navigate to="/dashboard" replace />;
+  return <OnboardingWizard />;
+}
 
 export const router = createBrowserRouter([
   {
@@ -25,7 +36,7 @@ export const router = createBrowserRouter([
       { path: "dashboard", element: <DashboardPage /> },
       { path: "reservas", element: <ReservationsPage /> },
       { path: "habitaciones", element: <RoomsPage /> },
-      { path: "onboarding/*", element: <OnboardingWizard /> },
+      { path: "onboarding/*", element: <OnboardingGate /> },
       { path: "settings", element: <Navigate to="/settings/users" replace /> },
       { path: "settings/users", element: <SettingsUsersPage /> },
       { path: "settings/subscription", element: <SettingsSubscriptionPage /> },
