@@ -76,6 +76,7 @@ export function VerifyEmailPage() {
             Email
             <input
               value={email}
+              placeholder="tu@correo.com"
               onChange={(e) => setEmail(e.target.value)}
               className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:ring-brand-500"
             />
@@ -101,6 +102,7 @@ export function VerifyEmailPage() {
             Codigo
             <input
               value={code}
+              placeholder="Ej: 123456"
               onChange={(e) => setCode(e.target.value)}
               className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:ring-brand-500"
             />
