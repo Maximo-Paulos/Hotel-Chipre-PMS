@@ -37,3 +37,7 @@ class SimpleRateLimiter:
 
 # default limiter used by auth endpoints
 login_limiter = SimpleRateLimiter()
+# rate limiter for password reset requests (per email)
+reset_request_limiter = SimpleRateLimiter(limit=3, window_seconds=15 * 60)
+# rate limiter for invitations (per inviter user)
+invite_limiter = SimpleRateLimiter(limit=5, window_seconds=60 * 60)

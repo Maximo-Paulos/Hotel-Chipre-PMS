@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+Ôªøfrom fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -17,7 +17,7 @@ router = APIRouter(prefix="/api/invitations", tags=["Invitations"])
 def get_invitation(token: str):
     data = decode_signed_token(token)
     if data.get("type") != "invite":
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token inv·lido")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token inv√°lido")
     return {"email": data.get("email"), "role": data.get("role"), "hotel_id": data.get("hotel_id")}
 
 
@@ -29,12 +29,12 @@ class AcceptPayload(LoginRequest):
 def accept_invitation(token: str, payload: AcceptPayload, db: Session = Depends(get_db)):
     data = decode_signed_token(token)
     if data.get("type") != "invite":
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token inv·lido")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token inv√°lido")
     email = data.get("email")
     role = data.get("role")
     hotel_id = data.get("hotel_id")
     if email.lower() != payload.email.lower():
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El email no coincide con la invitaciÛn")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El email no coincide con la invitaci√≥n")
 
     user = db.query(User).filter(User.email.ilike(email)).first()
     if not user:

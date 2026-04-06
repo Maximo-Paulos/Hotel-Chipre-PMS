@@ -12,6 +12,18 @@ class TokenStore:
     def __init__(self):
         self._tokens: Dict[str, Tuple[str, datetime]] = {}
 
+    def get(self, email: str) -> str | None:
+        """Return code if still valid (without consuming), else None."""
+        key = email.lower()
+        entry = self._tokens.get(key)
+        if not entry:
+            return None
+        code, expires = entry
+        if datetime.utcnow() > expires:
+            self._tokens.pop(key, None)
+            return None
+        return code
+
     def set(self, email: str, code: str, ttl_minutes: int = 15) -> None:
         self._tokens[email.lower()] = (code, datetime.utcnow() + timedelta(minutes=ttl_minutes))
 
