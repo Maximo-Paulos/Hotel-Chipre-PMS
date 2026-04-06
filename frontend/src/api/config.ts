@@ -23,6 +23,17 @@ export type HotelConfig = {
   receptionist_view_future_days?: number;
   allow_revenue_manager?: boolean;
   allow_revenue_receptionist?: boolean;
+  sync_interval_minutes?: number;
+  safety_buffer_rooms?: number;
+  allow_overbooking?: boolean;
+  max_overallocation_pct?: number;
+  no_show_cutoff_hours?: number;
+  ota_autopush_enabled?: boolean;
+  card_validation_enabled?: boolean;
+  payment_retry_attempts?: number;
+  auth_amount_pct?: number;
+  stop_sell_channels?: string | null;
+  event_notifications?: string | null;
   require_document_for_checkin: boolean;
   require_terms_acceptance: boolean;
   extra_policies?: string | null;
