@@ -56,15 +56,14 @@ export const resetPassword = (email: string, code: string, newPassword: string) 
 
 // Invitaciones (backend esperado: /api/invitations/info y /api/invitations/accept)
 export const getInvitationInfo = (token: string) =>
-  apiFetch<{ email: string; hotel_name: string; inviter_email: string }>("/api/invitations/info", {
-    method: "GET",
-    headers: { Authorization: `Bearer ${token}` } // o query param; se ajusta en backend
+  apiFetch<{ email: string; hotel_name?: string; inviter_email?: string }>("/api/invitations/" + token, {
+    method: "GET"
   });
 
-export const acceptInvitation = (token: string, password: string) =>
-  apiFetch<AuthResponse>("/api/invitations/accept", {
+export const acceptInvitation = (token: string, email: string, password: string) =>
+  apiFetch<AuthResponse>("/api/invitations/" + token + "/accept", {
     method: "POST",
-    data: { token, password }
+    data: { email, password }
   });
 
 export const currentUser = (session?: SessionLike) =>

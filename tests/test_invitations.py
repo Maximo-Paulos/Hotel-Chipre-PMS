@@ -85,6 +85,7 @@ def test_invite_returns_token_and_accepts(owner_ctx):
     body = resp.json()
     assert "invite_token" in body
     token = body["invite_token"]
+    assert "accept_url" in body
     payload = decode_signed_token(token)
     assert payload["type"] == "invite"
     assert payload["hotel_id"] == ctx["hotel_id"]

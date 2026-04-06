@@ -29,8 +29,8 @@ export function AcceptInvitationPage() {
       try {
         const data = await getInvitationInfo(token);
         setEmail(data.email);
-        setHotelName(data.hotel_name);
-        setInviter(data.inviter_email);
+        setHotelName(data.hotel_name || "");
+        setInviter(data.inviter_email || "");
       } catch (err) {
         setError(err instanceof ApiError ? err.message : "Invitación inválida o expirada");
       }
@@ -51,7 +51,7 @@ export function AcceptInvitationPage() {
     }
     setLoading(true);
     try {
-      const res = await acceptInvitation(token, password);
+      const res = await acceptInvitation(token, email, password);
       login({
         userId: res.user.email,
         email: res.user.email,
@@ -76,8 +76,16 @@ export function AcceptInvitationPage() {
         <p className="mb-4 text-sm text-slate-600">Creá tu contraseña para empezar a usar el sistema.</p>
 
         <div className="mb-4 space-y-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-          {hotelName && <p><strong>Hotel:</strong> {hotelName}</p>}
-          {inviter && <p><strong>Invitado por:</strong> {inviter}</p>}
+          {hotelName && (
+            <p>
+              <strong>Hotel:</strong> {hotelName}
+            </p>
+          )}
+          {inviter && (
+            <p>
+              <strong>Invitado por:</strong> {inviter}
+            </p>
+          )}
           {email && (
             <p>
               <strong>Email:</strong> <span className="text-slate-900">{email}</span>

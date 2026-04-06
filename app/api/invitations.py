@@ -1,24 +1,30 @@
-﻿from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.services.security import decode_signed_token, hash_password
 from app.models.user import User
 from app.models.hotel_membership import HotelMembership
-from app.dependencies.auth import get_auth_context, AuthContext
-from app.schemas.auth import AuthResponse, UserInfo
-from app.services.hotel_service import get_memberships_for_user, get_or_create_hotel_for_owner
+from app.models.hotel_config import HotelConfiguration
+from app.schemas.auth import AuthResponse
 from app.schemas.auth import LoginRequest
 
 router = APIRouter(prefix="/api/invitations", tags=["Invitations"])
 
 
 @router.get("/{token}")
-def get_invitation(token: str):
+def get_invitation(token: str, db: Session = Depends(get_db)):
     data = decode_signed_token(token)
     if data.get("type") != "invite":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token inválido")
-    return {"email": data.get("email"), "role": data.get("role"), "hotel_id": data.get("hotel_id")}
+    hotel = db.get(HotelConfiguration, data.get("hotel_id"))
+    return {
+        "email": data.get("email"),
+        "role": data.get("role"),
+        "hotel_id": data.get("hotel_id"),
+        "hotel_name": data.get("hotel_name") or (hotel.hotel_name if hotel else None),
+        "inviter_email": data.get("inviter_email"),
+    }
 
 
 class AcceptPayload(LoginRequest):
@@ -38,7 +44,13 @@ def accept_invitation(token: str, payload: AcceptPayload, db: Session = Depends(
 
     user = db.query(User).filter(User.email.ilike(email)).first()
     if not user:
-        user = User(email=email.lower(), password_hash=hash_password(payload.password), role=role, is_verified=True, is_active=True)
+        user = User(
+            email=email.lower(),
+            password_hash=hash_password(payload.password),
+            role=role,
+            is_verified=True,
+            is_active=True,
+        )
         db.add(user)
         db.flush()
     else:
@@ -61,4 +73,5 @@ def accept_invitation(token: str, payload: AcceptPayload, db: Session = Depends(
     db.refresh(user)
     # Build auth response
     from app.api.auth import _build_auth_response
+
     return _build_auth_response(db, user, requested_hotel_id=hotel_id)

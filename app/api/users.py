@@ -1,4 +1,4 @@
-﻿"""
+"""
 User management per hotel (owners/co-owners).
 """
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -42,6 +42,7 @@ class InvitePayload(BaseModel):
 class InviteResponse(BaseModel):
     user: UserInfo
     invite_token: str
+    accept_url: str
 
 
 @router.post("/invite", response_model=InviteResponse, status_code=status.HTTP_201_CREATED)
@@ -83,25 +84,37 @@ def invite_user(
 
     db.commit()
     db.refresh(user)
-    # Invitation token and email
+
+    hotel = db.get(HotelConfiguration, context.hotel_id)
+    hotel_name = hotel.hotel_name if hotel else f"Hotel {context.hotel_id}"
+
     token = create_signed_token(
-        {"type": "invite", "hotel_id": context.hotel_id, "email": user.email, "role": role},
+        {
+            "type": "invite",
+            "hotel_id": context.hotel_id,
+            "email": user.email,
+            "role": role,
+            "hotel_name": hotel_name,
+            "inviter_email": context.user_email,
+        },
         expires_minutes=60 * 24 * 7,
     )
     settings = get_settings()
-    base = getattr(settings, "PUBLIC_BASE_URL", None) or "http://localhost:8000"
-    accept_url = f"{base}/accept-invitation/{token}"
-    hotel = db.get(HotelConfiguration, context.hotel_id)
+    base = getattr(settings, "PUBLIC_BASE_URL", None) or "http://localhost:5173"
+    accept_url = f"{base}/invitations/accept?token={token}"
+
+    subj = f"Invitación a {hotel_name}"
+    body = (
+        f"Hola,\n\n"
+        f"Te invitaron al hotel '{hotel_name}' con el rol {role}.\n"
+        f"Aceptá la invitación y creá tu contraseña aquí: {accept_url}\n\n"
+        f"Invitó: {context.user_email}\n"
+        f"Si no esperabas este correo, podés ignorarlo."
+    )
     if mailer.configured:
-        subj = f"Invitación a {hotel.hotel_name if hotel else 'tu hotel'}"
-        body = (
-            f"Hola,\n\n"
-            f"Te invitaron al hotel '{hotel.hotel_name if hotel else context.hotel_id}' con el rol {role}.\n"
-            f"Aceptá la invitación y creá tu contraseña aquí: {accept_url}\n\n"
-            f"Si no esperabas este correo, podés ignorarlo."
-        )
         mailer.send(user.email, subj, body)
-    return {"user": UserInfo.model_validate(user), "invite_token": token}
+
+    return InviteResponse(user=UserInfo.model_validate(user), invite_token=token, accept_url=accept_url)
 
 
 class UpdateRolePayload(BaseModel):
