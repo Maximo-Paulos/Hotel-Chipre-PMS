@@ -87,13 +87,7 @@ def get_auth_context(
             )
 
     hotel_id = _resolve_hotel_id(db, x_hotel_id, user_email, user_id_int)
-    # Enforce subscription state globally: no operaciones si está inactiva.
-    config = db.query(HotelConfiguration).filter(HotelConfiguration.id == hotel_id).first()
-    if config and not config.subscription_active:
-        raise HTTPException(
-            status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail="Suscripción inactiva. Reactivá para usar el sistema.",
-        )
+    # Subscription enforcement desactivado en fase de implementación
     return AuthContext(hotel_id=hotel_id, user_id=user_id_int, user_email=user_email, user_role=user_role, permissions=set())
 
 
