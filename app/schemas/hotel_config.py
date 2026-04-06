@@ -27,6 +27,10 @@ class HotelConfigRead(BaseModel):
     hotel_name: str
     hotel_timezone: str
     default_currency: str
+    receptionist_view_past_days: int
+    receptionist_view_future_days: int
+    allow_revenue_manager: bool
+    allow_revenue_receptionist: bool
     extra_policies: Optional[str]
     updated_at: Optional[datetime]
 
@@ -53,4 +57,8 @@ class HotelConfigUpdate(BaseModel):
     hotel_name: Optional[str] = None
     hotel_timezone: Optional[str] = None
     default_currency: Optional[str] = None
+    receptionist_view_past_days: Optional[int] = Field(default=None, ge=0, le=365)
+    receptionist_view_future_days: Optional[int] = Field(default=None, ge=0, le=365)
+    allow_revenue_manager: Optional[bool] = None
+    allow_revenue_receptionist: Optional[bool] = None
     extra_policies: Optional[str] = None

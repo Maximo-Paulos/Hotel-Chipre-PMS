@@ -52,6 +52,12 @@ class HotelConfiguration(Base):
     hotel_timezone = Column(String(100), nullable=False, default="America/Argentina/Buenos_Aires")
     default_currency = Column(String(3), nullable=False, default="ARS")
 
+    # Display / permissions (scaffolding)
+    receptionist_view_past_days = Column(Integer, nullable=False, default=0)
+    receptionist_view_future_days = Column(Integer, nullable=False, default=7)
+    allow_revenue_manager = Column(Boolean, nullable=False, default=True)
+    allow_revenue_receptionist = Column(Boolean, nullable=False, default=False)
+
     # Additional policies as JSON
     extra_policies = Column(Text, nullable=True)  # Flexible JSON for future policies
 
