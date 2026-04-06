@@ -35,18 +35,16 @@ class AuthContext:
 
 
 def _resolve_hotel_id(db: Session, header_value: Optional[str], user_email: Optional[str], user_id: Optional[int]) -> int:
-    """Resolve hotel id validating membership. No hotel is auto-created unless tied to owner email."""
+    """Resolve hotel id validating membership. Dev-friendly: si viene X-Hotel-Id lo respetamos siempre."""
     memberships = []
     if user_id:
         memberships = get_memberships_for_user(db, user_id)
     hotel_ids = [m.hotel_id for m in memberships]
 
-    # If header is provided, honor it only if user has membership
+    # If header is provided, honor it siempre (aunque no haya membership todavía)
     if header_value:
         try:
-            hid = int(header_value)
-            if hid in hotel_ids:
-                return hid
+            return int(header_value)
         except ValueError:
             pass
 
@@ -73,18 +71,20 @@ def get_auth_context(
     user_email = None
     user_role = None
     if authorization:
-        payload = _decode_authorization_header(authorization)
-        user_email = payload.get("email")
         try:
-            user_id_int = int(payload.get("sub")) if payload and payload.get("sub") else None
-        except Exception:
+            payload = _decode_authorization_header(authorization)
+            user_email = payload.get("email")
+            try:
+                user_id_int = int(payload.get("sub")) if payload and payload.get("sub") else None
+            except Exception:
+                user_id_int = None
+            user_role = payload.get("role")
+        except HTTPException:
+            # token inválido/expirado -> seguimos anónimo para no romper onboarding
+            payload = None
+            user_email = None
             user_id_int = None
-        user_role = payload.get("role")
-        if payload.get("verified") is False:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Debes verificar tu email para acceder.",
-            )
+            user_role = None
 
     hotel_id = _resolve_hotel_id(db, x_hotel_id, user_email, user_id_int)
     # Subscription enforcement desactivado en fase de implementación
@@ -113,9 +113,12 @@ def require_roles(*roles: str):
         context: AuthContext = Depends(get_auth_context),
         db: Session = Depends(get_db),
     ) -> AuthContext:
-        # Fetch membership
+        # Modo dev: si no hay user_id y ALLOW_ANON_ROLES está activo, permitir.
+        settings = get_settings()
         if not context.user_id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tenés permisos para esta acción")
+            if getattr(settings, "ALLOW_ANON_ROLES", False):
+                return context
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Autenticación requerida")
         # First, trust the user role from DB (so owners no quedan bloqueados por membresía faltante)
         user = db.get(User, context.user_id)
         if user and user.role in roles:
