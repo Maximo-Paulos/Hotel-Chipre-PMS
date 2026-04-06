@@ -10,6 +10,7 @@ import { useGuest, useGuestCreate } from "../../hooks/useGuests";
 import { useReservationMutations, useReservations } from "../../hooks/useReservations";
 import { usePaymentMutation, usePaymentSummary } from "../../hooks/usePayments";
 import { useRooms } from "../../hooks/useRooms";
+import { useSubscriptionStatus } from "../../hooks/useSubscription";
 import { useSession } from "../../state/session";
 import StatCard from "../../components/StatCard";
 
@@ -90,6 +91,14 @@ export function ReservationsPage() {
   const [guestIdOpen, setGuestIdOpen] = useState<number | null>(null);
   const toastTimeout = useRef<number | null>(null);
   const [toast, setToast] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
+  const { data: subscription } = useSubscriptionStatus();
+  const subscriptionBlocked =
+    subscription && (subscription.status !== "active" || subscription.rooms_in_use >= subscription.room_limit);
+  const subscriptionBlockReason = subscriptionBlocked
+    ? subscription.status !== "active"
+      ? "Suscripción inactiva: reactivá tu plan para operar reservas."
+      : `Alcanzaste tu cupo de habitaciones (${subscription.rooms_in_use}/${subscription.room_limit}).`
+    : null;
 
   const filters = {
     status: statusFilter,
@@ -188,6 +197,10 @@ export function ReservationsPage() {
   }, [reservations, today]);
 
   const openCreate = () => {
+    if (subscriptionBlocked) {
+      setToast({ type: "error", message: subscriptionBlockReason || "Acción bloqueada por suscripción." });
+      return;
+    }
     setEditing(null);
     setFormValues(defaultFormState());
     setFormError(null);
@@ -221,6 +234,10 @@ export function ReservationsPage() {
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setFormError(null);
+    if (subscriptionBlocked) {
+      setFormError(subscriptionBlockReason || "Suscripción inactiva.");
+      return;
+    }
 
     const categoryIdNum = Number(formValues.category_id);
     let guestIdNum = Number(formValues.guest_id);
@@ -504,6 +521,11 @@ export function ReservationsPage() {
           </button>
         </div>
       )}
+      {subscriptionBlocked && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          {subscriptionBlockReason} Ajustá el plan en Configuración &gt; Hotel.
+        </div>
+      )}
 
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -513,9 +535,10 @@ export function ReservationsPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <button
-            className="rounded-lg border border-brand-200 bg-brand-50 px-4 py-2 text-sm font-semibold text-brand-700 hover:border-brand-300 hover:bg-brand-100"
+            className="rounded-lg border border-brand-200 bg-brand-50 px-4 py-2 text-sm font-semibold text-brand-700 hover:border-brand-300 hover:bg-brand-100 disabled:opacity-60"
             onClick={openCreate}
             type="button"
+            disabled={subscriptionBlocked}
           >
             Crear reserva
           </button>
@@ -824,7 +847,8 @@ export function ReservationsPage() {
                         <button
                           type="button"
                           onClick={() => openEdit(reservation)}
-                          className="rounded-lg border border-slate-200 px-2 py-1 hover:border-slate-300"
+                          className="rounded-lg border border-slate-200 px-2 py-1 hover:border-slate-300 disabled:opacity-50"
+                          disabled={subscriptionBlocked}
                         >
                           Editar
                         </button>
@@ -837,7 +861,7 @@ export function ReservationsPage() {
                         </button>
                         <button
                           type="button"
-                          disabled={!canCancel(reservation.status) || cancelMutation.isLoading}
+                          disabled={!canCancel(reservation.status) || cancelMutation.isLoading || subscriptionBlocked}
                           onClick={() => handleCancel(reservation.id)}
                           className="rounded-lg border border-rose-200 px-2 py-1 text-rose-700 hover:border-rose-300 disabled:cursor-not-allowed disabled:opacity-50"
                         >
@@ -845,7 +869,7 @@ export function ReservationsPage() {
                         </button>
                         <button
                           type="button"
-                          disabled={!canCheckIn(reservation.status) || checkInMutation.isLoading}
+                          disabled={!canCheckIn(reservation.status) || checkInMutation.isLoading || subscriptionBlocked}
                           onClick={() => handleCheckIn(reservation.id)}
                           className="rounded-lg border border-emerald-200 px-2 py-1 text-emerald-700 hover:border-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
                         >
@@ -853,7 +877,7 @@ export function ReservationsPage() {
                         </button>
                         <button
                           type="button"
-                          disabled={!canCheckOut(reservation.status) || checkOutMutation.isLoading}
+                          disabled={!canCheckOut(reservation.status) || checkOutMutation.isLoading || subscriptionBlocked}
                           onClick={() => handleCheckOut(reservation.id)}
                           className="rounded-lg border border-sky-200 px-2 py-1 text-sky-700 hover:border-sky-300 disabled:cursor-not-allowed disabled:opacity-50"
                         >
@@ -883,6 +907,11 @@ export function ReservationsPage() {
               </button>
             </div>
 
+            {subscriptionBlocked && (
+              <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                {subscriptionBlockReason} No podrás crear o editar reservas hasta regularizarlo.
+              </div>
+            )}
             {formError && <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">{formError}</div>}
 
             <form className="mt-4 space-y-4" onSubmit={handleSubmit}>
@@ -892,6 +921,7 @@ export function ReservationsPage() {
                   <input
                     type="number"
                     min={1}
+                    placeholder="ID de huésped (si ya está cargado)"
                     value={formValues.guest_id}
                     onChange={(e) => setFormValues((prev) => ({ ...prev, guest_id: e.target.value }))}
                     disabled={Boolean(editing)}
@@ -1057,6 +1087,7 @@ export function ReservationsPage() {
                 Notas
                 <textarea
                   value={formValues.notes}
+                  placeholder="Notas internas (opcional)"
                   onChange={(e) => setFormValues((prev) => ({ ...prev, notes: e.target.value }))}
                   className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
                   rows={3}
@@ -1161,8 +1192,8 @@ export function ReservationsPage() {
                 </button>
                 <button
                   type="submit"
-                  className="rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
-                  disabled={createMutation.isLoading || updateMutation.isLoading}
+                  className="rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
+                  disabled={createMutation.isLoading || updateMutation.isLoading || subscriptionBlocked}
                 >
                   {editing ? "Guardar cambios" : "Crear"}
                 </button>

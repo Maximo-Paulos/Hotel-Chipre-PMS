@@ -16,25 +16,33 @@ export function HotelSelector() {
   }, [session.hotelId]);
 
   const { data: hotels, isLoading } = useQuery<HotelOption[]>({
-    queryKey: ["hotels-list"],
+    queryKey: ["hotels-list", session.hotelIds?.join(",") || session.hotelId],
     queryFn: async () => {
-      // No hay endpoint dedicado; usamos el config actual como único hotel si falla
-      try {
-        const cfg = await getHotelConfig(session);
-        return [{ id: cfg.id, hotel_name: cfg.hotel_name }];
-      } catch {
-        return [{ id: 1, hotel_name: "Hotel activo" }];
+      const ids = session.hotelIds?.length ? session.hotelIds : [session.hotelId];
+      const results: HotelOption[] = [];
+      for (const id of ids) {
+        try {
+          const cfg = await getHotelConfig({ ...session, hotelId: id });
+          results.push({ id, hotel_name: cfg.hotel_name });
+        } catch {
+          results.push({ id });
+        }
       }
+      return results;
     },
     staleTime: 5 * 60 * 1000
   });
 
-  const options = useMemo(() => hotels ?? [{ id: 1, hotel_name: "Hotel activo" }], [hotels]);
+  const options = useMemo(() => {
+    if (hotels?.length) return hotels;
+    const ids = session.hotelIds?.length ? session.hotelIds : [safeHotelId(session.hotelId)];
+    return ids.map((id) => ({ id, hotel_name: "Hotel activo" }));
+  }, [hotels, session.hotelId, session.hotelIds]);
 
   const apply = () => {
     const next = safeHotelId(value);
     setHotelId(next);
-    queryClient.invalidateQueries(); // refresca caches con hotel nuevo
+    queryClient.invalidateQueries();
   };
 
   return (

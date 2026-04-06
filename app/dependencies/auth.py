@@ -84,6 +84,11 @@ def get_auth_context(
             user_id_int = int(payload.get("sub")) if payload and payload.get("sub") else None
         except Exception:
             user_id_int = None
+        if payload.get("verified") is False:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Debes verificar tu email para acceder.",
+            )
 
     hotel_id = _resolve_hotel_id(db, x_hotel_id, user_email, user_id_int)
     # Enforce subscription state globally: no operaciones si está inactiva.

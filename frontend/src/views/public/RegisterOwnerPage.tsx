@@ -78,6 +78,7 @@ export function RegisterOwnerPage() {
             Nombre
             <input
               className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 shadow-sm focus:border-brand-500 focus:ring-brand-500"
+              placeholder="Ej: Lucas"
               value={form.name}
               onChange={(e) => handleChange("name", e.target.value)}
               required
@@ -87,6 +88,7 @@ export function RegisterOwnerPage() {
             Apellido
             <input
               className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 shadow-sm focus:border-brand-500 focus:ring-brand-500"
+              placeholder="Ej: González"
               value={form.lastName}
               onChange={(e) => handleChange("lastName", e.target.value)}
               required
@@ -97,24 +99,27 @@ export function RegisterOwnerPage() {
             <input
               type="email"
               className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 shadow-sm focus:border-brand-500 focus:ring-brand-500"
+              placeholder="dueño@hotel.com"
               value={form.email}
               onChange={(e) => handleChange("email", e.target.value)}
               required
             />
           </label>
           <label className="text-sm font-medium text-slate-700">
-            Telefono
+            Teléfono
             <input
               className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 shadow-sm focus:border-brand-500 focus:ring-brand-500"
+              placeholder="Ej: +54 9 11 5555 1234"
               value={form.phone}
               onChange={(e) => handleChange("phone", e.target.value)}
             />
           </label>
           <label className="text-sm font-medium text-slate-700">
-            Contrasena
+            Contraseña
             <input
               type="password"
               className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 shadow-sm focus:border-brand-500 focus:ring-brand-500"
+              placeholder="Mínimo 6 caracteres"
               value={form.password}
               onChange={(e) => handleChange("password", e.target.value)}
               required
