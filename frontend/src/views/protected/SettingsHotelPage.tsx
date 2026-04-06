@@ -230,36 +230,46 @@ export function SettingsHotelPage() {
                 <h3 className="text-sm font-semibold text-slate-800">Calendario y permisos</h3>
                 <p className="text-xs text-slate-500">Visibilidad para recepcionistas y managers.</p>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                  <label className="text-sm font-semibold text-slate-700">
-                    Días pasados visibles al recepcionista
-                    <input
-                      type="range"
-                      min={0}
-                      max={90}
-                      step={1}
-                      className="mt-2 w-full"
-                      value={form.receptionist_view_past_days ?? 0}
-                      onChange={(e) => handleChange("receptionist_view_past_days", parseInt(e.target.value, 10))}
-                    />
-                    <span className="text-xs text-slate-600">
-                      Puede revisar hasta {form.receptionist_view_past_days ?? 0} días hacia atrás en el calendario.
-                    </span>
-                  </label>
-                  <label className="text-sm font-semibold text-slate-700">
-                    Días futuros visibles al recepcionista
-                    <input
-                      type="range"
-                      min={0}
-                      max={365}
-                      step={1}
-                      className="mt-2 w-full"
-                      value={form.receptionist_view_future_days ?? 30}
-                      onChange={(e) => handleChange("receptionist_view_future_days", parseInt(e.target.value, 10))}
-                    />
-                    <span className="text-xs text-slate-600">
-                      Puede ver reservas hasta {form.receptionist_view_future_days ?? 30} días hacia adelante.
-                    </span>
-                  </label>
+                <label className="text-sm font-semibold text-slate-700">
+                  Días pasados visibles al recepcionista
+                  <div className="flex items-center justify-between text-xs text-slate-500">
+                    <span>0</span>
+                    <span className="font-semibold text-slate-800">{form.receptionist_view_past_days ?? 0} días</span>
+                    <span>90</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={90}
+                    step={1}
+                    className="mt-2 w-full"
+                    value={form.receptionist_view_past_days ?? 0}
+                    onChange={(e) => handleChange("receptionist_view_past_days", parseInt(e.target.value, 10))}
+                  />
+                  <span className="text-xs text-slate-600">
+                    Puede revisar hasta {form.receptionist_view_past_days ?? 0} días hacia atrás en el calendario.
+                  </span>
+                </label>
+                <label className="text-sm font-semibold text-slate-700">
+                  Días futuros visibles al recepcionista
+                  <div className="flex items-center justify-between text-xs text-slate-500">
+                    <span>0</span>
+                    <span className="font-semibold text-slate-800">{form.receptionist_view_future_days ?? 30} días</span>
+                    <span>365</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={365}
+                    step={1}
+                    className="mt-2 w-full"
+                    value={form.receptionist_view_future_days ?? 30}
+                    onChange={(e) => handleChange("receptionist_view_future_days", parseInt(e.target.value, 10))}
+                  />
+                  <span className="text-xs text-slate-600">
+                    Puede ver reservas hasta {form.receptionist_view_future_days ?? 30} días hacia adelante.
+                  </span>
+                </label>
                 </div>
                 <div className="mt-4 space-y-2">
                   {[
