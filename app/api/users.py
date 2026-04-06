@@ -10,8 +10,11 @@ from app.dependencies.auth import get_auth_context, AuthContext, require_roles
 from app.models.user import User
 from app.models.hotel_membership import HotelMembership
 from app.schemas.auth import UserInfo
-from app.services.security import hash_password
+from app.services.security import hash_password, create_signed_token
 from app.adapters.rate_limiter import invite_limiter
+from app.config import get_settings
+from app.services.email_service import mailer
+from app.models.hotel_config import HotelConfiguration
 
 router = APIRouter(prefix="/api/users", tags=["Users"])
 
@@ -36,7 +39,12 @@ class InvitePayload(BaseModel):
     password: str | None = None
 
 
-@router.post("/invite", response_model=UserInfo, status_code=status.HTTP_201_CREATED)
+class InviteResponse(BaseModel):
+    user: UserInfo
+    invite_token: str
+
+
+@router.post("/invite", response_model=InviteResponse, status_code=status.HTTP_201_CREATED)
 def invite_user(
     payload: InvitePayload,
     db: Session = Depends(get_db),
@@ -75,7 +83,29 @@ def invite_user(
 
     db.commit()
     db.refresh(user)
-    return UserInfo.model_validate(user)
+    # Invitation token and email
+    token = create_signed_token(
+        {"type": "invite", "hotel_id": context.hotel_id, "email": user.email, "role": role},
+        expires_minutes=60 * 24 * 7,
+    )
+    settings = get_settings()
+    base = getattr(settings, "PUBLIC_BASE_URL", None) or "http://localhost:8000"
+    accept_url = f"{base}/accept-invitation/{token}"
+    hotel = db.get(HotelConfiguration, context.hotel_id)
+    if mailer.configured:
+        subj = f"Invitación a {hotel.hotel_name if hotel else 'tu hotel'}"
+        body = (
+            f"Hola,\n\n"
+            f"Te invitaron al hotel '{hotel.hotel_name if hotel else context.hotel_id}' con el rol {role}.\n"
+            f"Aceptá la invitación y creá tu contraseña aquí: {accept_url}\n\n"
+            f"Si no esperabas este correo, podés ignorarlo."
+        )
+        mailer.send(user.email, subj, body)
+    return {"user": UserInfo.model_validate(user), "invite_token": token}
+
+
+class UpdateRolePayload(BaseModel):
+    role: str
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -93,3 +123,32 @@ def revoke_user(
         raise HTTPException(status_code=404, detail="Usuario no encontrado en este hotel")
     membership.status = "revoked"
     db.commit()
+
+
+@router.patch("/{user_id}/role", response_model=UserInfo)
+def update_role(
+    user_id: int,
+    payload: UpdateRolePayload,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_roles("owner", "co_owner")),
+):
+    if payload.role not in {"owner", "co_owner", "manager", "housekeeping"}:
+        raise HTTPException(status_code=400, detail="Rol inválido")
+    membership = (
+        db.query(HotelMembership)
+        .filter(HotelMembership.hotel_id == context.hotel_id, HotelMembership.user_id == user_id)
+        .first()
+    )
+    if not membership:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado en este hotel")
+    membership.role = payload.role
+    membership.status = "active"
+    user = db.get(User, user_id)
+    if user:
+        user.role = payload.role
+        db.add(user)
+    db.commit()
+    if user:
+        db.refresh(user)
+        return UserInfo.model_validate(user)
+    return UserInfo.model_validate(membership.user)
