@@ -81,12 +81,19 @@ export function SettingsUsersPage() {
             </button>
           </div>
           {inviteLink && (
-            <p className="mt-2 rounded-md bg-slate-50 p-3 text-xs text-slate-700">
-              Invitación creada. Comparte este enlace si el correo no llega:{" "}
-              <a className="text-brand-700 underline" href={inviteLink} target="_blank" rel="noreferrer">
-                {inviteLink}
+            <div className="mt-2 flex flex-wrap items-center gap-2 rounded-md bg-slate-50 p-3 text-xs text-slate-700">
+              <span>Invitación creada.</span>
+              <a className="text-brand-700 hover:underline" href={inviteLink} target="_blank" rel="noreferrer">
+                Abrir
               </a>
-            </p>
+              <button
+                type="button"
+                className="rounded border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-700 hover:border-slate-300"
+                onClick={() => navigator.clipboard?.writeText(inviteLink)}
+              >
+                Copiar link
+              </button>
+            </div>
           )}
           {inviteMutation.isError && (
             <p className="mt-2 text-sm text-rose-600">
