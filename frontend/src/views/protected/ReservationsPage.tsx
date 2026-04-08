@@ -92,12 +92,20 @@ export function ReservationsPage() {
   const toastTimeout = useRef<number | null>(null);
   const [toast, setToast] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
   const { data: subscription } = useSubscriptionStatus();
-  const subscriptionBlocked =
-    subscription && (subscription.status !== "active" || subscription.rooms_in_use >= subscription.room_limit);
+  const writeBlocked = subscription?.can_write === false;
+  const limitReached =
+    subscription &&
+    typeof subscription.room_limit === "number" &&
+    subscription.room_limit > 0 &&
+    subscription.rooms_in_use >= subscription.room_limit;
+  const inactiveSubscription = subscription && subscription.status !== "active";
+  const subscriptionBlocked = Boolean(subscription) && (inactiveSubscription || limitReached || writeBlocked);
   const subscriptionBlockReason = subscriptionBlocked
-    ? subscription.status !== "active"
-      ? "Suscripción inactiva: reactivá tu plan para operar reservas."
-      : `Alcanzaste tu cupo de habitaciones (${subscription.rooms_in_use}/${subscription.room_limit}).`
+    ? writeBlocked
+      ? "Suscripción en modo solo lectura: reactivá el plan para habilitar acciones de reserva."
+      : inactiveSubscription
+        ? "Suscripción inactiva: reactivá tu plan para operar reservas."
+        : `Alcanzaste tu cupo de habitaciones (${subscription?.rooms_in_use}/${subscription?.room_limit}).`
     : null;
 
   const filters = {
@@ -523,7 +531,11 @@ export function ReservationsPage() {
       )}
       {subscriptionBlocked && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-          {subscriptionBlockReason} Ajustá el plan en Configuración &gt; Hotel.
+          {subscriptionBlockReason} Ajustá el plan en{" "}
+          <Link to="/settings/subscription" className="font-semibold underline">
+            Configuración &gt; Suscripción
+          </Link>
+          .
         </div>
       )}
 
@@ -909,7 +921,11 @@ export function ReservationsPage() {
 
             {subscriptionBlocked && (
               <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                {subscriptionBlockReason} No podrás crear o editar reservas hasta regularizarlo.
+                {subscriptionBlockReason} No podrás crear o editar reservas hasta regularizarlo.{" "}
+                <Link to="/settings/subscription" className="font-semibold underline">
+                  Ir a Suscripción
+                </Link>
+                .
               </div>
             )}
             {formError && <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">{formError}</div>}

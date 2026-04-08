@@ -32,6 +32,8 @@ from app.api import (
     demo,
     auth,
     invitations,
+    integrations,
+    payment_link_tests,
 )
 from app.services.email_service import mailer
 
@@ -126,6 +128,8 @@ app.include_router(users.router)
 app.include_router(demo.router)
 app.include_router(auth.router)
 app.include_router(invitations.router)
+app.include_router(integrations.router)
+app.include_router(payment_link_tests.router)
 
 # Frontend build paths
 BASE_DIR = Path(__file__).resolve().parent

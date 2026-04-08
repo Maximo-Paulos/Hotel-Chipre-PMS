@@ -9,6 +9,9 @@ from functools import lru_cache
 class Settings(BaseSettings):
     """Global application settings loaded from environment variables."""
 
+    # Public app URL used in redirects/webhooks
+    APP_BASE_URL: str = "http://127.0.0.1:8040"
+
     # Database
     DATABASE_URL: str = "postgresql+psycopg2://pms:pms@localhost:5432/hotel_pms"
 
@@ -25,6 +28,16 @@ class Settings(BaseSettings):
     PAYPAL_CLIENT_ID: str = ""
     PAYPAL_CLIENT_SECRET: str = ""
     PAYPAL_MODE: str = "sandbox"  # "sandbox" or "live"
+
+    # OAuth client IDs for connections
+    MERCADOPAGO_CLIENT_ID: str = ""
+    MERCADOPAGO_CLIENT_SECRET: str = ""
+    PAYPAL_REDIRECT_URI: str = "http://localhost:8000/api/integrations/paypal/callback"
+    MERCADOPAGO_REDIRECT_URI: str = "http://localhost:8000/api/integrations/mercadopago/callback"
+    GMAIL_CLIENT_ID: str = ""
+    GMAIL_CLIENT_SECRET: str = ""
+    GMAIL_REDIRECT_URI: str = "http://localhost:8000/api/integrations/gmail/callback"
+    MERCADOPAGO_WEBHOOK_SECRET: str = ""
 
     # OTA Credentials
     BOOKING_API_URL: str = "https://supply-xml.booking.com/hotels/xml"
@@ -55,6 +68,10 @@ class Settings(BaseSettings):
     JWT_EXPIRES_MINUTES: int = 60
     DEFAULT_SUBSCRIPTION_PLAN: str = "starter"
     LOGIN_RATE_LIMIT: int = 5  # attempts per window
+    SUBSCRIPTION_ENFORCEMENT_ENABLED: bool = False  # legacy flag, kept for backward compatibility
+    SUBSCRIPTION_ENFORCEMENT: bool = False  # primary toggle: when False, can_write stays allowed
+    CONNECTIONS_ENABLED: bool = True
+    INTEGRATIONS_ENCRYPTION_KEY: str = "ZGVmYXVsdC1pbnRlZ3JhdGlvbnMta2V5LXNlY3JldA=="  # base64 fernet
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

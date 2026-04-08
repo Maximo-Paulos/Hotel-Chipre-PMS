@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 
 import { type RoomStatus } from "../../api/rooms";
+import { useSubscriptionStatus } from "../../hooks/useSubscription";
 import { roomStatusLabel, useRooms } from "../../hooks/useRooms";
 
 const statusColors: Record<RoomStatus, string> = {
@@ -18,6 +20,16 @@ export function RoomsPage() {
   const rooms = roomsQuery.data || [];
   const categories = categoriesQuery.data || [];
   const [pendingRoom, setPendingRoom] = useState<number | null>(null);
+  const { data: subscription } = useSubscriptionStatus();
+
+  const writeBlocked = subscription?.can_write === false;
+  const inactiveSubscription = subscription && subscription.status !== "active";
+  const actionsBlocked = Boolean(subscription) && (writeBlocked || inactiveSubscription);
+  const blockReason = actionsBlocked
+    ? writeBlocked
+      ? "Suscripción en modo solo lectura: reactivá tu plan para habilitar cambios."
+      : "Suscripción inactiva. Reactivá el plan para operar."
+    : null;
 
   const categoryById = useMemo(() => {
     const map = new Map<number, { name: string; code: string; base_price_per_night: number }>();
@@ -36,6 +48,7 @@ export function RoomsPage() {
   }, [rooms]);
 
   const handleStatusUpdate = (roomId: number, status: RoomStatus) => {
+    if (actionsBlocked) return;
     setPendingRoom(roomId);
     updateStatusMutation.mutate(
       { roomId, status },
@@ -55,6 +68,16 @@ export function RoomsPage() {
         </div>
         {roomsQuery.isFetching && <p className="text-xs text-slate-500">Actualizando estado...</p>}
       </header>
+
+      {actionsBlocked && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          {blockReason}{" "}
+          <Link to="/settings/subscription" className="font-semibold underline">
+            Ir a Suscripción
+          </Link>
+          .
+        </div>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-3">
         <StatusBadge label="Libres" value={stats.available ?? 0} className={statusColors.available} />
@@ -95,7 +118,7 @@ export function RoomsPage() {
                     value={room.status}
                     onChange={(e) => handleStatusUpdate(room.id, e.target.value as RoomStatus)}
                     className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-brand-400 focus:outline-none disabled:bg-slate-50"
-                    disabled={pendingRoom === room.id && updateStatusMutation.isLoading}
+                    disabled={actionsBlocked || (pendingRoom === room.id && updateStatusMutation.isLoading)}
                   >
                     {statusOptions.map((status) => (
                       <option key={status} value={status}>

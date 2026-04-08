@@ -35,36 +35,46 @@ class AuthContext:
     permissions: Optional[Set[str]] = None
 
 
-def _resolve_hotel_id(db: Session, header_value: Optional[str], user_email: Optional[str], user_id: Optional[int]) -> int:
-    """Resolve hotel id validating membership. Dev-friendly: si viene X-Hotel-Id lo respetamos siempre."""
+def _resolve_hotel_id(db: Session, header_value: Optional[str], token_hotel_id: Optional[int], user_email: Optional[str], user_id: Optional[int]) -> int:
+    """Resolve hotel id validating membership. Prioridad: header -> token -> membership -> crear para dueño -> primer hotel existente."""
     memberships = []
     if user_id:
         memberships = get_memberships_for_user(db, user_id)
     hotel_ids = [m.hotel_id for m in memberships]
 
-    # If header is provided, honor it siempre (aunque no haya membership todavía)
+    # 1) Honor explicit header
     if header_value:
         try:
             return int(header_value)
         except ValueError:
             pass
 
-    # If token has email but no membership yet, create default hotel for owner
-    if user_email and not memberships:
-        hotel = get_or_create_hotel_for_owner(db, user_email)
-        return hotel.id
+    # 2) Honor token hotel_id
+    if token_hotel_id:
+        return int(token_hotel_id)
 
+    # 3) If user has memberships, use first
     if hotel_ids:
         return hotel_ids[0]
 
-    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="hotel_id requerido")
+    # 4) If owner email but no membership, create/reuse hotel for that owner
+    if user_email:
+        hotel = get_or_create_hotel_for_owner(db, user_email)
+        return hotel.id
+
+    # 5) Fallback dev: first hotel or create anon
+    existing = db.query(HotelConfiguration).order_by(HotelConfiguration.id.asc()).first()
+    if existing:
+        return existing.id
+    hotel = get_or_create_hotel_for_owner(db, "anon@local")
+    return hotel.id or 1
 
 
 def get_auth_context(
     db: Session = Depends(get_db),
-    x_hotel_id: Optional[str] = Header(default=None, convert_underscores=False),
-    x_user_id: Optional[str] = Header(default=None, convert_underscores=False),
-    authorization: Optional[str] = Header(default=None, convert_underscores=False),
+    x_hotel_id: Optional[str] = Header(default=None),
+    x_user_id: Optional[str] = Header(default=None),
+    authorization: Optional[str] = Header(default=None),
 ) -> AuthContext:
     """Return a minimal context with hotel scoping."""
     payload = None
@@ -87,7 +97,8 @@ def get_auth_context(
             user_id_int = None
             user_role = None
 
-    hotel_id = _resolve_hotel_id(db, x_hotel_id, user_email, user_id_int)
+    token_hotel_id = payload.get("hotel_id") if payload else None
+    hotel_id = _resolve_hotel_id(db, x_hotel_id, token_hotel_id, user_email, user_id_int)
     # Subscription enforcement desactivado en fase de implementación
     return AuthContext(hotel_id=hotel_id, user_id=user_id_int, user_email=user_email, user_role=user_role, permissions=set())
 

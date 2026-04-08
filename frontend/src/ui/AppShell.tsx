@@ -1,4 +1,4 @@
-﻿import clsx from "clsx";
+import clsx from "clsx";
 import { Link, NavLink, Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useMemo } from "react";
 
@@ -11,7 +11,7 @@ import { UserBadge } from "./UserBadge";
 
 const baseNav = [
   {
-    title: "OperaciÃ³n",
+    title: "Operación",
     items: [
       { label: "Dashboard", to: "/dashboard" },
       { label: "Reservas", to: "/reservas" },
@@ -23,10 +23,12 @@ const baseNav = [
     items: [{ label: "Onboarding", to: "/onboarding" }]
   },
   {
-    title: "ConfiguraciÃ³n",
+    title: "Configuración",
     items: [
       { label: "Usuarios", to: "/settings/users", requiresRole: ["owner", "co_owner"] },
-      { label: "SuscripciÃ³n", to: "/settings/subscription", requiresRole: ["owner", "co_owner"] },
+      { label: "Suscripción", to: "/settings/subscription", requiresRole: ["owner", "co_owner"] },
+      { label: "Conexiones", to: "/settings/connections", requiresRole: ["owner", "co_owner"] },
+      { label: "Pruebas", to: "/settings/tests", requiresRole: ["owner", "co_owner"] },
       { label: "Hotel", to: "/settings/hotel", requiresRole: ["owner", "co_owner"] },
       { label: "Seguridad", to: "/settings/security", requiresRole: ["owner", "co_owner"] }
     ]
@@ -71,7 +73,10 @@ export function AppShell() {
     subscription && subscription.room_limit > 0 && subscription.rooms_in_use >= subscription.room_limit;
   const capBanner =
     capReached &&
-    `LÃ­mite de habitaciones alcanzado (${subscription.rooms_in_use}/${subscription.room_limit}). AjustÃ¡ tu plan en ConfiguraciÃ³n > Hotel.`;
+    `Límite de habitaciones alcanzado (${subscription.rooms_in_use}/${subscription.room_limit}). Ajustá tu plan en Configuración > Suscripción.`;
+  const writeBlocked = subscription?.can_write === false;
+  const inactiveSubscription = subscription && subscription.status !== "active";
+  const subscriptionCTA = "/settings/subscription";
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
@@ -81,9 +86,13 @@ export function AppShell() {
         <span className="ml-3 text-slate-200">Usuario {session.email || session.userId}</span>
       </div>
 
-      {subscription && subscription.status !== "active" && (
+      {(writeBlocked || inactiveSubscription) && (
         <div className="border-b border-amber-200 bg-amber-50 px-6 py-2 text-sm text-amber-900">
-          SuscripciÃ³n inactiva. ReactivÃ¡ tu plan. Plan: {subscription.plan || "sin plan"} Â· Habitaciones: {subscription.rooms_in_use}/{subscription.room_limit}
+          {writeBlocked ? "Suscripción en modo solo lectura (can_write=false)." : "Suscripción inactiva."}{" "}
+          Plan: {subscription?.plan || "sin plan"} · Habitaciones: {subscription?.rooms_in_use}/{subscription?.room_limit}.{" "}
+          <Link to={subscriptionCTA} className="font-semibold underline">
+            Reactivar o cambiar plan
+          </Link>
         </div>
       )}
       {capBanner && (
@@ -92,8 +101,12 @@ export function AppShell() {
 
       {!isFetching && onboarding && !onboarding.completed && !location.pathname.startsWith("/onboarding") && (
         <div className="border-b border-amber-200 bg-amber-50 px-6 py-2 text-sm text-amber-900">
-          Onboarding pendiente: {onboarding.missing_steps.join(", ") || "revisÃ¡ los pasos"}.
-          <button className="ml-3 text-amber-800 underline" onClick={() => navigate("/onboarding", { replace: true })} type="button">
+          Onboarding pendiente: {onboarding.missing_steps.join(", ") || "revisá los pasos"}.
+          <button
+            className="ml-3 text-amber-800 underline"
+            onClick={() => navigate("/onboarding", { replace: true })}
+            type="button"
+          >
             Completar ahora
           </button>
         </div>
@@ -102,10 +115,10 @@ export function AppShell() {
       {onboardingError && (
         <div className="border-b border-rose-200 bg-rose-50 px-6 py-2 text-sm text-rose-900">
           {onboardingError.status === 402
-            ? "SuscripciÃ³n inactiva. ReactivÃ¡ el plan para seguir usando el sistema."
+            ? "Suscripción inactiva. Reactivá el plan para seguir usando el sistema."
             : onboardingError.status === 403
               ? "Debes verificar tu email para continuar."
-              : "Sin conexiÃ³n con el backend. Seguimos en modo offline para no bloquear la UI."}
+              : "Sin conexión con el backend. Seguimos en modo offline para no bloquear la UI."}
         </div>
       )}
 
@@ -115,7 +128,7 @@ export function AppShell() {
             <Link to="/dashboard" className="text-lg font-semibold text-slate-900">
               Hotel Chipre PMS
             </Link>
-            <p className="text-xs text-slate-500">Layout de navegaciÃ³n prototipo</p>
+            <p className="text-xs text-slate-500">Layout de navegación prototipo</p>
           </div>
           <nav className="flex-1 space-y-6 px-3 pb-6">
             {useMemo(() => {
@@ -193,4 +206,3 @@ export function AppShell() {
     </div>
   );
 }
-

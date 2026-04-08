@@ -9,7 +9,10 @@ from app.models.connection import Connection
 from app.models.onboarding import OnboardingState
 from app.models.user import User
 from app.models.hotel_membership import HotelMembership
-from app.models.subscription import SubscriptionPlan, HotelSubscription
+from app.models.subscription import SubscriptionPlan, HotelSubscription, SubscriptionEntitlement, HotelEntitlementOverride
+from app.models.subscription_v2 import Subscription, SubscriptionEvent
+from app.models.integration import IntegrationCatalog, IntegrationConnection, IntegrationEvent
+from app.models.payment_link_test import PaymentLinkTest
 
 __all__ = [
     "Room", "RoomCategory",
@@ -25,4 +28,12 @@ __all__ = [
     "HotelMembership",
     "SubscriptionPlan",
     "HotelSubscription",
+    "SubscriptionEntitlement",
+    "HotelEntitlementOverride",
+    "Subscription",
+    "SubscriptionEvent",
+    "IntegrationCatalog",
+    "IntegrationConnection",
+    "IntegrationEvent",
+    "PaymentLinkTest",
 ]

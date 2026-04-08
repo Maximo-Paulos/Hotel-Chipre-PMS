@@ -18,7 +18,8 @@ export class ApiError extends Error {
 }
 
 // Default to local backend so the dev/preview build doesn't hit the Vite preview origin.
-const DEFAULT_API_BASE = "http://127.0.0.1:8000/api";
+// Use 8040 to avoid conflicts with other local services; override with VITE_API_URL if set.
+const DEFAULT_API_BASE = "http://127.0.0.1:8040/api";
 const API_BASE =
   (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "") || DEFAULT_API_BASE;
 
