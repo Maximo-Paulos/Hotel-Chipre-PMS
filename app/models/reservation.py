@@ -6,7 +6,7 @@ Also supports: cancelled (from any pre-checkin state)
 """
 import enum
 from sqlalchemy import (
-    Column, Integer, Float, String, ForeignKey, Enum, Text, DateTime, Date,
+    Column, Integer, Float, String, ForeignKey, Enum, Text, DateTime, Date, Boolean,
     CheckConstraint, UniqueConstraint, Index, Table
 )
 from sqlalchemy.orm import relationship, validates
@@ -78,17 +78,28 @@ class Reservation(Base):
     guest_id = Column(Integer, ForeignKey("guests.id"), nullable=False)
     room_id = Column(Integer, ForeignKey("rooms.id"), nullable=True)  # Nullable until assigned
     category_id = Column(Integer, ForeignKey("room_categories.id"), nullable=False)
+    sellable_product_id = Column(Integer, ForeignKey("sellable_products.id"), nullable=True)
+    rate_plan_id = Column(Integer, ForeignKey("rate_plans.id"), nullable=True)
+    tax_policy_id = Column(Integer, ForeignKey("tax_policies.id"), nullable=True)
 
     # Dates
     check_in_date = Column(Date, nullable=False)
     check_out_date = Column(Date, nullable=False)
     actual_check_in = Column(DateTime, nullable=True)
     actual_check_out = Column(DateTime, nullable=True)
+    arrival_time_hint = Column(String(80), nullable=True)
 
     # Financial
     total_amount = Column(Float, nullable=False, default=0.0)
     amount_paid = Column(Float, nullable=False, default=0.0)
     deposit_amount = Column(Float, nullable=False, default=0.0)
+    subtotal_amount = Column(Float, nullable=False, default=0.0)
+    tax_amount = Column(Float, nullable=False, default=0.0)
+    fee_amount = Column(Float, nullable=False, default=0.0)
+    commission_amount = Column(Float, nullable=False, default=0.0)
+    net_amount = Column(Float, nullable=False, default=0.0)
+    currency_code = Column(String(3), nullable=False, default="ARS")
+    fx_rate_snapshot = Column(Float, nullable=True)
 
     # Status
     status = Column(
@@ -103,7 +114,14 @@ class Reservation(Base):
         nullable=False,
         default=ReservationSourceEnum.DIRECT,
     )
+    source_provider_code = Column(String(50), nullable=True, index=True)
     external_id = Column(String(100), nullable=True, index=True)  # OTA booking ID
+    external_confirmation_code = Column(String(120), nullable=True)
+    requested_attributes_json = Column(Text, nullable=True)
+    pricing_snapshot = Column(Text, nullable=True)
+    allocation_status = Column(String(30), nullable=False, default="unassigned")
+    allocation_locked = Column(Boolean, nullable=False, default=False)
+    requires_manual_review = Column(Boolean, nullable=False, default=False)
 
     # Number of guests
     num_adults = Column(Integer, nullable=False, default=1)
@@ -124,16 +142,24 @@ class Reservation(Base):
     additional_guests = relationship("Guest", secondary=reservation_additional_guests, lazy="selectin")
     room = relationship("Room", back_populates="reservations", lazy="joined")
     category = relationship("RoomCategory", lazy="joined")
+    sellable_product = relationship("SellableProduct", lazy="joined")
+    rate_plan = relationship("RatePlan", lazy="joined")
+    tax_policy = relationship("TaxPolicy", lazy="joined")
     transactions = relationship("Transaction", back_populates="reservation", lazy="selectin", cascade="all, delete-orphan")
 
     __table_args__ = (
         CheckConstraint("check_out_date > check_in_date", name="ck_reservation_dates"),
         CheckConstraint("total_amount >= 0", name="ck_reservation_total_positive"),
         CheckConstraint("amount_paid >= 0", name="ck_reservation_paid_positive"),
+        CheckConstraint("subtotal_amount >= 0", name="ck_reservation_subtotal_positive"),
+        CheckConstraint("tax_amount >= 0", name="ck_reservation_tax_positive"),
+        CheckConstraint("fee_amount >= 0", name="ck_reservation_fee_positive"),
         CheckConstraint("num_adults > 0", name="ck_reservation_adults_positive"),
         CheckConstraint("num_children >= 0", name="ck_reservation_children_positive"),
         Index("ix_reservation_dates", "check_in_date", "check_out_date"),
         Index("ix_reservation_hotel_id", "hotel_id"),
+        Index("ix_reservation_sellable_product_id", "sellable_product_id"),
+        Index("ix_reservation_rate_plan_id", "rate_plan_id"),
     )
 
     @property

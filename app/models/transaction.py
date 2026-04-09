@@ -52,6 +52,12 @@ class Transaction(Base):
     # Financial details
     amount = Column(Float, nullable=False)
     currency = Column(String(3), nullable=False, default="ARS")
+    gross_amount = Column(Float, nullable=True)
+    tax_amount = Column(Float, nullable=True)
+    fee_amount = Column(Float, nullable=True)
+    net_amount = Column(Float, nullable=True)
+    fx_rate_snapshot = Column(Float, nullable=True)
+    provider_code = Column(String(50), nullable=True)
 
     transaction_type = Column(
         Enum(TransactionTypeEnum, name="transaction_type_enum", create_constraint=True),
@@ -74,6 +80,7 @@ class Transaction(Base):
 
     # Description / notes
     description = Column(Text, nullable=True)
+    pricing_snapshot = Column(Text, nullable=True)
 
     # Metadata
     created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
