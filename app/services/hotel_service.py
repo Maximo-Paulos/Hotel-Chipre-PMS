@@ -73,3 +73,41 @@ def _ensure_membership_and_subscription(db: Session, hotel_id: int, owner_email:
 
 def get_memberships_for_user(db: Session, user_id: int):
     return db.query(HotelMembership).filter(HotelMembership.user_id == user_id, HotelMembership.status == "active").all()
+
+
+def ensure_all_ota_webhook_secrets(db: Session) -> int:
+    """
+    Ensure every hotel has webhook secrets for the OTA providers used by the app.
+
+    This keeps startup safe if a worker expects the helper to exist, and it is
+    idempotent: existing active secrets are preserved.
+    """
+    from app.models.ota import OTAWebhookCredential
+    from app.services.ota_service import OTAIntegrationService
+
+    created = 0
+    hotels = db.query(HotelConfiguration).all()
+    for hotel in hotels:
+        for provider in ("booking", "expedia"):
+            existing = (
+                db.query(OTAWebhookCredential)
+                .filter(
+                    OTAWebhookCredential.hotel_id == hotel.id,
+                    OTAWebhookCredential.provider == provider,
+                )
+                .first()
+            )
+            if existing:
+                continue
+            secret = OTAIntegrationService.generate_webhook_secret()
+            OTAIntegrationService.upsert_webhook_credential(
+                db,
+                hotel_id=hotel.id,
+                provider=provider,
+                webhook_secret=secret,
+                is_active=True,
+            )
+            created += 1
+    if created:
+        db.flush()
+    return created

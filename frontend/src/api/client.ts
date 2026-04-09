@@ -25,19 +25,31 @@ const API_BASE =
 
 const normalizeHotelId = (hotelId?: number | string | null) => {
   const parsed = typeof hotelId === "string" ? parseInt(hotelId, 10) : hotelId;
-  return Number.isInteger(parsed) && (parsed as number) > 0 ? (parsed as number) : 1;
+  return Number.isInteger(parsed) && (parsed as number) > 0 ? (parsed as number) : null;
+};
+
+export const hasValidSession = (session?: SessionLike) => {
+  const hotelId = normalizeHotelId(session?.hotelId);
+  const userId = typeof session?.userId === "string" ? session.userId.trim() : "";
+  const accessToken = typeof session?.accessToken === "string" ? session.accessToken.trim() : "";
+  return Boolean(hotelId && userId && accessToken && userId !== "guest");
 };
 
 export const buildAuthHeaders = (session?: SessionLike): Record<string, string> => {
+  if (!hasValidSession(session)) {
+    return {};
+  }
   const hotelId = normalizeHotelId(session?.hotelId);
-  const userId = session?.userId || "guest";
+  const userId = session?.userId?.trim();
+  const accessToken = session?.accessToken?.trim();
+  if (!hotelId || !userId || !accessToken) {
+    return {};
+  }
   const headers: Record<string, string> = {
     "X-Hotel-Id": String(hotelId),
     "X-User-Id": userId
   };
-  if (session?.accessToken) {
-    headers.Authorization = `Bearer ${session.accessToken}`;
-  }
+  headers.Authorization = `Bearer ${accessToken}`;
   return headers;
 };
 

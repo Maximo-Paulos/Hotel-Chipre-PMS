@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.database import get_db
 from app.dependencies.auth import AuthContext, require_roles
 from app.schemas.payment_link_test import PaymentLinkTestCreate, PaymentLinkTestRead
@@ -11,6 +12,7 @@ from app.services.payment_link_test_service import (
     list_payment_link_tests,
     refresh_mercadopago_payment_link_test,
     refresh_mercadopago_payment_link_test_by_reference,
+    validate_mercadopago_webhook_signature,
 )
 
 router = APIRouter(prefix="/api/payment-link-tests", tags=["Payment Link Tests"])
@@ -92,6 +94,7 @@ async def mercadopago_webhook(
     request: Request,
     db: Session = Depends(get_db),
 ):
+    settings = get_settings()
     external_reference = request.query_params.get("external_reference")
     hotel_id = request.query_params.get("hotel_id")
     payload = {}
@@ -107,6 +110,22 @@ async def mercadopago_webhook(
 
     if not external_reference:
         return {"status": "ignored", "reason": "external_reference_missing"}
+
+    data_id = request.query_params.get("data.id") or request.query_params.get("data_id") or request.query_params.get("id")
+    if not data_id and isinstance(payload, dict):
+        data = payload.get("data") or {}
+        if isinstance(data, dict):
+            data_id = data.get("id") or data.get("id_url")
+
+    try:
+        validate_mercadopago_webhook_signature(
+            settings.MERCADOPAGO_WEBHOOK_SECRET,
+            data_id=str(data_id or ""),
+            request_id=request.headers.get("x-request-id") or request.headers.get("X-Request-Id"),
+            signature_header=request.headers.get("x-signature") or request.headers.get("X-Signature"),
+        )
+    except PaymentLinkTestError as exc:
+        raise HTTPException(status_code=401, detail=str(exc))
 
     try:
         record = refresh_mercadopago_payment_link_test_by_reference(

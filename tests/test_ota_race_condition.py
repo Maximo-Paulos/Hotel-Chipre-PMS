@@ -15,6 +15,14 @@ from app.schemas.reservation import ReservationCreate
 
 class TestBookingWebhook:
     def test_process_booking_reservation(self, db, sample_rooms, sample_categories, hotel_config):
+        secret = "booking-secret-h1"
+        OTAIntegrationService.upsert_webhook_credential(
+            db,
+            hotel_id=hotel_config.id,
+            provider="booking",
+            webhook_secret=secret,
+            external_property_id="property-h1",
+        )
         payload = {
             "reservation_id": "BK-123456",
             "guest_name": "John Smith",
@@ -26,8 +34,9 @@ class TestBookingWebhook:
             "num_children": 0,
             "total_price": 500.00,
             "currency": "ARS",
+            "property_id": "property-h1",
         }
-        mapping = OTAIntegrationService.process_booking_webhook(db, payload)
+        mapping = OTAIntegrationService.process_booking_webhook(db, hotel_config.id, secret, payload)
         db.flush()
 
         assert mapping.sync_status == OTASyncStatusEnum.SYNCED
@@ -42,6 +51,14 @@ class TestBookingWebhook:
         assert res.source.value == "booking"
 
     def test_duplicate_booking_ignored(self, db, sample_rooms, sample_categories, hotel_config):
+        secret = "booking-secret-h1"
+        OTAIntegrationService.upsert_webhook_credential(
+            db,
+            hotel_id=hotel_config.id,
+            provider="booking",
+            webhook_secret=secret,
+            external_property_id="property-h1",
+        )
         payload = {
             "reservation_id": "BK-DUP-001",
             "guest_name": "Duplicate Guest",
@@ -50,15 +67,24 @@ class TestBookingWebhook:
             "room_type": "STD_DBL",
             "num_adults": 1,
             "total_price": 200.0,
+            "property_id": "property-h1",
         }
-        m1 = OTAIntegrationService.process_booking_webhook(db, payload)
+        m1 = OTAIntegrationService.process_booking_webhook(db, hotel_config.id, secret, payload)
         db.flush()
-        m2 = OTAIntegrationService.process_booking_webhook(db, payload)
+        m2 = OTAIntegrationService.process_booking_webhook(db, hotel_config.id, secret, payload)
         assert m1.id == m2.id  # Same mapping returned
 
 
 class TestExpediaWebhook:
     def test_process_expedia_reservation(self, db, sample_rooms, sample_categories, hotel_config):
+        secret = "expedia-secret-h1"
+        OTAIntegrationService.upsert_webhook_credential(
+            db,
+            hotel_id=hotel_config.id,
+            provider="expedia",
+            webhook_secret=secret,
+            external_property_id="expedia-h1",
+        )
         payload = {
             "booking_id": "EXP-987654",
             "guest": {"first_name": "Jane", "last_name": "Doe", "email": "jane@email.com"},
@@ -66,8 +92,9 @@ class TestExpediaWebhook:
             "room_type_id": "SUP_DBL",
             "occupancy": {"adults": 2, "children": 1},
             "pricing": {"total": 450.00, "currency": "ARS"},
+            "property_id": "expedia-h1",
         }
-        mapping = OTAIntegrationService.process_expedia_webhook(db, payload)
+        mapping = OTAIntegrationService.process_expedia_webhook(db, hotel_config.id, secret, payload)
         db.flush()
 
         assert mapping.sync_status == OTASyncStatusEnum.SYNCED
@@ -93,9 +120,18 @@ class TestOTARaceCondition:
         Expected: One succeeds, the other fails with overbooking error.
         """
         cat_suite = sample_categories[2]
+        secret = "booking-secret-h1"
+        OTAIntegrationService.upsert_webhook_credential(
+            db,
+            hotel_id=hotel_config.id,
+            provider="booking",
+            webhook_secret=secret,
+            external_property_id="property-h1",
+        )
 
         # Create only 1 suite room to force contention
         single_room = Room(
+            hotel_id=1,
             room_number="SUITE-RACE",
             floor=4,
             category_id=cat_suite.id,
@@ -106,7 +142,7 @@ class TestOTARaceCondition:
         db.flush()
 
         # Create a guest for the direct booking
-        guest = Guest(first_name="Direct", last_name="Booker", email="direct@test.com")
+        guest = Guest(first_name="Direct", last_name="Booker", email="direct@test.com", hotel_id=1)
         db.add(guest)
         db.flush()
 
@@ -130,13 +166,15 @@ class TestOTARaceCondition:
             "room_type": "SUITE_P",
             "num_adults": 2,
             "total_price": 1000.0,
+            "property_id": "property-h1",
         }
 
         with pytest.raises(OTAError, match="OVERBOOKING"):
-            OTAIntegrationService.process_booking_webhook(db, booking_payload)
+            OTAIntegrationService.process_booking_webhook(db, hotel_config.id, secret, booking_payload)
 
         # Verify the mapping was created with CONFLICT status
         mapping = db.query(OTAReservationMapping).filter(
+            OTAReservationMapping.hotel_id == hotel_config.id,
             OTAReservationMapping.ota_reservation_id == "BK-RACE-001"
         ).first()
         assert mapping is not None
@@ -145,11 +183,19 @@ class TestOTARaceCondition:
     def test_non_overlapping_ota_succeeds(self, db, sample_categories, hotel_config):
         """Non-overlapping OTA booking should succeed even with 1 room."""
         cat_suite = sample_categories[2]
-        room = Room(room_number="SUITE-OK", floor=4, category_id=cat_suite.id, status=RoomStatusEnum.AVAILABLE)
+        secret = "booking-secret-h1"
+        OTAIntegrationService.upsert_webhook_credential(
+            db,
+            hotel_id=hotel_config.id,
+            provider="booking",
+            webhook_secret=secret,
+            external_property_id="property-h1",
+        )
+        room = Room(room_number="SUITE-OK", floor=4, category_id=cat_suite.id, status=RoomStatusEnum.AVAILABLE, hotel_id=1)
         db.add(room)
         db.flush()
 
-        guest = Guest(first_name="First", last_name="Guest")
+        guest = Guest(first_name="First", last_name="Guest", hotel_id=1)
         db.add(guest)
         db.flush()
 
@@ -170,8 +216,9 @@ class TestOTARaceCondition:
             "room_type": "SUITE_P",
             "num_adults": 1,
             "total_price": 750.0,
+            "property_id": "property-h1",
         }
-        mapping = OTAIntegrationService.process_booking_webhook(db, payload)
+        mapping = OTAIntegrationService.process_booking_webhook(db, hotel_config.id, secret, payload)
         db.flush()
         assert mapping.sync_status == OTASyncStatusEnum.SYNCED
 

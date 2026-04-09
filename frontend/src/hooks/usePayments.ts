@@ -1,9 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { getPaymentSummary, makePayment, type PaymentRequest, type PaymentSummary } from "../api/payments";
+import { hasValidSession } from "../api/client";
 import { useSession } from "../state/session";
 
-const summaryKey = (hotelId: number, reservationId: number) => ["payment-summary", hotelId, reservationId];
+const summaryKey = (hotelId: number | null, reservationId: number) => ["payment-summary", hotelId, reservationId];
 
 export function usePaymentSummary(reservationId?: number) {
   const { session } = useSession();
@@ -12,7 +13,7 @@ export function usePaymentSummary(reservationId?: number) {
   return useQuery<PaymentSummary>({
     queryKey,
     queryFn: () => getPaymentSummary(reservationId!, session),
-    enabled: Boolean(reservationId),
+    enabled: Boolean(reservationId) && hasValidSession(session),
     staleTime: 1000 * 30
   });
 }

@@ -233,7 +233,13 @@ def extend_stay(
     ):
         raise HTTPException(status_code=400, detail="Room is not available for the extended dates")
 
-    category = db.query(RoomCategory).filter(RoomCategory.id == r.category_id).first()
+    category = (
+        db.query(RoomCategory)
+        .filter(RoomCategory.id == r.category_id, RoomCategory.hotel_id == context.hotel_id)
+        .first()
+    )
+    if not category:
+        raise HTTPException(status_code=404, detail="Category not found")
     extra_nights = (new_checkout - r.check_out_date).days
     r.check_out_date = new_checkout
     r.total_amount = round(r.total_amount + extra_nights * category.base_price_per_night, 2)

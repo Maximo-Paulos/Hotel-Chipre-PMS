@@ -15,6 +15,8 @@ export type PaymentLinkTest = {
   external_payment_id?: string | null;
   refunded_amount?: number | null;
   email_sent_at?: string | null;
+  sender_channel?: string | null;
+  sender_email?: string | null;
   expires_at?: string | null;
   last_checked_at?: string | null;
   last_error?: string | null;

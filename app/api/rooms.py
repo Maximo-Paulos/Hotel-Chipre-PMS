@@ -22,7 +22,7 @@ from app.schemas.room import (
     RoomUpdate,
     RoomStatusUpdateResponse,
 )
-from app.services.reservation_service import find_available_rooms
+from app.services.reservation_service import ReservationError, find_available_rooms
 from app.dependencies.auth import get_auth_context, AuthContext, require_roles
 from app.services.subscription_service import ensure_room_within_limit
 
@@ -74,29 +74,63 @@ def list_categories(
 
 
 @router.get("/categories/{category_id}", response_model=RoomCategoryRead)
-def get_category(category_id: int, db: Session = Depends(get_db)):
-    category = db.query(RoomCategory).filter(RoomCategory.id == category_id).first()
+def get_category(
+    category_id: int,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping")),
+):
+    category = (
+        db.query(RoomCategory)
+        .filter(RoomCategory.id == category_id, RoomCategory.hotel_id == context.hotel_id)
+        .first()
+    )
     if not category:
         raise HTTPException(status_code=404, detail="Category not found")
     return category
 
 
 @router.get("/categories/pricing/all", response_model=list[CategoryPricingRead])
-def get_all_category_pricing(db: Session = Depends(get_db)):
-    return db.query(CategoryPricing).all()
+def get_all_category_pricing(
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+):
+    return (
+        db.query(CategoryPricing)
+        .join(RoomCategory, RoomCategory.id == CategoryPricing.category_id)
+        .filter(RoomCategory.hotel_id == context.hotel_id)
+        .all()
+    )
 
 
 @router.get("/categories/{category_id}/pricing", response_model=CategoryPricingSchema)
-def get_category_pricing(category_id: int, db: Session = Depends(get_db)):
-    pricing = db.query(CategoryPricing).filter(CategoryPricing.category_id == category_id).first()
+def get_category_pricing(
+    category_id: int,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+):
+    pricing = (
+        db.query(CategoryPricing)
+        .join(RoomCategory, RoomCategory.id == CategoryPricing.category_id)
+        .filter(CategoryPricing.category_id == category_id, RoomCategory.hotel_id == context.hotel_id)
+        .first()
+    )
     if not pricing:
         raise HTTPException(status_code=404, detail="Pricing config not found")
     return pricing
 
 
 @router.post("/categories/{category_id}/pricing", response_model=CategoryPricingSchema)
-def update_category_pricing(category_id: int, data: CategoryPricingSchema, db: Session = Depends(get_db)):
-    category = db.query(RoomCategory).filter(RoomCategory.id == category_id).first()
+def update_category_pricing(
+    category_id: int,
+    data: CategoryPricingSchema,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_roles("owner", "co_owner")),
+):
+    category = (
+        db.query(RoomCategory)
+        .filter(RoomCategory.id == category_id, RoomCategory.hotel_id == context.hotel_id)
+        .first()
+    )
     if not category:
         raise HTTPException(status_code=404, detail="Category not found")
     pricing = db.query(CategoryPricing).filter(CategoryPricing.category_id == category_id).first()
@@ -157,7 +191,16 @@ def room_availability(
             "available_rooms": [],
             "message": "Provide category_id, check_in_date, and check_out_date to check availability.",
         }
-    available = find_available_rooms(db, category_id, check_in_date, check_out_date)
+    try:
+        available = find_available_rooms(
+            db,
+            category_id,
+            check_in_date,
+            check_out_date,
+            hotel_id=context.hotel_id,
+        )
+    except ReservationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     return {
         "status": "ok",
         "count": len(available),
@@ -208,6 +251,7 @@ def update_room(
     if payload.get("is_active") is False:
         active_res = db.query(Reservation).filter(
             Reservation.room_id == room_id,
+            Reservation.hotel_id == context.hotel_id,
             Reservation.status.notin_([ReservationStatusEnum.CANCELLED, ReservationStatusEnum.CHECKED_OUT]),
         ).count()
         if active_res > 0:
@@ -227,11 +271,10 @@ def update_room_status(
 ):
     """Update room status for housekeeping. When a room is set to cleaning/maintenance/blocked,
     any reservations assigned to it are automatically relocated by the allocation engine."""
-    room = db.query(Room).filter(Room.id == room_id).first()
+    room = db.query(Room).filter(Room.id == room_id, Room.hotel_id == context.hotel_id).first()
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
-    
-    old_status = room.status
+
     room.status = data.status
     if data.notes is not None:
         room.notes = data.notes
@@ -259,17 +302,26 @@ def update_room_status(
     return {"room": room, "reallocation": realloc_result}
 
 
-class RoomCategoryUpdate(BaseModel):
+class RoomCategoryAssignmentUpdate(BaseModel):
     category_id: int
 
 @router.patch("/{room_id}/category")
-def update_room_category(room_id: int, data: RoomCategoryUpdate, db: Session = Depends(get_db)):
+def update_room_category(
+    room_id: int,
+    data: RoomCategoryAssignmentUpdate,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+):
     """Update the category of a specific room."""
-    room = db.query(Room).filter(Room.id == room_id).first()
+    room = db.query(Room).filter(Room.id == room_id, Room.hotel_id == context.hotel_id).first()
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
     
-    category = db.query(RoomCategory).filter(RoomCategory.id == data.category_id, RoomCategory.hotel_id == room.hotel_id).first()
+    category = (
+        db.query(RoomCategory)
+        .filter(RoomCategory.id == data.category_id, RoomCategory.hotel_id == context.hotel_id)
+        .first()
+    )
     if not category:
         raise HTTPException(status_code=400, detail="Target category does not exist")
 
@@ -316,10 +368,12 @@ def trigger_reallocation(
 
 
 @router.get("/housekeeping/summary")
-def housekeeping_summary(db: Session = Depends(get_db)):
+def housekeeping_summary(
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping")),
+):
     """Get housekeeping overview: how many rooms in each status."""
-    # Note: no auth context here; fallback to global summary.
-    rooms = db.query(Room).all()
+    rooms = db.query(Room).filter(Room.hotel_id == context.hotel_id).all()
     summary = {
         "total": len(rooms),
         "available": 0,
@@ -331,7 +385,14 @@ def housekeeping_summary(db: Session = Depends(get_db)):
     }
     # Also check which rooms are actually occupied by checked-in guests
     checked_in_rooms = set()
-    checked_in_res = db.query(Reservation).filter(Reservation.status == ReservationStatusEnum.CHECKED_IN).all()
+    checked_in_res = (
+        db.query(Reservation)
+        .filter(
+            Reservation.hotel_id == context.hotel_id,
+            Reservation.status == ReservationStatusEnum.CHECKED_IN,
+        )
+        .all()
+    )
     for r in checked_in_res:
         if r.room_id:
             checked_in_rooms.add(r.room_id)
@@ -359,12 +420,13 @@ def delete_room(
     context: AuthContext = Depends(require_roles("owner", "co_owner")),
 ):
     """Delete a room when no active reservations are attached."""
-    room = db.query(Room).filter(Room.id == room_id).first()
+    room = db.query(Room).filter(Room.id == room_id, Room.hotel_id == context.hotel_id).first()
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
 
     in_use = db.query(Reservation).filter(
         Reservation.room_id == room_id,
+        Reservation.hotel_id == context.hotel_id,
         Reservation.status.notin_([ReservationStatusEnum.CANCELLED, ReservationStatusEnum.CHECKED_OUT]),
     ).count()
     if in_use > 0:

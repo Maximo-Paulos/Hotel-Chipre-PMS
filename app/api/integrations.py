@@ -1,9 +1,13 @@
+import html
+from urllib.parse import urlparse
+
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import get_db
-from app.dependencies.auth import AuthContext, get_auth_context, require_roles
+from app.dependencies.auth import AuthContext, require_roles
 from app.schemas.integration import (
     IntegrationConnectRequest,
     IntegrationConnectResponse,
@@ -15,13 +19,15 @@ from app.services.integration_service import (
     connection_account_label,
     derive_expires_at,
     exchange_token,
+    get_connection_record,
     list_catalog_with_status,
     record_event,
     revoke_connection,
     upsert_connection,
-    validate_mercadopago_credentials,
+    validate_provider_credentials,
     verify_connection_health,
 )
+from app.services.security import create_signed_token, decode_signed_token
 
 router = APIRouter(prefix="/api/integrations", tags=["Integrations"])
 
@@ -47,6 +53,70 @@ def _connection_error_message(exc: Exception) -> str:
     return str(exc)[:250] or "No se pudo guardar la conexion."
 
 
+def _origin_for_popup(request: Request) -> str:
+    origin = (request.headers.get("origin") or "").strip()
+    if origin.startswith(("http://", "https://")):
+        return origin
+    referer = (request.headers.get("referer") or "").strip()
+    if referer.startswith(("http://", "https://")):
+        parsed = urlparse(referer)
+        return f"{parsed.scheme}://{parsed.netloc}"
+    return get_settings().APP_BASE_URL.rstrip("/")
+
+
+def _oauth_state_token(request: Request, integration_id: int, context: AuthContext, provider: str) -> str:
+    return create_signed_token(
+        {
+            "type": "integration_oauth",
+            "integration_id": integration_id,
+            "hotel_id": context.hotel_id,
+            "user_id": context.user_id,
+            "provider": provider,
+            "web_origin": _origin_for_popup(request),
+        },
+        expires_minutes=15,
+    )
+
+
+def _oauth_callback_page(*, status: str, message: str, provider: str, integration_id: int, web_origin: str) -> HTMLResponse:
+    safe_message = message.replace("\\", "\\\\").replace("'", "\\'")
+    rendered_message = html.escape(message)
+    target_origin = web_origin if web_origin.startswith(("http://", "https://")) else "*"
+    return HTMLResponse(
+        f"""
+        <!doctype html>
+        <html lang="es">
+          <head>
+            <meta charset="utf-8" />
+            <title>Conexión {provider}</title>
+          </head>
+          <body style="font-family: Arial, sans-serif; padding: 24px;">
+            <p id="message">{rendered_message}</p>
+            <script>
+              (function () {{
+                var payload = {{
+                  type: 'integration-oauth-result',
+                  provider: '{provider}',
+                  integrationId: {integration_id},
+                  status: '{status}',
+                  message: '{safe_message}'
+                }};
+                try {{
+                  if (window.opener && !window.opener.closed) {{
+                    window.opener.postMessage(payload, '{target_origin}');
+                    window.close();
+                    return;
+                  }}
+                }} catch (err) {{}}
+                document.getElementById('message').textContent = payload.message;
+              }})();
+            </script>
+          </body>
+        </html>
+        """.strip()
+    )
+
+
 def _find_integration(db: Session, hotel_id: int, integration_id: int):
     catalog, _ = list_catalog_with_status(db, hotel_id)
     integration = next((item for item in catalog if item.id == integration_id), None)
@@ -58,6 +128,22 @@ def _find_integration(db: Session, hotel_id: int, integration_id: int):
 def _store_oauth_code(db: Session, hotel_id: int, integration_id: int, provider: str, code: str):
     try:
         token_payload = exchange_token(provider, code)
+        existing = get_connection_record(db, hotel_id, provider)
+        if existing:
+            try:
+                existing_payload = existing.auth_payload or {}
+                if isinstance(existing_payload, dict):
+                    existing_cipher = existing_payload
+                else:
+                    existing_cipher = {}
+            except Exception:
+                existing_cipher = {}
+            # Preserve refresh_token if Google does not return a new one on reconsent-less exchanges.
+            from app.services.integration_service import decrypt_payload
+            previous = decrypt_payload(existing_cipher) if existing_cipher else {}
+            if provider == "gmail" and previous.get("refresh_token") and not token_payload.get("refresh_token"):
+                token_payload["refresh_token"] = previous.get("refresh_token")
+        token_payload = validate_provider_credentials(provider, token_payload)
         conn = upsert_connection(
             db,
             hotel_id,
@@ -98,7 +184,7 @@ def _store_oauth_code(db: Session, hotel_id: int, integration_id: int, provider:
 @router.get("", response_model=IntegrationStatusResponse)
 def get_status(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(get_auth_context),
+    context: AuthContext = Depends(require_roles("owner", "co_owner")),
 ):
     _ensure_enabled()
     catalog, connections = list_catalog_with_status(db, context.hotel_id)
@@ -108,7 +194,11 @@ def get_status(
             if cat.id == conn.integration_id:
                 conn.integration = cat  # type: ignore[attr-defined]
                 break
-        conn.account_label = connection_account_label(conn)  # type: ignore[attr-defined]
+        try:
+            conn.account_label = connection_account_label(conn)  # type: ignore[attr-defined]
+        except ValueError as exc:
+            conn.account_label = None  # type: ignore[attr-defined]
+            conn.last_error = str(exc)
         response_connections.append(conn)
     return IntegrationStatusResponse(catalog=catalog, connections=response_connections)
 
@@ -128,26 +218,25 @@ def connect_integration(
         oauth_payload = payload.payload or {}
         manual_keys = {"access_token", "refresh_token", "public_key", "user_id", "merchant_id"}
         if any(oauth_payload.get(key) for key in manual_keys):
-            if integration.provider == "mercadopago":
-                try:
-                    oauth_payload = validate_mercadopago_credentials(oauth_payload)
-                except ValueError as exc:
-                    conn = upsert_connection(
-                        db,
-                        context.hotel_id,
-                        integration_id,
-                        oauth_payload,
-                        status="error",
-                        last_error=str(exc),
-                    )
-                    record_event(
-                        db,
-                        conn.id,
-                        "failure",
-                        {"auth_type": integration.auth_type, "provider": integration.provider, "message": str(exc)},
-                    )
-                    db.commit()
-                    raise HTTPException(status_code=400, detail=str(exc))
+            try:
+                oauth_payload = validate_provider_credentials(integration.provider, oauth_payload)
+            except ValueError as exc:
+                conn = upsert_connection(
+                    db,
+                    context.hotel_id,
+                    integration_id,
+                    oauth_payload,
+                    status="error",
+                    last_error=str(exc),
+                )
+                record_event(
+                    db,
+                    conn.id,
+                    "failure",
+                    {"auth_type": integration.auth_type, "provider": integration.provider, "message": str(exc)},
+                )
+                db.commit()
+                raise HTTPException(status_code=400, detail=str(exc))
             conn = upsert_connection(
                 db,
                 context.hotel_id,
@@ -170,9 +259,9 @@ def connect_integration(
             _store_oauth_code(db, context.hotel_id, integration_id, integration.provider, code.strip())
             return IntegrationConnectResponse(redirect_url=None, status="connected")
 
-        callback_url = str(request.url_for("oauth_callback", integration_id=integration_id))
+        state = _oauth_state_token(request, integration_id, context, integration.provider)
         try:
-            redirect = build_redirect_url(integration, redirect_uri=callback_url)
+            redirect = build_redirect_url(integration, state=state)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc))
         conn = upsert_connection(
@@ -197,12 +286,64 @@ def connect_integration(
     return IntegrationConnectResponse(redirect_url=None, status="connected")
 
 
+@router.get("/oauth/{provider}/callback", name="oauth_provider_callback")
+def oauth_provider_callback(
+    provider: str,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    _ensure_enabled()
+    state = request.query_params.get("state")
+    if not state:
+        raise HTTPException(status_code=400, detail="state requerido")
+    state_payload = decode_signed_token(state)
+    if state_payload.get("type") != "integration_oauth":
+        raise HTTPException(status_code=400, detail="state invalido")
+    integration_id = int(state_payload.get("integration_id") or 0)
+    if provider.strip() != str(state_payload.get("provider") or "").strip():
+        raise HTTPException(status_code=400, detail="state invalido para esta integracion")
+
+    hotel_id = int(state_payload.get("hotel_id") or 0)
+    web_origin = str(state_payload.get("web_origin") or "").strip()
+    error = request.query_params.get("error")
+    if error:
+        description = request.query_params.get("error_description") or error
+        return _oauth_callback_page(
+            status="error",
+            message=f"No se pudo completar la autorizacion: {description}",
+            provider=provider or "oauth",
+            integration_id=integration_id,
+            web_origin=web_origin,
+        )
+    code = request.query_params.get("code")
+    if not code:
+        raise HTTPException(status_code=400, detail="code requerido")
+    integration, _ = _find_integration(db, hotel_id, integration_id)
+    try:
+        _store_oauth_code(db, hotel_id, integration_id, integration.provider, code)
+    except HTTPException as exc:
+        return _oauth_callback_page(
+            status="error",
+            message=str(exc.detail),
+            provider=integration.provider,
+            integration_id=integration_id,
+            web_origin=web_origin,
+        )
+    return _oauth_callback_page(
+        status="connected",
+        message=f"{integration.display_name} quedo conectado correctamente para este hotel.",
+        provider=integration.provider,
+        integration_id=integration_id,
+        web_origin=web_origin,
+    )
+
+
 @router.get("/{integration_id}/callback")
-def oauth_callback(
+def oauth_callback_manual(
     integration_id: int,
     request: Request,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(get_auth_context),
+    context: AuthContext = Depends(require_roles("owner", "co_owner")),
 ):
     _ensure_enabled()
     code = request.query_params.get("code")

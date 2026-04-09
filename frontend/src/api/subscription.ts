@@ -21,7 +21,7 @@ export type SubscriptionLimit = {
 };
 
 export type SubscriptionStatus = {
-  hotel_id: number;
+  hotel_id: number | null;
   status: string;
   plan: string | null;
   room_limit: number;

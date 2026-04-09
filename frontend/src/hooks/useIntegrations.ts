@@ -7,6 +7,7 @@ import {
   finalizeIntegrationOAuth,
   type IntegrationStatus,
 } from "../api/integrations";
+import { hasValidSession } from "../api/client";
 import { useSession } from "../state/session";
 
 const integrationsKey = ["integrations"];
@@ -16,6 +17,7 @@ export const useIntegrations = () => {
   return useQuery<IntegrationStatus>({
     queryKey: [...integrationsKey, session.hotelId, session.userId],
     queryFn: () => fetchIntegrations(session),
+    enabled: hasValidSession(session),
   });
 };
 

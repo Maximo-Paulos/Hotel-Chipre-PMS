@@ -6,6 +6,7 @@ import {
   type SubscriptionPlan,
   type SubscriptionStatus
 } from "../api/subscription";
+import { hasValidSession } from "../api/client";
 import { type SessionState, useSession } from "../state/session";
 
 export const FALLBACK_PLANS: SubscriptionPlan[] = [
@@ -43,7 +44,7 @@ export const FALLBACK_PLANS: SubscriptionPlan[] = [
 ];
 
 const buildMockStatus = (session: SessionState): SubscriptionStatus => ({
-  hotel_id: session.hotelId ?? 1,
+  hotel_id: session.hotelId ?? null,
   status: "active",
   plan: "growth",
   room_limit: 30,
@@ -167,7 +168,7 @@ const normalizeStatus = (data: SubscriptionStatus | null | undefined, session: S
 export function useSubscriptionStatus() {
   const { session } = useSession();
   return useQuery({
-    queryKey: ["subscription", session.hotelId],
+    queryKey: ["subscription", session.hotelId ?? "none"],
     queryFn: async () => {
       try {
         const remote = await getSubscriptionStatus(session);
@@ -177,6 +178,7 @@ export function useSubscriptionStatus() {
         return buildMockStatus(session);
       }
     },
+    enabled: hasValidSession(session),
     staleTime: 60_000,
     placeholderData: () => buildMockStatus(session)
   });

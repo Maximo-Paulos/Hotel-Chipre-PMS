@@ -7,12 +7,14 @@ from sqlalchemy.orm import sessionmaker
 
 import app.database as db_module
 import app.main as main_module
+from app.config import get_settings
 from app.database import Base, get_db
 
 
 @pytest.fixture()
 def client(tmp_path, monkeypatch: pytest.MonkeyPatch):
     """FastAPI client backed by an isolated SQLite database."""
+    monkeypatch.setenv("APP_ENV", "development")
     db_file = tmp_path / "demo.sqlite"
     db_url = f"sqlite:///{db_file.as_posix()}"
     engine = create_engine(db_url, connect_args={"check_same_thread": False})
@@ -48,6 +50,7 @@ def client(tmp_path, monkeypatch: pytest.MonkeyPatch):
         yield test_client
 
     main_module.app.dependency_overrides.clear()
+    get_settings.cache_clear()
 
 
 def test_seed_and_reset_blocked_by_default(client: TestClient, monkeypatch: pytest.MonkeyPatch):
@@ -72,4 +75,11 @@ def test_seed_and_reset_allowed_when_demo_enabled(client: TestClient, monkeypatc
 
     reset = client.post("/api/reset")
     assert reset.status_code == 200
-    assert reset.json()["status"] == "reset"
+    assert reset.json()["status"] == "reset_empty"
+
+
+def test_demo_routes_hidden_from_openapi_by_default(client: TestClient, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv("DEMO_MODE", raising=False)
+    paths = client.app.openapi()["paths"]
+    assert "/api/seed" not in paths
+    assert "/api/reset" not in paths

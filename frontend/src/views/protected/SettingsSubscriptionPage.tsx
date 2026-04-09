@@ -127,7 +127,7 @@ export default function SettingsSubscriptionPage() {
                 <strong>Habitaciones usadas:</strong> {subscription.rooms_in_use}/{subscription.room_limit}
               </li>
               <li>
-                <strong>Hotel ID:</strong> {subscription.hotel_id}
+                <strong>Hotel ID:</strong> {subscription.hotel_id ?? "—"}
               </li>
               {isMock && <li className="text-amber-700">Fuente: mock/offline.</li>}
             </ul>

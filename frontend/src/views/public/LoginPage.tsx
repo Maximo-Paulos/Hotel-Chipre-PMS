@@ -4,7 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { ApiError } from "../../api/client";
 import { login as loginApi } from "../../api/auth";
 import { getOnboardingStatus } from "../../api/onboarding";
-import { useSession, type SessionState } from "../../state/session";
+import { normalizeRole, useSession, type SessionState } from "../../state/session";
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -21,13 +21,16 @@ export function LoginPage() {
 
     try {
       const res = await loginApi(email, password);
+      if (!res.hotel_id) {
+        throw new ApiError(500, "La respuesta de autenticación no devolvió un hotel válido.");
+      }
       const nextSession: Partial<SessionState> = {
         userId: res.user.email,
         email: res.user.email,
-        hotelId: res.hotel_id ?? 1,
-        hotelIds: res.hotel_ids ?? [res.hotel_id ?? 1],
-        role: (res.user.role as SessionState["role"]) || "owner",
-        baseRole: (res.user.role as SessionState["role"]) || "owner",
+        hotelId: res.hotel_id,
+        hotelIds: res.hotel_ids?.length ? res.hotel_ids : [res.hotel_id],
+        role: normalizeRole(res.user.role),
+        baseRole: normalizeRole(res.user.role),
         accessToken: res.access_token,
         isVerified: res.user.is_verified
       };
@@ -54,7 +57,7 @@ export function LoginPage() {
         <div className="mb-6">
           <h1 className="text-2xl font-semibold text-slate-900">Ingresa a tu cuenta</h1>
           <p className="text-sm text-slate-600">
-            Usa tu email corporativo. Enviamos headers X-User-Id, X-Hotel-Id y Authorization.
+            Ingresá con tus credenciales. El sistema sólo envía contexto de hotel cuando la sesión es válida.
           </p>
         </div>
         <form className="space-y-4" onSubmit={handleSubmit}>

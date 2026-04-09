@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies.auth import AuthContext, require_permission
+from app.dependencies.auth import AuthContext, require_roles
 from app.config import get_settings
 from app.models.hotel_config import HotelConfiguration
 from app.schemas.hotel_config import HotelConfigRead, HotelConfigUpdate
@@ -17,7 +17,7 @@ router = APIRouter(prefix="/api/config", tags=["Hotel Configuration"])
 @router.get("/", response_model=HotelConfigRead)
 def get_configuration(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission("config:manage")),
+    context: AuthContext = Depends(require_roles("owner", "co_owner")),
 ):
     config = get_hotel_config(db, context.hotel_id)
     db.commit()
@@ -28,7 +28,7 @@ def get_configuration(
 def update_configuration(
     data: HotelConfigUpdate,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission("config:manage")),
+    context: AuthContext = Depends(require_roles("owner", "co_owner")),
 ):
     config = get_hotel_config(db, context.hotel_id)
     update_data = data.model_dump(exclude_unset=True)

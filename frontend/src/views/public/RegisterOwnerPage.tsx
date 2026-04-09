@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { ApiError } from "../../api/client";
 import { register, requestVerification } from "../../api/auth";
 import { setOwner } from "../../api/onboarding";
+import { normalizeRole } from "../../state/session";
 import { useSession } from "../../state/session";
 
 export function RegisterOwnerPage() {
@@ -24,13 +25,16 @@ export function RegisterOwnerPage() {
 
     try {
       const res = await register(form.email, form.password, "owner");
+      if (!res.hotel_id) {
+        throw new ApiError(500, "La respuesta de registro no devolvió un hotel válido.");
+      }
       const sessionData = {
         userId: res.user.email,
         email: res.user.email,
-        hotelId: res.hotel_id ?? 1,
-        hotelIds: res.hotel_ids ?? [res.hotel_id ?? 1],
-        role: "owner" as const,
-        baseRole: "owner" as const,
+        hotelId: res.hotel_id,
+        hotelIds: res.hotel_ids?.length ? res.hotel_ids : [res.hotel_id],
+        role: normalizeRole(res.user.role) ?? "owner",
+        baseRole: normalizeRole(res.user.role) ?? "owner",
         accessToken: res.access_token,
         isVerified: res.user.is_verified
       };

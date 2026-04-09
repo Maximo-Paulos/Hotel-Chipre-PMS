@@ -9,7 +9,9 @@ from sqlalchemy.orm import sessionmaker
 import app.database as db_module
 import app.main as main_module
 from app.database import Base, get_db
+from app.dependencies.auth import AuthContext, get_auth_context
 from app.models.guest import Guest
+from app.models.hotel_config import HotelConfiguration
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.reservation import Reservation, ReservationStatusEnum
 
@@ -45,9 +47,24 @@ def api_client(monkeypatch: pytest.MonkeyPatch):
         finally:
             db.close()
 
+    def override_auth_context():
+        return AuthContext(
+            hotel_id=1,
+            user_id=1,
+            user_email="owner@test.com",
+            user_role="owner",
+            is_verified=True,
+            permissions=set(),
+        )
+
     main_module.app.dependency_overrides[get_db] = override_get_db
+    main_module.app.dependency_overrides[get_auth_context] = override_auth_context
 
     with TestClient(main_module.app) as client:
+        with SessionLocal() as db:
+            if not db.get(HotelConfiguration, 1):
+                db.add(HotelConfiguration(id=1, owner_email="owner@test.com", subscription_active=True))
+                db.commit()
         yield client, SessionLocal
 
     main_module.app.dependency_overrides.clear()
@@ -61,6 +78,7 @@ def test_rooms_crud_smoke(api_client):
     # Seed a category for room creation
     with SessionLocal() as db:
         cat = RoomCategory(
+            hotel_id=1,
             name="Demo Standard",
             code="STD_DEMO",
             base_price_per_night=100.0,
@@ -99,6 +117,7 @@ def test_room_status_and_category_fetch(api_client):
     client, SessionLocal = api_client
     with SessionLocal() as db:
         cat = RoomCategory(
+            hotel_id=1,
             name="Status Cat",
             code="STAT_CAT",
             base_price_per_night=90.0,
@@ -106,7 +125,7 @@ def test_room_status_and_category_fetch(api_client):
         )
         db.add(cat)
         db.flush()
-        room = Room(room_number="401", floor=4, category_id=cat.id, status=RoomStatusEnum.AVAILABLE)
+        room = Room(room_number="401", floor=4, category_id=cat.id, status=RoomStatusEnum.AVAILABLE, hotel_id=1)
         db.add(room)
         db.commit()
         db.refresh(cat)
@@ -133,15 +152,16 @@ def test_bookings_basic_flow(api_client):
     # Seed prerequisites
     with SessionLocal() as db:
         cat = RoomCategory(
+            hotel_id=1,
             name="Suite",
             code="STE",
             base_price_per_night=200.0,
             max_occupancy=3,
         )
-        guest = Guest(first_name="Test", last_name="Guest", email="guest@example.com")
+        guest = Guest(first_name="Test", last_name="Guest", email="guest@example.com", hotel_id=1)
         db.add_all([cat, guest])
         db.flush()
-        room = Room(room_number="201", floor=2, category_id=cat.id, status=RoomStatusEnum.AVAILABLE)
+        room = Room(room_number="201", floor=2, category_id=cat.id, status=RoomStatusEnum.AVAILABLE, hotel_id=1)
         db.add(room)
         db.commit()
         db.refresh(cat)
@@ -185,14 +205,23 @@ def test_booking_status_and_overlap(api_client):
 
     with SessionLocal() as db:
         cat = RoomCategory(
+            hotel_id=1,
             name="Standard API",
             code="STD_API",
             base_price_per_night=120.0,
             max_occupancy=2,
         )
-        guest = Guest(first_name="API", last_name="Tester", email="api@test.com")
-        room1 = Room(room_number="301", floor=3, category_id=1, status=RoomStatusEnum.AVAILABLE)
-        room2 = Room(room_number="302", floor=3, category_id=1, status=RoomStatusEnum.AVAILABLE)
+        guest = Guest(
+            first_name="API",
+            last_name="Tester",
+            email="api@test.com",
+            hotel_id=1,
+            document_type="DNI",
+            document_number="30123456",
+            terms_accepted=True,
+        )
+        room1 = Room(room_number="301", floor=3, category_id=1, status=RoomStatusEnum.AVAILABLE, hotel_id=1)
+        room2 = Room(room_number="302", floor=3, category_id=1, status=RoomStatusEnum.AVAILABLE, hotel_id=1)
         db.add_all([cat, guest])
         db.flush()
         room1.category_id = cat.id

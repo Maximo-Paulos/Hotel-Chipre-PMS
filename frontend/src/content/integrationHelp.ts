@@ -68,17 +68,18 @@ export const integrationHelp: IntegrationHelp[] = [
   },
   {
     provider: "gmail",
-    title: "Gmail (OAuth, envío de correo)",
+    title: "Gmail (correo operativo del hotel)",
     steps: [
-      "Haz clic en Conectar para abrir la autorización de Google.",
-      "Elige la cuenta de Gmail y acepta los scopes de envío/lectura.",
-      "Copia el código de autorización y pégalo en 'Finalizar con código'."
+      "Haz clic en Abrir autorizacion para abrir Google.",
+      "Elige la cuenta Gmail que el hotel usará para enviar links de pago, recibos y mensajes a huéspedes.",
+      "Acepta los permisos de envío y vuelve al PMS. La conexión debería completarse sola; si Google no redirige correctamente, usa el código manual como respaldo."
     ],
     tips: [
-      "Usa scopes mínimos: gmail.send y gmail.readonly.",
-      "La cuenta debe tener permitido el uso de aplicaciones propias (pantalla de consentimiento configurada)."
+      "Este Gmail no reemplaza al correo de PMS Paulus. PMS Paulus sigue enviando verificación, reset e invitaciones.",
+      "Usa scopes mínimos: openid, email, profile y gmail.send.",
+      "Si la cuenta pertenece a Google Workspace, el administrador puede tener que autorizar la app del PMS."
     ],
-    docUrl: "https://developers.google.com/gmail/api",
+    docUrl: "https://developers.google.com/workspace/gmail/api/guides/sending",
     copyUrlLabel: "Abrir autorización Gmail"
   },
   {

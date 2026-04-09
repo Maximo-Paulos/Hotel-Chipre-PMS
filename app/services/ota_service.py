@@ -4,7 +4,9 @@ Handles incoming reservations from Booking.com and Expedia,
 and outgoing inventory/availability updates.
 Uses row-level locking to handle race conditions on simultaneous bookings.
 """
+import hashlib
 import json
+import secrets
 import uuid
 from datetime import date, datetime, timezone
 from typing import Optional
@@ -15,7 +17,7 @@ from sqlalchemy import and_
 from app.models.reservation import Reservation, ReservationStatusEnum, ReservationSourceEnum
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.guest import Guest
-from app.models.ota import OTAReservationMapping, OTASyncStatusEnum
+from app.models.ota import OTAReservationMapping, OTAWebhookCredential, OTASyncStatusEnum
 from app.models.hotel_config import HotelConfiguration
 from app.services.reservation_service import (
     create_reservation,
@@ -31,6 +33,11 @@ class OTAError(Exception):
     pass
 
 
+class OTAAuthError(OTAError):
+    """Raised when a webhook is missing a valid hotel-scoped secret."""
+    pass
+
+
 class OTAIntegrationService:
     """
     Handles bidirectional synchronization with OTAs (Booking.com, Expedia).
@@ -40,7 +47,119 @@ class OTAIntegrationService:
     """
 
     @staticmethod
-    def process_booking_webhook(db: Session, payload: dict) -> OTAReservationMapping:
+    def _normalize_secret(secret: str | None) -> str:
+        return (secret or "").strip()
+
+    @staticmethod
+    def _hash_secret(secret: str) -> str:
+        normalized = OTAIntegrationService._normalize_secret(secret)
+        if not normalized:
+            raise OTAAuthError("Webhook OTA no autorizado")
+        return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+    @staticmethod
+    def _extract_external_property_id(payload: dict) -> Optional[str]:
+        if not isinstance(payload, dict):
+            return None
+        candidates = [
+            payload.get("external_property_id"),
+            payload.get("property_id"),
+            payload.get("propertyId"),
+            payload.get("hotel_id"),
+            payload.get("hotelId"),
+        ]
+        nested_property = payload.get("property")
+        if isinstance(nested_property, dict):
+            candidates.extend(
+                [
+                    nested_property.get("id"),
+                    nested_property.get("property_id"),
+                    nested_property.get("hotel_id"),
+                    nested_property.get("code"),
+                ]
+            )
+        for candidate in candidates:
+            if candidate in (None, ""):
+                continue
+            return str(candidate).strip()
+        return None
+
+    @staticmethod
+    def _resolve_webhook_credential(
+        db: Session,
+        hotel_id: int,
+        provider: str,
+        webhook_secret: str,
+        payload: dict,
+    ) -> OTAWebhookCredential:
+        credential = (
+            db.query(OTAWebhookCredential)
+            .filter(
+                OTAWebhookCredential.hotel_id == hotel_id,
+                OTAWebhookCredential.provider == provider,
+                OTAWebhookCredential.is_active == True,
+            )
+            .first()
+        )
+        if not credential:
+            raise OTAAuthError("Webhook OTA no configurado para este hotel")
+
+        presented_hash = OTAIntegrationService._hash_secret(webhook_secret)
+        if presented_hash != credential.webhook_secret_hash:
+            raise OTAAuthError("Webhook OTA no autorizado")
+
+        external_property_id = OTAIntegrationService._extract_external_property_id(payload)
+        if credential.external_property_id and external_property_id:
+            if str(credential.external_property_id).strip() != external_property_id:
+                raise OTAAuthError("Webhook OTA no coincide con el hotel configurado")
+
+        return credential
+
+    @staticmethod
+    def generate_webhook_secret() -> str:
+        return secrets.token_urlsafe(32)
+
+    @staticmethod
+    def upsert_webhook_credential(
+        db: Session,
+        hotel_id: int,
+        provider: str,
+        webhook_secret: str,
+        external_property_id: Optional[str] = None,
+        is_active: bool = True,
+    ) -> OTAWebhookCredential:
+        credential = (
+            db.query(OTAWebhookCredential)
+            .filter(
+                OTAWebhookCredential.hotel_id == hotel_id,
+                OTAWebhookCredential.provider == provider,
+            )
+            .first()
+        )
+        secret_hash = OTAIntegrationService._hash_secret(webhook_secret)
+        if credential:
+            credential.webhook_secret_hash = secret_hash
+            credential.external_property_id = (external_property_id or "").strip() or None
+            credential.is_active = is_active
+        else:
+            credential = OTAWebhookCredential(
+                hotel_id=hotel_id,
+                provider=provider,
+                webhook_secret_hash=secret_hash,
+                external_property_id=(external_property_id or "").strip() or None,
+                is_active=is_active,
+            )
+            db.add(credential)
+        db.flush()
+        return credential
+
+    @staticmethod
+    def process_booking_webhook(
+        db: Session,
+        hotel_id: int,
+        webhook_secret: str,
+        payload: dict,
+    ) -> OTAReservationMapping:
         """
         Process an incoming reservation from Booking.com.
         
@@ -61,12 +180,15 @@ class OTAIntegrationService:
         Uses SELECT FOR UPDATE to prevent race conditions when the last room
         is being booked simultaneously from multiple sources.
         """
+        OTAIntegrationService._resolve_webhook_credential(db, hotel_id, "booking", webhook_secret, payload)
+
         ota_res_id = payload.get("reservation_id", "")
         if not ota_res_id:
             raise OTAError("Missing reservation_id in Booking.com payload")
 
         # Check for duplicate
         existing = db.query(OTAReservationMapping).filter(
+            OTAReservationMapping.hotel_id == hotel_id,
             OTAReservationMapping.ota_name == "booking",
             OTAReservationMapping.ota_reservation_id == ota_res_id,
         ).first()
@@ -75,6 +197,7 @@ class OTAIntegrationService:
 
         # Create mapping record first (for audit)
         mapping = OTAReservationMapping(
+            hotel_id=hotel_id,
             ota_name="booking",
             ota_reservation_id=ota_res_id,
             ota_guest_name=payload.get("guest_name", ""),
@@ -98,13 +221,14 @@ class OTAIntegrationService:
 
             # Find category by code
             category = db.query(RoomCategory).filter(
-                RoomCategory.code == room_type_code
+                RoomCategory.code == room_type_code,
+                RoomCategory.hotel_id == hotel_id,
             ).first()
             if not category:
                 raise OTAError(f"Unknown room type code: {room_type_code}")
 
             # Check availability with lock
-            available_rooms = find_available_rooms(db, category.id, checkin, checkout)
+            available_rooms = find_available_rooms(db, category.id, checkin, checkout, hotel_id=hotel_id)
             if not available_rooms:
                 mapping.sync_status = OTASyncStatusEnum.CONFLICT
                 mapping.error_message = "No rooms available — overbooking detected"
@@ -121,7 +245,7 @@ class OTAIntegrationService:
 
             # Double-check availability after lock (prevents race condition)
             from app.services.reservation_service import check_room_availability
-            if not check_room_availability(db, room.id, checkin, checkout):
+            if not check_room_availability(db, room.id, checkin, checkout, hotel_id=hotel_id):
                 mapping.sync_status = OTASyncStatusEnum.CONFLICT
                 mapping.error_message = "Room taken after lock — race condition handled"
                 db.flush()
@@ -130,8 +254,15 @@ class OTAIntegrationService:
                     f"availability check and lock acquisition"
                 )
 
+            if room.hotel_id != hotel_id:
+                mapping.sync_status = OTASyncStatusEnum.CONFLICT
+                mapping.error_message = "Room does not belong to the OTA hotel context"
+                db.flush()
+                raise OTAError("Cross-hotel room assignment blocked")
+
             # Create or find guest
             guest = Guest(
+                hotel_id=hotel_id,
                 first_name=first_name,
                 last_name=last_name,
                 email=payload.get("guest_email", ""),
@@ -151,7 +282,7 @@ class OTAIntegrationService:
                 source=ReservationSourceEnum.BOOKING,
                 external_id=ota_res_id,
             )
-            reservation = create_reservation(db, reservation_data)
+            reservation = create_reservation(db, reservation_data, hotel_id=hotel_id)
 
             # Override total with OTA-provided price
             if total_price > 0:
@@ -177,7 +308,12 @@ class OTAIntegrationService:
             raise OTAError(f"Failed to process Booking.com reservation: {e}")
 
     @staticmethod
-    def process_expedia_webhook(db: Session, payload: dict) -> OTAReservationMapping:
+    def process_expedia_webhook(
+        db: Session,
+        hotel_id: int,
+        webhook_secret: str,
+        payload: dict,
+    ) -> OTAReservationMapping:
         """
         Process an incoming reservation from Expedia.
         
@@ -191,12 +327,15 @@ class OTAIntegrationService:
             "pricing": {"total": 750.00, "currency": "ARS"}
         }
         """
+        OTAIntegrationService._resolve_webhook_credential(db, hotel_id, "expedia", webhook_secret, payload)
+
         ota_res_id = payload.get("booking_id", "")
         if not ota_res_id:
             raise OTAError("Missing booking_id in Expedia payload")
 
         # Check for duplicate
         existing = db.query(OTAReservationMapping).filter(
+            OTAReservationMapping.hotel_id == hotel_id,
             OTAReservationMapping.ota_name == "expedia",
             OTAReservationMapping.ota_reservation_id == ota_res_id,
         ).first()
@@ -207,6 +346,7 @@ class OTAIntegrationService:
         guest_name = f"{guest_data.get('first_name', '')} {guest_data.get('last_name', '')}".strip()
 
         mapping = OTAReservationMapping(
+            hotel_id=hotel_id,
             ota_name="expedia",
             ota_reservation_id=ota_res_id,
             ota_guest_name=guest_name,
@@ -226,12 +366,13 @@ class OTAIntegrationService:
             occupancy = payload.get("occupancy", {})
 
             category = db.query(RoomCategory).filter(
-                RoomCategory.code == room_type_code
+                RoomCategory.code == room_type_code,
+                RoomCategory.hotel_id == hotel_id,
             ).first()
             if not category:
                 raise OTAError(f"Unknown Expedia room type: {room_type_code}")
 
-            available_rooms = find_available_rooms(db, category.id, checkin, checkout)
+            available_rooms = find_available_rooms(db, category.id, checkin, checkout, hotel_id=hotel_id)
             if not available_rooms:
                 mapping.sync_status = OTASyncStatusEnum.CONFLICT
                 mapping.error_message = "No rooms available — overbooking risk"
@@ -245,13 +386,20 @@ class OTAIntegrationService:
             ).with_for_update().first()
 
             from app.services.reservation_service import check_room_availability
-            if not check_room_availability(db, room.id, checkin, checkout):
+            if not check_room_availability(db, room.id, checkin, checkout, hotel_id=hotel_id):
                 mapping.sync_status = OTASyncStatusEnum.CONFLICT
                 mapping.error_message = "Race condition on room assignment"
                 db.flush()
                 raise OTAError("Room taken during lock — race condition")
 
+            if room.hotel_id != hotel_id:
+                mapping.sync_status = OTASyncStatusEnum.CONFLICT
+                mapping.error_message = "Room does not belong to the OTA hotel context"
+                db.flush()
+                raise OTAError("Cross-hotel room assignment blocked")
+
             guest = Guest(
+                hotel_id=hotel_id,
                 first_name=guest_data.get("first_name", "Expedia"),
                 last_name=guest_data.get("last_name", "Guest"),
                 email=guest_data.get("email", ""),
@@ -270,7 +418,7 @@ class OTAIntegrationService:
                 source=ReservationSourceEnum.EXPEDIA,
                 external_id=ota_res_id,
             )
-            reservation = create_reservation(db, reservation_data)
+            reservation = create_reservation(db, reservation_data, hotel_id=hotel_id)
 
             if total_price > 0:
                 reservation.total_amount = total_price
@@ -299,8 +447,13 @@ class OTAIntegrationService:
         """
         from datetime import timedelta
 
+        category = db.query(RoomCategory).filter(RoomCategory.id == category_id).first()
+        if not category:
+            raise OTAError(f"Unknown room category id: {category_id}")
+
         rooms = db.query(Room).filter(
             Room.category_id == category_id,
+            Room.hotel_id == category.hotel_id,
             Room.is_active == True,
             Room.status.in_([RoomStatusEnum.AVAILABLE, RoomStatusEnum.OCCUPIED]),
         ).all()
@@ -314,7 +467,7 @@ class OTAIntegrationService:
             booked = 0
             for room in rooms:
                 from app.services.reservation_service import check_room_availability
-                if not check_room_availability(db, room.id, current, next_day):
+                if not check_room_availability(db, room.id, current, next_day, hotel_id=category.hotel_id):
                     booked += 1
 
             availability.append({

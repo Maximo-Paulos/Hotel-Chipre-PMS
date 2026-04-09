@@ -5,7 +5,7 @@ import { useEffect, useMemo } from "react";
 import { useOnboardingStatus } from "../hooks/useOnboardingStatus";
 import { useSubscriptionStatus } from "../hooks/useSubscription";
 import { useSession } from "../state/session";
-import { ApiError } from "../api/client";
+import { ApiError, hasValidSession } from "../api/client";
 import { HotelSelector } from "./HotelSelector";
 import { UserBadge } from "./UserBadge";
 
@@ -39,7 +39,7 @@ export function AppShell() {
   const location = useLocation();
   const navigate = useNavigate();
   const { session } = useSession();
-  const isLoggedIn = session.accessToken !== undefined && session.userId !== "guest";
+  const isLoggedIn = hasValidSession(session);
   const isVerified = Boolean(session.isVerified);
   const role = session.role;
 
@@ -82,8 +82,8 @@ export function AppShell() {
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <div className="border-b bg-slate-900 px-6 py-2 text-xs text-white">
         <span className="font-semibold">Hotel Chipre PMS</span>
-        <span className="ml-3 text-slate-200">Hotel ID {session.hotelId}</span>
-        <span className="ml-3 text-slate-200">Usuario {session.email || session.userId}</span>
+        <span className="ml-3 text-slate-200">Hotel ID {session.hotelId ?? "—"}</span>
+        <span className="ml-3 text-slate-200">Usuario {session.email || session.userId || "Sin sesión"}</span>
       </div>
 
       {(writeBlocked || inactiveSubscription) && (
@@ -135,7 +135,7 @@ export function AppShell() {
               return baseNav
                 .map((section) => {
                   const items = section.items
-                    .filter((item: any) => !item.requiresRole || item.requiresRole.includes(role))
+                    .filter((item: any) => !item.requiresRole || (role ? item.requiresRole.includes(role) : false))
                     .filter((item: any) => !(item.to === "/onboarding" && onboarding?.completed));
                   if (!items.length) return null;
                   return (

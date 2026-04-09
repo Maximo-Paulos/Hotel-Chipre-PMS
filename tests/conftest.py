@@ -14,6 +14,8 @@ from app.models.transaction import Transaction
 from app.models.hotel_config import HotelConfiguration
 from app.models.ota import OTAReservationMapping
 from app.models.pricing import CategoryPricing
+from app.models.security_token import SecurityToken
+from app.models.rate_limit_event import RateLimitEvent
 
 
 # â”€â”€ SQLite in-memory engine for tests â”€â”€

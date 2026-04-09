@@ -3,6 +3,7 @@ import { useState } from "react";
 
 import { inviteUser, listUsers, revokeUser, updateUserRole } from "../../api/users";
 import { type AuthUser } from "../../api/auth";
+import { hasValidSession } from "../../api/client";
 import { useSession } from "../../state/session";
 
 const roleLabels: Record<string, string> = {
@@ -17,6 +18,7 @@ export function SettingsUsersPage() {
   const qc = useQueryClient();
   const usersQuery = useQuery<AuthUser[]>({
     queryKey: ["users", session.hotelId],
+    enabled: hasValidSession(session),
     queryFn: () => listUsers(session)
   });
   const inviteMutation = useMutation({
@@ -35,7 +37,11 @@ export function SettingsUsersPage() {
   const [inviteForm, setInviteForm] = useState({ email: "", role: "manager" });
   const [inviteLink, setInviteLink] = useState<string | null>(null);
 
-  const canManage = ["owner", "co_owner"].includes(session.role);
+  const canManage = ["owner", "co_owner"].includes(session.role ?? "");
+
+  if (!hasValidSession(session)) {
+    return <p className="text-sm text-slate-600">Iniciá sesión con un hotel activo para administrar usuarios.</p>;
+  }
 
   return (
     <div className="space-y-6">

@@ -55,7 +55,14 @@ def ctx(client_with_db):
     db.commit()
 
     def override_auth_context():
-        return AuthContext(hotel_id=1, user_id=1, user_email="owner@test.com", permissions=set())
+        return AuthContext(
+            hotel_id=1,
+            user_id=1,
+            user_email="owner@test.com",
+            user_role="owner",
+            is_verified=True,
+            permissions=set(),
+        )
 
     fastapi_app.dependency_overrides[get_auth_context_target()] = override_auth_context
     try:

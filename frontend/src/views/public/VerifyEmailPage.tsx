@@ -4,7 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { ApiError } from "../../api/client";
 import { requestVerification, verifyEmail } from "../../api/auth";
 import { getOnboardingStatus } from "../../api/onboarding";
-import { useSession } from "../../state/session";
+import { normalizeRole, useSession } from "../../state/session";
 
 export function VerifyEmailPage() {
   const navigate = useNavigate();
@@ -41,18 +41,22 @@ export function VerifyEmailPage() {
     setLoading(true);
     try {
       const res = await verifyEmail(email, code);
+      if (!res.hotel_id) {
+        throw new ApiError(500, "La respuesta de verificación no devolvió un hotel válido.");
+      }
       login({
         userId: res.user.email,
         email: res.user.email,
-        hotelId: res.hotel_id ?? session.hotelId,
-        hotelIds: res.hotel_ids ?? [res.hotel_id ?? session.hotelId],
-        role: (res.user.role as "owner" | "receptionist") || session.role,
+        hotelId: res.hotel_id,
+        hotelIds: res.hotel_ids?.length ? res.hotel_ids : [res.hotel_id],
+        role: normalizeRole(res.user.role),
+        baseRole: normalizeRole(res.user.role),
         accessToken: res.access_token,
         isVerified: true
       });
       setMessage("Codigo correcto. Email verificado.");
       const status = await getOnboardingStatus({
-        hotelId: res.hotel_id ?? session.hotelId,
+        hotelId: res.hotel_id,
         userId: res.user.email,
         accessToken: res.access_token
       });

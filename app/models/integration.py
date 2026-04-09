@@ -32,7 +32,7 @@ class IntegrationConnection(Base):
     )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    hotel_id = Column(Integer, nullable=False)
+    hotel_id = Column(Integer, ForeignKey("hotel_configuration.id", ondelete="CASCADE"), nullable=False)
     integration_id = Column(Integer, ForeignKey("integration_catalog.id"), nullable=False)
     status = Column(String(20), nullable=False, default="pending")
     auth_payload = Column(JSON, nullable=True)

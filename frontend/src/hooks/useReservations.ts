@@ -13,9 +13,10 @@ import {
   type ReservationStatus,
   type ReservationUpdatePayload
 } from "../api/reservations";
+import { hasValidSession } from "../api/client";
 import { useSession } from "../state/session";
 
-const reservationsKey = (hotelId: number, filters: ReservationFilters) => ["reservations", hotelId, filters];
+const reservationsKey = (hotelId: number | null, filters: ReservationFilters) => ["reservations", hotelId, filters];
 
 export function useReservations(filters: ReservationFilters) {
   const { session } = useSession();
@@ -23,6 +24,7 @@ export function useReservations(filters: ReservationFilters) {
   return useQuery<Reservation[]>({
     queryKey: reservationsKey(session.hotelId, filters),
     queryFn: () => listReservations(filters, session),
+    enabled: hasValidSession(session),
     keepPreviousData: true,
     staleTime: 1000 * 15
   });

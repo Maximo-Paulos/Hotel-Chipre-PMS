@@ -9,6 +9,7 @@ from sqlalchemy.orm import sessionmaker
 from app.main import app as fastapi_app
 from app.database import Base
 from app.dependencies.auth import AuthContext, get_auth_context
+from app.config import get_settings
 from app.models.hotel_config import HotelConfiguration
 from app.models.hotel_membership import HotelMembership
 from app.models.subscription import SubscriptionPlan, HotelSubscription
@@ -50,7 +51,14 @@ def client_with_db():
     ctx_holder = {"hotel_id": 1, "user_id": user.id, "user_email": user.email}
 
     def override_get_auth_context():
-        return AuthContext(hotel_id=ctx_holder["hotel_id"], user_id=ctx_holder["user_id"], user_email=ctx_holder["user_email"], permissions=set())
+        return AuthContext(
+            hotel_id=ctx_holder["hotel_id"],
+            user_id=ctx_holder["user_id"],
+            user_email=ctx_holder["user_email"],
+            user_role="owner",
+            is_verified=True,
+            permissions=set(),
+        )
 
     fastapi_app.dependency_overrides[get_db_override_target()] = override_get_db
     fastapi_app.dependency_overrides[get_auth_context] = override_get_auth_context
@@ -136,8 +144,10 @@ def test_reservations_list_isolated_by_hotel(client_with_db):
     assert codes2 == ["R2"]
 
 
-def test_room_cap_enforced(client_with_db):
+def test_room_cap_enforced(client_with_db, monkeypatch):
     client, db, ctx = client_with_db
+    monkeypatch.setenv("SUBSCRIPTION_ENFORCEMENT", "true")
+    get_settings.cache_clear()
     create_hotel_with_membership(db, 1, ctx["user_id"], plan_code="limit1", room_limit=1)
     cat1 = RoomCategory(name="Cat1", code="C1", base_price_per_night=100, max_occupancy=2, hotel_id=1)
     db.add(cat1); db.flush()
@@ -150,6 +160,7 @@ def test_room_cap_enforced(client_with_db):
     resp2 = client.post("/api/rooms/", json={"room_number": "102", "floor": 1, "category_id": cat1.id, "status": "available", "is_active": True})
     assert resp2.status_code == 402
     assert "límite" in resp2.json()["detail"].lower()
+    get_settings.cache_clear()
 
 
 def test_reset_endpoint_allows_testing_env(client_with_db, monkeypatch):

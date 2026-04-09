@@ -3,13 +3,13 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import { ApiError } from "../../api/client";
 import { acceptInvitation, getInvitationInfo } from "../../api/auth";
-import { useSession } from "../../state/session";
+import { normalizeRole, useSession } from "../../state/session";
 
 export function AcceptInvitationPage() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const token = params.get("token") || "";
-  const { login, session } = useSession();
+  const { login } = useSession();
 
   const [email, setEmail] = useState("");
   const [hotelName, setHotelName] = useState("");
@@ -52,11 +52,16 @@ export function AcceptInvitationPage() {
     setLoading(true);
     try {
       const res = await acceptInvitation(token, email, password);
+      if (!res.hotel_id) {
+        throw new ApiError(500, "La respuesta de invitación no devolvió un hotel válido.");
+      }
       login({
         userId: res.user.email,
         email: res.user.email,
-        hotelId: res.hotel_id ?? session.hotelId,
-        role: (res.user.role as "owner" | "receptionist" | "manager" | "housekeeping") || session.role,
+        hotelId: res.hotel_id,
+        hotelIds: res.hotel_ids?.length ? res.hotel_ids : [res.hotel_id],
+        role: normalizeRole(res.user.role),
+        baseRole: normalizeRole(res.user.role),
         accessToken: res.access_token,
         isVerified: res.user.is_verified
       });

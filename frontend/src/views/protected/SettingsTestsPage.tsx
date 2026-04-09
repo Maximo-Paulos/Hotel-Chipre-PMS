@@ -126,7 +126,7 @@ export function SettingsTestsPage() {
         <p className="text-xs uppercase tracking-wide text-slate-500">Configuracion</p>
         <h1 className="text-2xl font-semibold text-slate-900">Pruebas</h1>
         <p className="text-sm text-slate-600">
-          Envia un link de pago de Mercado Pago por mail y deja que el sistema verifique solo cuando quede abonado.
+          Envia un link de pago de Mercado Pago usando el Gmail conectado del hotel y deja que el sistema verifique solo cuando quede abonado.
         </p>
       </header>
 
@@ -135,7 +135,7 @@ export function SettingsTestsPage() {
           <div>
             <h2 className="text-lg font-semibold text-slate-900">Probar Mercado Pago</h2>
             <p className="text-sm text-slate-600">
-              Usa la conexion guardada del hotel activo para mandar un link de pago de prueba. El estado se refresca solo cada pocos segundos.
+              Usa Mercado Pago y el Gmail conectado del hotel activo. Si Gmail no esta conectado, el sistema no enviara el link y te pedira conectar primero el correo del hotel.
             </p>
           </div>
           <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">Mercado Pago</span>
@@ -208,7 +208,7 @@ export function SettingsTestsPage() {
             {createMutation.isPending ? "Creando prueba..." : "Probar"}
           </button>
           <p className="text-xs text-slate-500">
-            El link se manda por mail y tambien queda visible abajo por si quieres copiarlo manualmente. No hace falta tocar actualizar para acreditar el pago.
+            El link se manda con el Gmail del hotel y tambien queda visible abajo por si quieres copiarlo manualmente una vez creada la prueba. No hace falta tocar actualizar para acreditar el pago.
           </p>
         </div>
         <p className="mt-2 text-[11px] text-slate-500">
@@ -253,6 +253,11 @@ export function SettingsTestsPage() {
                   {test.created_at && (
                     <p>
                       <strong>Creada:</strong> {new Date(test.created_at).toLocaleString()}
+                    </p>
+                  )}
+                  {test.sender_email && (
+                    <p>
+                      <strong>Enviado desde:</strong> {test.sender_email}
                     </p>
                   )}
                   {test.paid_at && (

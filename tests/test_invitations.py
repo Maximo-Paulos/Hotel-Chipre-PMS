@@ -65,7 +65,14 @@ def owner_ctx(client_with_db):
     ctx = {"hotel_id": hotel.id, "user_id": owner.id, "user_email": owner.email}
 
     def override_auth_context():
-        return AuthContext(hotel_id=ctx["hotel_id"], user_id=ctx["user_id"], user_email=ctx["user_email"], permissions=set())
+        return AuthContext(
+            hotel_id=ctx["hotel_id"],
+            user_id=ctx["user_id"],
+            user_email=ctx["user_email"],
+            user_role="owner",
+            is_verified=True,
+            permissions=set(),
+        )
 
     fastapi_app.dependency_overrides[get_auth_context_target()] = override_auth_context
     try:
@@ -86,18 +93,37 @@ def test_invite_returns_token_and_accepts(owner_ctx):
     assert "invite_token" in body
     token = body["invite_token"]
     assert "accept_url" in body
+    assert body["user"]["is_active"] is False
     payload = decode_signed_token(token)
     assert payload["type"] == "invite"
     assert payload["hotel_id"] == ctx["hotel_id"]
     assert payload["email"] == "guest@test.com"
     assert payload["role"] == "manager"
+    pending_user = db.query(User).filter(User.email == "guest@test.com").first()
+    assert pending_user is not None
+    pending_membership = (
+        db.query(HotelMembership)
+        .filter(HotelMembership.hotel_id == ctx["hotel_id"], HotelMembership.user_id == pending_user.id)
+        .first()
+    )
+    assert pending_user.is_active is False
+    assert pending_user.is_verified is False
+    assert pending_membership is not None
+    assert pending_membership.status == "invited"
 
     accept = client.post(f"/api/invitations/{token}/accept", json={"email": "guest@test.com", "password": "newpw"})
     assert accept.status_code == 200
     accept_body = accept.json()
     assert accept_body["user"]["is_verified"] is True
-    guest = db.query(User).filter(User.email == "guest@test.com").first()
-    assert guest.is_active and guest.is_verified
+    invited_user = db.query(User).filter(User.email == "guest@test.com").first()
+    invited_membership = (
+        db.query(HotelMembership)
+        .filter(HotelMembership.hotel_id == ctx["hotel_id"], HotelMembership.user_id == invited_user.id)
+        .first()
+    )
+    assert invited_membership is not None
+    assert invited_membership.status == "active"
+    assert invited_user.is_active and invited_user.is_verified
 
 
 def test_update_role_requires_owner(owner_ctx):
@@ -112,11 +138,66 @@ def test_update_role_requires_owner(owner_ctx):
     r_ok = client.patch(f"/api/users/{mgr.id}/role", json={"role": "housekeeping"})
     assert r_ok.status_code == 200
     db.refresh(mgr)
-    assert mgr.role == "housekeeping"
+    membership = (
+        db.query(HotelMembership)
+        .filter(HotelMembership.hotel_id == ctx["hotel_id"], HotelMembership.user_id == mgr.id)
+        .first()
+    )
+    assert membership is not None
+    assert membership.role == "housekeeping"
 
     # switch context to manager and expect 403
     def override_auth_context_manager():
-        return AuthContext(hotel_id=ctx["hotel_id"], user_id=mgr.id, user_email=mgr.email, permissions=set())
+        return AuthContext(
+            hotel_id=ctx["hotel_id"],
+            user_id=mgr.id,
+            user_email=mgr.email,
+            user_role="manager",
+            is_verified=True,
+            permissions=set(),
+        )
     fastapi_app.dependency_overrides[get_auth_context_target()] = override_auth_context_manager
     r_forbidden = client.patch(f"/api/users/{mgr.id}/role", json={"role": "owner"})
     assert r_forbidden.status_code == 403
+
+
+def test_co_owner_cannot_grant_privileged_roles(owner_ctx):
+    client, db, ctx = owner_ctx
+    co_owner = User(email="co@test.com", password_hash=hash_password("pw"), role="co_owner", is_verified=True)
+    staff = User(email="staff@test.com", password_hash=hash_password("pw"), role="manager", is_verified=True)
+    db.add_all([co_owner, staff])
+    db.flush()
+    db.add(HotelMembership(hotel_id=ctx["hotel_id"], user_id=co_owner.id, role="co_owner", status="active"))
+    db.add(HotelMembership(hotel_id=ctx["hotel_id"], user_id=staff.id, role="manager", status="active"))
+    db.commit()
+
+    def override_auth_context_co_owner():
+        return AuthContext(
+            hotel_id=ctx["hotel_id"],
+            user_id=co_owner.id,
+            user_email=co_owner.email,
+            user_role="co_owner",
+            is_verified=True,
+            permissions=set(),
+        )
+
+    fastapi_app.dependency_overrides[get_auth_context_target()] = override_auth_context_co_owner
+
+    invite = client.post("/api/users/invite", json={"email": "newco@test.com", "role": "co_owner"})
+    assert invite.status_code == 403
+
+    promote = client.patch(f"/api/users/{staff.id}/role", json={"role": "co_owner"})
+    assert promote.status_code == 403
+
+    demote_to_manager = client.patch(f"/api/users/{staff.id}/role", json={"role": "manager"})
+    assert demote_to_manager.status_code == 200
+
+
+def test_owner_cannot_assign_owner_or_revoke_self(owner_ctx):
+    client, db, ctx = owner_ctx
+
+    invite_owner = client.post("/api/users/invite", json={"email": "other-owner@test.com", "role": "owner"})
+    assert invite_owner.status_code == 400
+
+    revoke_self = client.delete(f"/api/users/{ctx['user_id']}")
+    assert revoke_self.status_code == 400

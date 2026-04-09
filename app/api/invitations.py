@@ -57,7 +57,6 @@ def accept_invitation(token: str, payload: AcceptPayload, db: Session = Depends(
         user.password_hash = hash_password(payload.password)
         user.is_verified = True
         user.is_active = True
-        user.role = role
     membership = (
         db.query(HotelMembership)
         .filter(HotelMembership.hotel_id == hotel_id, HotelMembership.user_id == user.id)

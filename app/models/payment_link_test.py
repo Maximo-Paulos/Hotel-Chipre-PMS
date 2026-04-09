@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, DateTime, Float, Integer, JSON, String, Text
+from sqlalchemy import Column, DateTime, Float, Integer, JSON, String, Text, ForeignKey
 
 from app.database import Base
 
@@ -9,7 +9,7 @@ class PaymentLinkTest(Base):
     __tablename__ = "payment_link_tests"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    hotel_id = Column(Integer, nullable=False, index=True)
+    hotel_id = Column(Integer, ForeignKey("hotel_configuration.id", ondelete="CASCADE"), nullable=False, index=True)
     provider = Column(String(50), nullable=False, default="mercadopago")
     recipient_email = Column(String(255), nullable=False)
     amount = Column(Float, nullable=False)
@@ -24,6 +24,8 @@ class PaymentLinkTest(Base):
     refunded_amount = Column(Float, nullable=True)
     gateway_response = Column(JSON, nullable=True)
     email_sent_at = Column(DateTime, nullable=True)
+    sender_channel = Column(String(50), nullable=True)
+    sender_email = Column(String(255), nullable=True)
     expires_at = Column(DateTime, nullable=True)
     last_checked_at = Column(DateTime, nullable=True)
     last_error = Column(Text, nullable=True)

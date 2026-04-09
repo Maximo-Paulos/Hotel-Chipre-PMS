@@ -1,5 +1,7 @@
 from datetime import datetime, timedelta, timezone
 import ipaddress
+import hmac
+import hashlib
 from typing import Any
 from uuid import uuid4
 from urllib.parse import urlparse
@@ -8,9 +10,10 @@ import requests
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
+from app.models.hotel_config import HotelConfiguration
 from app.models.payment_link_test import PaymentLinkTest
 from app.schemas.payment_link_test import PaymentLinkTestCreate
-from app.services.email_service import mailer
+from app.services.hotel_outbound_email_service import HotelOutboundEmailError, ensure_hotel_gmail_ready, send_hotel_email
 from app.services.integration_service import get_connection_payload
 
 
@@ -26,7 +29,10 @@ def _validate_email(email: str) -> str:
 
 
 def _mercadopago_access_token(db: Session, hotel_id: int) -> str:
-    payload = get_connection_payload(db, hotel_id, "mercadopago")
+    try:
+        payload = get_connection_payload(db, hotel_id, "mercadopago")
+    except ValueError as exc:
+        raise PaymentLinkTestError(str(exc))
     access_token = payload.get("access_token")
     if not access_token:
         raise PaymentLinkTestError("Conecta Mercado Pago primero desde Configuracion > Conexiones.")
@@ -64,16 +70,26 @@ def _status_from_payment(status: str | None) -> str:
     return "pending"
 
 
-def _send_payment_link_email(recipient_email: str, amount: float, currency: str, payment_url: str, description: str) -> None:
-    subject = "Link de pago de prueba - Hotel PMS"
+def _send_payment_link_email(db: Session, hotel_id: int, recipient_email: str, amount: float, currency: str, payment_url: str, description: str) -> str:
+    hotel = db.get(HotelConfiguration, hotel_id)
+    hotel_name = hotel.hotel_name if hotel and hotel.hotel_name else "tu hotel"
+    subject = f"Link de pago - {hotel_name}"
     body = (
         "Hola,\n\n"
         f"Te enviamos un link de pago de prueba por {amount:.2f} {currency}.\n\n"
         f"Concepto: {description}\n"
         f"Link de pago: {payment_url}\n\n"
+        f"Este correo fue enviado desde la cuenta conectada del hotel {hotel_name}.\n"
         "Una vez abonado, el hotel podra verificar el estado desde el PMS.\n"
     )
-    mailer.send(recipient_email, subject, body)
+    result = send_hotel_email(
+        db,
+        hotel_id,
+        to=recipient_email,
+        subject=subject,
+        body=body,
+    )
+    return result.sender_email
 
 
 def _notification_url(external_reference: str, hotel_id: int) -> str:
@@ -110,6 +126,54 @@ def _notification_url_if_public(external_reference: str, hotel_id: int) -> str |
     if not _is_public_webhook_base(base_url):
         return None
     return _notification_url(external_reference, hotel_id)
+
+
+def parse_mercadopago_signature_header(signature_header: str | None) -> dict[str, str]:
+    if not signature_header:
+        return {}
+    pairs: dict[str, str] = {}
+    for chunk in signature_header.split(","):
+        if "=" not in chunk:
+            continue
+        key, value = chunk.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if key and value:
+            pairs[key] = value
+    return pairs
+
+
+def validate_mercadopago_webhook_signature(
+    secret: str,
+    *,
+    data_id: str,
+    request_id: str | None,
+    signature_header: str | None,
+    max_age_seconds: int = 300,
+) -> None:
+    if not secret:
+        return
+    signature_parts = parse_mercadopago_signature_header(signature_header)
+    if not request_id or not signature_parts:
+        raise PaymentLinkTestError("Faltan headers de firma de Mercado Pago para validar el webhook.")
+    ts = signature_parts.get("ts")
+    v1 = signature_parts.get("v1")
+    if not ts or not v1 or not data_id:
+        raise PaymentLinkTestError("El webhook de Mercado Pago no trajo firma valida.")
+
+    try:
+        ts_int = int(ts)
+    except ValueError as exc:
+        raise PaymentLinkTestError("El timestamp de firma de Mercado Pago no es valido.") from exc
+
+    now_seconds = int(datetime.now(timezone.utc).timestamp())
+    if abs(now_seconds - ts_int) > max_age_seconds:
+        raise PaymentLinkTestError("La firma de Mercado Pago expiro.")
+
+    manifest = f"id:{data_id};request-id:{request_id};ts:{ts};"
+    expected = hmac.new(secret.encode("utf-8"), manifest.encode("utf-8"), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(expected, v1):
+        raise PaymentLinkTestError("La firma de Mercado Pago no coincide.")
 
 
 def _ensure_utc(value: datetime | None) -> datetime | None:
@@ -179,6 +243,10 @@ def _apply_terminal_dates(record: PaymentLinkTest, status: str, payment: dict[st
 def create_mercadopago_payment_link_test(db: Session, hotel_id: int, payload: PaymentLinkTestCreate) -> PaymentLinkTest:
     access_token = _mercadopago_access_token(db, hotel_id)
     recipient_email = _validate_email(payload.recipient_email)
+    try:
+        ensure_hotel_gmail_ready(db, hotel_id)
+    except HotelOutboundEmailError as exc:
+        raise PaymentLinkTestError(str(exc)) from exc
     external_reference = f"mp-test-{hotel_id}-{uuid4().hex[:18]}"
     description = (payload.description or "Senia de prueba").strip()
     expires_at = None
@@ -243,9 +311,19 @@ def create_mercadopago_payment_link_test(db: Session, hotel_id: int, payload: Pa
     db.flush()
 
     try:
-        _send_payment_link_email(recipient_email, payload.amount, payload.currency, payment_url, description)
+        sender_email = _send_payment_link_email(db, hotel_id, recipient_email, payload.amount, payload.currency, payment_url, description)
         record.email_sent_at = datetime.now(timezone.utc)
+        record.sender_channel = "gmail_hotel"
+        record.sender_email = sender_email
+        record.last_error = None
+        record.gateway_response = {
+            **(record.gateway_response or {}),
+            "email_delivery_channel": "gmail_hotel",
+            "email_sender": sender_email,
+        }
     except Exception as exc:
+        record.sender_channel = "not_sent"
+        record.sender_email = None
         record.last_error = f"No se pudo enviar el email: {exc}"
 
     db.flush()

@@ -1,10 +1,9 @@
 """
-Lightweight authentication/context helpers.
+Strict authentication/context helpers.
 
-These dependencies only provide a hotel_id so the API can stay scoped per hotel
-without introducing a full auth system. If the caller sends the header
-`X-Hotel-Id`, it is respected; otherwise we fall back to the first persisted
-HotelConfiguration or create a default one (id=1).
+Every operational request must resolve to a real authenticated user plus an
+active hotel membership. We never fall back to hotel 1 or fabricate a hotel
+context from headers alone.
 """
 from dataclasses import dataclass
 from typing import Optional, Set
@@ -14,15 +13,9 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.user import User
-from app.models.hotel_config import HotelConfiguration
-from app.config import get_settings
 from app.services.security import decode_access_token
-from app.services.hotel_service import (
-    get_or_create_hotel_for_owner,
-    get_memberships_for_user,
-)
+from app.services.hotel_service import get_memberships_for_user
 from app.models.hotel_membership import HotelMembership
-from fastapi import Request
 
 
 @dataclass
@@ -32,86 +25,127 @@ class AuthContext:
     user_id: Optional[int] = None
     user_email: Optional[str] = None
     user_role: Optional[str] = None
+    is_verified: bool = False
     permissions: Optional[Set[str]] = None
 
 
-def _resolve_hotel_id(db: Session, header_value: Optional[str], token_hotel_id: Optional[int], user_email: Optional[str], user_id: Optional[int]) -> int:
-    """Resolve hotel id validating membership. Prioridad: header -> token -> membership -> crear para dueño -> primer hotel existente."""
-    memberships = []
-    if user_id:
-        memberships = get_memberships_for_user(db, user_id)
-    hotel_ids = [m.hotel_id for m in memberships]
+def _parse_header_hotel_id(header_value: Optional[str]) -> Optional[int]:
+    if header_value is None or not str(header_value).strip():
+        return None
+    try:
+        parsed = int(header_value)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="X-Hotel-Id invalido")
+    if parsed <= 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="X-Hotel-Id invalido")
+    return parsed
 
-    # 1) Honor explicit header
-    if header_value:
-        try:
-            return int(header_value)
-        except ValueError:
-            pass
 
-    # 2) Honor token hotel_id
-    if token_hotel_id:
-        return int(token_hotel_id)
+def _parse_token_hotel_id(payload: dict | None) -> Optional[int]:
+    if not payload:
+        return None
+    raw = payload.get("hotel_id")
+    if raw in (None, ""):
+        return None
+    try:
+        parsed = int(raw)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed > 0 else None
 
-    # 3) If user has memberships, use first
-    if hotel_ids:
-        return hotel_ids[0]
 
-    # 4) If owner email but no membership, create/reuse hotel for that owner
-    if user_email:
-        hotel = get_or_create_hotel_for_owner(db, user_email)
-        return hotel.id
+def _resolve_membership(
+    memberships: list[HotelMembership],
+    requested_hotel_id: Optional[int],
+    token_hotel_id: Optional[int],
+) -> HotelMembership:
+    membership_by_hotel = {m.hotel_id: m for m in memberships if m.status == "active"}
+    if not membership_by_hotel:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="El usuario no tiene hoteles activos asignados",
+        )
 
-    # 5) Fallback dev: first hotel or create anon
-    existing = db.query(HotelConfiguration).order_by(HotelConfiguration.id.asc()).first()
-    if existing:
-        return existing.id
-    hotel = get_or_create_hotel_for_owner(db, "anon@local")
-    return hotel.id or 1
+    selected_hotel_id = requested_hotel_id or token_hotel_id
+    if selected_hotel_id is not None:
+        membership = membership_by_hotel.get(selected_hotel_id)
+        if not membership:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="No tenes acceso al hotel solicitado",
+            )
+        return membership
+
+    if len(membership_by_hotel) == 1:
+        return next(iter(membership_by_hotel.values()))
+
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="Debes seleccionar un hotel valido para esta sesion",
+    )
 
 
 def get_auth_context(
     db: Session = Depends(get_db),
     x_hotel_id: Optional[str] = Header(default=None),
-    x_user_id: Optional[str] = Header(default=None),
     authorization: Optional[str] = Header(default=None),
 ) -> AuthContext:
-    """Return a minimal context with hotel scoping."""
-    payload = None
-    user_id_int: Optional[int] = None
-    user_email = None
-    user_role = None
-    if authorization:
-        try:
-            payload = _decode_authorization_header(authorization)
-            user_email = payload.get("email")
-            try:
-                user_id_int = int(payload.get("sub")) if payload and payload.get("sub") else None
-            except Exception:
-                user_id_int = None
-            user_role = payload.get("role")
-        except HTTPException:
-            # token inválido/expirado -> seguimos anónimo para no romper onboarding
-            payload = None
-            user_email = None
-            user_id_int = None
-            user_role = None
+    """Return an authenticated context scoped to an active hotel membership."""
+    if not authorization:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Autenticacion requerida")
 
-    token_hotel_id = payload.get("hotel_id") if payload else None
-    hotel_id = _resolve_hotel_id(db, x_hotel_id, token_hotel_id, user_email, user_id_int)
-    # Subscription enforcement desactivado en fase de implementación
-    return AuthContext(hotel_id=hotel_id, user_id=user_id_int, user_email=user_email, user_role=user_role, permissions=set())
+    payload = _decode_authorization_header(authorization)
+    raw_user_id = payload.get("sub")
+    try:
+        user_id = int(raw_user_id) if raw_user_id is not None else None
+    except (TypeError, ValueError):
+        user_id = None
+    if not user_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token sin usuario valido")
+
+    user = db.get(User, user_id)
+    if not user or not user.is_active:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuario no valido")
+    if not user.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Verifica tu email para usar el sistema",
+        )
+
+    memberships = get_memberships_for_user(db, user.id)
+    membership = _resolve_membership(
+        memberships,
+        requested_hotel_id=_parse_header_hotel_id(x_hotel_id),
+        token_hotel_id=_parse_token_hotel_id(payload),
+    )
+
+    return AuthContext(
+        hotel_id=membership.hotel_id,
+        user_id=user.id,
+        user_email=user.email,
+        user_role=membership.role,
+        is_verified=user.is_verified,
+        permissions=set(),
+    )
 
 
 def require_permission(permission: str):
     """
-    Dependency factory that attaches the required permission label to the context.
-    Real permission checks are out of scope; this keeps the signature stable.
+    Dependency factory that enforces a permission via hotel membership roles.
     """
+    permission_roles = {
+        "config:manage": {"owner", "co_owner"},
+    }
+
     def dependency(context: AuthContext = Depends(get_auth_context)) -> AuthContext:
         perms = context.permissions or set()
         perms.add(permission)
         context.permissions = perms
+        if not context.is_verified:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Verifica tu email para usar el sistema")
+        allowed_roles = permission_roles.get(permission)
+        if allowed_roles and context.user_role not in allowed_roles:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tenes permisos para esta accion")
         return context
 
     return dependency
@@ -121,31 +155,15 @@ def require_roles(*roles: str):
     """
     Dependency to enforce that the current user has one of the allowed roles in the current hotel.
     """
-    def dependency(
-        context: AuthContext = Depends(get_auth_context),
-        db: Session = Depends(get_db),
-    ) -> AuthContext:
-        # Modo dev: si no hay user_id y ALLOW_ANON_ROLES está activo, permitir.
-        settings = get_settings()
-        if not context.user_id:
-            if getattr(settings, "ALLOW_ANON_ROLES", False):
-                return context
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Autenticación requerida")
-        # First, trust the user role from DB (so owners no quedan bloqueados por membresía faltante)
-        user = db.get(User, context.user_id)
-        if user and user.role in roles:
+    allowed = set(roles)
+
+    def dependency(context: AuthContext = Depends(get_auth_context)) -> AuthContext:
+        if not context.is_verified:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Verifica tu email para usar el sistema")
+        if context.user_role in allowed:
             return context
 
-        membership = db.query(HotelMembership).filter(
-            HotelMembership.hotel_id == context.hotel_id,
-            HotelMembership.user_id == context.user_id,
-            HotelMembership.status == "active",
-        ).first()
-        if membership and membership.role in roles:
-            return context
-
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tenés permisos para esta acción")
-        return context
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tenes permisos para esta accion")
 
     return dependency
 

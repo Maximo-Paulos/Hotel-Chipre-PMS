@@ -28,6 +28,8 @@ class PaymentLinkTestRead(BaseModel):
     external_payment_id: Optional[str] = None
     refunded_amount: Optional[float] = None
     email_sent_at: Optional[datetime] = None
+    sender_channel: Optional[str] = None
+    sender_email: Optional[str] = None
     expires_at: Optional[datetime] = None
     last_checked_at: Optional[datetime] = None
     last_error: Optional[str] = None

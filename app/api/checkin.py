@@ -60,7 +60,11 @@ def validate_guest(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(get_auth_context),
 ):
-    guest = db.query(Guest).filter(Guest.id == guest_id).first()
+    guest = (
+        db.query(Guest)
+        .filter(Guest.id == guest_id, Guest.hotel_id == context.hotel_id)
+        .first()
+    )
     if not guest:
         raise HTTPException(status_code=404, detail="Guest not found")
     errors = validate_guest_for_checkin(db, guest, hotel_id=context.hotel_id)

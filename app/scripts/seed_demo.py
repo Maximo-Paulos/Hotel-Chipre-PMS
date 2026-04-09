@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from app.database import init_db, get_session_factory
 from app.models import (
     HotelConfiguration,
+    HotelMembership,
     RoomCategory,
     Room,
     CategoryPricing,
@@ -73,9 +74,9 @@ def seed(db: Session):
     }
     cat_objs = {}
     for code, data in categories.items():
-        cat = db.query(RoomCategory).filter_by(code=code).first()
+        cat = db.query(RoomCategory).filter_by(code=code, hotel_id=config.id).first()
         if not cat:
-            cat = RoomCategory(code=code, **data)
+            cat = RoomCategory(code=code, hotel_id=config.id, **data)
             db.add(cat)
             db.flush()
         cat_objs[code] = cat
@@ -89,9 +90,10 @@ def seed(db: Session):
         ("201", 2, "STE"),
     ]
     for number, floor, code in rooms:
-        if not db.query(Room).filter_by(room_number=number).first():
+        if not db.query(Room).filter_by(room_number=number, hotel_id=config.id).first():
             db.add(
                 Room(
+                    hotel_id=config.id,
                     room_number=number,
                     floor=floor,
                     category_id=cat_objs[code].id,
@@ -102,7 +104,8 @@ def seed(db: Session):
 
     # Demo user
     demo_email = "demo@hotel.test"
-    if not db.query(User).filter(User.email.ilike(demo_email)).first():
+    demo_user = db.query(User).filter(User.email.ilike(demo_email)).first()
+    if not demo_user:
         db.add(
             User(
                 email=demo_email,
@@ -110,6 +113,18 @@ def seed(db: Session):
                 is_active=True,
                 is_verified=True,
                 role="owner",
+            )
+        )
+        db.flush()
+        demo_user = db.query(User).filter(User.email.ilike(demo_email)).first()
+
+    if demo_user and not db.query(HotelMembership).filter_by(hotel_id=config.id, user_id=demo_user.id).first():
+        db.add(
+            HotelMembership(
+                hotel_id=config.id,
+                user_id=demo_user.id,
+                role="owner",
+                status="active",
             )
         )
 

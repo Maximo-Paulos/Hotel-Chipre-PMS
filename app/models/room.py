@@ -35,8 +35,7 @@ class RoomCategory(Base):
     __tablename__ = "room_categories"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    # Default to single-hotel mode for tests/dev; multi-hotel is opt-in.
-    hotel_id = Column(Integer, ForeignKey("hotel_configuration.id"), nullable=False, default=1)
+    hotel_id = Column(Integer, ForeignKey("hotel_configuration.id"), nullable=False)
     name = Column(String(100), nullable=False)  # "Standard Double"
     code = Column(String(20), nullable=False)  # "STD_DBL"
     description = Column(Text, nullable=True)
@@ -65,7 +64,7 @@ class Room(Base):
     __tablename__ = "rooms"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    hotel_id = Column(Integer, ForeignKey("hotel_configuration.id"), nullable=False, default=1)
+    hotel_id = Column(Integer, ForeignKey("hotel_configuration.id"), nullable=False)
     room_number = Column(String(10), nullable=False)  # "101", "PH-1"
     floor = Column(Integer, nullable=False, default=1)
     category_id = Column(Integer, ForeignKey("room_categories.id"), nullable=False)

@@ -6,15 +6,17 @@ import {
   refreshPaymentLinkTest,
   type PaymentLinkTestCreatePayload,
 } from "../api/paymentLinkTests";
+import { hasValidSession } from "../api/client";
 import { useSession } from "../state/session";
 
-const paymentLinkTestsKey = (hotelId: number) => ["payment-link-tests", hotelId, "mercadopago"];
+const paymentLinkTestsKey = (hotelId: number | null) => ["payment-link-tests", hotelId, "mercadopago"];
 
 export function useMercadoPagoTests() {
   const { session } = useSession();
   return useQuery({
     queryKey: paymentLinkTestsKey(session.hotelId),
     queryFn: () => listPaymentLinkTests(session),
+    enabled: hasValidSession(session),
     refetchInterval: 30_000,
   });
 }

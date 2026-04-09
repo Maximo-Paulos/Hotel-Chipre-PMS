@@ -140,6 +140,7 @@ class TestReservationModel:
         """Verify can_transition_to method."""
         res = Reservation(
             confirmation_code="TEST-001",
+            hotel_id=1,
             guest_id=sample_guest.id,
             room_id=sample_rooms[0].id,
             category_id=sample_categories[0].id,
@@ -159,6 +160,7 @@ class TestReservationModel:
         """Verify balance_due computed property."""
         res = Reservation(
             confirmation_code="TEST-002",
+            hotel_id=1,
             guest_id=sample_guest.id,
             room_id=sample_rooms[0].id,
             category_id=sample_categories[0].id,
@@ -177,6 +179,7 @@ class TestReservationModel:
         """Verify nights calculation."""
         res = Reservation(
             confirmation_code="TEST-003",
+            hotel_id=1,
             guest_id=sample_guest.id,
             room_id=sample_rooms[0].id,
             category_id=sample_categories[0].id,
@@ -196,6 +199,7 @@ class TestTransactionModel:
         """Create a transaction and verify attributes."""
         res = Reservation(
             confirmation_code="TEST-TX-001",
+            hotel_id=1,
             guest_id=sample_guest.id,
             room_id=sample_rooms[0].id,
             category_id=sample_categories[0].id,
@@ -228,6 +232,7 @@ class TestTransactionModel:
         """Verify Transaction → Reservation relationship."""
         res = Reservation(
             confirmation_code="TEST-TX-002",
+            hotel_id=1,
             guest_id=sample_guest.id,
             room_id=sample_rooms[0].id,
             category_id=sample_categories[0].id,

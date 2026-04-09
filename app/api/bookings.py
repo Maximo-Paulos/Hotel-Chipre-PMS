@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.dependencies.auth import AuthContext, require_roles
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.guest import Guest
@@ -59,6 +60,7 @@ def availability(
     check_in_date: date | None = None,
     check_out_date: date | None = None,
     db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping")),
 ):
     """
     Lightweight availability placeholder. When all parameters are provided,
@@ -70,7 +72,13 @@ def availability(
             "available_rooms": [],
             "message": "Provide category_id, check_in_date, and check_out_date to check availability.",
         }
-    available = find_available_rooms(db, category_id, check_in_date, check_out_date)
+    available = find_available_rooms(
+        db,
+        category_id,
+        check_in_date,
+        check_out_date,
+        hotel_id=context.hotel_id,
+    )
     return {
         "status": "ok",
         "available_rooms": [room.id for room in available],
@@ -84,6 +92,7 @@ def price_quote(
     check_in_date: date,
     check_out_date: date,
     db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping")),
 ):
     """
     Calculate pricing for a potential booking without persisting it.
@@ -91,7 +100,7 @@ def price_quote(
     """
     try:
         nights, nightly_rate, total_amount, deposit_amount = compute_reservation_pricing(
-            db, category_id, check_in_date, check_out_date
+            db, category_id, check_in_date, check_out_date, hotel_id=context.hotel_id
         )
         return {
             "status": "ok",
@@ -105,17 +114,29 @@ def price_quote(
 
 
 @router.get("/", response_model=list[BookingRead])
-def list_bookings(db: Session = Depends(get_db)):
-    bookings = db.query(Reservation).order_by(Reservation.check_in_date).all()
+def list_bookings(
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping")),
+):
+    bookings = (
+        db.query(Reservation)
+        .filter(Reservation.hotel_id == context.hotel_id)
+        .order_by(Reservation.check_in_date)
+        .all()
+    )
     return [_booking_to_read(r) for r in bookings]
 
 
 @router.post("/", response_model=BookingRead, status_code=status.HTTP_201_CREATED)
-def create_booking(payload: BookingCreate, db: Session = Depends(get_db)):
+def create_booking(
+    payload: BookingCreate,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+):
     # Reuse the existing ReservationCreate schema to drive business logic
     reservation_payload = ReservationCreate(**payload.model_dump())
     try:
-        booking = create_reservation(db, reservation_payload)
+        booking = create_reservation(db, reservation_payload, hotel_id=context.hotel_id)
         db.commit()
         db.refresh(booking)
         return _booking_to_read(booking)
@@ -124,16 +145,24 @@ def create_booking(payload: BookingCreate, db: Session = Depends(get_db)):
 
 
 @router.get("/{booking_id}", response_model=BookingRead)
-def get_booking(booking_id: int, db: Session = Depends(get_db)):
-    booking = db.query(Reservation).filter(Reservation.id == booking_id).first()
+def get_booking(
+    booking_id: int,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping")),
+):
+    booking = db.query(Reservation).filter(Reservation.id == booking_id, Reservation.hotel_id == context.hotel_id).first()
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
     return _booking_to_read(booking)
 
 
 @router.post("/{booking_id}/cancel", response_model=BookingRead)
-def cancel_booking(booking_id: int, db: Session = Depends(get_db)):
-    booking = db.query(Reservation).filter(Reservation.id == booking_id).first()
+def cancel_booking(
+    booking_id: int,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+):
+    booking = db.query(Reservation).filter(Reservation.id == booking_id, Reservation.hotel_id == context.hotel_id).first()
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
     if booking.status in (ReservationStatusEnum.CHECKED_IN, ReservationStatusEnum.CHECKED_OUT):
@@ -141,7 +170,7 @@ def cancel_booking(booking_id: int, db: Session = Depends(get_db)):
     if booking.status == ReservationStatusEnum.CANCELLED:
         raise HTTPException(status_code=400, detail="Booking is already cancelled")
     try:
-        transition_reservation_status(db, booking, ReservationStatusEnum.CANCELLED)
+        transition_reservation_status(db, booking, ReservationStatusEnum.CANCELLED, context.hotel_id)
         db.commit()
         db.refresh(booking)
         return _booking_to_read(booking)
@@ -150,9 +179,13 @@ def cancel_booking(booking_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/{booking_id}/checkin", response_model=BookingRead)
-def checkin_booking(booking_id: int, db: Session = Depends(get_db)):
+def checkin_booking(
+    booking_id: int,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping")),
+):
     try:
-        booking = perform_checkin(db, booking_id)
+        booking = perform_checkin(db, booking_id, hotel_id=context.hotel_id)
         db.commit()
         db.refresh(booking)
         return _booking_to_read(booking)
@@ -161,9 +194,13 @@ def checkin_booking(booking_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/{booking_id}/checkout", response_model=BookingRead)
-def checkout_booking(booking_id: int, db: Session = Depends(get_db)):
+def checkout_booking(
+    booking_id: int,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping")),
+):
     try:
-        booking = perform_checkout(db, booking_id)
+        booking = perform_checkout(db, booking_id, hotel_id=context.hotel_id)
         db.commit()
         db.refresh(booking)
         return _booking_to_read(booking)
@@ -172,8 +209,13 @@ def checkout_booking(booking_id: int, db: Session = Depends(get_db)):
 
 
 @router.patch("/{booking_id}", response_model=BookingRead)
-def update_booking(booking_id: int, payload: BookingUpdate, db: Session = Depends(get_db)):
-    booking = db.query(Reservation).filter(Reservation.id == booking_id).first()
+def update_booking(
+    booking_id: int,
+    payload: BookingUpdate,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+):
+    booking = db.query(Reservation).filter(Reservation.id == booking_id, Reservation.hotel_id == context.hotel_id).first()
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
 
@@ -183,7 +225,7 @@ def update_booking(booking_id: int, payload: BookingUpdate, db: Session = Depend
     new_co = data.get("check_out_date", booking.check_out_date)
 
     # Validate category existence
-    category = db.query(RoomCategory).filter(RoomCategory.id == new_category_id).first()
+    category = db.query(RoomCategory).filter(RoomCategory.id == new_category_id, RoomCategory.hotel_id == context.hotel_id).first()
     if not category:
         raise HTTPException(status_code=400, detail="Category not found")
 
@@ -199,17 +241,31 @@ def update_booking(booking_id: int, payload: BookingUpdate, db: Session = Depend
 
     # Handle room change
         if "room_id" in data and data["room_id"] is not None:
-            room = db.query(Room).filter(Room.id == data["room_id"]).first()
+            room = db.query(Room).filter(Room.id == data["room_id"], Room.hotel_id == context.hotel_id).first()
             if not room:
                 raise HTTPException(status_code=400, detail="Room not found")
             if room.category_id != new_category_id:
                 raise HTTPException(status_code=400, detail="Room does not belong to the booking category")
-            if not check_room_availability(db, room.id, new_ci, new_co, exclude_reservation_id=booking.id):
+            if not check_room_availability(
+                db,
+                room.id,
+                new_ci,
+                new_co,
+                hotel_id=context.hotel_id,
+                exclude_reservation_id=booking.id,
+            ):
                 raise HTTPException(status_code=400, detail="Room is not available for the requested dates")
             booking.room_id = room.id
 
     # Validate current room availability with new dates
-    if booking.room_id and not check_room_availability(db, booking.room_id, new_ci, new_co, exclude_reservation_id=booking.id):
+    if booking.room_id and not check_room_availability(
+        db,
+        booking.room_id,
+        new_ci,
+        new_co,
+        hotel_id=context.hotel_id,
+        exclude_reservation_id=booking.id,
+    ):
         raise HTTPException(status_code=400, detail="Room is not available for the new dates")
 
     booking.category_id = new_category_id
@@ -219,7 +275,13 @@ def update_booking(booking_id: int, payload: BookingUpdate, db: Session = Depend
     # Recalculate totals when dates or category change
     if {"check_in_date", "check_out_date", "category_id"} & data.keys():
         try:
-            _, _, total_amount, deposit_amount = compute_reservation_pricing(db, new_category_id, new_ci, new_co)
+            _, _, total_amount, deposit_amount = compute_reservation_pricing(
+                db,
+                new_category_id,
+                new_ci,
+                new_co,
+                hotel_id=context.hotel_id,
+            )
             booking.total_amount = total_amount
             booking.deposit_amount = deposit_amount
         except ReservationError as e:
@@ -231,7 +293,7 @@ def update_booking(booking_id: int, payload: BookingUpdate, db: Session = Depend
 
     if "status" in data and data["status"]:
         try:
-            transition_reservation_status(db, booking, data["status"])
+            transition_reservation_status(db, booking, data["status"], context.hotel_id)
         except ReservationError as e:
             raise HTTPException(status_code=400, detail=str(e))
 
@@ -241,14 +303,18 @@ def update_booking(booking_id: int, payload: BookingUpdate, db: Session = Depend
 
 
 @router.post("/demo-seed")
-def seed_demo_bookings(db: Session = Depends(get_db)):
+def seed_demo_bookings(
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+):
     """Quickly seed demo bookings (requires DEMO_MODE=true)."""
     _require_demo_mode()
     today = date.today()
 
-    category = db.query(RoomCategory).first()
+    category = db.query(RoomCategory).filter(RoomCategory.hotel_id == context.hotel_id).first()
     if not category:
         category = RoomCategory(
+            hotel_id=context.hotel_id,
             name="Demo Category",
             code="DEMO",
             base_price_per_night=100.0,
@@ -257,18 +323,18 @@ def seed_demo_bookings(db: Session = Depends(get_db)):
         db.add(category)
         db.flush()
 
-    rooms = db.query(Room).filter(Room.category_id == category.id).all()
+    rooms = db.query(Room).filter(Room.category_id == category.id, Room.hotel_id == context.hotel_id).all()
     if not rooms:
         rooms = [
-            Room(room_number="D1", floor=1, category_id=category.id, status=RoomStatusEnum.AVAILABLE),
-            Room(room_number="D2", floor=1, category_id=category.id, status=RoomStatusEnum.AVAILABLE),
+            Room(hotel_id=context.hotel_id, room_number="D1", floor=1, category_id=category.id, status=RoomStatusEnum.AVAILABLE),
+            Room(hotel_id=context.hotel_id, room_number="D2", floor=1, category_id=category.id, status=RoomStatusEnum.AVAILABLE),
         ]
         db.add_all(rooms)
         db.flush()
 
-    guest = db.query(Guest).first()
+    guest = db.query(Guest).filter(Guest.hotel_id == context.hotel_id).first()
     if not guest:
-        guest = Guest(first_name="Demo", last_name="Guest", email="demo@example.com")
+        guest = Guest(first_name="Demo", last_name="Guest", email="demo@example.com", hotel_id=context.hotel_id)
         db.add(guest)
         db.flush()
 
@@ -285,7 +351,7 @@ def seed_demo_bookings(db: Session = Depends(get_db)):
             num_adults=2,
         )
         try:
-            res = create_reservation(db, payload)
+            res = create_reservation(db, payload, hotel_id=context.hotel_id)
             created_ids.append(res.id)
         except ReservationError:
             continue
@@ -295,8 +361,12 @@ def seed_demo_bookings(db: Session = Depends(get_db)):
 
 
 @router.delete("/{booking_id}")
-def delete_booking(booking_id: int, db: Session = Depends(get_db)):
-    booking = db.query(Reservation).filter(Reservation.id == booking_id).first()
+def delete_booking(
+    booking_id: int,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+):
+    booking = db.query(Reservation).filter(Reservation.id == booking_id, Reservation.hotel_id == context.hotel_id).first()
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
     # Avoid deleting checked-in/checked-out bookings to preserve history

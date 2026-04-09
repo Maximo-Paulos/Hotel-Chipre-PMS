@@ -1,6 +1,7 @@
 """
 Security helpers: password hashing and JWT issuing/validation.
 """
+import hashlib
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
@@ -22,6 +23,21 @@ if not hasattr(_bcrypt, "__about__"):
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
+def _jwt_secret(kind: str) -> str:
+    """
+    Derive a token-specific secret from the master JWT secret so access and
+    invite/reset tokens do not share the exact same signing key.
+    """
+    settings = get_settings()
+    base_secret = getattr(settings, "JWT_SECRET", "change-me") or "change-me"
+    explicit_secret = getattr(settings, f"{kind.upper()}_TOKEN_SECRET", "") or getattr(
+        settings, f"JWT_{kind.upper()}_SECRET", ""
+    )
+    if explicit_secret:
+        return explicit_secret
+    return hashlib.sha256(f"{base_secret}:{kind}".encode("utf-8")).hexdigest()
+
+
 def hash_password(password: str) -> str:
     return pwd_context.hash(password)
 
@@ -38,14 +54,14 @@ def create_access_token(subject: str | int, extra: Optional[Dict[str, Any]] = No
         to_encode.update(extra)
     expire = datetime.now(timezone.utc) + timedelta(minutes=expire_minutes)
     to_encode["exp"] = expire
-    secret = getattr(settings, "JWT_SECRET", "change-me")
+    secret = _jwt_secret("access")
     algorithm = getattr(settings, "JWT_ALGORITHM", "HS256")
     return jwt.encode(to_encode, secret, algorithm=algorithm)
 
 
 def decode_access_token(token: str) -> Dict[str, Any]:
     settings = get_settings()
-    secret = getattr(settings, "JWT_SECRET", "change-me")
+    secret = _jwt_secret("access")
     algorithm = getattr(settings, "JWT_ALGORITHM", "HS256")
     try:
         return jwt.decode(token, secret, algorithms=[algorithm])
@@ -59,13 +75,18 @@ def create_signed_token(payload: Dict[str, Any], expires_minutes: int = 60) -> s
     settings = get_settings()
     expire = datetime.now(timezone.utc) + timedelta(minutes=expires_minutes)
     body = {**payload, "exp": expire}
-    secret = getattr(settings, "JWT_SECRET", "change-me")
+    secret = _jwt_secret("signed")
     algorithm = getattr(settings, "JWT_ALGORITHM", "HS256")
     return jwt.encode(body, secret, algorithm=algorithm)
 
 
 def decode_signed_token(token: str) -> Dict[str, Any]:
     settings = get_settings()
-    secret = getattr(settings, "JWT_SECRET", "change-me")
+    secret = _jwt_secret("signed")
     algorithm = getattr(settings, "JWT_ALGORITHM", "HS256")
-    return jwt.decode(token, secret, algorithms=[algorithm])
+    try:
+        return jwt.decode(token, secret, algorithms=[algorithm])
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expirado")
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token invalido")

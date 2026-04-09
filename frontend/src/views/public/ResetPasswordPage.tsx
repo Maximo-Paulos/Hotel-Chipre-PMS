@@ -3,13 +3,13 @@ import { Link, useNavigate } from "react-router-dom";
 
 import { ApiError } from "../../api/client";
 import { requestPasswordReset, resetPassword } from "../../api/auth";
-import { useSession } from "../../state/session";
+import { normalizeRole, useSession } from "../../state/session";
 
 type Step = 1 | 2 | 3;
 
 export function ResetPasswordPage() {
   const navigate = useNavigate();
-  const { session, login } = useSession();
+  const { login } = useSession();
 
   const [step, setStep] = useState<Step>(1);
   const [email, setEmail] = useState("");
@@ -58,11 +58,16 @@ export function ResetPasswordPage() {
     setLoading(true);
     try {
       const res = await resetPassword(email.trim(), code.trim(), password);
+      if (!res.hotel_id) {
+        throw new ApiError(500, "La respuesta de recuperación no devolvió un hotel válido.");
+      }
       login({
         userId: res.user.email,
         email: res.user.email,
-        hotelId: res.hotel_id ?? session.hotelId,
-        role: (res.user.role as "owner" | "receptionist") || session.role,
+        hotelId: res.hotel_id,
+        hotelIds: res.hotel_ids?.length ? res.hotel_ids : [res.hotel_id],
+        role: normalizeRole(res.user.role),
+        baseRole: normalizeRole(res.user.role),
         accessToken: res.access_token,
         isVerified: res.user.is_verified
       });

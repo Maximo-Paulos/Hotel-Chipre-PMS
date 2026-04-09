@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
 from app.database import init_db, get_db, Base
-from app.config import get_settings
+from app.config import get_settings, is_demo_mode, is_production_mode, validate_runtime_security
 from app.api import (
     rooms,
     guests,
@@ -23,11 +23,9 @@ from app.api import (
     ota_webhooks,
     config,
     reports,
-    connections,
     bookings,
     onboarding,
     users,
-    email,
     subscription,
     demo,
     auth,
@@ -82,6 +80,7 @@ def _maybe_send_startup_email():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize database on application startup."""
+    validate_runtime_security()
     init_db()
     _maybe_send_startup_email()
     yield
@@ -121,11 +120,10 @@ app.include_router(checkin.router)
 app.include_router(ota_webhooks.router)
 app.include_router(config.router)
 app.include_router(reports.router)
-app.include_router(connections.router)
-app.include_router(email.router)
 app.include_router(subscription.router)
 app.include_router(users.router)
-app.include_router(demo.router)
+if is_demo_mode() or not is_production_mode():
+    app.include_router(demo.router, include_in_schema=is_demo_mode())
 app.include_router(auth.router)
 app.include_router(invitations.router)
 app.include_router(integrations.router)
@@ -179,6 +177,35 @@ def _frontend_placeholder() -> HTMLResponse:
 @app.get("/health")
 def health_check():
     return {"status": "ok", "system": "Hotel PMS v1.0.0"}
+
+
+@app.api_route(
+    "/api/connections/{legacy_path:path}",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    include_in_schema=False,
+)
+def legacy_connections_removed(legacy_path: str):
+    raise HTTPException(
+        status_code=410,
+        detail="La API legacy /api/connections fue retirada. Usa /api/integrations.",
+    )
+
+
+@app.api_route(
+    "/api/email/{legacy_path:path}",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    include_in_schema=False,
+)
+@app.api_route(
+    "/api/email",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    include_in_schema=False,
+)
+def legacy_email_routes_removed(legacy_path: str = ""):
+    raise HTTPException(
+        status_code=410,
+        detail="La API publica /api/email fue retirada. Usa los flujos oficiales de /api/auth.",
+    )
 
 
 @app.get("/")

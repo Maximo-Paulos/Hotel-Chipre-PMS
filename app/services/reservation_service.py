@@ -37,13 +37,13 @@ def _resolve_hotel_id(
     room: Optional[Room] = None,
 ) -> int:
     """
-    Resolve hotel_id using explicit parameter first, then category/room defaults,
-    and finally fall back to single-hotel mode (id=1).
+    Resolve hotel_id using explicit parameter first, then category/room ownership.
+    Never fall back to a global/single-hotel default.
     """
-    for candidate in (hotel_id, getattr(category, "hotel_id", None), getattr(room, "hotel_id", None), 1):
+    for candidate in (hotel_id, getattr(category, "hotel_id", None), getattr(room, "hotel_id", None)):
         if candidate is not None:
             return candidate
-    return 1
+    raise ReservationError("hotel_id is required for reservation operations")
 
 
 def compute_reservation_pricing(
@@ -62,12 +62,19 @@ def compute_reservation_pricing(
         raise ReservationError(f"Room category with id={category_id} not found")
 
     hotel_id = _resolve_hotel_id(hotel_id, category)
+    if category.hotel_id != hotel_id:
+        raise ReservationError("Room category does not belong to the active hotel")
 
     nights = (check_out - check_in).days
     if nights <= 0:
         raise ReservationError("Check-out date must be after check-in date")
 
-    pricing = db.query(CategoryPricing).filter(CategoryPricing.category_id == category_id).first()
+    pricing = (
+        db.query(CategoryPricing)
+        .join(RoomCategory, RoomCategory.id == CategoryPricing.category_id)
+        .filter(CategoryPricing.category_id == category_id, RoomCategory.hotel_id == hotel_id)
+        .first()
+    )
     nightly_rate = pricing.price_cash if pricing and pricing.price_cash is not None else category.base_price_per_night
 
     total_amount = round(nightly_rate * nights, 2)
@@ -97,6 +104,8 @@ def check_room_availability(
         raise ReservationError(f"Room with id={room_id} not found")
 
     hotel_id = _resolve_hotel_id(hotel_id, room=room)
+    if room.hotel_id != hotel_id:
+        raise ReservationError("Room does not belong to the active hotel")
 
     query = db.query(Reservation).filter(
         Reservation.room_id == room_id,
@@ -133,6 +142,8 @@ def find_available_rooms(
         raise ReservationError(f"Room category with id={category_id} not found")
 
     hotel_id = _resolve_hotel_id(hotel_id, category)
+    if category.hotel_id != hotel_id:
+        raise ReservationError("Room category does not belong to the active hotel")
 
     candidate_rooms = db.query(Room).filter(
         Room.category_id == category_id,
@@ -180,6 +191,10 @@ def create_reservation(db: Session, data: ReservationCreate, hotel_id: Optional[
         raise ReservationError(f"Room category with id={data.category_id} not found")
 
     hotel_id = _resolve_hotel_id(hotel_id, category)
+    if guest.hotel_id != hotel_id:
+        raise ReservationError("Guest does not belong to the active hotel")
+    if category.hotel_id != hotel_id:
+        raise ReservationError("Room category does not belong to the active hotel")
 
     nights, price_night, total_amount, deposit_amount = compute_reservation_pricing(
         db, data.category_id, data.check_in_date, data.check_out_date, hotel_id

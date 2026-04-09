@@ -3,22 +3,24 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { getHotelConfig } from "../api/config";
 import { safeHotelId, useSession } from "../state/session";
+import { hasValidSession } from "../api/client";
 
 type HotelOption = { id: number; hotel_name?: string };
 
 export function HotelSelector() {
   const queryClient = useQueryClient();
   const { session, setHotelId } = useSession();
-  const [value, setValue] = useState(String(session.hotelId));
+  const [value, setValue] = useState(session.hotelId ? String(session.hotelId) : "");
 
   useEffect(() => {
-    setValue(String(session.hotelId));
+    setValue(session.hotelId ? String(session.hotelId) : "");
   }, [session.hotelId]);
 
   const { data: hotels, isLoading } = useQuery<HotelOption[]>({
-    queryKey: ["hotels-list", session.hotelIds?.join(",") || session.hotelId],
+    queryKey: ["hotels-list", session.hotelIds?.join(",") || session.hotelId || "none"],
+    enabled: hasValidSession(session),
     queryFn: async () => {
-      const ids = session.hotelIds?.length ? session.hotelIds : [session.hotelId];
+      const ids = session.hotelIds?.length ? session.hotelIds : session.hotelId ? [session.hotelId] : [];
       const results: HotelOption[] = [];
       for (const id of ids) {
         try {
@@ -35,15 +37,24 @@ export function HotelSelector() {
 
   const options = useMemo(() => {
     if (hotels?.length) return hotels;
-    const ids = session.hotelIds?.length ? session.hotelIds : [safeHotelId(session.hotelId)];
-    return ids.map((id) => ({ id, hotel_name: "Hotel activo" }));
+    const ids = session.hotelIds?.length ? session.hotelIds : session.hotelId ? [safeHotelId(session.hotelId)] : [];
+    return ids.filter((id): id is number => typeof id === "number").map((id) => ({ id, hotel_name: "Hotel activo" }));
   }, [hotels, session.hotelId, session.hotelIds]);
 
   const apply = () => {
     const next = safeHotelId(value);
+    if (!next) return;
     setHotelId(next);
     queryClient.invalidateQueries();
   };
+
+  if (!hasValidSession(session)) {
+    return (
+      <div className="rounded-lg border border-dashed border-slate-200 bg-white px-3 py-2 text-sm text-slate-500 shadow-sm">
+        Iniciá sesión para elegir un hotel activo.
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 shadow-sm">
@@ -55,6 +66,9 @@ export function HotelSelector() {
         onBlur={apply}
         disabled={isLoading}
       >
+        <option value="" disabled>
+          Seleccioná un hotel
+        </option>
         {options.map((opt) => (
           <option key={opt.id} value={opt.id}>
             {opt.hotel_name ? `${opt.hotel_name} (ID ${opt.id})` : `Hotel ${opt.id}`}
@@ -69,7 +83,7 @@ export function HotelSelector() {
       >
         Aplicar
       </button>
-      <span className="text-xs text-emerald-700">ID {safeHotelId(value)}</span>
+      <span className="text-xs text-emerald-700">ID {safeHotelId(value) ?? "—"}</span>
     </div>
   );
 }

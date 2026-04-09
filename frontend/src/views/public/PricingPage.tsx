@@ -124,7 +124,7 @@ export function PricingPage() {
           <div className="rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-lg">
             <p className="text-sm font-semibold text-slate-600">Resumen rápido</p>
             <ul className="mt-3 space-y-2 text-sm text-slate-700">
-              <li>· Header X-User-Id y X-Hotel-Id siempre presentes.</li>
+              <li>· El contexto de hotel solo se envía cuando la sesión es válida.</li>
               <li>· Room limit por plan para evitar sobreventa.</li>
               <li>· Bandeja de estado de suscripción con can_write.</li>
             </ul>
@@ -153,7 +153,7 @@ export function PricingPage() {
           </div>
           <div>
             <p className="text-xs uppercase tracking-wide text-slate-500">Seguridad</p>
-            <p className="mt-1 text-sm text-slate-700">JWT + headers X-User-Id / X-Hotel-Id.</p>
+            <p className="mt-1 text-sm text-slate-700">JWT + contexto de hotel validado por sesión activa.</p>
           </div>
         </div>
       </div>
