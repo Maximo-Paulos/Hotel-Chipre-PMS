@@ -15,6 +15,7 @@ env/
 
 # Environment variables
 .env
+frontend/.env.local
 
 # IDE
 .vscode/
@@ -33,6 +34,11 @@ env/
 # OS files
 Thumbs.db
 .DS_Store
+
+# Local runtime artifacts
+*.log
+backend-runtime*.log
+frontend-runtime*.log
 
 # Frontend
 frontend/node_modules/

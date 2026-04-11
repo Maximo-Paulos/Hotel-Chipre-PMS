@@ -17,6 +17,7 @@ export type PaymentSummary = {
   reservation_id: number;
   confirmation_code: string;
   status: string;
+  currency_code: string;
   total_amount: number;
   deposit_required: number;
   amount_paid: number;
@@ -25,6 +26,7 @@ export type PaymentSummary = {
   transactions: Array<{
     id: number;
     amount: number;
+    currency: string;
     method: string;
     type: string;
     status: string;

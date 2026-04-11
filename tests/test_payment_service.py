@@ -11,6 +11,7 @@ import pytest
 from datetime import date
 
 from app.models.hotel_config import HotelConfiguration
+from app.models.operations import BillingAdjustment, BillingAdjustmentTypeEnum
 from app.models.pricing import CategoryPricing
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.transaction import Transaction, PaymentMethodEnum, TransactionStatusEnum, TransactionTypeEnum
@@ -385,4 +386,166 @@ class TestPaymentEdgeCases:
         db.refresh(res)
         assert res.amount_paid == 0.0  # No change
         assert res.status == ReservationStatusEnum.PENDING  # No transition
+
+    def test_refund_reduces_amount_paid_and_reopens_financial_status(self, db, sample_guest, sample_rooms, sample_categories, hotel_config):
+        data = ReservationCreate(
+            guest_id=sample_guest.id,
+            category_id=sample_categories[0].id,
+            check_in_date=date(2026, 8, 10),
+            check_out_date=date(2026, 8, 15),  # $500
+        )
+        res = create_reservation(db, data, hotel_id=1)
+        db.flush()
+
+        full_payment = PaymentRequest(
+            reservation_id=res.id,
+            amount=500.0,
+            payment_method=PaymentMethodEnum.CASH,
+            transaction_type=TransactionTypeEnum.FULL_PAYMENT,
+        )
+        process_payment(db, full_payment, hotel_id=DEFAULT_HOTEL_ID)
+        db.flush()
+        db.refresh(res)
+        assert res.status == ReservationStatusEnum.FULLY_PAID
+
+        refund = PaymentRequest(
+            reservation_id=res.id,
+            amount=200.0,
+            payment_method=PaymentMethodEnum.CASH,
+            transaction_type=TransactionTypeEnum.REFUND,
+        )
+        tx = process_payment(db, refund, hotel_id=DEFAULT_HOTEL_ID)
+        db.flush()
+
+        assert tx.status == TransactionStatusEnum.COMPLETED
+        db.refresh(res)
+        assert res.amount_paid == 300.0
+        assert res.status == ReservationStatusEnum.DEPOSIT_PAID
+        assert res.balance_due == 200.0
+
+    def test_financial_summary_includes_billing_adjustments_and_operational_balance(self, db, sample_guest, sample_rooms, sample_categories, hotel_config):
+        data = ReservationCreate(
+            guest_id=sample_guest.id,
+            category_id=sample_categories[0].id,
+            check_in_date=date(2026, 8, 20),
+            check_out_date=date(2026, 8, 22),  # $200
+        )
+        res = create_reservation(db, data, hotel_id=1)
+        db.flush()
+
+        process_payment(
+            db,
+            PaymentRequest(
+                reservation_id=res.id,
+                amount=100.0,
+                payment_method=PaymentMethodEnum.CASH,
+                transaction_type=TransactionTypeEnum.PARTIAL_PAYMENT,
+            ),
+            hotel_id=DEFAULT_HOTEL_ID,
+        )
+        db.add(
+            BillingAdjustment(
+                hotel_id=DEFAULT_HOTEL_ID,
+                reservation_id=res.id,
+                adjustment_type=BillingAdjustmentTypeEnum.CHARGE,
+                amount=50.0,
+                currency_code="ARS",
+                total_amount=50.0,
+                notes="Upgrade operativo",
+            )
+        )
+        db.flush()
+
+        summary = get_reservation_financial_summary(db, DEFAULT_HOTEL_ID, res.id)
+        assert summary["total_amount"] == 200.0
+        assert summary["billing_adjustment_total"] == 50.0
+        assert summary["operational_total_amount"] == 250.0
+        assert summary["completed_payments"] == 100.0
+        assert summary["operational_balance_due"] == 150.0
+        assert summary["recommended_next_action"] == "collect_from_guest"
+        assert len(summary["billing_adjustments"]) == 1
+
+    def test_payment_does_not_override_reservation_total_from_legacy_category_pricing(
+        self,
+        db,
+        sample_guest,
+        sample_rooms,
+        sample_categories,
+        hotel_config,
+    ):
+        data = ReservationCreate(
+            guest_id=sample_guest.id,
+            category_id=sample_categories[0].id,
+            check_in_date=date(2026, 8, 24),
+            check_out_date=date(2026, 8, 26),  # $200
+        )
+        res = create_reservation(db, data, hotel_id=1)
+        db.flush()
+        _assign_hotel(res, DEFAULT_HOTEL_ID, db)
+
+        db.add(
+            CategoryPricing(
+                category_id=sample_categories[0].id,
+                price_cash=999.0,
+                price_transfer=999.0,
+                price_mercadopago=999.0,
+            )
+        )
+        db.flush()
+
+        original_total = res.total_amount
+        original_deposit = res.deposit_amount
+
+        process_payment(
+            db,
+            PaymentRequest(
+                reservation_id=res.id,
+                amount=50.0,
+                payment_method=PaymentMethodEnum.CASH,
+                transaction_type=TransactionTypeEnum.PARTIAL_PAYMENT,
+            ),
+            hotel_id=DEFAULT_HOTEL_ID,
+        )
+        db.flush()
+        db.refresh(res)
+
+        assert res.total_amount == original_total
+        assert res.deposit_amount == original_deposit
+        assert res.amount_paid == 50.0
+
+    def test_payment_inherits_reservation_currency_when_request_omits_it(
+        self,
+        db,
+        sample_guest,
+        sample_rooms,
+        sample_categories,
+        hotel_config,
+    ):
+        data = ReservationCreate(
+            guest_id=sample_guest.id,
+            category_id=sample_categories[0].id,
+            check_in_date=date(2026, 8, 27),
+            check_out_date=date(2026, 8, 29),
+        )
+        res = create_reservation(db, data, hotel_id=1)
+        res.currency_code = "USD"
+        db.flush()
+        _assign_hotel(res, DEFAULT_HOTEL_ID, db)
+
+        tx = process_payment(
+            db,
+            PaymentRequest(
+                reservation_id=res.id,
+                amount=30.0,
+                payment_method=PaymentMethodEnum.CASH,
+                transaction_type=TransactionTypeEnum.DEPOSIT,
+            ),
+            hotel_id=DEFAULT_HOTEL_ID,
+        )
+        db.flush()
+
+        summary = get_reservation_financial_summary(db, DEFAULT_HOTEL_ID, res.id)
+        assert tx.currency == "USD"
+        assert summary["currency_code"] == "USD"
+        assert summary["transactions"][0]["currency"] == "USD"
 

@@ -13,7 +13,7 @@ class PaymentRequest(BaseModel):
     amount: float = Field(..., gt=0)
     payment_method: PaymentMethodEnum
     transaction_type: TransactionTypeEnum
-    currency: str = "ARS"
+    currency: Optional[str] = Field(default=None, min_length=3, max_length=3)
     description: Optional[str] = None
 
 

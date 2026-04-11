@@ -2,10 +2,9 @@ import { useMemo } from "react";
 import { Link } from "react-router-dom";
 
 import { type ReservationStatus } from "../../api/reservations";
-import { useReservations } from "../../hooks/useReservations";
+import { usePendingReservationActions, useReservations } from "../../hooks/useReservations";
 import { useRooms } from "../../hooks/useRooms";
-
-const currency = new Intl.NumberFormat("es-AR", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+import { formatMoney, resolveSingleCurrencyCode } from "../../utils/currency";
 
 const statusClass = (status: ReservationStatus) => {
   switch (status) {
@@ -29,8 +28,11 @@ const todayIso = () => new Date().toISOString().slice(0, 10);
 export function DashboardPage() {
   const today = todayIso();
   const { data: reservations = [] } = useReservations({});
+  const pendingActionsQuery = usePendingReservationActions(8);
   const { roomsQuery } = useRooms();
   const rooms = roomsQuery.data || [];
+  const pendingActions = pendingActionsQuery.data || [];
+  const criticalPendingActions = pendingActions.filter((item) => item.priority === "critical").length;
 
   const cards = useMemo(() => {
     const occupied = rooms.filter((r) => r.status === "occupied").length;
@@ -38,6 +40,7 @@ export function DashboardPage() {
 
     const currentMonth = new Date(today).getMonth();
     const adrBase = reservations.filter((r) => new Date(r.check_in_date).getMonth() === currentMonth);
+    const monthCurrencyCode = resolveSingleCurrencyCode(adrBase.map((r) => r.currency_code));
     const adr =
       adrBase.length > 0
         ? adrBase.reduce((acc, r) => {
@@ -52,10 +55,23 @@ export function DashboardPage() {
 
     return [
       { label: "Ocupación hoy", value: `${occupancy}%`, helper: `${arrivalsToday} llegadas` },
-      { label: "ADR", value: currency.format(Math.round(adr || 0)), helper: "Tarifa promedio mes" },
-      { label: "Revenue mes", value: currency.format(Math.round(revenue || 0)), helper: `${departuresToday} salidas hoy` }
+      {
+        label: "ADR",
+        value: monthCurrencyCode ? formatMoney(Math.round(adr || 0), monthCurrencyCode) : "Multimoneda",
+        helper: monthCurrencyCode ? "Tarifa promedio mes" : "Mes con reservas en distintas monedas"
+      },
+      {
+        label: "Revenue mes",
+        value: monthCurrencyCode ? formatMoney(Math.round(revenue || 0), monthCurrencyCode) : "Multimoneda",
+        helper: monthCurrencyCode ? `${departuresToday} salidas hoy` : "Revisar detalle por reserva"
+      },
+      {
+        label: "Acciones pendientes",
+        value: String(pendingActions.length),
+        helper: criticalPendingActions > 0 ? `${criticalPendingActions} críticas` : "Sin críticas"
+      }
     ];
-  }, [reservations, rooms, today]);
+  }, [criticalPendingActions, pendingActions.length, reservations, rooms, today]);
 
   const arrivals = useMemo(
     () =>
@@ -87,7 +103,7 @@ export function DashboardPage() {
         <div>
           <p className="text-xs uppercase tracking-wide text-slate-500">Dashboard</p>
           <h1 className="text-2xl font-semibold text-slate-900">Visión general</h1>
-          <p className="text-sm text-slate-600">KPIs en vivo y próximas llegadas/salidas para el hotel activo.</p>
+          <p className="text-sm text-slate-600">KPIs en vivo, llegadas/salidas y acciones operativas del hotel activo.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Link
@@ -105,7 +121,7 @@ export function DashboardPage() {
         </div>
       </header>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-4">
         {cards.map((card) => (
           <div key={card.label} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <p className="text-sm text-slate-500">{card.label}</p>
@@ -150,7 +166,9 @@ export function DashboardPage() {
                         {reservation.status}
                       </span>
                     </td>
-                    <td className="px-4 py-2 text-right font-semibold text-slate-900">{currency.format(reservation.total_amount ?? 0)}</td>
+                    <td className="px-4 py-2 text-right font-semibold text-slate-900">
+                      {formatMoney(reservation.total_amount ?? 0, reservation.currency_code)}
+                    </td>
                   </tr>
                 ))}
                 {arrivals.length === 0 && (
@@ -182,6 +200,60 @@ export function DashboardPage() {
             ))}
             {activities.length === 0 && <p className="text-sm text-slate-500">Sin actividad para hoy.</p>}
           </div>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-xs uppercase tracking-wide text-slate-500">Operación</p>
+            <h2 className="text-lg font-semibold text-slate-900">Bandeja operativa</h2>
+          </div>
+          <Link to="/reservas" className="text-sm font-semibold text-brand-700 hover:underline">
+            Ir a Reservas
+          </Link>
+        </div>
+        <div className="mt-3 space-y-3">
+          {pendingActionsQuery.isLoading ? (
+            <p className="text-sm text-slate-500">Cargando acciones pendientes...</p>
+          ) : pendingActions.length === 0 ? (
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+              No hay acciones operativas pendientes.
+            </div>
+          ) : (
+            pendingActions.map((action) => (
+              <div key={action.action_key} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span
+                        className={`rounded-full px-2 py-1 text-[11px] font-semibold ${
+                          action.priority === "critical"
+                            ? "bg-rose-100 text-rose-800"
+                            : action.priority === "high"
+                              ? "bg-amber-100 text-amber-800"
+                              : action.priority === "medium"
+                                ? "bg-sky-100 text-sky-800"
+                                : "bg-slate-100 text-slate-700"
+                        }`}
+                      >
+                        {action.priority}
+                      </span>
+                      <span className="text-xs font-semibold text-slate-700">{action.confirmation_code}</span>
+                    </div>
+                    <p className="mt-1 text-sm font-semibold text-slate-900">{action.title}</p>
+                    <p className="text-sm text-slate-600">{action.detail}</p>
+                  </div>
+                  <div className="text-right text-xs text-slate-500">
+                    <p>
+                      {action.check_in_date} ? {action.check_out_date}
+                    </p>
+                    <p>{action.source_provider_code || action.source}</p>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
     </div>

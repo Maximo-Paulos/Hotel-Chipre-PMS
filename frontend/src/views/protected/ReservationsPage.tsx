@@ -1,17 +1,30 @@
-﻿import React, { useMemo, useRef, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation } from "@tanstack/react-query";
 
-import { type Reservation, type ReservationSource, type ReservationStatus } from "../../api/reservations";
+import {
+  type Reservation,
+  type ReservationPendingAction,
+  type ReservationSource,
+  type ReservationStatus
+} from "../../api/reservations";
 import { checkRoomAvailability, type RoomAvailabilityResponse } from "../../api/rooms";
 import { type PaymentMethod } from "../../api/payments";
 import { useCategories } from "../../hooks/useCategories";
 import { useGuest, useGuestCreate } from "../../hooks/useGuests";
-import { useReservationMutations, useReservations } from "../../hooks/useReservations";
+import {
+  usePendingReservationActions,
+  useReservation,
+  useReservationActionMutations,
+  useReservationMutations,
+  useReservationOperationsSummary,
+  useReservations
+} from "../../hooks/useReservations";
 import { usePaymentMutation, usePaymentSummary } from "../../hooks/usePayments";
 import { useRooms } from "../../hooks/useRooms";
 import { useSubscriptionStatus } from "../../hooks/useSubscription";
 import { useSession } from "../../state/session";
+import { formatMoney, normalizeCurrencyCode } from "../../utils/currency";
 import StatCard from "../../components/StatCard";
 
 type FormState = {
@@ -26,8 +39,6 @@ type FormState = {
   source: ReservationSource;
   status: ReservationStatus;
 };
-
-const currency = new Intl.NumberFormat("es-AR", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 
 const paymentMethodOptions: { value: PaymentMethod; label: string }[] = [
   { value: "cash", label: "Efectivo" },
@@ -45,6 +56,13 @@ const statusConfig: Record<ReservationStatus, { label: string; className: string
   checked_in: { label: "Check-in", className: "bg-emerald-200 text-emerald-900" },
   checked_out: { label: "Check-out", className: "bg-sky-100 text-sky-800" },
   cancelled: { label: "Cancelada", className: "bg-rose-100 text-rose-800" }
+};
+
+const priorityConfig: Record<ReservationPendingAction["priority"], { label: string; className: string }> = {
+  critical: { label: "Crítica", className: "bg-rose-100 text-rose-800" },
+  high: { label: "Alta", className: "bg-amber-100 text-amber-800" },
+  medium: { label: "Media", className: "bg-sky-100 text-sky-800" },
+  low: { label: "Baja", className: "bg-slate-100 text-slate-700" }
 };
 
 const defaultFormState = (): FormState => ({
@@ -87,7 +105,7 @@ export function ReservationsPage() {
     })()
   });
   const [calendarRange, setCalendarRange] = useState<"week" | "month">("week");
-  const [detailsReservation, setDetailsReservation] = useState<Reservation | null>(null);
+  const [detailsReservationId, setDetailsReservationId] = useState<number | null>(null);
   const [guestIdOpen, setGuestIdOpen] = useState<number | null>(null);
   const toastTimeout = useRef<number | null>(null);
   const [toast, setToast] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
@@ -115,17 +133,23 @@ export function ReservationsPage() {
   };
 
   const { data: reservations = [], isLoading, isFetching, error } = useReservations(filters);
+  const pendingActionsQuery = usePendingReservationActions(12);
   const { roomsQuery } = useRooms();
   const { data: categoriesData = [] } = useCategories();
   const guestMutation = useGuestCreate();
   const guestQuery = useGuest(guestIdOpen ?? undefined);
   const paymentSummaryQuery = usePaymentSummary(editing?.id || undefined);
-  const detailsSummaryQuery = usePaymentSummary(detailsReservation?.id || undefined);
+  const detailsReservationQuery = useReservation(detailsReservationId ?? undefined);
+  const detailsReservation =
+    detailsReservationQuery.data ?? reservations.find((item) => item.id === detailsReservationId) ?? null;
+  const detailsSummaryQuery = usePaymentSummary(detailsReservationId || undefined);
+  const detailsOperationsQuery = useReservationOperationsSummary(detailsReservationId || undefined);
   const paymentMutation = usePaymentMutation(editing?.id || undefined);
   const availabilityMutation = useMutation<RoomAvailabilityResponse, unknown, { category_id: number; check_in_date: string; check_out_date: string }>({
     mutationFn: (payload) => checkRoomAvailability(payload, session)
   });
   const { createMutation, updateMutation, cancelMutation, checkInMutation, checkOutMutation } = useReservationMutations(filters);
+  const { resolveExternalMutation, clearManualReviewMutation } = useReservationActionMutations(filters);
 
   const showToast = (type: "success" | "error" | "info", message: string) => {
     if (toastTimeout.current) {
@@ -203,6 +227,8 @@ export function ReservationsPage() {
       { active: 0, checkInsToday: 0, checkOutsToday: 0, cancelled: 0 }
     );
   }, [reservations, today]);
+  const pendingActions = pendingActionsQuery.data ?? [];
+  const criticalPendingActions = pendingActions.filter((item) => item.priority === "critical").length;
 
   const openCreate = () => {
     if (subscriptionBlocked) {
@@ -393,7 +419,14 @@ export function ReservationsPage() {
 
   const paymentSummary = paymentSummaryQuery.data;
   const detailsSummary = detailsSummaryQuery.data;
+  const detailsOperations = detailsOperationsQuery.data;
   const detailsGuest = useGuest(detailsReservation?.guest_id || undefined).data;
+  const editingCurrencyCode = normalizeCurrencyCode(paymentSummary?.currency_code ?? editing?.currency_code);
+  const detailsCurrencyCode = normalizeCurrencyCode(
+    detailsSummary?.currency_code ??
+      detailsOperations?.financial_summary.currency_code ??
+      detailsReservation?.currency_code
+  );
 
   const handlePayDeposit = () => {
     if (!editing || !paymentSummary) return;
@@ -407,7 +440,8 @@ export function ReservationsPage() {
         reservation_id: editing.id,
         amount: Number(due.toFixed(2)),
         payment_method: paymentMethod,
-        transaction_type: "deposit"
+        transaction_type: "deposit",
+        currency: editingCurrencyCode
       },
       {
         onSuccess: () => showToast("success", "Se registró la Seña"),
@@ -428,7 +462,8 @@ export function ReservationsPage() {
         reservation_id: editing.id,
         amount: Number(due.toFixed(2)),
         payment_method: paymentMethod,
-        transaction_type: "full_payment"
+        transaction_type: "full_payment",
+        currency: editingCurrencyCode
       },
       {
         onSuccess: () => showToast("success", "Pago completo registrado"),
@@ -437,10 +472,31 @@ export function ReservationsPage() {
     );
   };
 
-  const openDetails = (reservation: Reservation) => setDetailsReservation(reservation);
-  const closeDetails = () => setDetailsReservation(null);
+  const openDetails = (reservation: Reservation) => setDetailsReservationId(reservation.id);
+  const openDetailsById = (reservationId: number) => setDetailsReservationId(reservationId);
+  const closeDetails = () => setDetailsReservationId(null);
   const openGuest = (guestId: number) => setGuestIdOpen(guestId);
   const closeGuest = () => setGuestIdOpen(null);
+
+  const handleResolveExternal = (reservationId: number) =>
+    resolveExternalMutation.mutate(
+      { reservationId, payload: { notes: "Cierre manual desde la bandeja operativa." } },
+      {
+        onSuccess: () => showToast("success", "Follow-up externo marcado como resuelto"),
+        onError: (err: unknown) =>
+          showToast("error", err instanceof Error ? err.message : "No se pudo cerrar la acción externa")
+      }
+    );
+
+  const handleClearManualReview = (reservationId: number) =>
+    clearManualReviewMutation.mutate(
+      { reservationId, payload: { notes: "Revisión manual cerrada desde la bandeja operativa." } },
+      {
+        onSuccess: () => showToast("success", "Revisión manual cerrada"),
+        onError: (err: unknown) =>
+          showToast("error", err instanceof Error ? err.message : "No se pudo cerrar la revisión manual")
+      }
+    );
 
   const exportVoucher = () => {
     if (!detailsReservation) return;
@@ -481,9 +537,9 @@ export function ReservationsPage() {
           </div>
           <div class="card" style="margin-top:12px;">
             <p class="label">Finanzas</p>
-            <p>Total: <strong>${currency.format(summary?.total_amount ?? detailsReservation.total_amount ?? 0)}</strong></p>
-            <p>Pagado: <strong>${currency.format(summary?.amount_paid ?? detailsReservation.amount_paid ?? 0)}</strong></p>
-            <p>Saldo: <strong>${currency.format(summary?.balance_due ?? detailsReservation.balance_due ?? 0)}</strong></p>
+            <p>Total: <strong>${formatMoney(summary?.total_amount ?? detailsReservation.total_amount ?? 0, detailsCurrencyCode)}</strong></p>
+            <p>Pagado: <strong>${formatMoney(summary?.amount_paid ?? detailsReservation.amount_paid ?? 0, detailsCurrencyCode)}</strong></p>
+            <p>Saldo: <strong>${formatMoney(summary?.balance_due ?? detailsReservation.balance_due ?? 0, detailsCurrencyCode)}</strong></p>
           </div>
         </body>
       </html>`;
@@ -568,6 +624,103 @@ export function ReservationsPage() {
         <StatCard label="Check-ins hoy" value={totals.checkInsToday} helper={today} />
         <StatCard label="Checkouts hoy" value={totals.checkOutsToday} helper={today} />
         <StatCard label="Canceladas" value={totals.cancelled} helper="Últimos 7 días" />
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-xs uppercase tracking-wide text-slate-500">Operación</p>
+            <h2 className="text-lg font-semibold text-slate-900">Acciones pendientes</h2>
+            <p className="text-sm text-slate-600">
+              Seguimiento operativo de revisiones manuales, conciliación OTA y cobros pendientes.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+              {pendingActions.length} abiertas
+            </span>
+            {criticalPendingActions > 0 ? (
+              <span className="rounded-full bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-700">
+                {criticalPendingActions} críticas
+              </span>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="mt-4 space-y-3">
+          {pendingActionsQuery.isLoading ? (
+            <p className="text-sm text-slate-500">Cargando bandeja operativa...</p>
+          ) : pendingActions.length === 0 ? (
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+              No hay acciones operativas pendientes en este hotel.
+            </div>
+          ) : (
+            pendingActions.map((action) => {
+              const priority = priorityConfig[action.priority];
+              const isResolveExternal =
+                action.code === "resolve_external_channel" || action.code === "resolve_adjustment_external_action";
+              const isManualReview = action.code === "manual_review_required";
+
+              return (
+                <div key={action.action_key} className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={`rounded-full px-2 py-1 text-xs font-semibold ${priority.className}`}>
+                          {priority.label}
+                        </span>
+                        <span className="text-xs font-semibold text-slate-700">{action.confirmation_code}</span>
+                        <span className="text-xs text-slate-500">
+                          {action.check_in_date} → {action.check_out_date}
+                        </span>
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">{action.title}</p>
+                        <p className="text-sm text-slate-600">{action.detail}</p>
+                      </div>
+                      <div className="flex flex-wrap gap-3 text-xs text-slate-500">
+                        <span>Estado: {action.reservation_status}</span>
+                        <span>Origen: {action.source_provider_code || action.source}</span>
+                        {action.payment_collection_model ? <span>Cobro: {action.payment_collection_model}</span> : null}
+                        {action.settlement_status ? <span>Settlement: {action.settlement_status}</span> : null}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => openDetailsById(action.reservation_id)}
+                        className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:border-slate-300"
+                      >
+                        Ver ficha
+                      </button>
+                      {isManualReview ? (
+                        <button
+                          type="button"
+                          onClick={() => handleClearManualReview(action.reservation_id)}
+                          disabled={clearManualReviewMutation.isLoading}
+                          className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-semibold text-sky-700 hover:border-sky-300 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          Cerrar revisión
+                        </button>
+                      ) : null}
+                      {isResolveExternal ? (
+                        <button
+                          type="button"
+                          onClick={() => handleResolveExternal(action.reservation_id)}
+                          disabled={resolveExternalMutation.isLoading}
+                          className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800 hover:border-amber-300 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          Marcar resuelto
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -853,7 +1006,9 @@ export function ReservationsPage() {
                         {cfg?.label ?? reservation.status}
                       </span>
                     </td>
-                    <td className="px-4 py-2 text-right font-semibold text-slate-900">{currency.format(reservation.total_amount ?? 0)}</td>
+                    <td className="px-4 py-2 text-right font-semibold text-slate-900">
+                      {formatMoney(reservation.total_amount ?? 0, reservation.currency_code)}
+                    </td>
                     <td className="px-4 py-2 text-right text-xs text-slate-700">
                       <div className="flex flex-wrap justify-end gap-1">
                         <button
@@ -1126,19 +1281,19 @@ export function ReservationsPage() {
                     <div className="mt-2 grid gap-2 sm:grid-cols-4">
                       <div className="rounded-lg border border-emerald-100 bg-white/70 px-3 py-2 text-sm text-slate-800">
                         <p className="text-xs text-slate-500">Total</p>
-                        <p className="font-semibold">{currency.format(paymentSummary.total_amount ?? 0)}</p>
+                        <p className="font-semibold">{formatMoney(paymentSummary.total_amount ?? 0, editingCurrencyCode)}</p>
                       </div>
                       <div className="rounded-lg border border-emerald-100 bg-white/70 px-3 py-2 text-sm text-slate-800">
                         <p className="text-xs text-slate-500">Pagado</p>
-                        <p className="font-semibold">{currency.format(paymentSummary.amount_paid ?? 0)}</p>
+                        <p className="font-semibold">{formatMoney(paymentSummary.amount_paid ?? 0, editingCurrencyCode)}</p>
                       </div>
                       <div className="rounded-lg border border-emerald-100 bg-white/70 px-3 py-2 text-sm text-slate-800">
                         <p className="text-xs text-slate-500">Seña requerida</p>
-                        <p className="font-semibold">{currency.format(paymentSummary.deposit_required ?? 0)}</p>
+                        <p className="font-semibold">{formatMoney(paymentSummary.deposit_required ?? 0, editingCurrencyCode)}</p>
                       </div>
                       <div className="rounded-lg border border-emerald-100 bg-white/70 px-3 py-2 text-sm text-slate-800">
                         <p className="text-xs text-slate-500">Saldo</p>
-                        <p className="font-semibold">{currency.format(paymentSummary.balance_due ?? 0)}</p>
+                        <p className="font-semibold">{formatMoney(paymentSummary.balance_due ?? 0, editingCurrencyCode)}</p>
                       </div>
                     </div>
                   ) : (
@@ -1190,7 +1345,7 @@ export function ReservationsPage() {
                             <span>
                               {tx.type} · {tx.method}
                             </span>
-                            <span className="font-semibold">{currency.format(tx.amount)}</span>
+                            <span className="font-semibold">{formatMoney(tx.amount, tx.currency)}</span>
                           </li>
                         ))}
                       </ul>
@@ -1275,23 +1430,176 @@ export function ReservationsPage() {
                 <div className="grid grid-cols-2 gap-2 text-sm text-slate-800">
                   <div>
                     <p className="text-xs text-slate-500">Total</p>
-                    <p className="font-semibold">{currency.format(detailsSummary?.total_amount ?? detailsReservation.total_amount ?? 0)}</p>
+                    <p className="font-semibold">{formatMoney(detailsSummary?.total_amount ?? detailsReservation.total_amount ?? 0, detailsCurrencyCode)}</p>
                   </div>
                   <div>
                     <p className="text-xs text-slate-500">Pagado</p>
-                    <p className="font-semibold">{currency.format(detailsSummary?.amount_paid ?? detailsReservation.amount_paid ?? 0)}</p>
+                    <p className="font-semibold">{formatMoney(detailsSummary?.amount_paid ?? detailsReservation.amount_paid ?? 0, detailsCurrencyCode)}</p>
                   </div>
                   <div>
                     <p className="text-xs text-slate-500">Depósito</p>
-                    <p className="font-semibold">{currency.format(detailsSummary?.deposit_required ?? detailsReservation.deposit_amount ?? 0)}</p>
+                    <p className="font-semibold">{formatMoney(detailsSummary?.deposit_required ?? detailsReservation.deposit_amount ?? 0, detailsCurrencyCode)}</p>
                   </div>
                   <div>
                     <p className="text-xs text-slate-500">Saldo</p>
-                    <p className="font-semibold">{currency.format(detailsSummary?.balance_due ?? detailsReservation.balance_due ?? 0)}</p>
+                    <p className="font-semibold">{formatMoney(detailsSummary?.balance_due ?? detailsReservation.balance_due ?? 0, detailsCurrencyCode)}</p>
                   </div>
                 </div>
+                {detailsOperations?.financial_summary ? (
+                  <div className="rounded-lg border border-slate-200 bg-white/70 p-3 text-xs text-slate-700">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <p className="text-slate-500">Total operativo</p>
+                        <p className="font-semibold">
+                          {formatMoney(
+                            detailsOperations.financial_summary.operational_total_amount ?? 0,
+                            detailsOperations.financial_summary.currency_code
+                          )}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-slate-500">Saldo operativo</p>
+                        <p className="font-semibold">
+                          {formatMoney(
+                            detailsOperations.financial_summary.operational_balance_due ?? 0,
+                            detailsOperations.financial_summary.currency_code
+                          )}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-slate-500">Cobro</p>
+                        <p className="font-semibold">{detailsOperations.payment_collection_model}</p>
+                      </div>
+                      <div>
+                        <p className="text-slate-500">Settlement</p>
+                        <p className="font-semibold">{detailsOperations.settlement_status}</p>
+                      </div>
+                    </div>
+                    {detailsOperations.financial_summary.recommended_next_action ? (
+                      <p className="mt-2 text-xs text-amber-700">
+                        Próxima acción sugerida: {detailsOperations.financial_summary.recommended_next_action}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
             </div>
+
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Operación</p>
+                  {detailsOperationsQuery.isFetching ? <span className="text-xs text-slate-500">Actualizando...</span> : null}
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-sm text-slate-800">
+                  <div>
+                    <p className="text-xs text-slate-500">Asignación</p>
+                    <p className="font-semibold">{detailsOperations?.allocation_status ?? detailsReservation.allocation_status ?? "-"}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500">Revisión manual</p>
+                    <p className="font-semibold">{detailsOperations?.requires_manual_review ? "Sí" : "No"}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500">Acciones pendientes</p>
+                    <p className="font-semibold">{detailsOperations?.pending_action_count ?? 0}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500">Último movimiento</p>
+                    <p className="font-semibold">{detailsOperations?.latest_room_move?.move_type ?? "-"}</p>
+                  </div>
+                </div>
+                {detailsOperations?.ota_link ? (
+                  <div className="rounded-lg border border-slate-200 bg-white/70 p-3 text-xs text-slate-700">
+                    <p className="font-semibold text-slate-800">Canal externo</p>
+                    <p>Estado: {detailsOperations.ota_link.provider_state}</p>
+                    <p>Sync: {detailsOperations.ota_link.sync_status ?? "-"}</p>
+                    {detailsOperations.ota_link.error_message ? (
+                      <p className="mt-1 text-amber-700">{detailsOperations.ota_link.error_message}</p>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Acciones</p>
+                {detailsOperations?.pending_actions?.length ? (
+                  <div className="space-y-2">
+                    {detailsOperations.pending_actions.map((action) => {
+                      const priority = priorityConfig[action.priority];
+                      const isResolveExternal =
+                        action.code === "resolve_external_channel" || action.code === "resolve_adjustment_external_action";
+                      const isManualReview = action.code === "manual_review_required";
+
+                      return (
+                        <div key={action.action_key} className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className={`rounded-full px-2 py-1 text-[11px] font-semibold ${priority.className}`}>
+                                  {priority.label}
+                                </span>
+                                <p className="text-sm font-semibold text-slate-900">{action.title}</p>
+                              </div>
+                              <p className="mt-1 text-xs text-slate-600">{action.detail}</p>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {isManualReview ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleClearManualReview(detailsReservation.id)}
+                                  disabled={clearManualReviewMutation.isLoading}
+                                  className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-semibold text-sky-700 hover:border-sky-300 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                  Cerrar revisión
+                                </button>
+                              ) : null}
+                              {isResolveExternal ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleResolveExternal(detailsReservation.id)}
+                                  disabled={resolveExternalMutation.isLoading}
+                                  className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800 hover:border-amber-300 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                  Marcar resuelto
+                                </button>
+                              ) : null}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-600">Sin acciones pendientes para esta reserva.</p>
+                )}
+              </div>
+            </div>
+
+            {detailsOperations?.open_adjustments?.length ? (
+              <div className="mt-4 rounded-lg border border-slate-200 bg-white">
+                <div className="border-b border-slate-200 px-3 py-2">
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Ajustes operativos</p>
+                </div>
+                <div className="divide-y divide-slate-200 p-3">
+                  {detailsOperations.open_adjustments.map((adjustment) => (
+                    <div key={adjustment.id} className="flex items-start justify-between gap-3 py-2 text-sm">
+                      <div>
+                        <p className="font-semibold text-slate-900">{adjustment.kind}</p>
+                        <p className="text-xs text-slate-600">
+                          Estado: {adjustment.status} · Resolución externa: {adjustment.external_resolution_status ?? "-"}
+                        </p>
+                        {adjustment.notes ? <p className="mt-1 text-xs text-slate-500">{adjustment.notes}</p> : null}
+                      </div>
+                      <div className="text-right text-xs text-slate-600">
+                        <p>{adjustment.currency_code ?? "-"}</p>
+                        <p className="font-semibold">{formatMoney(adjustment.amount_delta ?? 0, adjustment.currency_code)}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
 
             <div className="mt-4 rounded-lg border border-slate-200 bg-white">
               <div className="border-b border-slate-200 px-3 py-2">
@@ -1303,7 +1611,7 @@ export function ReservationsPage() {
                     {detailsSummary.transactions.map((tx) => (
                       <li key={tx.id} className="flex items-center justify-between py-2">
                         <div>
-                          <p className="font-semibold">{currency.format(tx.amount)}</p>
+                          <p className="font-semibold">{formatMoney(tx.amount, tx.currency)}</p>
                           <p className="text-xs text-slate-500">
                             {tx.type} · {tx.method} · {tx.status}
                           </p>
