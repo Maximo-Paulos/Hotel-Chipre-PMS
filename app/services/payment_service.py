@@ -12,7 +12,8 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
-from app.models.reservation import Reservation, ReservationStatusEnum
+from app.models.operations import BillingAdjustment, ReservationStatusHistory
+from app.models.reservation import Reservation, ReservationSourceEnum, ReservationStatusEnum
 from app.models.transaction import (
     Transaction, PaymentMethodEnum, TransactionStatusEnum, TransactionTypeEnum
 )
@@ -76,7 +77,6 @@ def _resolve_reservation_hotel(
 ) -> int:
     """
     Resolve hotel scope using caller input or existing transactions.
-    No reservation/room fields are available for scoping in this slice.
     """
     reservation_hotel_id = getattr(reservation, "hotel_id", None)
 
@@ -99,6 +99,15 @@ def _resolve_reservation_hotel(
         raise PaymentError("hotel_id is required for finance operations")
 
     return resolved
+
+
+def _resolve_payment_currency(reservation: Reservation, requested_currency: Optional[str]) -> str:
+    """
+    Prefer an explicit payment currency, otherwise inherit the reservation currency.
+    This avoids recording ARS by default for reservations quoted in another currency.
+    """
+    candidate = (requested_currency or reservation.currency_code or "ARS").strip().upper()
+    return candidate[:3] if candidate else "ARS"
 
 
 def process_payment(
@@ -145,8 +154,11 @@ def process_payment(
         hotel_id,
         existing_tx_hotel_id=existing_tx_hotel_id,
     )
+    if reservation.hotel_id and reservation.hotel_id != resolved_hotel_id:
+        raise PaymentError("Reservation does not belong to selected hotel")
 
-    if reservation.status in (
+    is_refund = request.transaction_type == TransactionTypeEnum.REFUND
+    if not is_refund and reservation.status in (
         ReservationStatusEnum.CHECKED_OUT,
         ReservationStatusEnum.CANCELLED,
     ):
@@ -156,29 +168,20 @@ def process_payment(
 
     # 2. Validate payment method
     validate_payment_method_enabled(db, request.payment_method, resolved_hotel_id)
-
-    # 2.5 Dynamic Pricing Override
-    from app.models.pricing import CategoryPricing
-    pricing = db.query(CategoryPricing).filter(CategoryPricing.category_id == reservation.category_id).first()
-    if pricing and request.transaction_type != TransactionTypeEnum.REFUND:
-        method_key = request.payment_method.value
-        if method_key == "bank_transfer": method_key = "transfer"
-        elif method_key == "mercado_pago": method_key = "mercadopago"
-        
-        method_price = getattr(pricing, f"price_{method_key}", None)
-        if method_price is not None and method_price > 0:
-            reservation.total_amount = round(method_price * reservation.nights, 2)
-            config = get_hotel_config(db, resolved_hotel_id)
-            dep_pct = config.deposit_percentage if config else DEFAULT_DEPOSIT_PERCENTAGE
-            reservation.deposit_amount = round(reservation.total_amount * (dep_pct / 100.0), 2)
-            db.flush()
+    transaction_currency = _resolve_payment_currency(reservation, request.currency)
 
     # 3. Validate amount
-    balance = reservation.balance_due
-    if request.amount > balance + 0.01:  # Small tolerance for float arithmetic
-        raise PaymentError(
-            f"Payment amount ${request.amount:.2f} exceeds balance due ${balance:.2f}"
-        )
+    if is_refund:
+        if request.amount > reservation.amount_paid + 0.01:
+            raise PaymentError(
+                f"Refund amount ${request.amount:.2f} exceeds paid amount ${reservation.amount_paid:.2f}"
+            )
+    else:
+        balance = reservation.balance_due
+        if request.amount > balance + 0.01:  # Small tolerance for float arithmetic
+            raise PaymentError(
+                f"Payment amount ${request.amount:.2f} exceeds balance due ${balance:.2f}"
+            )
 
     # 4. Create transaction
     tx_status = TransactionStatusEnum.PENDING
@@ -208,7 +211,7 @@ def process_payment(
         hotel_id=resolved_hotel_id,
         reservation_id=request.reservation_id,
         amount=request.amount,
-        currency=request.currency,
+        currency=transaction_currency,
         transaction_type=request.transaction_type,
         payment_method=request.payment_method,
         status=tx_status,
@@ -223,7 +226,13 @@ def process_payment(
 
     # 5. If completed, update reservation financial state
     if tx_status == TransactionStatusEnum.COMPLETED:
-        _update_reservation_financials(db, reservation, request.amount, request.transaction_type)
+        _update_reservation_financials(
+            db,
+            reservation,
+            request.amount,
+            request.transaction_type,
+            resolved_hotel_id,
+        )
 
     return transaction
 
@@ -233,6 +242,7 @@ def _update_reservation_financials(
     reservation: Reservation,
     amount: float,
     tx_type: TransactionTypeEnum,
+    hotel_id: int,
 ) -> None:
     """
     Update reservation.amount_paid and transition status based on payment.
@@ -241,23 +251,48 @@ def _update_reservation_financials(
     - If deposit paid (amount >= deposit_amount) and status is PENDING → deposit_paid
     - If fully paid (balance_due == 0) → fully_paid
     """
-    reservation.amount_paid = round(reservation.amount_paid + amount, 2)
-
-    new_balance = reservation.balance_due  # Computed property
-
-    if reservation.status == ReservationStatusEnum.PENDING:
-        if new_balance <= 0.01:
-            # Fully paid in one shot
-            transition_reservation_status(db, reservation, ReservationStatusEnum.FULLY_PAID)
-        elif reservation.amount_paid >= reservation.deposit_amount - 0.01:
-            # Deposit threshold reached
-            transition_reservation_status(db, reservation, ReservationStatusEnum.DEPOSIT_PAID)
-
-    elif reservation.status == ReservationStatusEnum.DEPOSIT_PAID:
-        if new_balance <= 0.01:
-            transition_reservation_status(db, reservation, ReservationStatusEnum.FULLY_PAID)
-
+    signed_amount = -amount if tx_type == TransactionTypeEnum.REFUND else amount
+    reservation.amount_paid = max(0.0, round(reservation.amount_paid + signed_amount, 2))
+    _sync_reservation_financial_status(db, reservation, hotel_id=hotel_id, reason_code=tx_type.value)
     db.flush()
+
+
+def _sync_reservation_financial_status(
+    db: Session,
+    reservation: Reservation,
+    *,
+    hotel_id: int,
+    reason_code: str,
+) -> None:
+    if reservation.status in (ReservationStatusEnum.CANCELLED, ReservationStatusEnum.CHECKED_OUT):
+        return
+
+    if reservation.amount_paid >= reservation.total_amount - 0.01:
+        target_status = ReservationStatusEnum.FULLY_PAID
+    elif reservation.amount_paid >= reservation.deposit_amount - 0.01 and reservation.amount_paid > 0:
+        target_status = ReservationStatusEnum.DEPOSIT_PAID
+    else:
+        target_status = ReservationStatusEnum.PENDING
+
+    if reservation.status == target_status:
+        return
+
+    if reservation.can_transition_to(target_status):
+        transition_reservation_status(db, reservation, target_status, hotel_id, reason_code=reason_code)
+        return
+
+    previous_status = reservation.status
+    reservation.status = target_status
+    db.add(
+        ReservationStatusHistory(
+            hotel_id=hotel_id,
+            reservation_id=reservation.id,
+            from_status=previous_status.value if previous_status else None,
+            to_status=target_status.value,
+            reason_code=reason_code,
+            notes="Financial reconciliation adjusted reservation status outside the forward-only state machine",
+        )
+    )
 
 
 def get_reservation_financial_summary(db: Session, hotel_id: Optional[int], reservation_id: int) -> dict:
@@ -281,6 +316,8 @@ def get_reservation_financial_summary(db: Session, hotel_id: Optional[int], rese
         hotel_id,
         existing_tx_hotel_id=existing_tx_hotel_id,
     )
+    if reservation.hotel_id and reservation.hotel_id != resolved_hotel_id:
+        raise PaymentError(f"Reservation {reservation_id} does not belong to hotel {resolved_hotel_id}")
 
     transactions = (
         db.query(Transaction)
@@ -295,19 +332,49 @@ def get_reservation_financial_summary(db: Session, hotel_id: Optional[int], rese
     completed_transactions = [
         t for t in transactions if t.status == TransactionStatusEnum.COMPLETED
     ]
+    billing_adjustments = (
+        db.query(BillingAdjustment)
+        .filter(
+            BillingAdjustment.reservation_id == reservation_id,
+            BillingAdjustment.hotel_id == resolved_hotel_id,
+        )
+        .order_by(BillingAdjustment.effective_at, BillingAdjustment.id)
+        .all()
+    )
+    billing_adjustment_total = round(sum(adj.total_amount for adj in billing_adjustments), 2)
+    completed_payment_total = round(
+        sum(_signed_transaction_amount(t.transaction_type, t.amount) for t in completed_transactions),
+        2,
+    )
+    operational_total = round(reservation.total_amount + billing_adjustment_total, 2)
+    operational_balance_due = round(max(0.0, operational_total - reservation.amount_paid), 2)
+    reconciliation_gap = round(reservation.amount_paid - completed_payment_total, 2)
 
     return {
         "reservation_id": reservation.id,
         "confirmation_code": reservation.confirmation_code,
         "status": reservation.status.value,
+        "currency_code": reservation.currency_code or "ARS",
         "total_amount": reservation.total_amount,
         "deposit_required": reservation.deposit_amount,
         "amount_paid": reservation.amount_paid,
         "balance_due": reservation.balance_due,
+        "operational_total_amount": operational_total,
+        "operational_balance_due": operational_balance_due,
+        "billing_adjustment_total": billing_adjustment_total,
+        "payment_collection_model": reservation.payment_collection_model,
+        "settlement_status": reservation.settlement_status,
+        "has_financial_reconciliation_gap": abs(reconciliation_gap) > 0.01,
+        "financial_reconciliation_gap": reconciliation_gap,
+        "recommended_next_action": _recommended_financial_action(
+            reservation=reservation,
+            operational_balance_due=operational_balance_due,
+        ),
         "transactions": [
             {
                 "id": t.id,
                 "amount": t.amount,
+                "currency": t.currency,
                 "method": t.payment_method.value,
                 "type": t.transaction_type.value,
                 "status": t.status.value,
@@ -315,5 +382,37 @@ def get_reservation_financial_summary(db: Session, hotel_id: Optional[int], rese
             }
             for t in transactions
         ],
-        "completed_payments": sum(t.amount for t in completed_transactions),
+        "billing_adjustments": [
+            {
+                "id": adj.id,
+                "type": adj.adjustment_type.value if hasattr(adj.adjustment_type, "value") else str(adj.adjustment_type),
+                "amount": adj.amount,
+                "tax_amount": adj.tax_amount,
+                "total_amount": adj.total_amount,
+                "currency_code": adj.currency_code,
+                "notes": adj.notes,
+            }
+            for adj in billing_adjustments
+        ],
+        "completed_payments": completed_payment_total,
     }
+
+
+def _signed_transaction_amount(transaction_type: TransactionTypeEnum, amount: float) -> float:
+    if transaction_type == TransactionTypeEnum.REFUND:
+        return -amount
+    return amount
+
+
+def _recommended_financial_action(*, reservation: Reservation, operational_balance_due: float) -> str | None:
+    if reservation.requires_manual_review:
+        return "manual_review_required"
+    if reservation.status == ReservationStatusEnum.CANCELLED and reservation.source != ReservationSourceEnum.DIRECT:
+        return "review_cancellation_settlement"
+    if reservation.settlement_status in {"manual_resolution_required", "pending_hotel_action"}:
+        return "resolve_external_channel"
+    if operational_balance_due > 0.01 and reservation.payment_collection_model == "hotel_collect":
+        return "collect_from_guest"
+    if reservation.payment_collection_model == "ota_prepaid" and reservation.settlement_status in {"pending", "unknown"}:
+        return "await_channel_settlement"
+    return None

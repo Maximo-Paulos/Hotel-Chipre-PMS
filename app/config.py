@@ -2,12 +2,20 @@
 Application Configuration.
 Uses pydantic-settings for environment variable management.
 """
+import os
+from cryptography.fernet import Fernet
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 
 
 class Settings(BaseSettings):
     """Global application settings loaded from environment variables."""
+
+    # Environment / runtime mode
+    APP_ENV: str = "development"
+
+    # Public app URL used in redirects/webhooks
+    APP_BASE_URL: str = "http://127.0.0.1:8040"
 
     # Database
     DATABASE_URL: str = "postgresql+psycopg2://pms:pms@localhost:5432/hotel_pms"
@@ -26,6 +34,16 @@ class Settings(BaseSettings):
     PAYPAL_CLIENT_SECRET: str = ""
     PAYPAL_MODE: str = "sandbox"  # "sandbox" or "live"
 
+    # OAuth client IDs for connections
+    MERCADOPAGO_CLIENT_ID: str = ""
+    MERCADOPAGO_CLIENT_SECRET: str = ""
+    PAYPAL_REDIRECT_URI: str = "http://127.0.0.1:8040/api/integrations/oauth/paypal/callback"
+    MERCADOPAGO_REDIRECT_URI: str = "http://127.0.0.1:8040/api/integrations/oauth/mercadopago/callback"
+    GMAIL_CLIENT_ID: str = ""
+    GMAIL_CLIENT_SECRET: str = ""
+    GMAIL_REDIRECT_URI: str = "http://127.0.0.1:8040/api/integrations/oauth/gmail/callback"
+    MERCADOPAGO_WEBHOOK_SECRET: str = ""
+
     # OTA Credentials
     BOOKING_API_URL: str = "https://supply-xml.booking.com/hotels/xml"
     BOOKING_USERNAME: str = ""
@@ -41,9 +59,117 @@ class Settings(BaseSettings):
     HOTEL_TIMEZONE: str = "America/Argentina/Buenos_Aires"
     MANAGER_PIN: str = "1234"
 
+    # Gemma / policy-learning assistant
+    GEMMA_ENABLED: bool = False
+    GEMMA_PROVIDER: str = "disabled"  # disabled, openai_compatible, google_gemini_api, auto
+    GEMMA_ENDPOINT_URL: str = ""
+    GEMMA_MODEL: str = ""
+    GEMMA_API_KEY: str = ""
+    GEMMA_TIMEOUT_SECONDS: float = 20.0
+    GEMMA_MAX_OUTPUT_TOKENS: int = 1024
+    GEMMA_TEMPERATURE: float = 0.2
+    GEMMA_STRICT_JSON: bool = True
+    GEMMA_MAX_CONVERSATION_MESSAGES: int = 6
+    GEMMA_MAX_INPUT_CHARS: int = 4000
+    GEMMA_RATE_LIMIT_WINDOW_SECONDS: int = 300
+    GEMMA_RATE_LIMIT_MAX_MESSAGES: int = 20
+
+    # SMTP / Email
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASS: str = ""
+    SMTP_FROM: str = "Hotel PMS <noreply@example.com>"
+    SMTP_STARTUP_NOTIFY: bool = False
+
+    # Auth
+    JWT_SECRET: str = "change-me"
+    ACCESS_TOKEN_SECRET: str = ""
+    SIGNED_TOKEN_SECRET: str = ""
+    JWT_ALGORITHM: str = "HS256"
+    JWT_EXPIRES_MINUTES: int = 60
+    DEFAULT_SUBSCRIPTION_PLAN: str = "starter"
+    LOGIN_RATE_LIMIT: int = 5  # attempts per window
+    SUBSCRIPTION_ENFORCEMENT_ENABLED: bool = False  # legacy flag, kept for backward compatibility
+    SUBSCRIPTION_ENFORCEMENT: bool = False  # primary toggle: when False, can_write stays allowed
+    CONNECTIONS_ENABLED: bool = True
+    INTEGRATIONS_ENCRYPTION_KEY: str = "ZGVmYXVsdC1pbnRlZ3JhdGlvbnMta2V5LXNlY3JldA=="  # base64 fernet
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 
 @lru_cache()
 def get_settings() -> Settings:
     return Settings()
+
+
+def _normalized_env_value(value: str | None) -> str:
+    return (value or "").strip().lower()
+
+
+def is_demo_mode() -> bool:
+    return _normalized_env_value(os.getenv("DEMO_MODE")) in {"1", "true", "yes", "on"}
+
+
+def is_testing_mode() -> bool:
+    return _normalized_env_value(os.getenv("TESTING")) in {"1", "true", "yes", "on"}
+
+
+def is_production_mode(settings: Settings | None = None) -> bool:
+    runtime_settings = settings or get_settings()
+    env = _normalized_env_value(runtime_settings.APP_ENV or os.getenv("ENVIRONMENT") or os.getenv("APP_ENV"))
+    return env in {"prod", "production"}
+
+
+def validate_runtime_security(settings: Settings | None = None) -> None:
+    """
+    Fail fast if the app is being started in production with placeholder secrets.
+    Dev/test/demo are intentionally permissive so the local harness keeps working.
+    """
+    runtime_settings = settings or get_settings()
+    if not is_production_mode(runtime_settings):
+        return
+
+    errors: list[str] = []
+
+    if not runtime_settings.JWT_SECRET or runtime_settings.JWT_SECRET == "change-me" or len(runtime_settings.JWT_SECRET.strip()) < 32:
+        errors.append("JWT_SECRET must be set to a strong production value")
+
+    if (
+        runtime_settings.ACCESS_TOKEN_SECRET
+        and runtime_settings.SIGNED_TOKEN_SECRET
+        and runtime_settings.ACCESS_TOKEN_SECRET == runtime_settings.SIGNED_TOKEN_SECRET
+    ):
+        errors.append("ACCESS_TOKEN_SECRET and SIGNED_TOKEN_SECRET must be distinct in production")
+
+    manager_pin = str(runtime_settings.MANAGER_PIN or "").strip()
+    if not manager_pin or manager_pin == "1234" or len(manager_pin) < 6 or not manager_pin.isdigit():
+        errors.append("MANAGER_PIN must be at least 6 digits and not the default")
+
+    try:
+        Fernet(runtime_settings.INTEGRATIONS_ENCRYPTION_KEY.encode())
+    except Exception:
+        errors.append("INTEGRATIONS_ENCRYPTION_KEY must be a valid Fernet key in production")
+    else:
+        if runtime_settings.INTEGRATIONS_ENCRYPTION_KEY == "ZGVmYXVsdC1pbnRlZ3JhdGlvbnMta2V5LXNlY3JldA==":
+            errors.append("INTEGRATIONS_ENCRYPTION_KEY cannot use the bundled default in production")
+
+    if not runtime_settings.APP_BASE_URL.startswith("https://"):
+        errors.append("APP_BASE_URL must use https:// in production")
+    if any(host in runtime_settings.APP_BASE_URL for host in ("localhost", "127.0.0.1")):
+        errors.append("APP_BASE_URL cannot point to localhost in production")
+
+    if not runtime_settings.MERCADOPAGO_WEBHOOK_SECRET:
+        errors.append("MERCADOPAGO_WEBHOOK_SECRET must be configured in production")
+
+    redirect_uris = {
+        "PAYPAL_REDIRECT_URI": runtime_settings.PAYPAL_REDIRECT_URI,
+        "MERCADOPAGO_REDIRECT_URI": runtime_settings.MERCADOPAGO_REDIRECT_URI,
+        "GMAIL_REDIRECT_URI": runtime_settings.GMAIL_REDIRECT_URI,
+    }
+    for name, value in redirect_uris.items():
+        if value and (not value.startswith("https://") or any(host in value for host in ("localhost", "127.0.0.1"))):
+            errors.append(f"{name} must be a public https URL in production")
+
+    if errors:
+        raise RuntimeError("Invalid production security configuration: " + "; ".join(errors))

@@ -57,28 +57,33 @@ def push_availability_update(
         try:
             start_date = date.fromisoformat(start_date_str)
             end_date = date.fromisoformat(end_date_str)
+            from app.models.room import RoomCategory
 
             # Build availability data
             availability = OTAIntegrationService.build_availability_update(
                 db, category_id, start_date, end_date
             )
 
+            category = db.query(RoomCategory).filter(RoomCategory.id == category_id).first()
+            if not category:
+                return {"status": "skipped", "reason": "category not found"}
+
             config = db.query(HotelConfiguration).filter(
-                HotelConfiguration.id == 1
+                HotelConfiguration.id == category.hotel_id
             ).first()
+            if not config:
+                return {"status": "skipped", "reason": "hotel configuration not found"}
 
             results = {}
 
-            # Push to Booking.com
-            if config and config.enable_booking_sync:
+            if config.enable_booking_sync:
                 try:
                     results["booking"] = _push_to_booking(availability, category_id)
                 except Exception as e:
                     logger.error(f"Failed to push to Booking.com: {e}")
                     results["booking"] = {"error": str(e)}
 
-            # Push to Expedia
-            if config and config.enable_expedia_sync:
+            if config.enable_expedia_sync:
                 try:
                     results["expedia"] = _push_to_expedia(availability, category_id)
                 except Exception as e:

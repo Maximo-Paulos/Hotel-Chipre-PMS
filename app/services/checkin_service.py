@@ -26,14 +26,21 @@ class CheckInError(Exception):
 def validate_guest_for_checkin(
     db: Session,
     guest: Guest,
-    config: HotelConfiguration | None = None,
+    config_or_hotel: HotelConfiguration | int | None = None,
 ) -> list[str]:
     """
     Validate that a guest has all required data for check-in.
     Returns a list of missing field descriptions (empty = valid).
     """
-    if config is None:
-        config = db.query(HotelConfiguration).filter(HotelConfiguration.id == 1).first()
+    config: HotelConfiguration | None
+    if isinstance(config_or_hotel, HotelConfiguration):
+        config = config_or_hotel
+        hotel_id = config.id
+    else:
+        if config_or_hotel is None:
+            raise CheckInError("hotel_id is required for check-in validation")
+        hotel_id = config_or_hotel
+        config = db.query(HotelConfiguration).filter(HotelConfiguration.id == hotel_id).first()
 
     errors: list[str] = []
 
@@ -61,6 +68,7 @@ def validate_guest_for_checkin(
 def perform_checkin(
     db: Session,
     reservation_id: int,
+    hotel_id: int | None = None,
 ) -> Reservation:
     """
     Full check-in process:
@@ -72,12 +80,18 @@ def perform_checkin(
     
     Raises CheckInError with descriptive messages on failure.
     """
-    reservation = db.query(Reservation).filter(
-        Reservation.id == reservation_id
-    ).first()
+    reservation_q = db.query(Reservation).filter(Reservation.id == reservation_id)
+    if hotel_id is not None:
+        reservation_q = reservation_q.filter(Reservation.hotel_id == hotel_id)
+    reservation = reservation_q.first()
 
     if not reservation:
         raise CheckInError(f"Reservation {reservation_id} not found")
+
+    hotel_id = reservation.hotel_id or hotel_id
+    if hotel_id is None:
+        raise CheckInError("hotel_id is required for check-in")
+    reservation.hotel_id = hotel_id
 
     # Must be fully paid to check in
     if reservation.status != ReservationStatusEnum.FULLY_PAID:
@@ -87,13 +101,13 @@ def perform_checkin(
         )
 
     # Load guest
-    guest = db.query(Guest).filter(Guest.id == reservation.guest_id).first()
+    guest = db.query(Guest).filter(Guest.id == reservation.guest_id, Guest.hotel_id == hotel_id).first()
     if not guest:
         raise CheckInError("Guest record not found for this reservation")
 
     # Validate guest data
-    config = db.query(HotelConfiguration).filter(HotelConfiguration.id == 1).first()
-    validation_errors = validate_guest_for_checkin(db, guest, config)
+    config = db.query(HotelConfiguration).filter(HotelConfiguration.id == hotel_id).first()
+    validation_errors = validate_guest_for_checkin(db, guest, config or hotel_id)
 
     if validation_errors:
         raise CheckInError(
@@ -102,11 +116,16 @@ def perform_checkin(
 
     # All validations passed — perform check-in
     try:
-        transition_reservation_status(db, reservation, ReservationStatusEnum.CHECKED_IN)
+        transition_reservation_status(db, reservation, ReservationStatusEnum.CHECKED_IN, hotel_id)
     except ReservationError as e:
         raise CheckInError(str(e))
 
     reservation.actual_check_in = datetime.now(timezone.utc)
+    # Mark room as occupied for housekeeping dashboard
+    if reservation.room_id is not None:
+        room = db.query(Room).filter(Room.id == reservation.room_id, Room.hotel_id == hotel_id).first()
+        if room:
+            room.status = RoomStatusEnum.OCCUPIED
     db.flush()
 
     return reservation
@@ -115,6 +134,7 @@ def perform_checkin(
 def perform_checkout(
     db: Session,
     reservation_id: int,
+    hotel_id: int | None = None,
 ) -> Reservation:
     """
     Check-out process:
@@ -123,12 +143,18 @@ def perform_checkout(
     3. Transition to checked_out
     4. Record actual check-out timestamp
     """
-    reservation = db.query(Reservation).filter(
-        Reservation.id == reservation_id
-    ).first()
+    reservation_q = db.query(Reservation).filter(Reservation.id == reservation_id)
+    if hotel_id is not None:
+        reservation_q = reservation_q.filter(Reservation.hotel_id == hotel_id)
+    reservation = reservation_q.first()
 
     if not reservation:
         raise CheckInError(f"Reservation {reservation_id} not found")
+
+    hotel_id = reservation.hotel_id or hotel_id
+    if hotel_id is None:
+        raise CheckInError("hotel_id is required for check-out")
+    reservation.hotel_id = hotel_id
 
     if reservation.status != ReservationStatusEnum.CHECKED_IN:
         raise CheckInError(
@@ -138,7 +164,7 @@ def perform_checkout(
 
     # Transition
     try:
-        transition_reservation_status(db, reservation, ReservationStatusEnum.CHECKED_OUT)
+        transition_reservation_status(db, reservation, ReservationStatusEnum.CHECKED_OUT, hotel_id)
     except ReservationError as e:
         raise CheckInError(str(e))
 
@@ -146,7 +172,7 @@ def perform_checkout(
     
     # Mark room for cleaning
     if reservation.room_id is not None:
-        room = db.query(Room).filter(Room.id == reservation.room_id).first()
+        room = db.query(Room).filter(Room.id == reservation.room_id, Room.hotel_id == hotel_id).first()
         if room:
             room.status = RoomStatusEnum.CLEANING
             

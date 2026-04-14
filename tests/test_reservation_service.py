@@ -193,6 +193,101 @@ class TestReservationCreation:
             create_reservation(db, data2)
 
 
+def test_create_reservation_uses_rate_plan_quote_when_commercial_context_is_provided(
+    db,
+    hotel_config,
+    sample_categories,
+    sample_rooms,
+    sample_guest,
+):
+    from app.models.commercial import RatePlan, RatePlanPrice, SellableProduct, TaxPolicy, TaxRule
+
+    product = SellableProduct(
+        hotel_id=hotel_config.id,
+        primary_room_category_id=sample_categories[0].id,
+        code="STD_DIRECT",
+        name="Standard directa",
+        min_occupancy=1,
+        max_occupancy=2,
+    )
+    db.add(product)
+    db.flush()
+
+    rate_plan = RatePlan(
+        hotel_id=hotel_config.id,
+        sellable_product_id=product.id,
+        code="DIRECT-FLEX",
+        name="Directa flexible",
+        currency_code="ARS",
+        is_active=True,
+    )
+    db.add(rate_plan)
+    db.flush()
+
+    db.add(
+        RatePlanPrice(
+            hotel_id=hotel_config.id,
+            rate_plan_id=rate_plan.id,
+            sales_channel_code="direct",
+            occupancy=2,
+            currency_code="ARS",
+            base_amount=120.0,
+            tax_inclusive=False,
+        )
+    )
+
+    tax_policy = TaxPolicy(
+        hotel_id=hotel_config.id,
+        code="ARG",
+        name="Argentina",
+        taxes_included=False,
+        apply_vat_by_default=False,
+        foreign_guest_tax_exempt=False,
+        is_active=True,
+    )
+    db.add(tax_policy)
+    db.flush()
+    db.add(
+        TaxRule(
+            hotel_id=hotel_config.id,
+            tax_policy_id=tax_policy.id,
+            guest_scope="all",
+            tax_code="VAT",
+            tax_name="IVA",
+            tax_type="percentage",
+            amount=21.0,
+            priority=1,
+        )
+    )
+    db.flush()
+
+    room = db.query(Room).filter(Room.category_id == sample_categories[0].id).first()
+    data = ReservationCreate(
+        guest_id=sample_guest.id,
+        category_id=sample_categories[0].id,
+        room_id=room.id,
+        sellable_product_id=product.id,
+        rate_plan_id=rate_plan.id,
+        tax_policy_id=tax_policy.id,
+        pricing_channel_code="direct",
+        num_adults=2,
+        check_in_date=date(2026, 4, 1),
+        check_out_date=date(2026, 4, 3),
+    )
+
+    res = create_reservation(db, data, hotel_id=hotel_config.id)
+    db.flush()
+
+    assert res.rate_plan_id == rate_plan.id
+    assert res.sellable_product_id == product.id
+    assert res.tax_policy_id == tax_policy.id
+    assert res.subtotal_amount == 240.0
+    assert res.tax_amount == 50.4
+    assert res.total_amount == 290.4
+    assert res.net_amount == 290.4
+    assert res.currency_code == "ARS"
+
+
 class TestStateTransitions:
     """Tests for reservation state machine transitions."""
 

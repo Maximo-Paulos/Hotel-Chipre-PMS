@@ -1,0 +1,48 @@
+name: Build and Push Docker images
+
+on:
+  push:
+    branches: [ "codex/integration-frontend-demo-state" ]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME_BACKEND: ${{ github.repository }}-backend
+  IMAGE_NAME_FRONTEND: ${{ github.repository }}-frontend
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build backend image
+        run: |
+          docker build -f Dockerfile.backend -t $REGISTRY/${{ env.IMAGE_NAME_BACKEND }}:${{ github.sha }} .
+          docker tag $REGISTRY/${{ env.IMAGE_NAME_BACKEND }}:${{ github.sha }} $REGISTRY/${{ env.IMAGE_NAME_BACKEND }}:latest
+
+      - name: Build frontend image
+        run: |
+          docker build -f Dockerfile.frontend -t $REGISTRY/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.sha }} .
+          docker tag $REGISTRY/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.sha }} $REGISTRY/${{ env.IMAGE_NAME_FRONTEND }}:latest
+
+      - name: Push backend image
+        run: |
+          docker push $REGISTRY/${{ env.IMAGE_NAME_BACKEND }}:${{ github.sha }}
+          docker push $REGISTRY/${{ env.IMAGE_NAME_BACKEND }}:latest
+
+      - name: Push frontend image
+        run: |
+          docker push $REGISTRY/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.sha }}
+          docker push $REGISTRY/${{ env.IMAGE_NAME_FRONTEND }}:latest

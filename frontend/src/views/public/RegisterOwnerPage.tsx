@@ -2,16 +2,18 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { ApiError } from "../../api/client";
+import { register, requestVerification } from "../../api/auth";
 import { setOwner } from "../../api/onboarding";
-import { safeHotelId, useSession } from "../../state/session";
+import { normalizeRole } from "../../state/session";
+import { useSession } from "../../state/session";
 
 export function RegisterOwnerPage() {
   const navigate = useNavigate();
   const { login } = useSession();
   const [form, setForm] = useState({ name: "", lastName: "", email: "", password: "", phone: "" });
-  const [hotelId, setHotelId] = useState("1");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
 
   const handleChange = (field: string, value: string) => setForm((prev) => ({ ...prev, [field]: value }));
 
@@ -19,23 +21,44 @@ export function RegisterOwnerPage() {
     event.preventDefault();
     setLoading(true);
     setError(null);
-
-    const sessionData = { userId: form.email || "owner", email: form.email, hotelId: safeHotelId(hotelId) };
-    login(sessionData);
+    setInfo(null);
 
     try {
+      const res = await register(form.email, form.password, "owner");
+      if (!res.hotel_id) {
+        throw new ApiError(500, "La respuesta de registro no devolvió un hotel válido.");
+      }
+      const sessionData = {
+        userId: res.user.email,
+        email: res.user.email,
+        hotelId: res.hotel_id,
+        hotelIds: res.hotel_ids?.length ? res.hotel_ids : [res.hotel_id],
+        role: normalizeRole(res.user.role) ?? "owner",
+        baseRole: normalizeRole(res.user.role) ?? "owner",
+        accessToken: res.access_token,
+        isVerified: res.user.is_verified
+      };
+      login(sessionData);
+
       await setOwner(
         {
           name: `${form.name} ${form.lastName}`.trim(),
           email: form.email,
           phone: form.phone,
-          role: "Owner",
+          role: "Owner"
         },
         sessionData
       );
+
+      const codeResp = await requestVerification(form.email);
+      if (codeResp.code) {
+        setInfo(`Codigo generado: ${codeResp.code} (solo modo demo)`);
+      }
+
       navigate("/verify-email", { replace: true });
     } catch (err) {
       if (err instanceof ApiError) setError(err.message);
+      else setError("No se pudo crear la cuenta");
     } finally {
       setLoading(false);
     }
@@ -46,9 +69,9 @@ export function RegisterOwnerPage() {
       <div className="w-full max-w-2xl rounded-2xl bg-white p-8 shadow-lg ring-1 ring-slate-100">
         <div className="mb-6 flex items-start justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-slate-900">Crear cuenta de dueÃ±o</h1>
+            <h1 className="text-2xl font-semibold text-slate-900">Crear cuenta de dueno</h1>
             <p className="text-sm text-slate-600">
-              Guardamos el owner en /api/onboarding/owner y forzamos onboarding antes del dashboard.
+              Guardamos el owner en /api/onboarding/owner y luego verificamos tu email.
             </p>
           </div>
           <Link to="/login" className="text-sm text-brand-700 hover:underline">
@@ -60,6 +83,7 @@ export function RegisterOwnerPage() {
             Nombre
             <input
               className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 shadow-sm focus:border-brand-500 focus:ring-brand-500"
+              placeholder="Ej: Lucas"
               value={form.name}
               onChange={(e) => handleChange("name", e.target.value)}
               required
@@ -69,6 +93,7 @@ export function RegisterOwnerPage() {
             Apellido
             <input
               className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 shadow-sm focus:border-brand-500 focus:ring-brand-500"
+              placeholder="Ej: González"
               value={form.lastName}
               onChange={(e) => handleChange("lastName", e.target.value)}
               required
@@ -79,39 +104,34 @@ export function RegisterOwnerPage() {
             <input
               type="email"
               className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 shadow-sm focus:border-brand-500 focus:ring-brand-500"
+              placeholder="dueño@hotel.com"
               value={form.email}
               onChange={(e) => handleChange("email", e.target.value)}
               required
             />
           </label>
           <label className="text-sm font-medium text-slate-700">
-            TelÃ©fono
+            Teléfono
             <input
               className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 shadow-sm focus:border-brand-500 focus:ring-brand-500"
+              placeholder="Ej: +54 9 11 5555 1234"
               value={form.phone}
               onChange={(e) => handleChange("phone", e.target.value)}
             />
           </label>
           <label className="text-sm font-medium text-slate-700">
-            ContraseÃ±a
+            Contraseña
             <input
               type="password"
               className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 shadow-sm focus:border-brand-500 focus:ring-brand-500"
+              placeholder="Mínimo 6 caracteres"
               value={form.password}
               onChange={(e) => handleChange("password", e.target.value)}
-            />
-          </label>
-          <label className="text-sm font-medium text-slate-700">
-            Hotel ID (X-Hotel-Id)
-            <input
-              type="number"
-              min={1}
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 shadow-sm focus:border-brand-500 focus:ring-brand-500"
-              value={hotelId}
-              onChange={(e) => setHotelId(e.target.value)}
+              required
             />
           </label>
           {error && <p className="col-span-2 rounded-md bg-rose-50 p-3 text-rose-700">{error}</p>}
+          {info && <p className="col-span-2 rounded-md bg-amber-50 p-3 text-amber-800">{info}</p>}
           <div className="col-span-2">
             <button
               className="mt-2 w-full rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-70"

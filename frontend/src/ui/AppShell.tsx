@@ -1,49 +1,137 @@
-import { useEffect } from "react";
-import { Link, Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
+import clsx from "clsx";
+import { Link, NavLink, Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { useEffect, useMemo } from "react";
 
 import { useOnboardingStatus } from "../hooks/useOnboardingStatus";
+import { useSubscriptionStatus } from "../hooks/useSubscription";
 import { useSession } from "../state/session";
-
+import { ApiError, hasValidSession } from "../api/client";
 import { HotelSelector } from "./HotelSelector";
 import { UserBadge } from "./UserBadge";
+
+type NavItem = {
+  label: string;
+  to: string;
+  requiresRole?: Array<"owner" | "co_owner" | "manager" | "housekeeping" | "receptionist">;
+};
+
+type NavSection = {
+  title: string;
+  items: NavItem[];
+};
+
+const baseNav = [
+  {
+    title: "Operacion",
+    items: [
+      { label: "Dashboard", to: "/dashboard" },
+      { label: "Reservas", to: "/reservas" },
+      { label: "Huespedes", to: "/huespedes" },
+      { label: "Habitaciones", to: "/habitaciones" },
+    ],
+  },
+  {
+    title: "Proceso",
+    items: [{ label: "Onboarding", to: "/onboarding" }],
+  },
+  {
+    title: "Configuracion",
+    items: [
+      { label: "Usuarios", to: "/settings/users", requiresRole: ["owner", "co_owner"] },
+      { label: "Asistente", to: "/settings/assistant", requiresRole: ["owner", "co_owner", "manager"] },
+      { label: "Suscripcion", to: "/settings/subscription", requiresRole: ["owner", "co_owner"] },
+      { label: "Conexiones", to: "/settings/connections", requiresRole: ["owner", "co_owner"] },
+      { label: "Pruebas", to: "/settings/tests", requiresRole: ["owner", "co_owner"] },
+      { label: "Hotel", to: "/settings/hotel", requiresRole: ["owner", "co_owner"] },
+      { label: "Seguridad", to: "/settings/security", requiresRole: ["owner", "co_owner"] },
+    ],
+  },
+];
 
 export function AppShell() {
   const location = useLocation();
   const navigate = useNavigate();
   const { session } = useSession();
-  const isPublic = ["/login", "/register-owner", "/forgot-password", "/reset-password", "/verify-email"].includes(
-    location.pathname
-  );
-  const isAuthenticated = session.userId !== "guest";
+  const isLoggedIn = hasValidSession(session);
+  const isVerified = Boolean(session.isVerified);
+  const role = session.role;
 
-  const { data: onboarding, isFetching, error } = useOnboardingStatus({
-    enabled: !isPublic && isAuthenticated
-  });
-
-  useEffect(() => {
-    if (!isPublic && !isAuthenticated) {
-      navigate("/login", { replace: true });
-    }
-  }, [isPublic, isAuthenticated, navigate]);
+  const { data: onboarding, isFetching, error } = useOnboardingStatus({ enabled: isLoggedIn && isVerified });
+  const { data: subscription } = useSubscriptionStatus();
+  const onboardingError = error as ApiError | undefined;
 
   useEffect(() => {
-    if (!isPublic && onboarding && !onboarding.completed && !location.pathname.startsWith("/onboarding")) {
-      navigate("/onboarding", { replace: true });
-    }
-  }, [isPublic, onboarding, location.pathname, navigate]);
+    if (!isLoggedIn) navigate("/login", { replace: true });
+  }, [isLoggedIn, navigate]);
 
-  if (isPublic) return <Outlet />;
-  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  useEffect(() => {
+    if (isLoggedIn && !isVerified && location.pathname !== "/verify-email") {
+      navigate("/verify-email", { replace: true });
+    }
+  }, [isLoggedIn, isVerified, location.pathname, navigate]);
+
+  useEffect(() => {
+    if (onboardingError?.status === 403) {
+      navigate("/verify-email", { replace: true });
+    }
+  }, [onboardingError, navigate]);
+
+  const capReached =
+    subscription && subscription.room_limit > 0 && subscription.rooms_in_use >= subscription.room_limit;
+  const capBanner =
+    capReached &&
+    `Limite de habitaciones alcanzado (${subscription.rooms_in_use}/${subscription.room_limit}). Ajusta tu plan en Configuracion > Suscripcion.`;
+  const writeBlocked = subscription?.can_write === false;
+  const inactiveSubscription = subscription && subscription.status !== "active";
+  const subscriptionCTA = "/settings/subscription";
+
+  const visibleNavSections = useMemo<NavSection[]>(() => {
+    return baseNav
+      .map((section) => {
+        const items = section.items
+          .filter((item) => !item.requiresRole || (role ? item.requiresRole.includes(role) : false))
+          .filter((item) => !(item.to === "/onboarding" && onboarding?.completed));
+        if (!items.length) return null;
+        return { ...section, items } as NavSection;
+      })
+      .filter((section): section is NavSection => Boolean(section));
+  }, [role, onboarding?.completed]);
+
+  const path = location.pathname;
+  if (role === "housekeeping" && path.startsWith("/settings")) return <Navigate to="/reservas" replace />;
+  if (role === "manager" && path.startsWith("/settings") && path !== "/settings/assistant") {
+    return <Navigate to="/reservas" replace />;
+  }
+  if (onboarding?.completed && path.startsWith("/onboarding")) return <Navigate to="/dashboard" replace />;
+
+  if (!isLoggedIn) return <Navigate to="/login" replace />;
+  if (isLoggedIn && !isVerified) return <Navigate to="/verify-email" replace />;
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
-      <div className="border-b bg-slate-900 px-6 py-2 text-sm text-white">
-        <span className="font-semibold">Hotel Chipre PMS</span> - Hotel ID {session.hotelId} - Usuario{" "}
-        {session.email || session.userId}
+      <div className="border-b bg-slate-900 px-6 py-2 text-xs text-white">
+        <span className="font-semibold">Hotel Chipre PMS</span>
+        <span className="ml-3 text-slate-200">Hotel ID {session.hotelId ?? "-"}</span>
+        <span className="ml-3 text-slate-200">Usuario {session.email || session.userId || "Sin sesion"}</span>
       </div>
-      {!isFetching && onboarding && !onboarding.completed && (
+
+      {(writeBlocked || inactiveSubscription) && (
         <div className="border-b border-amber-200 bg-amber-50 px-6 py-2 text-sm text-amber-900">
-          Onboarding pendiente: {onboarding.missing_steps.join(", ") || "revisá los pasos"}.
+          {writeBlocked ? "Suscripcion en modo solo lectura (can_write=false)." : "Suscripcion inactiva."}{" "}
+          Plan: {subscription?.plan || "sin plan"} · Habitaciones: {subscription?.rooms_in_use}/{subscription?.room_limit}.{" "}
+          <Link to={subscriptionCTA} className="font-semibold underline">
+            Reactivar o cambiar plan
+          </Link>
+        </div>
+      )}
+
+      {capBanner && (
+        <div className="border-b border-rose-200 bg-rose-50 px-6 py-2 text-sm text-rose-900">{capBanner}</div>
+      )}
+
+      {!isFetching && onboarding && !onboarding.completed && !location.pathname.startsWith("/onboarding") && (
+        <div className="border-b border-amber-200 bg-amber-50 px-6 py-2 text-sm text-amber-900">
+          Onboarding pendiente: {onboarding.missing_steps.join(", ") || "revisa los pasos"}.
           <button
             className="ml-3 text-amber-800 underline"
             onClick={() => navigate("/onboarding", { replace: true })}
@@ -53,44 +141,88 @@ export function AppShell() {
           </button>
         </div>
       )}
-      {error && (
+
+      {onboardingError && (
         <div className="border-b border-rose-200 bg-rose-50 px-6 py-2 text-sm text-rose-900">
-          Sin conexión con el backend. Seguimos en modo offline para no bloquear la UI.
+          {onboardingError.status === 402
+            ? "Suscripcion inactiva. Reactiva el plan para seguir usando el sistema."
+            : onboardingError.status === 403
+              ? "Debes verificar tu email para continuar."
+              : "Sin conexion con el backend. Seguimos en modo offline para no bloquear la UI."}
         </div>
       )}
-      <header className="border-b bg-white/80 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
-          <div className="flex items-center gap-6">
-            <Link to="/dashboard" className="text-lg font-semibold text-brand-700">
+
+      <div className="flex min-h-[calc(100vh-80px)]">
+        <aside className="hidden w-72 shrink-0 border-r border-slate-200 bg-white/90 backdrop-blur md:flex md:flex-col">
+          <div className="px-5 pb-4 pt-6">
+            <Link to="/dashboard" className="text-lg font-semibold text-slate-900">
               Hotel Chipre PMS
             </Link>
-            <nav className="flex items-center gap-4 text-sm text-slate-600">
-              <Link to="/dashboard" className="hover:text-brand-700">
-                Dashboard
-              </Link>
-              <Link to="/onboarding" className="hover:text-brand-700">
-                Onboarding
-              </Link>
-              <Link to="/settings/users" className="hover:text-brand-700">
-                Usuarios
-              </Link>
-              <Link to="/settings/hotel" className="hover:text-brand-700">
-                Hotel
-              </Link>
-              <Link to="/settings/security" className="hover:text-brand-700">
-                Seguridad
-              </Link>
-            </nav>
+            <p className="text-xs text-slate-500">Layout de navegacion prototipo</p>
           </div>
-          <div className="flex items-center gap-4">
-            <HotelSelector />
-            <UserBadge />
-          </div>
+          <nav className="flex-1 space-y-6 px-3 pb-6">
+            {visibleNavSections.map((section) => (
+              <div key={section.title}>
+                <p className="px-2 text-xs uppercase tracking-wide text-slate-500">{section.title}</p>
+                <div className="mt-2 flex flex-col gap-1">
+                  {section.items.map((item) => (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      className={({ isActive }) =>
+                        clsx(
+                          "flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium",
+                          isActive ? "bg-brand-50 text-brand-700" : "text-slate-700 hover:bg-slate-100",
+                        )
+                      }
+                    >
+                      <span>{item.label}</span>
+                    </NavLink>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </nav>
+        </aside>
+
+        <div className="flex min-h-screen flex-1 flex-col">
+          <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur">
+            <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-3">
+                <Link to="/dashboard" className="text-lg font-semibold text-slate-900 md:hidden">
+                  Hotel Chipre PMS
+                </Link>
+                <nav className="flex items-center gap-2 md:hidden">
+                  {baseNav[0]?.items.map((item) => (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      className={({ isActive }) =>
+                        clsx(
+                          "rounded-full px-3 py-1 text-xs font-semibold",
+                          isActive ? "bg-brand-100 text-brand-800" : "bg-slate-100 text-slate-600",
+                        )
+                      }
+                    >
+                      {item.label}
+                    </NavLink>
+                  ))}
+                </nav>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <HotelSelector />
+                <UserBadge />
+              </div>
+            </div>
+          </header>
+
+          <main className="flex-1 px-4 py-8 sm:px-8">
+            <div className="mx-auto max-w-6xl">
+              <Outlet />
+            </div>
+          </main>
         </div>
-      </header>
-      <main className="mx-auto max-w-6xl px-6 py-8">
-        <Outlet />
-      </main>
+      </div>
     </div>
   );
 }

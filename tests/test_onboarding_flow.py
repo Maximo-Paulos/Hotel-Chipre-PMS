@@ -2,6 +2,7 @@
 End-to-end onboarding flow exposed through the FastAPI routers.
 """
 import os
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -51,14 +52,14 @@ def client():
         os.environ["DATABASE_URL"] = original_db_url
 
 
-def _complete_minimal_onboarding(client: TestClient):
+def _complete_minimal_onboarding(client: TestClient, auth: dict[str, str], owner_email: str):
     owner_payload = {
         "name": "Ana Manager",
-        "email": "ana@example.com",
+        "email": owner_email,
         "phone": "+54 11 5555 1111",
         "role": "Owner",
     }
-    client.post("/api/onboarding/owner", json=owner_payload)
+    client.post("/api/onboarding/owner", json=owner_payload, headers=auth)
 
     categories_payload = {
         "categories": [
@@ -80,7 +81,7 @@ def _complete_minimal_onboarding(client: TestClient):
             },
         ]
     }
-    client.post("/api/onboarding/categories", json=categories_payload)
+    client.post("/api/onboarding/categories", json=categories_payload, headers=auth)
 
     rooms_payload = {
         "rooms": [
@@ -89,7 +90,7 @@ def _complete_minimal_onboarding(client: TestClient):
             {"room_number": "201", "floor": 2, "category_code": "STE"},
         ]
     }
-    client.post("/api/onboarding/rooms", json=rooms_payload)
+    client.post("/api/onboarding/rooms", json=rooms_payload, headers=auth)
 
     staff_payload = {
         "staff": [
@@ -97,28 +98,47 @@ def _complete_minimal_onboarding(client: TestClient):
             {"name": "Javier", "role": "Housekeeping"},
         ]
     }
-    client.post("/api/onboarding/staff", json=staff_payload)
+    client.post("/api/onboarding/staff", json=staff_payload, headers=auth)
+
+
+def _register_owner(client: TestClient, email: str) -> dict[str, str]:
+    with patch("app.api.auth._generate_code", return_value="123456"):
+        response = client.post(
+            "/api/auth/register",
+            json={"email": email, "password": "Demo123!", "role": "owner"},
+        )
+    assert response.status_code == 201, response.text
+    verify = client.post(
+        "/api/auth/verify-email",
+        json={"email": email, "code": "123456"},
+    )
+    assert verify.status_code == 200, verify.text
+    payload = verify.json()
+    hotel_id = payload["hotel_id"]
+    return {
+        "Authorization": f"Bearer {payload['access_token']}",
+        "X-Hotel-Id": str(hotel_id),
+        "X-User-Id": payload["user"]["email"],
+    }
 
 
 def test_dashboard_is_blocked_until_onboarding_finishes(client: TestClient):
-    # Dashboard gated initially
+    # El frontend ahora siempre devuelve la SPA (200) aunque falte onboarding
     resp = client.get("/")
-    assert resp.status_code == 403
-    detail = resp.json()["detail"]
-    assert detail["onboarding_required"] is True
-    assert "owner" in detail["missing_steps"]
+    assert resp.status_code == 200
 
     # Status reflects missing steps
-    status = client.get("/api/onboarding/status")
+    headers = _register_owner(client, "owner@test.com")
+    status = client.get("/api/onboarding/status", headers=headers)
     assert status.status_code == 200
     data = status.json()
     assert data["completed"] is False
     assert "categories" in data["missing_steps"]
 
     # Complete onboarding flow
-    _complete_minimal_onboarding(client)
+    _complete_minimal_onboarding(client, headers, "owner@test.com")
 
-    finish = client.post("/api/onboarding/finish")
+    finish = client.post("/api/onboarding/finish", headers=headers)
     assert finish.status_code == 200
     finished = finish.json()
     assert finished["completed"] is True
@@ -132,19 +152,22 @@ def test_dashboard_is_blocked_until_onboarding_finishes(client: TestClient):
 
 def test_finish_requires_all_steps(client: TestClient):
     # Trying to finish too early should fail
-    result = client.post("/api/onboarding/finish")
+    headers = _register_owner(client, "owner2@test.com")
+    result = client.post("/api/onboarding/finish", headers=headers)
     assert result.status_code == 400
     assert "Missing required onboarding steps" in result.json()["detail"]
 
 
 def test_rooms_require_existing_category(client: TestClient):
     # Owner step ok
-    client.post("/api/onboarding/owner", json={"name": "Test", "email": "t@example.com"})
+    headers = _register_owner(client, "t@example.com")
+    client.post("/api/onboarding/owner", json={"name": "Test", "email": "t@example.com"}, headers=headers)
 
     # Attempt to create rooms without categories -> error
     response = client.post(
         "/api/onboarding/rooms",
         json={"rooms": [{"room_number": "1", "floor": 0, "category_code": "NOPE"}]},
+        headers=headers,
     )
     assert response.status_code == 400
     assert "Missing categories" in response.json()["detail"]

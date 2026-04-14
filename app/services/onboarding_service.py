@@ -20,18 +20,16 @@ class OnboardingError(Exception):
 
 
 def resolve_hotel_id(db: Session, provided: Optional[int] = None) -> int:
-    """Return the current hotel id, persisting a default if none exists."""
-    if provided is not None:
-        return provided
-
-    existing = db.query(HotelConfiguration.id).order_by(HotelConfiguration.id).first()
-    if existing:
-        return existing[0]
-
-    config = HotelConfiguration(id=1)
-    db.add(config)
-    db.flush()
-    return config.id
+    """Return the current hotel id; requires explicit selection."""
+    if provided is None:
+        raise OnboardingError("hotel_id is required")
+    config = db.get(HotelConfiguration, provided)
+    if not config:
+        # Create minimal configuration on the fly for new hotels during onboarding
+        config = HotelConfiguration(id=provided)
+        db.add(config)
+        db.flush()
+    return provided
 
 
 def get_or_create_state(db: Session, hotel_id: int) -> OnboardingState:
@@ -45,8 +43,8 @@ def get_or_create_state(db: Session, hotel_id: int) -> OnboardingState:
 
 def _status_from_state(db: Session, state: OnboardingState) -> dict:
     staff_list = state.get_staff()
-    categories_count = db.query(RoomCategory).count()
-    rooms_count = db.query(Room).count()
+    categories_count = db.query(RoomCategory).filter(RoomCategory.hotel_id == state.hotel_id).count()
+    rooms_count = db.query(Room).filter(Room.hotel_id == state.hotel_id).count()
 
     owner_done = bool(state.owner_name and state.owner_email)
     categories_done = categories_count > 0
@@ -112,7 +110,10 @@ def upsert_categories(
     hid = resolve_hotel_id(db, hotel_id)
     state = get_or_create_state(db, hid)
 
-    existing = {c.code.lower(): c for c in db.query(RoomCategory).all()}
+    existing = {
+        c.code.lower(): c
+        for c in db.query(RoomCategory).filter(RoomCategory.hotel_id == hid).all()
+    }
     created = 0
     updated = 0
     for cat in categories:
@@ -124,7 +125,7 @@ def upsert_categories(
                 setattr(obj, field, value)
             updated += 1
         else:
-            obj = RoomCategory(**data)
+            obj = RoomCategory(hotel_id=hid, **data)
             db.add(obj)
             created += 1
     db.flush()
@@ -143,12 +144,18 @@ def upsert_rooms(
     hid = resolve_hotel_id(db, hotel_id)
     state = get_or_create_state(db, hid)
 
-    categories = {c.code.lower(): c for c in db.query(RoomCategory).all()}
+    categories = {
+        c.code.lower(): c
+        for c in db.query(RoomCategory).filter(RoomCategory.hotel_id == hid).all()
+    }
     missing_codes = sorted({r.category_code.lower() for r in rooms if r.category_code.lower() not in categories})
     if missing_codes:
         raise OnboardingError(f"Missing categories for codes: {', '.join(missing_codes)}")
 
-    existing_rooms = {r.room_number: r for r in db.query(Room).all()}
+    existing_rooms = {
+        r.room_number: r
+        for r in db.query(Room).filter(Room.hotel_id == hid).all()
+    }
     created = 0
     updated = 0
 
@@ -161,14 +168,15 @@ def upsert_rooms(
             room.category_id = category_id
             room.is_active = True
             if room.status is None:
-                room.status = RoomStatusEnum.AVAILABLE
+                room.status = RoomStatusEnum.AVAILABLE.value
             updated += 1
         else:
             room = Room(
+                hotel_id=hid,
                 room_number=room_payload.room_number,
                 floor=room_payload.floor,
                 category_id=category_id,
-                status=RoomStatusEnum.AVAILABLE,
+                status=RoomStatusEnum.AVAILABLE.value,
             )
             db.add(room)
             created += 1

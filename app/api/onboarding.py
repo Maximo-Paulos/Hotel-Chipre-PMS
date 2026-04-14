@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies.auth import AuthContext, get_auth_context
+from app.dependencies.auth import AuthContext, get_auth_context, require_roles
 from app.schemas.onboarding import (
     OnboardingStatus,
     OwnerPayload,
@@ -14,6 +14,7 @@ from app.schemas.onboarding import (
     StaffPayload,
 )
 from app.services import onboarding_service
+from app.services.subscription_service import ensure_room_within_limit
 from app.services.onboarding_service import OnboardingError
 
 router = APIRouter(prefix="/api/onboarding", tags=["Onboarding"])
@@ -31,7 +32,7 @@ def onboarding_status(
 def set_owner(
     payload: OwnerPayload,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(get_auth_context),
+    context: AuthContext = Depends(require_roles("owner", "co_owner")),
 ):
     status_data = onboarding_service.set_owner(db, payload, hotel_id=context.hotel_id)
     db.commit()
@@ -42,7 +43,7 @@ def set_owner(
 def set_categories(
     payload: CategoriesPayload,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(get_auth_context),
+    context: AuthContext = Depends(require_roles("owner", "co_owner")),
 ):
     status_data = onboarding_service.upsert_categories(db, payload.categories, hotel_id=context.hotel_id)
     db.commit()
@@ -53,9 +54,11 @@ def set_categories(
 def set_rooms(
     payload: RoomsPayload,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(get_auth_context),
+    context: AuthContext = Depends(require_roles("owner", "co_owner")),
 ):
     try:
+        # validate room cap before persisting
+        ensure_room_within_limit(db, context.hotel_id)
         status_data = onboarding_service.upsert_rooms(db, payload.rooms, hotel_id=context.hotel_id)
         db.commit()
         return status_data
@@ -67,7 +70,7 @@ def set_rooms(
 def set_staff(
     payload: StaffPayload,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(get_auth_context),
+    context: AuthContext = Depends(require_roles("owner", "co_owner")),
 ):
     status_data = onboarding_service.store_staff(db, payload.staff, hotel_id=context.hotel_id)
     db.commit()
@@ -77,7 +80,7 @@ def set_staff(
 @router.post("/finish", response_model=OnboardingStatus)
 def finish(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(get_auth_context),
+    context: AuthContext = Depends(require_roles("owner", "co_owner")),
 ):
     try:
         status_data = onboarding_service.finish_onboarding(db, hotel_id=context.hotel_id)

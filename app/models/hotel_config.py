@@ -39,6 +39,10 @@ class HotelConfiguration(Base):
     enable_booking_sync = Column(Boolean, nullable=False, default=True)
     enable_expedia_sync = Column(Boolean, nullable=False, default=True)
 
+    # Subscription / ownership
+    owner_email = Column(String(200), nullable=True)
+    subscription_active = Column(Boolean, nullable=False, default=True)
+
     # Check-in policies
     require_document_for_checkin = Column(Boolean, nullable=False, default=True)
     require_terms_acceptance = Column(Boolean, nullable=False, default=True)
@@ -47,6 +51,31 @@ class HotelConfiguration(Base):
     hotel_name = Column(String(200), nullable=False, default="Mi Hotel")
     hotel_timezone = Column(String(100), nullable=False, default="America/Argentina/Buenos_Aires")
     default_currency = Column(String(3), nullable=False, default="ARS")
+
+    # Display / permissions (scaffolding)
+    receptionist_view_past_days = Column(Integer, nullable=False, default=0)
+    receptionist_view_future_days = Column(Integer, nullable=False, default=7)
+    allow_revenue_manager = Column(Boolean, nullable=False, default=True)
+    allow_revenue_receptionist = Column(Boolean, nullable=False, default=False)
+
+    # Operations / availability
+    sync_interval_minutes = Column(Integer, nullable=False, default=5)
+    safety_buffer_rooms = Column(Integer, nullable=False, default=0)
+    allow_overbooking = Column(Boolean, nullable=False, default=False)
+    max_overallocation_pct = Column(Float, nullable=False, default=0.0)
+
+    # No-show and OTA push
+    no_show_cutoff_hours = Column(Integer, nullable=False, default=24)
+    ota_autopush_enabled = Column(Boolean, nullable=False, default=False)
+
+    # Payment validation
+    card_validation_enabled = Column(Boolean, nullable=False, default=False)
+    payment_retry_attempts = Column(Integer, nullable=False, default=2)
+    auth_amount_pct = Column(Float, nullable=False, default=0.0)
+
+    # Notifications / stop-sell (stored as JSON/text for flexibility)
+    stop_sell_channels = Column(Text, nullable=True)  # JSON array of channel codes
+    event_notifications = Column(Text, nullable=True)  # JSON array of {event, channel, quiet_hours}
 
     # Additional policies as JSON
     extra_policies = Column(Text, nullable=True)  # Flexible JSON for future policies

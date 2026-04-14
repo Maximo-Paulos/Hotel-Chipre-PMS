@@ -37,11 +37,17 @@ class ReservationSlot:
     current_room_id: Optional[int]
     is_locked: bool  # True if checked_in (cannot be moved)
     allowed_category_ids: list[int] = field(default_factory=list)
+    category_priority_by_id: dict[int, int] = field(default_factory=dict)
 
     @property
     def effective_allowed_category_ids(self) -> list[int]:
         """Return allowed categories, falling back to [category_id] if empty."""
         return self.allowed_category_ids if self.allowed_category_ids else [self.category_id]
+
+    def category_priority(self, category_id: int) -> int:
+        if category_id == self.category_id:
+            return 0
+        return self.category_priority_by_id.get(category_id, 10_000)
 
     @property
     def nights(self) -> int:
@@ -77,10 +83,47 @@ def _check_overlap(slot_a: ReservationSlot, slot_b: ReservationSlot) -> bool:
     return slot_a.check_in < slot_b.check_out and slot_b.check_in < slot_a.check_out
 
 
+def _one_night_gap_penalty_for_room(
+    reservation: ReservationSlot,
+    occupancy: list[tuple[date, date]],
+) -> int:
+    """
+    Estimate how many single-night gaps remain if the reservation is placed on this room.
+    Lower is better.
+    """
+    stays = sorted([*occupancy, (reservation.check_in, reservation.check_out)], key=lambda item: item[0])
+    gaps = 0
+    for idx in range(len(stays) - 1):
+        left_out = stays[idx][1]
+        right_in = stays[idx + 1][0]
+        if (right_in - left_out).days == 1:
+            gaps += 1
+    return gaps
+
+
+def _adjacency_bonus_for_room(
+    reservation: ReservationSlot,
+    occupancy: list[tuple[date, date]],
+) -> int:
+    """
+    Count how many existing stays touch the candidate reservation without overlap.
+    Higher is better because it builds longer continuous occupancy blocks.
+    """
+    bonus = 0
+    for occ_in, occ_out in occupancy:
+        if occ_out == reservation.check_in:
+            bonus += 1
+        if occ_in == reservation.check_out:
+            bonus += 1
+    return bonus
+
+
 def run_allocation(
     reservations: list[ReservationSlot],
     rooms: list[RoomSlot],
     optimization_horizon: Optional[tuple[date, date]] = None,
+    policy_constraints: Optional[dict] = None,
+    policy_weights: Optional[dict] = None,
 ) -> AllocationResult:
     """
     Run the CP-SAT solver to optimally assign rooms to reservations.
@@ -106,10 +149,25 @@ def run_allocation(
     try:
         from ortools.sat.python import cp_model
     except ImportError:
-        return _run_allocation_greedy(reservations, rooms, optimization_horizon)
+        return _run_allocation_greedy(
+            reservations,
+            rooms,
+            optimization_horizon,
+            policy_constraints=policy_constraints,
+            policy_weights=policy_weights,
+        )
 
     if not reservations:
         return AllocationResult(success=True)
+
+    policy_constraints = policy_constraints or {}
+    policy_weights = policy_weights or {}
+    stability_weight = int(policy_weights.get("stability", 5))
+    exact_match_weight = int(policy_weights.get("prefer_exact_match", 500))
+    room_usage_penalty = int(policy_weights.get("room_usage_penalty", 50))
+    unassigned_penalty = int(policy_weights.get("unassigned_penalty", 10000))
+    fallback_priority_penalty = int(policy_weights.get("fallback_priority_penalty", 25))
+    one_night_gap_penalty = int(policy_weights.get("minimize_one_night_gaps", room_usage_penalty * 2))
 
     model = cp_model.CpModel()
 
@@ -198,24 +256,20 @@ def run_allocation(
 
     # Gap penalty: penalize day d if day d-1 and d+1 are occupied but d is not
     gap_penalties = []
-    FRAGMENTATION_PENALTY = 100  # Heavy penalty per gap day
 
     for h_idx in range(len(rooms)):
         for d in range(1, total_days - 1):
-            # gap = prev_occupied AND NOT current_occupied AND next_occupied
             prev_occ = is_occupied.get((h_idx, d - 1))
             curr_occ = is_occupied.get((h_idx, d))
             next_occ = is_occupied.get((h_idx, d + 1))
 
             if prev_occ is not None and curr_occ is not None and next_occ is not None:
-                # gap_indicator = 1 when prev=1, curr=0, next=1
                 gap = model.NewBoolVar(f"gap_{h_idx}_{d}")
-                not_curr = model.NewBoolVar(f"not_occ_{h_idx}_{d}")
-                model.Add(not_curr == 1).OnlyEnforceIf(curr_occ.Not() if hasattr(curr_occ, 'Not') else model.NewConstant(1))
-
-                # Simpler approach: gap is penalized additively
-                # We reward continuous occupancy instead
-                pass
+                model.Add(gap <= prev_occ)
+                model.Add(gap <= next_occ)
+                model.Add(gap + curr_occ <= 1)
+                model.Add(gap >= prev_occ + next_occ - curr_occ - 1)
+                gap_penalties.append(gap)
 
     # Simplified but effective objective: maximize continuous usage per room
     # Score = sum of occupied days per room (encourages packing)
@@ -224,6 +278,7 @@ def run_allocation(
     occupancy_score = []
     stability_bonus = []
     category_match_bonus = []
+    fallback_penalties = []
 
     for r_idx, res in enumerate(reservations):
         for h_idx, room in enumerate(rooms):
@@ -232,11 +287,15 @@ def run_allocation(
 
             # Stability: prefer keeping reservation in current room (if one exists)
             if res.current_room_id == room.room_id and not res.is_locked:
-                stability_bonus.append((x[r_idx, h_idx], 5))  # Boosted stability bonus
+                stability_bonus.append((x[r_idx, h_idx], stability_weight))
 
             # Category match bonus: heavily penalize upgrading if original category is available
             if room.category_id == res.category_id:
-                category_match_bonus.append((x[r_idx, h_idx], 500))
+                category_match_bonus.append((x[r_idx, h_idx], exact_match_weight))
+            else:
+                fallback_penalties.append(
+                    (x[r_idx, h_idx], res.category_priority(room.category_id) * fallback_priority_penalty)
+                )
 
     # Concentration bonus: penalize spreading across many rooms
     # For each room, add penalty if it has any reservation (encourages packing)
@@ -257,8 +316,10 @@ def run_allocation(
         sum(var * coeff for var, coeff in occupancy_score)
         + sum(var * coeff for var, coeff in stability_bonus)
         + sum(var * coeff for var, coeff in category_match_bonus)
-        - sum(room_usage[h_idx] * 50 for h_idx in range(len(rooms)))
-        - sum((1 - is_assigned[r_idx]) * 10000 for r_idx in range(len(reservations)))
+        - sum(room_usage[h_idx] * room_usage_penalty for h_idx in range(len(rooms)))
+        - sum(var * coeff for var, coeff in fallback_penalties)
+        - sum(gap * one_night_gap_penalty for gap in gap_penalties)
+        - sum((1 - is_assigned[r_idx]) * unassigned_penalty for r_idx in range(len(reservations)))
     )
 
     # ── Solve ──
@@ -306,6 +367,8 @@ def _run_allocation_greedy(
     reservations: list[ReservationSlot],
     rooms: list[RoomSlot],
     optimization_horizon: Optional[tuple[date, date]] = None,
+    policy_constraints: Optional[dict] = None,
+    policy_weights: Optional[dict] = None,
 ) -> AllocationResult:
     """
     Greedy fallback allocation when OR-Tools is not available.
@@ -344,13 +407,26 @@ def _run_allocation_greedy(
         if res.current_room_id is not None:
             current_first = sorted(
                 candidate_rooms,
-                key=lambda r: (0 if r.room_id == res.current_room_id else (1 if r.category_id == res.category_id else 2)),
+                key=lambda r: (
+                    0 if r.category_id == res.category_id else 1,
+                    _one_night_gap_penalty_for_room(res, room_occupancy.get(r.room_id, [])),
+                    -_adjacency_bonus_for_room(res, room_occupancy.get(r.room_id, [])),
+                    0 if r.room_id == res.current_room_id else 1,
+                    res.category_priority(r.category_id),
+                    -len(room_occupancy.get(r.room_id, [])),
+                ),
             )
         else:
             # Prefer exact category match
             current_first = sorted(
                 candidate_rooms,
-                key=lambda r: (0 if r.category_id == res.category_id else 1, -len(room_occupancy.get(r.room_id, []))),
+                key=lambda r: (
+                    0 if r.category_id == res.category_id else 1,
+                    _one_night_gap_penalty_for_room(res, room_occupancy.get(r.room_id, [])),
+                    -_adjacency_bonus_for_room(res, room_occupancy.get(r.room_id, [])),
+                    res.category_priority(r.category_id),
+                    -len(room_occupancy.get(r.room_id, [])),
+                ),
             )
 
         assigned = False
@@ -385,6 +461,7 @@ def _run_allocation_greedy(
 def apply_allocation_result(
     db: Session,
     result: AllocationResult,
+    hotel_id: Optional[int] = None,
 ) -> list[Reservation]:
     """
     Apply the solver's assignments to the database.
@@ -395,21 +472,16 @@ def apply_allocation_result(
 
     updated = []
     for reservation_id, room_id in result.assignments.items():
-        reservation = db.query(Reservation).filter(
-            Reservation.id == reservation_id
-        ).first()
-        if reservation:
+        reservation = db.query(Reservation).filter(Reservation.id == reservation_id).first()
+        if reservation and (hotel_id is None or getattr(reservation, "hotel_id", None) == hotel_id):
             reservation.room_id = room_id
             updated.append(reservation)
             
-    for reservation_id in result.unassigned_reservations:
-        reservation = db.query(Reservation).filter(
-            Reservation.id == reservation_id
-        ).first()
-        if reservation and reservation.room_id is not None:
-            reservation.room_id = None
-            if reservation.status != ReservationStatusEnum.CHECKED_IN:
-                updated.append(reservation)
+    if result.unassigned_reservations:
+        # No borres asignaciones existentes; informá al caller para que actúe.
+        raise AllocationError(
+            f"Sin habitaciones disponibles para las reservas: {', '.join(map(str, result.unassigned_reservations))}"
+        )
 
     db.flush()
     return updated
@@ -419,6 +491,8 @@ def build_slots_from_db(
     db: Session,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
+    hotel_id: Optional[int] = None,
+    policy_constraints: Optional[dict] = None,
 ) -> tuple[list[ReservationSlot], list[RoomSlot]]:
     """
     Load reservations and rooms from the database and convert to solver-friendly slots.
@@ -434,6 +508,7 @@ def build_slots_from_db(
         start_date = date_type.today()
     if end_date is None:
         end_date = start_date + dt.timedelta(days=90)
+    policy_constraints = policy_constraints or {}
 
     # Load active reservations in the window
     reservations_query = db.query(Reservation).filter(
@@ -444,24 +519,66 @@ def build_slots_from_db(
         Reservation.check_in_date < end_date,
         Reservation.check_out_date > start_date,
     )
+    if hotel_id is not None:
+        reservations_query = reservations_query.filter(Reservation.hotel_id == hotel_id)
+
+    reservation_rows = reservations_query.all()
 
     # Discover allowed categories intelligently
     from app.models.room import RoomCategory
-    all_cat = db.query(RoomCategory).all()
+    from app.models.commercial import ProductRoomCompatibility, SellableProduct
+    all_cat_query = db.query(RoomCategory)
+    if hotel_id is not None:
+        all_cat_query = all_cat_query.filter(RoomCategory.hotel_id == hotel_id)
+    all_cat = all_cat_query.all()
     cat_map = {c.id: c for c in all_cat}
+    compat_query = db.query(ProductRoomCompatibility).filter(ProductRoomCompatibility.allows_auto_assignment == True)
+    if hotel_id is not None:
+        compat_query = compat_query.filter(ProductRoomCompatibility.hotel_id == hotel_id)
+    compatibility_rows = compat_query.order_by(ProductRoomCompatibility.priority.asc()).all()
+    allow_category_fallback = bool(policy_constraints.get("allow_category_fallback", True))
+    compatibility_by_product: dict[int, list[ProductRoomCompatibility]] = {}
+    for row in compatibility_rows:
+        compatibility_by_product.setdefault(row.sellable_product_id, []).append(row)
+    product_ids = {
+        product_id
+        for product_id in {
+            getattr(reservation, "sellable_product_id", None)
+            for reservation in reservation_rows
+        }
+        if product_id is not None
+    }
+    product_map: dict[int, SellableProduct] = {}
+    if product_ids:
+        product_query = db.query(SellableProduct).filter(SellableProduct.id.in_(product_ids))
+        if hotel_id is not None:
+            product_query = product_query.filter(SellableProduct.hotel_id == hotel_id)
+        product_map = {product.id: product for product in product_query.all()}
 
     reservation_slots = []
-    for res in reservations_query.all():
+    for res in reservation_rows:
         req_cat = cat_map.get(res.category_id)
         allowed = [res.category_id]
-        if req_cat:
-            bathroom_type = 'C' if req_cat.code.endswith('C') else ('P' if req_cat.code.endswith('P') else None)
-            if bathroom_type:
-                # Find other categories with same or higher max_occupancy and same bathroom_type
-                for c in all_cat:
-                    if c.id != res.category_id and c.max_occupancy >= req_cat.max_occupancy:
-                        if c.code.endswith(bathroom_type):
-                            allowed.append(c.id)
+        priority_by_category: dict[int, int] = {res.category_id: 0}
+
+        sellable_product_id = getattr(res, "sellable_product_id", None)
+        product = product_map.get(sellable_product_id)
+        compat_rows = compatibility_by_product.get(sellable_product_id, [])
+        if compat_rows:
+            for row in compat_rows:
+                if not allow_category_fallback and row.compatibility_kind != "exact":
+                    continue
+                if row.room_category_id not in allowed:
+                    allowed.append(row.room_category_id)
+                priority_by_category[row.room_category_id] = min(
+                    priority_by_category.get(row.room_category_id, row.priority),
+                    row.priority,
+                )
+        elif product and product.primary_room_category_id and product.primary_room_category_id not in allowed:
+            # Keep the fallback model explicit: if no compatibility rows were configured
+            # we only trust the product's declared primary category, never code heuristics.
+            allowed.append(product.primary_room_category_id)
+            priority_by_category[product.primary_room_category_id] = 0
 
         slot = ReservationSlot(
             reservation_id=res.id,
@@ -469,16 +586,20 @@ def build_slots_from_db(
             check_in=res.check_in_date,
             check_out=res.check_out_date,
             current_room_id=res.room_id,
-            is_locked=(res.status == ReservationStatusEnum.CHECKED_IN),
+            is_locked=(res.status == ReservationStatusEnum.CHECKED_IN or getattr(res, "allocation_locked", False)),
             allowed_category_ids=allowed,
+            category_priority_by_id=priority_by_category,
         )
         reservation_slots.append(slot)
 
     # Load all active rooms — EXCLUDE maintenance, blocked, but include CLEANING as it's a temporary state
-    rooms = db.query(Room).filter(
+    rooms_query = db.query(Room).filter(
         Room.is_active == True,
         Room.status.in_([RoomStatusEnum.AVAILABLE, RoomStatusEnum.OCCUPIED, RoomStatusEnum.CLEANING]),
-    ).all()
+    )
+    if hotel_id is not None:
+        rooms_query = rooms_query.filter(Room.hotel_id == hotel_id)
+    rooms = rooms_query.all()
 
     room_slots = [
         RoomSlot(

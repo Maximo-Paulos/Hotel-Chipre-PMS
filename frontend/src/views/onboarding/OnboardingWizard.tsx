@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { Link, Route, Routes, useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
@@ -15,45 +15,16 @@ import {
   type RoomPayload,
   type StaffPayload
 } from "../../api/onboarding";
+import { inviteUser } from "../../api/users";
 import { onboardingStatusKey, useOnboardingStatus } from "../../hooks/useOnboardingStatus";
 import { useSession } from "../../state/session";
 
 const steps = [
   { path: "", label: "Hotel" },
-  { path: "categories", label: "CategorÃ­as" },
+  { path: "categories", label: "Categorías" },
   { path: "rooms", label: "Habitaciones" },
   { path: "staff", label: "Staff" },
   { path: "finish", label: "Finalizar" }
-];
-
-const defaultCategories: CategoryPayload[] = [
-  {
-    name: "Standard Doble",
-    code: "STD",
-    description: "Base double room",
-    base_price_per_night: 100,
-    max_occupancy: 2,
-    amenities: "wifi"
-  },
-  {
-    name: "Suite",
-    code: "STE",
-    description: "Suite con balcÃ³n",
-    base_price_per_night: 180,
-    max_occupancy: 4,
-    amenities: "wifi,ac"
-  }
-];
-
-const defaultRooms: RoomPayload[] = [
-  { room_number: "101", floor: 1, category_code: "STD" },
-  { room_number: "102", floor: 1, category_code: "STD" },
-  { room_number: "201", floor: 2, category_code: "STE" }
-];
-
-const defaultStaff: StaffPayload[] = [
-  { name: "Lucia", role: "Front desk", email: "lucia@example.com" },
-  { name: "Javier", role: "Housekeeping" }
 ];
 
 export function OnboardingWizard() {
@@ -69,9 +40,17 @@ export function OnboardingWizard() {
     phone: "",
     role: "Owner"
   });
-  const [categories, setCategoriesState] = useState<CategoryPayload[]>(defaultCategories);
-  const [rooms, setRoomsState] = useState<RoomPayload[]>(defaultRooms);
-  const [staff, setStaffState] = useState<StaffPayload[]>(defaultStaff);
+  const [categories, setCategoriesState] = useState<CategoryPayload[]>([]);
+  const [rooms, setRoomsState] = useState<RoomPayload[]>([]);
+  const [staff, setStaffState] = useState<StaffPayload[]>([]);
+
+  // Pre-cargar datos previos si el backend los devuelve
+  useEffect(() => {
+    const anyStatus = status as any;
+    if (anyStatus?.categories && !categories.length) setCategoriesState(anyStatus.categories as CategoryPayload[]);
+    if (anyStatus?.rooms && !rooms.length) setRoomsState(anyStatus.rooms as RoomPayload[]);
+    if (anyStatus?.staff && !staff.length) setStaffState(anyStatus.staff as StaffPayload[]);
+  }, [status, categories.length, rooms.length, staff.length]);
 
   useEffect(() => {
     if (
@@ -122,12 +101,18 @@ export function OnboardingWizard() {
     return `Falta: ${status.missing_steps.join(", ")}`;
   }, [status]);
 
+  useEffect(() => {
+    if (status?.completed) {
+      navigate("/dashboard", { replace: true });
+    }
+  }, [status?.completed, navigate]);
+
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-xs uppercase tracking-wide text-slate-500">Onboarding obligatorio</p>
-          <h1 className="text-xl font-semibold text-slate-900">ConfigurÃ¡ tu hotel</h1>
+          <h1 className="text-xl font-semibold text-slate-900">Configurá tu hotel</h1>
         </div>
         <Link to="/dashboard" className="text-sm text-brand-700 hover:underline">
           Ir al dashboard
@@ -187,6 +172,7 @@ export function OnboardingWizard() {
             path="rooms"
             element={
               <RoomsStep
+                categories={categories}
                 rooms={rooms}
                 setRooms={setRoomsState}
                 onSave={async () => {
@@ -272,6 +258,7 @@ function OwnerStep({
               className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 shadow-sm focus:border-brand-500 focus:ring-brand-500"
               value={form.name}
               onChange={(e) => handleChange("name", e.target.value)}
+              placeholder="Ej: Hotel Chipre Sucursal Centro"
               required
             />
           </label>
@@ -282,16 +269,18 @@ function OwnerStep({
               className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 shadow-sm focus:border-brand-500 focus:ring-brand-500"
               value={form.email}
               onChange={(e) => handleChange("email", e.target.value)}
+              placeholder="Ej: admin@hotel.test"
               required
             />
           </label>
         </div>
         <div className="grid gap-3 md:grid-cols-2">
           <label className="text-sm font-medium text-slate-700">
-            TelÃ©fono
+            Teléfono
             <input
               className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 shadow-sm focus:border-brand-500 focus:ring-brand-500"
               value={form.phone || ""}
+              placeholder="Ej: +54 9 11 5555 1234"
               onChange={(e) => handleChange("phone", e.target.value)}
             />
           </label>
@@ -300,6 +289,7 @@ function OwnerStep({
             <input
               className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 shadow-sm focus:border-brand-500 focus:ring-brand-500"
               value={form.role || ""}
+              placeholder="Ej: Owner / Manager"
               onChange={(e) => handleChange("role", e.target.value)}
             />
           </label>
@@ -348,57 +338,75 @@ function CategoriesStep({
     ]);
 
   return (
-    <StepCard title="CategorÃ­as" status={status}>
+    <StepCard title="Categorías" status={status}>
       <div className="space-y-4">
         {categories.map((cat, idx) => (
           <div key={idx} className="rounded-lg border border-slate-200 p-4">
             <div className="grid gap-3 md:grid-cols-3">
-              <input
-                className="rounded border border-slate-200 px-3 py-2 text-sm"
-                placeholder="Nombre"
-                value={cat.name}
-                onChange={(e) => update(idx, "name", e.target.value)}
-              />
-              <input
-                className="rounded border border-slate-200 px-3 py-2 text-sm"
-                placeholder="CÃ³digo"
-                value={cat.code}
-                onChange={(e) => update(idx, "code", e.target.value)}
-              />
-              <input
-                className="rounded border border-slate-200 px-3 py-2 text-sm"
-                placeholder="Amenities"
-                value={cat.amenities || ""}
-                onChange={(e) => update(idx, "amenities", e.target.value)}
-              />
+              <label className="flex flex-col gap-1 text-xs font-semibold text-slate-600">
+                Nombre de categoría
+                <input
+                  className="rounded border border-slate-200 px-3 py-2 text-sm"
+                  placeholder="Ej: Standard Doble"
+                  value={cat.name}
+                  onChange={(e) => update(idx, "name", e.target.value)}
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-xs font-semibold text-slate-600">
+                Código interno
+                <input
+                  className="rounded border border-slate-200 px-3 py-2 text-sm"
+                  placeholder="Ej: STD"
+                  value={cat.code}
+                  onChange={(e) => update(idx, "code", e.target.value)}
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-xs font-semibold text-slate-600">
+                Amenities
+                <input
+                  className="rounded border border-slate-200 px-3 py-2 text-sm"
+                  placeholder="Ej: wifi,ac"
+                  value={cat.amenities || ""}
+                  onChange={(e) => update(idx, "amenities", e.target.value)}
+                />
+              </label>
             </div>
             <div className="mt-3 grid gap-3 md:grid-cols-3">
-              <input
-                className="rounded border border-slate-200 px-3 py-2 text-sm"
-                placeholder="Precio base"
-                type="number"
-                value={cat.base_price_per_night}
-                onChange={(e) => update(idx, "base_price_per_night", e.target.value)}
-              />
-              <input
-                className="rounded border border-slate-200 px-3 py-2 text-sm"
-                placeholder="OcupaciÃ³n"
-                type="number"
-                value={cat.max_occupancy}
-                onChange={(e) => update(idx, "max_occupancy", e.target.value)}
-              />
-              <input
-                className="rounded border border-slate-200 px-3 py-2 text-sm"
-                placeholder="DescripciÃ³n"
-                value={cat.description || ""}
-                onChange={(e) => update(idx, "description", e.target.value)}
-              />
+              <label className="flex flex-col gap-1 text-xs font-semibold text-slate-600">
+                Precio base por noche
+                <input
+                  className="rounded border border-slate-200 px-3 py-2 text-sm"
+                  placeholder="Ej: 120"
+                  type="number"
+                  value={cat.base_price_per_night}
+                  onChange={(e) => update(idx, "base_price_per_night", e.target.value)}
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-xs font-semibold text-slate-600">
+                Ocupación máxima
+                <input
+                  className="rounded border border-slate-200 px-3 py-2 text-sm"
+                  placeholder="Ej: 2"
+                  type="number"
+                  value={cat.max_occupancy}
+                  onChange={(e) => update(idx, "max_occupancy", e.target.value)}
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-xs font-semibold text-slate-600">
+                Descripción breve
+                <input
+                  className="rounded border border-slate-200 px-3 py-2 text-sm"
+                  placeholder="Ej: Vista al jardín"
+                  value={cat.description || ""}
+                  onChange={(e) => update(idx, "description", e.target.value)}
+                />
+              </label>
             </div>
           </div>
         ))}
         <div className="flex items-center justify-between">
           <button className="text-sm text-brand-700 hover:underline" type="button" onClick={addCategory}>
-            + Agregar categorÃ­a
+            + Agregar Categoría
           </button>
           <button
             className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-70"
@@ -415,12 +423,14 @@ function CategoriesStep({
 }
 
 function RoomsStep({
+  categories,
   rooms,
   setRooms,
   onSave,
   loading,
   status
 }: {
+  categories: CategoryPayload[];
   rooms: RoomPayload[];
   setRooms: (data: RoomPayload[]) => void;
   onSave: () => Promise<void>;
@@ -432,38 +442,58 @@ function RoomsStep({
     setRooms(rooms.map((room, i) => (i === idx ? { ...room, [field]: parsed } as RoomPayload : room)));
   };
 
-  const addRoom = () =>
-    setRooms([...rooms, { room_number: `${rooms.length + 101}`, floor: 1, category_code: rooms[0]?.category_code || "STD" }]);
+  const addRoom = () => {
+    const defaultCat = categories[0]?.code || "STD";
+    setRooms([
+      ...rooms,
+      { room_number: `${rooms.length + 101}`, floor: 1, category_code: rooms[rooms.length - 1]?.category_code || defaultCat }
+    ]);
+  };
 
   return (
     <StepCard title="Habitaciones" status={status}>
       <div className="space-y-3">
         {rooms.map((room, idx) => (
           <div key={idx} className="grid gap-3 md:grid-cols-4">
-            <input
-              className="rounded border border-slate-200 px-3 py-2 text-sm"
-              value={room.room_number}
-              onChange={(e) => update(idx, "room_number", e.target.value)}
-              placeholder="NÃºmero"
-            />
-            <input
-              className="rounded border border-slate-200 px-3 py-2 text-sm"
-              type="number"
-              value={room.floor}
-              onChange={(e) => update(idx, "floor", e.target.value)}
-              placeholder="Piso"
-            />
-            <input
-              className="rounded border border-slate-200 px-3 py-2 text-sm"
-              value={room.category_code}
-              onChange={(e) => update(idx, "category_code", e.target.value)}
-              placeholder="CÃ³digo categorÃ­a"
-            />
+            <label className="flex flex-col gap-1 text-xs font-semibold text-slate-600">
+              Número de habitación
+              <input
+                className="rounded border border-slate-200 px-3 py-2 text-sm"
+                value={room.room_number}
+                onChange={(e) => update(idx, "room_number", e.target.value)}
+                placeholder="Ej: 101"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs font-semibold text-slate-600">
+              Piso
+              <input
+                className="rounded border border-slate-200 px-3 py-2 text-sm"
+                type="number"
+                value={room.floor}
+                onChange={(e) => update(idx, "floor", e.target.value)}
+                placeholder="Ej: 1"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs font-semibold text-slate-600">
+              Código de categoría
+              <select
+                className="rounded border border-slate-200 px-3 py-2 text-sm"
+                value={room.category_code}
+                onChange={(e) => update(idx, "category_code", e.target.value)}
+              >
+                <option value="">Seleccioná una categoría</option>
+                {categories.map((cat) => (
+                  <option key={cat.code} value={cat.code}>
+                    {cat.name} ({cat.code})
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
         ))}
         <div className="flex items-center justify-between">
           <button className="text-sm text-brand-700 hover:underline" type="button" onClick={addRoom}>
-            + Agregar habitaciÃ³n
+            + Agregar habitación
           </button>
           <button
             className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-70"
@@ -483,12 +513,14 @@ function StaffStep({
   staff,
   setStaff,
   onSave,
+  onSkip,
   loading,
   status
 }: {
   staff: StaffPayload[];
   setStaff: (data: StaffPayload[]) => void;
   onSave: () => Promise<void>;
+  onSkip?: () => void;
   loading: boolean;
   status?: StepProps["status"];
 }) {
@@ -499,42 +531,63 @@ function StaffStep({
   const addMember = () => setStaff([...staff, { name: "", role: "", email: "" }]);
 
   return (
-    <StepCard title="Staff inicial" status={status}>
+    <StepCard title="Staff inicial (opcional)" status={status}>
       <div className="space-y-3">
         {staff.map((member, idx) => (
           <div key={idx} className="grid gap-3 md:grid-cols-3">
-            <input
-              className="rounded border border-slate-200 px-3 py-2 text-sm"
-              placeholder="Nombre"
-              value={member.name}
-              onChange={(e) => update(idx, "name", e.target.value)}
-            />
-            <input
-              className="rounded border border-slate-200 px-3 py-2 text-sm"
-              placeholder="Rol"
-              value={member.role || ""}
-              onChange={(e) => update(idx, "role", e.target.value)}
-            />
-            <input
-              className="rounded border border-slate-200 px-3 py-2 text-sm"
-              placeholder="Email"
-              value={member.email || ""}
-              onChange={(e) => update(idx, "email", e.target.value)}
-            />
+            <label className="flex flex-col gap-1 text-xs font-semibold text-slate-600">
+              Nombre
+              <input
+                className="rounded border border-slate-200 px-3 py-2 text-sm"
+                placeholder="Ej: Juan Pérez"
+                value={member.name}
+                onChange={(e) => update(idx, "name", e.target.value)}
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs font-semibold text-slate-600">
+              Rol
+              <input
+                className="rounded border border-slate-200 px-3 py-2 text-sm"
+                placeholder="Ej: Front Desk"
+                value={member.role || ""}
+                onChange={(e) => update(idx, "role", e.target.value)}
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs font-semibold text-slate-600">
+              Email
+              <input
+                className="rounded border border-slate-200 px-3 py-2 text-sm"
+                placeholder="Ej: juan@hotel.test"
+                value={member.email || ""}
+                onChange={(e) => update(idx, "email", e.target.value)}
+              />
+            </label>
           </div>
         ))}
         <div className="flex items-center justify-between">
           <button className="text-sm text-brand-700 hover:underline" type="button" onClick={addMember}>
             + Agregar staff
           </button>
-          <button
-            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-70"
-            onClick={onSave}
-            type="button"
-            disabled={loading}
-          >
-            {loading ? "Guardando..." : "Guardar y seguir"}
-          </button>
+          <div className="flex items-center gap-3">
+            {onSkip && (
+              <button
+                className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:border-brand-400"
+                onClick={onSkip}
+                type="button"
+                disabled={loading}
+              >
+                Saltar este paso
+              </button>
+            )}
+            <button
+              className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-70"
+              onClick={onSave}
+              type="button"
+              disabled={loading}
+            >
+              {loading ? "Guardando..." : "Guardar y seguir"}
+            </button>
+          </div>
         </div>
       </div>
     </StepCard>
@@ -558,7 +611,7 @@ function FinishStep({
         <p>Revisamos los pasos y marcamos completado en /api/onboarding/finish.</p>
         <ul className="list-disc pl-5">
           <li>Owner cargado</li>
-          <li>CategorÃ­as y habitaciones creadas</li>
+          <li>Categorías y habitaciones creadas</li>
           <li>Staff inicial guardado</li>
         </ul>
         <button
@@ -604,3 +657,6 @@ function StepCard({
     </div>
   );
 }
+
+
+
