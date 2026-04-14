@@ -79,6 +79,11 @@ const defaultFormState = (): FormState => ({
 });
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
+const reservationGuestLabel = (reservation: {
+  guest?: { first_name: string; last_name: string } | null;
+  guest_id: number;
+}) => (reservation.guest ? `${reservation.guest.first_name} ${reservation.guest.last_name}`.trim() : `Huesped #${reservation.guest_id}`);
+
 
 export function ReservationsPage() {
   const { session } = useSession();
@@ -993,7 +998,7 @@ export function ReservationsPage() {
                     <td className="px-4 py-2 font-semibold text-slate-900">{reservation.confirmation_code}</td>
                     <td className="px-4 py-2 text-slate-700">
                       <button className="text-left font-semibold text-brand-700 hover:underline" onClick={() => openGuest(reservation.guest_id)} type="button">
-                        Huésped #{reservation.guest_id}
+                        {reservationGuestLabel(reservation)}
                       </button>
                     </td>
                     <td className="px-4 py-2 text-slate-600">
@@ -1385,7 +1390,7 @@ export function ReservationsPage() {
                 <p className="text-xs uppercase tracking-wide text-slate-500">Ficha</p>
                 <h3 className="text-lg font-semibold text-slate-900">Reserva {detailsReservation.confirmation_code}</h3>
                 <p className="text-xs text-slate-500">
-                  Huésped #{detailsReservation.guest_id} · Cat {detailsReservation.category_id} ·{" "}
+                  {reservationGuestLabel(detailsReservation)} - Cat {detailsReservation.category_id} -{" "}
                   {detailsReservation.room_id ? `Hab ${detailsReservation.room_id}` : "Sin asignar"}
                 </p>
               </div>

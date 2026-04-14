@@ -57,6 +57,7 @@ from app.models.integration import IntegrationCatalog, IntegrationConnection, In
 from app.models.payment_link_test import PaymentLinkTest
 from app.models.security_token import SecurityToken
 from app.models.rate_limit_event import RateLimitEvent
+from app.models.ai_assistant import AIAssistantSession, AIAssistantMessage, AIAssistantActionRun, AIAssistantInsight
 
 __all__ = [
     "Room", "RoomCategory",
@@ -117,4 +118,8 @@ __all__ = [
     "PaymentLinkTest",
     "SecurityToken",
     "RateLimitEvent",
+    "AIAssistantSession",
+    "AIAssistantMessage",
+    "AIAssistantActionRun",
+    "AIAssistantInsight",
 ]

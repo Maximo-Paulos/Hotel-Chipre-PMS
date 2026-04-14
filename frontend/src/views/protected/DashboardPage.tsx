@@ -24,6 +24,10 @@ const statusClass = (status: ReservationStatus) => {
 };
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
+const reservationGuestLabel = (reservation: {
+  guest?: { first_name: string; last_name: string } | null;
+  guest_id: number;
+}) => (reservation.guest ? `${reservation.guest.first_name} ${reservation.guest.last_name}`.trim() : `Huesped #${reservation.guest_id}`);
 
 export function DashboardPage() {
   const today = todayIso();
@@ -157,7 +161,7 @@ export function DashboardPage() {
                 {arrivals.map((reservation) => (
                   <tr key={reservation.id} className="hover:bg-slate-50/60">
                     <td className="px-4 py-2 font-medium text-slate-900">{reservation.confirmation_code}</td>
-                    <td className="px-4 py-2 text-slate-600">Huésped #{reservation.guest_id}</td>
+                    <td className="px-4 py-2 text-slate-600">{reservationGuestLabel(reservation)}</td>
                     <td className="px-4 py-2 text-slate-600">
                       {reservation.check_in_date} - {reservation.check_out_date}
                     </td>

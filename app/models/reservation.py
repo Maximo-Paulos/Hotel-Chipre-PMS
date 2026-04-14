@@ -122,6 +122,8 @@ class Reservation(Base):
     allocation_status = Column(String(30), nullable=False, default="unassigned")
     allocation_locked = Column(Boolean, nullable=False, default=False)
     requires_manual_review = Column(Boolean, nullable=False, default=False)
+    payment_collection_model = Column(String(40), nullable=False, default="hotel_collect")
+    settlement_status = Column(String(40), nullable=False, default="not_applicable")
 
     # Number of guests
     num_adults = Column(Integer, nullable=False, default=1)

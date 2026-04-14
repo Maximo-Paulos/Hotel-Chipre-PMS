@@ -32,6 +32,9 @@ from app.api import (
     invitations,
     integrations,
     payment_link_tests,
+    commercial,
+    allocation_policy,
+    gemma_chat,
 )
 from app.services.email_service import mailer
 
@@ -128,6 +131,9 @@ app.include_router(auth.router)
 app.include_router(invitations.router)
 app.include_router(integrations.router)
 app.include_router(payment_link_tests.router)
+app.include_router(commercial.router)
+app.include_router(allocation_policy.router)
+app.include_router(gemma_chat.router)
 
 # Frontend build paths
 BASE_DIR = Path(__file__).resolve().parent

@@ -14,6 +14,13 @@ export type Reservation = {
   id: number;
   confirmation_code: string;
   guest_id: number;
+  guest?: {
+    id: number;
+    first_name: string;
+    last_name: string;
+    document_type?: string | null;
+    document_number?: string | null;
+  } | null;
   room_id: number | null;
   category_id: number;
   check_in_date: string;

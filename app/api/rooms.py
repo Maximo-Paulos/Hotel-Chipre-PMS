@@ -24,6 +24,7 @@ from app.schemas.room import (
 )
 from app.services.reservation_service import ReservationError, find_available_rooms
 from app.dependencies.auth import get_auth_context, AuthContext, require_roles
+from app.services.allocation_runtime_service import run_persisted_allocation
 from app.services.subscription_service import ensure_room_within_limit
 
 router = APIRouter(prefix="/api/rooms", tags=["Rooms"])
@@ -32,6 +33,23 @@ router = APIRouter(prefix="/api/rooms", tags=["Rooms"])
 class RoomStatusUpdate(BaseModel):
     status: RoomStatusEnum
     notes: Optional[str] = None
+
+
+def _serialize_reallocation_result(result, *, include_message: bool = False) -> dict:
+    payload = {
+        "run_id": result.run.id,
+        "status": result.run.status.value if hasattr(result.run.status, "value") else str(result.run.status),
+        "assignments": len(result.solver_result.assignments),
+        "moved": len(result.solver_result.moved_reservations),
+        "moved_ids": result.solver_result.moved_reservations,
+        "unassigned": len(result.solver_result.unassigned_reservations),
+        "unassigned_ids": result.solver_result.unassigned_reservations,
+        "objective_value": result.solver_result.objective_value,
+        "error": result.solver_result.error,
+    }
+    if include_message:
+        payload["message"] = "Reallocation executed"
+    return payload
 
 
 @router.post("/categories", response_model=RoomCategoryRead, status_code=status.HTTP_201_CREATED)
@@ -284,18 +302,16 @@ def update_room_status(
     # If room was moved to an unavailable state, trigger reallocation
     realloc_result = None
     if data.status in (RoomStatusEnum.CLEANING, RoomStatusEnum.MAINTENANCE, RoomStatusEnum.BLOCKED):
-        from app.services.allocation_engine import build_slots_from_db, run_allocation, apply_allocation_result
         try:
-            res_slots, room_slots = build_slots_from_db(db, hotel_id=context.hotel_id)
-            if res_slots:
-                result = run_allocation(res_slots, room_slots)
-                updated = apply_allocation_result(db, result, hotel_id=context.hotel_id)
+            result = run_persisted_allocation(
+                db,
+                hotel_id=context.hotel_id,
+                trigger_type=f"room_status_{data.status.value}",
+                apply=True,
+            )
+            if result.solver_result.assignments or result.solver_result.unassigned_reservations:
                 db.commit()
-                realloc_result = {
-                    "moved": len(result.moved_reservations),
-                    "unassigned": len(result.unassigned_reservations),
-                    "unassigned_ids": result.unassigned_reservations,
-                }
+                realloc_result = _serialize_reallocation_result(result)
         except Exception as e:
             realloc_result = {"error": str(e)}
     
@@ -340,29 +356,25 @@ def trigger_reallocation(
     This maximizes availability and profitability by packing rooms tightly and
     relocating reservations away from cleaning/maintenance rooms.
     Returns unassigned reservations (to be shown in yellow in the UI)."""
-    from app.services.allocation_engine import build_slots_from_db, run_allocation, apply_allocation_result, AllocationError
     
     try:
-        res_slots, room_slots = build_slots_from_db(db, hotel_id=context.hotel_id)
-        if not res_slots:
-            return {"status": "ok", "message": "No active reservations to reallocate", "moved": 0, "unassigned": []}
-        
-        result = run_allocation(res_slots, room_slots)
-        updated = apply_allocation_result(db, result, hotel_id=context.hotel_id)
+        result = run_persisted_allocation(
+            db,
+            hotel_id=context.hotel_id,
+            trigger_type="rooms_manual_reallocate",
+            apply=True,
+        )
         db.commit()
-        
-        return {
-            "status": "ok",
-            "total_reservations": len(res_slots),
-            "assignments": len(result.assignments),
-            "moved": result.moved_reservations,
-            "moved_count": len(result.moved_reservations),
-            "unassigned": result.unassigned_reservations,
-            "unassigned_count": len(result.unassigned_reservations),
-            "objective_value": result.objective_value,
-        }
-    except AllocationError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        if not result.solver_result.assignments and not result.solver_result.unassigned_reservations:
+            return {
+                "status": "ok",
+                "message": "No active reservations to reallocate",
+                "moved": 0,
+                "unassigned": [],
+            }
+        payload = _serialize_reallocation_result(result, include_message=True)
+        payload["status"] = "ok" if result.solver_result.success else "manual_review"
+        return payload
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

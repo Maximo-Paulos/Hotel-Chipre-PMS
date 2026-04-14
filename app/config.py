@@ -59,6 +59,21 @@ class Settings(BaseSettings):
     HOTEL_TIMEZONE: str = "America/Argentina/Buenos_Aires"
     MANAGER_PIN: str = "1234"
 
+    # Gemma / policy-learning assistant
+    GEMMA_ENABLED: bool = False
+    GEMMA_PROVIDER: str = "disabled"  # disabled, openai_compatible, google_gemini_api, auto
+    GEMMA_ENDPOINT_URL: str = ""
+    GEMMA_MODEL: str = ""
+    GEMMA_API_KEY: str = ""
+    GEMMA_TIMEOUT_SECONDS: float = 20.0
+    GEMMA_MAX_OUTPUT_TOKENS: int = 1024
+    GEMMA_TEMPERATURE: float = 0.2
+    GEMMA_STRICT_JSON: bool = True
+    GEMMA_MAX_CONVERSATION_MESSAGES: int = 6
+    GEMMA_MAX_INPUT_CHARS: int = 4000
+    GEMMA_RATE_LIMIT_WINDOW_SECONDS: int = 300
+    GEMMA_RATE_LIMIT_MAX_MESSAGES: int = 20
+
     # SMTP / Email
     SMTP_HOST: str = ""
     SMTP_PORT: int = 587

@@ -11,6 +11,19 @@ from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.room import Room, RoomCategory
 from app.models.hotel_config import HotelConfiguration
 from app.schemas.reservation import ReservationCreate, ReservationRead, ReservationUpdate
+from app.schemas.reservation_operations import (
+    AllocationRunRequest,
+    AllocationRunResponse,
+    OTARebookPreviewResponse,
+    OTARebookToDirectRequest,
+    OTARebookToDirectResponse,
+    ReservationActionResolveRequest,
+    ReservationExternalResolutionResponse,
+    ReservationManualReviewResponse,
+    ReservationOperationsSummaryRead,
+    ReservationPendingActionRead,
+    RoomMoveRequest,
+)
 from app.services.reservation_service import (
     create_reservation,
     transition_reservation_status,
@@ -21,6 +34,20 @@ from app.services.reservation_service import (
     get_reservation_by_id,
     update_reservation_fields,
 )
+from app.services.reservation_operations_service import (
+    ReservationOperationsError,
+    move_reservation_room,
+    preview_ota_rebook_as_direct,
+    rebook_ota_reservation_as_direct,
+)
+from app.services.reservation_action_service import (
+    ReservationActionError,
+    clear_reservation_manual_review,
+    get_reservation_operations_summary,
+    list_pending_reservation_actions,
+    resolve_external_channel_follow_up,
+)
+from app.services.allocation_runtime_service import run_persisted_allocation
 from app.dependencies.auth import get_auth_context, AuthContext, require_roles
 
 router = APIRouter(prefix="/api/reservations", tags=["Reservations"])
@@ -73,6 +100,76 @@ def list_reservations(
         db, hotel_id=context.hotel_id, status_filter=status_filter, from_date=from_date, to_date=to_date
     )
     return [_to_read(r) for r in reservations]
+
+
+@router.get("/actions/pending", response_model=list[ReservationPendingActionRead])
+def list_pending_actions(
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping")),
+):
+    safe_limit = max(1, min(limit, 250))
+    return list_pending_reservation_actions(db, hotel_id=context.hotel_id, limit=safe_limit)
+
+
+@router.get("/{reservation_id}/operations-summary", response_model=ReservationOperationsSummaryRead)
+def reservation_operations_summary(
+    reservation_id: int,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping")),
+):
+    try:
+        return get_reservation_operations_summary(
+            db,
+            hotel_id=context.hotel_id,
+            reservation_id=reservation_id,
+        )
+    except ReservationActionError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/{reservation_id}/operations/resolve-external", response_model=ReservationExternalResolutionResponse)
+def resolve_external_follow_up(
+    reservation_id: int,
+    payload: ReservationActionResolveRequest,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+):
+    try:
+        response = resolve_external_channel_follow_up(
+            db,
+            hotel_id=context.hotel_id,
+            reservation_id=reservation_id,
+            resolved_by_user_id=context.user_id,
+            notes=payload.notes,
+        )
+        db.commit()
+        return response
+    except ReservationActionError as e:
+        db.rollback()
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/{reservation_id}/operations/clear-manual-review", response_model=ReservationManualReviewResponse)
+def clear_manual_review(
+    reservation_id: int,
+    payload: ReservationActionResolveRequest,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping")),
+):
+    try:
+        response = clear_reservation_manual_review(
+            db,
+            hotel_id=context.hotel_id,
+            reservation_id=reservation_id,
+            reviewed_by_user_id=context.user_id,
+            notes=payload.notes,
+        )
+        db.commit()
+        return response
+    except ReservationActionError as e:
+        db.rollback()
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 @router.get("/{reservation_id}", response_model=ReservationRead)
@@ -151,7 +248,14 @@ def cancel_reservation(
     if r.status == ReservationStatusEnum.CANCELLED:
         raise HTTPException(status_code=400, detail="Reservation is already cancelled")
     try:
-        transition_reservation_status(db, r, ReservationStatusEnum.CANCELLED, context.hotel_id)
+        transition_reservation_status(
+            db,
+            r,
+            ReservationStatusEnum.CANCELLED,
+            context.hotel_id,
+            reason_code="cancelled_by_user",
+            changed_by_user_id=context.user_id,
+        )
         db.commit()
         db.refresh(r)
         return _to_read(r)
@@ -173,7 +277,14 @@ def mark_no_show(
         raise HTTPException(status_code=400, detail=f"Cannot mark no-show: reservation is '{r.status.value}'")
     try:
         r.notes = (r.notes or '') + f'\n[NO-SHOW] Marcado como no-show el {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")}'
-        transition_reservation_status(db, r, ReservationStatusEnum.CANCELLED, context.hotel_id)
+        transition_reservation_status(
+            db,
+            r,
+            ReservationStatusEnum.CANCELLED,
+            context.hotel_id,
+            reason_code="no_show",
+            changed_by_user_id=context.user_id,
+        )
         db.commit()
         db.refresh(r)
         return _to_read(r)
@@ -201,7 +312,15 @@ def modify_reservation(
     if r.status in (ReservationStatusEnum.CHECKED_IN, ReservationStatusEnum.CHECKED_OUT, ReservationStatusEnum.CANCELLED):
         raise HTTPException(status_code=400, detail=("Cannot modify: reservation is " + r.status.value))
     try:
-        update_reservation_fields(db, r, data, context.hotel_id)
+        update_reservation_fields(
+            db,
+            r,
+            data,
+            context.hotel_id,
+            changed_by_user_id=context.user_id,
+            room_move_reason_code="manual_update",
+            room_move_notes="Cambio manual desde API de reservas",
+        )
         db.commit()
         db.refresh(r)
         return _to_read(r)
@@ -233,16 +352,19 @@ def extend_stay(
     ):
         raise HTTPException(status_code=400, detail="Room is not available for the extended dates")
 
-    category = (
-        db.query(RoomCategory)
-        .filter(RoomCategory.id == r.category_id, RoomCategory.hotel_id == context.hotel_id)
-        .first()
-    )
-    if not category:
-        raise HTTPException(status_code=404, detail="Category not found")
     extra_nights = (new_checkout - r.check_out_date).days
-    r.check_out_date = new_checkout
-    r.total_amount = round(r.total_amount + extra_nights * category.base_price_per_night, 2)
+    try:
+        update_reservation_fields(
+            db,
+            r,
+            ReservationUpdate(check_out_date=new_checkout),
+            context.hotel_id,
+            changed_by_user_id=context.user_id,
+            room_move_reason_code="extend_stay",
+            room_move_notes=f"Extension hasta {new_checkout}",
+        )
+    except ReservationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     r.notes = (r.notes or '') + f"\n[EXTENSION] +{extra_nights} noches hasta {new_checkout}"
 
     if r.balance_due > 0 and r.status == ReservationStatusEnum.FULLY_PAID:
@@ -251,3 +373,144 @@ def extend_stay(
     db.commit()
     db.refresh(r)
     return _to_read(r)
+
+
+@router.post("/{reservation_id}/room-move", response_model=ReservationRead)
+def room_move(
+    reservation_id: int,
+    payload: RoomMoveRequest,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping")),
+):
+    reservation = get_reservation_by_id(db, reservation_id, context.hotel_id)
+    if not reservation:
+        raise HTTPException(status_code=404, detail="Reservation not found")
+    try:
+        move_reservation_room(
+            db,
+            reservation=reservation,
+            to_room_id=payload.to_room_id,
+            hotel_id=context.hotel_id,
+            moved_by_user_id=context.user_id,
+            reason_code=payload.reason_code,
+            notes=payload.notes,
+        )
+        db.commit()
+        db.refresh(reservation)
+        return _to_read(reservation)
+    except ReservationOperationsError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/{reservation_id}/rebook-direct", response_model=OTARebookToDirectResponse)
+def rebook_ota_to_direct(
+    reservation_id: int,
+    payload: OTARebookToDirectRequest,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+):
+    reservation = get_reservation_by_id(db, reservation_id, context.hotel_id)
+    if not reservation:
+        raise HTTPException(status_code=404, detail="Reservation not found")
+    try:
+        result = rebook_ota_reservation_as_direct(
+            db,
+            reservation=reservation,
+            hotel_id=context.hotel_id,
+            target_category_id=payload.target_category_id,
+            target_rate_plan_id=payload.target_rate_plan_id,
+            target_tax_policy_id=payload.target_tax_policy_id,
+            created_by_user_id=context.user_id,
+            target_room_id=payload.target_room_id,
+            pricing_channel_code=payload.pricing_channel_code,
+            guest_scope=payload.guest_scope,
+            target_currency=payload.target_currency,
+            discount_pct=payload.discount_pct,
+            total_override=payload.total_override,
+            notes=payload.notes,
+        )
+        db.commit()
+        return OTARebookToDirectResponse(
+            adjustment_id=result.adjustment.id,
+            original_reservation_id=result.original_reservation.id,
+            new_reservation_id=result.new_reservation.id,
+            billing_adjustment_id=(result.billing_adjustment.id if result.billing_adjustment else None),
+            amount_delta=result.adjustment.amount_delta or 0.0,
+            currency_code=result.adjustment.currency_code,
+            quoted_total_amount=result.preview.quoted_total_amount,
+            pricing_source=result.preview.pricing_source,
+        )
+    except ReservationOperationsError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/{reservation_id}/rebook-direct/preview", response_model=OTARebookPreviewResponse)
+def preview_ota_rebook_to_direct(
+    reservation_id: int,
+    payload: OTARebookToDirectRequest,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+):
+    reservation = get_reservation_by_id(db, reservation_id, context.hotel_id)
+    if not reservation:
+        raise HTTPException(status_code=404, detail="Reservation not found")
+    try:
+        preview = preview_ota_rebook_as_direct(
+            db,
+            reservation=reservation,
+            hotel_id=context.hotel_id,
+            target_category_id=payload.target_category_id,
+            target_rate_plan_id=payload.target_rate_plan_id,
+            target_tax_policy_id=payload.target_tax_policy_id,
+            pricing_channel_code=payload.pricing_channel_code,
+            guest_scope=payload.guest_scope,
+            target_currency=payload.target_currency,
+            discount_pct=payload.discount_pct,
+            total_override=payload.total_override,
+        )
+        return OTARebookPreviewResponse(
+            target_category_id=preview.target_category_id,
+            target_rate_plan_id=preview.target_rate_plan_id,
+            target_sellable_product_id=preview.target_sellable_product_id,
+            pricing_source=preview.pricing_source,
+            currency_code=preview.currency_code,
+            original_total_amount=preview.original_total_amount,
+            quoted_total_amount=preview.quoted_total_amount,
+            subtotal_amount=preview.subtotal_amount,
+            tax_amount=preview.tax_amount,
+            fee_amount=preview.fee_amount,
+            commission_amount=preview.commission_amount,
+            net_amount=preview.net_amount,
+            deposit_amount=preview.deposit_amount,
+            amount_delta=preview.amount_delta,
+            fx_rate_snapshot=preview.fx_rate_snapshot,
+        )
+    except ReservationOperationsError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/allocation/recalculate", response_model=AllocationRunResponse)
+def recalculate_allocation(
+    payload: AllocationRunRequest,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping")),
+):
+    result = run_persisted_allocation(
+        db,
+        hotel_id=context.hotel_id,
+        trigger_type="manual_api_recalculate",
+        apply=payload.apply,
+        horizon_start=payload.horizon_start,
+        horizon_end=payload.horizon_end,
+    )
+    db.commit()
+    return AllocationRunResponse(
+        run_id=result.run.id,
+        status=result.run.status.value if hasattr(result.run.status, "value") else str(result.run.status),
+        objective_score=result.run.objective_score or 0.0,
+        assignments_created=len(result.solver_result.assignments),
+        unassigned_count=len(result.solver_result.unassigned_reservations),
+        moved_count=len(result.solver_result.moved_reservations),
+    )

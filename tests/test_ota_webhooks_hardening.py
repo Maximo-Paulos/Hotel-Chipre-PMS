@@ -99,6 +99,7 @@ def _seed_hotel(db, hotel_id: int, room_type_code: str) -> tuple[str, str]:
 
     booking_secret = f"booking-secret-{hotel_id}"
     expedia_secret = f"expedia-secret-{hotel_id}"
+    despegar_secret = f"despegar-secret-{hotel_id}"
     OTAIntegrationService.upsert_webhook_credential(
         db,
         hotel_id=hotel_id,
@@ -113,12 +114,19 @@ def _seed_hotel(db, hotel_id: int, room_type_code: str) -> tuple[str, str]:
         webhook_secret=expedia_secret,
         external_property_id=f"expedia-{hotel_id}",
     )
-    return booking_secret, expedia_secret
+    OTAIntegrationService.upsert_webhook_credential(
+        db,
+        hotel_id=hotel_id,
+        provider="despegar",
+        webhook_secret=despegar_secret,
+        external_property_id=f"despegar-{hotel_id}",
+    )
+    return booking_secret, expedia_secret, despegar_secret
 
 
 def test_booking_webhook_scopes_by_hotel_and_secret(client: TestClient, db):
-    booking_secret_1, _ = _seed_hotel(db, 1, "STD_DBL")
-    booking_secret_2, _ = _seed_hotel(db, 2, "STD_DBL")
+    booking_secret_1, _, _ = _seed_hotel(db, 1, "STD_DBL")
+    booking_secret_2, _, _ = _seed_hotel(db, 2, "STD_DBL")
     db.commit()
 
     payload = {
@@ -159,8 +167,8 @@ def test_booking_webhook_scopes_by_hotel_and_secret(client: TestClient, db):
 
 
 def test_expedia_webhook_scopes_by_hotel_and_secret(client: TestClient, db):
-    _, expedia_secret_1 = _seed_hotel(db, 1, "STD_DBL")
-    _, expedia_secret_2 = _seed_hotel(db, 2, "STD_DBL")
+    _, expedia_secret_1, _ = _seed_hotel(db, 1, "STD_DBL")
+    _, expedia_secret_2, _ = _seed_hotel(db, 2, "STD_DBL")
     db.commit()
 
     payload = {
@@ -218,3 +226,41 @@ def test_ota_webhook_rejects_invalid_secret(client: TestClient, db):
     assert response.status_code == 401
     assert db.query(OTAReservationMapping).count() == 0
 
+
+def test_despegar_webhook_scopes_by_hotel_and_secret(client: TestClient, db):
+    _, _, despegar_secret_1 = _seed_hotel(db, 1, "STD_DBL")
+    _, _, despegar_secret_2 = _seed_hotel(db, 2, "STD_DBL")
+    db.commit()
+
+    payload = {
+        "reservation_id": "DSP-2003",
+        "confirmation_code": "DSP-CNF-2003",
+        "guest": {"first_name": "Luis", "last_name": "Diaz", "email": "luis@example.com"},
+        "stay": {"checkin": "2026-04-18", "checkout": "2026-04-20"},
+        "product_code": "STD_DBL",
+        "occupancy": {"adults": 2, "children": 0},
+        "pricing": {"total": 310.0, "currency": "USD"},
+        "property_id": "despegar-2",
+    }
+
+    response = client.post(f"/api/webhooks/despegar/2/{despegar_secret_2}", json=payload)
+    assert response.status_code == 200
+    assert response.json()["status"] == "ok"
+
+    db.expire_all()
+    mapping = db.query(OTAReservationMapping).filter_by(
+        hotel_id=2,
+        ota_name="despegar",
+        ota_reservation_id="DSP-2003",
+    ).one()
+    assert mapping.hotel_id == 2
+    assert mapping.reservation is not None
+    assert mapping.reservation.hotel_id == 2
+    assert mapping.reservation.room is not None
+    assert mapping.reservation.room.hotel_id == 2
+
+    assert db.query(OTAReservationMapping).filter_by(
+        hotel_id=1,
+        ota_name="despegar",
+        ota_reservation_id="DSP-2003",
+    ).count() == 0

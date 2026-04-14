@@ -46,7 +46,10 @@ class TestBookingWebhook:
 
         res = db.query(Reservation).filter(Reservation.id == mapping.reservation_id).first()
         assert res is not None
-        assert res.status == ReservationStatusEnum.FULLY_PAID
+        assert res.status == ReservationStatusEnum.PENDING
+        assert res.amount_paid == 0.0
+        assert res.payment_collection_model == "unknown"
+        assert res.settlement_status == "unknown"
         assert res.total_amount == 500.0
         assert res.source.value == "booking"
 
@@ -73,6 +76,39 @@ class TestBookingWebhook:
         db.flush()
         m2 = OTAIntegrationService.process_booking_webhook(db, hotel_config.id, secret, payload)
         assert m1.id == m2.id  # Same mapping returned
+
+
+    def test_process_booking_prepaid_reservation_marks_guest_balance_as_paid(self, db, sample_rooms, sample_categories, hotel_config):
+        secret = "booking-secret-prepaid"
+        OTAIntegrationService.upsert_webhook_credential(
+            db,
+            hotel_id=hotel_config.id,
+            provider="booking",
+            webhook_secret=secret,
+            external_property_id="property-h1",
+        )
+        payload = {
+            "reservation_id": "BK-PAID-001",
+            "guest_name": "Paid Guest",
+            "checkin": "2026-04-08",
+            "checkout": "2026-04-10",
+            "room_type": "STD_DBL",
+            "num_adults": 2,
+            "total_price": 300.0,
+            "currency": "ARS",
+            "paid_amount": 300.0,
+            "payment_collection_model": "prepaid",
+            "property_id": "property-h1",
+        }
+
+        mapping = OTAIntegrationService.process_booking_webhook(db, hotel_config.id, secret, payload)
+        db.flush()
+
+        res = db.query(Reservation).filter(Reservation.id == mapping.reservation_id).first()
+        assert res.status == ReservationStatusEnum.FULLY_PAID
+        assert res.amount_paid == 300.0
+        assert res.payment_collection_model == "ota_prepaid"
+        assert res.settlement_status == "pending"
 
 
 class TestExpediaWebhook:

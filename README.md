@@ -13,6 +13,18 @@
 - Migraciones: `alembic upgrade head` (usa `DATABASE_URL` de `.env`).
 - (Opcional) Seed demo manual: `python -m app.scripts.seed_demo` — solo si querés datos de ejemplo.
 
+### Gemma local (mock rapido)
+- Para probar la integracion de Gemma sin modelo real:
+```bash
+python -m app.scripts.mock_gemma_runtime --port 11434
+```
+- Variables recomendadas:
+  - `GEMMA_ENABLED=true`
+  - `GEMMA_PROVIDER=openai_compatible`
+  - `GEMMA_ENDPOINT_URL=http://127.0.0.1:11434/v1/chat/completions`
+  - `GEMMA_MODEL=gemma-mock-local`
+- Diagnostico: `GET /api/gemma/chat/runtime-status`
+
 ## Deploy (Docker / Compose)
 1) Build imagenes  
 ```bash

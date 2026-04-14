@@ -55,6 +55,14 @@ class NormalizedOTAReservation:
     tax_total: float | None
     fee_total: float | None
     commission_total: float | None
+    event_type: str = "new"
+    guest_phone: str | None = None
+    guest_nationality: str | None = None
+    guest_document_type: str | None = None
+    guest_document_number: str | None = None
+    paid_amount: float | None = None
+    payment_collection_model: str | None = None
+    settlement_status: str | None = None
     arrival_time_hint: str | None = None
     notes: str | None = None
     raw_payload: dict[str, Any] = field(default_factory=dict)
@@ -63,6 +71,10 @@ class NormalizedOTAReservation:
 
 class OTAProviderAdapter(ABC):
     provider_code: str
+
+    @abstractmethod
+    def normalize_reservation_payload(self, payload: dict[str, Any]) -> NormalizedOTAReservation:
+        raise NotImplementedError
 
     @abstractmethod
     def verify_connection(self, context: OTAAdapterContext) -> OTAOperationResult:

@@ -16,6 +16,8 @@ def _handle_ota_webhook(provider: str, hotel_id: int, webhook_secret: str, paylo
             mapping = OTAIntegrationService.process_booking_webhook(db, hotel_id, webhook_secret, payload)
         elif provider == "expedia":
             mapping = OTAIntegrationService.process_expedia_webhook(db, hotel_id, webhook_secret, payload)
+        elif provider == "despegar":
+            mapping = OTAIntegrationService.process_despegar_webhook(db, hotel_id, webhook_secret, payload)
         else:
             raise OTAError(f"Unsupported OTA provider: {provider}")
         db.commit()
@@ -44,8 +46,15 @@ def expedia_webhook(hotel_id: int, webhook_secret: str, payload: dict, db: Sessi
     return _handle_ota_webhook("expedia", hotel_id, webhook_secret, payload, db)
 
 
+@router.post("/despegar/{hotel_id}/{webhook_secret}")
+def despegar_webhook(hotel_id: int, webhook_secret: str, payload: dict, db: Session = Depends(get_db)):
+    """Receive reservation notifications from Despegar."""
+    return _handle_ota_webhook("despegar", hotel_id, webhook_secret, payload, db)
+
+
 @router.post("/booking")
 @router.post("/expedia")
+@router.post("/despegar")
 def deprecated_webhook():
     raise HTTPException(
         status_code=status.HTTP_410_GONE,

@@ -126,3 +126,31 @@ class TestCPSATAllocation:
         result = run_allocation([], rooms)
         assert result.success is True
         assert len(result.assignments) == 0
+
+    def test_cpsat_prefers_filling_one_night_gap_when_other_room_is_already_used(self):
+        rooms = make_rooms(1, 2)
+        reservations = [
+            make_res(1, 1, date(2026, 4, 1), date(2026, 4, 3), room=1, locked=True),
+            make_res(2, 1, date(2026, 4, 4), date(2026, 4, 6), room=1, locked=True),
+            make_res(3, 1, date(2026, 4, 3), date(2026, 4, 4), room=2),
+            make_res(4, 1, date(2026, 4, 10), date(2026, 4, 12), room=2, locked=True),
+        ]
+
+        result = run_allocation(reservations, rooms)
+
+        assert result.success is True
+        assert result.assignments[3] == 1
+
+    def test_greedy_prefers_filling_one_night_gap_when_other_room_is_already_used(self):
+        rooms = make_rooms(1, 2)
+        reservations = [
+            make_res(1, 1, date(2026, 4, 1), date(2026, 4, 3), room=1, locked=True),
+            make_res(2, 1, date(2026, 4, 4), date(2026, 4, 6), room=1, locked=True),
+            make_res(3, 1, date(2026, 4, 3), date(2026, 4, 4), room=2),
+            make_res(4, 1, date(2026, 4, 10), date(2026, 4, 12), room=2, locked=True),
+        ]
+
+        result = _run_allocation_greedy(reservations, rooms)
+
+        assert result.success is True
+        assert result.assignments[3] == 1

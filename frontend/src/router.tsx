@@ -9,6 +9,7 @@ import { VerifyEmailPage } from "./views/public/VerifyEmailPage";
 import { AcceptInvitationPage } from "./views/public/AcceptInvitationPage";
 import { OnboardingWizard } from "./views/onboarding/OnboardingWizard";
 import { DashboardPage } from "./views/protected/DashboardPage";
+import { GuestsPage } from "./views/protected/GuestsPage";
 import { ReservationsPage } from "./views/protected/ReservationsPage";
 import { RoomsPage } from "./views/protected/RoomsPage";
 import PricingPage from "./views/public/PricingPage";
@@ -17,6 +18,7 @@ import { SettingsHotelPage } from "./views/protected/SettingsHotelPage";
 import { SettingsSecurityPage } from "./views/protected/SettingsSecurityPage";
 import { SettingsConnectionsPage } from "./views/protected/SettingsConnectionsPage";
 import { SettingsTestsPage } from "./views/protected/SettingsTestsPage";
+import { SettingsAssistantPage } from "./views/protected/SettingsAssistantPage";
 import SettingsSubscriptionPage from "./views/protected/SettingsSubscriptionPage";
 import { useOnboardingStatus } from "./hooks/useOnboardingStatus";
 import { useSession } from "./state/session";
@@ -36,11 +38,13 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <Navigate to="/dashboard" replace /> },
       { path: "dashboard", element: <DashboardPage /> },
+      { path: "huespedes", element: <GuestsPage /> },
       { path: "reservas", element: <ReservationsPage /> },
       { path: "habitaciones", element: <RoomsPage /> },
       { path: "onboarding/*", element: <OnboardingGate /> },
       { path: "settings", element: <Navigate to="/settings/users" replace /> },
       { path: "settings/users", element: <SettingsUsersPage /> },
+      { path: "settings/assistant", element: <SettingsAssistantPage /> },
       { path: "settings/subscription", element: <SettingsSubscriptionPage /> },
       { path: "settings/connections", element: <SettingsConnectionsPage /> },
       { path: "settings/tests", element: <SettingsTestsPage /> },

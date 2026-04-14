@@ -9,6 +9,7 @@ from app.services.ota.contracts import (
     OTAProviderAdapter,
 )
 from app.services.ota.orchestrator import OTAOrchestratorService
+from app.services.ota.registry import build_default_ota_orchestrator, get_default_adapter
 
 __all__ = [
     "NormalizedOTAReservation",
@@ -16,4 +17,6 @@ __all__ = [
     "OTAOperationResult",
     "OTAProviderAdapter",
     "OTAOrchestratorService",
+    "build_default_ota_orchestrator",
+    "get_default_adapter",
 ]

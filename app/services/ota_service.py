@@ -34,8 +34,10 @@ from app.services.reservation_service import (
     find_available_rooms,
     generate_confirmation_code,
     ReservationError,
+    transition_reservation_status,
+    update_reservation_fields,
 )
-from app.schemas.reservation import ReservationCreate
+from app.schemas.reservation import ReservationCreate, ReservationUpdate
 
 
 class OTAError(Exception):
@@ -168,6 +170,8 @@ class OTAIntegrationService:
         gross_total: float | None,
         currency_code: str | None,
         sync_status: str,
+        provider_state: OTAReservationLifecycleEnum = OTAReservationLifecycleEnum.CONFIRMED,
+        error_message: str | None = None,
         rate_plan_id: int | None = None,
     ) -> OTAReservationLink:
         provider = OTAIntegrationService._ensure_foundation_provider(db, provider_code)
@@ -204,11 +208,12 @@ class OTAIntegrationService:
         link.reservation_id = reservation.id if reservation else None
         link.rate_plan_id = rate_plan_id or (reservation.rate_plan_id if reservation else None)
         link.external_confirmation_code = external_confirmation_code
-        link.provider_state = OTAReservationLifecycleEnum.CONFIRMED
+        link.provider_state = provider_state
         link.sync_status = sync_status
         link.currency_code = currency_code
         link.gross_total = gross_total
         link.raw_payload_encrypted = json.dumps(payload)
+        link.error_message = error_message
         link.last_seen_at = datetime.now(timezone.utc)
         db.flush()
         return link
@@ -219,6 +224,127 @@ class OTAIntegrationService:
         first_name = name_parts[0] if name_parts and name_parts[0] else "OTA"
         last_name = name_parts[1] if len(name_parts) > 1 else "Guest"
         return first_name, last_name
+
+    @staticmethod
+    def _normalize_event_type(raw_value: str | None) -> str:
+        normalized = str(raw_value or "").strip().lower().replace("-", "_").replace(" ", "_")
+        if any(token in normalized for token in ("cancel", "void", "deleted", "delete")):
+            return "cancelled"
+        if any(token in normalized for token in ("modify", "modified", "update", "updated", "change", "changed", "amend")):
+            return "modified"
+        return "new"
+
+    @staticmethod
+    def _sync_mapping_payload(
+        mapping: OTAReservationMapping,
+        *,
+        guest_name: str,
+        payload: dict,
+        sync_status: OTASyncStatusEnum | None = None,
+        error_message: str | None = None,
+    ) -> None:
+        mapping.ota_guest_name = guest_name
+        mapping.raw_payload = json.dumps(payload, ensure_ascii=True, sort_keys=True)
+        if sync_status is not None:
+            mapping.sync_status = sync_status
+        mapping.error_message = error_message
+
+    @staticmethod
+    def _sync_guest_record(
+        db: Session,
+        *,
+        hotel_id: int,
+        guest: Guest | None,
+        normalized: NormalizedOTAReservation,
+    ) -> Guest:
+        first_name, last_name = OTAIntegrationService._split_guest_name(normalized.guest_full_name)
+        guest = guest or Guest(hotel_id=hotel_id, first_name=first_name, last_name=last_name)
+        guest.hotel_id = hotel_id
+        guest.first_name = first_name
+        guest.last_name = last_name
+        if normalized.guest_email is not None:
+            guest.email = normalized.guest_email
+        if normalized.guest_phone is not None:
+            guest.phone = normalized.guest_phone
+        if normalized.guest_nationality is not None:
+            guest.nationality = normalized.guest_nationality
+        if normalized.guest_document_type is not None:
+            guest.document_type = normalized.guest_document_type
+        if normalized.guest_document_number is not None:
+            guest.document_number = normalized.guest_document_number
+        db.add(guest)
+        db.flush()
+        return guest
+
+    @staticmethod
+    def _select_room_for_normalized_reservation(
+        db: Session,
+        *,
+        hotel_id: int,
+        reservation_id: int | None,
+        normalized: NormalizedOTAReservation,
+        candidate_categories: list[RoomCategory],
+        current_room: Room | None = None,
+    ) -> tuple[RoomCategory | None, Room | None]:
+        from app.services.reservation_service import check_room_availability
+
+        category_by_id = {category.id: category for category in candidate_categories}
+        if (
+            current_room
+            and current_room.hotel_id == hotel_id
+            and current_room.category_id in category_by_id
+            and check_room_availability(
+                db,
+                current_room.id,
+                normalized.check_in_date,
+                normalized.check_out_date,
+                hotel_id=hotel_id,
+                exclude_reservation_id=reservation_id,
+            )
+        ):
+            locked_room = (
+                db.query(Room)
+                .filter(Room.id == current_room.id, Room.hotel_id == hotel_id)
+                .with_for_update()
+                .first()
+            )
+            if locked_room:
+                return category_by_id[current_room.category_id], locked_room
+
+        for category in candidate_categories:
+            available_rooms = find_available_rooms(
+                db,
+                category.id,
+                normalized.check_in_date,
+                normalized.check_out_date,
+                hotel_id=hotel_id,
+                exclude_reservation_id=reservation_id,
+            )
+            if not available_rooms:
+                continue
+            room = (
+                db.query(Room)
+                .filter(Room.id == available_rooms[0].id, Room.hotel_id == hotel_id)
+                .with_for_update()
+                .first()
+            )
+            if room:
+                return category, room
+        return None, None
+
+    @staticmethod
+    def _mark_reservation_manual_review(
+        reservation: Reservation,
+        *,
+        reason: str,
+        append_note: bool = True,
+    ) -> None:
+        reservation.requires_manual_review = True
+        reservation.allocation_status = "manual_review"
+        if append_note:
+            existing = (reservation.notes or "").strip()
+            note = f"[OTA MANUAL REVIEW] {reason}".strip()
+            reservation.notes = f"{existing}\n{note}".strip() if existing else note
 
     @staticmethod
     def _reservation_source_for_provider(provider_code: str) -> ReservationSourceEnum:
@@ -256,6 +382,8 @@ class OTAIntegrationService:
         hotel_id: int,
         reservation: Reservation,
         normalized: NormalizedOTAReservation,
+        *,
+        preserve_operational_status: bool = False,
     ) -> None:
         gross_total = normalized.gross_total or 0.0
         tax_total = normalized.tax_total or 0.0
@@ -289,12 +417,13 @@ class OTAIntegrationService:
             amount_paid=amount_paid,
             gross_total=gross_total,
         )
-        if gross_total > 0 and amount_paid >= gross_total:
-            reservation.status = ReservationStatusEnum.FULLY_PAID
-        elif amount_paid > 0:
-            reservation.status = ReservationStatusEnum.DEPOSIT_PAID
-        else:
-            reservation.status = ReservationStatusEnum.PENDING
+        if not preserve_operational_status:
+            if gross_total > 0 and amount_paid >= gross_total:
+                reservation.status = ReservationStatusEnum.FULLY_PAID
+            elif amount_paid > 0:
+                reservation.status = ReservationStatusEnum.DEPOSIT_PAID
+            else:
+                reservation.status = ReservationStatusEnum.PENDING
         reservation.source_provider_code = normalized.provider_code
         reservation.external_confirmation_code = (
             normalized.external_confirmation_code or normalized.external_reservation_id
@@ -345,21 +474,15 @@ class OTAIntegrationService:
                 f"{normalized.sellable_product_code or normalized.rate_plan_code or 'missing'}"
             )
 
-        selected_category = None
-        available_rooms = []
-        for category in candidate_categories:
-            available_rooms = find_available_rooms(
-                db,
-                category.id,
-                normalized.check_in_date,
-                normalized.check_out_date,
-                hotel_id=hotel_id,
-            )
-            if available_rooms:
-                selected_category = category
-                break
+        selected_category, room = OTAIntegrationService._select_room_for_normalized_reservation(
+            db,
+            hotel_id=hotel_id,
+            reservation_id=None,
+            normalized=normalized,
+            candidate_categories=candidate_categories,
+        )
 
-        if not available_rooms:
+        if not selected_category or not room:
             mapping.sync_status = OTASyncStatusEnum.CONFLICT
             mapping.error_message = "No rooms available - overbooking detected"
             db.flush()
@@ -369,8 +492,6 @@ class OTAIntegrationService:
                 f"({normalized.sellable_product_code or normalized.rate_plan_code}, "
                 f"{normalized.check_in_date} to {normalized.check_out_date})"
             )
-
-        room = db.query(Room).filter(Room.id == available_rooms[0].id).with_for_update().first()
 
         from app.services.reservation_service import check_room_availability
 
@@ -395,15 +516,12 @@ class OTAIntegrationService:
             db.flush()
             raise OTAError("Cross-hotel room assignment blocked")
 
-        first_name, last_name = OTAIntegrationService._split_guest_name(normalized.guest_full_name)
-        guest = Guest(
+        guest = OTAIntegrationService._sync_guest_record(
+            db,
             hotel_id=hotel_id,
-            first_name=first_name,
-            last_name=last_name,
-            email=normalized.guest_email or "",
+            guest=None,
+            normalized=normalized,
         )
-        db.add(guest)
-        db.flush()
 
         reservation_data = ReservationCreate(
             guest_id=guest.id,
@@ -555,6 +673,304 @@ class OTAIntegrationService:
         return sellable_product, rate_plan, categories
 
     @staticmethod
+    def _process_existing_incoming_reservation(
+        db: Session,
+        *,
+        hotel_id: int,
+        mapping: OTAReservationMapping,
+        normalized: NormalizedOTAReservation,
+        payload: dict,
+    ) -> OTAReservationMapping:
+        reservation = mapping.reservation
+        if reservation is None and mapping.reservation_id is not None:
+            reservation = (
+                db.query(Reservation)
+                .filter(Reservation.id == mapping.reservation_id, Reservation.hotel_id == hotel_id)
+                .first()
+            )
+
+        if reservation is None:
+            OTAIntegrationService._sync_mapping_payload(
+                mapping,
+                guest_name=normalized.guest_full_name,
+                payload=payload,
+                sync_status=OTASyncStatusEnum.PENDING,
+                error_message=None,
+            )
+            return OTAIntegrationService._materialize_incoming_reservation(
+                db,
+                hotel_id=hotel_id,
+                mapping=mapping,
+                normalized=normalized,
+                payload=payload,
+            )
+
+        OTAIntegrationService._sync_mapping_payload(
+            mapping,
+            guest_name=normalized.guest_full_name,
+            payload=payload,
+            error_message=None,
+        )
+        OTAIntegrationService._sync_guest_record(
+            db,
+            hotel_id=hotel_id,
+            guest=reservation.guest,
+            normalized=normalized,
+        )
+
+        event_type = OTAIntegrationService._normalize_event_type(normalized.event_type)
+        if event_type == "cancelled":
+            return OTAIntegrationService._cancel_existing_reservation_from_normalized(
+                db,
+                hotel_id=hotel_id,
+                mapping=mapping,
+                reservation=reservation,
+                normalized=normalized,
+                payload=payload,
+            )
+        return OTAIntegrationService._update_existing_reservation_from_normalized(
+            db,
+            hotel_id=hotel_id,
+            mapping=mapping,
+            reservation=reservation,
+            normalized=normalized,
+            payload=payload,
+        )
+
+    @staticmethod
+    def _update_existing_reservation_from_normalized(
+        db: Session,
+        *,
+        hotel_id: int,
+        mapping: OTAReservationMapping,
+        reservation: Reservation,
+        normalized: NormalizedOTAReservation,
+        payload: dict,
+    ) -> OTAReservationMapping:
+        if reservation.status == ReservationStatusEnum.CANCELLED:
+            OTAIntegrationService._mark_reservation_manual_review(
+                reservation,
+                reason="Llego una modificacion OTA sobre una reserva ya cancelada internamente.",
+            )
+            mapping.sync_status = OTASyncStatusEnum.CONFLICT
+            mapping.error_message = "Modification received for a cancelled reservation"
+            OTAIntegrationService._sync_foundation_reservation_link(
+                db,
+                hotel_id=hotel_id,
+                provider_code=normalized.provider_code,
+                external_reservation_id=normalized.external_reservation_id,
+                external_confirmation_code=normalized.external_confirmation_code,
+                reservation=reservation,
+                payload=payload,
+                gross_total=normalized.gross_total,
+                currency_code=normalized.currency_code,
+                sync_status="manual_resolution_required",
+                provider_state=OTAReservationLifecycleEnum.MANUAL_RESOLUTION_REQUIRED,
+                error_message=mapping.error_message,
+                rate_plan_id=reservation.rate_plan_id,
+            )
+            db.flush()
+            return mapping
+
+        sellable_product, rate_plan, candidate_categories = OTAIntegrationService._resolve_commercial_context(
+            db,
+            hotel_id=hotel_id,
+            provider_code=normalized.provider_code,
+            normalized=normalized,
+        )
+        if not candidate_categories:
+            OTAIntegrationService._sync_mapping_payload(
+                mapping,
+                guest_name=normalized.guest_full_name,
+                payload=payload,
+                sync_status=OTASyncStatusEnum.CONFLICT,
+                error_message="No se pudo mapear el producto OTA a una categoria interna",
+            )
+            OTAIntegrationService._mark_reservation_manual_review(
+                reservation,
+                reason="El cambio OTA no pudo mapearse a una categoria interna.",
+            )
+            OTAIntegrationService._sync_foundation_reservation_link(
+                db,
+                hotel_id=hotel_id,
+                provider_code=normalized.provider_code,
+                external_reservation_id=normalized.external_reservation_id,
+                external_confirmation_code=normalized.external_confirmation_code,
+                reservation=reservation,
+                payload=payload,
+                gross_total=normalized.gross_total,
+                currency_code=normalized.currency_code,
+                sync_status="manual_resolution_required",
+                provider_state=OTAReservationLifecycleEnum.MANUAL_RESOLUTION_REQUIRED,
+                error_message=mapping.error_message,
+                rate_plan_id=rate_plan.id if rate_plan else reservation.rate_plan_id,
+            )
+            db.flush()
+            return mapping
+
+        selected_category, selected_room = OTAIntegrationService._select_room_for_normalized_reservation(
+            db,
+            hotel_id=hotel_id,
+            reservation_id=reservation.id,
+            normalized=normalized,
+            candidate_categories=candidate_categories,
+            current_room=reservation.room,
+        )
+
+        new_notes = normalized.notes if normalized.notes is not None else reservation.notes
+        update_payload = ReservationUpdate(
+            check_in_date=normalized.check_in_date,
+            check_out_date=normalized.check_out_date,
+            num_adults=normalized.num_adults,
+            num_children=normalized.num_children,
+            notes=new_notes,
+        )
+
+        try:
+            update_reservation_fields(
+                db,
+                reservation,
+                update_payload,
+                hotel_id=hotel_id,
+            )
+        except ReservationError:
+            reservation.check_in_date = normalized.check_in_date
+            reservation.check_out_date = normalized.check_out_date
+            reservation.num_adults = normalized.num_adults
+            reservation.num_children = normalized.num_children
+            reservation.notes = new_notes
+
+        reservation.sellable_product_id = sellable_product.id if sellable_product else None
+        reservation.rate_plan_id = rate_plan.id if rate_plan else None
+        reservation.category_id = selected_category.id if selected_category else reservation.category_id
+        reservation.source_provider_code = normalized.provider_code
+        reservation.external_id = normalized.external_reservation_id
+        reservation.external_confirmation_code = (
+            normalized.external_confirmation_code or normalized.external_reservation_id
+        )
+        OTAIntegrationService._apply_financial_snapshot(
+            db,
+            hotel_id,
+            reservation,
+            normalized,
+            preserve_operational_status=reservation.status in {
+                ReservationStatusEnum.CHECKED_IN,
+                ReservationStatusEnum.CHECKED_OUT,
+                ReservationStatusEnum.CANCELLED,
+            },
+        )
+
+        if selected_room and selected_category:
+            reservation.room_id = selected_room.id
+            reservation.category_id = selected_category.id
+            reservation.requires_manual_review = False
+            reservation.allocation_status = "assigned"
+            mapping.sync_status = OTASyncStatusEnum.SYNCED
+            mapping.error_message = None
+            provider_state = OTAReservationLifecycleEnum.MODIFIED
+            sync_status = mapping.sync_status.value
+            error_message = None
+        else:
+            reservation.room_id = None
+            OTAIntegrationService._mark_reservation_manual_review(
+                reservation,
+                reason="El cambio OTA dejo la reserva sin una habitacion valida disponible.",
+            )
+            mapping.sync_status = OTASyncStatusEnum.CONFLICT
+            mapping.error_message = "Reservation updated from OTA but requires manual reassignment"
+            provider_state = OTAReservationLifecycleEnum.MANUAL_RESOLUTION_REQUIRED
+            sync_status = "manual_resolution_required"
+            error_message = mapping.error_message
+
+        OTAIntegrationService._sync_foundation_reservation_link(
+            db,
+            hotel_id=hotel_id,
+            provider_code=normalized.provider_code,
+            external_reservation_id=normalized.external_reservation_id,
+            external_confirmation_code=normalized.external_confirmation_code,
+            reservation=reservation,
+            payload=payload,
+            gross_total=normalized.gross_total,
+            currency_code=normalized.currency_code,
+            sync_status=sync_status,
+            provider_state=provider_state,
+            error_message=error_message,
+            rate_plan_id=rate_plan.id if rate_plan else reservation.rate_plan_id,
+        )
+        db.flush()
+        return mapping
+
+    @staticmethod
+    def _cancel_existing_reservation_from_normalized(
+        db: Session,
+        *,
+        hotel_id: int,
+        mapping: OTAReservationMapping,
+        reservation: Reservation,
+        normalized: NormalizedOTAReservation,
+        payload: dict,
+    ) -> OTAReservationMapping:
+        if reservation.status in {ReservationStatusEnum.CHECKED_IN, ReservationStatusEnum.CHECKED_OUT}:
+            OTAIntegrationService._mark_reservation_manual_review(
+                reservation,
+                reason="La OTA informo una cancelacion pero la reserva ya estaba operada.",
+            )
+            reservation.settlement_status = "manual_resolution_required"
+            mapping.sync_status = OTASyncStatusEnum.CONFLICT
+            mapping.error_message = "Cancellation received after check-in/checkout; manual resolution required"
+            OTAIntegrationService._sync_foundation_reservation_link(
+                db,
+                hotel_id=hotel_id,
+                provider_code=normalized.provider_code,
+                external_reservation_id=normalized.external_reservation_id,
+                external_confirmation_code=normalized.external_confirmation_code,
+                reservation=reservation,
+                payload=payload,
+                gross_total=normalized.gross_total,
+                currency_code=normalized.currency_code,
+                sync_status="manual_resolution_required",
+                provider_state=OTAReservationLifecycleEnum.MANUAL_RESOLUTION_REQUIRED,
+                error_message=mapping.error_message,
+                rate_plan_id=reservation.rate_plan_id,
+            )
+            db.flush()
+            return mapping
+
+        if reservation.status != ReservationStatusEnum.CANCELLED:
+            transition_reservation_status(
+                db,
+                reservation,
+                ReservationStatusEnum.CANCELLED,
+                hotel_id=hotel_id,
+                reason_code="ota_cancelled",
+                notes=f"Cancelada por {normalized.provider_code} via webhook",
+            )
+        reservation.requires_manual_review = False
+        reservation.allocation_status = "cancelled"
+        reservation.settlement_status = (
+            "review_cancellation" if reservation.payment_collection_model != "hotel_collect" else "not_applicable"
+        )
+        mapping.sync_status = OTASyncStatusEnum.SYNCED
+        mapping.error_message = None
+        OTAIntegrationService._sync_foundation_reservation_link(
+            db,
+            hotel_id=hotel_id,
+            provider_code=normalized.provider_code,
+            external_reservation_id=normalized.external_reservation_id,
+            external_confirmation_code=normalized.external_confirmation_code,
+            reservation=reservation,
+            payload=payload,
+            gross_total=normalized.gross_total,
+            currency_code=normalized.currency_code,
+            sync_status=mapping.sync_status.value,
+            provider_state=OTAReservationLifecycleEnum.CANCELLED,
+            error_message=None,
+            rate_plan_id=reservation.rate_plan_id,
+        )
+        db.flush()
+        return mapping
+
+    @staticmethod
     def _process_normalized_webhook(
         db: Session,
         *,
@@ -575,11 +991,30 @@ class OTAIntegrationService:
             OTAReservationMapping.ota_name == provider_code,
             OTAReservationMapping.ota_reservation_id == external_reservation_id,
         ).first()
-        if existing:
-            return existing
-
         adapter = get_default_adapter(provider_code)
         normalized = adapter.normalize_reservation_payload(payload)
+        if existing:
+            try:
+                return OTAIntegrationService._process_existing_incoming_reservation(
+                    db,
+                    hotel_id=hotel_id,
+                    mapping=existing,
+                    normalized=normalized,
+                    payload=payload,
+                )
+            except OTAError:
+                raise
+            except Exception as exc:
+                OTAIntegrationService._sync_mapping_payload(
+                    existing,
+                    guest_name=normalized.guest_full_name,
+                    payload=payload,
+                    sync_status=OTASyncStatusEnum.FAILED,
+                    error_message=str(exc),
+                )
+                db.flush()
+                raise OTAError(f"Failed to process {provider_code} reservation update: {exc}")
+
         mapping = OTAIntegrationService._create_legacy_mapping(
             db,
             hotel_id=hotel_id,
@@ -588,6 +1023,31 @@ class OTAIntegrationService:
             guest_name=normalized.guest_full_name,
             payload=payload,
         )
+        if OTAIntegrationService._normalize_event_type(normalized.event_type) == "cancelled":
+            OTAIntegrationService._sync_mapping_payload(
+                mapping,
+                guest_name=normalized.guest_full_name,
+                payload=payload,
+                sync_status=OTASyncStatusEnum.CONFLICT,
+                error_message="Cancellation received for unknown OTA reservation",
+            )
+            OTAIntegrationService._sync_foundation_reservation_link(
+                db,
+                hotel_id=hotel_id,
+                provider_code=normalized.provider_code,
+                external_reservation_id=normalized.external_reservation_id,
+                external_confirmation_code=normalized.external_confirmation_code,
+                reservation=None,
+                payload=payload,
+                gross_total=normalized.gross_total,
+                currency_code=normalized.currency_code,
+                sync_status="manual_resolution_required",
+                provider_state=OTAReservationLifecycleEnum.CANCELLED,
+                error_message=mapping.error_message,
+                rate_plan_id=None,
+            )
+            db.flush()
+            return mapping
 
         try:
             return OTAIntegrationService._materialize_incoming_reservation(
