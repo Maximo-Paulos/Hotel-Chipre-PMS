@@ -17,6 +17,7 @@ from app.models.hotel_config import HotelConfiguration
 from app.services.reservation_service import transition_reservation_status, ReservationError
 from app.services.jurisdiction_profile import compute_missing_guest_fields
 from app.models.room import Room, RoomStatusEnum
+from app.services.guest_profile import get_guest_profile, validate_primary_guest_record
 
 
 class CheckInError(Exception):
@@ -35,6 +36,7 @@ def validate_guest_for_checkin(
     db: Session,
     guest: Guest,
     config_or_hotel: HotelConfiguration | int | None = None,
+    reservation: Reservation | None = None,
 ) -> list[str]:
     """
     Validate that a guest has all required data for check-in.
@@ -100,7 +102,7 @@ def perform_checkin(
 
     # Validate guest data
     config = db.query(HotelConfiguration).filter(HotelConfiguration.id == hotel_id).first()
-    validation_errors = validate_guest_for_checkin(db, guest, config or hotel_id)
+    validation_errors = validate_guest_for_checkin(db, guest, config or hotel_id, reservation=reservation)
 
     if validation_errors:
         raise CheckInError(

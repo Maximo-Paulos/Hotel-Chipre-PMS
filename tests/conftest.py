@@ -3,12 +3,13 @@ Pytest configuration and fixtures.
 Uses an in-memory SQLite database for isolated, fast testing.
 """
 import pytest
+from datetime import date, timedelta
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker, Session
 
 from app.database import Base
 from app.models.room import Room, RoomCategory, RoomStatusEnum
-from app.models.guest import Guest, GuestCompanion
+from app.models.guest import Guest, GuestCompanion, DocumentTypeEnum
 from app.models.reservation import Reservation, ReservationStatusEnum, ReservationSourceEnum
 from app.models.transaction import Transaction
 from app.models.hotel_config import HotelConfiguration
@@ -222,9 +223,10 @@ def sample_guest(db: Session) -> Guest:
     guest = Guest(
         first_name="Carlos",
         last_name="Pérez",
-        document_type="DNI",
+        document_type=DocumentTypeEnum.DNI,
         document_number="30456789",
         nationality="Argentina",
+        date_of_birth=date(1990, 4, 12),
         email="carlos@email.com",
         phone="+54111234567",
         terms_accepted=True,

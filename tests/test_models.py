@@ -5,7 +5,7 @@ import pytest
 from datetime import date, datetime, timezone
 
 from app.models.room import Room, RoomCategory, RoomStatusEnum
-from app.models.guest import Guest, GuestCompanion
+from app.models.guest import Guest, GuestCompanion, DocumentTypeEnum
 from app.models.reservation import Reservation, ReservationStatusEnum, VALID_TRANSITIONS
 from app.models.transaction import Transaction, PaymentMethodEnum, TransactionStatusEnum, TransactionTypeEnum
 from app.models.hotel_config import HotelConfiguration
@@ -73,7 +73,7 @@ class TestGuestModel:
         assert sample_guest.first_name == "Carlos"
         assert sample_guest.last_name == "Pérez"
         assert sample_guest.full_name == "Carlos Pérez"
-        assert sample_guest.document_type == "DNI"
+        assert sample_guest.document_type == DocumentTypeEnum.DNI
         assert sample_guest.document_number == "30456789"
         assert sample_guest.has_valid_identity is True
 
@@ -87,7 +87,7 @@ class TestGuestModel:
             guest_id=sample_guest.id,
             first_name="Ana",
             last_name="Pérez",
-            document_type="DNI",
+            document_type=DocumentTypeEnum.DNI,
             document_number="40123456",
             relationship_to_guest="spouse",
         )
@@ -106,6 +106,7 @@ class TestGuestModel:
     def test_guest_timestamps(self, db, sample_guest):
         """Verify auto-generated timestamps."""
         assert sample_guest.created_at is not None
+        assert sample_guest.retention_until is not None
         assert sample_guest.updated_at is not None
 
 

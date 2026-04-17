@@ -2,13 +2,20 @@
 Guest and GuestCompanion models.
 Exhaustive fields for check-in panel: identity documents, nationality, contact, etc.
 """
+import enum
 from sqlalchemy import (
-    Column, Integer, String, Boolean, ForeignKey, Text, DateTime, Date
+    Column, Integer, String, Boolean, ForeignKey, Text, DateTime, Date, Enum
 )
 from sqlalchemy.orm import relationship
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from app.database import Base
+
+
+class DocumentTypeEnum(str, enum.Enum):
+    DNI = "DNI"
+    PASSPORT = "PASSPORT"
+    CEDULA = "CEDULA"
 
 
 class Guest(Base):
@@ -24,7 +31,15 @@ class Guest(Base):
     # Identity
     first_name = Column(String(120), nullable=False)
     last_name = Column(String(120), nullable=False)
-    document_type = Column(String(30), nullable=True)   # "DNI", "PASSPORT", "CEDULA"
+    document_type = Column(
+        Enum(
+            DocumentTypeEnum,
+            name="guest_document_type_enum",
+            create_constraint=True,
+            values_callable=lambda enum_cls: [item.value for item in enum_cls],
+        ),
+        nullable=True,
+    )
     document_number = Column(String(50), nullable=True)
     nationality = Column(String(80), nullable=True)
     date_of_birth = Column(Date, nullable=True)
@@ -48,6 +63,11 @@ class Guest(Base):
 
     # Metadata
     created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    retention_until = Column(
+        DateTime,
+        nullable=True,
+        default=lambda: datetime.now(timezone.utc) + timedelta(days=365 * 5),
+    )
     updated_at = Column(
         DateTime, nullable=False,
         default=lambda: datetime.now(timezone.utc),
@@ -88,7 +108,15 @@ class GuestCompanion(Base):
 
     first_name = Column(String(120), nullable=False)
     last_name = Column(String(120), nullable=False)
-    document_type = Column(String(30), nullable=True)
+    document_type = Column(
+        Enum(
+            DocumentTypeEnum,
+            name="guest_document_type_enum",
+            create_constraint=True,
+            values_callable=lambda enum_cls: [item.value for item in enum_cls],
+        ),
+        nullable=True,
+    )
     document_number = Column(String(50), nullable=True)
     nationality = Column(String(80), nullable=True)
     date_of_birth = Column(Date, nullable=True)

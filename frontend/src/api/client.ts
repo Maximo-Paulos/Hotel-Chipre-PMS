@@ -61,7 +61,7 @@ type RequestOptions = {
   session?: SessionLike;
 };
 
-const buildUrl = (path: string) => {
+export const buildUrl = (path: string) => {
   const leading = path.startsWith("/") ? path : `/${path}`;
   // Avoid duplicating /api when both the base and path contain it.
   if (API_BASE.endsWith("/api") && leading.startsWith("/api/")) {

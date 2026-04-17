@@ -1,3 +1,5 @@
+import csv
+from io import StringIO
 from datetime import date, timedelta
 
 import pytest
@@ -10,7 +12,7 @@ import app.database as db_module
 import app.main as main_module
 from app.database import Base, get_db
 from app.dependencies.auth import AuthContext, get_auth_context
-from app.models.guest import Guest
+from app.models.guest import Guest, DocumentTypeEnum
 from app.models.hotel_config import HotelConfiguration
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.reservation import Reservation, ReservationStatusEnum
@@ -216,8 +218,10 @@ def test_booking_status_and_overlap(api_client):
             last_name="Tester",
             email="api@test.com",
             hotel_id=1,
-            document_type="DNI",
+            document_type=DocumentTypeEnum.DNI,
             document_number="30123456",
+            nationality="Argentina",
+            date_of_birth=date(1992, 6, 14),
             terms_accepted=True,
         )
         room1 = Room(room_number="301", floor=3, category_id=1, status=RoomStatusEnum.AVAILABLE, hotel_id=1)
@@ -283,3 +287,155 @@ def test_booking_status_and_overlap(api_client):
     checkout_resp = client.post(f"/api/bookings/{booking2_id}/checkout")
     assert checkout_resp.status_code == 200
     assert checkout_resp.json()["status"] == ReservationStatusEnum.CHECKED_OUT.value
+
+
+def test_checkin_api_blocks_missing_primary_guest_fields(api_client):
+    client, SessionLocal = api_client
+    with SessionLocal() as db:
+        guest = Guest(
+            first_name="Incomplete",
+            last_name="Guest",
+            hotel_id=1,
+            terms_accepted=False,
+        )
+        category = RoomCategory(
+            hotel_id=1,
+            name="Guest Cat",
+            code="GST_CAT",
+            base_price_per_night=100.0,
+            max_occupancy=2,
+        )
+        db.add_all([guest, category])
+        db.flush()
+        reservation = Reservation(
+            confirmation_code="CHK-REQ-001",
+            hotel_id=1,
+            guest_id=guest.id,
+            category_id=category.id,
+            check_in_date=date(2026, 4, 10),
+            check_out_date=date(2026, 4, 12),
+            total_amount=200.0,
+            amount_paid=200.0,
+            deposit_amount=60.0,
+            subtotal_amount=200.0,
+            tax_amount=0.0,
+            fee_amount=0.0,
+            commission_amount=0.0,
+            net_amount=200.0,
+            currency_code="ARS",
+            status=ReservationStatusEnum.FULLY_PAID,
+            num_adults=1,
+            num_children=0,
+        )
+        db.add(reservation)
+        db.commit()
+        reservation_id = reservation.id
+
+    resp = client.post(f"/api/checkin/{reservation_id}")
+    assert resp.status_code == 400, resp.text
+    assert "missing" in resp.json()["detail"].lower() or "required" in resp.json()["detail"].lower()
+
+
+def test_guest_ledger_export_returns_csv_for_date_range(api_client):
+    client, SessionLocal = api_client
+    with SessionLocal() as db:
+        guest_in_range = Guest(
+            first_name="Ana",
+            last_name="Lopez",
+            document_type=DocumentTypeEnum.PASSPORT,
+            document_number="P1234567",
+            nationality="Argentina",
+            date_of_birth=date(1990, 1, 2),
+            country="Argentina",
+            phone="+54911111111",
+            email="ana@example.com",
+            terms_accepted=True,
+            hotel_id=1,
+        )
+        guest_outside_range = Guest(
+            first_name="Bruno",
+            last_name="Perez",
+            document_type=DocumentTypeEnum.DNI,
+            document_number="30112233",
+            nationality="Argentina",
+            date_of_birth=date(1988, 5, 15),
+            terms_accepted=True,
+            hotel_id=1,
+        )
+        category = RoomCategory(
+            hotel_id=1,
+            name="Ledger Cat",
+            code="LEDGER_CAT",
+            base_price_per_night=110.0,
+            max_occupancy=2,
+        )
+        db.add_all([guest_in_range, guest_outside_range, category])
+        db.flush()
+        db.add_all(
+            [
+                Reservation(
+                    confirmation_code="LEDGER-001",
+                    hotel_id=1,
+                    guest_id=guest_in_range.id,
+                    category_id=category.id,
+                    check_in_date=date(2026, 4, 10),
+                    check_out_date=date(2026, 4, 12),
+                    total_amount=220.0,
+                    amount_paid=220.0,
+                    deposit_amount=66.0,
+                    subtotal_amount=220.0,
+                    tax_amount=0.0,
+                    fee_amount=0.0,
+                    commission_amount=0.0,
+                    net_amount=220.0,
+                    currency_code="ARS",
+                    status=ReservationStatusEnum.CHECKED_IN,
+                    num_adults=1,
+                    num_children=0,
+                ),
+                Reservation(
+                    confirmation_code="LEDGER-002",
+                    hotel_id=1,
+                    guest_id=guest_outside_range.id,
+                    category_id=category.id,
+                    check_in_date=date(2026, 5, 1),
+                    check_out_date=date(2026, 5, 3),
+                    total_amount=220.0,
+                    amount_paid=220.0,
+                    deposit_amount=66.0,
+                    subtotal_amount=220.0,
+                    tax_amount=0.0,
+                    fee_amount=0.0,
+                    commission_amount=0.0,
+                    net_amount=220.0,
+                    currency_code="ARS",
+                    status=ReservationStatusEnum.CHECKED_IN,
+                    num_adults=1,
+                    num_children=0,
+                ),
+            ]
+        )
+        db.commit()
+
+    resp = client.get(
+        "/api/guests/ledger/export",
+        params={"from_date": "2026-04-01", "to_date": "2026-04-30"},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.headers["content-type"].startswith("text/csv")
+    assert resp.headers["content-disposition"] == 'attachment; filename="guest-ledger-1-2026-04-01-2026-04-30.csv"'
+
+    csv_text = resp.content.decode("utf-8-sig")
+    reader = csv.DictReader(StringIO(csv_text))
+    rows = list(reader)
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["first_name"] == "Ana"
+    assert row["last_name"] == "Lopez"
+    assert row["document_type"] == DocumentTypeEnum.PASSPORT.value
+    assert row["document_number"] == "P1234567"
+    assert row["nationality"] == "Argentina"
+    assert row["date_of_birth"] == "1990-01-02"
+    assert row["arrival_date"] == "2026-04-10"
+    assert row["departure_date"] == "2026-04-12"
+    assert row["terms_accepted"] == "true"

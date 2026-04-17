@@ -5,11 +5,13 @@ from pydantic import BaseModel, Field, EmailStr
 from typing import Optional
 from datetime import date, datetime
 
+from app.models.guest import DocumentTypeEnum
+
 
 class GuestCompanionBase(BaseModel):
     first_name: str = Field(..., min_length=1, max_length=120)
     last_name: str = Field(..., min_length=1, max_length=120)
-    document_type: Optional[str] = None
+    document_type: Optional[DocumentTypeEnum] = None
     document_number: Optional[str] = None
     nationality: Optional[str] = None
     date_of_birth: Optional[date] = None
@@ -29,7 +31,7 @@ class GuestCompanionRead(GuestCompanionBase):
 class GuestBase(BaseModel):
     first_name: str = Field(..., min_length=1, max_length=120)
     last_name: str = Field(..., min_length=1, max_length=120)
-    document_type: Optional[str] = None
+    document_type: Optional[DocumentTypeEnum] = None
     document_number: Optional[str] = None
     nationality: Optional[str] = None
     date_of_birth: Optional[date] = None
@@ -55,7 +57,7 @@ class GuestCreate(GuestBase):
 class GuestUpdate(BaseModel):
     first_name: Optional[str] = None
     last_name: Optional[str] = None
-    document_type: Optional[str] = None
+    document_type: Optional[DocumentTypeEnum] = None
     document_number: Optional[str] = None
     nationality: Optional[str] = None
     date_of_birth: Optional[date] = None
@@ -77,6 +79,7 @@ class GuestUpdate(BaseModel):
 class GuestRead(GuestBase):
     id: int
     created_at: Optional[datetime] = None
+    retention_until: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     companions: list[GuestCompanionRead] = []
     model_config = {"from_attributes": True}

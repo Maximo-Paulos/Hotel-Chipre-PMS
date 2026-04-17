@@ -1,11 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
+  addGuestCompanions,
   createGuest,
   getGuest,
   listGuests,
   updateGuest,
   type Guest,
+  type GuestCompanionPayload,
   type GuestPayload,
   type GuestUpdatePayload
 } from "../api/guests";
@@ -51,6 +53,19 @@ export function useGuestUpdate() {
   return useMutation({
     mutationFn: ({ guestId, payload }: { guestId: number; payload: GuestUpdatePayload }) =>
       updateGuest(guestId, payload, session),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["guests", session.hotelId] });
+      queryClient.invalidateQueries({ queryKey: ["guest", session.hotelId, variables.guestId] });
+    }
+  });
+}
+
+export function useGuestCompanionAdd() {
+  const queryClient = useQueryClient();
+  const { session } = useSession();
+  return useMutation({
+    mutationFn: ({ guestId, companions }: { guestId: number; companions: GuestCompanionPayload[] }) =>
+      addGuestCompanions(guestId, companions, session),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["guests", session.hotelId] });
       queryClient.invalidateQueries({ queryKey: ["guest", session.hotelId, variables.guestId] });
