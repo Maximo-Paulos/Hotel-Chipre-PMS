@@ -13,14 +13,22 @@ from app.config import get_settings
 def ensure_plans_seeded(db: Session):
     """Seed default plans if missing."""
     defaults = [
-        ("starter", "Plan Inicial", 20),
-        ("standard", "Plan Estándar", 40),
-        ("pro", "Plan Pro", 80),
+        ("starter", "Starter", 15),
+        ("pro", "Pro", 40),
+        ("ultra", "Ultra", 80),
     ]
     for code, name, limit in defaults:
         exists = db.query(SubscriptionPlan).filter(SubscriptionPlan.code == code).first()
-        if not exists:
-            db.add(SubscriptionPlan(code=code, name=name, room_limit=limit))
+        if exists:
+            exists.name = name
+            exists.room_limit = limit
+            continue
+        db.add(SubscriptionPlan(code=code, name=name, room_limit=limit))
+
+    standard = db.query(SubscriptionPlan).filter(SubscriptionPlan.code == "standard").first()
+    if standard:
+        standard.name = "Standard (legacy)"
+        standard.room_limit = 40
     db.flush()
 
 

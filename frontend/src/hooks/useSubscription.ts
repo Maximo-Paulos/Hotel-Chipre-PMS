@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+
 import {
   getSubscriptionStatus,
   listSubscriptionPlans,
@@ -14,31 +15,31 @@ export const FALLBACK_PLANS: SubscriptionPlan[] = [
     code: "starter",
     name: "Starter",
     price_month: 0,
-    room_limit: 10,
+    room_limit: 15,
     description: "Ideal para hostels y B&B que empiezan a digitalizarse.",
-    features: ["Dashboard básico", "Hasta 10 habitaciones", "Exportes manuales CSV"],
+    features: ["Dashboard básico", "Hasta 15 habitaciones", "Exportes manuales CSV"],
     badge: "Gratis",
-    mock: true
-  },
-  {
-    code: "growth",
-    name: "Growth",
-    price_month: 39,
-    room_limit: 30,
-    description: "Para hoteles boutique que quieren operar sin fricción.",
-    features: ["Check-in rápido", "Usuarios ilimitados", "Reportes diarios", "Soporte priorizado"],
-    badge: "Recomendado",
-    highlight: true,
     mock: true
   },
   {
     code: "pro",
     name: "Pro",
-    price_month: 79,
-    room_limit: 120,
+    price_month: 49,
+    room_limit: 40,
+    description: "Para hoteles boutique que quieren operar sin fricción.",
+    features: ["Check-in rápido", "Hasta 8 usuarios", "Reportes diarios", "Soporte priorizado"],
+    badge: "Recomendado",
+    highlight: true,
+    mock: true
+  },
+  {
+    code: "ultra",
+    name: "Ultra",
+    price_month: 99,
+    room_limit: 80,
     description: "Hoteles con más volumen y necesidad de control fino.",
-    features: ["Integración OTA (beta)", "Roles avanzados", "Límites flexibles", "SLA 99.5%"],
-    badge: "Equipo",
+    features: ["Integración OTA", "Hasta 20 usuarios", "Roles avanzados", "SLA 99.5%"],
+    badge: "Escala",
     mock: true
   }
 ];
@@ -46,13 +47,14 @@ export const FALLBACK_PLANS: SubscriptionPlan[] = [
 const buildMockStatus = (session: SessionState): SubscriptionStatus => ({
   hotel_id: session.hotelId ?? null,
   status: "active",
-  plan: "growth",
-  room_limit: 30,
+  plan: "pro",
+  room_limit: 40,
+  staff_limit: 8,
   rooms_in_use: 4,
   can_write: true,
   limits: [
-    { code: "rooms", label: "Habitaciones operables", used: 4, limit: 30 },
-    { code: "users", label: "Usuarios activos", used: 8, limit: 20 }
+    { code: "rooms", label: "Habitaciones operables", used: 4, limit: 40 },
+    { code: "users", label: "Usuarios activos", used: 6, limit: 8 }
   ],
   available_plans: FALLBACK_PLANS,
   source: "mock"
@@ -143,7 +145,10 @@ const normalizeStatus = (data: SubscriptionStatus | null | undefined, session: S
     fallback.status;
 
   const canWriteRaw = (data as Record<string, unknown>)?.can_write;
-  const canWrite = typeof canWriteRaw === "boolean" ? canWriteRaw : statusFromData === "active";
+  const canWrite =
+    typeof canWriteRaw === "boolean"
+      ? canWriteRaw
+      : ["active", "trialing", "demo", "comped"].includes(String(statusFromData));
 
   const roomLimit = typeof data.room_limit === "number" ? data.room_limit : fallback.room_limit;
   const roomsInUse = typeof data.rooms_in_use === "number" ? data.rooms_in_use : fallback.rooms_in_use;
@@ -157,6 +162,7 @@ const normalizeStatus = (data: SubscriptionStatus | null | undefined, session: S
     plan: planFromData as string | null,
     status: statusFromData as string,
     room_limit: roomLimit,
+    staff_limit: typeof data.staff_limit === "number" ? data.staff_limit : fallback.staff_limit,
     rooms_in_use: roomsInUse,
     can_write: canWrite,
     available_plans: availablePlans.length ? availablePlans : fallback.available_plans,

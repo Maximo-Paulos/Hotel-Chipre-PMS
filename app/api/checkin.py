@@ -67,7 +67,7 @@ def validate_guest(
     )
     if not guest:
         raise HTTPException(status_code=404, detail="Guest not found")
-    errors = validate_guest_for_checkin(db, guest, hotel_id=context.hotel_id)
+    errors = validate_guest_for_checkin(db, guest, context.hotel_id)
     return {
         "guest_id": guest_id,
         "valid": len(errors) == 0,

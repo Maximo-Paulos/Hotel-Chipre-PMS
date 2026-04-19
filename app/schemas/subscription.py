@@ -22,5 +22,15 @@ class EntitlementOverrideRequest(BaseModel):
     value: Any
     value_type: str | None = Field(
         default=None,
-        description="int|bool|str – opcional, si se omite se infiere automáticamente",
+        description="int|bool|str - opcional, si se omite se infiere automaticamente",
     )
+
+
+class TrialRequest(BaseModel):
+    plan_code: str = Field(default="pro", examples=["starter", "pro", "ultra"])
+
+
+class CompedOverrideRequest(BaseModel):
+    hotel_id: int = Field(..., gt=0)
+    plan_code: str = Field(default="ultra", examples=["starter", "pro", "ultra"])
+    reason: str | None = Field(default=None, max_length=250)

@@ -1,31 +1,35 @@
 """
 End-to-end onboarding flow exposed through the FastAPI routers.
 """
-import os
 from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 import app.models  # Ensure all models (including onboarding) are registered
+import app.database as db_module
+import app.main as main_module
 from app.database import Base, get_db
-from app.main import app
 
 
 @pytest.fixture
-def client():
+def client(monkeypatch: pytest.MonkeyPatch):
     """Provide a TestClient backed by an in-memory SQLite database."""
-    original_db_url = os.environ.get("DATABASE_URL")
-    os.environ["DATABASE_URL"] = "sqlite:///:memory:"
-
     engine = create_engine(
         "sqlite:///:memory:",
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
+
+    @event.listens_for(engine, "connect")
+    def _set_sqlite_pragma(dbapi_connection, connection_record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
     Base.metadata.create_all(bind=engine)
     TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -37,19 +41,17 @@ def client():
         finally:
             db.close()
 
-    app.dependency_overrides[get_db] = override_get_db
+    monkeypatch.setattr(db_module, "get_engine", lambda database_url=None: engine)
+    db_module.init_db("sqlite:///:memory:")
+    monkeypatch.setattr(main_module, "init_db", lambda: db_module.init_db("sqlite:///:memory:"))
+    main_module.app.dependency_overrides[get_db] = override_get_db
 
-    with TestClient(app) as test_client:
+    with TestClient(main_module.app) as test_client:
         yield test_client
 
-    app.dependency_overrides.clear()
+    main_module.app.dependency_overrides.clear()
     Base.metadata.drop_all(bind=engine)
     engine.dispose()
-
-    if original_db_url is None:
-        os.environ.pop("DATABASE_URL", None)
-    else:
-        os.environ["DATABASE_URL"] = original_db_url
 
 
 def _complete_minimal_onboarding(client: TestClient, auth: dict[str, str], owner_email: str):
@@ -60,6 +62,17 @@ def _complete_minimal_onboarding(client: TestClient, auth: dict[str, str], owner
         "role": "Owner",
     }
     client.post("/api/onboarding/owner", json=owner_payload, headers=auth)
+    client.post(
+        "/api/onboarding/identity",
+        json={
+            "name": "Hotel Chipre Centro",
+            "timezone": "America/Argentina/Buenos_Aires",
+            "currency": "ARS",
+            "languages": ["es", "en"],
+            "jurisdiction_code": "AR",
+        },
+        headers=auth,
+    )
 
     categories_payload = {
         "categories": [
@@ -91,6 +104,38 @@ def _complete_minimal_onboarding(client: TestClient, auth: dict[str, str], owner
         ]
     }
     client.post("/api/onboarding/rooms", json=rooms_payload, headers=auth)
+    client.post(
+        "/api/onboarding/policy",
+        json={
+            "deposit_percentage": 30,
+            "free_cancellation_hours": 48,
+            "cancellation_penalty_percentage": 0,
+        },
+        headers=auth,
+    )
+    client.post(
+        "/api/onboarding/payments",
+        json={
+            "mercado_pago": {"enabled": True, "credentials": {"account_id": "mp-user"}},
+            "paypal": {"enabled": False, "credentials": {}},
+            "stripe": {"enabled": False, "credentials": {}},
+        },
+        headers=auth,
+    )
+    client.post(
+        "/api/onboarding/ota",
+        json={
+            "booking": {"enabled": True, "credentials": {"account_id": "booking-user"}},
+            "expedia": {"enabled": False, "credentials": {}},
+            "despegar": {"enabled": False, "credentials": {}},
+        },
+        headers=auth,
+    )
+    client.post(
+        "/api/onboarding/subscription-choice",
+        json={"plan_code": "pro", "start_trial": True},
+        headers=auth,
+    )
 
     staff_payload = {
         "staff": [
@@ -155,7 +200,7 @@ def test_finish_requires_all_steps(client: TestClient):
     headers = _register_owner(client, "owner2@test.com")
     result = client.post("/api/onboarding/finish", headers=headers)
     assert result.status_code == 400
-    assert "Missing required onboarding steps" in result.json()["detail"]
+    assert "Missing required onboarding gates" in result.json()["detail"]
 
 
 def test_rooms_require_existing_category(client: TestClient):

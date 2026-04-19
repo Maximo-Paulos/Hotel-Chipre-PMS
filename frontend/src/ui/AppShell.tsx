@@ -48,6 +48,8 @@ const baseNav = [
   },
 ];
 
+const ACTIVE_SUBSCRIPTION_STATUSES = ["active", "trialing", "demo", "comped"];
+
 export function AppShell() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -82,7 +84,8 @@ export function AppShell() {
     capReached &&
     `Limite de habitaciones alcanzado (${subscription.rooms_in_use}/${subscription.room_limit}). Ajusta tu plan en Configuracion > Suscripcion.`;
   const writeBlocked = subscription?.can_write === false;
-  const inactiveSubscription = subscription && subscription.status !== "active";
+  const inactiveSubscription =
+    subscription && !ACTIVE_SUBSCRIPTION_STATUSES.includes(subscription.status);
   const subscriptionCTA = "/settings/subscription";
 
   const visibleNavSections = useMemo<NavSection[]>(() => {

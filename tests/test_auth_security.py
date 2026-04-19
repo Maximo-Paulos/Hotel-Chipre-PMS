@@ -8,13 +8,15 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+import app.database as db_module
+import app.main as main_module
 import app.models  # noqa: F401
 from app.database import Base, get_db
 from app.main import app as fastapi_app
 
 
 @pytest.fixture
-def client_and_db():
+def client_and_db(monkeypatch: pytest.MonkeyPatch):
     engine = create_engine(
         "sqlite:///:memory:", connect_args={"check_same_thread": False}, poolclass=StaticPool
     )
@@ -28,6 +30,9 @@ def client_and_db():
         finally:
             pass
 
+    monkeypatch.setattr(db_module, "get_engine", lambda database_url=None: engine)
+    db_module.init_db("sqlite:///:memory:")
+    monkeypatch.setattr(main_module, "init_db", lambda: db_module.init_db("sqlite:///:memory:"))
     fastapi_app.dependency_overrides[get_db] = override_get_db
     try:
         with TestClient(fastapi_app) as client:

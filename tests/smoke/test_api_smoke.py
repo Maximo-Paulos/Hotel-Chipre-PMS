@@ -47,6 +47,19 @@ def test_onboarding_flow_complete(client: TestClient):
     )
     assert owner.status_code == 200, owner.text
 
+    identity = client.post(
+        "/api/onboarding/identity",
+        json={
+            "name": "Hotel Chipre Centro",
+            "timezone": "America/Argentina/Buenos_Aires",
+            "currency": "ARS",
+            "languages": ["es", "en"],
+            "jurisdiction_code": "AR",
+        },
+        headers=headers,
+    )
+    assert identity.status_code == 200, identity.text
+
     categories = client.post(
         "/api/onboarding/categories",
         json={
@@ -71,12 +84,56 @@ def test_onboarding_flow_complete(client: TestClient):
     )
     assert rooms.status_code == 201, rooms.text
 
+    policy = client.post(
+        "/api/onboarding/policy",
+        json={
+            "deposit_percentage": 30,
+            "free_cancellation_hours": 48,
+            "cancellation_penalty_percentage": 0,
+        },
+        headers=headers,
+    )
+    assert policy.status_code == 200, policy.text
+
+    payments = client.post(
+        "/api/onboarding/payments",
+        json={
+            "mercado_pago": {"enabled": True, "credentials": {"account_id": "mp-user"}},
+            "paypal": {"enabled": False, "credentials": {}},
+            "stripe": {"enabled": False, "credentials": {}},
+        },
+        headers=headers,
+    )
+    assert payments.status_code == 200, payments.text
+
+    ota = client.post(
+        "/api/onboarding/ota",
+        json={
+            "booking": {"enabled": True, "credentials": {"account_id": "booking-user"}},
+            "expedia": {"enabled": False, "credentials": {}},
+            "despegar": {"enabled": False, "credentials": {}},
+        },
+        headers=headers,
+    )
+    assert ota.status_code == 200, ota.text
+
+    subscription = client.post(
+        "/api/onboarding/subscription-choice",
+        json={"plan_code": "pro", "start_trial": True},
+        headers=headers,
+    )
+    assert subscription.status_code == 200, subscription.text
+
     staff = client.post(
         "/api/onboarding/staff",
         json={"staff": [{"name": "Recep", "role": "receptionist", "email": "r@example.com"}]},
         headers=headers,
     )
     assert staff.status_code == 200, staff.text
+
+    status_before_finish = client.get("/api/onboarding/status", headers=headers)
+    assert status_before_finish.status_code == 200, status_before_finish.text
+    assert status_before_finish.json()["gates"]["can_finish"] is True
 
     finish = client.post("/api/onboarding/finish", headers=headers)
     assert finish.status_code == 200, finish.text
@@ -133,4 +190,4 @@ def test_permissions_headers_applied_to_config(client: TestClient):
 
 def test_connections_connect_endpoint(client: TestClient):
     resp = client.post("/api/connections/mercadopago/connect", json={"credentials": {"token": "abc"}})
-    assert resp.status_code == 410
+    assert resp.status_code == 410, resp.text

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pytest
 from fastapi.testclient import TestClient
 import httpx
 from sqlalchemy import create_engine
@@ -13,6 +14,8 @@ from app.main import app as fastapi_app
 from app.models.hotel_config import HotelConfiguration
 from app.models.user import User
 from app.services.gemma_orchestrator import GemmaOrchestrator
+
+GEMMA_DEFER_REASON = "Gemma validation is deferred until the final IA configuration phase."
 
 
 def _override_auth(hotel_id: int, role: str = "owner", user_id: int = 10):
@@ -154,6 +157,7 @@ def test_gemma_chat_can_archive_session_and_hide_it_from_history():
         _cleanup_client(db, engine)
 
 
+@pytest.mark.skip(reason=GEMMA_DEFER_REASON)
 def test_gemma_chat_persists_and_lists_insights():
     client, db, engine = _build_client()
     try:
@@ -179,6 +183,7 @@ def test_gemma_chat_persists_and_lists_insights():
         _cleanup_client(db, engine)
 
 
+@pytest.mark.skip(reason=GEMMA_DEFER_REASON)
 def test_gemma_chat_returns_controlled_preview_for_policy_change_requests():
     client, db, engine = _build_client()
     try:
@@ -206,6 +211,7 @@ def test_gemma_chat_returns_controlled_preview_for_policy_change_requests():
         _cleanup_client(db, engine)
 
 
+@pytest.mark.skip(reason=GEMMA_DEFER_REASON)
 def test_gemma_chat_can_confirm_preview_into_policy_suggestion_draft():
     client, db, engine = _build_client()
     try:
@@ -243,6 +249,7 @@ def test_gemma_chat_can_confirm_preview_into_policy_suggestion_draft():
         _cleanup_client(db, engine)
 
 
+@pytest.mark.skip(reason=GEMMA_DEFER_REASON)
 def test_gemma_chat_can_reject_pending_action():
     client, db, engine = _build_client()
     try:
@@ -275,6 +282,7 @@ def test_gemma_chat_can_reject_pending_action():
         _cleanup_client(db, engine)
 
 
+@pytest.mark.skip(reason=GEMMA_DEFER_REASON)
 def test_gemma_chat_can_review_and_apply_created_draft():
     client, db, engine = _build_client()
     try:

@@ -30,6 +30,8 @@ class Subscription(Base):
     hotel_id = Column(Integer, ForeignKey("hotel_configuration.id", ondelete="CASCADE"), nullable=False, unique=True)
     plan = Column(String(20), nullable=False, default="starter")
     status = Column(String(20), nullable=False, default="active")
+    trial_started_at = Column(DateTime(timezone=True), nullable=True)
+    trial_end_at = Column(DateTime(timezone=True), nullable=True)
     current_period_end = Column(DateTime(timezone=True), nullable=True)
     grace_until = Column(DateTime(timezone=True), nullable=True)
     room_limit = Column(Integer, nullable=True)
@@ -42,7 +44,7 @@ class Subscription(Base):
 
     __table_args__ = (
         CheckConstraint("plan in ('starter','pro','ultra')", name="ck_subscriptions_plan"),
-        CheckConstraint("status in ('active','past_due','suspended','trialing','demo')", name="ck_subscriptions_status"),
+        CheckConstraint("status in ('active','past_due','suspended','trialing','demo','comped')", name="ck_subscriptions_status"),
     )
 
 

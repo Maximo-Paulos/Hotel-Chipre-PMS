@@ -124,6 +124,7 @@ app.include_router(ota_webhooks.router)
 app.include_router(config.router)
 app.include_router(reports.router)
 app.include_router(subscription.router)
+app.include_router(subscription.admin_router)
 app.include_router(users.router)
 if is_demo_mode() or not is_production_mode():
     app.include_router(demo.router, include_in_schema=is_demo_mode())

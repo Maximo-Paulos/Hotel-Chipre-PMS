@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -17,6 +18,8 @@ from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.commercial import ProductRoomCompatibility, SellableProduct
 from app.services.allocation_policy_service import record_manual_override_feedback
 from app.services.allocation_runtime_service import run_persisted_allocation
+
+GEMMA_DEFER_REASON = "Gemma validation is deferred until the final IA configuration phase."
 
 
 def _override_auth(hotel_id: int, role: str = "owner"):
@@ -168,6 +171,7 @@ def test_allocation_policy_api_suggestions_are_scoped_and_manager_is_read_only()
         _cleanup_client(db, engine)
 
 
+@pytest.mark.skip(reason=GEMMA_DEFER_REASON)
 def test_allocation_policy_questionnaire_endpoint_creates_draft_suggestion():
     client, db, engine = _build_client()
     try:

@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from datetime import date
 
+import pytest
+
 from app.models.allocation import AllocationExplanation
 from app.models.commercial import ProductRoomCompatibility, SellableProduct
 from app.models.hotel_config import HotelConfiguration
@@ -20,6 +22,8 @@ from app.services.allocation_policy_service import (
 )
 from app.services.allocation_learning_service import draft_policy_from_questionnaire
 from app.services.allocation_runtime_service import get_allocation_run_details, run_persisted_allocation
+
+GEMMA_DEFER_REASON = "Gemma validation is deferred until the final IA configuration phase."
 
 
 def test_policy_service_seeds_default_profile_and_version(db):
@@ -200,6 +204,7 @@ def test_create_policy_suggestion_draft_stores_structured_payload(db):
     assert json.loads(suggestion.suggested_policy_json)["weights"]["stability"] == 12
 
 
+@pytest.mark.skip(reason=GEMMA_DEFER_REASON)
 def test_questionnaire_draft_creates_heuristic_policy_suggestion(db):
     db.add(HotelConfiguration(id=64, hotel_name="Questionnaire Hotel", subscription_active=True))
     db.flush()

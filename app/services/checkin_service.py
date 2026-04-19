@@ -15,12 +15,20 @@ from app.models.guest import Guest
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.hotel_config import HotelConfiguration
 from app.services.reservation_service import transition_reservation_status, ReservationError
+from app.services.jurisdiction_profile import compute_missing_guest_fields
 from app.models.room import Room, RoomStatusEnum
 
 
 class CheckInError(Exception):
     """Custom exception for check-in validation errors."""
     pass
+
+
+def _resolve_jurisdiction_code(config: HotelConfiguration | None) -> str:
+    if not config:
+        return "AR"
+    extra_policies = config.get_extra_policies()
+    return str(extra_policies.get("jurisdiction_code") or "AR").strip().upper()
 
 
 def validate_guest_for_checkin(
@@ -42,27 +50,12 @@ def validate_guest_for_checkin(
         hotel_id = config_or_hotel
         config = db.query(HotelConfiguration).filter(HotelConfiguration.id == hotel_id).first()
 
-    errors: list[str] = []
-
-    # Always required: name
-    if not guest.first_name or not guest.first_name.strip():
-        errors.append("First name is required")
-    if not guest.last_name or not guest.last_name.strip():
-        errors.append("Last name is required")
-
-    # Document requirement (configurable)
-    if config and config.require_document_for_checkin:
-        if not guest.document_type or not guest.document_type.strip():
-            errors.append("Document type (DNI/Passport) is required")
-        if not guest.document_number or not guest.document_number.strip():
-            errors.append("Document number is required")
-
-    # Terms acceptance (configurable)
-    if config and config.require_terms_acceptance:
-        if not guest.terms_accepted:
-            errors.append("Guest must accept terms and conditions")
-
-    return errors
+    return compute_missing_guest_fields(
+        guest,
+        jurisdiction_code=_resolve_jurisdiction_code(config),
+        require_document=bool(config.require_document_for_checkin) if config else False,
+        require_terms=bool(config.require_terms_acceptance) if config else False,
+    )
 
 
 def perform_checkin(

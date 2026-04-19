@@ -25,9 +25,13 @@ export type SubscriptionStatus = {
   status: string;
   plan: string | null;
   room_limit: number;
+  staff_limit?: number | null;
   rooms_in_use: number;
   can_write?: boolean;
   limits?: Array<SubscriptionLimit> | Record<string, SubscriptionLimit>;
+  trial_started_at?: string | null;
+  trial_end_at?: string | null;
+  trial_remaining_days?: number | null;
   source?: "api" | "mock";
   available_plans?: Array<SubscriptionPlan>;
 };
@@ -40,3 +44,18 @@ export const listSubscriptionPlans = (session?: SessionLike) =>
 
 export const changeSubscriptionPlan = (plan_code: string, session?: SessionLike) =>
   apiFetch<SubscriptionStatus>("/api/subscription/plan", { method: "POST", data: { plan_code }, session });
+
+export const startTrial = (plan_code: string, session?: SessionLike) =>
+  apiFetch<SubscriptionStatus>("/api/subscription/trial", { method: "POST", data: { plan_code }, session });
+
+export const adminCompedOverride = (
+  hotel_id: number,
+  plan_code: string,
+  reason?: string,
+  session?: SessionLike
+) =>
+  apiFetch<SubscriptionStatus>("/api/admin/subscription/comped-override", {
+    method: "POST",
+    data: { hotel_id, plan_code, reason },
+    session
+  });

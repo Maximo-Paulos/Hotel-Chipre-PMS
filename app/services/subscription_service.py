@@ -24,11 +24,15 @@ DEFAULT_ENTITLEMENTS: dict[str, dict[str, Any]] = {
         "reports.advanced": False,
         "ota.sync": False,
     },
-    "standard": {
+    "pro": {
         "reports.advanced": True,
         "ota.sync": True,
     },
-    "pro": {
+    "ultra": {
+        "reports.advanced": True,
+        "ota.sync": True,
+    },
+    "standard": {
         "reports.advanced": True,
         "ota.sync": True,
     },
@@ -138,7 +142,7 @@ def ensure_subscription(db: Session, hotel_id: int) -> HotelSubscription:
         return sub
     plan = db.query(SubscriptionPlan).filter(SubscriptionPlan.code == "starter").first()
     if not plan:
-        plan = SubscriptionPlan(code="starter", name="Plan Inicial", room_limit=20)
+        plan = SubscriptionPlan(code="starter", name="Starter", room_limit=15)
         db.add(plan)
         db.flush()
         ensure_entitlements_seeded(db)
@@ -200,7 +204,7 @@ def get_entitlements(db: Session, hotel_id: int) -> dict[str, dict[str, Any]]:
 def get_effective_room_limit(db: Session, hotel_id: int) -> int:
     entitlements = get_entitlements(db, hotel_id)
     limit = entitlements.get("rooms.max_active", {}).get("value")
-    return int(limit) if limit is not None else 20
+    return int(limit) if limit is not None else 15
 
 
 def require_subscription_active(db: Session, hotel_id: int, action: str | None = None):
