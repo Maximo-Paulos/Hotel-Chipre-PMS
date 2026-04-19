@@ -1,7 +1,7 @@
 # Graph Report - C:\PROJECTO\Hotel-Chipre-PMS  (2026-04-19)
 
 ## Corpus Check
-- 253 files · ~406,716 words
+- 253 files · ~421,571 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
@@ -469,8 +469,8 @@
   C:\PROJECTO\Hotel-Chipre-PMS\app\database.py → app\main.py
 - `Base` --uses--> `Initialize database on application startup.`  [INFERRED]
   C:\PROJECTO\Hotel-Chipre-PMS\app\database.py → app\main.py
-- `StaticFiles that returns 404 on invalid filenames (e.g., containing wildcards on` --uses--> `Base`  [INFERRED]
-  C:\PROJECTO\Hotel-Chipre-PMS\app\main.py → C:\PROJECTO\Hotel-Chipre-PMS\app\database.py
+- `Base` --uses--> `StaticFiles that returns 404 on invalid filenames (e.g., containing wildcards on`  [INFERRED]
+  C:\PROJECTO\Hotel-Chipre-PMS\app\database.py → C:\PROJECTO\Hotel-Chipre-PMS\app\main.py
 
 ## Communities
 
@@ -3030,11 +3030,11 @@ Nodes (1): Ratio of actual intra-community edges to maximum possible.
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `HotelConfiguration` connect `Community 1` to `Community 0`, `Community 2`, `Community 5`, `Community 6`, `Community 7`, `Community 8`, `Community 10`, `Community 11`, `Community 12`?**
-  _High betweenness centrality (0.102) - this node is a cross-community bridge._
+  _High betweenness centrality (0.128) - this node is a cross-community bridge._
 - **Why does `Base` connect `Community 0` to `Community 1`, `Community 2`, `Community 4`, `Community 5`, `Community 6`, `Community 7`, `Community 8`, `Community 9`, `Community 10`, `Community 11`, `Community 12`, `Community 13`, `Community 14`, `Community 18`, `Community 19`, `Community 22`?**
-  _High betweenness centrality (0.098) - this node is a cross-community bridge._
+  _High betweenness centrality (0.090) - this node is a cross-community bridge._
 - **Why does `apiFetch()` connect `Community 4` to `Community 3`?**
-  _High betweenness centrality (0.080) - this node is a cross-community bridge._
+  _High betweenness centrality (0.077) - this node is a cross-community bridge._
 - **Are the 262 inferred relationships involving `HotelConfiguration` (e.g. with `FastAPI routes for Hotel Configuration (Admin Panel).` and `Lightweight status so the frontend can check if SMTP is configured.`) actually correct?**
   _`HotelConfiguration` has 262 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 253 inferred relationships involving `Reservation` (e.g. with `FastAPI routes for Booking management (thin layer over Reservation). Provides b` and `Ensure computed fields land in the response.`) actually correct?**
