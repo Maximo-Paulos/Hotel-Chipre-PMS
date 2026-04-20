@@ -42,6 +42,17 @@ def _generate_code() -> str:
     return str(secrets.randbelow(900000) + 100000)
 
 
+def _mask_email(email: str) -> str:
+    local_part, at, domain = email.partition("@")
+    if not at:
+        return "***"
+    if len(local_part) <= 2:
+        masked_local = f"{local_part[:1]}***"
+    else:
+        masked_local = f"{local_part[:2]}***"
+    return f"{masked_local}@{domain}"
+
+
 def _build_auth_response(db: Session, user: User, requested_hotel_id: int | None = None) -> AuthResponse:
     memberships = get_memberships_for_user(db, user.id)
     memberships_by_hotel = {m.hotel_id: m for m in memberships if m.status == "active"}
@@ -134,19 +145,29 @@ def request_verify(payload: RequestCode, db: Session = Depends(get_db)):
     key = payload.email.lower()
     if not verify_request_limiter.allow(key, db=db):
         db.commit()
+        LOGGER.warning("request_verify rate limit hit email=%s", _mask_email(key))
         raise HTTPException(status_code=429, detail="Demasiados intentos de verificacion. Espera unos minutos.")
     db.commit()
 
     user = db.query(User).filter(User.email.ilike(payload.email)).first()
     if not user or user.is_verified:
+        reason = "not_found" if not user else "already_verified"
+        LOGGER.info("request_verify no-op email=%s reason=%s", _mask_email(key), reason)
         return {"sent": True}
 
     code = _issue_email_token(db, payload.email, "email_verification")
     db.commit()
     if mailer.configured:
+        LOGGER.info("request_verify smtp configured send attempted email=%s", _mask_email(key))
         if not send_verification_email(payload.email, code):
             LOGGER.warning("Verification email send failed during request_verify")
             raise HTTPException(status_code=502, detail="No se pudo enviar el email de verificacion")
+    else:
+        LOGGER.info(
+            "request_verify smtp not configured fallback used email=%s code_exposed=%s",
+            _mask_email(key),
+            _should_return_code(),
+        )
     response: dict = {"sent": True}
     if _should_return_code():
         response["code"] = code

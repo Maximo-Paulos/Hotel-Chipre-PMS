@@ -144,6 +144,7 @@ def test_request_verify_confirms_success_only_after_smtp_send(client_and_db, fix
             self.sent_messages.append(message)
 
     monkeypatch.setattr(email_service.smtplib, "SMTP", FakeSMTP)
+    caplog.set_level(logging.INFO, logger="app.api.auth")
     caplog.set_level(logging.INFO, logger="app.services.email_service")
 
     db.add(User(email="smtp-ok@example.com", password_hash=hash_password("Demo123!"), role="owner", is_verified=False, is_active=True))
@@ -162,10 +163,61 @@ def test_request_verify_confirms_success_only_after_smtp_send(client_and_db, fix
     assert len(smtp.sent_messages) == 1
 
     log_text = "\n".join(record.message for record in caplog.records)
+    assert "request_verify smtp configured send attempted" in log_text
     assert "SMTP connection attempt" in log_text
     assert "SMTP authentication attempt" in log_text
     assert "SMTP authentication success" in log_text
     assert "SMTP send success" in log_text
+
+
+def test_request_verify_logs_fallback_when_smtp_is_missing(client_and_db, caplog):
+    client, db = client_and_db
+    caplog.set_level(logging.INFO, logger="app.api.auth")
+
+    db.add(User(email="fallback@example.com", password_hash=hash_password("Demo123!"), role="owner", is_verified=False, is_active=True))
+    db.commit()
+
+    request_verify = client.post("/api/auth/request-verify", json={"email": "fallback@example.com"})
+    assert request_verify.status_code == 200, request_verify.text
+    assert request_verify.json() == {"sent": True}
+
+    log_text = "\n".join(record.message for record in caplog.records)
+    assert "request_verify smtp not configured fallback used" in log_text
+    assert "code_exposed=False" in log_text
+
+
+def test_request_verify_logs_noop_when_user_missing_or_verified(client_and_db, caplog):
+    client, db = client_and_db
+    caplog.set_level(logging.INFO, logger="app.api.auth")
+
+    missing = client.post("/api/auth/request-verify", json={"email": "missing@example.com"})
+    assert missing.status_code == 200, missing.text
+    assert missing.json() == {"sent": True}
+
+    db.add(User(email="verified@example.com", password_hash=hash_password("Demo123!"), role="owner", is_verified=True, is_active=True))
+    db.commit()
+
+    verified = client.post("/api/auth/request-verify", json={"email": "verified@example.com"})
+    assert verified.status_code == 200, verified.text
+    assert verified.json() == {"sent": True}
+
+    log_text = "\n".join(record.message for record in caplog.records)
+    assert "request_verify no-op" in log_text
+    assert "reason=not_found" in log_text
+    assert "reason=already_verified" in log_text
+
+
+def test_request_verify_logs_rate_limit_hit(client_and_db, monkeypatch, caplog):
+    client, _db = client_and_db
+    caplog.set_level(logging.INFO, logger="app.api.auth")
+
+    monkeypatch.setattr("app.api.auth.verify_request_limiter.allow", lambda key, db=None: False)
+
+    request_verify = client.post("/api/auth/request-verify", json={"email": "rate-limited@example.com"})
+    assert request_verify.status_code == 429, request_verify.text
+
+    log_text = "\n".join(record.message for record in caplog.records)
+    assert "request_verify rate limit hit" in log_text
 
 
 def test_request_verify_surfaces_smtp_failure(client_and_db, fixed_code_patch, monkeypatch, caplog):
