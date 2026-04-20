@@ -2,6 +2,7 @@
 Auth endpoints: register, login, email verification and password reset.
 Verification and reset codes are persisted in the database.
 """
+import logging
 from datetime import datetime, timezone
 import secrets
 
@@ -34,6 +35,7 @@ from app.services.security import create_access_token, hash_password, verify_pas
 from app.dependencies.auth import get_current_user
 
 router = APIRouter(prefix="/api/auth", tags=["Auth"])
+LOGGER = logging.getLogger(__name__)
 
 
 def _generate_code() -> str:
@@ -142,7 +144,9 @@ def request_verify(payload: RequestCode, db: Session = Depends(get_db)):
     code = _issue_email_token(db, payload.email, "email_verification")
     db.commit()
     if mailer.configured:
-        send_verification_email(payload.email, code)
+        if not send_verification_email(payload.email, code):
+            LOGGER.warning("Verification email send failed during request_verify")
+            raise HTTPException(status_code=502, detail="No se pudo enviar el email de verificacion")
     response: dict = {"sent": True}
     if _should_return_code():
         response["code"] = code

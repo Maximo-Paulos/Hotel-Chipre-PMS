@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+import smtplib
 from unittest.mock import patch
 
 import pytest
@@ -11,8 +13,12 @@ from sqlalchemy.pool import StaticPool
 import app.database as db_module
 import app.main as main_module
 import app.models  # noqa: F401
+from app.config import Settings
 from app.database import Base, get_db
 from app.main import app as fastapi_app
+from app.models.user import User
+from app.services import email_service
+from app.services.security import hash_password
 
 
 @pytest.fixture
@@ -94,6 +100,123 @@ def test_register_verify_and_reset_do_not_expose_codes(client_and_db, fixed_code
     reset_unknown = client.post("/api/auth/request-reset", json={"email": "unknown@example.com"})
     assert reset_unknown.status_code == 200
     assert reset_unknown.json() == {"sent": True}
+
+
+def test_request_verify_confirms_success_only_after_smtp_send(client_and_db, fixed_code_patch, monkeypatch, caplog):
+    client, db = client_and_db
+    monkeypatch.setattr(
+        email_service.mailer,
+        "settings",
+        Settings(
+            SMTP_HOST="smtp.example.com",
+            SMTP_PORT=587,
+            SMTP_USER="no-reply@example.com",
+            SMTP_PASS="super-secret",
+            SMTP_FROM="Hotel PMS <no-reply@example.com>",
+        ),
+    )
+
+    class FakeSMTP:
+        instances: list["FakeSMTP"] = []
+
+        def __init__(self, host: str, port: int, timeout: int):
+            self.host = host
+            self.port = port
+            self.timeout = timeout
+            self.started_tls = False
+            self.logged_in = False
+            self.sent_messages = []
+            FakeSMTP.instances.append(self)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def starttls(self):
+            self.started_tls = True
+
+        def login(self, user: str, password: str):
+            self.logged_in = True
+
+        def send_message(self, message):
+            self.sent_messages.append(message)
+
+    monkeypatch.setattr(email_service.smtplib, "SMTP", FakeSMTP)
+    caplog.set_level(logging.INFO, logger="app.services.email_service")
+
+    db.add(User(email="smtp-ok@example.com", password_hash=hash_password("Demo123!"), role="owner", is_verified=False, is_active=True))
+    db.commit()
+
+    request_verify = client.post("/api/auth/request-verify", json={"email": "smtp-ok@example.com"})
+    assert request_verify.status_code == 200, request_verify.text
+    assert request_verify.json() == {"sent": True}
+
+    assert len(FakeSMTP.instances) == 1, "SMTP client was not instantiated exactly once"
+    smtp = FakeSMTP.instances[0]
+    assert smtp.host == "smtp.example.com"
+    assert smtp.port == 587
+    assert smtp.started_tls is True
+    assert smtp.logged_in is True
+    assert len(smtp.sent_messages) == 1
+
+    log_text = "\n".join(record.message for record in caplog.records)
+    assert "SMTP connection attempt" in log_text
+    assert "SMTP authentication attempt" in log_text
+    assert "SMTP authentication success" in log_text
+    assert "SMTP send success" in log_text
+
+
+def test_request_verify_surfaces_smtp_failure(client_and_db, fixed_code_patch, monkeypatch, caplog):
+    client, db = client_and_db
+    monkeypatch.setattr(
+        email_service.mailer,
+        "settings",
+        Settings(
+            SMTP_HOST="smtp.example.com",
+            SMTP_PORT=587,
+            SMTP_USER="no-reply@example.com",
+            SMTP_PASS="super-secret",
+            SMTP_FROM="Hotel PMS <no-reply@example.com>",
+        ),
+    )
+
+    class FailingSMTP:
+        def __init__(self, host: str, port: int, timeout: int):
+            self.host = host
+            self.port = port
+            self.timeout = timeout
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def starttls(self):
+            return None
+
+        def login(self, user: str, password: str):
+            return None
+
+        def send_message(self, message):
+            raise smtplib.SMTPException("550 5.7.1 relay denied")
+
+    monkeypatch.setattr(email_service.smtplib, "SMTP", FailingSMTP)
+    caplog.set_level(logging.INFO, logger="app.services.email_service")
+
+    db.add(User(email="smtp-fail@example.com", password_hash=hash_password("Demo123!"), role="owner", is_verified=False, is_active=True))
+    db.commit()
+
+    request_verify = client.post("/api/auth/request-verify", json={"email": "smtp-fail@example.com"})
+    assert request_verify.status_code == 502
+    assert request_verify.json()["detail"] == "No se pudo enviar el email de verificacion"
+
+    log_text = "\n".join(record.message for record in caplog.records)
+    assert "SMTP connection attempt" in log_text
+    assert "SMTP authentication attempt" in log_text
+    assert "SMTP send failed" in log_text
 
 
 def test_unverified_users_cannot_use_operational_endpoints(client_and_db, fixed_code_patch):
