@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: hotel-chipre-pms-api
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}
+    healthCheckPath: /health
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false   # set manually in Render dashboard (Supabase connection string)
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CORS_ORIGINS
+        sync: false   # set to your Vercel URL, e.g. https://hotel-chipre.vercel.app
+      - key: FRONTEND_URL
+        sync: false   # set to your Vercel URL (used in invitation emails)
+      - key: APP_BASE_URL
+        sync: false   # set to your Render service URL, e.g. https://hotel-chipre-pms-api.onrender.com
+      - key: MANAGER_PIN
+        sync: false   # at least 6 digits, not 1234
+      - key: INTEGRATIONS_ENCRYPTION_KEY
+        sync: false   # generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+      - key: GEMMA_ENABLED
+        value: "false"
+    plan: free
+    autoDeploy: true
