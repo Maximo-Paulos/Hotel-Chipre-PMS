@@ -105,6 +105,13 @@ En el dashboard del servicio → **Environment** → agregar cada variable:
 | `GEMMA_ENABLED` | `false` | *(ya en render.yaml)* |
 
 > **SMTP es opcional para el MVP.** Si no configurás SMTP, las invitaciones a staff se crean pero el email no se envía. El sistema no rompe.
+>
+> **Verificación de email sin SMTP (modo piloto):** para que el piloto pueda arrancar sin Gmail/SMTP existen dos flags opt-in:
+>
+> - `PILOT_AUTO_VERIFY=true` → `/api/auth/register` marca al owner como verificado directamente (no se envía ni pide código).
+> - `EXPOSE_AUTH_CODES_WHEN_NO_SMTP=true` (solo cuando no hay SMTP) → `/api/auth/request-verify` y `/api/auth/request-reset` devuelven el código en el JSON para que la UI pueda completar el flujo.
+>
+> Ambas flags están activadas por default en `.env.render`. **Desactivalas antes de abrir el deployment a usuarios externos al hotel.**
 
 > **Integraciones opcionales:** Mercado Pago, PayPal y Gmail OAuth solo se validan cuando realmente se cargan sus credenciales en producción. Si no las vas a usar en el piloto, dejalas vacías.
 

@@ -84,16 +84,32 @@ def _issue_email_token(db: Session, email: str, token_type: str) -> str:
     return code
 
 
+def _should_auto_verify() -> bool:
+    """Pilot escape hatch: when PILOT_AUTO_VERIFY is set, new owners are
+    marked verified on register so they can operate without SMTP."""
+    return bool(get_settings().PILOT_AUTO_VERIFY)
+
+
+def _should_return_code() -> bool:
+    """Return verification/reset codes inline when the operator opted in and
+    SMTP is not configured. Never leak codes when a real mailer exists."""
+    if mailer.configured:
+        return False
+    return bool(get_settings().EXPOSE_AUTH_CODES_WHEN_NO_SMTP)
+
+
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
 def register(payload: RegisterRequest, db: Session = Depends(get_db)):
     existing = db.query(User).filter(User.email.ilike(payload.email)).first()
     if existing:
         raise HTTPException(status_code=400, detail="Ya existe un usuario con ese email")
 
+    auto_verify = _should_auto_verify()
     user = User(
         email=payload.email.lower(),
         password_hash=hash_password(payload.password),
         role=payload.role or "owner",
+        is_verified=auto_verify,
     )
     db.add(user)
     db.commit()
@@ -102,10 +118,11 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
     get_or_create_hotel_for_owner(db, user.email)
     db.commit()
 
-    code = _issue_email_token(db, payload.email, "email_verification")
-    db.commit()
-    if mailer.configured:
-        send_verification_email(payload.email, code)
+    if not auto_verify:
+        code = _issue_email_token(db, payload.email, "email_verification")
+        db.commit()
+        if mailer.configured:
+            send_verification_email(payload.email, code)
 
     return _build_auth_response(db, user)
 
@@ -126,7 +143,10 @@ def request_verify(payload: RequestCode, db: Session = Depends(get_db)):
     db.commit()
     if mailer.configured:
         send_verification_email(payload.email, code)
-    return {"sent": True}
+    response: dict = {"sent": True}
+    if _should_return_code():
+        response["code"] = code
+    return response
 
 
 @router.post("/login", response_model=AuthResponse)
@@ -178,13 +198,15 @@ def request_reset(payload: RequestCode, db: Session = Depends(get_db)):
         raise HTTPException(status_code=429, detail="Demasiados intentos de reset. Espera unos minutos.")
     db.commit()
 
-    response = {"sent": True}
+    response: dict = {"sent": True}
     user = db.query(User).filter(User.email.ilike(payload.email)).first()
     if user and user.is_verified:
         code = _issue_email_token(db, payload.email, "password_reset")
         db.commit()
         if mailer.configured:
             send_reset_password_email(payload.email, code)
+        if _should_return_code():
+            response["code"] = code
     return response
 
 

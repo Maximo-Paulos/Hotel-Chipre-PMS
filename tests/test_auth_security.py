@@ -121,3 +121,28 @@ def test_legacy_public_email_endpoints_are_retired(client_and_db):
 
     resp = client.post("/api/email/verify?to=test@example.com")
     assert resp.status_code == 410
+
+
+def test_pilot_auto_verify_skips_email_gating(client_and_db, monkeypatch):
+    client, _db = client_and_db
+    from app.config import get_settings
+
+    get_settings.cache_clear()
+    monkeypatch.setenv("PILOT_AUTO_VERIFY", "true")
+    monkeypatch.setenv("EXPOSE_AUTH_CODES_WHEN_NO_SMTP", "true")
+    try:
+        register = _register_owner(client, "pilot@example.com")
+        assert register["requires_verification"] is False
+        assert register["user"]["is_verified"] is True
+
+        headers = _auth_headers(register)
+        status_resp = client.get("/api/onboarding/status", headers=headers)
+        assert status_resp.status_code == 200
+
+        reset = client.post("/api/auth/request-reset", json={"email": "pilot@example.com"})
+        assert reset.status_code == 200
+        body = reset.json()
+        assert body["sent"] is True
+        assert "code" in body and len(body["code"]) == 6
+    finally:
+        get_settings.cache_clear()

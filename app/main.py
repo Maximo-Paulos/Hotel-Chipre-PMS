@@ -107,12 +107,19 @@ _base_origins = [
     "http://127.0.0.1:3000",
 ]
 _extra = os.getenv("CORS_ORIGINS", "")
-allowed_origins = _base_origins + [o.strip() for o in _extra.split(",") if o.strip()]
+_extra_entries = [o.strip() for o in _extra.split(",") if o.strip()]
+# Wildcard is incompatible with allow_credentials=True in the browser spec
+# (the server must echo a concrete Origin). When operators set CORS_ORIGINS=*
+# we widen the regex instead of shipping a literal "*" that silently fails.
+_wildcard = any(entry == "*" for entry in _extra_entries)
+_extra_origins = [entry for entry in _extra_entries if entry != "*"]
+allowed_origins = _base_origins + _extra_origins
+_allow_origin_regex = r".*" if _wildcard else r"https://.*\.vercel\.app"
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
-    allow_origin_regex=r"https://.*\.vercel\.app",
+    allow_origin_regex=_allow_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

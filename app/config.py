@@ -85,6 +85,16 @@ class Settings(BaseSettings):
     SMTP_FROM: str = "Hotel PMS <noreply@example.com>"
     SMTP_STARTUP_NOTIFY: bool = False
 
+    # Pilot / onboarding flags
+    # Opt-in: when True new users are auto-verified on register so the piloto
+    # can proceed without a working outbound-email channel.
+    PILOT_AUTO_VERIFY: bool = False
+    # Opt-in: when True AND SMTP is not configured, password-reset and
+    # verification endpoints include the code in the JSON response so the UI
+    # can complete the flow without a mailbox. Intended for trusted pilot
+    # users only; leave False when exposing the deployment publicly.
+    EXPOSE_AUTH_CODES_WHEN_NO_SMTP: bool = False
+
     # Auth
     JWT_SECRET: str = "change-me"
     ACCESS_TOKEN_SECRET: str = ""
