@@ -1,11 +1,12 @@
-import clsx from "clsx";
-import { Link, NavLink, Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useMemo } from "react";
+import cx from "clsx";
+import { Link, NavLink, Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import { useOnboardingStatus } from "../hooks/useOnboardingStatus";
 import { useSubscriptionStatus } from "../hooks/useSubscription";
 import { useSession } from "../state/session";
 import { ApiError, hasValidSession } from "../api/client";
+
 import { HotelSelector } from "./HotelSelector";
 import { UserBadge } from "./UserBadge";
 
@@ -158,10 +159,14 @@ export function AppShell() {
       <div className="flex min-h-[calc(100vh-80px)]">
         <aside className="hidden w-72 shrink-0 border-r border-slate-200 bg-white/90 backdrop-blur md:flex md:flex-col">
           <div className="px-5 pb-4 pt-6">
-            <Link to="/dashboard" className="text-lg font-semibold text-slate-900">
-              Hotel Chipre PMS
+            <Link to="/dashboard" className="block">
+              <img
+                src="/brand/logo-full.png"
+                alt="Hotel Chipre PMS"
+                className="h-16 w-auto object-contain"
+              />
             </Link>
-            <p className="text-xs text-slate-500">Layout de navegacion prototipo</p>
+            <p className="mt-2 text-xs text-slate-500">Layout de navegacion prototipo</p>
           </div>
           <nav className="flex-1 space-y-6 px-3 pb-6">
             {visibleNavSections.map((section) => (
@@ -173,7 +178,7 @@ export function AppShell() {
                       key={item.to}
                       to={item.to}
                       className={({ isActive }) =>
-                        clsx(
+                        cx(
                           "flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium",
                           isActive ? "bg-brand-50 text-brand-700" : "text-slate-700 hover:bg-slate-100",
                         )
@@ -192,8 +197,13 @@ export function AppShell() {
           <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur">
             <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-3">
-                <Link to="/dashboard" className="text-lg font-semibold text-slate-900 md:hidden">
-                  Hotel Chipre PMS
+                <Link to="/dashboard" className="flex items-center gap-2 text-lg font-semibold text-slate-900 md:hidden">
+                  <img
+                    src="/brand/logo-avatar.png"
+                    alt="Hotel Chipre PMS"
+                    className="h-9 w-9 rounded-full border border-slate-200 object-cover"
+                  />
+                  <span className="leading-tight">Hotel Chipre PMS</span>
                 </Link>
                 <nav className="flex items-center gap-2 md:hidden">
                   {baseNav[0]?.items.map((item) => (

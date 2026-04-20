@@ -4,8 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { ApiError } from "../../api/client";
 import { register, requestVerification } from "../../api/auth";
 import { setOwner } from "../../api/onboarding";
-import { normalizeRole } from "../../state/session";
-import { useSession } from "../../state/session";
+import { normalizeRole, useSession } from "../../state/session";
 
 export function RegisterOwnerPage() {
   const navigate = useNavigate();
@@ -67,8 +66,13 @@ export function RegisterOwnerPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
       <div className="w-full max-w-2xl rounded-2xl bg-white p-8 shadow-lg ring-1 ring-slate-100">
-        <div className="mb-6 flex items-start justify-between">
-          <div>
+        <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div className="space-y-3">
+            <img
+              src="/brand/logo-full.png"
+              alt="Hotel Chipre PMS"
+              className="h-20 w-auto max-w-full object-contain"
+            />
             <h1 className="text-2xl font-semibold text-slate-900">Crear cuenta de dueno</h1>
             <p className="text-sm text-slate-600">
               Guardamos el owner en /api/onboarding/owner y luego verificamos tu email.

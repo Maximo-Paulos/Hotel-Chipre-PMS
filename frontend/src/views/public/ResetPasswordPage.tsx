@@ -83,8 +83,15 @@ export function ResetPasswordPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
       <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-lg ring-1 ring-slate-100">
-        <h1 className="text-2xl font-semibold text-slate-900">Restablecer contraseña</h1>
-        <p className="mb-4 text-sm text-slate-600">Seguí los pasos para recuperar tu acceso.</p>
+        <div className="mb-6 space-y-3">
+          <img
+            src="/brand/logo-full.png"
+            alt="Hotel Chipre PMS"
+            className="h-20 w-auto max-w-full object-contain"
+          />
+          <h1 className="text-2xl font-semibold text-slate-900">Restablecer contraseña</h1>
+          <p className="text-sm text-slate-600">Seguí los pasos para recuperar tu acceso.</p>
+        </div>
 
         {step === 1 && (
           <div className="space-y-4">
