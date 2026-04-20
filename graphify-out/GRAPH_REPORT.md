@@ -3037,12 +3037,12 @@ Nodes (1): Ratio of actual intra-community edges to maximum possible.
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `HotelConfiguration` connect `Community 0` to `Community 1`, `Community 2`, `Community 3`, `Community 4`, `Community 7`, `Community 9`, `Community 10`, `Community 11`, `Community 12`, `Community 14`, `Community 21`?**
-  _High betweenness centrality (0.120) - this node is a cross-community bridge._
 - **Why does `Base` connect `Community 4` to `Community 0`, `Community 1`, `Community 2`, `Community 3`, `Community 7`, `Community 8`, `Community 9`, `Community 10`, `Community 11`, `Community 12`, `Community 13`, `Community 14`, `Community 21`?**
-  _High betweenness centrality (0.114) - this node is a cross-community bridge._
+  _High betweenness centrality (0.124) - this node is a cross-community bridge._
+- **Why does `HotelConfiguration` connect `Community 0` to `Community 1`, `Community 2`, `Community 3`, `Community 4`, `Community 7`, `Community 9`, `Community 10`, `Community 11`, `Community 12`, `Community 14`, `Community 21`?**
+  _High betweenness centrality (0.122) - this node is a cross-community bridge._
 - **Why does `apiFetch()` connect `Community 6` to `Community 5`?**
-  _High betweenness centrality (0.076) - this node is a cross-community bridge._
+  _High betweenness centrality (0.087) - this node is a cross-community bridge._
 - **Are the 269 inferred relationships involving `HotelConfiguration` (e.g. with `FastAPI routes for Hotel Configuration (Admin Panel).` and `Lightweight status so the frontend can check if SMTP is configured.`) actually correct?**
   _`HotelConfiguration` has 269 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 260 inferred relationships involving `Reservation` (e.g. with `FastAPI routes for Booking management (thin layer over Reservation). Provides b` and `Ensure computed fields land in the response.`) actually correct?**

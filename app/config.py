@@ -110,6 +110,30 @@ def _normalized_env_value(value: str | None) -> str:
     return (value or "").strip().lower()
 
 
+def _has_value(value: str | None) -> bool:
+    return bool((value or "").strip())
+
+
+def _is_public_https_url(value: str | None) -> bool:
+    normalized = (value or "").strip()
+    return normalized.startswith("https://") and not any(host in normalized for host in ("localhost", "127.0.0.1"))
+
+
+def _mercadopago_is_active(settings: Settings) -> bool:
+    # Mercado Pago is considered active only when the integration is actually configured.
+    return _has_value(settings.MP_ACCESS_TOKEN) or (
+        _has_value(settings.MERCADOPAGO_CLIENT_ID) and _has_value(settings.MERCADOPAGO_CLIENT_SECRET)
+    )
+
+
+def _paypal_is_active(settings: Settings) -> bool:
+    return _has_value(settings.PAYPAL_CLIENT_ID) and _has_value(settings.PAYPAL_CLIENT_SECRET)
+
+
+def _gmail_is_active(settings: Settings) -> bool:
+    return _has_value(settings.GMAIL_CLIENT_ID) and _has_value(settings.GMAIL_CLIENT_SECRET)
+
+
 def is_demo_mode() -> bool:
     return _normalized_env_value(os.getenv("DEMO_MODE")) in {"1", "true", "yes", "on"}
 
@@ -157,30 +181,26 @@ def validate_runtime_security(settings: Settings | None = None) -> None:
         if runtime_settings.INTEGRATIONS_ENCRYPTION_KEY == "ZGVmYXVsdC1pbnRlZ3JhdGlvbnMta2V5LXNlY3JldA==":
             errors.append("INTEGRATIONS_ENCRYPTION_KEY cannot use the bundled default in production")
 
-    if not runtime_settings.APP_BASE_URL.startswith("https://"):
-        errors.append("APP_BASE_URL must use https:// in production")
-    if any(host in runtime_settings.APP_BASE_URL for host in ("localhost", "127.0.0.1")):
-        errors.append("APP_BASE_URL cannot point to localhost in production")
+    if not _is_public_https_url(runtime_settings.APP_BASE_URL):
+        errors.append("APP_BASE_URL must be a public https URL in production")
 
-    # MercadoPago webhook secret: only required when MP is actually configured
-    if runtime_settings.MP_ACCESS_TOKEN and not runtime_settings.MERCADOPAGO_WEBHOOK_SECRET:
-        errors.append("MERCADOPAGO_WEBHOOK_SECRET must be configured when MP_ACCESS_TOKEN is set")
+    # Optional integrations only become mandatory when their real credentials are configured.
+    mercadopago_active = _mercadopago_is_active(runtime_settings)
+    paypal_active = _paypal_is_active(runtime_settings)
+    gmail_active = _gmail_is_active(runtime_settings)
+
+    if mercadopago_active and not runtime_settings.MERCADOPAGO_WEBHOOK_SECRET.strip():
+        errors.append("MERCADOPAGO_WEBHOOK_SECRET must be configured when Mercado Pago is enabled")
 
     # OAuth redirect URIs: only validate when the respective service is configured
-    # (default values contain localhost — safe to ignore when service is not enabled)
+    # (only check when the integration is truly enabled)
     conditional_redirect_uris = [
-        ("PAYPAL_REDIRECT_URI", runtime_settings.PAYPAL_REDIRECT_URI,
-         runtime_settings.PAYPAL_CLIENT_ID or runtime_settings.PAYPAL_CLIENT_SECRET),
-        ("MERCADOPAGO_REDIRECT_URI", runtime_settings.MERCADOPAGO_REDIRECT_URI,
-         runtime_settings.MERCADOPAGO_CLIENT_ID or runtime_settings.MERCADOPAGO_CLIENT_SECRET),
-        ("GMAIL_REDIRECT_URI", runtime_settings.GMAIL_REDIRECT_URI,
-         runtime_settings.GMAIL_CLIENT_ID or runtime_settings.GMAIL_CLIENT_SECRET),
+        ("PAYPAL_REDIRECT_URI", runtime_settings.PAYPAL_REDIRECT_URI, paypal_active),
+        ("MERCADOPAGO_REDIRECT_URI", runtime_settings.MERCADOPAGO_REDIRECT_URI, mercadopago_active),
+        ("GMAIL_REDIRECT_URI", runtime_settings.GMAIL_REDIRECT_URI, gmail_active),
     ]
     for name, value, service_configured in conditional_redirect_uris:
-        if service_configured and value and (
-            not value.startswith("https://")
-            or any(host in value for host in ("localhost", "127.0.0.1"))
-        ):
+        if service_configured and not _is_public_https_url(value):
             errors.append(f"{name} must be a public https URL when the integration is enabled")
 
     if errors:

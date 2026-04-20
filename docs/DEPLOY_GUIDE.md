@@ -106,6 +106,8 @@ En el dashboard del servicio → **Environment** → agregar cada variable:
 
 > **SMTP es opcional para el MVP.** Si no configurás SMTP, las invitaciones a staff se crean pero el email no se envía. El sistema no rompe.
 
+> **Integraciones opcionales:** Mercado Pago, PayPal y Gmail OAuth solo se validan cuando realmente se cargan sus credenciales en producción. Si no las vas a usar en el piloto, dejalas vacías.
+
 ### 3.3 Lo que hace el Start Command automáticamente
 
 ```bash
@@ -261,6 +263,7 @@ El backend lanza este error si detecta secrets inseguros en modo producción. Ve
 - `JWT_SECRET` tiene al menos 32 caracteres
 - `MANAGER_PIN` tiene al menos 6 dígitos y no es `1234`
 - `APP_BASE_URL` empieza con `https://` y no tiene `localhost`
+- Las URLs de redirect y `MERCADOPAGO_WEBHOOK_SECRET` solo se exigen si la integración correspondiente está activada con credenciales reales
 
 ### Alembic falla en el startup
 
