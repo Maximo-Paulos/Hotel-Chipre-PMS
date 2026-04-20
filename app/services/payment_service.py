@@ -135,6 +135,7 @@ def process_payment(
     reservation = (
         db.query(Reservation)
         .filter(Reservation.id == request.reservation_id)
+        .enable_eagerloads(False)
         .with_for_update()
         .first()
     )

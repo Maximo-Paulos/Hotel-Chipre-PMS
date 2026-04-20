@@ -22,7 +22,7 @@ DOWNGRADE_STATUS_CHECK = "status in ('active','past_due','suspended','trialing',
 
 
 def upgrade() -> None:
-    with op.batch_alter_table("subscriptions", recreate="always") as batch_op:
+    with op.batch_alter_table("subscriptions", recreate="auto") as batch_op:
         batch_op.add_column(sa.Column("trial_started_at", sa.DateTime(timezone=True), nullable=True))
         batch_op.add_column(sa.Column("trial_end_at", sa.DateTime(timezone=True), nullable=True))
         batch_op.drop_constraint("ck_subscriptions_status", type_="check")
@@ -30,7 +30,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    with op.batch_alter_table("subscriptions", recreate="always") as batch_op:
+    with op.batch_alter_table("subscriptions", recreate="auto") as batch_op:
         batch_op.drop_constraint("ck_subscriptions_status", type_="check")
         batch_op.create_check_constraint("ck_subscriptions_status", DOWNGRADE_STATUS_CHECK)
         batch_op.drop_column("trial_end_at")

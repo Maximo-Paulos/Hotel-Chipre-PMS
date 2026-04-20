@@ -103,14 +103,24 @@ class Reservation(Base):
 
     # Status
     status = Column(
-        Enum(ReservationStatusEnum, name="reservation_status_enum", create_constraint=True),
+        Enum(
+            ReservationStatusEnum,
+            name="reservation_status_enum",
+            create_constraint=True,
+            values_callable=lambda enum_cls: [e.value for e in enum_cls],
+        ),
         nullable=False,
         default=ReservationStatusEnum.PENDING,
     )
 
     # Source tracking (OTA or direct)
     source = Column(
-        Enum(ReservationSourceEnum, name="reservation_source_enum", create_constraint=True),
+        Enum(
+            ReservationSourceEnum,
+            name="reservation_source_enum",
+            create_constraint=True,
+            values_callable=lambda enum_cls: [e.value for e in enum_cls],
+        ),
         nullable=False,
         default=ReservationSourceEnum.DIRECT,
     )

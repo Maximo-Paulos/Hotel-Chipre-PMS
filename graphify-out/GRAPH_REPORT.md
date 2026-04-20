@@ -1,12 +1,12 @@
 # Graph Report - C:\PROJECTO\Hotel-Chipre-PMS  (2026-04-19)
 
 ## Corpus Check
-- 253 files · ~421,571 words
+- 254 files · ~429,205 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 2662 nodes · 8378 edges · 437 communities detected
-- Extraction: 38% EXTRACTED · 62% INFERRED · 0% AMBIGUOUS · INFERRED: 5220 edges (avg confidence: 0.59)
+- 2691 nodes · 8562 edges · 437 communities detected
+- Extraction: 37% EXTRACTED · 63% INFERRED · 0% AMBIGUOUS · INFERRED: 5394 edges (avg confidence: 0.58)
 - Token cost: 0 input · 0 output
 
 ## Community Hubs (Navigation)
@@ -449,182 +449,182 @@
 - [[_COMMUNITY_Community 436|Community 436]]
 
 ## God Nodes (most connected - your core abstractions)
-1. `HotelConfiguration` - 269 edges
-2. `Reservation` - 258 edges
-3. `ReservationStatusEnum` - 228 edges
-4. `Room` - 223 edges
-5. `RoomCategory` - 181 edges
-6. `Base` - 180 edges
-7. `RoomStatusEnum` - 161 edges
-8. `Guest` - 153 edges
-9. `ReservationCreate` - 131 edges
-10. `ReservationError` - 116 edges
+1. `HotelConfiguration` - 276 edges
+2. `Reservation` - 265 edges
+3. `ReservationStatusEnum` - 235 edges
+4. `Room` - 228 edges
+5. `Base` - 189 edges
+6. `RoomCategory` - 186 edges
+7. `RoomStatusEnum` - 166 edges
+8. `Guest` - 158 edges
+9. `ReservationCreate` - 136 edges
+10. `ReservationError` - 122 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `Base` --uses--> `graphify CLI - `graphify install` sets up the Claude Code skill.`  [INFERRED]
-  C:\PROJECTO\Hotel-Chipre-PMS\app\database.py → graphify_repo\graphify\__main__.py
-- `Base` --uses--> `Check whether demo-only utilities should be exposed.`  [INFERRED]
-  C:\PROJECTO\Hotel-Chipre-PMS\app\database.py → app\main.py
-- `Base` --uses--> `Sends a lightweight startup email to the configured SMTP user/from.     Only fi`  [INFERRED]
-  C:\PROJECTO\Hotel-Chipre-PMS\app\database.py → app\main.py
-- `Base` --uses--> `Initialize database on application startup.`  [INFERRED]
-  C:\PROJECTO\Hotel-Chipre-PMS\app\database.py → app\main.py
-- `Base` --uses--> `StaticFiles that returns 404 on invalid filenames (e.g., containing wildcards on`  [INFERRED]
-  C:\PROJECTO\Hotel-Chipre-PMS\app\database.py → C:\PROJECTO\Hotel-Chipre-PMS\app\main.py
+- `Base` --uses--> `AI assistant session and message models.  Phase 1 keeps Gemma in read-only/propo`  [INFERRED]
+  C:\PROJECTO\Hotel-Chipre-PMS\app\database.py → app\models\ai_assistant.py
+- `Base` --uses--> `Parse and return extra_policies as a dictionary.`  [INFERRED]
+  C:\PROJECTO\Hotel-Chipre-PMS\app\database.py → app\models\hotel_config.py
+- `Base` --uses--> `Serialize policies dict to JSON string.`  [INFERRED]
+  C:\PROJECTO\Hotel-Chipre-PMS\app\database.py → app\models\hotel_config.py
+- `Base` --uses--> `HotelMembership model: many-to-many between users and hotels with roles. Roles:`  [INFERRED]
+  C:\PROJECTO\Hotel-Chipre-PMS\app\database.py → app\models\hotel_membership.py
+- `Base` --uses--> `Operational reservation models for adjustments, room moves and audit history.`  [INFERRED]
+  C:\PROJECTO\Hotel-Chipre-PMS\app\database.py → app\models\operations.py
 
 ## Communities
 
 ### Community 0 - "Community 0"
-Cohesion: 0.04
-Nodes (252): AllocationResult, AllocationEngine — Intelligent Room Assignment using Google OR-Tools (CP-SAT Sol, Count how many existing stays touch the candidate reservation without overlap., Run the CP-SAT solver to optimally assign rooms to reservations.          Args, Custom exception for allocation engine errors., Lightweight representation of a reservation for the solver., Greedy fallback allocation when OR-Tools is not available.     Simple first-fit, Return allowed categories, falling back to [category_id] if empty. (+244 more)
+Cohesion: 0.06
+Nodes (184): AllocationEngine — Intelligent Room Assignment using Google OR-Tools (CP-SAT Sol, Count how many existing stays touch the candidate reservation without overlap., Run the CP-SAT solver to optimally assign rooms to reservations.          Args, Custom exception for allocation engine errors., Lightweight representation of a reservation for the solver., Greedy fallback allocation when OR-Tools is not available.     Simple first-fit, Return allowed categories, falling back to [category_id] if empty., Apply the solver's assignments to the database.     Updates room_id on each rese (+176 more)
 
 ### Community 1 - "Community 1"
 Cohesion: 0.05
-Nodes (126): perform_checkin(), _resolve_jurisdiction_code(), validate_guest_for_checkin(), GuestCompanion, HotelConfiguration, get_mercadopago_adapter(), MercadoPagoAdapter, MercadoPago Payment Adapter. Wraps the MercadoPago SDK to create payment prefer (+118 more)
+Nodes (157): record_manual_override_feedback(), Base, BookingCreate, BookingRead, BookingUpdate, Pydantic schemas for Booking (lightweight wrapper around Reservation)., Input for creating a booking/reservation., Partial update payload for a booking. (+149 more)
 
 ### Community 2 - "Community 2"
 Cohesion: 0.03
-Nodes (128): get_db(), get_session_factory(), init_db(), Database engine and session management. Supports both PostgreSQL (production) a, Initialize the database engine and create all tables., Get or create a session factory., FastAPI dependency: yields a database session., GemmaOrchestrator (+120 more)
+Nodes (131): availability(), _booking_to_read(), cancel_booking(), checkin_booking(), checkout_booking(), create_booking(), get_booking(), list_bookings() (+123 more)
 
 ### Community 3 - "Community 3"
-Cohesion: 0.02
-Nodes (94): add subscription v2 tables  Revision ID: 20260407_subscription_tables Revises: 2, upgrade(), downgrade(), _fk_names(), launch security hardening  Revision ID: 20260408_launch_security_hardening Revis, upgrade(), ai assistant sessions  Revision ID: 20260411_ai_assistant_sessions Revises: 2026, upgrade() (+86 more)
+Cohesion: 0.03
+Nodes (139): UserInfo, get_db(), get_session_factory(), init_db(), Database engine and session management. Supports both PostgreSQL (production) a, Initialize the database engine and create all tables., Get or create a session factory., FastAPI dependency: yields a database session. (+131 more)
 
 ### Community 4 - "Community 4"
-Cohesion: 0.02
-Nodes (114): load(), submit(), acceptInvitation(), _build_auth_response(), currentUser(), _generate_code(), getInvitationInfo(), _issue_email_token() (+106 more)
+Cohesion: 0.03
+Nodes (143): AllocationAssignment, AllocationAssignmentStatusEnum, AllocationExplanation, AllocationPolicyProfile, AllocationPolicyVersion, AllocationRun, AllocationRunStatusEnum, AllocationError (+135 more)
 
 ### Community 5 - "Community 5"
-Cohesion: 0.03
-Nodes (129): ActiveAllocationPolicyRead, AllocationExplanationRead, AllocationFeedbackDraftRequest, AllocationPolicySuggestionApplyRequest, AllocationPolicySuggestionApplyResponse, AllocationPolicySuggestionCreate, AllocationPolicySuggestionReviewRequest, AllocationPolicyVersionCreate (+121 more)
+Cohesion: 0.02
+Nodes (89): add subscription v2 tables  Revision ID: 20260407_subscription_tables Revises: 2, upgrade(), downgrade(), _fk_names(), launch security hardening  Revision ID: 20260408_launch_security_hardening Revis, upgrade(), reservation financial lifecycle  Revision ID: 20260410_reservation_financial_l, upgrade() (+81 more)
 
 ### Community 6 - "Community 6"
-Cohesion: 0.04
-Nodes (108): _booking_to_read(), cancel_booking(), checkin_booking(), checkout_booking(), create_booking(), get_booking(), list_bookings(), price_quote() (+100 more)
+Cohesion: 0.02
+Nodes (111): load(), submit(), acceptInvitation(), _build_auth_response(), currentUser(), _generate_code(), getInvitationInfo(), _issue_email_token() (+103 more)
 
 ### Community 7 - "Community 7"
 Cohesion: 0.03
-Nodes (97): App(), get_configuration(), get_settings(), is_demo_mode(), is_production_mode(), is_testing_mode(), _normalized_env_value(), FastAPI routes for Hotel Configuration (Admin Panel). (+89 more)
+Nodes (119): ActiveAllocationPolicyRead, AllocationExplanationRead, AllocationFeedbackDraftRequest, AllocationPolicySuggestionApplyRequest, AllocationPolicySuggestionApplyResponse, AllocationPolicySuggestionCreate, AllocationPolicySuggestionReviewRequest, AllocationPolicyVersionCreate (+111 more)
 
 ### Community 8 - "Community 8"
-Cohesion: 0.05
-Nodes (108): Dependency factory that enforces a permission via hotel membership roles., Dependency to enforce that the current user has one of the allowed roles in the, Return an authenticated context scoped to an active hotel membership., HotelMembership, HotelMembership model: many-to-many between users and hotels with roles. Roles:, ensure_all_ota_webhook_secrets(), _ensure_membership_and_subscription(), ensure_plans_seeded() (+100 more)
+Cohesion: 0.04
+Nodes (75): AIAssistantActionRun, AIAssistantInsight, AIAssistantMessage, AIAssistantSession, AI assistant session and message models.  Phase 1 keeps Gemma in read-only/propo, AllocationFeedbackDraft, AllocationQuestionnaireDraft, draft_policy_from_feedback() (+67 more)
 
 ### Community 9 - "Community 9"
-Cohesion: 0.04
-Nodes (55): AIAssistantActionRun, AIAssistantInsight, AIAssistantMessage, AIAssistantSession, AI assistant session and message models.  Phase 1 keeps Gemma in read-only/propo, BaseSettings, Global application settings loaded from environment variables., Settings (+47 more)
+Cohesion: 0.05
+Nodes (111): Dependency factory that enforces a permission via hotel membership roles., Dependency to enforce that the current user has one of the allowed roles in the, Return an authenticated context scoped to an active hotel membership., HotelMembership, HotelMembership model: many-to-many between users and hotels with roles. Roles:, ensure_all_ota_webhook_secrets(), _ensure_membership_and_subscription(), ensure_plans_seeded() (+103 more)
 
 ### Community 10 - "Community 10"
 Cohesion: 0.04
-Nodes (36): ABC, BookingAdapter, _coerce_amount(), _infer_event_type(), NormalizedOTAReservation, OTAAdapterContext, OTAOperationResult, OTAProviderAdapter (+28 more)
+Nodes (87): App(), get_settings(), get_engine(), Create a SQLAlchemy engine.          Args:         database_url: Optional ove, IntegrationCatalog, IntegrationConnection, IntegrationEvent, _account_label_from_payload() (+79 more)
 
 ### Community 11 - "Community 11"
-Cohesion: 0.06
-Nodes (80): AllocationAssignment, AllocationAssignmentStatusEnum, AllocationExplanation, AllocationPolicyProfile, AllocationPolicyVersion, AllocationRun, AllocationRunStatusEnum, AllocationError (+72 more)
+Cohesion: 0.04
+Nodes (36): ABC, BookingAdapter, _coerce_amount(), _infer_event_type(), NormalizedOTAReservation, OTAAdapterContext, OTAOperationResult, OTAProviderAdapter (+28 more)
 
 ### Community 12 - "Community 12"
 Cohesion: 0.08
-Nodes (61): CategoriesPayload, _decode(), DepositPolicyPayload, _encode(), finish(), HotelIdentityPayload, normalize_languages(), onboarding_status() (+53 more)
+Nodes (59): CategoriesPayload, _decode(), DepositPolicyPayload, _encode(), finish(), HotelIdentityPayload, onboarding_status(), OnboardingState (+51 more)
 
 ### Community 13 - "Community 13"
 Cohesion: 0.07
 Nodes (61): create_fx(), create_plan(), create_policy(), create_product(), FxPolicyBase, FxPolicyCreate, FxPolicyRead, FxPolicyUpdate (+53 more)
 
 ### Community 14 - "Community 14"
-Cohesion: 0.1
-Nodes (48): AuthContext, _authenticate_user(), _decode_authorization_header(), get_auth_context(), get_current_user(), get_current_user_optional(), _parse_header_hotel_id(), _parse_token_hotel_id() (+40 more)
+Cohesion: 0.12
+Nodes (43): AuthContext, _authenticate_user(), _decode_authorization_header(), get_auth_context(), get_current_user(), get_current_user_optional(), _parse_header_hotel_id(), _parse_token_hotel_id() (+35 more)
 
 ### Community 15 - "Community 15"
 Cohesion: 0.1
 Nodes (44): _apply_financial_snapshot(), _cancel_existing_reservation_from_normalized(), _create_legacy_mapping(), _ensure_foundation_provider(), _extract_external_property_id(), _hash_secret(), _hotel_default_currency(), _mark_reservation_manual_review() (+36 more)
 
 ### Community 16 - "Community 16"
-Cohesion: 0.15
-Nodes (11): _adjacency_bonus_for_room(), _check_overlap(), _one_night_gap_penalty_for_room(), run_allocation(), _run_allocation_greedy(), make_res(), make_rooms(), Tests for the Allocation Engine (OR-Tools CP-SAT + greedy fallback). (+3 more)
+Cohesion: 0.12
+Nodes (20): _adjacency_bonus_for_room(), build_slots_from_db(), _check_overlap(), _one_night_gap_penalty_for_room(), ReservationSlot, RoomSlot, run_allocation(), _run_allocation_greedy() (+12 more)
 
 ### Community 17 - "Community 17"
 Cohesion: 0.09
 Nodes (7): defaultFormState(), handleCheckAvailability(), handlePayDeposit(), handlePayFull(), handleSubmit(), openCreate(), showToast()
 
 ### Community 18 - "Community 18"
-Cohesion: 0.11
-Nodes (15): Connection, ConnectionCreate, ConnectionRead, Pydantic schemas for external provider connections. Ensures credentials/setting, Payload to establish/update a provider connection., ConnectionError, Connection service to manage external provider credentials/settings. Provides a, Raised for validation problems while creating/updating a connection. (+7 more)
+Cohesion: 0.18
+Nodes (8): get_paypal_adapter(), PayPalAdapter, PayPal Payment Adapter. Wraps the PayPal REST SDK to create orders and capture, Execute (capture) a PayPal payment after customer approval.         Called when, Service adapter for PayPal payment integration.     Creates orders and processe, Process a PayPal webhook notification., Lazy-initialize the PayPal API., Create a PayPal payment (order).         Returns a redirect URL for the custome
 
 ### Community 19 - "Community 19"
-Cohesion: 0.11
-Nodes (17): _frontend_placeholder(), _is_demo_mode_enabled(), lifespan(), _maybe_send_startup_email(), graphify CLI - `graphify install` sets up the Claude Code skill., StaticFiles that returns 404 on invalid filenames (e.g., containing wildcards on, Fallback page shown when the Vite build is missing., Serve the SPA shell. We no longer block by onboarding here to avoid     returni (+9 more)
+Cohesion: 0.29
+Nodes (9): clearCodeField(), getErrorMessage(), getProviderErrorMessage(), handleConnect(), handleMessage(), handleRefresh(), handleRevoke(), handleStartAuthorization() (+1 more)
 
 ### Community 20 - "Community 20"
-Cohesion: 0.25
-Nodes (12): _apply_tax_policy(), _calculate_rule_amount(), _convert_amount(), _load_json_dict(), quote_rate_plan_stay(), _resolve_commission_amount(), _select_fx_policy(), _select_rate_plan_price() (+4 more)
+Cohesion: 0.21
+Nodes (7): get_mercadopago_adapter(), MercadoPagoAdapter, MercadoPago Payment Adapter. Wraps the MercadoPago SDK to create payment prefer, Service adapter for MercadoPago payment integration.     Creates checkout prefe, Lazy-initialize the MercadoPago SDK., Create a MercadoPago checkout preference.         Returns a redirect URL for th, Process an IPN (Instant Payment Notification) from MercadoPago.         Queries
 
 ### Community 21 - "Community 21"
-Cohesion: 0.28
-Nodes (7): compute_missing_guest_fields(), get_profile(), JurisdictionProfile, Jurisdiction profiles for guest/check-in validation.  AR remains the only launch, test_ar_profile_is_launch_active_and_default(), test_missing_field_computation_uses_profile(), test_uy_profile_lookup_is_safe()
+Cohesion: 0.22
+Nodes (8): Serialize policies dict to JSON string., compute_missing_guest_fields(), get_profile(), JurisdictionProfile, Jurisdiction profiles for guest/check-in validation.  AR remains the only launch, test_ar_profile_is_launch_active_and_default(), test_missing_field_computation_uses_profile(), test_uy_profile_lookup_is_safe()
 
 ### Community 22 - "Community 22"
-Cohesion: 0.32
-Nodes (7): Demo-only utilities: seed sample data and reset the database. Exposed only when, Guard endpoints so they only run in explicit demo mode or tests., Populate the database with minimal demo data.     Idempotent: running twice simp, Drop and recreate all tables.     Keeps the app in a known-good empty state for, _require_demo_mode(), reset_demo(), seed_demo()
-
-### Community 23 - "Community 23"
 Cohesion: 0.43
 Nodes (7): client_with_db(), create_hotel_with_membership(), get_db_override_target(), test_reservations_list_isolated_by_hotel(), test_reset_endpoint_allows_testing_env(), test_room_cap_enforced(), test_rooms_list_isolated_by_hotel()
 
-### Community 24 - "Community 24"
+### Community 23 - "Community 23"
 Cohesion: 0.32
 Nodes (4): authed_client(), client_with_db(), get_auth_context_target(), get_db_override_target()
 
-### Community 25 - "Community 25"
+### Community 24 - "Community 24"
 Cohesion: 0.6
 Nodes (4): downgrade(), _has_column(), extend payment link tests states  Revision ID: d4f8c21e7b10 Revises: b7c1f0a8f9d, upgrade()
 
-### Community 26 - "Community 26"
+### Community 25 - "Community 25"
 Cohesion: 0.6
 Nodes (3): formatMoney(), getFormatter(), normalizeCurrencyCode()
 
-### Community 27 - "Community 27"
-Cohesion: 0.83
-Nodes (3): get_url(), run_migrations_offline(), run_migrations_online()
-
-### Community 28 - "Community 28"
+### Community 26 - "Community 26"
 Cohesion: 0.5
 Nodes (1): add hotel scope to core tables  Revision ID: 20260404_add_hotel_scope Revises: c
 
-### Community 29 - "Community 29"
+### Community 27 - "Community 27"
 Cohesion: 0.5
 Nodes (1): add sender metadata to payment link tests  Revision ID: 20260408_payment_link_
 
-### Community 30 - "Community 30"
-Cohesion: 0.5
-Nodes (1): reservation financial lifecycle  Revision ID: 20260410_reservation_financial_l
-
-### Community 31 - "Community 31"
+### Community 28 - "Community 28"
 Cohesion: 0.5
 Nodes (1): extend onboarding state for wizard flow  Revision ID: 20260419_onboarding_wizard
 
-### Community 32 - "Community 32"
+### Community 29 - "Community 29"
 Cohesion: 0.5
 Nodes (1): add trial and comped fields to subscriptions  Revision ID: 20260419_subscription
 
-### Community 33 - "Community 33"
+### Community 30 - "Community 30"
 Cohesion: 0.5
 Nodes (0): 
 
+### Community 31 - "Community 31"
+Cohesion: 0.67
+Nodes (0): 
+
+### Community 32 - "Community 32"
+Cohesion: 0.67
+Nodes (0): 
+
+### Community 33 - "Community 33"
+Cohesion: 1.0
+Nodes (1): Celery application configuration and async tasks for OTA synchronization.
+
 ### Community 34 - "Community 34"
-Cohesion: 0.5
+Cohesion: 1.0
 Nodes (0): 
 
 ### Community 35 - "Community 35"
-Cohesion: 0.67
+Cohesion: 1.0
 Nodes (0): 
 
 ### Community 36 - "Community 36"
-Cohesion: 0.67
+Cohesion: 1.0
 Nodes (0): 
 
 ### Community 37 - "Community 37"
 Cohesion: 1.0
-Nodes (1): Celery application configuration and async tasks for OTA synchronization.
+Nodes (0): 
 
 ### Community 38 - "Community 38"
 Cohesion: 1.0
@@ -732,19 +732,19 @@ Nodes (0):
 
 ### Community 64 - "Community 64"
 Cohesion: 1.0
-Nodes (0): 
+Nodes (1): Fail fast if the app is being started in production with placeholder secrets.
 
 ### Community 65 - "Community 65"
 Cohesion: 1.0
-Nodes (0): 
+Nodes (1): Initialize the database engine and create all tables.
 
 ### Community 66 - "Community 66"
 Cohesion: 1.0
-Nodes (0): 
+Nodes (1): Get or create a session factory.
 
 ### Community 67 - "Community 67"
 Cohesion: 1.0
-Nodes (0): 
+Nodes (1): FastAPI dependency: yields a database session.
 
 ### Community 68 - "Community 68"
 Cohesion: 1.0
@@ -2223,27 +2223,35 @@ Cohesion: 1.0
 Nodes (1): Ratio of actual intra-community edges to maximum possible.
 
 ## Knowledge Gaps
-- **418 isolated node(s):** `add hotel scope to core tables  Revision ID: 20260404_add_hotel_scope Revises: c`, `add subscription v2 tables  Revision ID: 20260407_subscription_tables Revises: 2`, `launch security hardening  Revision ID: 20260408_launch_security_hardening Revis`, `add sender metadata to payment link tests  Revision ID: 20260408_payment_link_`, `reservation financial lifecycle  Revision ID: 20260410_reservation_financial_l` (+413 more)
+- **431 isolated node(s):** `add hotel scope to core tables  Revision ID: 20260404_add_hotel_scope Revises: c`, `add subscription v2 tables  Revision ID: 20260407_subscription_tables Revises: 2`, `launch security hardening  Revision ID: 20260408_launch_security_hardening Revis`, `add sender metadata to payment link tests  Revision ID: 20260408_payment_link_`, `reservation financial lifecycle  Revision ID: 20260410_reservation_financial_l` (+426 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **Thin community `Community 37`** (2 nodes): `celery_app.py`, `Celery application configuration and async tasks for OTA synchronization.`
+- **Thin community `Community 33`** (2 nodes): `celery_app.py`, `Celery application configuration and async tasks for OTA synchronization.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 38`** (2 nodes): `CheckoutStub.tsx`, `CheckoutStub()`
+- **Thin community `Community 34`** (2 nodes): `CheckoutStub.tsx`, `CheckoutStub()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 39`** (2 nodes): `StatCard.tsx`, `StatCard()`
+- **Thin community `Community 35`** (2 nodes): `StatCard.tsx`, `StatCard()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 40`** (2 nodes): `RoomsPage.tsx`, `handleStatusUpdate()`
+- **Thin community `Community 36`** (2 nodes): `RoomsPage.tsx`, `handleStatusUpdate()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 41`** (2 nodes): `SettingsSecurityPage.tsx`, `SettingsSecurityPage()`
+- **Thin community `Community 37`** (2 nodes): `SettingsSecurityPage.tsx`, `SettingsSecurityPage()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 42`** (2 nodes): `PricingPage.tsx`, `handleFakeCheckout()`
+- **Thin community `Community 38`** (2 nodes): `PricingPage.tsx`, `handleFakeCheckout()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 43`** (2 nodes): `main()`, `run_smoke.py`
+- **Thin community `Community 39`** (2 nodes): `main()`, `run_smoke.py`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 44`** (2 nodes): `test_gemma_smoke_placeholder.py`, `test_gemma_smoke_placeholder()`
+- **Thin community `Community 40`** (2 nodes): `test_gemma_smoke_placeholder.py`, `test_gemma_smoke_placeholder()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 45`** (1 nodes): `app.py`
+- **Thin community `Community 41`** (1 nodes): `app.py`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 46`** (1 nodes): `reset.py`
+- **Thin community `Community 42`** (1 nodes): `reset.py`
+  Too small to be a meaningful cluster - may be noise or needs more connections extracted.
+- **Thin community `Community 43`** (1 nodes): `__init__.py`
+  Too small to be a meaningful cluster - may be noise or needs more connections extracted.
+- **Thin community `Community 44`** (1 nodes): `__init__.py`
+  Too small to be a meaningful cluster - may be noise or needs more connections extracted.
+- **Thin community `Community 45`** (1 nodes): `__init__.py`
+  Too small to be a meaningful cluster - may be noise or needs more connections extracted.
+- **Thin community `Community 46`** (1 nodes): `__init__.py`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 - **Thin community `Community 47`** (1 nodes): `__init__.py`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
@@ -2257,35 +2265,35 @@ Nodes (1): Ratio of actual intra-community edges to maximum possible.
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 - **Thin community `Community 52`** (1 nodes): `__init__.py`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 53`** (1 nodes): `__init__.py`
+- **Thin community `Community 53`** (1 nodes): `playwright.config.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 54`** (1 nodes): `__init__.py`
+- **Thin community `Community 54`** (1 nodes): `vite.config.mjs`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 55`** (1 nodes): `__init__.py`
+- **Thin community `Community 55`** (1 nodes): `main.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 56`** (1 nodes): `__init__.py`
+- **Thin community `Community 56`** (1 nodes): `IntegrationHelpDrawer.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 57`** (1 nodes): `playwright.config.ts`
+- **Thin community `Community 57`** (1 nodes): `integrationHelp.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 58`** (1 nodes): `vite.config.mjs`
+- **Thin community `Community 58`** (1 nodes): `mock.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 59`** (1 nodes): `main.tsx`
+- **Thin community `Community 59`** (1 nodes): `AppShell.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 60`** (1 nodes): `IntegrationHelpDrawer.tsx`
+- **Thin community `Community 60`** (1 nodes): `SettingsTestsPage.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 61`** (1 nodes): `integrationHelp.ts`
+- **Thin community `Community 61`** (1 nodes): `SettingsUsersPage.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 62`** (1 nodes): `mock.ts`
+- **Thin community `Community 62`** (1 nodes): `__init__.py`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 63`** (1 nodes): `AppShell.tsx`
+- **Thin community `Community 63`** (1 nodes): `run_smoke.ps1`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 64`** (1 nodes): `SettingsTestsPage.tsx`
+- **Thin community `Community 64`** (1 nodes): `Fail fast if the app is being started in production with placeholder secrets.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 65`** (1 nodes): `SettingsUsersPage.tsx`
+- **Thin community `Community 65`** (1 nodes): `Initialize the database engine and create all tables.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 66`** (1 nodes): `__init__.py`
+- **Thin community `Community 66`** (1 nodes): `Get or create a session factory.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 67`** (1 nodes): `run_smoke.ps1`
+- **Thin community `Community 67`** (1 nodes): `FastAPI dependency: yields a database session.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 - **Thin community `Community 68`** (1 nodes): `Keep legacy subscription tables populated so existing checks (room limit, etc.)`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
@@ -3029,17 +3037,17 @@ Nodes (1): Ratio of actual intra-community edges to maximum possible.
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `HotelConfiguration` connect `Community 1` to `Community 0`, `Community 2`, `Community 5`, `Community 6`, `Community 7`, `Community 8`, `Community 10`, `Community 11`, `Community 12`?**
-  _High betweenness centrality (0.128) - this node is a cross-community bridge._
-- **Why does `Base` connect `Community 0` to `Community 1`, `Community 2`, `Community 4`, `Community 5`, `Community 6`, `Community 7`, `Community 8`, `Community 9`, `Community 10`, `Community 11`, `Community 12`, `Community 13`, `Community 14`, `Community 18`, `Community 19`, `Community 22`?**
-  _High betweenness centrality (0.090) - this node is a cross-community bridge._
-- **Why does `apiFetch()` connect `Community 4` to `Community 3`?**
-  _High betweenness centrality (0.077) - this node is a cross-community bridge._
-- **Are the 262 inferred relationships involving `HotelConfiguration` (e.g. with `FastAPI routes for Hotel Configuration (Admin Panel).` and `Lightweight status so the frontend can check if SMTP is configured.`) actually correct?**
-  _`HotelConfiguration` has 262 INFERRED edges - model-reasoned connections that need verification._
-- **Are the 253 inferred relationships involving `Reservation` (e.g. with `FastAPI routes for Booking management (thin layer over Reservation). Provides b` and `Ensure computed fields land in the response.`) actually correct?**
-  _`Reservation` has 253 INFERRED edges - model-reasoned connections that need verification._
-- **Are the 226 inferred relationships involving `ReservationStatusEnum` (e.g. with `FastAPI routes for Booking management (thin layer over Reservation). Provides b` and `Ensure computed fields land in the response.`) actually correct?**
-  _`ReservationStatusEnum` has 226 INFERRED edges - model-reasoned connections that need verification._
-- **Are the 219 inferred relationships involving `Room` (e.g. with `FastAPI routes for Booking management (thin layer over Reservation). Provides b` and `Ensure computed fields land in the response.`) actually correct?**
-  _`Room` has 219 INFERRED edges - model-reasoned connections that need verification._
+- **Why does `HotelConfiguration` connect `Community 0` to `Community 1`, `Community 2`, `Community 3`, `Community 4`, `Community 7`, `Community 9`, `Community 10`, `Community 11`, `Community 12`, `Community 14`, `Community 21`?**
+  _High betweenness centrality (0.120) - this node is a cross-community bridge._
+- **Why does `Base` connect `Community 4` to `Community 0`, `Community 1`, `Community 2`, `Community 3`, `Community 7`, `Community 8`, `Community 9`, `Community 10`, `Community 11`, `Community 12`, `Community 13`, `Community 14`, `Community 21`?**
+  _High betweenness centrality (0.114) - this node is a cross-community bridge._
+- **Why does `apiFetch()` connect `Community 6` to `Community 5`?**
+  _High betweenness centrality (0.076) - this node is a cross-community bridge._
+- **Are the 269 inferred relationships involving `HotelConfiguration` (e.g. with `FastAPI routes for Hotel Configuration (Admin Panel).` and `Lightweight status so the frontend can check if SMTP is configured.`) actually correct?**
+  _`HotelConfiguration` has 269 INFERRED edges - model-reasoned connections that need verification._
+- **Are the 260 inferred relationships involving `Reservation` (e.g. with `FastAPI routes for Booking management (thin layer over Reservation). Provides b` and `Ensure computed fields land in the response.`) actually correct?**
+  _`Reservation` has 260 INFERRED edges - model-reasoned connections that need verification._
+- **Are the 233 inferred relationships involving `ReservationStatusEnum` (e.g. with `FastAPI routes for Booking management (thin layer over Reservation). Provides b` and `Ensure computed fields land in the response.`) actually correct?**
+  _`ReservationStatusEnum` has 233 INFERRED edges - model-reasoned connections that need verification._
+- **Are the 224 inferred relationships involving `Room` (e.g. with `FastAPI routes for Booking management (thin layer over Reservation). Provides b` and `Ensure computed fields land in the response.`) actually correct?**
+  _`Room` has 224 INFERRED edges - model-reasoned connections that need verification._

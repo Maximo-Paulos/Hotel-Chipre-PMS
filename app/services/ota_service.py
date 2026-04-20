@@ -305,6 +305,7 @@ class OTAIntegrationService:
             locked_room = (
                 db.query(Room)
                 .filter(Room.id == current_room.id, Room.hotel_id == hotel_id)
+                .enable_eagerloads(False)
                 .with_for_update()
                 .first()
             )
@@ -325,6 +326,7 @@ class OTAIntegrationService:
             room = (
                 db.query(Room)
                 .filter(Room.id == available_rooms[0].id, Room.hotel_id == hotel_id)
+                .enable_eagerloads(False)
                 .with_for_update()
                 .first()
             )

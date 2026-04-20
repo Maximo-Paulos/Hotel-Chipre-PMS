@@ -40,13 +40,12 @@ def update_configuration(
 
 
 @router.get("/smtp")
-def smtp_status():
+def smtp_status(context: AuthContext = Depends(require_roles("owner", "co_owner"))):
     """
     Lightweight status so the frontend can check if SMTP is configured.
+    Returns only whether it is configured — never exposes host or credentials.
     """
     settings = get_settings()
     return {
         "configured": bool(settings.SMTP_HOST and settings.SMTP_USER and settings.SMTP_PASS),
-        "from": settings.SMTP_FROM,
-        "host": settings.SMTP_HOST,
     }

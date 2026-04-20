@@ -151,7 +151,7 @@ def invite_user(
         expires_minutes=60 * 24 * 7,
     )
     settings = get_settings()
-    base = getattr(settings, "PUBLIC_BASE_URL", None) or "http://localhost:5173"
+    base = settings.FRONTEND_URL.rstrip("/")
     accept_url = f"{base}/invitations/accept?token={token}"
 
     subj = f"Invitación a {hotel_name}"

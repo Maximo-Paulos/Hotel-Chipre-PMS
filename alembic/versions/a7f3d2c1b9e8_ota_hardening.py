@@ -31,7 +31,7 @@ def upgrade() -> None:
             sa.Column("provider", sa.String(length=50), nullable=False),
             sa.Column("webhook_secret_hash", sa.String(length=128), nullable=False),
             sa.Column("external_property_id", sa.String(length=120), nullable=True),
-            sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("1")),
+            sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.true()),
             sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.func.now()),
             sa.Column("updated_at", sa.DateTime(), nullable=False, server_default=sa.func.now()),
             sa.UniqueConstraint("hotel_id", "provider", name="uq_ota_webhook_credential_hotel_provider"),

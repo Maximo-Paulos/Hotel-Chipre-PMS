@@ -35,7 +35,12 @@ class OTAReservationMapping(Base):
     raw_payload = Column(Text, nullable=True)  # Full JSON payload from OTA
 
     sync_status = Column(
-        Enum(OTASyncStatusEnum, name="ota_sync_status_enum", create_constraint=True),
+        Enum(
+            OTASyncStatusEnum,
+            name="ota_sync_status_enum",
+            create_constraint=True,
+            values_callable=lambda enum_cls: [e.value for e in enum_cls],
+        ),
         nullable=False,
         default=OTASyncStatusEnum.PENDING,
     )

@@ -60,15 +60,30 @@ class Transaction(Base):
     provider_code = Column(String(50), nullable=True)
 
     transaction_type = Column(
-        Enum(TransactionTypeEnum, name="transaction_type_enum", create_constraint=True),
+        Enum(
+            TransactionTypeEnum,
+            name="transaction_type_enum",
+            create_constraint=True,
+            values_callable=lambda enum_cls: [e.value for e in enum_cls],
+        ),
         nullable=False,
     )
     payment_method = Column(
-        Enum(PaymentMethodEnum, name="payment_method_enum", create_constraint=True),
+        Enum(
+            PaymentMethodEnum,
+            name="payment_method_enum",
+            create_constraint=True,
+            values_callable=lambda enum_cls: [e.value for e in enum_cls],
+        ),
         nullable=False,
     )
     status = Column(
-        Enum(TransactionStatusEnum, name="transaction_status_enum", create_constraint=True),
+        Enum(
+            TransactionStatusEnum,
+            name="transaction_status_enum",
+            create_constraint=True,
+            values_callable=lambda enum_cls: [e.value for e in enum_cls],
+        ),
         nullable=False,
         default=TransactionStatusEnum.PENDING,
     )

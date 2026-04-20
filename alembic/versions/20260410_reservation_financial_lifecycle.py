@@ -18,7 +18,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    with op.batch_alter_table("reservations", recreate="always") as batch_op:
+    with op.batch_alter_table("reservations", recreate="auto") as batch_op:
         batch_op.add_column(sa.Column("payment_collection_model", sa.String(length=40), nullable=False, server_default="hotel_collect"))
         batch_op.add_column(sa.Column("settlement_status", sa.String(length=40), nullable=False, server_default="not_applicable"))
 
@@ -39,6 +39,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    with op.batch_alter_table("reservations", recreate="always") as batch_op:
+    with op.batch_alter_table("reservations", recreate="auto") as batch_op:
         batch_op.drop_column("settlement_status")
         batch_op.drop_column("payment_collection_model")

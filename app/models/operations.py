@@ -68,11 +68,21 @@ class ReservationAdjustment(Base):
     resulting_reservation_id = Column(Integer, ForeignKey("reservations.id", ondelete="SET NULL"), nullable=True)
     ota_reservation_link_id = Column(Integer, ForeignKey("ota_reservation_links.id", ondelete="SET NULL"), nullable=True)
     kind = Column(
-        Enum(ReservationAdjustmentKindEnum, name="reservation_adjustment_kind_enum", create_constraint=True),
+        Enum(
+            ReservationAdjustmentKindEnum,
+            name="reservation_adjustment_kind_enum",
+            create_constraint=True,
+            values_callable=lambda enum_cls: [e.value for e in enum_cls],
+        ),
         nullable=False,
     )
     status = Column(
-        Enum(ReservationAdjustmentStatusEnum, name="reservation_adjustment_status_enum", create_constraint=True),
+        Enum(
+            ReservationAdjustmentStatusEnum,
+            name="reservation_adjustment_status_enum",
+            create_constraint=True,
+            values_callable=lambda enum_cls: [e.value for e in enum_cls],
+        ),
         nullable=False,
         default=ReservationAdjustmentStatusEnum.DRAFT,
     )
@@ -107,7 +117,12 @@ class RoomMoveEvent(Base):
     from_room_id = Column(Integer, ForeignKey("rooms.id", ondelete="SET NULL"), nullable=True)
     to_room_id = Column(Integer, ForeignKey("rooms.id", ondelete="SET NULL"), nullable=True)
     move_type = Column(
-        Enum(RoomMoveTypeEnum, name="room_move_type_enum", create_constraint=True),
+        Enum(
+            RoomMoveTypeEnum,
+            name="room_move_type_enum",
+            create_constraint=True,
+            values_callable=lambda enum_cls: [e.value for e in enum_cls],
+        ),
         nullable=False,
         default=RoomMoveTypeEnum.MANUAL_MOVE,
     )
@@ -143,7 +158,12 @@ class BillingAdjustment(Base):
         nullable=True,
     )
     adjustment_type = Column(
-        Enum(BillingAdjustmentTypeEnum, name="billing_adjustment_type_enum", create_constraint=True),
+        Enum(
+            BillingAdjustmentTypeEnum,
+            name="billing_adjustment_type_enum",
+            create_constraint=True,
+            values_callable=lambda enum_cls: [e.value for e in enum_cls],
+        ),
         nullable=False,
     )
     amount = Column(Float, nullable=False)

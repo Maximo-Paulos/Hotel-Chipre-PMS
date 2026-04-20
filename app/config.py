@@ -14,8 +14,11 @@ class Settings(BaseSettings):
     # Environment / runtime mode
     APP_ENV: str = "development"
 
-    # Public app URL used in redirects/webhooks
+    # Public app URL used in redirects/webhooks (backend)
     APP_BASE_URL: str = "http://127.0.0.1:8040"
+
+    # Frontend public URL used in emails (invitation links, password reset, etc.)
+    FRONTEND_URL: str = "http://localhost:5173"
 
     # Database
     DATABASE_URL: str = "postgresql+psycopg2://pms:pms@localhost:5432/hotel_pms"
@@ -159,17 +162,26 @@ def validate_runtime_security(settings: Settings | None = None) -> None:
     if any(host in runtime_settings.APP_BASE_URL for host in ("localhost", "127.0.0.1")):
         errors.append("APP_BASE_URL cannot point to localhost in production")
 
-    if not runtime_settings.MERCADOPAGO_WEBHOOK_SECRET:
-        errors.append("MERCADOPAGO_WEBHOOK_SECRET must be configured in production")
+    # MercadoPago webhook secret: only required when MP is actually configured
+    if runtime_settings.MP_ACCESS_TOKEN and not runtime_settings.MERCADOPAGO_WEBHOOK_SECRET:
+        errors.append("MERCADOPAGO_WEBHOOK_SECRET must be configured when MP_ACCESS_TOKEN is set")
 
-    redirect_uris = {
-        "PAYPAL_REDIRECT_URI": runtime_settings.PAYPAL_REDIRECT_URI,
-        "MERCADOPAGO_REDIRECT_URI": runtime_settings.MERCADOPAGO_REDIRECT_URI,
-        "GMAIL_REDIRECT_URI": runtime_settings.GMAIL_REDIRECT_URI,
-    }
-    for name, value in redirect_uris.items():
-        if value and (not value.startswith("https://") or any(host in value for host in ("localhost", "127.0.0.1"))):
-            errors.append(f"{name} must be a public https URL in production")
+    # OAuth redirect URIs: only validate when the respective service is configured
+    # (default values contain localhost — safe to ignore when service is not enabled)
+    conditional_redirect_uris = [
+        ("PAYPAL_REDIRECT_URI", runtime_settings.PAYPAL_REDIRECT_URI,
+         runtime_settings.PAYPAL_CLIENT_ID or runtime_settings.PAYPAL_CLIENT_SECRET),
+        ("MERCADOPAGO_REDIRECT_URI", runtime_settings.MERCADOPAGO_REDIRECT_URI,
+         runtime_settings.MERCADOPAGO_CLIENT_ID or runtime_settings.MERCADOPAGO_CLIENT_SECRET),
+        ("GMAIL_REDIRECT_URI", runtime_settings.GMAIL_REDIRECT_URI,
+         runtime_settings.GMAIL_CLIENT_ID or runtime_settings.GMAIL_CLIENT_SECRET),
+    ]
+    for name, value, service_configured in conditional_redirect_uris:
+        if service_configured and value and (
+            not value.startswith("https://")
+            or any(host in value for host in ("localhost", "127.0.0.1"))
+        ):
+            errors.append(f"{name} must be a public https URL when the integration is enabled")
 
     if errors:
         raise RuntimeError("Invalid production security configuration: " + "; ".join(errors))

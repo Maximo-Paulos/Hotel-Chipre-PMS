@@ -91,7 +91,12 @@ class OTAConnection(Base):
     provider_id = Column(Integer, ForeignKey("ota_providers.id", ondelete="CASCADE"), nullable=False)
     environment = Column(String(20), nullable=False, default="sandbox")
     status = Column(
-        Enum(OTAConnectionStatusEnum, name="ota_connection_status_enum", create_constraint=True),
+        Enum(
+            OTAConnectionStatusEnum,
+            name="ota_connection_status_enum",
+            create_constraint=True,
+            values_callable=lambda enum_cls: [e.value for e in enum_cls],
+        ),
         nullable=False,
         default=OTAConnectionStatusEnum.PENDING,
     )
@@ -370,7 +375,12 @@ class OTAReservationLink(Base):
     external_reservation_id = Column(String(120), nullable=False)
     external_confirmation_code = Column(String(120), nullable=True)
     provider_state = Column(
-        Enum(OTAReservationLifecycleEnum, name="ota_reservation_lifecycle_enum", create_constraint=True),
+        Enum(
+            OTAReservationLifecycleEnum,
+            name="ota_reservation_lifecycle_enum",
+            create_constraint=True,
+            values_callable=lambda enum_cls: [e.value for e in enum_cls],
+        ),
         nullable=False,
         default=OTAReservationLifecycleEnum.NEW,
     )
@@ -420,7 +430,12 @@ class OTASyncJob(Base):
     scope_type = Column(String(50), nullable=True)
     scope_id = Column(String(120), nullable=True)
     status = Column(
-        Enum(OTASyncJobStatusEnum, name="ota_sync_job_status_enum", create_constraint=True),
+        Enum(
+            OTASyncJobStatusEnum,
+            name="ota_sync_job_status_enum",
+            create_constraint=True,
+            values_callable=lambda enum_cls: [e.value for e in enum_cls],
+        ),
         nullable=False,
         default=OTASyncJobStatusEnum.PENDING,
     )

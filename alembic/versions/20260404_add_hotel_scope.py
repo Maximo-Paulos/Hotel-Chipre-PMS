@@ -98,7 +98,7 @@ def upgrade() -> None:
     op.execute("UPDATE rooms SET hotel_id = 1 WHERE hotel_id IS NULL")
     op.execute("UPDATE reservations SET hotel_id = 1 WHERE hotel_id IS NULL")
 
-    with op.batch_alter_table("room_categories", recreate="always", copy_from=room_categories_with_hotel) as batch_op:
+    with op.batch_alter_table("room_categories", recreate="auto", copy_from=room_categories_with_hotel) as batch_op:
         batch_op.alter_column("hotel_id", existing_type=sa.Integer(), nullable=False)
         batch_op.drop_constraint("room_categories_code_key", type_="unique")
         batch_op.drop_constraint("room_categories_name_key", type_="unique")
@@ -118,7 +118,7 @@ def upgrade() -> None:
         )
         batch_op.create_index("ix_room_category_hotel_id", ["hotel_id"], unique=False)
 
-    with op.batch_alter_table("rooms", recreate="always", copy_from=rooms_with_hotel) as batch_op:
+    with op.batch_alter_table("rooms", recreate="auto", copy_from=rooms_with_hotel) as batch_op:
         batch_op.alter_column("hotel_id", existing_type=sa.Integer(), nullable=False)
         batch_op.drop_constraint("rooms_room_number_key", type_="unique")
         batch_op.create_foreign_key(
@@ -133,7 +133,7 @@ def upgrade() -> None:
         )
         batch_op.create_index("ix_room_hotel_id", ["hotel_id"], unique=False)
 
-    with op.batch_alter_table("reservations", recreate="always", copy_from=reservations_with_hotel) as batch_op:
+    with op.batch_alter_table("reservations", recreate="auto", copy_from=reservations_with_hotel) as batch_op:
         batch_op.alter_column("hotel_id", existing_type=sa.Integer(), nullable=False)
         batch_op.create_foreign_key(
             "fk_reservations_hotel_configuration",
@@ -145,19 +145,19 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    with op.batch_alter_table("reservations", recreate="always", copy_from=reservations_with_hotel) as batch_op:
+    with op.batch_alter_table("reservations", recreate="auto", copy_from=reservations_with_hotel) as batch_op:
         batch_op.drop_index("ix_reservations_hotel_id")
         batch_op.drop_constraint("fk_reservations_hotel_configuration", type_="foreignkey")
         batch_op.alter_column("hotel_id", existing_type=sa.Integer(), nullable=True)
 
-    with op.batch_alter_table("rooms", recreate="always", copy_from=rooms_with_hotel) as batch_op:
+    with op.batch_alter_table("rooms", recreate="auto", copy_from=rooms_with_hotel) as batch_op:
         batch_op.drop_index("ix_room_hotel_id")
         batch_op.drop_constraint("uq_room_number_hotel", type_="unique")
         batch_op.drop_constraint("fk_rooms_hotel_configuration", type_="foreignkey")
         batch_op.alter_column("hotel_id", existing_type=sa.Integer(), nullable=True)
         batch_op.create_unique_constraint("rooms_room_number_key", ["room_number"])
 
-    with op.batch_alter_table("room_categories", recreate="always", copy_from=room_categories_with_hotel) as batch_op:
+    with op.batch_alter_table("room_categories", recreate="auto", copy_from=room_categories_with_hotel) as batch_op:
         batch_op.drop_index("ix_room_category_hotel_id")
         batch_op.drop_constraint("uq_room_category_name_hotel", type_="unique")
         batch_op.drop_constraint("uq_room_category_code_hotel", type_="unique")

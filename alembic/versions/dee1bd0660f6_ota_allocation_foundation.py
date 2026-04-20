@@ -800,7 +800,7 @@ def upgrade() -> None:
     )
     op.create_index('ix_billing_adjustments_hotel_id', 'billing_adjustments', ['hotel_id'], unique=False)
     op.create_index('ix_billing_adjustments_reservation_id', 'billing_adjustments', ['reservation_id'], unique=False)
-    with op.batch_alter_table('reservations', recreate='always') as batch_op:
+    with op.batch_alter_table('reservations', recreate='auto') as batch_op:
         batch_op.add_column(sa.Column('sellable_product_id', sa.Integer(), nullable=True))
         batch_op.add_column(sa.Column('rate_plan_id', sa.Integer(), nullable=True))
         batch_op.add_column(sa.Column('tax_policy_id', sa.Integer(), nullable=True))
@@ -868,7 +868,7 @@ def downgrade() -> None:
     op.drop_column('transactions', 'fee_amount')
     op.drop_column('transactions', 'tax_amount')
     op.drop_column('transactions', 'gross_amount')
-    with op.batch_alter_table('reservations', recreate='always') as batch_op:
+    with op.batch_alter_table('reservations', recreate='auto') as batch_op:
         batch_op.drop_constraint('fk_reservations_tax_policy_id_tax_policies', type_='foreignkey')
         batch_op.drop_constraint('fk_reservations_rate_plan_id_rate_plans', type_='foreignkey')
         batch_op.drop_constraint('fk_reservations_sellable_product_id_sellable_products', type_='foreignkey')

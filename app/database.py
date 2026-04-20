@@ -15,25 +15,35 @@ class Base(DeclarativeBase):
 
 
 def get_engine(database_url: str | None = None):
-    """Create a SQLAlchemy engine.
-    
-    Args:
-        database_url: Optional override URL. Uses settings if not provided.
-    """
+    """Create a SQLAlchemy engine for SQLite (dev) or PostgreSQL (prod)."""
     url = database_url or get_settings().DATABASE_URL
-    connect_args = {}
-    if url.startswith("sqlite"):
-        connect_args["check_same_thread"] = False
-    engine = create_engine(url, echo=False, connect_args=connect_args)
+    is_sqlite = url.startswith("sqlite")
 
-    # Enable WAL mode and foreign keys for SQLite
-    if url.startswith("sqlite"):
+    if is_sqlite:
+        engine = create_engine(
+            url,
+            echo=False,
+            connect_args={"check_same_thread": False},
+        )
+
         @event.listens_for(engine, "connect")
         def _set_sqlite_pragma(dbapi_connection, connection_record):
             cursor = dbapi_connection.cursor()
             cursor.execute("PRAGMA journal_mode=WAL")
             cursor.execute("PRAGMA foreign_keys=ON")
             cursor.close()
+
+    else:
+        # PostgreSQL / Supabase: use a bounded pool suitable for web workers.
+        # For serverless (Render free tier, etc.) pool_size=5 prevents exhaustion.
+        engine = create_engine(
+            url,
+            echo=False,
+            pool_size=5,
+            max_overflow=10,
+            pool_pre_ping=True,   # drop stale connections
+            pool_recycle=1800,    # recycle every 30 min
+        )
 
     return engine
 

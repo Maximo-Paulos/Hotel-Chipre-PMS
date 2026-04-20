@@ -121,7 +121,12 @@ class AllocationRun(Base):
     horizon_start = Column(DateTime, nullable=True)
     horizon_end = Column(DateTime, nullable=True)
     status = Column(
-        Enum(AllocationRunStatusEnum, name="allocation_run_status_enum", create_constraint=True),
+        Enum(
+            AllocationRunStatusEnum,
+            name="allocation_run_status_enum",
+            create_constraint=True,
+            values_callable=lambda enum_cls: [e.value for e in enum_cls],
+        ),
         nullable=False,
         default=AllocationRunStatusEnum.PENDING,
     )
@@ -156,7 +161,12 @@ class AllocationAssignment(Base):
     room_id = Column(Integer, ForeignKey("rooms.id", ondelete="SET NULL"), nullable=True)
     sellable_product_id = Column(Integer, ForeignKey("sellable_products.id", ondelete="SET NULL"), nullable=True)
     status = Column(
-        Enum(AllocationAssignmentStatusEnum, name="allocation_assignment_status_enum", create_constraint=True),
+        Enum(
+            AllocationAssignmentStatusEnum,
+            name="allocation_assignment_status_enum",
+            create_constraint=True,
+            values_callable=lambda enum_cls: [e.value for e in enum_cls],
+        ),
         nullable=False,
         default=AllocationAssignmentStatusEnum.PROPOSED,
     )
@@ -277,7 +287,12 @@ class LLMPolicySuggestion(Base):
     profile_id = Column(Integer, ForeignKey("allocation_policy_profiles.id", ondelete="SET NULL"), nullable=True)
     suggestion_type = Column(String(50), nullable=False)
     status = Column(
-        Enum(LLMPolicySuggestionStatusEnum, name="llm_policy_suggestion_status_enum", create_constraint=True),
+        Enum(
+            LLMPolicySuggestionStatusEnum,
+            name="llm_policy_suggestion_status_enum",
+            create_constraint=True,
+            values_callable=lambda enum_cls: [e.value for e in enum_cls],
+        ),
         nullable=False,
         default=LLMPolicySuggestionStatusEnum.DRAFT,
     )

@@ -336,6 +336,7 @@ def create_reservation(db: Session, data: ReservationCreate, hotel_id: Optional[
         room = (
             db.query(Room)
             .filter(Room.id == room_id, Room.hotel_id == hotel_id)
+            .enable_eagerloads(False)
             .with_for_update()
             .first()
         )

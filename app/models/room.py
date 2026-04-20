@@ -69,7 +69,12 @@ class Room(Base):
     floor = Column(Integer, nullable=False, default=1)
     category_id = Column(Integer, ForeignKey("room_categories.id"), nullable=False)
     status = Column(
-        Enum(RoomStatusEnum, name="room_status_enum", create_constraint=True),
+        Enum(
+            RoomStatusEnum,
+            name="room_status_enum",
+            create_constraint=True,
+            values_callable=lambda enum_cls: [e.value for e in enum_cls],
+        ),
         nullable=False,
         default=RoomStatusEnum.AVAILABLE,
     )
