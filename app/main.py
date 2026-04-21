@@ -36,6 +36,8 @@ from app.api import (
     allocation_policy,
     gemma_chat,
 )
+import app.master_admin.models  # noqa: F401
+from app.master_admin.router import router as master_admin_router
 from app.services.email_service import mailer
 
 _startup_email_sent = False
@@ -148,6 +150,7 @@ app.include_router(payment_link_tests.router)
 app.include_router(commercial.router)
 app.include_router(allocation_policy.router)
 app.include_router(gemma_chat.router)
+app.include_router(master_admin_router)
 
 # Frontend build paths
 BASE_DIR = Path(__file__).resolve().parent

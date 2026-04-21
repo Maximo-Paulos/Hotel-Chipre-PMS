@@ -1,84 +1,36 @@
 """
-Platform email service for PMS-owned transactional emails.
-
-This mailer is reserved for system-originated messages such as account
-verification, password reset, invitations, and platform notices. Guest-facing
-operational emails must use a hotel-owned outbound channel (for now, Gmail).
+Platform email service facade backed by pluggable providers.
 """
-import logging
+from __future__ import annotations
+
 import smtplib
-from email.message import EmailMessage
 from typing import Iterable
 
-from app.config import get_settings
-
-LOGGER = logging.getLogger(__name__)
-
-
-def _mask_email(email: str) -> str:
-    local_part, at, domain = email.partition("@")
-    if not at:
-        return "***"
-    if len(local_part) <= 2:
-        masked_local = f"{local_part[:1]}***"
-    else:
-        masked_local = f"{local_part[:2]}***"
-    return f"{masked_local}@{domain}"
-
-
-def _mask_recipients(recipients: list[str]) -> str:
-    return ", ".join(_mask_email(recipient) for recipient in recipients)
+from app.services.email.providers import EmailProvider, get_email_provider
 
 
 class Mailer:
-    def __init__(self):
-        self.settings = get_settings()
+    def __init__(self, provider: EmailProvider | None = None):
+        self.settings = None
+        self.provider = provider or get_email_provider(self.settings)
+
+    def _resolve_provider(self) -> EmailProvider:
+        self.provider = get_email_provider(self.settings)
+        return self.provider
 
     @property
     def configured(self) -> bool:
-        s = self.settings
-        return bool(s.SMTP_HOST and s.SMTP_USER and s.SMTP_PASS)
+        return self._resolve_provider().configured
+
+    @property
+    def provider_name(self) -> str:
+        return getattr(self._resolve_provider(), "provider_name", "unknown")
+
+    def available_providers(self) -> list[str]:
+        return ["smtp", "transactional_http", "null"]
 
     def send(self, to: Iterable[str] | str, subject: str, body: str) -> bool:
-        if not self.configured:
-            LOGGER.warning("SMTP send skipped because configuration is incomplete")
-            return False
-
-        recipients = [to] if isinstance(to, str) else list(to)
-        masked_recipients = _mask_recipients(recipients)
-
-        msg = EmailMessage()
-        msg["From"] = self.settings.SMTP_FROM or self.settings.SMTP_USER
-        msg["To"] = ", ".join(recipients)
-        msg["Subject"] = subject
-        msg.set_content(body)
-
-        try:
-            LOGGER.info(
-                "SMTP connection attempt host=%s port=%s recipients=%s",
-                self.settings.SMTP_HOST,
-                self.settings.SMTP_PORT,
-                masked_recipients,
-            )
-            with smtplib.SMTP(self.settings.SMTP_HOST, self.settings.SMTP_PORT, timeout=10) as smtp:
-                LOGGER.info("SMTP connection established host=%s port=%s", self.settings.SMTP_HOST, self.settings.SMTP_PORT)
-                LOGGER.info("SMTP authentication attempt user=%s", _mask_email(self.settings.SMTP_USER))
-                smtp.starttls()
-                smtp.login(self.settings.SMTP_USER, self.settings.SMTP_PASS)
-                LOGGER.info("SMTP authentication success user=%s", _mask_email(self.settings.SMTP_USER))
-                LOGGER.info("SMTP send attempt recipients=%s subject=%s", masked_recipients, subject)
-                smtp.send_message(msg)
-            LOGGER.info("SMTP send success recipients=%s subject=%s", masked_recipients, subject)
-            return True
-        except Exception:  # pragma: no cover
-            LOGGER.exception(
-                "SMTP send failed host=%s port=%s recipients=%s subject=%s",
-                self.settings.SMTP_HOST,
-                self.settings.SMTP_PORT,
-                masked_recipients,
-                subject,
-            )
-            return False
+        return self._resolve_provider().send(to, subject, body)
 
 
 mailer = Mailer()

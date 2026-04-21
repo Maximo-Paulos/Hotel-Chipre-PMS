@@ -12,7 +12,7 @@ import { DashboardPage } from "./views/protected/DashboardPage";
 import { GuestsPage } from "./views/protected/GuestsPage";
 import { ReservationsPage } from "./views/protected/ReservationsPage";
 import { RoomsPage } from "./views/protected/RoomsPage";
-import PricingPage from "./views/public/PricingPage";
+import PricingPageView from "./views/public/PricingPage";
 import { SettingsUsersPage } from "./views/protected/SettingsUsersPage";
 import { SettingsHotelPage } from "./views/protected/SettingsHotelPage";
 import { SettingsSecurityPage } from "./views/protected/SettingsSecurityPage";
@@ -22,6 +22,13 @@ import { SettingsAssistantPage } from "./views/protected/SettingsAssistantPage";
 import SettingsSubscriptionPage from "./views/protected/SettingsSubscriptionPage";
 import { useOnboardingStatus } from "./hooks/useOnboardingStatus";
 import { useSession } from "./state/session";
+import { MasterAdminRoot, MasterAdminIndexRoute, MasterAdminProtectedShell } from "./master_admin/layout";
+import { MasterAdminLoginPage } from "./master_admin/pages/LoginPage";
+import { MasterAdminDashboardPage } from "./master_admin/pages/DashboardPage";
+import { MasterAdminBillingPage } from "./master_admin/pages/BillingPage";
+import { MasterAdminEmailPage } from "./master_admin/pages/EmailPage";
+import { MasterAdminStripePage } from "./master_admin/pages/StripePage";
+import { MasterAdminAuditPage } from "./master_admin/pages/AuditPage";
 
 function OnboardingGate() {
   const { session } = useSession();
@@ -53,6 +60,24 @@ export const router = createBrowserRouter([
     ]
   },
   {
+    path: "/adminpmsmaster",
+    element: <MasterAdminRoot />,
+    children: [
+      { index: true, element: <MasterAdminIndexRoute /> },
+      { path: "login", element: <MasterAdminLoginPage /> },
+      {
+        element: <MasterAdminProtectedShell />,
+        children: [
+          { path: "dashboard", element: <MasterAdminDashboardPage /> },
+          { path: "billing", element: <MasterAdminBillingPage /> },
+          { path: "email", element: <MasterAdminEmailPage /> },
+          { path: "stripe", element: <MasterAdminStripePage /> },
+          { path: "audit", element: <MasterAdminAuditPage /> }
+        ]
+      }
+    ]
+  },
+  {
     path: "/login",
     element: <LoginPage />
   },
@@ -61,6 +86,6 @@ export const router = createBrowserRouter([
   { path: "/reset-password", element: <ResetPasswordPage /> },
   { path: "/invitations/accept", element: <AcceptInvitationPage /> },
   { path: "/verify-email", element: <VerifyEmailPage /> },
-  { path: "/pricing", element: <PricingPage /> },
+  { path: "/pricing", element: <PricingPageView /> },
   { path: "*", element: <Navigate to="/dashboard" replace /> }
 ]);

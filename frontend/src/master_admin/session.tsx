@@ -1,0 +1,98 @@
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+
+import { ApiError } from "../api/client";
+
+import {
+  masterAdminFetch,
+  type MasterAdminLoginResponse,
+  type MasterAdminUser
+} from "./api";
+
+type SessionStatus = "loading" | "anonymous" | "authenticated";
+
+type MasterAdminSessionValue = {
+  user: MasterAdminUser | null;
+  status: SessionStatus;
+  csrfToken: string | null;
+  login: (email: string, password: string, pin: string) => Promise<MasterAdminLoginResponse>;
+  logout: () => Promise<void>;
+  refresh: () => Promise<void>;
+};
+
+const MasterAdminSessionContext = createContext<MasterAdminSessionValue | null>(null);
+
+const readCookie = (name: string): string | null => {
+  if (typeof document === "undefined") return null;
+  const match = document.cookie.match(new RegExp(`(?:^|; )${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}=([^;]*)`));
+  return match ? decodeURIComponent(match[1]) : null;
+};
+
+export function MasterAdminSessionProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<MasterAdminUser | null>(null);
+  const [csrfToken, setCsrfToken] = useState<string | null>(null);
+  const [status, setStatus] = useState<SessionStatus>("loading");
+
+  const refresh = async () => {
+    setStatus("loading");
+    try {
+      const nextUser = await masterAdminFetch<MasterAdminUser>("/api/master-admin/auth/me");
+      setUser(nextUser);
+      setCsrfToken(readCookie("master_admin_csrf"));
+      setStatus("authenticated");
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        setUser(null);
+        setCsrfToken(null);
+        setStatus("anonymous");
+        return;
+      }
+      setUser(null);
+      setCsrfToken(null);
+      setStatus("anonymous");
+    }
+  };
+
+  useEffect(() => {
+    void refresh();
+  }, []);
+
+  const login = async (email: string, password: string, pin: string) => {
+    const response = await masterAdminFetch<MasterAdminLoginResponse>("/api/master-admin/auth/login", {
+      method: "POST",
+      data: { email, password, pin }
+    });
+    setUser(response.user);
+    setCsrfToken(response.csrf_token);
+    setStatus("authenticated");
+    return response;
+  };
+
+  const logout = async () => {
+    try {
+      await masterAdminFetch("/api/master-admin/auth/logout", { method: "POST" });
+    } finally {
+      setUser(null);
+      setCsrfToken(null);
+      setStatus("anonymous");
+    }
+  };
+
+  const value: MasterAdminSessionValue = {
+    user,
+    status,
+    csrfToken,
+    login,
+    logout,
+    refresh
+  };
+
+  return <MasterAdminSessionContext.Provider value={value}>{children}</MasterAdminSessionContext.Provider>;
+}
+
+export function useMasterAdminSession() {
+  const ctx = useContext(MasterAdminSessionContext);
+  if (!ctx) {
+    throw new Error("useMasterAdminSession must be used within MasterAdminSessionProvider");
+  }
+  return ctx;
+}

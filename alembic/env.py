@@ -18,6 +18,7 @@ except ImportError:
 
 from app.database import Base, get_engine  # noqa: E402
 import app.models  # noqa: F401,E402
+import app.master_admin.models  # noqa: F401,E402
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

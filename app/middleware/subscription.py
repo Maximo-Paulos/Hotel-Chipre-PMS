@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 
 from app.config import get_settings
 from app.database import get_session_factory
+from app.master_admin.billing_policy import evaluate_hotel_write_access
 from app.services.subscription_entitlements import get_subscription_snapshot
 
 
@@ -48,18 +49,22 @@ class SubscriptionEnforcementMiddleware:
             snapshot = get_subscription_snapshot(db, hotel_id)
             if snapshot.get("dirty"):
                 db.commit()
-            if not snapshot.get("can_write", True):
-                response = JSONResponse(
-                    status_code=402,
-                    content={
-                        "detail": "Suscripción en pausa o vencida",
-                        "plan": snapshot.get("plan"),
-                        "status": snapshot.get("status"),
-                        "hotel_id": hotel_id,
-                    },
-                )
-                await response(scope, receive, send)
+            decision = evaluate_hotel_write_access(db, hotel_id, snapshot=snapshot)
+            if decision.can_write:
+                await self.app(scope, receive, send)
                 return
+            response = JSONResponse(
+                status_code=402,
+                content={
+                    "detail": "SuscripciÃ³n en pausa o vencida",
+                    "plan": snapshot.get("plan"),
+                    "status": snapshot.get("status"),
+                    "hotel_id": hotel_id,
+                    "billing_reason": decision.reason,
+                },
+            )
+            await response(scope, receive, send)
+            return
         except Exception:
             db.rollback()
         finally:
