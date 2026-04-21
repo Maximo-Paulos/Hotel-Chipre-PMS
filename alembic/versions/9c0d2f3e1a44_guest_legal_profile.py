@@ -1,7 +1,7 @@
 """guest legal profile
 
 Revision ID: 9c0d2f3e1a44
-Revises: a7f3d2c1b9e8
+Revises: 3eaf48a79290
 Create Date: 2026-04-17 00:00:00.000000
 """
 from typing import Sequence, Union
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 
 revision: str = "9c0d2f3e1a44"
-down_revision: Union[str, None] = "a7f3d2c1b9e8"
+down_revision: Union[str, None] = "3eaf48a79290"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
