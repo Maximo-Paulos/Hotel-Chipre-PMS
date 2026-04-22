@@ -6,7 +6,7 @@ import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -69,6 +69,17 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+
+@app.middleware("http")
+async def normalize_master_admin_prefix(request: Request, call_next):
+    path = request.scope.get("path", "")
+    if isinstance(path, str) and path.startswith("/api/master_admin"):
+        request.scope["path"] = path.replace("/api/master_admin", "/api/master-admin", 1)
+        raw_path = request.scope.get("raw_path")
+        if isinstance(raw_path, (bytes, bytearray)):
+            request.scope["raw_path"] = raw_path.replace(b"/api/master_admin", b"/api/master-admin", 1)
+    return await call_next(request)
 
 # CORS: local dev + production domains (add CORS_ORIGINS env var for extra origins)
 _base_origins = [

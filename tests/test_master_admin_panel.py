@@ -219,6 +219,33 @@ def test_master_login_sets_cookie_and_hydrates_me(master_client, monkeypatch):
     assert payload["csrf_token"]
 
 
+def test_master_login_cookie_works_on_underscore_alias(master_client, monkeypatch):
+    client, SessionLocal = master_client
+    monkeypatch.setenv("MASTER_ADMIN_PIN", "654321")
+    get_settings.cache_clear()
+
+    db = SessionLocal()
+    try:
+        _seed_platform_admin(db)
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.post(
+        "/api/master-admin/auth/login",
+        json={"email": "platform-admin@example.com", "password": "Master123!", "pin": "654321"},
+    )
+    assert response.status_code == 200, response.text
+    assert "Path=/api/" in response.headers.get("set-cookie", "")
+
+    me = client.get("/api/master_admin/auth/me")
+    assert me.status_code == 200, me.text
+    summary = client.get("/api/master_admin/dashboard/summary")
+    assert summary.status_code == 200, summary.text
+    hotels = client.get("/api/master_admin/dashboard/hotels")
+    assert hotels.status_code == 200, hotels.text
+
+
 def test_master_session_cookie_uses_cross_site_settings_in_production(monkeypatch):
     monkeypatch.setattr(master_security, "is_production_mode", lambda settings=None: True)
     response = Response()
@@ -233,6 +260,7 @@ def test_master_session_cookie_uses_cross_site_settings_in_production(monkeypatc
     normalized_headers = [header.lower() for header in cookie_headers]
     assert any("master_admin_session=session-token" in header for header in normalized_headers)
     assert any("samesite=none" in header and "secure" in header for header in normalized_headers)
+    assert any("path=/api/" in header for header in normalized_headers)
 
 
 def test_master_login_locks_out_after_repeated_failures(master_client, monkeypatch):

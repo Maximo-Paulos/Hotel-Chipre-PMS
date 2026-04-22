@@ -135,11 +135,12 @@ def create_master_session(db: Session, user: User, request: Request | None = Non
 
 
 def set_master_session_cookies(response: Response, session_token: str, csrf_token: str) -> None:
+    cookie_path = "/api/"
     cookie_kwargs = {
         "httponly": True,
         "secure": _session_cookie_secure(),
         "samesite": _session_cookie_samesite(),
-        "path": "/api/master-admin",
+        "path": cookie_path,
     }
     response.set_cookie(SESSION_COOKIE_NAME, session_token, max_age=_session_max_age_seconds(), **cookie_kwargs)
     response.set_cookie(
@@ -149,13 +150,14 @@ def set_master_session_cookies(response: Response, session_token: str, csrf_toke
         httponly=False,
         secure=_session_cookie_secure(),
         samesite=_session_cookie_samesite(),
-        path="/",
+        path=cookie_path,
     )
 
 
 def clear_master_session_cookies(response: Response) -> None:
-    response.delete_cookie(SESSION_COOKIE_NAME, path="/api/master-admin")
-    response.delete_cookie(CSRF_COOKIE_NAME, path="/")
+    cookie_path = "/api/"
+    response.delete_cookie(SESSION_COOKIE_NAME, path=cookie_path)
+    response.delete_cookie(CSRF_COOKIE_NAME, path=cookie_path)
 
 
 def _lockout_query(db: Session, login_identifier: str) -> MasterAdminAuthLockout | None:
