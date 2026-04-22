@@ -16,6 +16,7 @@ from app.models.operations import ReservationAdjustment, ReservationAdjustmentKi
 from app.models.ota_core import OTAProvider, OTAReservationLink, OTAReservationLifecycleEnum
 from app.models.reservation import Reservation, ReservationSourceEnum, ReservationStatusEnum
 from app.models.room import Room, RoomCategory, RoomStatusEnum
+from app.services.payment_service import PaymentError
 
 
 def _override_auth(hotel_id: int, role: str = "owner"):
@@ -172,6 +173,43 @@ def test_pending_actions_endpoint_is_hotel_scoped():
         assert body
         assert {item["reservation_id"] for item in body} == {reservation_h1.id}
         assert all(item["priority"] in {"critical", "high", "medium", "low"} for item in body)
+    finally:
+        _cleanup_client(db, engine)
+
+
+def test_pending_actions_endpoint_surfaces_payment_errors_as_http_500(monkeypatch):
+    client, db, engine = _build_client()
+    try:
+        _seed_operational_state(db, 1, "H1")
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "manager")
+
+        def boom(*_args, **_kwargs):
+            raise PaymentError("Reservation 1 already has payments for hotel 2")
+
+        monkeypatch.setattr("app.api.reservations.list_pending_reservation_actions", boom)
+
+        resp = client.get("/api/reservations/actions/pending")
+        assert resp.status_code == 500, resp.text
+        assert "acciones pendientes" in resp.json()["detail"]
+        assert "hotel 2" in resp.json()["detail"]
+    finally:
+        _cleanup_client(db, engine)
+
+
+def test_reservations_list_surfaces_serialization_failures_as_http_500(monkeypatch):
+    client, db, engine = _build_client()
+    try:
+        _seed_operational_state(db, 1, "H1")
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "manager")
+
+        def broken(_reservation):
+            raise RuntimeError("boom")
+
+        monkeypatch.setattr("app.api.reservations._to_read", broken)
+
+        resp = client.get("/api/reservations/")
+        assert resp.status_code == 500, resp.text
+        assert resp.json()["detail"] == "No se pudieron serializar las reservas"
     finally:
         _cleanup_client(db, engine)
 
