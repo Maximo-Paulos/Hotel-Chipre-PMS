@@ -6,6 +6,7 @@ from typing import Dict, List, Optional
 from pydantic import BaseModel, Field, field_validator
 
 from app.schemas.room import RoomCategoryCreate
+from app.services.timezones import normalize_timezone
 
 
 class OwnerPayload(BaseModel):
@@ -26,6 +27,11 @@ class HotelIdentityPayload(BaseModel):
     @classmethod
     def normalize_currency(cls, value: str) -> str:
         return value.strip().upper()
+
+    @field_validator("timezone")
+    @classmethod
+    def normalize_timezone_value(cls, value: str) -> str:
+        return normalize_timezone(value)
 
     @field_validator("jurisdiction_code")
     @classmethod

@@ -54,21 +54,23 @@ def client(monkeypatch: pytest.MonkeyPatch):
 
 
 def _register_owner(client: TestClient, email: str) -> dict[str, str]:
-    with patch("app.api.auth._generate_code", return_value="123456"):
+    with patch("app.api.auth._generate_code", return_value="123456"), patch(
+        "app.api.auth.send_verification_email", return_value=True
+    ), patch("app.api.auth.send_verification_success_email", return_value=True):
         response = client.post(
             "/api/auth/register",
             json={"email": email, "password": "Demo123!", "role": "owner"},
         )
-    assert response.status_code == 201, response.text
+        assert response.status_code == 201, response.text
 
-    verify = client.post("/api/auth/verify-email", json={"email": email, "code": "123456"})
-    assert verify.status_code == 200, verify.text
-    payload = verify.json()
-    return {
-        "Authorization": f"Bearer {payload['access_token']}",
-        "X-Hotel-Id": str(payload["hotel_id"]),
-        "X-User-Id": payload["user"]["email"],
-    }
+        verify = client.post("/api/auth/verify-email", json={"email": email, "code": "123456"})
+        assert verify.status_code == 200, verify.text
+        payload = verify.json()
+        return {
+            "Authorization": f"Bearer {payload['access_token']}",
+            "X-Hotel-Id": str(payload["hotel_id"]),
+            "X-User-Id": payload["user"]["email"],
+        }
 
 
 def _complete_onboarding_setup(client: TestClient, auth: dict[str, str], owner_email: str):
@@ -217,7 +219,7 @@ def test_invalid_data_blocks_advancement(client: TestClient):
         "/api/onboarding/identity",
         json={
             "name": "Hotel",
-            "timezone": "America/Argentina/Buenos_Aires",
+            "timezone": "Not/A_Real_Zone",
             "currency": "ARS",
             "languages": [],
             "jurisdiction_code": "AR",

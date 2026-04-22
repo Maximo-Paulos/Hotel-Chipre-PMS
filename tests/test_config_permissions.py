@@ -95,3 +95,9 @@ def test_config_update_permissions(ctx):
     body = r.json()
     for k, v in payload.items():
         assert body[k] == v
+
+
+def test_config_rejects_invalid_timezone(ctx):
+    client, db = ctx
+    r = client.patch("/api/config/", json={"hotel_timezone": "Not/A_Real_Zone"})
+    assert r.status_code == 422

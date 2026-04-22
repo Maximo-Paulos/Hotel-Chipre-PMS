@@ -14,12 +14,14 @@ import {
 } from "../../api/rooms";
 import { useSession } from "../../state/session";
 import { hasValidSession } from "../../api/client";
+import { useTimezones } from "../../hooks/useTimezones";
 
 const roomStatuses: RoomStatus[] = ["available", "occupied", "maintenance", "blocked", "cleaning"];
 
 export function SettingsHotelPage() {
   const { session } = useSession();
   const qc = useQueryClient();
+  const timezonesQuery = useTimezones();
   const [form, setForm] = useState<Partial<HotelConfig>>({});
   const [error, setError] = useState<string | null>(null);
 
@@ -142,7 +144,17 @@ export function SettingsHotelPage() {
             </label>
             <label className="text-sm font-semibold text-slate-700">
               Zona horaria
-              <input className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" value={form.hotel_timezone ?? ""} onChange={(e) => handleChange("hotel_timezone", e.target.value)} />
+              <input
+                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                value={form.hotel_timezone ?? ""}
+                onChange={(e) => handleChange("hotel_timezone", e.target.value)}
+                list="hotel-timezones"
+              />
+              <datalist id="hotel-timezones">
+                {(timezonesQuery.data ?? []).map((timezone) => (
+                  <option key={timezone} value={timezone} />
+                ))}
+              </datalist>
             </label>
           </div>
           <div className="grid gap-3 md:grid-cols-3">
