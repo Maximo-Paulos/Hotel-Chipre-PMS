@@ -33,6 +33,7 @@ from .schemas import (
     EmailTestRequest,
     MasterAdminLoginRequest,
     MasterAdminLoginResponse,
+    MasterAdminSessionResponse,
     MasterAdminUserPayload,
     MasterEmailStatusPayload,
     MasterStripeConfigPayload,
@@ -97,10 +98,10 @@ def logout(request: Request, response: Response, db: Session = Depends(get_db)):
     return {"ok": True}
 
 
-@router.get("/auth/me", response_model=MasterAdminUserPayload)
+@router.get("/auth/me", response_model=MasterAdminSessionResponse)
 def me(request: Request, db: Session = Depends(get_db)):
     context = require_master_admin(request=request, db=db, write=False)
-    return _serialize_user(context.user)
+    return MasterAdminSessionResponse(user=_serialize_user(context.user), csrf_token=context.csrf_token)
 
 
 @router.get("/dashboard/summary")

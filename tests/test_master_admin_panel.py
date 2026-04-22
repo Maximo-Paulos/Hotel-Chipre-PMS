@@ -9,6 +9,7 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest
 from fastapi.testclient import TestClient
+from starlette.responses import Response
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -20,6 +21,7 @@ from app.database import Base, get_db
 from app.master_admin.billing_policy import evaluate_hotel_write_access
 from app.master_admin.email_provider import connect_system_email
 from app.master_admin.models import MasterAdminAuditEvent, MasterStripeWebhookEvent
+import app.master_admin.security as master_security
 from app.models.hotel_config import HotelConfiguration
 from app.models.subscription_v2 import Subscription
 from app.models.user import User
@@ -212,7 +214,25 @@ def test_master_login_sets_cookie_and_hydrates_me(master_client, monkeypatch):
 
     me = client.get("/api/master-admin/auth/me")
     assert me.status_code == 200, me.text
-    assert me.json()["email"] == "platform-admin@example.com"
+    payload = me.json()
+    assert payload["user"]["email"] == "platform-admin@example.com"
+    assert payload["csrf_token"]
+
+
+def test_master_session_cookie_uses_cross_site_settings_in_production(monkeypatch):
+    monkeypatch.setattr(master_security, "is_production_mode", lambda settings=None: True)
+    response = Response()
+
+    master_security.set_master_session_cookies(response, "session-token", "csrf-token")
+
+    cookie_headers = [
+        value.decode("latin-1")
+        for key, value in response.raw_headers
+        if key.lower() == b"set-cookie"
+    ]
+    normalized_headers = [header.lower() for header in cookie_headers]
+    assert any("master_admin_session=session-token" in header for header in normalized_headers)
+    assert any("samesite=none" in header and "secure" in header for header in normalized_headers)
 
 
 def test_master_login_locks_out_after_repeated_failures(master_client, monkeypatch):

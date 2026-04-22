@@ -78,6 +78,12 @@ def _session_cookie_secure() -> bool:
     return is_production_mode()
 
 
+def _session_cookie_samesite() -> str:
+    # Cross-origin SPA requests from Vercel to Render require SameSite=None in production.
+    # Keep lax on local HTTP so localhost development still works without Secure cookies.
+    return "none" if _session_cookie_secure() else "lax"
+
+
 def _issue_token() -> str:
     return secrets.token_urlsafe(48)
 
@@ -132,7 +138,7 @@ def set_master_session_cookies(response: Response, session_token: str, csrf_toke
     cookie_kwargs = {
         "httponly": True,
         "secure": _session_cookie_secure(),
-        "samesite": "lax",
+        "samesite": _session_cookie_samesite(),
         "path": "/api/master-admin",
     }
     response.set_cookie(SESSION_COOKIE_NAME, session_token, max_age=_session_max_age_seconds(), **cookie_kwargs)
@@ -142,7 +148,7 @@ def set_master_session_cookies(response: Response, session_token: str, csrf_toke
         max_age=_session_max_age_seconds(),
         httponly=False,
         secure=_session_cookie_secure(),
-        samesite="lax",
+        samesite=_session_cookie_samesite(),
         path="/",
     )
 

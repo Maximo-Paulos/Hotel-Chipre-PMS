@@ -27,6 +27,11 @@ class MasterAdminLoginResponse(BaseModel):
     expires_at: datetime
 
 
+class MasterAdminSessionResponse(BaseModel):
+    user: MasterAdminUserPayload
+    csrf_token: str
+
+
 class BillingPolicyUpdateRequest(BaseModel):
     enabled: bool = True
     allow_active: bool = True

@@ -3,7 +3,9 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import { ApiError } from "../api/client";
 
 import {
+  clearMasterAdminCsrfToken,
   masterAdminFetch,
+  setMasterAdminCsrfToken,
   type MasterAdminLoginResponse,
   type MasterAdminUser
 } from "./api";
@@ -21,12 +23,6 @@ type MasterAdminSessionValue = {
 
 const MasterAdminSessionContext = createContext<MasterAdminSessionValue | null>(null);
 
-const readCookie = (name: string): string | null => {
-  if (typeof document === "undefined") return null;
-  const match = document.cookie.match(new RegExp(`(?:^|; )${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}=([^;]*)`));
-  return match ? decodeURIComponent(match[1]) : null;
-};
-
 export function MasterAdminSessionProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<MasterAdminUser | null>(null);
   const [csrfToken, setCsrfToken] = useState<string | null>(null);
@@ -35,19 +31,22 @@ export function MasterAdminSessionProvider({ children }: { children: ReactNode }
   const refresh = async () => {
     setStatus("loading");
     try {
-      const nextUser = await masterAdminFetch<MasterAdminUser>("/api/master-admin/auth/me");
-      setUser(nextUser);
-      setCsrfToken(readCookie("master_admin_csrf"));
+      const response = await masterAdminFetch<{ user: MasterAdminUser; csrf_token: string }>("/api/master-admin/auth/me");
+      setUser(response.user);
+      setCsrfToken(response.csrf_token);
+      setMasterAdminCsrfToken(response.csrf_token);
       setStatus("authenticated");
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         setUser(null);
         setCsrfToken(null);
+        clearMasterAdminCsrfToken();
         setStatus("anonymous");
         return;
       }
       setUser(null);
       setCsrfToken(null);
+      clearMasterAdminCsrfToken();
       setStatus("anonymous");
     }
   };
@@ -63,6 +62,7 @@ export function MasterAdminSessionProvider({ children }: { children: ReactNode }
     });
     setUser(response.user);
     setCsrfToken(response.csrf_token);
+    setMasterAdminCsrfToken(response.csrf_token);
     setStatus("authenticated");
     return response;
   };
@@ -73,6 +73,7 @@ export function MasterAdminSessionProvider({ children }: { children: ReactNode }
     } finally {
       setUser(null);
       setCsrfToken(null);
+      clearMasterAdminCsrfToken();
       setStatus("anonymous");
     }
   };

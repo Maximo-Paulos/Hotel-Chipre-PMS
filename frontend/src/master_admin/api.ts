@@ -7,11 +7,20 @@ type RequestOptions = {
 };
 
 const CSRF_COOKIE_NAME = "master_admin_csrf";
+let masterAdminCsrfToken: string | null = null;
 
 const readCookie = (name: string): string | null => {
   if (typeof document === "undefined") return null;
   const match = document.cookie.match(new RegExp(`(?:^|; )${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}=([^;]*)`));
   return match ? decodeURIComponent(match[1]) : null;
+};
+
+export const setMasterAdminCsrfToken = (token: string | null) => {
+  masterAdminCsrfToken = typeof token === "string" && token.trim() ? token.trim() : null;
+};
+
+export const clearMasterAdminCsrfToken = () => {
+  masterAdminCsrfToken = null;
 };
 
 const safeJson = (text: string): unknown => {
@@ -31,7 +40,7 @@ export async function masterAdminFetch<T = unknown>(path: string, options: Reque
   };
 
   if (method !== "GET" && method !== "HEAD") {
-    const csrf = readCookie(CSRF_COOKIE_NAME);
+    const csrf = masterAdminCsrfToken || readCookie(CSRF_COOKIE_NAME);
     if (csrf) {
       finalHeaders["X-CSRF-Token"] = csrf;
     }
