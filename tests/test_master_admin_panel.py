@@ -211,6 +211,7 @@ def test_master_login_sets_cookie_and_hydrates_me(master_client, monkeypatch):
     payload = response.json()
     assert payload["user"]["role"] == "platform_admin"
     assert "master_admin_session" in response.cookies
+    assert response.cookies.get("master_admin_session_hint") == "1"
 
     me = client.get("/api/master-admin/auth/me")
     assert me.status_code == 200, me.text
@@ -449,6 +450,32 @@ def test_master_email_connect_test_and_disconnect(master_client, monkeypatch):
     disconnect = client.post("/api/master-admin/email/disconnect", headers={"X-CSRF-Token": csrf_token}, json={})
     assert disconnect.status_code == 200, disconnect.text
     assert disconnect.json()["configured"] is False
+
+
+def test_master_session_hint_cookie_is_cleared_on_logout(master_client, monkeypatch):
+    client, SessionLocal = master_client
+    monkeypatch.setenv("MASTER_ADMIN_PIN", "654321")
+    get_settings.cache_clear()
+
+    db = SessionLocal()
+    try:
+        _seed_platform_admin(db)
+        db.commit()
+    finally:
+        db.close()
+
+    login = client.post(
+        "/api/master-admin/auth/login",
+        json={"email": "platform-admin@example.com", "password": "Master123!", "pin": "654321"},
+    )
+    assert login.status_code == 200, login.text
+    assert login.cookies.get("master_admin_session_hint") == "1"
+
+    csrf_token = login.cookies.get("master_admin_csrf")
+    assert csrf_token
+    logout = client.post("/api/master-admin/auth/logout", headers={"X-CSRF-Token": csrf_token})
+    assert logout.status_code == 200, logout.text
+    assert "master_admin_session_hint" in logout.headers.get("set-cookie", "")
 
 
 def test_master_stripe_connect_and_webhook_signature_is_verified(master_client, monkeypatch):

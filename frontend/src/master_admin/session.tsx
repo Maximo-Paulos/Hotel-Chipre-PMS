@@ -23,12 +23,26 @@ type MasterAdminSessionValue = {
 
 const MasterAdminSessionContext = createContext<MasterAdminSessionValue | null>(null);
 
+const SESSION_HINT_COOKIE_NAME = "master_admin_session_hint";
+
+const hasSessionHintCookie = () => {
+  if (typeof document === "undefined") return false;
+  return document.cookie.split("; ").some((entry) => entry.startsWith(`${SESSION_HINT_COOKIE_NAME}=`));
+};
+
 export function MasterAdminSessionProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<MasterAdminUser | null>(null);
   const [csrfToken, setCsrfToken] = useState<string | null>(null);
   const [status, setStatus] = useState<SessionStatus>("loading");
 
   const refresh = async () => {
+    if (!hasSessionHintCookie()) {
+      setUser(null);
+      setCsrfToken(null);
+      clearMasterAdminCsrfToken();
+      setStatus("anonymous");
+      return;
+    }
     setStatus("loading");
     try {
       const response = await masterAdminFetch<{ user: MasterAdminUser; csrf_token: string }>("/api/master-admin/auth/me");

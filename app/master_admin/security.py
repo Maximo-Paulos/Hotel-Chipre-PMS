@@ -19,6 +19,7 @@ from .models import MasterAdminAuditEvent, MasterAdminAuthLockout, MasterAdminSe
 
 SESSION_COOKIE_NAME = "master_admin_session"
 CSRF_COOKIE_NAME = "master_admin_csrf"
+SESSION_HINT_COOKIE_NAME = "master_admin_session_hint"
 DEFAULT_SESSION_TTL_MINUTES = 8 * 60
 DEFAULT_IDLE_TTL_MINUTES = 8 * 60
 DEFAULT_LOCKOUT_THRESHOLD = 5
@@ -152,12 +153,22 @@ def set_master_session_cookies(response: Response, session_token: str, csrf_toke
         samesite=_session_cookie_samesite(),
         path=cookie_path,
     )
+    response.set_cookie(
+        SESSION_HINT_COOKIE_NAME,
+        "1",
+        max_age=_session_max_age_seconds(),
+        httponly=False,
+        secure=_session_cookie_secure(),
+        samesite=_session_cookie_samesite(),
+        path="/",
+    )
 
 
 def clear_master_session_cookies(response: Response) -> None:
     cookie_path = "/api/"
     response.delete_cookie(SESSION_COOKIE_NAME, path=cookie_path)
     response.delete_cookie(CSRF_COOKIE_NAME, path=cookie_path)
+    response.delete_cookie(SESSION_HINT_COOKIE_NAME, path="/")
 
 
 def _lockout_query(db: Session, login_identifier: str) -> MasterAdminAuthLockout | None:
