@@ -2,6 +2,7 @@
 FastAPI routes for Reservations.
 Complete CRUD + cancel, modify, no-show, extend stay.
 """
+import logging
 from datetime import date, datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -47,10 +48,12 @@ from app.services.reservation_action_service import (
     list_pending_reservation_actions,
     resolve_external_channel_follow_up,
 )
+from app.services.payment_service import PaymentError
 from app.services.allocation_runtime_service import run_persisted_allocation
 from app.dependencies.auth import get_auth_context, AuthContext, require_roles
 
 router = APIRouter(prefix="/api/reservations", tags=["Reservations"])
+logger = logging.getLogger(__name__)
 
 
 def _to_read(r: Reservation) -> ReservationRead:
@@ -99,7 +102,11 @@ def list_reservations(
     reservations = list_reservations_service(
         db, hotel_id=context.hotel_id, status_filter=status_filter, from_date=from_date, to_date=to_date
     )
-    return [_to_read(r) for r in reservations]
+    try:
+        return [_to_read(r) for r in reservations]
+    except Exception as exc:
+        logger.exception("Reservation serialization failed for hotel_id=%s", context.hotel_id)
+        raise HTTPException(status_code=500, detail="No se pudieron serializar las reservas") from exc
 
 
 @router.get("/actions/pending", response_model=list[ReservationPendingActionRead])
@@ -109,7 +116,14 @@ def list_pending_actions(
     context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping")),
 ):
     safe_limit = max(1, min(limit, 250))
-    return list_pending_reservation_actions(db, hotel_id=context.hotel_id, limit=safe_limit)
+    try:
+        return list_pending_reservation_actions(db, hotel_id=context.hotel_id, limit=safe_limit)
+    except PaymentError as exc:
+        logger.exception("Pending actions failed for hotel_id=%s", context.hotel_id)
+        raise HTTPException(
+            status_code=500,
+            detail=f"No se pudieron calcular las acciones pendientes: {exc}",
+        ) from exc
 
 
 @router.get("/{reservation_id}/operations-summary", response_model=ReservationOperationsSummaryRead)
