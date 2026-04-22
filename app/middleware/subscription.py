@@ -9,6 +9,7 @@ from app.config import get_settings
 from app.database import get_session_factory
 from app.master_admin.billing_policy import evaluate_hotel_write_access
 from app.services.subscription_entitlements import get_subscription_snapshot
+from app.services.security import decode_access_token
 
 
 class SubscriptionEnforcementMiddleware:
@@ -43,12 +44,27 @@ class SubscriptionEnforcementMiddleware:
             await self.app(scope, receive, send)
             return
 
+        user_id = None
+        auth_header = request.headers.get("Authorization") or ""
+        if auth_header.lower().startswith("bearer "):
+            token = auth_header.split(" ", 1)[1].strip()
+            if token:
+                try:
+                    token_payload = decode_access_token(token)
+                    raw_user_id = token_payload.get("sub") or token_payload.get("user_id")
+                    if raw_user_id is not None:
+                        user_id = int(str(raw_user_id))
+                except Exception:
+                    user_id = None
+
         SessionLocal = get_session_factory()
         db = SessionLocal()
         try:
             snapshot = get_subscription_snapshot(db, hotel_id)
             if snapshot.get("dirty"):
                 db.commit()
+            if user_id is not None:
+                snapshot["user_id"] = user_id
             decision = evaluate_hotel_write_access(db, hotel_id, snapshot=snapshot)
             if decision.can_write:
                 await self.app(scope, receive, send)

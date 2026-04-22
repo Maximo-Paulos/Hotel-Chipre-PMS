@@ -95,23 +95,14 @@ En el dashboard del servicio → **Environment** → agregar cada variable:
 | `APP_BASE_URL` | `https://hotel-chipre-pms-api.onrender.com` | La URL que Render te asigna al servicio |
 | `CORS_ORIGINS` | `https://hotel-chipre.vercel.app` | La URL de tu app en Vercel (paso 4) |
 | `FRONTEND_URL` | `https://hotel-chipre.vercel.app` | La misma URL de Vercel (para links en emails) |
-| `MANAGER_PIN` | `XXXXXX` | Mínimo 6 dígitos, NO usar 1234 |
+| `MASTER_ADMIN_PIN` | `XXXXXX` | Mínimo 6 dígitos, NO usar 1234 |
 | `INTEGRATIONS_ENCRYPTION_KEY` | *(output del comando de abajo)* | `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` |
-| `SMTP_HOST` | `smtp.gmail.com` | *(si querés emails)* |
-| `SMTP_PORT` | `587` | |
-| `SMTP_USER` | `tu@gmail.com` | |
-| `SMTP_PASS` | `xxxx xxxx xxxx xxxx` | Gmail → Manage Account → Security → App Passwords (requiere 2FA activo) |
-| `SMTP_FROM` | `Hotel Chipre <tu@gmail.com>` | |
+| `MASTER_EMAIL_GMAIL_REDIRECT_URI` | `https://[TU-SERVICIO].onrender.com/api/master-admin/email/oauth/gmail/callback` | Callback OAuth del mail del sistema |
+| `GMAIL_CLIENT_ID` | `...` | Google Cloud OAuth client |
+| `GMAIL_CLIENT_SECRET` | `...` | Google Cloud OAuth client |
 | `GEMMA_ENABLED` | `false` | *(ya en render.yaml)* |
 
-> **SMTP es opcional para el MVP.** Si no configurás SMTP, las invitaciones a staff se crean pero el email no se envía. El sistema no rompe.
->
-> **Verificación de email sin SMTP (modo piloto):** para que el piloto pueda arrancar sin Gmail/SMTP existen dos flags opt-in:
->
-> - `PILOT_AUTO_VERIFY=true` → `/api/auth/register` marca al owner como verificado directamente (no se envía ni pide código).
-> - `EXPOSE_AUTH_CODES_WHEN_NO_SMTP=true` (solo cuando no hay SMTP) → `/api/auth/request-verify` y `/api/auth/request-reset` devuelven el código en el JSON para que la UI pueda completar el flujo.
->
-> Ambas flags están activadas por default en `.env.render`. **Desactivalas antes de abrir el deployment a usuarios externos al hotel.**
+> **El mail del sistema ya no usa SMTP ni app passwords.** Se conecta desde `/adminpmsmaster` con Gmail OAuth y el backend persiste esa conexión de forma segura.
 
 > **Integraciones opcionales:** Mercado Pago, PayPal y Gmail OAuth solo se validan cuando realmente se cargan sus credenciales en producción. Si no las vas a usar en el piloto, dejalas vacías.
 
@@ -200,13 +191,11 @@ DATABASE_URL                = postgresql+psycopg2://postgres:[PASS]@db.[REF].sup
 APP_BASE_URL                = https://[TU-SERVICIO].onrender.com
 CORS_ORIGINS                = https://[TU-APP].vercel.app
 FRONTEND_URL                = https://[TU-APP].vercel.app
-MANAGER_PIN                 = [MINIMO 6 DIGITOS, NO 1234]
+MASTER_ADMIN_PIN            = [MINIMO 6 DIGITOS, NO 1234]
 INTEGRATIONS_ENCRYPTION_KEY = [OUTPUT DE: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"]
-SMTP_HOST                   = smtp.gmail.com          (opcional)
-SMTP_PORT                   = 587                     (opcional)
-SMTP_USER                   = tu@gmail.com            (opcional)
-SMTP_PASS                   = xxxx xxxx xxxx xxxx     (opcional — App Password de Gmail)
-SMTP_FROM                   = Hotel Chipre <tu@gmail.com>  (opcional)
+MASTER_EMAIL_GMAIL_REDIRECT_URI = https://[TU-SERVICIO].onrender.com/api/master-admin/email/oauth/gmail/callback
+GMAIL_CLIENT_ID             = [OAuth client id de Google]
+GMAIL_CLIENT_SECRET         = [OAuth client secret de Google]
 ```
 
 Variables que **vos pegás manualmente** en el dashboard de Vercel:
@@ -268,7 +257,7 @@ curl -X POST https://TU-SERVICIO.onrender.com/api/auth/login \
 
 El backend lanza este error si detecta secrets inseguros en modo producción. Verificar:
 - `JWT_SECRET` tiene al menos 32 caracteres
-- `MANAGER_PIN` tiene al menos 6 dígitos y no es `1234`
+- `MASTER_ADMIN_PIN` tiene al menos 6 dígitos y no es `1234`
 - `APP_BASE_URL` empieza con `https://` y no tiene `localhost`
 - Las URLs de redirect y `MERCADOPAGO_WEBHOOK_SECRET` solo se exigen si la integración correspondiente está activada con credenciales reales
 

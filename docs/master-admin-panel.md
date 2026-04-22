@@ -2,16 +2,16 @@
 
 ## Scope
 
-The owner master panel is isolated under `/adminpmsmaster` and is backed by a separate backend module at `app/master_admin/`.
+The owner master panel is isolated under `/adminpmsmaster` and is backed by `app/master_admin/`.
 
 It provides:
 
 - master-only authentication with a separate session store
 - separate CSRF protection for master writes
 - dashboard visibility for hotel and subscription state
-- centralized billing policy management
-- email provider abstraction and test endpoint
-- Stripe webhook base with signature verification
+- centralized billing policy management with `exempt_hotel_ids` and `exempt_user_ids`
+- Gmail OAuth connection for the system mail provider
+- Stripe owner configuration with secure persistence
 - audit event collection for master actions
 
 ## Backend entrypoints
@@ -22,9 +22,15 @@ It provides:
 - `GET /api/master-admin/dashboard/summary`
 - `GET /api/master-admin/dashboard/hotels`
 - `GET|PUT /api/master-admin/billing/policy`
+- `GET /api/master-admin/email/status`
 - `GET /api/master-admin/email/providers`
+- `POST /api/master-admin/email/connect`
+- `GET /api/master-admin/email/oauth/gmail/callback`
+- `POST /api/master-admin/email/disconnect`
 - `POST /api/master-admin/email/test`
 - `GET /api/master-admin/stripe/config`
+- `POST /api/master-admin/stripe/connect`
+- `POST /api/master-admin/stripe/disconnect`
 - `POST /api/master-admin/stripe/webhook`
 - `GET /api/master-admin/audit/events`
 
@@ -40,20 +46,17 @@ It provides:
 
 ## Key environment variables
 
-- `MANAGER_PIN`
+- `MASTER_ADMIN_PIN`
+- `MASTER_EMAIL_GMAIL_REDIRECT_URI`
+- `GMAIL_CLIENT_ID`
+- `GMAIL_CLIENT_SECRET`
 - `MASTER_STRIPE_WEBHOOK_SECRET`
 - `STRIPE_WEBHOOK_SECRET`
-- `EMAIL_PROVIDER`
-- `SMTP_HOST`
-- `SMTP_PORT`
-- `SMTP_USER`
-- `SMTP_PASS`
-- `SMTP_FROM`
-- `TRANSACTIONAL_EMAIL_ENDPOINT`
-- `TRANSACTIONAL_EMAIL_API_KEY`
+- `INTEGRATIONS_ENCRYPTION_KEY`
+- `APP_BASE_URL`
+- `FRONTEND_URL`
 
 ## Validation
 
 Backend regression coverage lives in `tests/test_master_admin_panel.py`.
 The master panel-specific backend tests pass.
-

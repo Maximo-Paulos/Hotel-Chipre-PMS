@@ -58,7 +58,7 @@ def _normalize_pin(value: str) -> str:
 
 def _pin_matches(pin: str) -> bool:
     settings = get_settings()
-    expected = _normalize_pin(str(settings.MANAGER_PIN or ""))
+    expected = _normalize_pin(str(settings.MASTER_ADMIN_PIN or ""))
     return bool(expected) and hmac.compare_digest(_normalize_pin(pin), expected)
 
 

@@ -7,22 +7,36 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from json import JSONDecodeError
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.database import get_db
 from app.models.hotel_config import HotelConfiguration
 from app.models.subscription_v2 import Subscription
 from app.models.user import User
-from app.services.email_service import mailer
 from app.services.subscription_entitlements import get_subscription_snapshot
+from app.services.security import decode_signed_token
 from .billing_policy import BillingDecision, evaluate_hotel_write_access, get_policy_payload, update_policy
+from .email_provider import (
+    MasterEmailConnectionError,
+    build_connect_redirect,
+    build_email_callback_page,
+    build_state_payload,
+    connect_system_email,
+    disconnect_system_email,
+    get_system_email_status,
+    send_system_email,
+)
 from .models import MasterAdminAuditEvent, MasterStripeWebhookEvent
 from .schemas import (
     BillingPolicyPayload,
     BillingPolicyUpdateRequest,
+    MasterEmailConnectResponse,
     EmailTestRequest,
     MasterAdminLoginRequest,
     MasterAdminLoginResponse,
     MasterAdminUserPayload,
-    StripeWebhookConfigPayload,
+    MasterEmailStatusPayload,
+    MasterStripeConfigPayload,
+    MasterStripeConnectRequest,
 )
 from .security import (
     audit_master_action,
@@ -32,9 +46,19 @@ from .security import (
     require_master_admin,
     set_master_session_cookies,
 )
-from .stripe import DEFAULT_TOLERANCE_SECONDS, stripe_secret_configured, verify_stripe_signature
+from .stripe import clear_stripe_settings, get_stripe_status, save_stripe_settings, verify_stripe_signature
 
 router = APIRouter(prefix="/api/master-admin", tags=["Master Admin"])
+
+
+def _popup_origin(request: Request) -> str:
+    origin = (request.headers.get("origin") or "").strip()
+    if origin.startswith(("http://", "https://")):
+        return origin
+    referer = (request.headers.get("referer") or "").strip()
+    if referer.startswith(("http://", "https://")):
+        return referer.rsplit("/", 1)[0]
+    return get_settings().APP_BASE_URL.rstrip("/")
 
 
 def _serialize_user(user: User) -> MasterAdminUserPayload:
@@ -85,7 +109,6 @@ def dashboard_summary(request: Request, db: Session = Depends(get_db)):
     hotels = db.query(HotelConfiguration).count()
     active_subscriptions = db.query(Subscription).filter(Subscription.status == "active").count()
     trialing = db.query(Subscription).filter(Subscription.status == "trialing").count()
-    comped = db.query(Subscription).filter(Subscription.status == "comped").count()
     past_due = db.query(Subscription).filter(Subscription.status == "past_due").count()
     policy = get_policy_payload(db)
     recent_events = db.query(MasterAdminAuditEvent).order_by(MasterAdminAuditEvent.id.desc()).limit(10).all()
@@ -95,7 +118,6 @@ def dashboard_summary(request: Request, db: Session = Depends(get_db)):
             "hotels": hotels,
             "active_subscriptions": active_subscriptions,
             "trialing": trialing,
-            "comped": comped,
             "past_due": past_due,
         },
         "policy": policy,
@@ -164,48 +186,172 @@ def put_billing_policy(
     return BillingPolicyPayload(**policy)
 
 
-@router.get("/email/providers")
+@router.get("/email/status", response_model=MasterEmailStatusPayload)
+@router.get("/email/providers", response_model=MasterEmailStatusPayload)
 def email_providers(request: Request, db: Session = Depends(get_db)):
     require_master_admin(request=request, db=db, write=False)
-    return {
-        "current_provider": mailer.provider_name,
-        "configured": mailer.configured,
-        "available": mailer.available_providers(),
-    }
+    status_payload = get_system_email_status(db)
+    return MasterEmailStatusPayload(**status_payload.__dict__)
+
+
+@router.post("/email/connect", response_model=MasterEmailConnectResponse)
+def email_connect(request: Request, db: Session = Depends(get_db)):
+    context = require_master_admin(request=request, db=db, csrf_header=request.headers.get("X-CSRF-Token"), write=True)
+    origin = _popup_origin(request)
+    state_payload = build_state_payload(web_origin=origin)
+    try:
+        redirect_url = build_connect_redirect(state_payload=state_payload)
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    audit_master_action(
+        db,
+        actor_user_id=context.user.id,
+        action="master_admin_email_connect_started",
+        metadata={"provider": "gmail"},
+        request=request,
+    )
+    db.commit()
+    return MasterEmailConnectResponse(redirect_url=redirect_url, status="pending")
+
+
+@router.get("/email/oauth/gmail/callback")
+def email_oauth_callback(request: Request, db: Session = Depends(get_db)):
+    state = request.query_params.get("state")
+    if not state:
+        raise HTTPException(status_code=400, detail="state requerido")
+    state_payload = decode_signed_token(state)
+    if state_payload.get("type") != "master_admin_email_oauth":
+        raise HTTPException(status_code=400, detail="state invalido")
+    web_origin = str(state_payload.get("web_origin") or "").strip()
+    error = request.query_params.get("error")
+    if error:
+        description = request.query_params.get("error_description") or error
+        return build_email_callback_page(status="error", message=f"No se pudo conectar Gmail: {description}", web_origin=web_origin)
+
+    code = request.query_params.get("code")
+    if not code:
+        raise HTTPException(status_code=400, detail="code requerido")
+
+    try:
+        status_payload = connect_system_email(db, code)
+        db.commit()
+        audit_master_action(
+            db,
+            actor_user_id=None,
+            action="master_admin_email_connected",
+            metadata=status_payload.__dict__,
+            request=request,
+        )
+        db.commit()
+    except MasterEmailConnectionError as exc:
+        db.rollback()
+        return build_email_callback_page(status="error", message=str(exc), web_origin=web_origin)
+    except Exception as exc:
+        db.rollback()
+        return build_email_callback_page(status="error", message=str(exc), web_origin=web_origin)
+
+    message = "Gmail quedo conectado correctamente para los mails del sistema."
+    return build_email_callback_page(status="connected", message=message, web_origin=web_origin)
+
+
+@router.post("/email/disconnect", response_model=MasterEmailStatusPayload)
+def email_disconnect(request: Request, db: Session = Depends(get_db)):
+    context = require_master_admin(request=request, db=db, csrf_header=request.headers.get("X-CSRF-Token"), write=True)
+    status_payload = disconnect_system_email(db)
+    audit_master_action(
+        db,
+        actor_user_id=context.user.id,
+        action="master_admin_email_disconnected",
+        metadata=status_payload.__dict__,
+        request=request,
+    )
+    db.commit()
+    return MasterEmailStatusPayload(**status_payload.__dict__)
 
 
 @router.post("/email/test")
 def email_test(payload: EmailTestRequest, request: Request, db: Session = Depends(get_db)):
     context = require_master_admin(request=request, db=db, csrf_header=request.headers.get("X-CSRF-Token"), write=True)
-    ok = mailer.send(payload.recipient, payload.subject, payload.body)
+    try:
+        result = send_system_email(db, payload.recipient, payload.subject, payload.body)
+        db.commit()
+    except MasterEmailConnectionError as exc:
+        db.rollback()
+        audit_master_action(
+            db,
+            actor_user_id=context.user.id,
+            action="master_admin_email_test",
+            outcome="failed",
+            metadata={"recipient": str(payload.recipient), "error": str(exc)},
+            request=request,
+        )
+        db.commit()
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     audit_master_action(
         db,
         actor_user_id=context.user.id,
         action="master_admin_email_test",
-        outcome="success" if ok else "failed",
-        metadata={"recipient": str(payload.recipient), "provider": mailer.provider_name},
+        outcome="success",
+        metadata={"recipient": str(payload.recipient), **result},
         request=request,
     )
     db.commit()
-    return {"ok": ok, "provider": mailer.provider_name}
+    return {"ok": True, **result}
 
 
-@router.get("/stripe/config", response_model=StripeWebhookConfigPayload)
+@router.get("/stripe/config", response_model=MasterStripeConfigPayload)
 def stripe_config(request: Request, db: Session = Depends(get_db)):
     require_master_admin(request=request, db=db, write=False)
-    configured = stripe_secret_configured()
-    return StripeWebhookConfigPayload(
-        configured=configured,
-        secret_source="MASTER_STRIPE_WEBHOOK_SECRET" if configured else "unset",
-        tolerance_seconds=DEFAULT_TOLERANCE_SECONDS,
+    return MasterStripeConfigPayload(**get_stripe_status(db))
+
+
+@router.post("/stripe/connect", response_model=MasterStripeConfigPayload)
+def stripe_connect(payload: MasterStripeConnectRequest, request: Request, db: Session = Depends(get_db)):
+    context = require_master_admin(request=request, db=db, csrf_header=request.headers.get("X-CSRF-Token"), write=True)
+    try:
+        status_payload = save_stripe_settings(
+            db,
+            {
+                "stripe_secret_key": payload.stripe_secret_key,
+                "webhook_secret": payload.webhook_secret,
+                "enabled": payload.enabled,
+            },
+        )
+        db.commit()
+    except HTTPException:
+        db.rollback()
+        raise
+    audit_master_action(
+        db,
+        actor_user_id=context.user.id,
+        action="master_admin_stripe_connected",
+        metadata=status_payload,
+        request=request,
     )
+    db.commit()
+    return MasterStripeConfigPayload(**status_payload)
+
+
+@router.post("/stripe/disconnect", response_model=MasterStripeConfigPayload)
+def stripe_disconnect(request: Request, db: Session = Depends(get_db)):
+    context = require_master_admin(request=request, db=db, csrf_header=request.headers.get("X-CSRF-Token"), write=True)
+    status_payload = clear_stripe_settings(db)
+    audit_master_action(
+        db,
+        actor_user_id=context.user.id,
+        action="master_admin_stripe_disconnected",
+        metadata=status_payload,
+        request=request,
+    )
+    db.commit()
+    return MasterStripeConfigPayload(**status_payload)
 
 
 @router.post("/stripe/webhook")
 async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
     body = await request.body()
     signature = request.headers.get("Stripe-Signature")
-    verify_stripe_signature(body, signature)
+    verify_stripe_signature(db, body, signature)
 
     try:
         event_data = json.loads(body.decode("utf-8"))

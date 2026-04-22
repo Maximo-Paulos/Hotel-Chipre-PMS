@@ -9,10 +9,13 @@ const parseHotelIds = (value: string) =>
     .map((entry) => parseInt(entry.trim(), 10))
     .filter((entry) => Number.isInteger(entry) && entry > 0);
 
+const parseUserIds = parseHotelIds;
+
 export function MasterAdminBillingPage() {
   const [policy, setPolicy] = useState<MasterBillingPolicy | null>(null);
   const [notes, setNotes] = useState("");
   const [exemptHotelIds, setExemptHotelIds] = useState("");
+  const [exemptUserIds, setExemptUserIds] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -24,6 +27,7 @@ export function MasterAdminBillingPage() {
       setPolicy(data);
       setNotes(data.notes || "");
       setExemptHotelIds((data.exempt_hotel_ids || []).join(", "));
+      setExemptUserIds((data.exempt_user_ids || []).join(", "));
     };
     void load().catch(() => {
       if (!cancelled) setMessage("No se pudo cargar la policy de billing.");
@@ -45,10 +49,8 @@ export function MasterAdminBillingPage() {
           enabled: policy.enabled,
           allow_active: policy.allow_active,
           allow_trialing: policy.allow_trialing,
-          allow_demo: policy.allow_demo,
-          allow_comped: policy.allow_comped,
-          allow_past_due_grace: policy.allow_past_due_grace,
           exempt_hotel_ids: parseHotelIds(exemptHotelIds),
+          exempt_user_ids: parseUserIds(exemptUserIds),
           notes
         }
       });
@@ -86,10 +88,7 @@ export function MasterAdminBillingPage() {
         {[
           ["enabled", "Enabled"],
           ["allow_active", "Allow active"],
-          ["allow_trialing", "Allow trialing"],
-          ["allow_demo", "Allow demo"],
-          ["allow_comped", "Allow comped"],
-          ["allow_past_due_grace", "Allow past due grace"]
+          ["allow_trialing", "Allow trialing"]
         ].map(([key, label]) => (
           <label key={key} className="rounded-[1.5rem] border border-white/10 bg-slate-950/50 p-4">
             <div className="flex items-center justify-between gap-3">
@@ -109,7 +108,7 @@ export function MasterAdminBillingPage() {
         ))}
       </section>
 
-      <section className="grid gap-6 lg:grid-cols-[1fr_1fr]">
+      <section className="grid gap-6 lg:grid-cols-[1fr_1fr_1fr]">
         <label className="rounded-[2rem] border border-white/10 bg-slate-950/50 p-5">
           <span className="block text-sm font-medium text-slate-200">Exempt hotel IDs</span>
           <textarea
@@ -118,6 +117,18 @@ export function MasterAdminBillingPage() {
             rows={8}
             className="mt-3 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-amber-300/60"
             placeholder="1, 7, 12"
+          />
+          <p className="mt-2 text-xs text-slate-400">Separados por coma o salto de línea.</p>
+        </label>
+
+        <label className="rounded-[2rem] border border-white/10 bg-slate-950/50 p-5">
+          <span className="block text-sm font-medium text-slate-200">Exempt user IDs</span>
+          <textarea
+            value={exemptUserIds}
+            onChange={(event) => setExemptUserIds(event.target.value)}
+            rows={8}
+            className="mt-3 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-amber-300/60"
+            placeholder="2, 4, 8"
           />
           <p className="mt-2 text-xs text-slate-400">Separados por coma o salto de línea.</p>
         </label>

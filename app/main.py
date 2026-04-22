@@ -38,9 +38,6 @@ from app.api import (
 )
 import app.master_admin.models  # noqa: F401
 from app.master_admin.router import router as master_admin_router
-from app.services.email_service import mailer
-
-_startup_email_sent = False
 
 def _is_demo_mode_enabled() -> bool:
     """Check whether demo-only utilities should be exposed."""
@@ -55,39 +52,11 @@ def _require_demo_mode():
         )
 
 
-def _maybe_send_startup_email():
-    """
-    Sends a lightweight startup email to the configured SMTP user/from.
-    Only fires if SMTP is configured AND SMTP_STARTUP_NOTIFY is True.
-    Guards against multiple sends per process.
-    """
-    global _startup_email_sent
-    if _startup_email_sent:
-        return
-    if not mailer.configured:
-        return
-    settings = get_settings()
-    if not settings.SMTP_STARTUP_NOTIFY:
-        return
-    recipient = settings.SMTP_USER or settings.SMTP_FROM
-    if not recipient:
-        return
-    subject = "Hotel PMS iniciado"
-    body = (
-        "Hola,\n\n"
-        "El servicio Hotel PMS se inició correctamente.\n"
-        "Si no esperabas este mensaje, revisá las credenciales SMTP.\n"
-    )
-    mailer.send(recipient, subject, body)
-    _startup_email_sent = True
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize database on application startup."""
     validate_runtime_security()
     init_db()
-    _maybe_send_startup_email()
     yield
 
 

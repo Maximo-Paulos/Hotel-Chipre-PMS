@@ -1,36 +1,50 @@
 """
-Platform email service facade backed by pluggable providers.
+Platform email service facade backed by the owner-managed Gmail connection.
 """
 from __future__ import annotations
 
-import smtplib
 from typing import Iterable
 
-from app.services.email.providers import EmailProvider, get_email_provider
+from app.database import get_session_factory
+from app.master_admin.email_provider import MasterEmailConnectionError, get_system_email_status, send_system_email
 
 
 class Mailer:
-    def __init__(self, provider: EmailProvider | None = None):
-        self.settings = None
-        self.provider = provider or get_email_provider(self.settings)
-
-    def _resolve_provider(self) -> EmailProvider:
-        self.provider = get_email_provider(self.settings)
-        return self.provider
+    @property
+    def provider_name(self) -> str:
+        db = get_session_factory()()
+        try:
+            status = get_system_email_status(db)
+            return "gmail_oauth" if status.configured else "null"
+        finally:
+            db.close()
 
     @property
     def configured(self) -> bool:
-        return self._resolve_provider().configured
-
-    @property
-    def provider_name(self) -> str:
-        return getattr(self._resolve_provider(), "provider_name", "unknown")
+        db = get_session_factory()()
+        try:
+            status = get_system_email_status(db)
+            return bool(status.configured)
+        finally:
+            db.close()
 
     def available_providers(self) -> list[str]:
-        return ["smtp", "transactional_http", "null"]
+        return ["gmail_oauth"]
 
     def send(self, to: Iterable[str] | str, subject: str, body: str) -> bool:
-        return self._resolve_provider().send(to, subject, body)
+        db = get_session_factory()()
+        try:
+            send_system_email(db, to, subject, body)
+            db.commit()
+            return True
+        except MasterEmailConnectionError as exc:
+            db.rollback()
+            raise exc
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.close()
 
 
 mailer = Mailer()

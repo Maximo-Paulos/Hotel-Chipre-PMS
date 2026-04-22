@@ -4,6 +4,8 @@ import hashlib
 import hmac
 import json
 import time
+from dataclasses import dataclass
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 from fastapi.testclient import TestClient
@@ -15,11 +17,27 @@ import app.database as db_module
 import app.main as main_module
 from app.config import get_settings
 from app.database import Base, get_db
+from app.master_admin.billing_policy import evaluate_hotel_write_access
+from app.master_admin.email_provider import connect_system_email
 from app.master_admin.models import MasterAdminAuditEvent, MasterStripeWebhookEvent
 from app.models.hotel_config import HotelConfiguration
 from app.models.subscription_v2 import Subscription
 from app.models.user import User
 from app.services.security import hash_password
+
+
+@dataclass
+class FakeResponse:
+    ok: bool
+    payload: dict
+    text: str = ""
+
+    @property
+    def content(self):
+        return b"{}"
+
+    def json(self):
+        return self.payload
 
 
 @pytest.fixture
@@ -102,9 +120,49 @@ def _seed_subscription(db, hotel_id: int, status: str = "suspended") -> Subscrip
     return subscription
 
 
+def _configure_gmail(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("GMAIL_CLIENT_ID", "client-id")
+    monkeypatch.setenv("GMAIL_CLIENT_SECRET", "client-secret")
+    monkeypatch.setenv("MASTER_EMAIL_GMAIL_REDIRECT_URI", "https://example.com/api/master-admin/email/oauth/gmail/callback")
+    get_settings.cache_clear()
+
+    def fake_post(url, data=None, headers=None, json=None, timeout=None):
+        if url == "https://oauth2.googleapis.com/token":
+            return FakeResponse(
+                True,
+                {
+                    "access_token": "access-123",
+                    "refresh_token": "refresh-123",
+                    "expires_in": 3600,
+                    "scope": "openid email profile https://www.googleapis.com/auth/gmail.send",
+                },
+            )
+        if url == "https://gmail.googleapis.com/gmail/v1/users/me/messages/send":
+            return FakeResponse(True, {"id": "msg-123"})
+        raise AssertionError(f"Unexpected POST {url}")
+
+    def fake_get(url, headers=None, timeout=None):
+        if url == "https://openidconnect.googleapis.com/v1/userinfo":
+            return FakeResponse(True, {"email": "owner-mail@example.com", "name": "Owner Mail", "sub": "google-sub"})
+        if url == "https://api.stripe.com/v1/account":
+            return FakeResponse(True, {"id": "acct_123", "display_name": "Owner Stripe"})
+        raise AssertionError(f"Unexpected GET {url}")
+
+    monkeypatch.setattr("app.master_admin.email_provider.requests.post", fake_post)
+    monkeypatch.setattr("app.master_admin.email_provider.requests.get", fake_get)
+    monkeypatch.setattr("app.master_admin.stripe.requests.get", fake_get)
+    monkeypatch.setattr("app.master_admin.stripe.requests.post", fake_post)
+
+
+def _seed_master_email(db, monkeypatch: pytest.MonkeyPatch):
+    _configure_gmail(monkeypatch)
+    connect_system_email(db, "auth-code-123")
+    db.commit()
+
+
 def test_master_login_sets_cookie_and_hydrates_me(master_client, monkeypatch):
     client, SessionLocal = master_client
-    monkeypatch.setenv("MANAGER_PIN", "654321")
+    monkeypatch.setenv("MASTER_ADMIN_PIN", "654321")
     get_settings.cache_clear()
 
     db = SessionLocal()
@@ -130,7 +188,7 @@ def test_master_login_sets_cookie_and_hydrates_me(master_client, monkeypatch):
 
 def test_master_login_locks_out_after_repeated_failures(master_client, monkeypatch):
     client, SessionLocal = master_client
-    monkeypatch.setenv("MANAGER_PIN", "654321")
+    monkeypatch.setenv("MASTER_ADMIN_PIN", "654321")
     get_settings.cache_clear()
 
     db = SessionLocal()
@@ -154,9 +212,9 @@ def test_master_login_locks_out_after_repeated_failures(master_client, monkeypat
     assert locked.status_code == 429, locked.text
 
 
-def test_master_policy_update_exempts_hotel_and_audit_logs(master_client, monkeypatch):
+def test_master_policy_update_exempts_hotel_and_user(master_client, monkeypatch):
     client, SessionLocal = master_client
-    monkeypatch.setenv("MANAGER_PIN", "654321")
+    monkeypatch.setenv("MASTER_ADMIN_PIN", "654321")
     get_settings.cache_clear()
 
     db = SessionLocal()
@@ -183,32 +241,118 @@ def test_master_policy_update_exempts_hotel_and_audit_logs(master_client, monkey
             "enabled": True,
             "allow_active": True,
             "allow_trialing": True,
-            "allow_demo": True,
-            "allow_comped": True,
-            "allow_past_due_grace": False,
             "exempt_hotel_ids": [1],
+            "exempt_user_ids": [99],
             "notes": "pilot exemption",
         },
     )
     assert update.status_code == 200, update.text
     assert update.json()["exempt_hotel_ids"] == [1]
+    assert update.json()["exempt_user_ids"] == [99]
 
     hotels = client.get("/api/master-admin/dashboard/hotels")
     assert hotels.status_code == 200, hotels.text
     row = next(item for item in hotels.json()["items"] if item["hotel_id"] == 1)
     assert row["can_write"] is True
-    assert row["reason"] == "hotel_exempt"
+    assert row["reason"] == "exempt"
 
     db = SessionLocal()
     try:
+        decision = evaluate_hotel_write_access(db, 1, snapshot={"status": "suspended", "plan": "starter", "user_id": 99})
+        assert decision.can_write is True
+        assert decision.reason == "exempt"
         assert db.query(MasterAdminAuditEvent).filter(MasterAdminAuditEvent.action == "master_admin_update_billing_policy").count() == 1
     finally:
         db.close()
 
 
-def test_master_stripe_webhook_signature_is_verified(master_client, monkeypatch):
+def test_master_email_connect_test_and_disconnect(master_client, monkeypatch):
     client, SessionLocal = master_client
-    monkeypatch.setenv("MASTER_STRIPE_WEBHOOK_SECRET", "whsec_test_secret")
+    monkeypatch.setenv("MASTER_ADMIN_PIN", "654321")
+    _configure_gmail(monkeypatch)
+    get_settings.cache_clear()
+
+    db = SessionLocal()
+    try:
+        _seed_platform_admin(db)
+        db.commit()
+    finally:
+        db.close()
+
+    login = client.post(
+        "/api/master-admin/auth/login",
+        json={"email": "platform-admin@example.com", "password": "Master123!", "pin": "654321"},
+    )
+    assert login.status_code == 200, login.text
+    csrf_token = login.cookies.get("master_admin_csrf")
+    assert csrf_token
+
+    connect = client.post("/api/master-admin/email/connect", headers={"X-CSRF-Token": csrf_token}, json={})
+    assert connect.status_code == 200, connect.text
+    redirect_url = connect.json()["redirect_url"]
+    parsed = urlparse(redirect_url)
+    params = parse_qs(parsed.query)
+    state = params["state"][0]
+
+    callback = client.get(f"/api/master-admin/email/oauth/gmail/callback?code=auth-code-123&state={state}")
+    assert callback.status_code == 200, callback.text
+    assert "master-admin-email-oauth-result" in callback.text
+
+    status_resp = client.get("/api/master-admin/email/status")
+    assert status_resp.status_code == 200, status_resp.text
+    assert status_resp.json()["configured"] is True
+    assert status_resp.json()["connected_account_email"] == "owner-mail@example.com"
+
+    test = client.post(
+        "/api/master-admin/email/test",
+        headers={"X-CSRF-Token": csrf_token},
+        json={
+            "recipient": "ops@example.com",
+            "subject": "test",
+            "body": "hello",
+        },
+    )
+    assert test.status_code == 200, test.text
+    assert test.json()["ok"] is True
+
+    disconnect = client.post("/api/master-admin/email/disconnect", headers={"X-CSRF-Token": csrf_token}, json={})
+    assert disconnect.status_code == 200, disconnect.text
+    assert disconnect.json()["configured"] is False
+
+
+def test_master_stripe_connect_and_webhook_signature_is_verified(master_client, monkeypatch):
+    client, SessionLocal = master_client
+    monkeypatch.setenv("MASTER_ADMIN_PIN", "654321")
+    _configure_gmail(monkeypatch)
+    get_settings.cache_clear()
+
+    db = SessionLocal()
+    try:
+        _seed_platform_admin(db)
+        db.commit()
+    finally:
+        db.close()
+
+    login = client.post(
+        "/api/master-admin/auth/login",
+        json={"email": "platform-admin@example.com", "password": "Master123!", "pin": "654321"},
+    )
+    assert login.status_code == 200, login.text
+    csrf_token = login.cookies.get("master_admin_csrf")
+    assert csrf_token
+
+    connect = client.post(
+        "/api/master-admin/stripe/connect",
+        headers={"X-CSRF-Token": csrf_token},
+        json={
+            "stripe_secret_key": "sk_test_123",
+            "webhook_secret": "whsec_test_secret",
+            "enabled": True,
+        },
+    )
+    assert connect.status_code == 200, connect.text
+    assert connect.json()["configured"] is True
+    assert connect.json()["webhook_secret_configured"] is True
 
     payload = {"id": "evt_123", "type": "invoice.paid"}
     body = json.dumps(payload, separators=(",", ":"))

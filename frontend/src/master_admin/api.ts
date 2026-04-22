@@ -78,10 +78,8 @@ export type MasterBillingPolicy = {
   enabled: boolean;
   allow_active: boolean;
   allow_trialing: boolean;
-  allow_demo: boolean;
-  allow_comped: boolean;
-  allow_past_due_grace: boolean;
   exempt_hotel_ids: number[];
+  exempt_user_ids: number[];
   notes?: string | null;
   updated_at?: string | null;
   updated_by_user_id?: number | null;
@@ -107,7 +105,6 @@ export type MasterDashboardSummary = {
     hotels: number;
     active_subscriptions: number;
     trialing: number;
-    comped: number;
     past_due: number;
   };
   policy: MasterBillingPolicy;
@@ -119,4 +116,30 @@ export type MasterDashboardSummary = {
     target_id: string | null;
     created_at: string;
   }>;
+};
+
+export type MasterEmailStatus = {
+  configured: boolean;
+  status: string;
+  provider: string;
+  connected_account_email?: string | null;
+  connected_account_name?: string | null;
+  last_checked_at?: string | null;
+  last_error?: string | null;
+  updated_at?: string | null;
+};
+
+export type MasterEmailConnectResponse = {
+  redirect_url?: string | null;
+  status: string;
+};
+
+export type MasterStripeConfig = {
+  configured: boolean;
+  enabled: boolean;
+  account_id?: string | null;
+  account_name?: string | null;
+  webhook_secret_configured: boolean;
+  last_checked_at?: string | null;
+  last_error?: string | null;
 };

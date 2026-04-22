@@ -11,7 +11,6 @@ from sqlalchemy.orm import Session
 
 from app.adapters.memory_tokens import token_store
 from app.adapters.rate_limiter import login_limiter, reset_request_limiter, verify_request_limiter
-from app.config import get_settings
 from app.database import get_db
 from app.models.user import User
 from app.schemas.auth import (
@@ -25,14 +24,15 @@ from app.schemas.auth import (
     VerifyCodeRequest,
 )
 from app.services.email_service import (
-    mailer,
     send_reset_password_email,
     send_verification_email,
     send_verification_success_email,
 )
+from app.master_admin.email_provider import MasterEmailConnectionError
 from app.services.hotel_service import get_or_create_hotel_for_owner, get_memberships_for_user
 from app.services.security import create_access_token, hash_password, verify_password
 from app.dependencies.auth import get_current_user
+from app.config import get_settings
 
 router = APIRouter(prefix="/api/auth", tags=["Auth"])
 LOGGER = logging.getLogger(__name__)
@@ -97,45 +97,29 @@ def _issue_email_token(db: Session, email: str, token_type: str) -> str:
     return code
 
 
-def _should_auto_verify() -> bool:
-    """Pilot escape hatch: when PILOT_AUTO_VERIFY is set, new owners are
-    marked verified on register so they can operate without SMTP."""
-    return bool(get_settings().PILOT_AUTO_VERIFY)
-
-
-def _should_return_code() -> bool:
-    """Return verification/reset codes inline when the operator opted in and
-    SMTP is not configured. Never leak codes when a real mailer exists."""
-    if mailer.configured:
-        return False
-    return bool(get_settings().EXPOSE_AUTH_CODES_WHEN_NO_SMTP)
-
-
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
 def register(payload: RegisterRequest, db: Session = Depends(get_db)):
     existing = db.query(User).filter(User.email.ilike(payload.email)).first()
     if existing:
         raise HTTPException(status_code=400, detail="Ya existe un usuario con ese email")
 
-    auto_verify = _should_auto_verify()
     user = User(
         email=payload.email.lower(),
         password_hash=hash_password(payload.password),
         role=payload.role or "owner",
-        is_verified=auto_verify,
+        is_verified=False,
     )
     db.add(user)
-    db.commit()
-    db.refresh(user)
-    # Create hotel + membership + subscription for the new owner.
+    db.flush()
     get_or_create_hotel_for_owner(db, user.email)
-    db.commit()
-
-    if not auto_verify:
-        code = _issue_email_token(db, payload.email, "email_verification")
+    code = _issue_email_token(db, payload.email, "email_verification")
+    try:
+        send_verification_email(payload.email, code)
         db.commit()
-        if mailer.configured:
-            send_verification_email(payload.email, code)
+        db.refresh(user)
+    except MasterEmailConnectionError as exc:
+        db.rollback()
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     return _build_auth_response(db, user)
 
@@ -156,22 +140,14 @@ def request_verify(payload: RequestCode, db: Session = Depends(get_db)):
         return {"sent": True}
 
     code = _issue_email_token(db, payload.email, "email_verification")
-    db.commit()
-    if mailer.configured:
-        LOGGER.info("request_verify smtp configured send attempted email=%s", _mask_email(key))
-        if not send_verification_email(payload.email, code):
-            LOGGER.warning("Verification email send failed during request_verify")
-            raise HTTPException(status_code=502, detail="No se pudo enviar el email de verificacion")
-    else:
-        LOGGER.info(
-            "request_verify smtp not configured fallback used email=%s code_exposed=%s",
-            _mask_email(key),
-            _should_return_code(),
-        )
-    response: dict = {"sent": True}
-    if _should_return_code():
-        response["code"] = code
-    return response
+    try:
+        send_verification_email(payload.email, code)
+        db.commit()
+    except MasterEmailConnectionError as exc:
+        db.rollback()
+        LOGGER.warning("request_verify mail delivery failed email=%s error=%s", _mask_email(key), exc)
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return {"sent": True}
 
 
 @router.post("/login", response_model=AuthResponse)
@@ -207,9 +183,13 @@ def verify_email(payload: VerifyCodeRequest, db: Session = Depends(get_db)):
     user.is_verified = True
     user.last_login = datetime.now(timezone.utc)
     db.add(user)
+    try:
+        send_verification_success_email(user.email)
+    except MasterEmailConnectionError as exc:
+        db.rollback()
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     db.commit()
     db.refresh(user)
-    send_verification_success_email(user.email)
     return _build_auth_response(db, user)
 
 
@@ -227,11 +207,12 @@ def request_reset(payload: RequestCode, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email.ilike(payload.email)).first()
     if user and user.is_verified:
         code = _issue_email_token(db, payload.email, "password_reset")
-        db.commit()
-        if mailer.configured:
+        try:
             send_reset_password_email(payload.email, code)
-        if _should_return_code():
-            response["code"] = code
+            db.commit()
+        except MasterEmailConnectionError as exc:
+            db.rollback()
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
     return response
 
 

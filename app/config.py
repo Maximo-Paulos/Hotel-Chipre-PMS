@@ -45,6 +45,7 @@ class Settings(BaseSettings):
     GMAIL_CLIENT_ID: str = ""
     GMAIL_CLIENT_SECRET: str = ""
     GMAIL_REDIRECT_URI: str = "http://127.0.0.1:8040/api/integrations/oauth/gmail/callback"
+    MASTER_EMAIL_GMAIL_REDIRECT_URI: str = "http://127.0.0.1:8040/api/master-admin/email/oauth/gmail/callback"
     MERCADOPAGO_WEBHOOK_SECRET: str = ""
 
     # OTA Credentials
@@ -60,7 +61,7 @@ class Settings(BaseSettings):
     DEFAULT_DEPOSIT_PERCENT: float = 30.0
     HOTEL_NAME: str = "Hotel PMS"
     HOTEL_TIMEZONE: str = "America/Argentina/Buenos_Aires"
-    MANAGER_PIN: str = "1234"
+    MASTER_ADMIN_PIN: str = "1234"
 
     # Gemma / policy-learning assistant
     GEMMA_ENABLED: bool = False
@@ -76,24 +77,6 @@ class Settings(BaseSettings):
     GEMMA_MAX_INPUT_CHARS: int = 4000
     GEMMA_RATE_LIMIT_WINDOW_SECONDS: int = 300
     GEMMA_RATE_LIMIT_MAX_MESSAGES: int = 20
-
-    # SMTP / Email
-    SMTP_HOST: str = ""
-    SMTP_PORT: int = 587
-    SMTP_USER: str = ""
-    SMTP_PASS: str = ""
-    SMTP_FROM: str = "Hotel PMS <noreply@example.com>"
-    SMTP_STARTUP_NOTIFY: bool = False
-
-    # Pilot / onboarding flags
-    # Opt-in: when True new users are auto-verified on register so the piloto
-    # can proceed without a working outbound-email channel.
-    PILOT_AUTO_VERIFY: bool = False
-    # Opt-in: when True AND SMTP is not configured, password-reset and
-    # verification endpoints include the code in the JSON response so the UI
-    # can complete the flow without a mailbox. Intended for trusted pilot
-    # users only; leave False when exposing the deployment publicly.
-    EXPOSE_AUTH_CODES_WHEN_NO_SMTP: bool = False
 
     # Auth
     JWT_SECRET: str = "change-me"
@@ -179,9 +162,9 @@ def validate_runtime_security(settings: Settings | None = None) -> None:
     ):
         errors.append("ACCESS_TOKEN_SECRET and SIGNED_TOKEN_SECRET must be distinct in production")
 
-    manager_pin = str(runtime_settings.MANAGER_PIN or "").strip()
+    manager_pin = str(runtime_settings.MASTER_ADMIN_PIN or "").strip()
     if not manager_pin or manager_pin == "1234" or len(manager_pin) < 6 or not manager_pin.isdigit():
-        errors.append("MANAGER_PIN must be at least 6 digits and not the default")
+        errors.append("MASTER_ADMIN_PIN must be at least 6 digits and not the default")
 
     try:
         Fernet(runtime_settings.INTEGRATIONS_ENCRYPTION_KEY.encode())
@@ -208,6 +191,7 @@ def validate_runtime_security(settings: Settings | None = None) -> None:
         ("PAYPAL_REDIRECT_URI", runtime_settings.PAYPAL_REDIRECT_URI, paypal_active),
         ("MERCADOPAGO_REDIRECT_URI", runtime_settings.MERCADOPAGO_REDIRECT_URI, mercadopago_active),
         ("GMAIL_REDIRECT_URI", runtime_settings.GMAIL_REDIRECT_URI, gmail_active),
+        ("MASTER_EMAIL_GMAIL_REDIRECT_URI", runtime_settings.MASTER_EMAIL_GMAIL_REDIRECT_URI, gmail_active),
     ]
     for name, value, service_configured in conditional_redirect_uris:
         if service_configured and not _is_public_https_url(value):

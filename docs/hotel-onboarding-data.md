@@ -28,7 +28,7 @@ TODO(owner) confirm additional steps the AI assistant should walk the hotel thro
 - Deposit / cancellation policy (within platform bounds).
 - Payment methods to enable + gateway credentials.
 - OTA channels to connect + credentials.
-- Email sender (SMTP or Gmail OAuth).
+- Email sender (Gmail OAuth per hotel, system mail owned from `/adminpmsmaster`).
 - Legal check-in fields (per jurisdiction).
 - Allocation policy draft review & approval.
 - Subscription plan choice & billing.
@@ -65,7 +65,7 @@ TODO(owner) confirm additional steps the AI assistant should walk the hotel thro
 - Webhook endpoints automatically provisioned per tenant.
 
 ### 3.6 Communications (optional)
-- Email sender: platform SMTP by default, Gmail OAuth per hotel.
+- Email sender: Gmail OAuth per hotel, system mail owned from `/adminpmsmaster`.
 - Transactional templates: TODO(owner) — hotel-editable or platform-wide?
 
 ### 3.7 AI configuration (optional, subject to tier)

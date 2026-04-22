@@ -65,7 +65,6 @@ export function MasterAdminDashboardPage() {
           <MasterStatCard label="Hoteles" value={summary.counts.hotels} helper="Tenants visibles" tone="info" />
           <MasterStatCard label="Activas" value={summary.counts.active_subscriptions} helper="Suscripciones activas" tone="success" />
           <MasterStatCard label="Trialing" value={summary.counts.trialing} helper="En periodo de prueba" />
-          <MasterStatCard label="Comped" value={summary.counts.comped} helper="Override interno" />
           <MasterStatCard label="Past due" value={summary.counts.past_due} helper="Cobranza / gracia" tone="danger" />
         </section>
       )}
@@ -109,12 +108,12 @@ export function MasterAdminDashboardPage() {
                 <dd className="text-white">{summary.policy.allow_trialing ? "Sí" : "No"}</dd>
               </div>
               <div className="flex items-center justify-between">
-                <dt className="text-slate-400">Comped</dt>
-                <dd className="text-white">{summary.policy.allow_comped ? "Sí" : "No"}</dd>
-              </div>
-              <div className="flex items-center justify-between">
                 <dt className="text-slate-400">Exempt hotels</dt>
                 <dd className="text-white">{summary.policy.exempt_hotel_ids.length}</dd>
+              </div>
+              <div className="flex items-center justify-between">
+                <dt className="text-slate-400">Exempt users</dt>
+                <dd className="text-white">{summary.policy.exempt_user_ids.length}</dd>
               </div>
             </dl>
           </div>

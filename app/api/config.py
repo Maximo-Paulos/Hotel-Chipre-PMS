@@ -6,9 +6,9 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies.auth import AuthContext, require_roles
-from app.config import get_settings
 from app.models.hotel_config import HotelConfiguration
 from app.schemas.hotel_config import HotelConfigRead, HotelConfigUpdate
+from app.services.email_service import mailer
 from app.services.payment_service import get_hotel_config
 
 router = APIRouter(prefix="/api/config", tags=["Hotel Configuration"])
@@ -39,13 +39,13 @@ def update_configuration(
     return config
 
 
-@router.get("/smtp")
-def smtp_status(context: AuthContext = Depends(require_roles("owner", "co_owner"))):
+@router.get("/email/status")
+def email_status(context: AuthContext = Depends(require_roles("owner", "co_owner"))):
     """
-    Lightweight status so the frontend can check if SMTP is configured.
-    Returns only whether it is configured — never exposes host or credentials.
+    Lightweight status so the frontend can check the active system email provider.
+    Returns only whether it is configured — never exposes credentials.
     """
-    settings = get_settings()
     return {
-        "configured": bool(settings.SMTP_HOST and settings.SMTP_USER and settings.SMTP_PASS),
+        "configured": mailer.configured,
+        "provider": mailer.provider_name,
     }

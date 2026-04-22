@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
 
 from app.database import Base
@@ -80,6 +80,7 @@ class MasterBillingPolicy(Base):
     allow_comped = Column(Boolean, nullable=False, default=True)
     allow_past_due_grace = Column(Boolean, nullable=False, default=False)
     exempt_hotel_ids_json = Column(Text, nullable=False, default="[]")
+    exempt_user_ids_json = Column(Text, nullable=False, default="[]")
     notes = Column(Text, nullable=True)
     updated_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow)
@@ -89,6 +90,46 @@ class MasterBillingPolicy(Base):
 
     __table_args__ = (
         Index("ix_master_billing_policies_policy_key", "policy_key"),
+    )
+
+
+class MasterSystemEmailConnection(Base):
+    __tablename__ = "master_system_email_connections"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    connection_key = Column(String(50), nullable=False, unique=True, default="system")
+    provider = Column(String(50), nullable=False, default="gmail")
+    status = Column(String(20), nullable=False, default="disconnected")
+    auth_payload = Column(JSON, nullable=True)
+    connected_account_email = Column(String(255), nullable=True)
+    connected_account_name = Column(String(255), nullable=True)
+    last_checked_at = Column(DateTime(timezone=True), nullable=True)
+    last_error = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_utcnow)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow)
+
+    __table_args__ = (
+        Index("ix_master_system_email_connections_connection_key", "connection_key", unique=True),
+    )
+
+
+class MasterStripeSettings(Base):
+    __tablename__ = "master_stripe_settings"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    config_key = Column(String(50), nullable=False, unique=True, default="system")
+    enabled = Column(Boolean, nullable=False, default=False)
+    auth_payload = Column(JSON, nullable=True)
+    account_id = Column(String(120), nullable=True)
+    account_name = Column(String(255), nullable=True)
+    webhook_secret_configured = Column(Boolean, nullable=False, default=False)
+    last_checked_at = Column(DateTime(timezone=True), nullable=True)
+    last_error = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_utcnow)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow)
+
+    __table_args__ = (
+        Index("ix_master_stripe_settings_config_key", "config_key", unique=True),
     )
 
 

@@ -298,7 +298,7 @@ Resolved (partial) 2026-04-16 via P-B revision. Tier exposure in §4.
 - **OTA — available to all tiers**: Booking (inbound), Expedia (inbound). Despegar (adapter exists in code) — TODO(owner) confirm launch inclusion. OTA outbound remains post-launch.
 - **Payments — available to all tiers**: MercadoPago, PayPal, cash, bank transfer, other manual methods.
 - **Payments — `pro` / `ultra` only**: Stripe (card processing). Card brands (Visa / Mastercard / Amex / Discover / etc.) are whatever the Stripe merchant account supports for the hotel's geography — **not** modeled as separate product integrations.
-- **Email**: SMTP + Gmail OAuth per hotel.
+- **Email**: Gmail OAuth per hotel, plus owner-managed system mail for auth and transaccional system flows.
 - **Future**: channel manager, accounting export, housekeeping app.
 
 Notes:

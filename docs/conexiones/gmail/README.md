@@ -9,6 +9,7 @@ Separar dos correos dentro del producto:
    - Recuperacion de acceso
    - Invitaciones al staff
    - Avisos propios del sistema
+   - Este correo del sistema se conecta desde `/adminpmsmaster` con Gmail OAuth.
 
 2. **Correo del hotel**
    - Envio de links de pago
@@ -28,6 +29,7 @@ Hay dos decisiones distintas:
    - Lo usamos nosotros como plataforma.
    - Reemplaza al Gmail personal que hoy sirve para pruebas.
    - Envia: verificacion de cuenta, recuperacion de acceso, invitaciones y avisos del sistema.
+   - El flujo activo no usa SMTP ni app passwords; se conecta desde `/adminpmsmaster`.
 
 2. **App OAuth de Google de PMS Paulus**
    - Tambien la preparamos nosotros una sola vez.
@@ -117,15 +119,7 @@ Esto es importante para reputacion de envio y para que Google y otros proveedore
 
 ### 3. Cargar el correo oficial de PMS Paulus en el sistema
 
-Cuando se reemplace el Gmail personal por el correo oficial, actualizar en produccion:
-
-- `SMTP_HOST`
-- `SMTP_PORT`
-- `SMTP_USER`
-- `SMTP_PASS`
-- `SMTP_FROM`
-
-Luego validar manualmente:
+Cuando se conecte la cuenta oficial, validar manualmente:
 
 - envio de verificacion
 - envio de reset de contrasena
@@ -358,7 +352,7 @@ Antes de vender el sistema:
 - [ ] configurar SPF
 - [ ] configurar DKIM
 - [ ] configurar DMARC
-- [ ] reemplazar `SMTP_*` por credenciales del correo oficial
+- [ ] conectar Gmail del sistema desde `/adminpmsmaster`
 - [ ] probar verificacion, reset e invitaciones
 
 #### Google Cloud / OAuth

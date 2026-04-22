@@ -31,10 +31,8 @@ class BillingPolicyUpdateRequest(BaseModel):
     enabled: bool = True
     allow_active: bool = True
     allow_trialing: bool = True
-    allow_demo: bool = True
-    allow_comped: bool = True
-    allow_past_due_grace: bool = False
     exempt_hotel_ids: list[int] = Field(default_factory=list)
+    exempt_user_ids: list[int] = Field(default_factory=list)
     notes: str | None = None
 
 
@@ -50,8 +48,38 @@ class EmailTestRequest(BaseModel):
     body: str = Field(min_length=1, max_length=10_000)
 
 
-class StripeWebhookConfigPayload(BaseModel):
+class MasterEmailStatusPayload(BaseModel):
     configured: bool
-    secret_source: str
-    tolerance_seconds: int
+    status: str
+    provider: str
+    connected_account_email: EmailStr | None = None
+    connected_account_name: str | None = None
+    last_checked_at: datetime | None = None
+    last_error: str | None = None
+    updated_at: datetime | None = None
+
+
+class MasterEmailConnectRequest(BaseModel):
+    pass
+
+
+class MasterEmailConnectResponse(BaseModel):
+    redirect_url: str | None = None
+    status: str
+
+
+class MasterStripeConfigPayload(BaseModel):
+    configured: bool
+    enabled: bool
+    account_id: str | None = None
+    account_name: str | None = None
+    webhook_secret_configured: bool
+    last_checked_at: datetime | None = None
+    last_error: str | None = None
+
+
+class MasterStripeConnectRequest(BaseModel):
+    stripe_secret_key: str = Field(min_length=1)
+    webhook_secret: str | None = None
+    enabled: bool = True
 

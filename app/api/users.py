@@ -15,6 +15,7 @@ from app.schemas.auth import UserInfo
 from app.services.security import hash_password, create_signed_token
 from app.adapters.rate_limiter import invite_limiter
 from app.config import get_settings
+from app.master_admin.email_provider import MasterEmailConnectionError
 from app.services.email_service import mailer
 from app.models.hotel_config import HotelConfiguration
 
@@ -163,7 +164,10 @@ def invite_user(
         f"Si no esperabas este correo, podés ignorarlo."
     )
     if mailer.configured:
-        mailer.send(user.email, subj, body)
+        try:
+            mailer.send(user.email, subj, body)
+        except MasterEmailConnectionError:
+            pass
 
     return InviteResponse(
         user=_membership_user_info(user, membership.role if membership else role),

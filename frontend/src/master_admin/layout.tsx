@@ -6,8 +6,8 @@ import { MasterAdminSessionProvider, useMasterAdminSession } from "./session";
 const navItems = [
   { to: "/adminpmsmaster/dashboard", label: "Dashboard" },
   { to: "/adminpmsmaster/billing", label: "Billing Policy" },
-  { to: "/adminpmsmaster/email", label: "Email Adapter" },
-  { to: "/adminpmsmaster/stripe", label: "Stripe Base" },
+  { to: "/adminpmsmaster/email", label: "System Email" },
+  { to: "/adminpmsmaster/stripe", label: "Stripe Owner" },
   { to: "/adminpmsmaster/audit", label: "Audit Log" }
 ];
 
