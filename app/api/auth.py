@@ -29,6 +29,7 @@ from app.services.email_service import (
     send_verification_success_email,
 )
 from app.master_admin.email_provider import MasterEmailConnectionError
+from app.services import onboarding_service
 from app.services.hotel_service import get_or_create_hotel_for_owner, get_memberships_for_user
 from app.services.security import create_access_token, hash_password, verify_password
 from app.dependencies.auth import get_current_user
@@ -53,6 +54,33 @@ def _mask_email(email: str) -> str:
     return f"{masked_local}@{domain}"
 
 
+def _pick_default_hotel_id(db: Session, hotel_ids: list[int]) -> int:
+    """
+    Prefer a hotel whose onboarding is already complete.
+
+    When a user belongs to multiple hotels, the auth response must not pick an
+    arbitrary membership, because that can land the user in an unfinished hotel
+    and send them to onboarding even if another active hotel is operational.
+    """
+
+    completed_hotels: list[int] = []
+    fallback_hotels: list[int] = []
+    for hotel_id in hotel_ids:
+        try:
+            status = onboarding_service.get_status(db, hotel_id=hotel_id)
+        except Exception:
+            fallback_hotels.append(hotel_id)
+            continue
+        if status.get("completed"):
+            completed_hotels.append(hotel_id)
+        else:
+            fallback_hotels.append(hotel_id)
+
+    if completed_hotels:
+        return completed_hotels[0]
+    return fallback_hotels[0]
+
+
 def _build_auth_response(db: Session, user: User, requested_hotel_id: int | None = None) -> AuthResponse:
     memberships = get_memberships_for_user(db, user.id)
     memberships_by_hotel = {m.hotel_id: m for m in memberships if m.status == "active"}
@@ -61,10 +89,10 @@ def _build_auth_response(db: Session, user: User, requested_hotel_id: int | None
             status_code=403,
             detail="La cuenta no tiene acceso a ningun hotel activo. Pedile al owner que te invite nuevamente.",
         )
-    hotel_ids = list(memberships_by_hotel.keys())
+    hotel_ids = sorted(memberships_by_hotel.keys())
     if requested_hotel_id is not None and requested_hotel_id not in memberships_by_hotel:
         raise HTTPException(status_code=403, detail="No tenes acceso al hotel solicitado")
-    hotel_id = requested_hotel_id if requested_hotel_id is not None else hotel_ids[0]
+    hotel_id = requested_hotel_id if requested_hotel_id is not None else _pick_default_hotel_id(db, hotel_ids)
     active_membership = memberships_by_hotel[hotel_id]
     token = create_access_token(
         subject=user.id,

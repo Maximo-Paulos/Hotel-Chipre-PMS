@@ -14,7 +14,21 @@ import app.main as main_module
 import app.models  # noqa: F401
 from app.config import get_settings
 from app.database import Base, get_db
+from app.models.hotel_config import HotelConfiguration
+from app.models.hotel_membership import HotelMembership
 from app.models.user import User
+from app.schemas.onboarding import (
+    DepositPolicyPayload,
+    HotelIdentityPayload,
+    OTAChannelsPayload,
+    OwnerPayload,
+    PaymentMethodsPayload,
+    RoomInput,
+    StaffMember,
+    SubscriptionChoicePayload,
+)
+from app.schemas.room import RoomCategoryCreate
+from app.services import onboarding_service
 from app.services.security import hash_password
 
 
@@ -92,6 +106,81 @@ def _auth_headers(auth_payload: dict[str, object]) -> dict[str, str]:
         "X-Hotel-Id": str(auth_payload["hotel_id"]),
         "X-User-Id": auth_payload["user"]["email"],
     }
+
+
+def _complete_onboarding(db, hotel_id: int, owner_email: str) -> None:
+    onboarding_service.set_owner(
+        db,
+        OwnerPayload(name="Ana Manager", email=owner_email, phone="+54 11 5555 1111", role="Owner"),
+        hotel_id=hotel_id,
+    )
+    onboarding_service.set_hotel_identity(
+        db,
+        HotelIdentityPayload(
+            name=f"Hotel {hotel_id}",
+            timezone="America/Argentina/Buenos_Aires",
+            currency="ARS",
+            languages=["es", "en"],
+            jurisdiction_code="AR",
+        ),
+        hotel_id=hotel_id,
+    )
+    onboarding_service.upsert_categories(
+        db,
+        [
+            RoomCategoryCreate(
+                name="Standard",
+                code=f"STD-{hotel_id}",
+                base_price_per_night=100.0,
+                max_occupancy=2,
+                amenities="wifi",
+            )
+        ],
+        hotel_id=hotel_id,
+    )
+    onboarding_service.upsert_rooms(
+        db,
+        [RoomInput(room_number=f"{hotel_id}01", floor=1, category_code=f"STD-{hotel_id}")],
+        hotel_id=hotel_id,
+    )
+    onboarding_service.set_deposit_policy(
+        db,
+        DepositPolicyPayload(
+            deposit_percentage=30,
+            free_cancellation_hours=48,
+            cancellation_penalty_percentage=0,
+        ),
+        hotel_id=hotel_id,
+    )
+    onboarding_service.upsert_payment_methods(
+        db,
+        PaymentMethodsPayload(
+            mercado_pago={"enabled": True, "credentials": {"account_id": "mp-user"}},
+            paypal={"enabled": False, "credentials": {}},
+            stripe={"enabled": False, "credentials": {}},
+        ),
+        hotel_id=hotel_id,
+    )
+    onboarding_service.upsert_ota_channels(
+        db,
+        OTAChannelsPayload(
+            booking={"enabled": True, "credentials": {"account_id": "booking-user"}},
+            expedia={"enabled": False, "credentials": {}},
+            despegar={"enabled": False, "credentials": {}},
+        ),
+        hotel_id=hotel_id,
+    )
+    onboarding_service.set_subscription_choice(
+        db,
+        SubscriptionChoicePayload(plan_code="pro", start_trial=True),
+        hotel_id=hotel_id,
+    )
+    onboarding_service.store_staff(
+        db,
+        [StaffMember(name="Lucia", role="Front desk", email="lucia@example.com")],
+        hotel_id=hotel_id,
+    )
+    onboarding_service.finish_onboarding(db, hotel_id=hotel_id, actor_role="owner")
 
 
 def _configure_resend(monkeypatch: pytest.MonkeyPatch, sent_payloads: list[dict] | None = None):
@@ -203,6 +292,49 @@ def test_unverified_users_cannot_use_operational_endpoints(client_and_db, fixed_
 
     allowed = client.get("/api/onboarding/status", headers=headers)
     assert allowed.status_code == 200, allowed.text
+
+
+def test_login_prefers_a_completed_hotel_when_multiple_memberships_exist(client_and_db, fixed_code_patch):
+    client, db, _session_factory = client_and_db
+
+    user = User(
+        email="multi@example.com",
+        password_hash=hash_password("Demo123!"),
+        role="owner",
+        is_verified=True,
+        is_active=True,
+    )
+    db.add(user)
+    db.flush()
+
+    db.add_all(
+        [
+            HotelConfiguration(id=1, owner_email="multi@example.com", hotel_name="Pending Hotel", subscription_active=True),
+            HotelConfiguration(id=2, owner_email="multi@example.com", hotel_name="Ready Hotel", subscription_active=True),
+        ]
+    )
+    db.flush()
+    db.add_all(
+        [
+            HotelMembership(hotel_id=1, user_id=user.id, role="owner", status="active"),
+            HotelMembership(hotel_id=2, user_id=user.id, role="owner", status="active"),
+        ]
+    )
+    db.flush()
+
+    _complete_onboarding(db, 2, "multi@example.com")
+    db.commit()
+
+    login = client.post("/api/auth/login", json={"email": "multi@example.com", "password": "Demo123!"})
+    assert login.status_code == 200, login.text
+    payload = login.json()
+    assert payload["hotel_id"] == 2
+    assert payload["hotel_ids"] == [1, 2]
+
+    headers = _auth_headers(payload)
+    status = client.get("/api/onboarding/status", headers=headers)
+    assert status.status_code == 200, status.text
+    assert status.json()["completed"] is True
 
 
 def test_legacy_public_email_endpoints_are_retired(client_and_db):
