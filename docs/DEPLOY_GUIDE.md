@@ -95,11 +95,13 @@ En el dashboard del servicio → **Environment** → agregar cada variable:
 | `APP_BASE_URL` | `https://hotel-chipre-pms-api.onrender.com` | La URL que Render te asigna al servicio |
 | `CORS_ORIGINS` | `https://hotel-chipre.vercel.app` | La URL de tu app en Vercel (paso 4) |
 | `FRONTEND_URL` | `https://hotel-chipre.vercel.app` | La misma URL de Vercel (para links en emails) |
+| `MASTER_ADMIN_EMAIL` | `owner-admin@tu-dominio.com` | Usuario bootstrap del panel master |
+| `MASTER_ADMIN_PASSWORD` | `...` | Contraseña bootstrap del panel master |
 | `MASTER_ADMIN_PIN` | `XXXXXX` | Mínimo 6 dígitos, NO usar 1234 |
 | `INTEGRATIONS_ENCRYPTION_KEY` | *(output del comando de abajo)* | `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` |
-| `MASTER_EMAIL_GMAIL_REDIRECT_URI` | `https://[TU-SERVICIO].onrender.com/api/master-admin/email/oauth/gmail/callback` | Callback OAuth del mail del sistema |
-| `GMAIL_CLIENT_ID` | `...` | Google Cloud OAuth client |
-| `GMAIL_CLIENT_SECRET` | `...` | Google Cloud OAuth client |
+| `GOOGLE_OAUTH_REDIRECT_URI` | `https://[TU-SERVICIO].onrender.com/api/master-admin/email/oauth/gmail/callback` | Callback OAuth del mail del sistema |
+| `GOOGLE_OAUTH_CLIENT_ID` | `...` | Google Cloud OAuth client |
+| `GOOGLE_OAUTH_CLIENT_SECRET` | `...` | Google Cloud OAuth client |
 | `GEMMA_ENABLED` | `false` | *(ya en render.yaml)* |
 
 > **El mail del sistema ya no usa SMTP ni app passwords.** Se conecta desde `/adminpmsmaster` con Gmail OAuth y el backend persiste esa conexión de forma segura.
@@ -191,11 +193,13 @@ DATABASE_URL                = postgresql+psycopg2://postgres:[PASS]@db.[REF].sup
 APP_BASE_URL                = https://[TU-SERVICIO].onrender.com
 CORS_ORIGINS                = https://[TU-APP].vercel.app
 FRONTEND_URL                = https://[TU-APP].vercel.app
-MASTER_ADMIN_PIN            = [MINIMO 6 DIGITOS, NO 1234]
+MASTER_ADMIN_EMAIL           = [EMAIL DEL OWNER MASTER]
+MASTER_ADMIN_PASSWORD        = [PASSWORD DEL OWNER MASTER]
+MASTER_ADMIN_PIN             = [MINIMO 6 DIGITOS, NO 1234]
 INTEGRATIONS_ENCRYPTION_KEY = [OUTPUT DE: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"]
-MASTER_EMAIL_GMAIL_REDIRECT_URI = https://[TU-SERVICIO].onrender.com/api/master-admin/email/oauth/gmail/callback
-GMAIL_CLIENT_ID             = [OAuth client id de Google]
-GMAIL_CLIENT_SECRET         = [OAuth client secret de Google]
+GOOGLE_OAUTH_REDIRECT_URI   = https://[TU-SERVICIO].onrender.com/api/master-admin/email/oauth/gmail/callback
+GOOGLE_OAUTH_CLIENT_ID      = [OAuth client id de Google]
+GOOGLE_OAUTH_CLIENT_SECRET  = [OAuth client secret de Google]
 ```
 
 Variables que **vos pegás manualmente** en el dashboard de Vercel:

@@ -121,6 +121,9 @@ def _seed_subscription(db, hotel_id: int, status: str = "suspended") -> Subscrip
 
 
 def _configure_gmail(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("GOOGLE_OAUTH_CLIENT_ID", "client-id")
+    monkeypatch.setenv("GOOGLE_OAUTH_CLIENT_SECRET", "client-secret")
+    monkeypatch.setenv("GOOGLE_OAUTH_REDIRECT_URI", "https://example.com/api/master-admin/email/oauth/gmail/callback")
     monkeypatch.setenv("GMAIL_CLIENT_ID", "client-id")
     monkeypatch.setenv("GMAIL_CLIENT_SECRET", "client-secret")
     monkeypatch.setenv("MASTER_EMAIL_GMAIL_REDIRECT_URI", "https://example.com/api/master-admin/email/oauth/gmail/callback")
@@ -158,6 +161,32 @@ def _seed_master_email(db, monkeypatch: pytest.MonkeyPatch):
     _configure_gmail(monkeypatch)
     connect_system_email(db, "auth-code-123")
     db.commit()
+
+
+def test_master_login_bootstraps_env_account(master_client, monkeypatch):
+    client, SessionLocal = master_client
+    monkeypatch.setenv("MASTER_ADMIN_EMAIL", "owner-admin@example.com")
+    monkeypatch.setenv("MASTER_ADMIN_PASSWORD", "Secret123!")
+    monkeypatch.setenv("MANAGER_PIN", "654321")
+    get_settings.cache_clear()
+
+    response = client.post(
+        "/api/master-admin/auth/login",
+        json={"email": "owner-admin@example.com", "password": "Secret123!", "pin": "654321"},
+    )
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["user"]["role"] == "platform_admin"
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.email == "owner-admin@example.com").first()
+        assert user is not None
+        assert user.role == "platform_admin"
+        assert user.is_active is True
+        assert user.is_verified is True
+    finally:
+        db.close()
 
 
 def test_master_login_sets_cookie_and_hydrates_me(master_client, monkeypatch):

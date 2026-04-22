@@ -569,7 +569,7 @@ def build_redirect_url(
     if integration.provider == "gmail":
         if not settings.GMAIL_CLIENT_ID or not settings.GMAIL_CLIENT_SECRET:
             raise ValueError(
-                "OAuth de Gmail no esta configurado en este entorno. Faltan GMAIL_CLIENT_ID y/o GMAIL_CLIENT_SECRET en la app del PMS."
+                "OAuth de Gmail no esta configurado en este entorno. Faltan GOOGLE_OAUTH_CLIENT_ID y/o GOOGLE_OAUTH_CLIENT_SECRET en la app del PMS."
             )
         scopes = integration.scopes or f"{' '.join(GOOGLE_IDENTITY_SCOPES)} {GMAIL_SEND_SCOPE}"
         target_redirect = redirect_uri or settings.GMAIL_REDIRECT_URI

@@ -60,10 +60,10 @@ def _get_connection(db: Session, *, create: bool = False) -> MasterSystemEmailCo
 def _build_authorize_url(*, state: str) -> str:
     settings = get_settings()
     if not settings.GMAIL_CLIENT_ID or not settings.GMAIL_CLIENT_SECRET:
-        raise MasterEmailConnectionError("Faltan GMAIL_CLIENT_ID y/o GMAIL_CLIENT_SECRET en el backend.")
+        raise MasterEmailConnectionError("Faltan GOOGLE_OAUTH_CLIENT_ID y/o GOOGLE_OAUTH_CLIENT_SECRET en el backend.")
     redirect_uri = settings.MASTER_EMAIL_GMAIL_REDIRECT_URI
     if not redirect_uri:
-        raise MasterEmailConnectionError("Falta MASTER_EMAIL_GMAIL_REDIRECT_URI en el backend.")
+        raise MasterEmailConnectionError("Falta GOOGLE_OAUTH_REDIRECT_URI en el backend.")
     scopes = " ".join(GOOGLE_IDENTITY_SCOPES + [GMAIL_SEND_SCOPE])
     params = urlencode(
         {

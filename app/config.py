@@ -4,6 +4,7 @@ Uses pydantic-settings for environment variable management.
 """
 import os
 from cryptography.fernet import Fernet
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 
@@ -42,10 +43,13 @@ class Settings(BaseSettings):
     MERCADOPAGO_CLIENT_SECRET: str = ""
     PAYPAL_REDIRECT_URI: str = "http://127.0.0.1:8040/api/integrations/oauth/paypal/callback"
     MERCADOPAGO_REDIRECT_URI: str = "http://127.0.0.1:8040/api/integrations/oauth/mercadopago/callback"
-    GMAIL_CLIENT_ID: str = ""
-    GMAIL_CLIENT_SECRET: str = ""
+    GMAIL_CLIENT_ID: str = Field(default="", validation_alias=AliasChoices("GMAIL_CLIENT_ID", "GOOGLE_OAUTH_CLIENT_ID"))
+    GMAIL_CLIENT_SECRET: str = Field(default="", validation_alias=AliasChoices("GMAIL_CLIENT_SECRET", "GOOGLE_OAUTH_CLIENT_SECRET"))
     GMAIL_REDIRECT_URI: str = "http://127.0.0.1:8040/api/integrations/oauth/gmail/callback"
-    MASTER_EMAIL_GMAIL_REDIRECT_URI: str = "http://127.0.0.1:8040/api/master-admin/email/oauth/gmail/callback"
+    MASTER_EMAIL_GMAIL_REDIRECT_URI: str = Field(
+        default="http://127.0.0.1:8040/api/master-admin/email/oauth/gmail/callback",
+        validation_alias=AliasChoices("MASTER_EMAIL_GMAIL_REDIRECT_URI", "GOOGLE_OAUTH_REDIRECT_URI"),
+    )
     MERCADOPAGO_WEBHOOK_SECRET: str = ""
 
     # OTA Credentials
@@ -61,7 +65,15 @@ class Settings(BaseSettings):
     DEFAULT_DEPOSIT_PERCENT: float = 30.0
     HOTEL_NAME: str = "Hotel PMS"
     HOTEL_TIMEZONE: str = "America/Argentina/Buenos_Aires"
-    MASTER_ADMIN_PIN: str = "1234"
+    MASTER_ADMIN_EMAIL: str = ""
+    MASTER_ADMIN_PASSWORD: str = ""
+    MASTER_ADMIN_PIN: str = Field(default="1234", validation_alias=AliasChoices("MASTER_ADMIN_PIN", "MANAGER_PIN"))
+    MASTER_ADMIN_COOKIE_SECURE: bool | None = None
+    MASTER_ADMIN_SESSION_SECRET: str = ""
+    MASTER_ADMIN_SESSION_TTL_MINUTES: int = 8 * 60
+    MASTER_ADMIN_IDLE_TTL_MINUTES: int = 8 * 60
+    MASTER_ADMIN_MAX_ATTEMPTS: int = 5
+    MASTER_ADMIN_LOCKOUT_MINUTES: int = 15
 
     # Gemma / policy-learning assistant
     GEMMA_ENABLED: bool = False
