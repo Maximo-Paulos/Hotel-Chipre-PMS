@@ -8,6 +8,7 @@ import {
   type ReservationSource,
   type ReservationStatus
 } from "../../api/reservations";
+import { type Guest } from "../../api/guests";
 import { checkRoomAvailability, type RoomAvailabilityResponse } from "../../api/rooms";
 import { type PaymentMethod } from "../../api/payments";
 import { useCategories } from "../../hooks/useCategories";
@@ -25,7 +26,7 @@ import { useRooms } from "../../hooks/useRooms";
 import { useSubscriptionStatus } from "../../hooks/useSubscription";
 import { useSession } from "../../state/session";
 import { formatMoney, normalizeCurrencyCode } from "../../utils/currency";
-import StatCard from "../../components/StatCard";
+import ReservationStatCard from "../../components/StatCard";
 
 type FormState = {
   guest_id: string;
@@ -299,7 +300,7 @@ export function ReservationsPage() {
           email: guestForm.email.trim() || undefined,
           phone: guestForm.phone.trim() || undefined,
           terms_accepted: true
-        } as any);
+        });
         guestIdNum = newGuest.id;
         setFormValues((prev) => ({ ...prev, guest_id: String(newGuest.id) }));
         setGuestForm({ first_name: "", last_name: "", email: "", phone: "" });
@@ -413,7 +414,7 @@ export function ReservationsPage() {
 
   const handleCreateGuest = () => {
     guestMutation.mutate(guestForm, {
-      onSuccess: (guest: any) => {
+      onSuccess: (guest: Guest) => {
         setFormValues((prev) => ({ ...prev, guest_id: String(guest.id) }));
         setGuestForm({ first_name: "", last_name: "", email: "", phone: "" });
         showToast("success", "Huésped creado y asignado");
@@ -625,10 +626,10 @@ export function ReservationsPage() {
       </header>
 
       <div className="grid gap-4 md:grid-cols-4">
-        <StatCard label="Activas" value={totals.active} helper="Pendientes + check-in" />
-        <StatCard label="Check-ins hoy" value={totals.checkInsToday} helper={today} />
-        <StatCard label="Checkouts hoy" value={totals.checkOutsToday} helper={today} />
-        <StatCard label="Canceladas" value={totals.cancelled} helper="Últimos 7 días" />
+        <ReservationStatCard label="Activas" value={totals.active} helper="Pendientes + check-in" />
+        <ReservationStatCard label="Check-ins hoy" value={totals.checkInsToday} helper={today} />
+        <ReservationStatCard label="Checkouts hoy" value={totals.checkOutsToday} helper={today} />
+        <ReservationStatCard label="Canceladas" value={totals.cancelled} helper="Últimos 7 días" />
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">

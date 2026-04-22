@@ -1,4 +1,3 @@
-import React from "react";
 import type { SubscriptionPlan } from "../api/subscription";
 
 type CheckoutStubProps = {

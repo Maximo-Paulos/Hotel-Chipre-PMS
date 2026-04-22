@@ -181,7 +181,19 @@ export function OnboardingWizard() {
     if (status.staff?.length && !staff.length) {
       setStaffState(status.staff);
     }
-  }, [session.email, status]);
+  }, [
+    categories.length,
+    identityForm.name,
+    otaForm,
+    ownerForm.name,
+    paymentsForm,
+    policyForm.deposit_percentage,
+    rooms.length,
+    session.email,
+    staff.length,
+    status,
+    subscriptionForm.plan_code
+  ]);
 
   const refreshCache = (data: OnboardingStatus) =>
     queryClient.setQueryData(onboardingStatusKey(session.hotelId, session.userId), data);

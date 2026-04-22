@@ -17,8 +17,8 @@ const statusOptions: RoomStatus[] = ["available", "occupied", "cleaning"];
 
 export function RoomsPage() {
   const { roomsQuery, categoriesQuery, updateStatusMutation } = useRooms();
-  const rooms = roomsQuery.data || [];
-  const categories = categoriesQuery.data || [];
+  const rooms = useMemo(() => roomsQuery.data || [], [roomsQuery.data]);
+  const categories = useMemo(() => categoriesQuery.data || [], [categoriesQuery.data]);
   const [pendingRoom, setPendingRoom] = useState<number | null>(null);
   const { data: subscription } = useSubscriptionStatus();
 

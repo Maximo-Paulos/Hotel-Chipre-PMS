@@ -1,5 +1,5 @@
 ﻿import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 
 import { getHotelConfig, updateHotelConfig, type HotelConfig } from "../../api/config";
 import {
@@ -10,7 +10,6 @@ import {
   createRoom,
   updateRoom,
   type RoomCategory,
-  type Room,
   type RoomStatus
 } from "../../api/rooms";
 import { useSession } from "../../state/session";
@@ -66,7 +65,7 @@ export function SettingsHotelPage() {
       setForm(data);
       setError(null);
     },
-    onError: (err: any) => setError(err?.message || "No se pudo guardar la configuración")
+    onError: (err: unknown) => setError(err instanceof Error ? err.message : "No se pudo guardar la configuración")
   });
 
   const createCategoryMutation = useMutation({
@@ -76,7 +75,7 @@ export function SettingsHotelPage() {
       setCategoryForm({ name: "", code: "", description: "", base_price_per_night: 0, max_occupancy: 1, amenities: "" });
       setError(null);
     },
-    onError: (err: any) => setError(err?.message || "No se pudo crear la categoría")
+    onError: (err: unknown) => setError(err instanceof Error ? err.message : "No se pudo crear la categoría")
   });
 
   const updateCategoryMutation = useMutation({
@@ -87,7 +86,7 @@ export function SettingsHotelPage() {
       setCategoryEdit({});
       setError(null);
     },
-    onError: (err: any) => setError(err?.message || "No se pudo actualizar la categoría")
+    onError: (err: unknown) => setError(err instanceof Error ? err.message : "No se pudo actualizar la categoría")
   });
 
   const createRoomMutation = useMutation({
@@ -98,7 +97,7 @@ export function SettingsHotelPage() {
       setRoomForm({ room_number: "", floor: 1, category_id: 0, notes: "" });
       setError(null);
     },
-    onError: (err: any) => setError(err?.message || "No se pudo crear la habitación")
+    onError: (err: unknown) => setError(err instanceof Error ? err.message : "No se pudo crear la habitación")
   });
 
   const updateRoomMutation = useMutation({
@@ -110,7 +109,7 @@ export function SettingsHotelPage() {
       setRoomEdit({});
       setError(null);
     },
-    onError: (err: any) => setError(err?.message || "No se pudo actualizar la habitación")
+    onError: (err: unknown) => setError(err instanceof Error ? err.message : "No se pudo actualizar la habitación")
   });
 
   const handleChange = (key: keyof HotelConfig, value: unknown) => setForm((prev) => ({ ...prev, [key]: value }));

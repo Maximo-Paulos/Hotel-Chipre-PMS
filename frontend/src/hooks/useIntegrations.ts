@@ -1,11 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+
 import {
   fetchIntegrations,
   connectIntegration,
   revokeIntegration,
   refreshIntegration,
   finalizeIntegrationOAuth,
-  type IntegrationStatus,
+  type IntegrationStatus
 } from "../api/integrations";
 import { hasValidSession } from "../api/client";
 import { useSession } from "../state/session";
@@ -17,7 +18,7 @@ export const useIntegrations = () => {
   return useQuery<IntegrationStatus>({
     queryKey: [...integrationsKey, session.hotelId, session.userId],
     queryFn: () => fetchIntegrations(session),
-    enabled: hasValidSession(session),
+    enabled: hasValidSession(session)
   });
 };
 
@@ -27,7 +28,7 @@ export const useConnectIntegration = () => {
   return useMutation({
     mutationFn: ({ id, payload }: { id: number; payload?: Record<string, unknown> }) =>
       connectIntegration(id, payload, session),
-    onSuccess: () => client.invalidateQueries({ queryKey: integrationsKey }),
+    onSuccess: () => client.invalidateQueries({ queryKey: integrationsKey })
   });
 };
 
@@ -36,7 +37,7 @@ export const useRevokeIntegration = () => {
   const { session } = useSession();
   return useMutation({
     mutationFn: (id: number) => revokeIntegration(id, session),
-    onSuccess: () => client.invalidateQueries({ queryKey: integrationsKey }),
+    onSuccess: () => client.invalidateQueries({ queryKey: integrationsKey })
   });
 };
 
@@ -45,7 +46,7 @@ export const useRefreshIntegration = () => {
   const { session } = useSession();
   return useMutation({
     mutationFn: (id: number) => refreshIntegration(id, session),
-    onSuccess: () => client.invalidateQueries({ queryKey: integrationsKey }),
+    onSuccess: () => client.invalidateQueries({ queryKey: integrationsKey })
   });
 };
 
@@ -54,6 +55,6 @@ export const useFinalizeIntegrationOAuth = () => {
   const { session } = useSession();
   return useMutation({
     mutationFn: ({ id, code }: { id: number; code: string }) => finalizeIntegrationOAuth(id, code, session),
-    onSuccess: () => client.invalidateQueries({ queryKey: integrationsKey }),
+    onSuccess: () => client.invalidateQueries({ queryKey: integrationsKey })
   });
 };

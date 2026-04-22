@@ -1,10 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
-import { inviteUser, listUsers, revokeUser, updateUserRole } from "../../api/users";
+import { inviteUser, listUsers, revokeUser, updateUserRole, type InvitePayload } from "../../api/users";
 import { type AuthUser } from "../../api/auth";
 import { hasValidSession } from "../../api/client";
 import { useSession } from "../../state/session";
+
+type InviteResponse = {
+  user: AuthUser;
+  invite_token: string;
+  accept_url: string;
+};
 
 const roleLabels: Record<string, string> = {
   owner: "Owner",
@@ -22,7 +28,7 @@ export function SettingsUsersPage() {
     queryFn: () => listUsers(session)
   });
   const inviteMutation = useMutation({
-    mutationFn: (payload: { email: string; role: string; password?: string }) => inviteUser(payload as any, session),
+    mutationFn: (payload: InvitePayload) => inviteUser(payload, session),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["users", session.hotelId] })
   });
   const revokeMutation = useMutation({
@@ -30,11 +36,12 @@ export function SettingsUsersPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["users", session.hotelId] })
   });
   const updateRoleMutation = useMutation({
-    mutationFn: (payload: { userId: number; role: string }) => updateUserRole(payload.userId, payload.role as any, session),
+    mutationFn: (payload: { userId: number; role: InvitePayload["role"] }) =>
+      updateUserRole(payload.userId, payload.role, session),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["users", session.hotelId] })
   });
 
-  const [inviteForm, setInviteForm] = useState({ email: "", role: "manager" });
+  const [inviteForm, setInviteForm] = useState<InvitePayload>({ email: "", role: "manager" });
   const [inviteLink, setInviteLink] = useState<string | null>(null);
 
   const canManage = ["owner", "co_owner"].includes(session.role ?? "");
@@ -74,7 +81,7 @@ export function SettingsUsersPage() {
               type="button"
               onClick={() =>
                 inviteMutation.mutate(inviteForm, {
-                  onSuccess: (res: any) => {
+                  onSuccess: (res: InviteResponse) => {
                     setInviteLink(res.accept_url || res.invite_token || null);
                     setInviteForm({ email: "", role: "manager" });
                   }

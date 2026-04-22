@@ -34,7 +34,7 @@ export function DashboardPage() {
   const { data: reservations = [] } = useReservations({});
   const pendingActionsQuery = usePendingReservationActions(8);
   const { roomsQuery } = useRooms();
-  const rooms = roomsQuery.data || [];
+  const rooms = useMemo(() => roomsQuery.data || [], [roomsQuery.data]);
   const pendingActions = pendingActionsQuery.data || [];
   const criticalPendingActions = pendingActions.filter((item) => item.priority === "critical").length;
 
