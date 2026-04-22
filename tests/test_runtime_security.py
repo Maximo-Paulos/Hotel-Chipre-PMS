@@ -8,6 +8,10 @@ def test_validate_runtime_security_rejects_default_production_secrets():
         MASTER_ADMIN_PIN="1234",
         APP_BASE_URL="http://localhost:8040",
         INTEGRATIONS_ENCRYPTION_KEY="ZGVmYXVsdC1pbnRlZ3JhdGlvbnMta2V5LXNlY3JldA==",
+        EMAIL_PROVIDER="resend",
+        RESEND_API_KEY="",
+        SYSTEM_EMAIL_FROM="Hotel Chipre PMS <noreply@auth.hotels-pms.com>",
+        SYSTEM_EMAIL_REPLY_TO="hotelxpms@gmail.com",
         MERCADOPAGO_WEBHOOK_SECRET="",
     )
 
@@ -33,6 +37,10 @@ def test_validate_runtime_security_rejects_missing_mp_webhook_when_mp_configured
         MASTER_ADMIN_PIN="654321",
         APP_BASE_URL="https://hotel-chipre.example.com",
         INTEGRATIONS_ENCRYPTION_KEY="fRb9jE74bWw5gAKpNwZrl_uCWhsx2Nl7fNL1jK5vLG8=",
+        EMAIL_PROVIDER="resend",
+        RESEND_API_KEY="re_test_key",
+        SYSTEM_EMAIL_FROM="Hotel Chipre PMS <noreply@auth.hotels-pms.com>",
+        SYSTEM_EMAIL_REPLY_TO="hotelxpms@gmail.com",
         MP_ACCESS_TOKEN="TEST-access-token",
         MERCADOPAGO_WEBHOOK_SECRET="",  # missing when MP is configured → error
     )
@@ -54,11 +62,14 @@ def test_validate_runtime_security_ignores_incomplete_optional_integrations():
         MASTER_ADMIN_PIN="654321",
         APP_BASE_URL="https://hotel-chipre.example.com",
         INTEGRATIONS_ENCRYPTION_KEY="fRb9jE74bWw5gAKpNwZrl_uCWhsx2Nl7fNL1jK5vLG8=",
+        EMAIL_PROVIDER="resend",
+        RESEND_API_KEY="re_test_key",
+        SYSTEM_EMAIL_FROM="Hotel Chipre PMS <noreply@auth.hotels-pms.com>",
+        SYSTEM_EMAIL_REPLY_TO="hotelxpms@gmail.com",
         PAYPAL_CLIENT_ID="paypal-client-id-only",
         GMAIL_CLIENT_SECRET="gmail-secret-only",
         MERCADOPAGO_CLIENT_ID="mp-client-id-only",
         GMAIL_REDIRECT_URI="http://127.0.0.1:8040/api/integrations/oauth/gmail/callback",
-        MASTER_EMAIL_GMAIL_REDIRECT_URI="http://127.0.0.1:8040/api/master-admin/email/oauth/gmail/callback",
         PAYPAL_REDIRECT_URI="http://127.0.0.1:8040/api/integrations/oauth/paypal/callback",
         MERCADOPAGO_REDIRECT_URI="http://127.0.0.1:8040/api/integrations/oauth/mercadopago/callback",
     )
@@ -75,10 +86,13 @@ def test_validate_runtime_security_rejects_localhost_redirect_when_service_confi
         MASTER_ADMIN_PIN="654321",
         APP_BASE_URL="https://hotel-chipre.example.com",
         INTEGRATIONS_ENCRYPTION_KEY="fRb9jE74bWw5gAKpNwZrl_uCWhsx2Nl7fNL1jK5vLG8=",
+        EMAIL_PROVIDER="resend",
+        RESEND_API_KEY="re_test_key",
+        SYSTEM_EMAIL_FROM="Hotel Chipre PMS <noreply@auth.hotels-pms.com>",
+        SYSTEM_EMAIL_REPLY_TO="hotelxpms@gmail.com",
         GMAIL_CLIENT_ID="gmail-client-id",
         GMAIL_CLIENT_SECRET="gmail-client-secret",
         GMAIL_REDIRECT_URI="http://127.0.0.1:8040/api/integrations/oauth/gmail/callback",  # localhost → error
-        MASTER_EMAIL_GMAIL_REDIRECT_URI="http://127.0.0.1:8040/api/master-admin/email/oauth/gmail/callback",
     )
 
     try:
@@ -97,6 +111,10 @@ def test_validate_runtime_security_accepts_strong_production_settings():
         MASTER_ADMIN_PIN="654321",
         APP_BASE_URL="https://hotel-chipre.example.com",
         INTEGRATIONS_ENCRYPTION_KEY="fRb9jE74bWw5gAKpNwZrl_uCWhsx2Nl7fNL1jK5vLG8=",
+        EMAIL_PROVIDER="resend",
+        RESEND_API_KEY="re_test_key",
+        SYSTEM_EMAIL_FROM="Hotel Chipre PMS <noreply@auth.hotels-pms.com>",
+        SYSTEM_EMAIL_REPLY_TO="hotelxpms@gmail.com",
         MERCADOPAGO_WEBHOOK_SECRET="mp-webhook-secret",
         PAYPAL_REDIRECT_URI="https://hotel-chipre.example.com/api/integrations/oauth/paypal/callback",
         MERCADOPAGO_REDIRECT_URI="https://hotel-chipre.example.com/api/integrations/oauth/mercadopago/callback",
@@ -114,11 +132,14 @@ def test_validate_runtime_security_rejects_shared_token_secrets():
         MASTER_ADMIN_PIN="654321",
         APP_BASE_URL="https://hotel-chipre.example.com",
         INTEGRATIONS_ENCRYPTION_KEY="fRb9jE74bWw5gAKpNwZrl_uCWhsx2Nl7fNL1jK5vLG8=",
+        EMAIL_PROVIDER="resend",
+        RESEND_API_KEY="re_test_key",
+        SYSTEM_EMAIL_FROM="Hotel Chipre PMS <noreply@auth.hotels-pms.com>",
+        SYSTEM_EMAIL_REPLY_TO="hotelxpms@gmail.com",
         MERCADOPAGO_WEBHOOK_SECRET="mp-webhook-secret",
         PAYPAL_REDIRECT_URI="https://hotel-chipre.example.com/api/integrations/oauth/paypal/callback",
         MERCADOPAGO_REDIRECT_URI="https://hotel-chipre.example.com/api/integrations/oauth/mercadopago/callback",
         GMAIL_REDIRECT_URI="https://hotel-chipre.example.com/api/integrations/oauth/gmail/callback",
-        MASTER_EMAIL_GMAIL_REDIRECT_URI="https://hotel-chipre.example.com/api/master-admin/email/oauth/gmail/callback",
         ACCESS_TOKEN_SECRET="shared-token-secret",
         SIGNED_TOKEN_SECRET="shared-token-secret",
     )

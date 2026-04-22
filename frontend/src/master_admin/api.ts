@@ -131,6 +131,8 @@ export type MasterEmailStatus = {
   configured: boolean;
   status: string;
   provider: string;
+  sender_email?: string | null;
+  reply_to?: string | null;
   connected_account_email?: string | null;
   connected_account_name?: string | null;
   last_checked_at?: string | null;

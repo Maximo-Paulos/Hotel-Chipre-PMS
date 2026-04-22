@@ -98,7 +98,7 @@ class MasterSystemEmailConnection(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     connection_key = Column(String(50), nullable=False, unique=True, default="system")
-    provider = Column(String(50), nullable=False, default="gmail")
+    provider = Column(String(50), nullable=False, default="resend")
     status = Column(String(20), nullable=False, default="disconnected")
     auth_payload = Column(JSON, nullable=True)
     connected_account_email = Column(String(255), nullable=True)

@@ -43,13 +43,13 @@ class Settings(BaseSettings):
     MERCADOPAGO_CLIENT_SECRET: str = ""
     PAYPAL_REDIRECT_URI: str = "http://127.0.0.1:8040/api/integrations/oauth/paypal/callback"
     MERCADOPAGO_REDIRECT_URI: str = "http://127.0.0.1:8040/api/integrations/oauth/mercadopago/callback"
+    EMAIL_PROVIDER: str = "resend"
+    RESEND_API_KEY: str = ""
+    SYSTEM_EMAIL_FROM: str = "Hotel Chipre PMS <noreply@auth.hotels-pms.com>"
+    SYSTEM_EMAIL_REPLY_TO: str = "hotelxpms@gmail.com"
     GMAIL_CLIENT_ID: str = Field(default="", validation_alias=AliasChoices("GMAIL_CLIENT_ID", "GOOGLE_OAUTH_CLIENT_ID"))
     GMAIL_CLIENT_SECRET: str = Field(default="", validation_alias=AliasChoices("GMAIL_CLIENT_SECRET", "GOOGLE_OAUTH_CLIENT_SECRET"))
     GMAIL_REDIRECT_URI: str = "http://127.0.0.1:8040/api/integrations/oauth/gmail/callback"
-    MASTER_EMAIL_GMAIL_REDIRECT_URI: str = Field(
-        default="http://127.0.0.1:8040/api/master-admin/email/oauth/gmail/callback",
-        validation_alias=AliasChoices("MASTER_EMAIL_GMAIL_REDIRECT_URI", "GOOGLE_OAUTH_REDIRECT_URI"),
-    )
     MERCADOPAGO_WEBHOOK_SECRET: str = ""
 
     # OTA Credentials
@@ -139,6 +139,10 @@ def _gmail_is_active(settings: Settings) -> bool:
     return _has_value(settings.GMAIL_CLIENT_ID) and _has_value(settings.GMAIL_CLIENT_SECRET)
 
 
+def _resend_is_active(settings: Settings) -> bool:
+    return _normalized_env_value(settings.EMAIL_PROVIDER) == "resend"
+
+
 def is_demo_mode() -> bool:
     return _normalized_env_value(os.getenv("DEMO_MODE")) in {"1", "true", "yes", "on"}
 
@@ -193,9 +197,18 @@ def validate_runtime_security(settings: Settings | None = None) -> None:
     mercadopago_active = _mercadopago_is_active(runtime_settings)
     paypal_active = _paypal_is_active(runtime_settings)
     gmail_active = _gmail_is_active(runtime_settings)
+    resend_active = _resend_is_active(runtime_settings)
 
     if mercadopago_active and not runtime_settings.MERCADOPAGO_WEBHOOK_SECRET.strip():
         errors.append("MERCADOPAGO_WEBHOOK_SECRET must be configured when Mercado Pago is enabled")
+
+    if resend_active:
+        if not _has_value(runtime_settings.RESEND_API_KEY):
+            errors.append("RESEND_API_KEY must be configured when EMAIL_PROVIDER=resend")
+        if not _has_value(runtime_settings.SYSTEM_EMAIL_FROM):
+            errors.append("SYSTEM_EMAIL_FROM must be configured when EMAIL_PROVIDER=resend")
+        if not _has_value(runtime_settings.SYSTEM_EMAIL_REPLY_TO):
+            errors.append("SYSTEM_EMAIL_REPLY_TO must be configured when EMAIL_PROVIDER=resend")
 
     # OAuth redirect URIs: only validate when the respective service is configured
     # (only check when the integration is truly enabled)
@@ -203,7 +216,6 @@ def validate_runtime_security(settings: Settings | None = None) -> None:
         ("PAYPAL_REDIRECT_URI", runtime_settings.PAYPAL_REDIRECT_URI, paypal_active),
         ("MERCADOPAGO_REDIRECT_URI", runtime_settings.MERCADOPAGO_REDIRECT_URI, mercadopago_active),
         ("GMAIL_REDIRECT_URI", runtime_settings.GMAIL_REDIRECT_URI, gmail_active),
-        ("MASTER_EMAIL_GMAIL_REDIRECT_URI", runtime_settings.MASTER_EMAIL_GMAIL_REDIRECT_URI, gmail_active),
     ]
     for name, value, service_configured in conditional_redirect_uris:
         if service_configured and not _is_public_https_url(value):

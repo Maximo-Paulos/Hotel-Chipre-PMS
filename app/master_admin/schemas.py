@@ -57,6 +57,8 @@ class MasterEmailStatusPayload(BaseModel):
     configured: bool
     status: str
     provider: str
+    sender_email: EmailStr | None = None
+    reply_to: EmailStr | None = None
     connected_account_email: EmailStr | None = None
     connected_account_name: str | None = None
     last_checked_at: datetime | None = None

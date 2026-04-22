@@ -5,8 +5,6 @@ import hmac
 import json
 import time
 from dataclasses import dataclass
-from urllib.parse import parse_qs, urlparse
-
 import pytest
 from fastapi.testclient import TestClient
 from starlette.responses import Response
@@ -19,7 +17,6 @@ import app.main as main_module
 from app.config import get_settings
 from app.database import Base, get_db
 from app.master_admin.billing_policy import evaluate_hotel_write_access
-from app.master_admin.email_provider import connect_system_email
 from app.master_admin.models import MasterAdminAuditEvent, MasterStripeWebhookEvent
 import app.master_admin.security as master_security
 from app.models.hotel_config import HotelConfiguration
@@ -79,6 +76,13 @@ def master_client(monkeypatch: pytest.MonkeyPatch):
     engine.dispose()
 
 
+@pytest.fixture(autouse=True)
+def _clear_settings_cache():
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
+
+
 def _seed_platform_admin(db, email: str = "platform-admin@example.com") -> User:
     user = db.query(User).filter(User.email == email).first()
     if not user:
@@ -122,28 +126,18 @@ def _seed_subscription(db, hotel_id: int, status: str = "suspended") -> Subscrip
     return subscription
 
 
-def _configure_gmail(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setenv("GOOGLE_OAUTH_CLIENT_ID", "client-id")
-    monkeypatch.setenv("GOOGLE_OAUTH_CLIENT_SECRET", "client-secret")
-    monkeypatch.setenv("GOOGLE_OAUTH_REDIRECT_URI", "https://example.com/api/master-admin/email/oauth/gmail/callback")
-    monkeypatch.setenv("GMAIL_CLIENT_ID", "client-id")
-    monkeypatch.setenv("GMAIL_CLIENT_SECRET", "client-secret")
-    monkeypatch.setenv("MASTER_EMAIL_GMAIL_REDIRECT_URI", "https://example.com/api/master-admin/email/oauth/gmail/callback")
+def _configure_resend(monkeypatch: pytest.MonkeyPatch, sent_payloads: list[dict] | None = None):
+    monkeypatch.setenv("EMAIL_PROVIDER", "resend")
+    monkeypatch.setenv("RESEND_API_KEY", "re_test_key")
+    monkeypatch.setenv("SYSTEM_EMAIL_FROM", "Hotel Chipre PMS <noreply@auth.hotels-pms.com>")
+    monkeypatch.setenv("SYSTEM_EMAIL_REPLY_TO", "hotelxpms@gmail.com")
     get_settings.cache_clear()
+    payloads = sent_payloads if sent_payloads is not None else []
 
     def fake_post(url, data=None, headers=None, json=None, timeout=None):
-        if url == "https://oauth2.googleapis.com/token":
-            return FakeResponse(
-                True,
-                {
-                    "access_token": "access-123",
-                    "refresh_token": "refresh-123",
-                    "expires_in": 3600,
-                    "scope": "openid email profile https://www.googleapis.com/auth/gmail.send",
-                },
-            )
-        if url == "https://gmail.googleapis.com/gmail/v1/users/me/messages/send":
-            return FakeResponse(True, {"id": "msg-123"})
+        if url == "https://api.resend.com/emails":
+            payloads.append(json or {})
+            return FakeResponse(True, {"id": "resend-message-123"})
         raise AssertionError(f"Unexpected POST {url}")
 
     def fake_get(url, headers=None, timeout=None):
@@ -153,16 +147,10 @@ def _configure_gmail(monkeypatch: pytest.MonkeyPatch):
             return FakeResponse(True, {"id": "acct_123", "display_name": "Owner Stripe"})
         raise AssertionError(f"Unexpected GET {url}")
 
-    monkeypatch.setattr("app.master_admin.email_provider.requests.post", fake_post)
-    monkeypatch.setattr("app.master_admin.email_provider.requests.get", fake_get)
+    monkeypatch.setattr("app.services.email.providers.requests.post", fake_post)
     monkeypatch.setattr("app.master_admin.stripe.requests.get", fake_get)
     monkeypatch.setattr("app.master_admin.stripe.requests.post", fake_post)
-
-
-def _seed_master_email(db, monkeypatch: pytest.MonkeyPatch):
-    _configure_gmail(monkeypatch)
-    connect_system_email(db, "auth-code-123")
-    db.commit()
+    return payloads
 
 
 def test_master_login_bootstraps_env_account(master_client, monkeypatch):
@@ -398,10 +386,10 @@ def test_master_billing_policy_handles_legacy_schema():
         engine.dispose()
 
 
-def test_master_email_connect_test_and_disconnect(master_client, monkeypatch):
+def test_master_email_status_and_test_mail(master_client, monkeypatch):
     client, SessionLocal = master_client
     monkeypatch.setenv("MASTER_ADMIN_PIN", "654321")
-    _configure_gmail(monkeypatch)
+    sent_payloads = _configure_resend(monkeypatch, [])
     get_settings.cache_clear()
 
     db = SessionLocal()
@@ -419,21 +407,12 @@ def test_master_email_connect_test_and_disconnect(master_client, monkeypatch):
     csrf_token = login.cookies.get("master_admin_csrf")
     assert csrf_token
 
-    connect = client.post("/api/master-admin/email/connect", headers={"X-CSRF-Token": csrf_token}, json={})
-    assert connect.status_code == 200, connect.text
-    redirect_url = connect.json()["redirect_url"]
-    parsed = urlparse(redirect_url)
-    params = parse_qs(parsed.query)
-    state = params["state"][0]
-
-    callback = client.get(f"/api/master-admin/email/oauth/gmail/callback?code=auth-code-123&state={state}")
-    assert callback.status_code == 200, callback.text
-    assert "master-admin-email-oauth-result" in callback.text
-
     status_resp = client.get("/api/master-admin/email/status")
     assert status_resp.status_code == 200, status_resp.text
     assert status_resp.json()["configured"] is True
-    assert status_resp.json()["connected_account_email"] == "owner-mail@example.com"
+    assert status_resp.json()["provider"] == "resend"
+    assert status_resp.json()["sender_email"] == "noreply@auth.hotels-pms.com"
+    assert status_resp.json()["reply_to"] == "hotelxpms@gmail.com"
 
     test = client.post(
         "/api/master-admin/email/test",
@@ -446,10 +425,11 @@ def test_master_email_connect_test_and_disconnect(master_client, monkeypatch):
     )
     assert test.status_code == 200, test.text
     assert test.json()["ok"] is True
-
-    disconnect = client.post("/api/master-admin/email/disconnect", headers={"X-CSRF-Token": csrf_token}, json={})
-    assert disconnect.status_code == 200, disconnect.text
-    assert disconnect.json()["configured"] is False
+    assert test.json()["provider"] == "resend"
+    assert test.json()["sender_email"] == "noreply@auth.hotels-pms.com"
+    assert test.json()["reply_to"] == "hotelxpms@gmail.com"
+    assert len(sent_payloads) == 1
+    assert sent_payloads[0]["reply_to"] == ["hotelxpms@gmail.com"]
 
 
 def test_master_session_hint_cookie_is_cleared_on_logout(master_client, monkeypatch):
@@ -481,7 +461,7 @@ def test_master_session_hint_cookie_is_cleared_on_logout(master_client, monkeypa
 def test_master_stripe_connect_and_webhook_signature_is_verified(master_client, monkeypatch):
     client, SessionLocal = master_client
     monkeypatch.setenv("MASTER_ADMIN_PIN", "654321")
-    _configure_gmail(monkeypatch)
+    _configure_resend(monkeypatch, [])
     get_settings.cache_clear()
 
     db = SessionLocal()

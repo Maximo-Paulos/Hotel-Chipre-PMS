@@ -13,15 +13,9 @@ from app.models.hotel_config import HotelConfiguration
 from app.models.subscription_v2 import Subscription
 from app.models.user import User
 from app.services.subscription_entitlements import get_subscription_snapshot
-from app.services.security import decode_signed_token
 from .billing_policy import BillingDecision, evaluate_hotel_write_access, get_policy_payload, update_policy
 from .email_provider import (
     MasterEmailConnectionError,
-    build_connect_redirect,
-    build_email_callback_page,
-    build_state_payload,
-    connect_system_email,
-    disconnect_system_email,
     get_system_email_status,
     send_system_email,
 )
@@ -29,7 +23,6 @@ from .models import MasterAdminAuditEvent, MasterStripeWebhookEvent
 from .schemas import (
     BillingPolicyPayload,
     BillingPolicyUpdateRequest,
-    MasterEmailConnectResponse,
     EmailTestRequest,
     MasterAdminLoginRequest,
     MasterAdminLoginResponse,
@@ -50,16 +43,6 @@ from .security import (
 from .stripe import clear_stripe_settings, get_stripe_status, save_stripe_settings, verify_stripe_signature
 
 router = APIRouter(prefix="/api/master-admin", tags=["Master Admin"])
-
-
-def _popup_origin(request: Request) -> str:
-    origin = (request.headers.get("origin") or "").strip()
-    if origin.startswith(("http://", "https://")):
-        return origin
-    referer = (request.headers.get("referer") or "").strip()
-    if referer.startswith(("http://", "https://")):
-        return referer.rsplit("/", 1)[0]
-    return get_settings().APP_BASE_URL.rstrip("/")
 
 
 def _serialize_user(user: User) -> MasterAdminUserPayload:
@@ -195,79 +178,21 @@ def email_providers(request: Request, db: Session = Depends(get_db)):
     return MasterEmailStatusPayload(**status_payload.__dict__)
 
 
-@router.post("/email/connect", response_model=MasterEmailConnectResponse)
+@router.post("/email/connect")
 def email_connect(request: Request, db: Session = Depends(get_db)):
-    context = require_master_admin(request=request, db=db, csrf_header=request.headers.get("X-CSRF-Token"), write=True)
-    origin = _popup_origin(request)
-    state_payload = build_state_payload(web_origin=origin)
-    try:
-        redirect_url = build_connect_redirect(state_payload=state_payload)
-    except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    audit_master_action(
-        db,
-        actor_user_id=context.user.id,
-        action="master_admin_email_connect_started",
-        metadata={"provider": "gmail"},
-        request=request,
-    )
-    db.commit()
-    return MasterEmailConnectResponse(redirect_url=redirect_url, status="pending")
+    require_master_admin(request=request, db=db, csrf_header=request.headers.get("X-CSRF-Token"), write=True)
+    raise HTTPException(status_code=status.HTTP_410_GONE, detail="Gmail OAuth para el mail del sistema fue retirado. Usa Resend.")
 
 
 @router.get("/email/oauth/gmail/callback")
 def email_oauth_callback(request: Request, db: Session = Depends(get_db)):
-    state = request.query_params.get("state")
-    if not state:
-        raise HTTPException(status_code=400, detail="state requerido")
-    state_payload = decode_signed_token(state)
-    if state_payload.get("type") != "master_admin_email_oauth":
-        raise HTTPException(status_code=400, detail="state invalido")
-    web_origin = str(state_payload.get("web_origin") or "").strip()
-    error = request.query_params.get("error")
-    if error:
-        description = request.query_params.get("error_description") or error
-        return build_email_callback_page(status="error", message=f"No se pudo conectar Gmail: {description}", web_origin=web_origin)
-
-    code = request.query_params.get("code")
-    if not code:
-        raise HTTPException(status_code=400, detail="code requerido")
-
-    try:
-        status_payload = connect_system_email(db, code)
-        db.commit()
-        audit_master_action(
-            db,
-            actor_user_id=None,
-            action="master_admin_email_connected",
-            metadata=status_payload.__dict__,
-            request=request,
-        )
-        db.commit()
-    except MasterEmailConnectionError as exc:
-        db.rollback()
-        return build_email_callback_page(status="error", message=str(exc), web_origin=web_origin)
-    except Exception as exc:
-        db.rollback()
-        return build_email_callback_page(status="error", message=str(exc), web_origin=web_origin)
-
-    message = "Gmail quedo conectado correctamente para los mails del sistema."
-    return build_email_callback_page(status="connected", message=message, web_origin=web_origin)
+    raise HTTPException(status_code=status.HTTP_410_GONE, detail="Gmail OAuth para el mail del sistema fue retirado. Usa Resend.")
 
 
-@router.post("/email/disconnect", response_model=MasterEmailStatusPayload)
+@router.post("/email/disconnect")
 def email_disconnect(request: Request, db: Session = Depends(get_db)):
-    context = require_master_admin(request=request, db=db, csrf_header=request.headers.get("X-CSRF-Token"), write=True)
-    status_payload = disconnect_system_email(db)
-    audit_master_action(
-        db,
-        actor_user_id=context.user.id,
-        action="master_admin_email_disconnected",
-        metadata=status_payload.__dict__,
-        request=request,
-    )
-    db.commit()
-    return MasterEmailStatusPayload(**status_payload.__dict__)
+    require_master_admin(request=request, db=db, csrf_header=request.headers.get("X-CSRF-Token"), write=True)
+    raise HTTPException(status_code=status.HTTP_410_GONE, detail="Gmail OAuth para el mail del sistema fue retirado. Usa Resend.")
 
 
 @router.post("/email/test")

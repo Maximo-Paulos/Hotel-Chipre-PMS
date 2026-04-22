@@ -1,9 +1,15 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 
 import { ApiError } from "../../api/client";
-import { masterAdminFetch, type MasterEmailConnectResponse, type MasterEmailStatus } from "../api";
+import { masterAdminFetch, type MasterEmailStatus } from "../api";
 
-type EmailTestResult = { ok: boolean; provider: string; sender_email?: string | null; provider_message_id?: string | null };
+type EmailTestResult = {
+  ok: boolean;
+  provider: string;
+  sender_email?: string | null;
+  reply_to?: string | null;
+  provider_message_id?: string | null;
+};
 
 export function MasterAdminEmailPage() {
   const [status, setStatus] = useState<MasterEmailStatus | null>(null);
@@ -22,59 +28,6 @@ export function MasterAdminEmailPage() {
     void reloadStatus().catch(() => setMessage("No se pudo leer el estado del email del sistema."));
   }, [reloadStatus]);
 
-  useEffect(() => {
-    const handler = (event: MessageEvent) => {
-      if (typeof event.data !== "object" || event.data === null) return;
-      if ((event.data as { type?: string }).type !== "master-admin-email-oauth-result") return;
-      const payload = event.data as { status?: string; message?: string };
-      setMessage(payload.message || "Flujo OAuth completado.");
-      void reloadStatus().catch(() => setMessage("No se pudo refrescar el estado del email."));
-    };
-    window.addEventListener("message", handler);
-    return () => window.removeEventListener("message", handler);
-  }, [reloadStatus]);
-
-  const startConnect = async () => {
-    setLoading(true);
-    setMessage(null);
-    try {
-      const result = await masterAdminFetch<MasterEmailConnectResponse>("/api/master-admin/email/connect", {
-        method: "POST",
-        data: {}
-      });
-      if (!result.redirect_url) {
-        throw new Error("No se genero la URL de OAuth para Gmail.");
-      }
-      const popup = window.open(result.redirect_url, "master-admin-gmail-oauth", "width=540,height=720");
-      if (!popup) {
-        throw new Error("El navegador bloqueo la ventana emergente de OAuth.");
-      }
-      popup.focus();
-      setMessage("Completa la autorizacion de Gmail en la ventana emergente.");
-    } catch (error) {
-      if (error instanceof ApiError) setMessage(error.message);
-      else if (error instanceof Error) setMessage(error.message);
-      else setMessage("No se pudo iniciar la conexion de Gmail.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const disconnect = async () => {
-    setLoading(true);
-    setMessage(null);
-    try {
-      await masterAdminFetch<MasterEmailStatus>("/api/master-admin/email/disconnect", { method: "POST", data: {} });
-      await reloadStatus();
-      setMessage("La conexion de Gmail quedo desconectada.");
-    } catch (error) {
-      if (error instanceof ApiError) setMessage(error.message);
-      else setMessage("No se pudo desconectar Gmail.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setLoading(true);
@@ -84,7 +37,12 @@ export function MasterAdminEmailPage() {
         method: "POST",
         data: { recipient, subject, body }
       });
-      setMessage(result.ok ? `Test enviado con ${result.provider}` : `El proveedor ${result.provider} no pudo enviar el test.`);
+      setMessage(
+        result.ok
+          ? `Test enviado con ${result.provider}${result.provider_message_id ? ` (${result.provider_message_id})` : ""}.`
+          : `El provider ${result.provider} no pudo enviar el test.`
+      );
+      await reloadStatus();
     } catch (error) {
       if (error instanceof ApiError) setMessage(error.message);
       else setMessage("No se pudo enviar el test de email.");
@@ -93,55 +51,43 @@ export function MasterAdminEmailPage() {
     }
   };
 
+  const statusLabel = status?.configured ? "Activo" : "Inactivo";
+
   return (
     <div className="space-y-6">
       <section className="rounded-[2rem] border border-white/10 bg-white/5 p-6 shadow-2xl shadow-black/10 backdrop-blur">
         <p className="text-xs uppercase tracking-[0.35em] text-amber-300/80">System mail</p>
-        <h2 className="mt-2 text-3xl font-semibold text-white">Gmail OAuth del owner</h2>
+        <h2 className="mt-2 text-3xl font-semibold text-white">Resend como provider activo</h2>
         <p className="mt-2 text-sm text-slate-300">
-          El sistema usa una conexión Gmail administrada desde este panel. No hay SMTP ni app passwords en el flujo activo.
+          El sistema de mails transaccionales usa exclusivamente Resend. No hay OAuth de Gmail ni SMTP en el flujo
+          activo del panel.
         </p>
       </section>
 
       {message && <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-100">{message}</div>}
 
       {status && (
-        <section className="grid gap-4 md:grid-cols-3">
+        <section className="grid gap-4 md:grid-cols-4">
           <div className="rounded-[1.5rem] border border-white/10 bg-slate-950/50 p-4">
-            <p className="text-xs uppercase tracking-[0.25em] text-slate-400">Configured</p>
-            <p className="mt-2 text-lg font-semibold text-white">{status.configured ? "Yes" : "No"}</p>
+            <p className="text-xs uppercase tracking-[0.25em] text-slate-400">Provider</p>
+            <p className="mt-2 text-lg font-semibold text-white">{status.provider}</p>
           </div>
           <div className="rounded-[1.5rem] border border-white/10 bg-slate-950/50 p-4">
-            <p className="text-xs uppercase tracking-[0.25em] text-slate-400">Account</p>
-            <p className="mt-2 text-lg font-semibold text-white">{status.connected_account_email || "Not connected"}</p>
+            <p className="text-xs uppercase tracking-[0.25em] text-slate-400">Sender</p>
+            <p className="mt-2 text-lg font-semibold text-white">{status.sender_email || "Not set"}</p>
             {status.connected_account_name && <p className="mt-1 text-sm text-slate-400">{status.connected_account_name}</p>}
           </div>
           <div className="rounded-[1.5rem] border border-white/10 bg-slate-950/50 p-4">
+            <p className="text-xs uppercase tracking-[0.25em] text-slate-400">Reply-to</p>
+            <p className="mt-2 text-lg font-semibold text-white">{status.reply_to || "Not set"}</p>
+          </div>
+          <div className="rounded-[1.5rem] border border-white/10 bg-slate-950/50 p-4">
             <p className="text-xs uppercase tracking-[0.25em] text-slate-400">Status</p>
-            <p className="mt-2 text-lg font-semibold text-white">{status.status}</p>
+            <p className="mt-2 text-lg font-semibold text-white">{statusLabel}</p>
             {status.last_error && <p className="mt-1 text-sm text-rose-300">{status.last_error}</p>}
           </div>
         </section>
       )}
-
-      <section className="flex flex-wrap gap-3">
-        <button
-          type="button"
-          onClick={() => void startConnect()}
-          disabled={loading}
-          className="rounded-2xl bg-amber-300 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-70"
-        >
-          Conectar Google / Gmail
-        </button>
-        <button
-          type="button"
-          onClick={() => void disconnect()}
-          disabled={loading}
-          className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-semibold text-slate-100 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-70"
-        >
-          Desconectar
-        </button>
-      </section>
 
       <form onSubmit={submit} className="grid gap-6 lg:grid-cols-[1fr_1.2fr]">
         <label className="rounded-[2rem] border border-white/10 bg-slate-950/50 p-5">
@@ -179,7 +125,7 @@ export function MasterAdminEmailPage() {
           disabled={loading}
           className="rounded-2xl bg-amber-300 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-70 lg:col-start-2"
         >
-          {loading ? "Sending..." : "Send test email"}
+          {loading ? "Sending..." : "Send test mail"}
         </button>
       </form>
     </div>

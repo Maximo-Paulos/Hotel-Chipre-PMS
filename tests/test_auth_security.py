@@ -14,7 +14,6 @@ import app.main as main_module
 import app.models  # noqa: F401
 from app.config import get_settings
 from app.database import Base, get_db
-from app.master_admin.email_provider import connect_system_email
 from app.models.user import User
 from app.services.security import hash_password
 
@@ -67,10 +66,15 @@ def client_and_db(monkeypatch: pytest.MonkeyPatch):
 
 @pytest.fixture
 def fixed_code_patch():
-    with patch("app.api.auth._generate_code", return_value="123456"), patch(
-        "app.api.email._generate_code", return_value="123456"
-    ):
+    with patch("app.api.auth._generate_code", return_value="123456"):
         yield
+
+
+@pytest.fixture(autouse=True)
+def _clear_settings_cache():
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
 
 
 def _register_owner(client: TestClient, email: str):
@@ -90,45 +94,27 @@ def _auth_headers(auth_payload: dict[str, object]) -> dict[str, str]:
     }
 
 
-def _configure_gmail(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setenv("GMAIL_CLIENT_ID", "client-id")
-    monkeypatch.setenv("GMAIL_CLIENT_SECRET", "client-secret")
-    monkeypatch.setenv("MASTER_EMAIL_GMAIL_REDIRECT_URI", "https://example.com/api/master-admin/email/oauth/gmail/callback")
+def _configure_resend(monkeypatch: pytest.MonkeyPatch, sent_payloads: list[dict] | None = None):
+    monkeypatch.setenv("EMAIL_PROVIDER", "resend")
+    monkeypatch.setenv("RESEND_API_KEY", "re_test_key")
+    monkeypatch.setenv("SYSTEM_EMAIL_FROM", "Hotel Chipre PMS <noreply@auth.hotels-pms.com>")
+    monkeypatch.setenv("SYSTEM_EMAIL_REPLY_TO", "hotelxpms@gmail.com")
     get_settings.cache_clear()
+    payloads = sent_payloads if sent_payloads is not None else []
 
     def fake_post(url, data=None, headers=None, json=None, timeout=None):
-        if url == "https://oauth2.googleapis.com/token":
-            return FakeResponse(
-                True,
-                {
-                    "access_token": "access-123",
-                    "refresh_token": "refresh-123",
-                    "expires_in": 3600,
-                    "scope": "openid email profile https://www.googleapis.com/auth/gmail.send",
-                },
-            )
-        if url == "https://gmail.googleapis.com/gmail/v1/users/me/messages/send":
-            return FakeResponse(True, {"id": "msg-123"})
-        raise AssertionError(f"Unexpected POST {url}")
+        if url != "https://api.resend.com/emails":
+            raise AssertionError(f"Unexpected POST {url}")
+        payloads.append(json or {})
+        return FakeResponse(True, {"id": "resend-message-123"})
 
-    def fake_get(url, headers=None, timeout=None):
-        if url == "https://openidconnect.googleapis.com/v1/userinfo":
-            return FakeResponse(True, {"email": "owner-mail@example.com", "name": "Owner Mail", "sub": "google-sub"})
-        raise AssertionError(f"Unexpected GET {url}")
-
-    monkeypatch.setattr("app.master_admin.email_provider.requests.post", fake_post)
-    monkeypatch.setattr("app.master_admin.email_provider.requests.get", fake_get)
+    monkeypatch.setattr("app.services.email.providers.requests.post", fake_post)
+    return payloads
 
 
-def _seed_connected_email(db, monkeypatch: pytest.MonkeyPatch):
-    _configure_gmail(monkeypatch)
-    connect_system_email(db, "auth-code-123")
-    db.commit()
-
-
-def test_register_verify_and_reset_use_connected_gmail_provider(client_and_db, fixed_code_patch, monkeypatch):
+def test_register_verify_and_reset_use_resend_provider(client_and_db, fixed_code_patch, monkeypatch):
     client, db, _session_factory = client_and_db
-    _seed_connected_email(db, monkeypatch)
+    sent_payloads = _configure_resend(monkeypatch, [])
 
     register = _register_owner(client, "owner@example.com")
     assert "code" not in register
@@ -154,16 +140,36 @@ def test_register_verify_and_reset_use_connected_gmail_provider(client_and_db, f
     assert reset_unknown.status_code == 200
     assert reset_unknown.json() == {"sent": True}
 
+    reset = client.post(
+        "/api/auth/reset-password",
+        json={"email": "owner@example.com", "code": "123456", "new_password": "Demo1234!"},
+    )
+    assert reset.status_code == 200, reset.text
+    assert reset.json()["requires_verification"] is False
 
-def test_auth_flows_fail_without_connected_mail_provider(client_and_db, fixed_code_patch):
+    login = client.post("/api/auth/login", json={"email": "owner@example.com", "password": "Demo1234!"})
+    assert login.status_code == 200, login.text
+    assert login.json()["user"]["email"] == "owner@example.com"
+
+    assert len(sent_payloads) >= 4
+    assert sent_payloads[0]["from"] == "Hotel Chipre PMS <noreply@auth.hotels-pms.com>"
+    assert sent_payloads[0]["reply_to"] == ["hotelxpms@gmail.com"]
+
+
+def test_auth_flows_fail_without_connected_mail_provider(client_and_db, fixed_code_patch, monkeypatch):
     client, db, _session_factory = client_and_db
+    monkeypatch.setenv("EMAIL_PROVIDER", "resend")
+    monkeypatch.setenv("RESEND_API_KEY", "")
+    monkeypatch.setenv("SYSTEM_EMAIL_FROM", "")
+    monkeypatch.setenv("SYSTEM_EMAIL_REPLY_TO", "")
+    get_settings.cache_clear()
 
     failed_register = client.post(
         "/api/auth/register",
         json={"email": "blocked@example.com", "password": "Demo123!", "role": "owner"},
     )
     assert failed_register.status_code == 503
-    assert "Gmail" in failed_register.json()["detail"] or "Conecta Gmail" in failed_register.json()["detail"]
+    assert "Resend" in failed_register.json()["detail"]
 
     db.add(User(email="pending@example.com", password_hash=hash_password("Demo123!"), role="owner", is_verified=False, is_active=True))
     db.commit()
@@ -180,7 +186,7 @@ def test_auth_flows_fail_without_connected_mail_provider(client_and_db, fixed_co
 
 def test_unverified_users_cannot_use_operational_endpoints(client_and_db, fixed_code_patch, monkeypatch):
     client, db, _session_factory = client_and_db
-    _seed_connected_email(db, monkeypatch)
+    _configure_resend(monkeypatch, [])
 
     register = _register_owner(client, "blocked@example.com")
     headers = _auth_headers(register)
