@@ -29,6 +29,7 @@ import {
 } from "../../api/onboarding";
 import { onboardingStatusKey, useOnboardingStatus } from "../../hooks/useOnboardingStatus";
 import { useSubscriptionPlans } from "../../hooks/useSubscription";
+import { useTimezones } from "../../hooks/useTimezones";
 import { useSession } from "../../state/session";
 
 const steps = [
@@ -86,6 +87,7 @@ export function OnboardingWizard() {
   const queryClient = useQueryClient();
   const { session } = useSession();
   const plansQuery = useSubscriptionPlans();
+  const timezonesQuery = useTimezones();
   const { data: status, isFetching, refetch } = useOnboardingStatus();
 
   const [ownerForm, setOwnerForm] = useState<OwnerPayload>({
@@ -335,6 +337,7 @@ export function OnboardingWizard() {
               <IdentityStep
                 form={identityForm}
                 setForm={setIdentityForm}
+                timezones={timezonesQuery.data ?? []}
                 onSave={async () => {
                   await identityMutation.mutateAsync();
                   navigate("/onboarding/categories");
@@ -555,16 +558,19 @@ function OwnerStep({
 function IdentityStep({
   form,
   setForm,
+  timezones,
   onSave,
   loading,
   status
 }: {
   form: HotelIdentityPayload;
   setForm: (payload: HotelIdentityPayload) => void;
+  timezones: string[];
   onSave: () => Promise<void>;
   loading: boolean;
   status?: StepStatus;
 }) {
+  const timezoneListId = "timezone-options";
   return (
     <StepCard title="Identidad del hotel" status={status}>
       <div className="grid gap-3 md:grid-cols-2">
@@ -582,7 +588,13 @@ function IdentityStep({
             value={form.timezone}
             onChange={(event) => setForm({ ...form, timezone: event.target.value })}
             placeholder="Ej: America/Argentina/Buenos_Aires"
+            list={timezoneListId}
           />
+          <datalist id={timezoneListId}>
+            {timezones.map((timezone) => (
+              <option key={timezone} value={timezone} />
+            ))}
+          </datalist>
         </Field>
       </div>
       <div className="mt-3 grid gap-3 md:grid-cols-3">

@@ -24,6 +24,7 @@ from app.api import (
     config,
     reports,
     bookings,
+    reference,
     onboarding,
     users,
     subscription,
@@ -109,6 +110,7 @@ app.add_middleware(
 
 # Register all API routers
 app.include_router(onboarding.router)
+app.include_router(reference.router)
 app.include_router(rooms.router)
 app.include_router(guests.router)
 app.include_router(reservations.router)

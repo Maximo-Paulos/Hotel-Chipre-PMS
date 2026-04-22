@@ -1,9 +1,12 @@
 """
 Pydantic schemas for HotelConfiguration.
 """
-from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime
+
+from pydantic import BaseModel, Field, field_validator
+
+from app.services.timezones import normalize_timezone
 
 
 class HotelConfigRead(BaseModel):
@@ -84,3 +87,10 @@ class HotelConfigUpdate(BaseModel):
     stop_sell_channels: Optional[str] = None
     event_notifications: Optional[str] = None
     extra_policies: Optional[str] = None
+
+    @field_validator("hotel_timezone")
+    @classmethod
+    def normalize_hotel_timezone(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        return normalize_timezone(value)
