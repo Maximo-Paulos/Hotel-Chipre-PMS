@@ -211,7 +211,7 @@ export function AppShell() {
                       key={item.to}
                       to={item.to}
                       className={({ isActive }) =>
-                        clsx(
+                        cx(
                           "rounded-full px-3 py-1 text-xs font-semibold",
                           isActive ? "bg-brand-100 text-brand-800" : "bg-slate-100 text-slate-600",
                         )
