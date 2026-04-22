@@ -10,7 +10,7 @@ from urllib.parse import parse_qs, urlparse
 import pytest
 from fastapi.testclient import TestClient
 from starlette.responses import Response
-from sqlalchemy import create_engine, event
+from sqlalchemy import Boolean, Column, DateTime, Integer, MetaData, String, Table, Text, create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -341,6 +341,60 @@ def test_master_policy_update_exempts_hotel_and_user(master_client, monkeypatch)
         assert db.query(MasterAdminAuditEvent).filter(MasterAdminAuditEvent.action == "master_admin_update_billing_policy").count() == 1
     finally:
         db.close()
+
+
+def test_master_billing_policy_handles_legacy_schema():
+    from app.master_admin.billing_policy import get_policy_payload, update_policy
+
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+
+    metadata = MetaData()
+    Table(
+        "master_billing_policies",
+        metadata,
+        Column("id", Integer, primary_key=True, autoincrement=True),
+        Column("policy_key", String(50), nullable=False, unique=True),
+        Column("enabled", Boolean, nullable=False, default=True),
+        Column("allow_active", Boolean, nullable=False, default=True),
+        Column("allow_trialing", Boolean, nullable=False, default=True),
+        Column("exempt_hotel_ids_json", Text, nullable=False, default="[]"),
+        Column("notes", Text, nullable=True),
+        Column("updated_by_user_id", Integer, nullable=True),
+        Column("updated_at", DateTime(timezone=True), nullable=False),
+        Column("created_at", DateTime(timezone=True), nullable=False),
+    )
+    metadata.create_all(engine)
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    db = SessionLocal()
+    try:
+        payload = get_policy_payload(db)
+        assert payload["policy_key"] == "default"
+        assert payload["enabled"] is True
+        assert payload["exempt_user_ids"] == []
+
+        updated = update_policy(
+            db,
+            {
+                "enabled": False,
+                "allow_active": False,
+                "allow_trialing": True,
+                "exempt_hotel_ids": [7],
+                "exempt_user_ids": [9],
+                "notes": "legacy-schema",
+            },
+            actor_user_id=42,
+        )
+        assert updated["enabled"] is False
+        assert updated["exempt_hotel_ids"] == [7]
+        assert updated["exempt_user_ids"] == [9]
+    finally:
+        db.close()
+        metadata.drop_all(engine)
+        engine.dispose()
 
 
 def test_master_email_connect_test_and_disconnect(master_client, monkeypatch):
