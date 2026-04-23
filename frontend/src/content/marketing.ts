@@ -12,7 +12,7 @@ export const heroBullets = [
 export const problemPoints = [
   {
     title: "Información dispersa",
-    body: "Reservas, huéspedes y cobros terminan repartidos entre planillas, mensajes y herramientas sueltas."
+    body: "Reservas, huéspedes y cobros quedan repartidos entre planillas, mensajes y herramientas sueltas."
   },
   {
     title: "Más fricción operativa",
@@ -48,14 +48,14 @@ export const systemPoints = [
 ];
 
 export const integrationPoints = [
-  "Conexiones visibles en la configuración del sistema",
+  "Conexiones visibles desde la configuración del hotel",
   "Integraciones ligadas a operación, canales y cobros",
-  "Enfoque en centralizar la gestión, no en sumar complejidad innecesaria"
+  "Un solo lugar para administrar el día a día sin sumar complejidad innecesaria"
 ];
 
 export const onboardingSteps = [
   "Crear tu cuenta y validar el acceso",
-  "Configurar el hotel paso a paso",
+  "Completar la configuración inicial del hotel",
   "Empezar a operar desde una sola plataforma"
 ];
 
@@ -97,35 +97,45 @@ export const pricingCards = [
 
 export const faqItems = [
   {
-    question: "Que es Hotel Chipre PMS?",
+    question: "¿Qué es Hotel Chipre PMS?",
     answer:
       "Es un sistema de gestión hotelera pensado para centralizar reservas, habitaciones, huéspedes y cobros desde una sola plataforma web."
   },
   {
-    question: "Para que tipo de hoteles sirve?",
+    question: "¿Para qué tipo de hoteles sirve?",
     answer:
       "La propuesta está pensada para hoteles independientes, boutique y pequeños/medianos dentro del rango definido por el producto."
   },
   {
-    question: "Que incluye la prueba de 14 dias?",
+    question: "¿Qué cubre el sistema hoy?",
     answer:
-      "El producto contempla una prueba de 14 días para conocer el sistema antes de decidir. Si la implementación comercial requiere un ajuste puntual, se documenta sin cambiar la promesa pública."
+      "El foco público está en reservas, habitaciones, huéspedes, cobros, reportes y un onboarding guiado para empezar con orden."
   },
   {
-    question: "Como ingreso si ya tengo cuenta?",
-    answer: "Usa el acceso actual de la app para iniciar sesión."
+    question: "¿La prueba de 14 días está incluida en Starter?",
+    answer:
+      "Sí. Starter es el plan de entrada y se presenta públicamente con una prueba de 14 días para conocer el sistema antes de decidir."
   },
   {
-    question: "Como compro si la compra online todavia no esta abierta?",
+    question: "¿Qué hago si ya tengo cuenta?",
+    answer: "Usá el acceso actual de la app para iniciar sesión."
+  },
+  {
+    question: "¿Cómo consulto planes pagos?",
     answer:
-      "Mientras no haya checkout real, el CTA de planes pagos debe ir a contacto comercial para mantener una experiencia honesta y sin fricción falsa."
+      "Pro y Ultra se gestionan con el equipo comercial hasta que la compra online esté abierta."
+  },
+  {
+    question: "¿La landing y la app están separadas?",
+    answer:
+      "Sí. La landing vive en el dominio marketing y la app opera en el subdominio del producto con indexación controlada."
   }
 ];
 
 export const screenshotFrames = [
   {
     title: "Dashboard operativo",
-    description: "Visión general con KPIs, próximas reservas y acciones del día.",
+    description: "Vista general con indicadores, próximas reservas y acciones del día.",
     src: "/marketing/screenshots/dashboard.png"
   },
   {

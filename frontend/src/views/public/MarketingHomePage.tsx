@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom";
+
 import { Seo } from "../../components/Seo";
 import { MarketingShell } from "../../components/marketing/MarketingShell";
 import { PublicButtonLink } from "../../components/marketing/PublicButtonLink";
@@ -63,7 +65,7 @@ export function MarketingHomePage() {
   return (
     <MarketingShell>
       <Seo
-        title="Software para hoteles | PMS hotelero para centralizar tu operación"
+        title="PMS hotelero para hoteles independientes | Hotel Chipre PMS"
         description="Sistema de gestión hotelera para centralizar reservas, habitaciones, huéspedes y cobros en un solo lugar. Prueba 14 días con Hotel Chipre PMS."
         canonicalPath="/"
         noindex={!ALLOW_INDEXING}
@@ -77,11 +79,9 @@ export function MarketingHomePage() {
           </p>
           <div className="space-y-4">
             <h1 className="max-w-2xl text-4xl font-semibold tracking-tight text-slate-950 sm:text-5xl">
-              Sistema de gestión hotelera para operar tu hotel desde un solo lugar
+              PMS hotelero para operar tu hotel desde un solo lugar
             </h1>
-            <p className="max-w-2xl text-lg leading-8 text-slate-700">
-              {positioning}
-            </p>
+            <p className="max-w-2xl text-lg leading-8 text-slate-700">{positioning}</p>
           </div>
 
           <div className="flex flex-wrap gap-3">
@@ -96,9 +96,24 @@ export function MarketingHomePage() {
             </PublicButtonLink>
           </div>
 
+          <div className="flex flex-wrap gap-4 text-sm font-medium text-slate-600">
+            <Link to="/pms-hotelero" className="underline decoration-slate-300 underline-offset-4 hover:text-brand-700">
+              PMS hotelero
+            </Link>
+            <Link to="/software-para-hoteles" className="underline decoration-slate-300 underline-offset-4 hover:text-brand-700">
+              Software para hoteles
+            </Link>
+            <Link to="/faq" className="underline decoration-slate-300 underline-offset-4 hover:text-brand-700">
+              Preguntas frecuentes
+            </Link>
+          </div>
+
           <ul className="grid gap-3 sm:grid-cols-3">
             {heroBullets.map((bullet) => (
-              <li key={bullet} className="rounded-2xl border border-slate-200 bg-white/90 px-4 py-4 text-sm leading-6 text-slate-700 shadow-sm">
+              <li
+                key={bullet}
+                className="rounded-2xl border border-slate-200 bg-white/90 px-4 py-4 text-sm leading-6 text-slate-700 shadow-sm"
+              >
                 {bullet}
               </li>
             ))}
@@ -132,7 +147,7 @@ export function MarketingHomePage() {
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-700">Todo en un solo sistema</p>
             <h2 className="text-3xl font-semibold tracking-tight text-slate-950">Centraliza la operación del hotel sin sumar complejidad</h2>
             <p className="text-base leading-7 text-slate-600">
-              La landing debe vender una base operativa clara: reservas, habitaciones, huéspedes, cobros y reportes dentro de una misma plataforma web.
+              Reservas, habitaciones, huéspedes, cobros y reportes viven en una misma plataforma web para que el equipo trabaje con más claridad.
             </p>
             <PublicButtonLink href="/funciones" variant="secondary">
               Ver funciones
@@ -154,9 +169,9 @@ export function MarketingHomePage() {
         <div className="rounded-[2rem] border border-slate-200 bg-white/90 p-6 shadow-sm">
           <div className="max-w-2xl space-y-3">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-700">Screenshots reales</p>
-            <h2 className="text-3xl font-semibold tracking-tight text-slate-950">La landing debe mostrar el producto, no solo promesas</h2>
+            <h2 className="text-3xl font-semibold tracking-tight text-slate-950">La app muestra el producto real, no solo promesas</h2>
             <p className="text-sm leading-7 text-slate-600">
-              Usa capturas reales del sistema para mostrar dashboard, reservas y conexiones. Si alguna imagen todavia no esta capturada, dejala fuera hasta tener el archivo real.
+              Estas capturas muestran dashboard, reservas y conexiones reales del sistema para que la propuesta sea fácil de entender.
             </p>
           </div>
           <div className="mt-6">
@@ -168,10 +183,14 @@ export function MarketingHomePage() {
       <section className="mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:px-8">
         <div className="grid gap-8 lg:grid-cols-[1fr_1fr]">
           <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-700">Integraciones disponibles dentro del sistema</p>
-            <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">Conexiones visibles en la configuración del sistema</h2>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-700">
+              Integraciones disponibles dentro del sistema
+            </p>
+            <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">
+              Conexiones visibles en la configuración del sistema
+            </h2>
             <p className="mt-3 text-sm leading-7 text-slate-600">
-              Hotel Chipre PMS ya muestra integraciones y conexiones configurables dentro del producto para acompañar la operación diaria del hotel desde una misma plataforma.
+              Hotel Chipre PMS muestra integraciones y conexiones configurables dentro del producto para acompañar la operación diaria del hotel desde una misma plataforma.
             </p>
             <ul className="mt-4 space-y-2 text-sm leading-6 text-slate-700">
               {integrationPoints.map((item) => (
@@ -202,7 +221,7 @@ export function MarketingHomePage() {
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-700">Cómo funciona / onboarding</p>
             <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">Empieza con un flujo guiado</h2>
             <p className="mt-3 text-sm leading-7 text-slate-600">
-              El objetivo comercial no es prometer magia, sino explicar que la puesta en marcha está guiada desde el alta hasta la operación inicial.
+              La puesta en marcha está guiada desde el alta hasta la configuración inicial para que el hotel empiece con orden.
             </p>
             <ol className="mt-5 space-y-3">
               {onboardingSteps.map((step, index) => (
@@ -235,9 +254,9 @@ export function MarketingHomePage() {
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-2xl space-y-3">
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-700">Pricing teaser</p>
-              <h2 className="text-3xl font-semibold tracking-tight text-slate-950">Starter, Pro y Ultra sin detalles no cerrados</h2>
+              <h2 className="text-3xl font-semibold tracking-tight text-slate-950">Starter, Pro y Ultra para distintas etapas de operación</h2>
               <p className="text-sm leading-7 text-slate-600">
-                La landing puede mostrar los tres planes con un mensaje comercial mínimo y honesto, sin entrar en límites finos o beneficios todavía abiertos.
+                Starter incluye prueba de 14 días. Pro y Ultra se gestionan con ventas hasta cerrar el flujo de compra online.
               </p>
             </div>
             <PublicButtonLink href="/precios" variant="secondary">
@@ -264,20 +283,26 @@ export function MarketingHomePage() {
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-700">FAQ</p>
             <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">Resolvemos objeciones sin inflar el producto</h2>
             <p className="mt-3 text-sm leading-7 text-slate-600">
-              El FAQ debe responder con claridad, no abrir discusiones funcionales innecesarias.
+              El FAQ responde con claridad y sin prometer módulos o alcances que no están cerrados.
             </p>
             <div className="mt-5 space-y-3">
               <details className="group rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <summary className="cursor-pointer list-none text-sm font-semibold text-slate-900">Que incluye la prueba de 14 dias?</summary>
-                <p className="mt-3 text-sm leading-6 text-slate-600">La landing debe comunicar que el Starter incluye una prueba de 14 días sin prometer más de lo que el producto sostiene.</p>
+                <summary className="cursor-pointer list-none text-sm font-semibold text-slate-900">¿Qué incluye la prueba de 14 días?</summary>
+                <p className="mt-3 text-sm leading-6 text-slate-600">
+                  Starter se presenta públicamente con una prueba de 14 días para conocer el sistema antes de decidir.
+                </p>
               </details>
               <details className="group rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <summary className="cursor-pointer list-none text-sm font-semibold text-slate-900">Como compro si todavia no hay checkout real?</summary>
-                <p className="mt-3 text-sm leading-6 text-slate-600">El CTA de planes pagos va a contacto comercial mientras el flujo de compra no esté cerrado.</p>
+                <summary className="cursor-pointer list-none text-sm font-semibold text-slate-900">¿Cómo consulto planes pagos?</summary>
+                <p className="mt-3 text-sm leading-6 text-slate-600">
+                  Pro y Ultra se gestionan con el equipo comercial hasta que la compra online esté abierta.
+                </p>
               </details>
               <details className="group rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <summary className="cursor-pointer list-none text-sm font-semibold text-slate-900">La app y la landing van separadas?</summary>
-                <p className="mt-3 text-sm leading-6 text-slate-600">Sí. La landing vive en marketing/root y la app queda como producto operativo con indexación controlada.</p>
+                <summary className="cursor-pointer list-none text-sm font-semibold text-slate-900">¿La app y la landing van separadas?</summary>
+                <p className="mt-3 text-sm leading-6 text-slate-600">
+                  Sí. La landing vive en marketing/root y la app queda como producto operativo con indexación controlada.
+                </p>
               </details>
             </div>
           </div>
@@ -292,10 +317,18 @@ export function MarketingHomePage() {
               <PublicButtonLink href={resolveAppUrl("/register-owner")} variant="primary">
                 Registrarte
               </PublicButtonLink>
-              <PublicButtonLink href={resolveAppUrl("/login")} variant="secondary" className="border-white/15 bg-white/5 text-white hover:border-white/30 hover:text-white">
+              <PublicButtonLink
+                href={resolveAppUrl("/login")}
+                variant="secondary"
+                className="border-white/15 bg-white/5 text-white hover:border-white/30 hover:text-white"
+              >
                 Ingresar
               </PublicButtonLink>
-              <PublicButtonLink href={resolveSalesContactUrl()} variant="ghost" className="text-slate-200 hover:text-white">
+              <PublicButtonLink
+                href={resolveSalesContactUrl()}
+                variant="ghost"
+                className="text-slate-200 hover:text-white"
+              >
                 Hablar con ventas
               </PublicButtonLink>
             </div>

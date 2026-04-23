@@ -71,6 +71,12 @@ export function MarketingShell({ children }: MarketingShellProps) {
             <Link to="/funciones" className="text-slate-600 hover:text-brand-700">
               Funciones
             </Link>
+            <Link to="/pms-hotelero" className="text-slate-600 hover:text-brand-700">
+              PMS hotelero
+            </Link>
+            <Link to="/software-para-hoteles" className="text-slate-600 hover:text-brand-700">
+              Software para hoteles
+            </Link>
             <Link to="/precios" className="text-slate-600 hover:text-brand-700">
               Precios
             </Link>

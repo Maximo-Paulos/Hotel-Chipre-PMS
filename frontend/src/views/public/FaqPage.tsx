@@ -4,19 +4,6 @@ import { PublicButtonLink } from "../../components/marketing/PublicButtonLink";
 import { ALLOW_INDEXING, resolveAppUrl } from "../../config/publicUrls";
 import { faqItems } from "../../content/marketing";
 
-const faqSchema = {
-  "@context": "https://schema.org",
-  "@type": "FAQPage",
-  mainEntity: faqItems.map((item) => ({
-    "@type": "Question",
-    name: item.question,
-    acceptedAnswer: {
-      "@type": "Answer",
-      text: item.answer
-    }
-  }))
-};
-
 export function FaqPage() {
   return (
     <MarketingShell>
@@ -25,14 +12,25 @@ export function FaqPage() {
         description="Preguntas frecuentes sobre Hotel Chipre PMS, la prueba de 14 días, el acceso y el tratamiento comercial de los planes."
         canonicalPath="/faq"
         noindex={!ALLOW_INDEXING}
-        structuredData={faqSchema}
+        structuredData={{
+          "@context": "https://schema.org",
+          "@type": "FAQPage",
+          mainEntity: faqItems.map((item) => ({
+            "@type": "Question",
+            name: item.question,
+            acceptedAnswer: {
+              "@type": "Answer",
+              text: item.answer
+            }
+          }))
+        }}
       />
       <section className="mx-auto max-w-4xl px-4 py-16 sm:px-6 lg:px-8">
         <div className="space-y-4">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-700">FAQ</p>
           <h1 className="text-4xl font-semibold tracking-tight text-slate-950">Preguntas frecuentes</h1>
           <p className="text-lg leading-8 text-slate-700">
-            Respuestas cortas y honestas para reducir fricción sin inventar alcances comerciales.
+            Respuestas cortas y útiles para entender el producto, la prueba de 14 días y el tratamiento comercial de los planes.
           </p>
         </div>
 
@@ -45,8 +43,29 @@ export function FaqPage() {
           ))}
         </div>
 
+        <div className="mt-10 rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-700">Seguir explorando</p>
+          <div className="mt-4 flex flex-wrap gap-3 text-sm font-medium">
+            <PublicButtonLink href="/" variant="ghost" className="text-slate-700 hover:text-brand-700">
+              Volver al inicio
+            </PublicButtonLink>
+            <PublicButtonLink href="/funciones" variant="ghost" className="text-slate-700 hover:text-brand-700">
+              Ver qué cubre el sistema
+            </PublicButtonLink>
+            <PublicButtonLink href="/precios" variant="ghost" className="text-slate-700 hover:text-brand-700">
+              Ver planes y precios
+            </PublicButtonLink>
+            <PublicButtonLink href="/pms-hotelero" variant="ghost" className="text-slate-700 hover:text-brand-700">
+              Entender el PMS hotelero
+            </PublicButtonLink>
+            <PublicButtonLink href="/software-para-hoteles" variant="ghost" className="text-slate-700 hover:text-brand-700">
+              Ver software para hoteles
+            </PublicButtonLink>
+          </div>
+        </div>
+
         <div className="mt-10 rounded-[2rem] border border-slate-200 bg-slate-950 p-6 text-white shadow-sm">
-          <h2 className="text-2xl font-semibold">Si quieres avanzar, el siguiente paso es simple</h2>
+          <h2 className="text-2xl font-semibold">Si querés avanzar, el siguiente paso es simple</h2>
           <div className="mt-4 flex flex-wrap gap-3">
             <PublicButtonLink href={resolveAppUrl("/register-owner")} variant="primary">
               Registrarte

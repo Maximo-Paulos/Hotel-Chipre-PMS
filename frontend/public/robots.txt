@@ -6,6 +6,9 @@ Disallow: /habitaciones
 Disallow: /onboarding
 Disallow: /settings
 Disallow: /adminpmsmaster
+Disallow: /login
+Disallow: /register-owner
+Disallow: /invitations/accept
 Disallow: /verify-email
 Disallow: /forgot-password
 Disallow: /reset-password

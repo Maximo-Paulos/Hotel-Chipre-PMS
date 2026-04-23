@@ -3,16 +3,77 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Hotel Chipre PMS</title>
+    <title>Hotel Chipre PMS | PMS hotelero para hoteles independientes</title>
     <meta name="description" content="Sistema de gestión hotelera para centralizar reservas, habitaciones, huéspedes y cobros en un solo lugar." />
     <meta name="theme-color" content="#12324f" />
-    <meta property="og:title" content="Hotel Chipre PMS" />
+    <meta property="og:title" content="Hotel Chipre PMS | PMS hotelero para hoteles independientes" />
     <meta property="og:description" content="Sistema de gestión hotelera para centralizar reservas, habitaciones, huéspedes y cobros en un solo lugar." />
+    <meta property="og:site_name" content="Hotel Chipre PMS" />
     <meta property="og:image" content="/brand/logo-full.png" />
+    <meta property="og:url" content="https://hoteles-pms.com/" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Hotel Chipre PMS" />
+    <meta name="twitter:title" content="Hotel Chipre PMS | PMS hotelero para hoteles independientes" />
     <meta name="twitter:description" content="Sistema de gestión hotelera para centralizar reservas, habitaciones, huéspedes y cobros en un solo lugar." />
-    <meta name="robots" content="noindex, nofollow" />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://hoteles-pms.com/" />
+    <script>
+      (function () {
+        var appHost = "app.hoteles-pms.com";
+
+        var path = window.location.pathname || "/";
+        var host = window.location.hostname || "";
+        var isAppHost = host === appHost || host.endsWith("." + appHost);
+        var privatePaths = [
+          "/login",
+          "/register-owner",
+          "/invitations/accept",
+          "/verify-email",
+          "/forgot-password",
+          "/reset-password",
+          "/adminpmsmaster"
+        ];
+        var isPrivatePath = privatePaths.some(function (route) {
+          return path === route || path.indexOf(route + "/") === 0;
+        });
+        var shouldNoindex = isAppHost || isPrivatePath;
+        var title = shouldNoindex
+          ? "Hotel Chipre PMS | Acceso al sistema"
+          : "Hotel Chipre PMS | PMS hotelero para hoteles independientes";
+        var description = "Sistema de gestión hotelera para centralizar reservas, habitaciones, huéspedes y cobros en un solo lugar.";
+
+        document.title = title;
+
+        function upsertMeta(selector, attribute, value) {
+          var element = document.head.querySelector(selector);
+          if (!element) {
+            element = document.createElement("meta");
+            var match = selector.match(/\[(name|property)="([^"]+)"\]/);
+            if (match) {
+              element.setAttribute(match[1], match[2]);
+            }
+            document.head.appendChild(element);
+          }
+          element.setAttribute(attribute, value);
+        }
+
+        upsertMeta('meta[name="description"]', "content", description);
+        upsertMeta('meta[name="robots"]', "content", shouldNoindex ? "noindex, nofollow" : "index, follow");
+        upsertMeta('meta[property="og:title"]', "content", title);
+        upsertMeta('meta[property="og:description"]', "content", description);
+        upsertMeta('meta[property="og:site_name"]', "content", "Hotel Chipre PMS");
+        upsertMeta('meta[property="og:url"]', "content", window.location.origin + path);
+        upsertMeta('meta[name="twitter:title"]', "content", title);
+        upsertMeta('meta[name="twitter:description"]', "content", description);
+
+        var canonical = document.head.querySelector('link[rel="canonical"]');
+        if (!canonical) {
+          canonical = document.createElement("link");
+          canonical.rel = "canonical";
+          document.head.appendChild(canonical);
+        }
+        canonical.href = window.location.origin + path;
+      })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

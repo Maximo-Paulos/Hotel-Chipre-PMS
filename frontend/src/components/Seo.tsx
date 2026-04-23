@@ -30,12 +30,18 @@ export function Seo({ title, description, canonicalPath = "/", noindex = false, 
     document.title = title;
     document.documentElement.lang = "es";
 
-    const canonicalUrl = resolveCanonicalUrl(canonicalPath);
+    const normalizedPath = canonicalPath.startsWith("/") ? canonicalPath : `/${canonicalPath}`;
+    const canonicalUrl =
+      noindex && typeof window !== "undefined"
+        ? `${window.location.origin}${normalizedPath}`
+        : resolveCanonicalUrl(normalizedPath);
     setMetaTag('meta[name="description"]', "content", description);
     setMetaTag('meta[name="robots"]', "content", noindex ? "noindex, nofollow" : "index, follow");
     setMetaTag('meta[property="og:title"]', "content", title);
     setMetaTag('meta[property="og:description"]', "content", description);
     setMetaTag('meta[property="og:type"]', "content", "website");
+    setMetaTag('meta[property="og:site_name"]', "content", "Hotel Chipre PMS");
+    setMetaTag('meta[property="og:url"]', "content", canonicalUrl);
     setMetaTag('meta[property="og:image"]', "content", resolveAssetUrl("/brand/logo-full.png"));
     setMetaTag('meta[name="twitter:card"]', "content", "summary_large_image");
     setMetaTag('meta[name="twitter:title"]', "content", title);
