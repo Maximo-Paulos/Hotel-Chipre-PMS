@@ -2,6 +2,7 @@ import { useEffect, useMemo } from "react";
 import cx from "clsx";
 import { Link, NavLink, Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 
+import { Seo } from "../components/Seo";
 import { useOnboardingStatus } from "../hooks/useOnboardingStatus";
 import { useSubscriptionStatus } from "../hooks/useSubscription";
 import { useSession } from "../state/session";
@@ -113,6 +114,7 @@ export function AppShell() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
+      <Seo title="Hotel Chipre PMS | App" description="Acceso al sistema operativo de Hotel Chipre PMS." noindex />
       <div className="border-b bg-slate-900 px-6 py-2 text-xs text-white">
         <span className="font-semibold">Hotel Chipre PMS</span>
         <span className="ml-3 text-slate-200">Hotel ID {session.hotelId ?? "-"}</span>

@@ -1,6 +1,7 @@
 """
 End-to-end onboarding flow exposed through the FastAPI routers.
 """
+import tempfile
 from unittest.mock import patch
 
 import pytest
@@ -18,6 +19,10 @@ from app.database import Base, get_db
 @pytest.fixture
 def client(monkeypatch: pytest.MonkeyPatch):
     """Provide a TestClient backed by an in-memory SQLite database."""
+    monkeypatch.setenv(
+        "DEV_EMAIL_OUTBOX_PATH",
+        f"{tempfile.gettempdir()}\\hotel-chipre-test-email-outbox.jsonl",
+    )
     engine = create_engine(
         "sqlite:///:memory:",
         connect_args={"check_same_thread": False},

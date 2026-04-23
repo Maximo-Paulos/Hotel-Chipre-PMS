@@ -1,19 +1,51 @@
 from __future__ import annotations
 
+import json
 import html
+import logging
+import tempfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from email.utils import parseaddr
+from pathlib import Path
 
 from fastapi.responses import HTMLResponse
 
 from app.config import get_settings
 from app.services.email.providers import EmailProviderError, get_email_provider
 from app.services.security import decode_signed_token
+from app.config import is_production_mode
 
 
 class MasterEmailConnectionError(RuntimeError):
     pass
+
+
+LOGGER = logging.getLogger(__name__)
+
+
+def _dev_outbox_path() -> Path:
+    settings = get_settings()
+    raw_path = (getattr(settings, "DEV_EMAIL_OUTBOX_PATH", "") or "").strip()
+    if raw_path:
+        return Path(raw_path)
+    return Path(tempfile.gettempdir()) / "hotel-chipre-dev-email-outbox.jsonl"
+
+
+def _record_dev_email(*, channel: str, to, subject: str, body: str, sender_email: str | None, reply_to: str | None) -> None:
+    path = _dev_outbox_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "channel": channel,
+        "to": [to] if isinstance(to, str) else list(to),
+        "subject": subject,
+        "body": body,
+        "sender_email": sender_email,
+        "reply_to": reply_to,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(payload, ensure_ascii=False) + "\n")
 
 
 @dataclass
@@ -88,6 +120,27 @@ def get_system_email_status(db=None) -> SystemEmailStatus:
 
 def send_system_email(db, to, subject: str, body: str) -> dict[str, object]:
     provider = get_email_provider()
+    settings = get_settings()
+    dev_outbox_path = (getattr(settings, "DEV_EMAIL_OUTBOX_PATH", "") or "").strip()
+    if not is_production_mode(settings) and dev_outbox_path:
+        LOGGER.info("Email system using dev no-op delivery provider provider=%s", provider.provider_name)
+        sender_email, _ = _sender_parts()
+        _record_dev_email(
+            channel="dev_noop",
+            to=to,
+            subject=subject,
+            body=body,
+            sender_email=sender_email,
+            reply_to=(settings.SYSTEM_EMAIL_REPLY_TO or "").strip() or None,
+        )
+        return {
+            "channel": "dev_noop",
+            "provider": provider.provider_name or "null",
+            "sender_email": sender_email,
+            "reply_to": (settings.SYSTEM_EMAIL_REPLY_TO or "").strip() or None,
+            "provider_message_id": None,
+        }
+
     if provider.provider_name != "resend" or not provider.configured:
         raise MasterEmailConnectionError(_build_unavailable_message())
 
@@ -96,7 +149,6 @@ def send_system_email(db, to, subject: str, body: str) -> dict[str, object]:
     except EmailProviderError as exc:
         raise MasterEmailConnectionError(str(exc)) from exc
 
-    settings = get_settings()
     sender_email, _ = _sender_parts()
     return {
         "channel": "resend_system",

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { ApiError } from "../../api/client";
+import { Seo } from "../../components/Seo";
 import { login as loginApi } from "../../api/auth";
 import { getOnboardingStatus } from "../../api/onboarding";
 import { normalizeRole, useSession, type SessionState } from "../../state/session";
@@ -53,6 +54,7 @@ export function LoginPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
+      <Seo title="Ingresar | Hotel Chipre PMS" description="Accede al sistema de gestión hotelera Hotel Chipre PMS." noindex />
       <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-lg ring-1 ring-slate-100">
         <div className="mb-6 flex flex-col items-start gap-4">
           <img

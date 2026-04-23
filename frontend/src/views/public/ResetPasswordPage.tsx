@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { ApiError } from "../../api/client";
+import { Seo } from "../../components/Seo";
 import { requestPasswordReset, resetPassword } from "../../api/auth";
 import { normalizeRole, useSession } from "../../state/session";
 
@@ -82,6 +83,7 @@ export function ResetPasswordPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
+      <Seo title="Restablecer contraseña | Hotel Chipre PMS" description="Restablece tu contraseña de acceso." noindex />
       <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-lg ring-1 ring-slate-100">
         <div className="mb-6 space-y-3">
           <img

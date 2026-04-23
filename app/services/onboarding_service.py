@@ -77,29 +77,47 @@ def _merge_extra_policies(config: HotelConfiguration, **updates) -> None:
 
 
 def _serialize_categories(db: Session, hotel_id: int) -> list[dict]:
-    categories = db.query(RoomCategory).filter(RoomCategory.hotel_id == hotel_id).order_by(RoomCategory.id.asc()).all()
+    categories = (
+        db.query(
+            RoomCategory.name,
+            RoomCategory.code,
+            RoomCategory.description,
+            RoomCategory.base_price_per_night,
+            RoomCategory.max_occupancy,
+            RoomCategory.amenities,
+        )
+        .filter(RoomCategory.hotel_id == hotel_id)
+        .order_by(RoomCategory.id.asc())
+        .all()
+    )
     return [
         {
-            "name": category.name,
-            "code": category.code,
-            "description": category.description,
-            "base_price_per_night": category.base_price_per_night,
-            "max_occupancy": category.max_occupancy,
-            "amenities": category.amenities,
+            "name": name,
+            "code": code,
+            "description": description,
+            "base_price_per_night": base_price_per_night,
+            "max_occupancy": max_occupancy,
+            "amenities": amenities,
         }
-        for category in categories
+        for name, code, description, base_price_per_night, max_occupancy, amenities in categories
     ]
 
 
 def _serialize_rooms(db: Session, hotel_id: int) -> list[dict]:
-    rooms = db.query(Room).filter(Room.hotel_id == hotel_id).order_by(Room.id.asc()).all()
+    rooms = (
+        db.query(Room.room_number, Room.floor, RoomCategory.code)
+        .join(RoomCategory, Room.category_id == RoomCategory.id)
+        .filter(Room.hotel_id == hotel_id)
+        .order_by(Room.id.asc())
+        .all()
+    )
     return [
         {
-            "room_number": room.room_number,
-            "floor": room.floor,
-            "category_code": room.category.code if room.category else None,
+            "room_number": room_number,
+            "floor": floor,
+            "category_code": category_code,
         }
-        for room in rooms
+        for room_number, floor, category_code in rooms
     ]
 
 

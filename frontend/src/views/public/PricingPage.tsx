@@ -1,166 +1,105 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Seo } from "../../components/Seo";
+import { MarketingShell } from "../../components/marketing/MarketingShell";
+import { PublicButtonLink } from "../../components/marketing/PublicButtonLink";
+import { ALLOW_INDEXING, resolveAppUrl, resolveSalesContactUrl } from "../../config/publicUrls";
+import { faqItems, pricingCards } from "../../content/marketing";
 
-import { CheckoutStub } from "../../components/CheckoutStub";
-import { FALLBACK_PLANS, useSubscriptionPlans } from "../../hooks/useSubscription";
-import type { SubscriptionPlan } from "../../api/subscription";
-
-type PlanCardProps = {
-  plan: SubscriptionPlan;
-  onSelect: (plan: SubscriptionPlan) => void;
+const schema = {
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  itemListElement: [
+    { "@type": "ListItem", position: 1, name: "Inicio", item: "/" },
+    { "@type": "ListItem", position: 2, name: "Precios", item: "/precios" }
+  ]
 };
 
-function PlanCard({ plan, onSelect }: PlanCardProps) {
-  return (
-    <div
-      className={`relative flex h-full flex-col rounded-2xl border bg-white/90 p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-md ${
-        plan.highlight ? "border-brand-300 ring-2 ring-brand-100" : "border-slate-200"
-      }`}
-    >
-      {plan.badge && (
-        <span className="absolute -top-3 left-4 rounded-full bg-brand-600 px-3 py-1 text-xs font-semibold text-white shadow-sm">
-          {plan.badge}
-        </span>
-      )}
-      <div className="mb-4 space-y-1">
-        <p className="text-sm font-semibold text-slate-500">{plan.code.toUpperCase()}</p>
-        <h3 className="text-xl font-semibold text-slate-900">{plan.name}</h3>
-        {plan.description && <p className="text-sm text-slate-600">{plan.description}</p>}
-      </div>
-      <div className="mb-4 flex items-baseline gap-2">
-        {plan.price_month != null ? (
-          <>
-            <span className="text-3xl font-bold text-slate-900">${plan.price_month}</span>
-            <span className="text-sm text-slate-500">/ mes</span>
-          </>
-        ) : (
-          <span className="text-lg font-semibold text-slate-800">A medida</span>
-        )}
-      </div>
-      <p className="text-sm text-slate-500">Hasta {plan.room_limit} habitaciones operables.</p>
-      <ul className="mt-4 space-y-2 text-sm text-slate-700">
-        {(plan.features ?? []).map((feature) => (
-          <li key={feature} className="flex items-start gap-2">
-            <span className="mt-1 h-2 w-2 rounded-full bg-brand-500" aria-hidden />
-            <span>{feature}</span>
-          </li>
-        ))}
-      </ul>
-      <div className="mt-auto pt-6">
-        <button
-          type="button"
-          onClick={() => onSelect(plan)}
-          className={`w-full rounded-xl px-4 py-2 text-sm font-semibold transition ${
-            plan.highlight
-              ? "bg-brand-600 text-white hover:bg-brand-700"
-              : "border border-slate-200 text-slate-800 hover:border-brand-300 hover:text-brand-700"
-          }`}
-        >
-          {plan.price_month === 0 ? "Probar gratis" : "Checkout (demo)"}
-        </button>
-        <p className="mt-2 text-center text-xs text-slate-500">Checkout falso (modo demo).</p>
-      </div>
-    </div>
-  );
-}
-
 export function PricingPage() {
-  const { data: plansData = FALLBACK_PLANS, isPlaceholderData } = useSubscriptionPlans();
-  const plans = plansData?.length ? plansData : FALLBACK_PLANS;
-  const usingMock = isPlaceholderData || plans.some((p) => p.mock);
-  const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlan | null>(null);
-  const [checkoutOpen, setCheckoutOpen] = useState(false);
-
-  const handleFakeCheckout = (plan: SubscriptionPlan) => {
-    setSelectedPlan(plan);
-    setCheckoutOpen(true);
-  };
-
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      <div className="border-b border-slate-200 bg-white/80 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
-          <Link to="/" className="text-lg font-semibold text-slate-900">
-            Hotel Chipre PMS
-          </Link>
-          <div className="flex items-center gap-3 text-sm font-semibold">
-            <Link to="/login" className="text-slate-700 hover:text-brand-700">
+    <MarketingShell>
+      <Seo
+        title="Precios de Hotel Chipre PMS | Starter, Pro y Ultra"
+        description="Conoce los planes Starter, Pro y Ultra de Hotel Chipre PMS y descubre cómo empezar con la prueba de 14 días."
+        canonicalPath="/precios"
+        noindex={!ALLOW_INDEXING}
+        structuredData={schema}
+      />
+
+      <section className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:px-8">
+        <div className="max-w-3xl space-y-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-700">Precios</p>
+          <h1 className="text-4xl font-semibold tracking-tight text-slate-950">Planes simples, honestos y orientados a operación real</h1>
+          <p className="text-lg leading-8 text-slate-700">
+            La página de precios debe evitar cualquier resto de versiones anteriores o checkout no definitivo. La comunicación pública se mantiene deliberadamente mínima hasta cerrar los detalles finos de comercialización.
+          </p>
+          <div className="flex flex-wrap gap-3">
+            <PublicButtonLink href={resolveAppUrl("/register-owner")} variant="primary">
+              Registrarte
+            </PublicButtonLink>
+            <PublicButtonLink href={resolveAppUrl("/login")} variant="secondary">
               Ingresar
-            </Link>
-            <Link
-              to="/register-owner"
-              className="rounded-full bg-brand-600 px-4 py-2 text-white shadow-sm hover:bg-brand-700"
-            >
-              Crear cuenta
-            </Link>
-          </div>
-        </div>
-      </div>
-
-      <div className="mx-auto max-w-6xl px-4 py-12 lg:py-16">
-        <div className="grid gap-10 lg:grid-cols-2 lg:items-center">
-          <div className="space-y-4">
-            <p className="inline-flex rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700">
-              Nuevos planes beta
-            </p>
-            <h1 className="text-3xl font-bold text-slate-900 sm:text-4xl">
-              Reservas, operación y cobros en un solo lugar.
-            </h1>
-            <p className="text-lg text-slate-700">
-              Diseñamos planes simples para hoteles de pocas habitaciones hasta propiedades con operación más compleja.
-              Los precios son de muestra y el checkout está en modo demo para no tocar producción.
-            </p>
-            <div className="flex flex-wrap gap-3 text-sm text-slate-700">
-              <span className="flex items-center gap-2 rounded-full bg-white px-3 py-2 shadow-sm">
-                <span className="h-2 w-2 rounded-full bg-emerald-500" /> Datos mock seguros
-              </span>
-              <span className="flex items-center gap-2 rounded-full bg-white px-3 py-2 shadow-sm">
-                <span className="h-2 w-2 rounded-full bg-brand-500" /> Cambiá de plan sin fricción
-              </span>
-              <span className="flex items-center gap-2 rounded-full bg-white px-3 py-2 shadow-sm">
-                <span className="h-2 w-2 rounded-full bg-slate-500" /> En camino: checkout real
-              </span>
-            </div>
-          </div>
-          <div className="rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-lg">
-            <p className="text-sm font-semibold text-slate-600">Resumen rápido</p>
-            <ul className="mt-3 space-y-2 text-sm text-slate-700">
-              <li>· El contexto de hotel solo se envía cuando la sesión es válida.</li>
-              <li>· Room limit por plan para evitar sobreventa.</li>
-              <li>· Bandeja de estado de suscripción con can_write.</li>
-            </ul>
-            <p className="mt-4 rounded-lg bg-brand-50 px-4 py-3 text-sm text-brand-800">
-              {usingMock
-                ? "Mostrando planes mock porque el backend no respondió."
-                : "Datos obtenidos del backend. ¡Listo para conectar checkout!"}
-            </p>
+            </PublicButtonLink>
           </div>
         </div>
 
-        <div className="mt-12 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {plans.map((plan) => (
-            <PlanCard key={plan.code} plan={plan} onSelect={handleFakeCheckout} />
+        <div className="mt-10 grid gap-4 md:grid-cols-3">
+          {pricingCards.map((plan) => (
+            <article key={plan.code} className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{plan.code}</p>
+              <h2 className="mt-2 text-2xl font-semibold text-slate-950">{plan.name}</h2>
+              <p className="mt-3 text-sm leading-7 text-slate-600">{plan.description}</p>
+              <div className="mt-6">
+                <PublicButtonLink
+                  href={plan.code === "starter" ? resolveAppUrl("/register-owner") : resolveSalesContactUrl()}
+                  variant={plan.code === "starter" ? "primary" : "secondary"}
+                >
+                  {plan.cta}
+                </PublicButtonLink>
+              </div>
+            </article>
           ))}
         </div>
 
-        <div className="mt-14 grid gap-6 rounded-2xl border border-slate-200 bg-white/90 p-6 shadow-sm md:grid-cols-3">
-          <div>
-            <p className="text-xs uppercase tracking-wide text-slate-500">Integraciones</p>
-            <p className="mt-1 text-sm text-slate-700">API REST JSON · OTA (beta) · Webhooks</p>
+        <div className="mt-10 rounded-[2rem] border border-slate-200 bg-slate-950 p-6 text-white shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-300">Regla de pricing</p>
+          <ul className="mt-4 grid gap-3 text-sm leading-6 text-slate-300 md:grid-cols-3">
+            <li>No publicar detalle fino no cerrado.</li>
+            <li>No publicar integraciones específicas en las cards.</li>
+            <li>No publicar límites, staff limits, Stripe ni capacidades avanzadas no cerradas.</li>
+          </ul>
+        </div>
+
+        <div className="mt-10 grid gap-8 lg:grid-cols-[1fr_1fr]">
+          <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-700">FAQ</p>
+            <h2 className="mt-2 text-2xl font-semibold text-slate-950">Objeciones frecuentes</h2>
+            <div className="mt-4 space-y-3">
+              {faqItems.slice(1).map((item) => (
+                <details key={item.question} className="group rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <summary className="cursor-pointer list-none text-sm font-semibold text-slate-950">{item.question}</summary>
+                  <p className="mt-3 text-sm leading-7 text-slate-600">{item.answer}</p>
+                </details>
+              ))}
+            </div>
           </div>
-          <div>
-            <p className="text-xs uppercase tracking-wide text-slate-500">Soporte</p>
-            <p className="mt-1 text-sm text-slate-700">Email y chat. SLA según plan.</p>
-          </div>
-          <div>
-            <p className="text-xs uppercase tracking-wide text-slate-500">Seguridad</p>
-            <p className="mt-1 text-sm text-slate-700">JWT + contexto de hotel validado por sesión activa.</p>
+
+          <div className="rounded-[2rem] border border-slate-200 bg-slate-950 p-6 text-white shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-300">CTA final</p>
+            <h2 className="mt-2 text-3xl font-semibold tracking-tight">Hablar con ventas si quieres planes pagos</h2>
+            <p className="mt-3 text-sm leading-7 text-slate-300">
+              Mientras la compra online no esté abierta, esta es la opción correcta para Pro y Ultra.
+            </p>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <PublicButtonLink href={resolveSalesContactUrl()} variant="primary">
+                Hablar con ventas
+              </PublicButtonLink>
+              <PublicButtonLink href={resolveAppUrl("/register-owner")} variant="secondary" className="border-white/15 bg-white/5 text-white hover:border-white/30 hover:text-white">
+                Registrarte
+              </PublicButtonLink>
+            </div>
           </div>
         </div>
-      </div>
-
-      <CheckoutStub open={checkoutOpen} plan={selectedPlan} onClose={() => setCheckoutOpen(false)} />
-    </div>
+      </section>
+    </MarketingShell>
   );
 }
 

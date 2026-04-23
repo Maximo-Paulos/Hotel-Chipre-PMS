@@ -1,0 +1,13 @@
+User-agent: *
+Disallow: /dashboard
+Disallow: /reservas
+Disallow: /huespedes
+Disallow: /habitaciones
+Disallow: /onboarding
+Disallow: /settings
+Disallow: /adminpmsmaster
+Disallow: /verify-email
+Disallow: /forgot-password
+Disallow: /reset-password
+
+Sitemap: https://hoteles-pms.com/sitemap.xml

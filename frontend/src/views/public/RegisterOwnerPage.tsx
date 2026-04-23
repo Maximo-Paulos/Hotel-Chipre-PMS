@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { ApiError } from "../../api/client";
+import { Seo } from "../../components/Seo";
 import { register, requestVerification } from "../../api/auth";
 import { setOwner } from "../../api/onboarding";
 import { normalizeRole, useSession } from "../../state/session";
@@ -65,6 +66,7 @@ export function RegisterOwnerPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
+      <Seo title="Registrarte | Hotel Chipre PMS" description="Crea tu cuenta de dueño y empieza la prueba de 14 días." noindex />
       <div className="w-full max-w-2xl rounded-2xl bg-white p-8 shadow-lg ring-1 ring-slate-100">
         <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div className="space-y-3">
