@@ -1,7 +1,7 @@
-import type { ReactNode } from "react";
-import { createBrowserRouter, Navigate } from "react-router-dom";
+import { useEffect, type ReactNode } from "react";
+import { createBrowserRouter, Navigate, useLocation } from "react-router-dom";
 
-import { isAppHostname, PUBLIC_SITE_URL } from "./config/publicUrls";
+import { isAppHostname, resolveAppLocation, resolveSiteLocation } from "./config/publicUrls";
 import { useOnboardingStatus } from "./hooks/useOnboardingStatus";
 import { useSession } from "./state/session";
 import { AppShell } from "./ui/AppShell";
@@ -42,10 +42,40 @@ import { MasterAdminStripePage } from "./master_admin/pages/StripePage";
 
 const APP_HOST = isAppHostname();
 
+function HostRedirect({ target }: { target: string }) {
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.location.href !== target) {
+      window.location.replace(target);
+    }
+  }, [target]);
+
+  return null;
+}
+
 function MarketingRedirect({ children }: { children: ReactNode }) {
-  if (APP_HOST && PUBLIC_SITE_URL) {
-    return <Navigate to={`${PUBLIC_SITE_URL}${window.location.pathname}${window.location.search}${window.location.hash}`} replace />;
+  const location = useLocation();
+
+  if (APP_HOST) {
+    return (
+      <HostRedirect
+        target={resolveSiteLocation(location.pathname, location.search, location.hash)}
+      />
+    );
   }
+  return <>{children}</>;
+}
+
+function AppHostOnly({ children }: { children: ReactNode }) {
+  const location = useLocation();
+
+  if (!APP_HOST) {
+    return (
+      <HostRedirect
+        target={resolveAppLocation(location.pathname, location.search, location.hash)}
+      />
+    );
+  }
+
   return <>{children}</>;
 }
 
@@ -149,16 +179,134 @@ const publicRoutes = [
       </MarketingRedirect>
     )
   },
-  { path: "/login", element: <LoginPage /> },
-  { path: "/register-owner", element: <RegisterOwnerPage /> },
-  { path: "/forgot-password", element: <ForgotPasswordPage /> },
-  { path: "/reset-password", element: <ResetPasswordPage /> },
-  { path: "/invitations/accept", element: <AcceptInvitationPage /> },
-  { path: "/verify-email", element: <VerifyEmailPage /> }
+  {
+    path: "/login",
+    element: (
+      <AppHostOnly>
+        <LoginPage />
+      </AppHostOnly>
+    )
+  },
+  {
+    path: "/register-owner",
+    element: (
+      <AppHostOnly>
+        <RegisterOwnerPage />
+      </AppHostOnly>
+    )
+  },
+  {
+    path: "/forgot-password",
+    element: (
+      <AppHostOnly>
+        <ForgotPasswordPage />
+      </AppHostOnly>
+    )
+  },
+  {
+    path: "/reset-password",
+    element: (
+      <AppHostOnly>
+        <ResetPasswordPage />
+      </AppHostOnly>
+    )
+  },
+  {
+    path: "/invitations/accept",
+    element: (
+      <AppHostOnly>
+        <AcceptInvitationPage />
+      </AppHostOnly>
+    )
+  },
+  {
+    path: "/accept-invitation",
+    element: (
+      <AppHostOnly>
+        <AcceptInvitationPage />
+      </AppHostOnly>
+    )
+  },
+  {
+    path: "/verify-email",
+    element: (
+      <AppHostOnly>
+        <VerifyEmailPage />
+      </AppHostOnly>
+    )
+  }
 ];
 
 export const router = createBrowserRouter([
   ...appRoutes,
+  ...(!APP_HOST
+    ? [
+        {
+          path: "/dashboard",
+          element: (
+            <AppHostOnly>
+              <Navigate to="/dashboard" replace />
+            </AppHostOnly>
+          )
+        },
+        {
+          path: "/huespedes",
+          element: (
+            <AppHostOnly>
+              <Navigate to="/huespedes" replace />
+            </AppHostOnly>
+          )
+        },
+        {
+          path: "/reservas",
+          element: (
+            <AppHostOnly>
+              <Navigate to="/reservas" replace />
+            </AppHostOnly>
+          )
+        },
+        {
+          path: "/habitaciones",
+          element: (
+            <AppHostOnly>
+              <Navigate to="/habitaciones" replace />
+            </AppHostOnly>
+          )
+        },
+        {
+          path: "/onboarding/*",
+          element: (
+            <AppHostOnly>
+              <Navigate to="/onboarding" replace />
+            </AppHostOnly>
+          )
+        },
+        {
+          path: "/settings/*",
+          element: (
+            <AppHostOnly>
+              <Navigate to="/settings/users" replace />
+            </AppHostOnly>
+          )
+        },
+        {
+          path: "/adminpmsmaster/*",
+          element: (
+            <AppHostOnly>
+              <Navigate to="/adminpmsmaster" replace />
+            </AppHostOnly>
+          )
+        },
+        {
+          path: "/accept-invitation",
+          element: (
+            <AppHostOnly>
+              <Navigate to="/accept-invitation" replace />
+            </AppHostOnly>
+          )
+        }
+      ]
+    : []),
   ...publicRoutes,
   { path: "*", element: APP_HOST ? <Navigate to="/dashboard" replace /> : <Navigate to="/" replace /> }
 ]);
