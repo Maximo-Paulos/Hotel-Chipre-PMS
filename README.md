@@ -53,10 +53,11 @@ Toma `DATABASE_URL` del compose. Para SQLite local: `DATABASE_URL=sqlite:///./de
 - Add `X-Hotel-Id` on every mutating call (defaults to the first persisted hotel if omitted).
 
 ## Auth & Email
-- Registro/Login/Verificación/Reset: `/api/auth/*` (envía emails si `SMTP_*` está configurado; si `DEMO_MODE=true` devuelve el código en la respuesta).
+- Registro/Login/Verificación/Reset: `/api/auth/*` (usa `EMAIL_PROVIDER=resend`; en desarrollo puede escribir el código en el outbox local si se configura `DEV_EMAIL_OUTBOX_PATH`).
 - JWT: header `Authorization: Bearer <token>`. Claves en `.env`: `JWT_SECRET`, `JWT_EXPIRES_MINUTES`, `JWT_ALGORITHM`.
 - Rate limit de login (in-memory): `LOGIN_RATE_LIMIT` intentos por ventana de 15 min.
-- SMTP env vars: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`, `SMTP_STARTUP_NOTIFY` (default False, así no spamea al iniciar).
+- Email transaccional: `EMAIL_PROVIDER`, `RESEND_API_KEY`, `SYSTEM_EMAIL_FROM`, `SYSTEM_EMAIL_REPLY_TO`.
+- Opcional dev: `DEV_EMAIL_OUTBOX_PATH` para guardar códigos de verificación/reset en local.
 - Add `X-User-Id` for auditing; values are free-form.
 
 ## Key Stage 1 Endpoints

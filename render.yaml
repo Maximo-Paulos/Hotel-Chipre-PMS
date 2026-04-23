@@ -13,15 +13,23 @@ services:
       - key: JWT_SECRET
         generateValue: true
       - key: CORS_ORIGINS
-        sync: false   # set to your Vercel URL, e.g. https://hotel-chipre.vercel.app
+        sync: false   # set to https://hoteles-pms.com,https://app.hoteles-pms.com
       - key: FRONTEND_URL
-        sync: false   # set to your Vercel URL (used in invitation emails)
+        sync: false   # set to https://app.hoteles-pms.com (used in invitation emails)
       - key: APP_BASE_URL
         sync: false   # set to your Render service URL, e.g. https://hotel-chipre-pms-api.onrender.com
       - key: MANAGER_PIN
         sync: false   # at least 6 digits, not 1234
       - key: INTEGRATIONS_ENCRYPTION_KEY
         sync: false   # generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+      - key: EMAIL_PROVIDER
+        value: resend
+      - key: RESEND_API_KEY
+        sync: false   # set in Render dashboard; required when EMAIL_PROVIDER=resend
+      - key: SYSTEM_EMAIL_FROM
+        sync: false   # set in Render dashboard; required when EMAIL_PROVIDER=resend
+      - key: SYSTEM_EMAIL_REPLY_TO
+        sync: false   # set in Render dashboard; required when EMAIL_PROVIDER=resend
       - key: GEMMA_ENABLED
         value: "false"
     plan: free
