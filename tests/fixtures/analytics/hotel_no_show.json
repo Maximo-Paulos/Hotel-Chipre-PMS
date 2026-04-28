@@ -1,0 +1,25 @@
+{
+  "hotel": {
+    "id": 1,
+    "hotel_name": "No Show Hotel",
+    "hotel_timezone": "America/Argentina/Buenos_Aires",
+    "default_currency": "ARS",
+    "plan": "ultra"
+  },
+  "reservations": [
+    {
+      "id": 60,
+      "confirmation_code": "NS-001",
+      "status": "no_show",
+      "outcome": "no_show",
+      "no_show_policy_applied": "full_charge",
+      "channel_code": "other_direct",
+      "guest_segment": "leisure",
+      "guest_segment_source": "system_default"
+    }
+  ],
+  "expected": {
+    "has_no_show": true,
+    "row_kind": "no_show_chargeable"
+  }
+}

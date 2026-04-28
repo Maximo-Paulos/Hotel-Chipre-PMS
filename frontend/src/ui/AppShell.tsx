@@ -15,6 +15,7 @@ type NavItem = {
   label: string;
   to: string;
   requiresRole?: Array<"owner" | "co_owner" | "manager" | "housekeeping" | "receptionist">;
+  minPlan?: "starter" | "pro" | "ultra";
 };
 
 type NavSection = {
@@ -23,6 +24,19 @@ type NavSection = {
 };
 
 const baseNav = [
+  {
+    title: "Analytics",
+    items: [
+      { label: "Resumen", to: "/analytics" },
+      { label: "Habitaciones", to: "/analytics/rooms", minPlan: "pro" },
+      { label: "Segmentos", to: "/analytics/segments", minPlan: "pro" },
+      { label: "Canales", to: "/analytics/channels", minPlan: "pro" },
+      { label: "Operación", to: "/analytics/operations", minPlan: "pro" },
+      { label: "Chat IA", to: "/analytics/ai-chat", minPlan: "ultra" },
+      { label: "Companies", to: "/settings/companies", minPlan: "pro" },
+      { label: "Room events", to: "/operacion/room-state-events", minPlan: "pro" }
+    ]
+  },
   {
     title: "Operacion",
     items: [
@@ -36,19 +50,26 @@ const baseNav = [
     title: "Proceso",
     items: [{ label: "Onboarding", to: "/onboarding" }],
   },
-  {
-    title: "Configuracion",
-    items: [
-      { label: "Usuarios", to: "/settings/users", requiresRole: ["owner", "co_owner"] },
-      { label: "Asistente", to: "/settings/assistant", requiresRole: ["owner", "co_owner", "manager"] },
-      { label: "Suscripcion", to: "/settings/subscription", requiresRole: ["owner", "co_owner"] },
-      { label: "Conexiones", to: "/settings/connections", requiresRole: ["owner", "co_owner"] },
-      { label: "Pruebas", to: "/settings/tests", requiresRole: ["owner", "co_owner"] },
-      { label: "Hotel", to: "/settings/hotel", requiresRole: ["owner", "co_owner"] },
-      { label: "Seguridad", to: "/settings/security", requiresRole: ["owner", "co_owner"] },
-    ],
+        {
+          title: "Configuracion",
+          items: [
+            { label: "Usuarios", to: "/settings/users", requiresRole: ["owner", "co_owner"] },
+            { label: "Asistente", to: "/settings/assistant", requiresRole: ["owner", "co_owner", "manager"] },
+            { label: "Suscripcion", to: "/settings/subscription", requiresRole: ["owner", "co_owner"] },
+            { label: "Companies", to: "/settings/companies", minPlan: "pro" },
+            { label: "Conexiones", to: "/settings/connections", requiresRole: ["owner", "co_owner"] },
+            { label: "Pruebas", to: "/settings/tests", requiresRole: ["owner", "co_owner"] },
+            { label: "Hotel", to: "/settings/hotel", requiresRole: ["owner", "co_owner"] },
+            { label: "Seguridad", to: "/settings/security", requiresRole: ["owner", "co_owner"] },
+          ],
   },
 ];
+
+const planRank: Record<"starter" | "pro" | "ultra", number> = {
+  starter: 0,
+  pro: 1,
+  ultra: 2
+};
 
 const ACTIVE_SUBSCRIPTION_STATUSES = ["active", "trialing", "demo", "comped"];
 
@@ -95,12 +116,13 @@ export function AppShell() {
       .map((section) => {
         const items = section.items
           .filter((item) => !item.requiresRole || (role ? item.requiresRole.includes(role) : false))
+          .filter((item) => !item.minPlan || (subscription?.plan ? (planRank[subscription.plan] ?? 0) >= (planRank[item.minPlan] ?? 0) : false))
           .filter((item) => !(item.to === "/onboarding" && onboarding?.completed));
         if (!items.length) return null;
         return { ...section, items } as NavSection;
       })
       .filter((section): section is NavSection => Boolean(section));
-  }, [role, onboarding?.completed]);
+  }, [role, onboarding?.completed, subscription?.plan]);
 
   const path = location.pathname;
   if (role === "housekeeping" && path.startsWith("/settings")) return <Navigate to="/reservas" replace />;
@@ -208,7 +230,7 @@ export function AppShell() {
                   <span className="leading-tight">Hotel Chipre PMS</span>
                 </Link>
                 <nav className="flex items-center gap-2 md:hidden">
-                  {baseNav[0]?.items.map((item) => (
+                  {visibleNavSections.find((section) => section.title === "Analytics")?.items.map((item) => (
                     <NavLink
                       key={item.to}
                       to={item.to}

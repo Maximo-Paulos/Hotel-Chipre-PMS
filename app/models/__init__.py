@@ -1,8 +1,18 @@
 from app.models.room import Room, RoomCategory
 from app.models.guest import Guest, GuestCompanion
-from app.models.reservation import Reservation, ReservationStatusEnum
+from app.models.reservation import (
+    Reservation,
+    ReservationStatusEnum,
+    ReservationOutcomeEnum,
+    ReservationGuestSegmentEnum,
+    ReservationGuestSegmentSourceEnum,
+    ReservationChannelCodeEnum,
+    ReservationCancellationReasonCodeEnum,
+    ReservationNoShowPolicyAppliedEnum,
+)
 from app.models.transaction import Transaction, PaymentMethodEnum, TransactionStatusEnum
 from app.models.hotel_config import HotelConfiguration
+from app.models.company import Company
 from app.models.ota import OTAReservationMapping, OTAWebhookCredential
 from app.models.ota_core import (
     OTAProvider,
@@ -58,13 +68,34 @@ from app.models.payment_link_test import PaymentLinkTest
 from app.models.security_token import SecurityToken
 from app.models.rate_limit_event import RateLimitEvent
 from app.models.ai_assistant import AIAssistantSession, AIAssistantMessage, AIAssistantActionRun, AIAssistantInsight
+from app.models.analytics import (
+    AnalyticsExportFormatEnum,
+    AnalyticsCurrencyDisplayEnum,
+    AnalyticsExportStatusEnum,
+    AnalyticsAlertSetting,
+    AnalyticsAlertSnooze,
+    AnalyticsExportJob,
+    AnalyticsAIUsageMonthly,
+    HotelAuditEvent,
+    RoomStateEventTypeEnum,
+    RoomStateEventReasonCodeEnum,
+    RoomStateEvent,
+    FactReservationRowKindEnum,
+    FactRoomOccupancyStatusAtNightEnum,
+    FactReservationDaily,
+    FactRoomOccupancyDaily,
+)
 
 __all__ = [
     "Room", "RoomCategory",
     "Guest", "GuestCompanion",
-    "Reservation", "ReservationStatusEnum",
+    "Reservation", "ReservationStatusEnum", "ReservationOutcomeEnum",
+    "ReservationGuestSegmentEnum", "ReservationGuestSegmentSourceEnum",
+    "ReservationChannelCodeEnum", "ReservationCancellationReasonCodeEnum",
+    "ReservationNoShowPolicyAppliedEnum",
     "Transaction", "PaymentMethodEnum", "TransactionStatusEnum",
     "HotelConfiguration",
+    "Company",
     "OTAReservationMapping",
     "OTAWebhookCredential",
     "OTAProvider",
@@ -122,4 +153,19 @@ __all__ = [
     "AIAssistantMessage",
     "AIAssistantActionRun",
     "AIAssistantInsight",
+    "AnalyticsExportFormatEnum",
+    "AnalyticsCurrencyDisplayEnum",
+    "AnalyticsExportStatusEnum",
+    "AnalyticsAlertSetting",
+    "AnalyticsAlertSnooze",
+    "AnalyticsExportJob",
+    "AnalyticsAIUsageMonthly",
+    "HotelAuditEvent",
+    "RoomStateEventTypeEnum",
+    "RoomStateEventReasonCodeEnum",
+    "RoomStateEvent",
+    "FactReservationRowKindEnum",
+    "FactRoomOccupancyStatusAtNightEnum",
+    "FactReservationDaily",
+    "FactRoomOccupancyDaily",
 ]

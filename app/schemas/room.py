@@ -13,6 +13,7 @@ class RoomCategoryBase(BaseModel):
     code: str = Field(..., min_length=1, max_length=20)
     description: Optional[str] = None
     base_price_per_night: float = Field(..., gt=0)
+    variable_cost_per_night: float = Field(default=0, ge=0)
     max_occupancy: int = Field(..., gt=0)
     amenities: Optional[str] = None
 
@@ -31,6 +32,7 @@ class RoomCategoryUpdate(BaseModel):
     code: Optional[str] = Field(default=None, min_length=1, max_length=20)
     description: Optional[str] = None
     base_price_per_night: Optional[float] = Field(default=None, gt=0)
+    variable_cost_per_night: Optional[float] = Field(default=None, ge=0)
     max_occupancy: Optional[int] = Field(default=None, gt=0)
     amenities: Optional[str] = None
 

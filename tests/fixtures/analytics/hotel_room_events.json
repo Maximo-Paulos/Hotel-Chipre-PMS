@@ -1,0 +1,33 @@
+{
+  "hotel": {
+    "id": 1,
+    "hotel_name": "Room Events Hotel",
+    "hotel_timezone": "America/Argentina/Buenos_Aires",
+    "default_currency": "ARS",
+    "plan": "pro"
+  },
+  "rooms": [
+    {
+      "id": 70,
+      "room_number": "201",
+      "category_id": 20,
+      "status": "available",
+      "is_active": true
+    }
+  ],
+  "room_state_events": [
+    {
+      "id": 80,
+      "room_id": 70,
+      "event_type": "maintenance",
+      "reason_code": "inspection",
+      "reason_note": "Scheduled inspection",
+      "started_at": "2026-04-01T09:00:00Z",
+      "ended_at": "2026-04-01T13:00:00Z"
+    }
+  ],
+  "expected": {
+    "status_at_night": "maintenance",
+    "is_sellable_night": false
+  }
+}

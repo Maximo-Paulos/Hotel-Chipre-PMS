@@ -22,6 +22,7 @@ class ReservationStatusEnum(str, enum.Enum):
     CHECKED_IN = "checked_in"
     CHECKED_OUT = "checked_out"
     CANCELLED = "cancelled"
+    NO_SHOW = "no_show"
 
 
 class ReservationSourceEnum(str, enum.Enum):
@@ -29,6 +30,53 @@ class ReservationSourceEnum(str, enum.Enum):
     BOOKING = "booking"          # Booking.com
     EXPEDIA = "expedia"          # Expedia
     OTHER_OTA = "other_ota"
+
+
+class ReservationOutcomeEnum(str, enum.Enum):
+    PENDING = "pending"
+    CHECKED_IN = "checked_in"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+    NO_SHOW = "no_show"
+
+
+class ReservationGuestSegmentEnum(str, enum.Enum):
+    LEISURE = "leisure"
+    BUSINESS = "business"
+
+
+class ReservationGuestSegmentSourceEnum(str, enum.Enum):
+    MANUAL = "manual"
+    INFERRED_FROM_COMPANY = "inferred_from_company"
+    SYSTEM_DEFAULT = "system_default"
+
+
+class ReservationChannelCodeEnum(str, enum.Enum):
+    WEBSITE_DIRECT = "website_direct"
+    WHATSAPP = "whatsapp"
+    PHONE = "phone"
+    WALK_IN = "walk_in"
+    BOOKING = "booking"
+    EXPEDIA = "expedia"
+    DESPEGAR = "despegar"
+    OTHER_OTA = "other_ota"
+    OTHER_DIRECT = "other_direct"
+
+
+class ReservationCancellationReasonCodeEnum(str, enum.Enum):
+    GUEST_REQUEST = "guest_request"
+    PAYMENT_FAILURE = "payment_failure"
+    OVERBOOKING = "overbooking"
+    HOTEL_ISSUE = "hotel_issue"
+    WEATHER = "weather"
+    OTHER = "other"
+
+
+class ReservationNoShowPolicyAppliedEnum(str, enum.Enum):
+    NONE = "none"
+    FULL_CHARGE = "full_charge"
+    PARTIAL_CHARGE = "partial_charge"
+    WAIVED = "waived"
 
 
 # Valid state transitions
@@ -45,12 +93,14 @@ VALID_TRANSITIONS: dict[ReservationStatusEnum, set[ReservationStatusEnum]] = {
     ReservationStatusEnum.FULLY_PAID: {
         ReservationStatusEnum.CHECKED_IN,
         ReservationStatusEnum.CANCELLED,
+        ReservationStatusEnum.NO_SHOW,
     },
     ReservationStatusEnum.CHECKED_IN: {
         ReservationStatusEnum.CHECKED_OUT,
     },
     ReservationStatusEnum.CHECKED_OUT: set(),
     ReservationStatusEnum.CANCELLED: set(),     # Terminal state
+    ReservationStatusEnum.NO_SHOW: set(),
 }
 
 
@@ -78,6 +128,7 @@ class Reservation(Base):
     guest_id = Column(Integer, ForeignKey("guests.id"), nullable=False)
     room_id = Column(Integer, ForeignKey("rooms.id"), nullable=True)  # Nullable until assigned
     category_id = Column(Integer, ForeignKey("room_categories.id"), nullable=False)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=True)
     sellable_product_id = Column(Integer, ForeignKey("sellable_products.id"), nullable=True)
     rate_plan_id = Column(Integer, ForeignKey("rate_plans.id"), nullable=True)
     tax_policy_id = Column(Integer, ForeignKey("tax_policies.id"), nullable=True)
@@ -111,6 +162,69 @@ class Reservation(Base):
         ),
         nullable=False,
         default=ReservationStatusEnum.PENDING,
+    )
+    outcome = Column(
+        Enum(
+            ReservationOutcomeEnum,
+            name="reservation_outcome_enum",
+            create_constraint=True,
+            values_callable=lambda enum_cls: [e.value for e in enum_cls],
+        ),
+        nullable=False,
+        default=ReservationOutcomeEnum.PENDING,
+    )
+    guest_segment = Column(
+        Enum(
+            ReservationGuestSegmentEnum,
+            name="reservation_guest_segment_enum",
+            create_constraint=True,
+            values_callable=lambda enum_cls: [e.value for e in enum_cls],
+        ),
+        nullable=False,
+        default=ReservationGuestSegmentEnum.LEISURE,
+    )
+    guest_segment_source = Column(
+        Enum(
+            ReservationGuestSegmentSourceEnum,
+            name="reservation_guest_segment_source_enum",
+            create_constraint=True,
+            values_callable=lambda enum_cls: [e.value for e in enum_cls],
+        ),
+        nullable=False,
+        default=ReservationGuestSegmentSourceEnum.SYSTEM_DEFAULT,
+    )
+    channel_code = Column(
+        Enum(
+            ReservationChannelCodeEnum,
+            name="reservation_channel_code_enum",
+            create_constraint=True,
+            values_callable=lambda enum_cls: [e.value for e in enum_cls],
+        ),
+        nullable=False,
+        default=ReservationChannelCodeEnum.OTHER_DIRECT,
+    )
+    cancelled_at = Column(DateTime, nullable=True)
+    cancelled_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    cancellation_reason_code = Column(
+        Enum(
+            ReservationCancellationReasonCodeEnum,
+            name="reservation_cancellation_reason_code_enum",
+            create_constraint=True,
+            values_callable=lambda enum_cls: [e.value for e in enum_cls],
+        ),
+        nullable=True,
+    )
+    cancellation_reason_note = Column(String(500), nullable=True)
+    no_show_confirmed_at = Column(DateTime, nullable=True)
+    no_show_policy_applied = Column(
+        Enum(
+            ReservationNoShowPolicyAppliedEnum,
+            name="reservation_no_show_policy_applied_enum",
+            create_constraint=True,
+            values_callable=lambda enum_cls: [e.value for e in enum_cls],
+        ),
+        nullable=False,
+        default=ReservationNoShowPolicyAppliedEnum.NONE,
     )
 
     # Source tracking (OTA or direct)
@@ -188,9 +302,9 @@ class Reservation(Base):
         """Check if a state transition is valid."""
         if (
             self.status in (ReservationStatusEnum.CHECKED_IN, ReservationStatusEnum.CHECKED_OUT)
-            and new_status == ReservationStatusEnum.CANCELLED
+            and new_status in (ReservationStatusEnum.CANCELLED, ReservationStatusEnum.NO_SHOW)
         ):
-            # Defensive guard: never allow cancellations after check-in/checkout
+            # Defensive guard: never allow terminal pre-check-in outcomes after check-in/checkout
             return False
         return new_status in VALID_TRANSITIONS.get(self.status, set())
 

@@ -28,6 +28,19 @@ import { SettingsHotelPage } from "./views/protected/SettingsHotelPage";
 import { SettingsSecurityPage } from "./views/protected/SettingsSecurityPage";
 import { SettingsTestsPage } from "./views/protected/SettingsTestsPage";
 import { SettingsUsersPage } from "./views/protected/SettingsUsersPage";
+import {
+  AnalyticsCategoryDetailPage,
+  AnalyticsAIChatPage,
+  AnalyticsChannelsPage,
+  AnalyticsCompanyDetailPage,
+  AnalyticsHomePage,
+  AnalyticsOperationsPage,
+  AnalyticsRoomDetailPage,
+  AnalyticsRoomsPage,
+  AnalyticsSegmentsPage,
+  CompaniesSettingsPage,
+  RoomStateEventsPage
+} from "./views/protected/analytics/AnalyticsPages";
 import { OnboardingWizard } from "./views/onboarding/OnboardingWizard";
 import {
   MasterAdminProtectedShell,
@@ -94,6 +107,17 @@ const appRoutes = APP_HOST
         element: <AppShell />,
         children: [
           { index: true, element: <Navigate to="/dashboard" replace /> },
+          { path: "analytics", element: <AnalyticsHomePage /> },
+          { path: "analytics/rooms", element: <AnalyticsRoomsPage /> },
+          { path: "analytics/rooms/:roomId", element: <AnalyticsRoomDetailPage /> },
+          { path: "analytics/categories/:categoryId", element: <AnalyticsCategoryDetailPage /> },
+          { path: "analytics/segments", element: <AnalyticsSegmentsPage /> },
+          { path: "analytics/companies/:companyId", element: <AnalyticsCompanyDetailPage /> },
+          { path: "analytics/channels", element: <AnalyticsChannelsPage /> },
+          { path: "analytics/operations", element: <AnalyticsOperationsPage /> },
+          { path: "analytics/ai-chat", element: <AnalyticsAIChatPage /> },
+          { path: "settings/companies", element: <CompaniesSettingsPage /> },
+          { path: "operacion/room-state-events", element: <RoomStateEventsPage /> },
           { path: "dashboard", element: <DashboardPage /> },
           { path: "huespedes", element: <GuestsPage /> },
           { path: "reservas", element: <ReservationsPage /> },

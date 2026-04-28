@@ -22,3 +22,7 @@ celery_app.conf.update(
     task_acks_late=True,
     worker_prefetch_multiplier=1,
 )
+
+# Eager imports so Celery registers module-level tasks without autodiscovery.
+import app.tasks.ota_tasks  # noqa: F401,E402
+import app.tasks.analytics_tasks  # noqa: F401,E402

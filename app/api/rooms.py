@@ -26,6 +26,7 @@ from app.services.reservation_service import ReservationError, find_available_ro
 from app.dependencies.auth import get_auth_context, AuthContext, require_roles
 from app.services.allocation_runtime_service import run_persisted_allocation
 from app.services.subscription_service import ensure_room_within_limit
+from app.services.analytics_service import record_hotel_audit_event
 
 router = APIRouter(prefix="/api/rooms", tags=["Rooms"])
 
@@ -60,6 +61,16 @@ def create_category(
 ):
     category = RoomCategory(**data.model_dump(), hotel_id=context.hotel_id)
     db.add(category)
+    db.flush()
+    record_hotel_audit_event(
+        db,
+        hotel_id=context.hotel_id,
+        user_id=context.user_id or 0,
+        action_code="analytics.variable_cost.updated",
+        entity_type="room_category",
+        entity_id=category.id,
+        after={"room_category_id": category.id, "variable_cost_per_night": float(category.variable_cost_per_night or 0)},
+    )
     db.commit()
     db.refresh(category)
     return category
@@ -75,9 +86,21 @@ def update_category(
     category = db.query(RoomCategory).filter(RoomCategory.id == category_id, RoomCategory.hotel_id == context.hotel_id).first()
     if not category:
         raise HTTPException(status_code=404, detail="Category not found")
+    before_variable_cost = float(category.variable_cost_per_night or 0)
     payload = data.model_dump(exclude_unset=True)
     for field, value in payload.items():
         setattr(category, field, value)
+    if "variable_cost_per_night" in payload and float(payload["variable_cost_per_night"] or 0) != before_variable_cost:
+        record_hotel_audit_event(
+            db,
+            hotel_id=context.hotel_id,
+            user_id=context.user_id or 0,
+            action_code="analytics.variable_cost.updated",
+            entity_type="room_category",
+            entity_id=category.id,
+            before={"room_category_id": category.id, "variable_cost_per_night": before_variable_cost},
+            after={"room_category_id": category.id, "variable_cost_per_night": float(category.variable_cost_per_night or 0)},
+        )
     db.commit()
     db.refresh(category)
     return category
