@@ -49,6 +49,8 @@ Variables de entorno:
 - `RESEND_API_KEY=<resend key>`
 - `SYSTEM_EMAIL_FROM="Hotel Chipre PMS <noreply@auth.hoteles-pms.com>"`
 - `SYSTEM_EMAIL_REPLY_TO=hotelxpms@gmail.com`
+- `ANALYTICS_EXPORTS_DIR=/var/exports/analytics`
+- `AI_ENABLED=false` until the hotel-specific IA provider is configured
 - `GEMMA_ENABLED=false`
 
 ## 3) Cloudflare DNS
