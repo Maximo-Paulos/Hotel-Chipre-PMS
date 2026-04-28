@@ -42,6 +42,7 @@ class HotelConfiguration(Base):
     # Subscription / ownership
     owner_email = Column(String(200), nullable=True)
     subscription_active = Column(Boolean, nullable=False, default=True)
+    analytics_ai_enabled = Column(Boolean, nullable=False, default=False)
 
     # Check-in policies
     require_document_for_checkin = Column(Boolean, nullable=False, default=True)

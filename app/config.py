@@ -76,6 +76,18 @@ class Settings(BaseSettings):
     MASTER_ADMIN_MAX_ATTEMPTS: int = 5
     MASTER_ADMIN_LOCKOUT_MINUTES: int = 15
 
+    # Generic AI provider for Analytics. When unset, Analytics falls back to the legacy GEMMA_* values.
+    AI_ENABLED: bool | None = None
+    AI_PROVIDER: str = ""  # disabled, gemma, openai, openai_compatible, auto
+    AI_BASE_URL: str = ""
+    AI_API_KEY: str = ""
+    AI_MODEL: str = ""
+    AI_TIMEOUT_SECONDS: float | None = None
+    AI_MAX_OUTPUT_TOKENS: int | None = None
+    AI_TEMPERATURE: float | None = None
+    AI_STRICT_JSON: bool | None = None
+    AI_MONTHLY_QUOTA: int | None = None
+
     # Gemma / policy-learning assistant
     GEMMA_ENABLED: bool = False
     GEMMA_PROVIDER: str = "disabled"  # disabled, openai_compatible, google_gemini_api, auto
@@ -90,6 +102,7 @@ class Settings(BaseSettings):
     GEMMA_MAX_INPUT_CHARS: int = 4000
     GEMMA_RATE_LIMIT_WINDOW_SECONDS: int = 300
     GEMMA_RATE_LIMIT_MAX_MESSAGES: int = 20
+    ANALYTICS_EXPORTS_DIR: str = r"C:\PROJECTO\Hotel-Chipre-PMS\var\exports\analytics"
 
     # Auth
     JWT_SECRET: str = "change-me"

@@ -1,0 +1,64 @@
+{
+  "hotel": {
+    "id": 1,
+    "hotel_name": "Small ARS Hotel",
+    "hotel_timezone": "America/Argentina/Buenos_Aires",
+    "default_currency": "ARS",
+    "plan": "starter"
+  },
+  "companies": [
+    {
+      "id": 10,
+      "legal_name": "Acme SRL",
+      "display_name": "Acme",
+      "tax_id": "30-12345678-9",
+      "country_code": "AR",
+      "is_active": true
+    }
+  ],
+  "room_categories": [
+    {
+      "id": 20,
+      "code": "STD",
+      "name": "Standard",
+      "variable_cost_per_night": 12.5
+    }
+  ],
+  "rooms": [
+    {
+      "id": 30,
+      "room_number": "101",
+      "category_id": 20,
+      "status": "available",
+      "is_active": true
+    }
+  ],
+  "guests": [
+    {
+      "id": 40,
+      "first_name": "Ana",
+      "last_name": "Paz",
+      "email": "guest@acme.test"
+    }
+  ],
+  "reservations": [
+    {
+      "id": 50,
+      "confirmation_code": "RES-001",
+      "company_id": 10,
+      "room_id": 30,
+      "category_id": 20,
+      "status": "fully_paid",
+      "outcome": "pending",
+      "channel_code": "booking",
+      "guest_segment": "leisure",
+      "guest_segment_source": "system_default"
+    }
+  ],
+  "room_state_events": [],
+  "expected": {
+    "currency_display": "ARS",
+    "compare_previous": true,
+    "compare_yoy": false
+  }
+}

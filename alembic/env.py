@@ -58,6 +58,18 @@ def _ensure_wide_version_table(engine) -> None:
     Alembic's own transaction management is not disturbed.
     """
     from sqlalchemy import text, inspect as sa_inspect
+    if engine.dialect.name == "sqlite":
+        with engine.begin() as conn:
+            inspector = sa_inspect(conn)
+            if "alembic_version" not in inspector.get_table_names():
+                conn.execute(text(
+                    "CREATE TABLE alembic_version ("
+                    "  version_num VARCHAR(128) NOT NULL, "
+                    "  CONSTRAINT alembic_version_pkc PRIMARY KEY (version_num)"
+                    ")"
+                ))
+        return
+
     with engine.begin() as conn:
         inspector = sa_inspect(conn)
         if "alembic_version" in inspector.get_table_names():

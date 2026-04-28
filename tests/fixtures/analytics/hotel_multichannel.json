@@ -1,0 +1,44 @@
+{
+  "hotel": {
+    "id": 1,
+    "hotel_name": "Multichannel Hotel",
+    "hotel_timezone": "America/Argentina/Buenos_Aires",
+    "default_currency": "ARS",
+    "plan": "pro"
+  },
+  "companies": [
+    {
+      "id": 11,
+      "legal_name": "North Travel SA",
+      "display_name": "North Travel",
+      "tax_id": "30-98765432-1",
+      "country_code": "AR",
+      "is_active": true
+    }
+  ],
+  "reservations": [
+    {
+      "id": 51,
+      "confirmation_code": "WEB-001",
+      "channel_code": "website_direct",
+      "guest_segment": "leisure"
+    },
+    {
+      "id": 52,
+      "confirmation_code": "OTA-001",
+      "channel_code": "expedia",
+      "guest_segment": "business"
+    },
+    {
+      "id": 53,
+      "confirmation_code": "WPP-001",
+      "channel_code": "whatsapp",
+      "guest_segment": "leisure"
+    }
+  ],
+  "expected": {
+    "channels": ["website_direct", "expedia", "whatsapp"],
+    "compare_previous": true,
+    "compare_yoy": false
+  }
+}

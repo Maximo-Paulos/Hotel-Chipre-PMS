@@ -1,0 +1,37 @@
+{
+  "owner": {
+    "id": 90,
+    "email": "owner@example.com",
+    "role": "owner"
+  },
+  "hotels": [
+    {
+      "id": 1,
+      "hotel_name": "Main Hotel",
+      "plan": "pro"
+    },
+    {
+      "id": 2,
+      "hotel_name": "Second Hotel",
+      "plan": "ultra"
+    }
+  ],
+  "memberships": [
+    {
+      "hotel_id": 1,
+      "user_id": 90,
+      "role": "owner",
+      "status": "active"
+    },
+    {
+      "hotel_id": 2,
+      "user_id": 90,
+      "role": "owner",
+      "status": "active"
+    }
+  ],
+  "expected": {
+    "hotel_ids": [1, 2],
+    "primary_hotel_id": 1
+  }
+}

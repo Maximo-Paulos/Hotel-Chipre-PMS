@@ -5,6 +5,7 @@ import enum
 
 from sqlalchemy import (
     Column,
+    Numeric,
     Integer,
     String,
     Float,
@@ -40,6 +41,7 @@ class RoomCategory(Base):
     code = Column(String(20), nullable=False)  # "STD_DBL"
     description = Column(Text, nullable=True)
     base_price_per_night = Column(Float, nullable=False)
+    variable_cost_per_night = Column(Numeric(12, 2), nullable=False, default=0)
     max_occupancy = Column(Integer, nullable=False, default=2)
     amenities = Column(Text, nullable=True)  # JSON string of amenities
 
