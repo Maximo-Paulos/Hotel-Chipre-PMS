@@ -2,6 +2,11 @@
   "version": 2,
   "buildCommand": "npm run build",
   "outputDirectory": "frontend/dist",
+  "functions": {
+    "app.py": {
+      "excludeFiles": "{tests/**,docs/**,graphify-out/**,backups/**,tmp/**,.claude/**,.codex/**,.pytest_cache/**,frontend/node_modules/**,frontend/src/**,frontend/e2e/**,frontend/public/**,frontend/.playwright-cache/**,frontend/*.log,frontend/*.err,frontend/*.config.cjs,frontend/*.config.mjs,frontend/tsconfig*.json,frontend/playwright.config.ts,frontend/package-lock.json,frontend/package.json,frontend/vite.config.mjs,frontend/tailwind.config.cjs,frontend/postcss.config.cjs,*.db,*.log,.env,.env.*,dev*.db}"
+    }
+  },
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
   ],
