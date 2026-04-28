@@ -1,0 +1,7 @@
+{
+  "name": "hotel-chipre-pms-vercel-build",
+  "private": true,
+  "scripts": {
+    "build": "cd frontend && npm ci && npm run build"
+  }
+}
