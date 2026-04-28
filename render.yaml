@@ -32,5 +32,9 @@ services:
         sync: false   # set in Render dashboard; required when EMAIL_PROVIDER=resend
       - key: GEMMA_ENABLED
         value: "false"
+      - key: AI_ENABLED
+        value: "false"
+      - key: ANALYTICS_EXPORTS_DIR
+        value: /var/exports/analytics
     plan: free
     autoDeploy: true
