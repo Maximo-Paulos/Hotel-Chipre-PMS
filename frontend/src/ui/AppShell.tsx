@@ -44,7 +44,7 @@ const baseNav = [
       { label: "Reservas", to: "/reservas" },
       { label: "Huespedes", to: "/huespedes" },
       { label: "Habitaciones", to: "/habitaciones" },
-      { label: "Tarifas", to: "/operacion/tarifas" },
+      { label: "Tarifas", to: "/operacion/tarifas", requiresRole: ["owner", "co_owner", "manager"] },
     ],
   },
   {

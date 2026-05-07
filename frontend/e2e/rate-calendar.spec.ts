@@ -250,7 +250,7 @@ const mockCalendar = {
 };
 
 test("rate calendar page renders read-only grid", async ({ page }) => {
-  await page.route("**/api/**", async (route) => {
+  await page.route("http://127.0.0.1:8040/api/**", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
 
@@ -364,18 +364,19 @@ test("rate calendar page renders read-only grid", async ({ page }) => {
     });
   });
 
-  await page.goto("/login");
-  await page.getByLabel("Email").fill("owner@example.com");
-  await page.getByLabel("Contraseña").fill("demo-password");
+  await page.goto("http://127.0.0.1:5173/login");
+  await page.locator('input[type="email"]').fill("owner@example.com");
+  await page.locator('input[type="password"]').fill("demo-password");
   await page.getByTestId("login-submit").click();
 
   await page.waitForURL("**/dashboard");
-  await page.goto("/operacion/tarifas");
+  await page.getByRole("link", { name: "Tarifas" }).click();
+  await page.waitForURL("**/operacion/tarifas");
 
   await expect(page.getByTestId("rate-calendar-page")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Calendario de tarifas y disponibilidad" })).toBeVisible();
   await expect(page.getByTestId("rate-calendar-grid")).toBeVisible();
   await expect(page.getByText("Booking.com")).toBeVisible();
-  await expect(page.getByText("Falta mapeo")).toBeVisible();
+  await expect(page.getByText("Falta mapeo").first()).toBeVisible();
   await expect(page.getByText("US$ 42")).toBeVisible();
 });
