@@ -39,6 +39,7 @@ from app.api import (
     analytics,
     companies,
     room_state_events,
+    rate_calendar,
 )
 import app.master_admin.models  # noqa: F401
 from app.master_admin.router import router as master_admin_router
@@ -138,6 +139,7 @@ app.include_router(gemma_chat.router)
 app.include_router(analytics.router)
 app.include_router(companies.router)
 app.include_router(room_state_events.router)
+app.include_router(rate_calendar.router)
 app.include_router(master_admin_router)
 
 # Frontend build paths
@@ -244,6 +246,7 @@ def serve_spa(full_path: str, db: Session = Depends(get_db)):
     if candidate.is_file() and candidate.is_relative_to(FRONTEND_DIST):
         return FileResponse(candidate)
     return serve_frontend(db)
+
 
 
 

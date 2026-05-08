@@ -19,6 +19,7 @@ import { SoftwareParaHotelesPage } from "./views/public/SoftwareParaHotelesPage"
 import { VerifyEmailPage } from "./views/public/VerifyEmailPage";
 import { DashboardPage } from "./views/protected/DashboardPage";
 import { GuestsPage } from "./views/protected/GuestsPage";
+import { RateCalendarPage } from "./views/protected/RateCalendarPage";
 import { ReservationsPage } from "./views/protected/ReservationsPage";
 import { RoomsPage } from "./views/protected/RoomsPage";
 import { SettingsAssistantPage } from "./views/protected/SettingsAssistantPage";
@@ -122,6 +123,7 @@ const appRoutes = APP_HOST
           { path: "huespedes", element: <GuestsPage /> },
           { path: "reservas", element: <ReservationsPage /> },
           { path: "habitaciones", element: <RoomsPage /> },
+          { path: "operacion/tarifas", element: <RateCalendarPage /> },
           { path: "onboarding/*", element: <OnboardingGate /> },
           { path: "settings", element: <Navigate to="/settings/users" replace /> },
           { path: "settings/users", element: <SettingsUsersPage /> },
@@ -294,6 +296,14 @@ export const router = createBrowserRouter([
           element: (
             <AppHostOnly>
               <Navigate to="/habitaciones" replace />
+            </AppHostOnly>
+          )
+        },
+        {
+          path: "/operacion/tarifas",
+          element: (
+            <AppHostOnly>
+              <Navigate to="/operacion/tarifas" replace />
             </AppHostOnly>
           )
         },

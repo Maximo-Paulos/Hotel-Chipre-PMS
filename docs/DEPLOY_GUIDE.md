@@ -12,9 +12,11 @@ Crear un proyecto desde la raíz del repo.
 
 Config:
 - Framework: Vite
+- No usar `FastAPI` como framework preset para este proyecto de Vercel.
 - Build command: usar la del `vercel.json` de la raíz
 - Output directory: `frontend/dist`
 - Rewrites SPA: todas las rutas a `/index.html`
+- Si el proyecto de Vercel usa `Root Directory = frontend`, la config equivalente vive en `frontend/vercel.json`.
 
 Dominios a conectar:
 - `hoteles-pms.com`
