@@ -19,6 +19,7 @@ class ReservationStatusEnum(str, enum.Enum):
     PENDING = "pending"
     DEPOSIT_PAID = "deposit_paid"
     FULLY_PAID = "fully_paid"
+    PRE_CHECK_IN = "pre_check_in"   # v72 §7.2: docs loaded, waiting for room entry confirmation
     CHECKED_IN = "checked_in"
     CHECKED_OUT = "checked_out"
     CANCELLED = "cancelled"
@@ -91,9 +92,14 @@ VALID_TRANSITIONS: dict[ReservationStatusEnum, set[ReservationStatusEnum]] = {
         ReservationStatusEnum.CANCELLED,
     },
     ReservationStatusEnum.FULLY_PAID: {
-        ReservationStatusEnum.CHECKED_IN,
+        ReservationStatusEnum.PRE_CHECK_IN,     # v72 §7.2: docs loaded, awaiting room entry
+        ReservationStatusEnum.CHECKED_IN,       # skip pre_check_in if entry confirmed immediately
         ReservationStatusEnum.CANCELLED,
         ReservationStatusEnum.NO_SHOW,
+    },
+    ReservationStatusEnum.PRE_CHECK_IN: {       # v72 §7.2: "Huésped ingresó al cuarto"
+        ReservationStatusEnum.CHECKED_IN,
+        ReservationStatusEnum.CANCELLED,        # guest no-shows after pre-check-in
     },
     ReservationStatusEnum.CHECKED_IN: {
         ReservationStatusEnum.CHECKED_OUT,
@@ -138,6 +144,7 @@ class Reservation(Base):
     check_out_date = Column(Date, nullable=False)
     actual_check_in = Column(DateTime, nullable=True)
     actual_check_out = Column(DateTime, nullable=True)
+    pre_check_in_at = Column(DateTime, nullable=True)   # v72 §7.2: timestamp of pre-finalization
     arrival_time_hint = Column(String(80), nullable=True)
 
     # Financial

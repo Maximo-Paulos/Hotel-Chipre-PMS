@@ -143,6 +143,8 @@ REQUIRED_TABLES = {
     "room_blocks",
     # v72 gaps phase 3
     "room_movement_groups",
+    # v72 gaps phase 4
+    "company_documents",
 }
 
 

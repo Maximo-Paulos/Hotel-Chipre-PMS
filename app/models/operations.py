@@ -156,6 +156,10 @@ class RoomMoveEvent(Base):
         default=RoomMoveTypeEnum.MANUAL_MOVE,
     )
     reason_code = Column(String(50), nullable=True)
+    reason_note = Column(Text, nullable=True)           # v72 §5.3: motivo obligatorio para movimiento manual
+    trigger_event = Column(String(100), nullable=True)  # v72 §5.5: e.g. "new_reservation", "block_created"
+    state_before = Column(String(50), nullable=True)    # v72 §5.5: reservation/room state before move
+    state_after = Column(String(50), nullable=True)     # v72 §5.5: reservation/room state after move
     notes = Column(Text, nullable=True)
     occurred_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
     created_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
