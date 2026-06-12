@@ -42,6 +42,7 @@ from app.models.commercial import (
 from app.models.operations import (
     ReservationStatusHistory,
     ReservationAdjustment,
+    RoomMovementGroup,
     RoomMoveEvent,
     BillingAdjustment,
 )
@@ -141,6 +142,7 @@ __all__ = [
     "FxPolicy",
     "ReservationStatusHistory",
     "ReservationAdjustment",
+    "RoomMovementGroup",
     "RoomMoveEvent",
     "BillingAdjustment",
     "AllocationPolicyProfile",

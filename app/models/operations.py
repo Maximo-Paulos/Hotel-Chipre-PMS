@@ -7,14 +7,15 @@ from datetime import datetime, timezone
 import enum
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     Column,
     DateTime,
     Enum,
-    Float,
     ForeignKey,
     Index,
     Integer,
+    Numeric,
     String,
     Text,
 )
@@ -89,7 +90,7 @@ class ReservationAdjustment(Base):
     reason_code = Column(String(50), nullable=True)
     request_source = Column(String(50), nullable=True)
     notes = Column(Text, nullable=True)
-    amount_delta = Column(Float, nullable=True)
+    amount_delta = Column(Numeric(12, 2), nullable=True)
     currency_code = Column(String(3), nullable=True)
     external_resolution_status = Column(String(50), nullable=True)
     requested_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
@@ -108,12 +109,40 @@ class ReservationAdjustment(Base):
     )
 
 
+class RoomMovementGroup(Base):
+    """
+    Groups multiple RoomMoveEvents triggered by the same cause (v72 §5.4).
+    Supports batch revert by owner/co-owner/manager.
+    """
+    __tablename__ = "room_movement_groups"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    hotel_id = Column(Integer, ForeignKey("hotel_configuration.id", ondelete="CASCADE"), nullable=False)
+    trigger_reason = Column(String(100), nullable=False)   # e.g. "overbooking_resolution_2026-08-01"
+    notes = Column(Text, nullable=True)
+    is_reverted = Column(Boolean, nullable=False, default=False)
+    reverted_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    reverted_at = Column(DateTime, nullable=True)
+    created_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+
+    move_events = relationship("RoomMoveEvent", back_populates="movement_group", lazy="selectin")
+
+    __table_args__ = (
+        Index("ix_room_movement_groups_hotel_id", "hotel_id"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<RoomMovementGroup(id={self.id}, hotel_id={self.hotel_id}, reverted={self.is_reverted})>"
+
+
 class RoomMoveEvent(Base):
     __tablename__ = "room_move_events"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     hotel_id = Column(Integer, ForeignKey("hotel_configuration.id", ondelete="CASCADE"), nullable=False)
     reservation_id = Column(Integer, ForeignKey("reservations.id", ondelete="CASCADE"), nullable=False)
+    movement_group_id = Column(Integer, ForeignKey("room_movement_groups.id", ondelete="SET NULL"), nullable=True)
     from_room_id = Column(Integer, ForeignKey("rooms.id", ondelete="SET NULL"), nullable=True)
     to_room_id = Column(Integer, ForeignKey("rooms.id", ondelete="SET NULL"), nullable=True)
     move_type = Column(
@@ -132,6 +161,7 @@ class RoomMoveEvent(Base):
     created_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     reservation = relationship("Reservation", lazy="joined")
+    movement_group = relationship("RoomMovementGroup", back_populates="move_events", lazy="joined")
     from_room = relationship("Room", foreign_keys=[from_room_id], lazy="joined")
     to_room = relationship("Room", foreign_keys=[to_room_id], lazy="joined")
     created_by = relationship("User", lazy="joined")
@@ -166,10 +196,10 @@ class BillingAdjustment(Base):
         ),
         nullable=False,
     )
-    amount = Column(Float, nullable=False)
+    amount = Column(Numeric(12, 2), nullable=False)
     currency_code = Column(String(3), nullable=False, default="ARS")
-    tax_amount = Column(Float, nullable=True)
-    total_amount = Column(Float, nullable=False)
+    tax_amount = Column(Numeric(12, 2), nullable=True)
+    total_amount = Column(Numeric(12, 2), nullable=False)
     effective_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
     notes = Column(Text, nullable=True)
     created_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)

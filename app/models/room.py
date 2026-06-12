@@ -83,6 +83,7 @@ class Room(Base):
     is_active = Column(Boolean, nullable=False, default=True)
     score = Column(Integer, nullable=True)        # 1-10 preference score for allocation
     is_accessible = Column(Boolean, nullable=False, default=False)
+    description = Column(Text, nullable=True)
     notes = Column(Text, nullable=True)
 
     # Relationships

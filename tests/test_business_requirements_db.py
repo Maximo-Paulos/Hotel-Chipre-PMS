@@ -40,6 +40,7 @@ from app.models.payment_config import PaymentSurchargeConfig
 from app.models.hotel_api_key import HotelAPIKey, APIKeyPurposeEnum
 from app.models.room_block import RoomBlock, RoomBlockReasonEnum
 from app.models.company import Company
+from app.models.operations import RoomMovementGroup, RoomMoveEvent, BillingAdjustment
 
 
 # ---------------------------------------------------------------------------
@@ -140,6 +141,8 @@ REQUIRED_TABLES = {
     "hotel_api_keys",
     # v72 gaps phase 2
     "room_blocks",
+    # v72 gaps phase 3
+    "room_movement_groups",
 }
 
 
@@ -885,3 +888,49 @@ def test_reservation_ota_dedup_constraint_exists():
         c.name for c in Reservation.__table__.constraints if isinstance(c, UC)
     }
     assert "uq_reservation_ota_external_id" in constraint_names
+
+
+# ---------------------------------------------------------------------------
+# v72 gaps phase 3 — room_movement_groups (§5.4)
+# ---------------------------------------------------------------------------
+
+def test_room_movement_groups_table_registered():
+    assert "room_movement_groups" in Base.metadata.tables
+
+
+def test_room_movement_group_persists(db):
+    hotel = HotelConfiguration(id=900, hotel_name="H900", subscription_active=True)
+    db.add(hotel)
+    db.flush()
+
+    group = RoomMovementGroup(
+        hotel_id=900,
+        trigger_reason="overbooking_resolution_2026-08-01",
+        notes="3 rooms moved due to same overbooking event",
+        created_at=datetime.now(timezone.utc),
+    )
+    db.add(group)
+    db.commit()
+    saved = db.get(RoomMovementGroup, group.id)
+    assert saved.trigger_reason == "overbooking_resolution_2026-08-01"
+    assert saved.is_reverted is False
+
+
+def test_billing_adjustment_amounts_are_numeric():
+    from sqlalchemy import Numeric
+    cols = BillingAdjustment.__table__.columns
+    for col_name in ("amount", "tax_amount", "total_amount"):
+        col = cols[col_name]
+        assert isinstance(col.type, Numeric),             f"BillingAdjustment.{col_name} must be Numeric, got {type(col.type)}"
+
+
+def test_rooms_description_field_exists():
+    from app.models.room import Room
+    assert "description" in Room.__table__.columns
+
+
+def test_reservation_adjustment_amount_delta_is_numeric():
+    from sqlalchemy import Numeric
+    from app.models.operations import ReservationAdjustment
+    col = ReservationAdjustment.__table__.columns["amount_delta"]
+    assert isinstance(col.type, Numeric),         f"ReservationAdjustment.amount_delta must be Numeric, got {type(col.type)}"
