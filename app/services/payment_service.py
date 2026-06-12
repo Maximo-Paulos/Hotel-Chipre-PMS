@@ -8,6 +8,7 @@ Implements the booking cart flow:
 Coordinates with payment gateway adapters (MercadoPago, PayPal) and cash.
 """
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Optional
 
 from sqlalchemy.orm import Session
@@ -172,14 +173,15 @@ def process_payment(
     transaction_currency = _resolve_payment_currency(reservation, request.currency)
 
     # 3. Validate amount
+    _TOLERANCE = Decimal("0.01")
     if is_refund:
-        if request.amount > reservation.amount_paid + 0.01:
+        if Decimal(str(request.amount)) > reservation.amount_paid + _TOLERANCE:
             raise PaymentError(
                 f"Refund amount ${request.amount:.2f} exceeds paid amount ${reservation.amount_paid:.2f}"
             )
     else:
         balance = reservation.balance_due
-        if request.amount > balance + 0.01:  # Small tolerance for float arithmetic
+        if Decimal(str(request.amount)) > Decimal(str(balance)) + _TOLERANCE:
             raise PaymentError(
                 f"Payment amount ${request.amount:.2f} exceeds balance due ${balance:.2f}"
             )
@@ -252,8 +254,11 @@ def _update_reservation_financials(
     - If deposit paid (amount >= deposit_amount) and status is PENDING → deposit_paid
     - If fully paid (balance_due == 0) → fully_paid
     """
-    signed_amount = -amount if tx_type == TransactionTypeEnum.REFUND else amount
-    reservation.amount_paid = max(0.0, round(reservation.amount_paid + signed_amount, 2))
+    d_amount = Decimal(str(amount))
+    signed_amount = -d_amount if tx_type == TransactionTypeEnum.REFUND else d_amount
+    current_paid = Decimal(str(reservation.amount_paid or 0))
+    new_paid = current_paid + signed_amount
+    reservation.amount_paid = max(Decimal("0"), new_paid).quantize(Decimal("0.01"))
     _sync_reservation_financial_status(db, reservation, hotel_id=hotel_id, reason_code=tx_type.value)
     db.flush()
 
@@ -268,9 +273,13 @@ def _sync_reservation_financial_status(
     if reservation.status in (ReservationStatusEnum.CANCELLED, ReservationStatusEnum.CHECKED_OUT):
         return
 
-    if reservation.amount_paid >= reservation.total_amount - 0.01:
+    _TOL = Decimal("0.01")
+    d_paid = Decimal(str(reservation.amount_paid or 0))
+    d_total = Decimal(str(reservation.total_amount or 0))
+    d_deposit = Decimal(str(reservation.deposit_amount or 0))
+    if d_paid >= d_total - _TOL:
         target_status = ReservationStatusEnum.FULLY_PAID
-    elif reservation.amount_paid >= reservation.deposit_amount - 0.01 and reservation.amount_paid > 0:
+    elif d_paid >= d_deposit - _TOL and d_paid > 0:
         target_status = ReservationStatusEnum.DEPOSIT_PAID
     else:
         target_status = ReservationStatusEnum.PENDING
@@ -342,14 +351,16 @@ def get_reservation_financial_summary(db: Session, hotel_id: Optional[int], rese
         .order_by(BillingAdjustment.effective_at, BillingAdjustment.id)
         .all()
     )
-    billing_adjustment_total = round(sum(adj.total_amount for adj in billing_adjustments), 2)
-    completed_payment_total = round(
+    billing_adjustment_total = Decimal(str(round(sum(adj.total_amount for adj in billing_adjustments), 2)))
+    completed_payment_total = Decimal(str(round(
         sum(_signed_transaction_amount(t.transaction_type, t.amount) for t in completed_transactions),
         2,
-    )
-    operational_total = round(reservation.total_amount + billing_adjustment_total, 2)
-    operational_balance_due = round(max(0.0, operational_total - reservation.amount_paid), 2)
-    reconciliation_gap = round(reservation.amount_paid - completed_payment_total, 2)
+    )))
+    d_total = Decimal(str(reservation.total_amount or 0))
+    d_paid = Decimal(str(reservation.amount_paid or 0))
+    operational_total = d_total + billing_adjustment_total
+    operational_balance_due = max(Decimal("0"), operational_total - d_paid)
+    reconciliation_gap = d_paid - completed_payment_total
 
     return {
         "reservation_id": reservation.id,
@@ -399,10 +410,9 @@ def get_reservation_financial_summary(db: Session, hotel_id: Optional[int], rese
     }
 
 
-def _signed_transaction_amount(transaction_type: TransactionTypeEnum, amount: float) -> float:
-    if transaction_type == TransactionTypeEnum.REFUND:
-        return -amount
-    return amount
+def _signed_transaction_amount(transaction_type: TransactionTypeEnum, amount) -> Decimal:
+    d = Decimal(str(amount))
+    return -d if transaction_type == TransactionTypeEnum.REFUND else d
 
 
 def _recommended_financial_action(*, reservation: Reservation, operational_balance_due: float) -> str | None:

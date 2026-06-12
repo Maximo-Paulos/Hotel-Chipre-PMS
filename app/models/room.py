@@ -40,7 +40,7 @@ class RoomCategory(Base):
     name = Column(String(100), nullable=False)  # "Standard Double"
     code = Column(String(20), nullable=False)  # "STD_DBL"
     description = Column(Text, nullable=True)
-    base_price_per_night = Column(Float, nullable=False)
+    base_price_per_night = Column(Numeric(12, 2), nullable=False)
     variable_cost_per_night = Column(Numeric(12, 2), nullable=False, default=0)
     max_occupancy = Column(Integer, nullable=False, default=2)
     amenities = Column(Text, nullable=True)  # JSON string of amenities
@@ -81,6 +81,8 @@ class Room(Base):
         default=RoomStatusEnum.AVAILABLE,
     )
     is_active = Column(Boolean, nullable=False, default=True)
+    score = Column(Integer, nullable=True)        # 1-10 preference score for allocation
+    is_accessible = Column(Boolean, nullable=False, default=False)
     notes = Column(Text, nullable=True)
 
     # Relationships
@@ -89,6 +91,7 @@ class Room(Base):
 
     __table_args__ = (
         CheckConstraint("floor >= 0", name="ck_room_floor_positive"),
+        CheckConstraint("score IS NULL OR (score >= 1 AND score <= 10)", name="ck_room_score_range"),
         UniqueConstraint("hotel_id", "room_number", name="uq_room_number_hotel"),
         Index("ix_room_hotel_id", "hotel_id"),
     )

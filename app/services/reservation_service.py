@@ -7,6 +7,7 @@ import json
 import string
 import random
 from dataclasses import dataclass
+from decimal import Decimal
 from datetime import date
 from typing import Optional
 
@@ -206,7 +207,7 @@ def calculate_reservation_pricing(
         sellable_product_id=sellable_product.id if sellable_product else None,
         rate_plan_id=None,
         tax_policy_id=tax_policy.id if tax_policy else None,
-        pricing_snapshot=json.dumps(snapshot, ensure_ascii=True, sort_keys=True),
+        pricing_snapshot=json.dumps(snapshot, ensure_ascii=True, sort_keys=True, default=lambda o: float(o) if isinstance(o, Decimal) else str(o)),
     )
 
 
@@ -686,7 +687,7 @@ def _pricing_result_from_quote(
         sellable_product_id=sellable_product.id if sellable_product else None,
         rate_plan_id=rate_plan.id,
         tax_policy_id=tax_policy.id if tax_policy else None,
-        pricing_snapshot=json.dumps(snapshot, ensure_ascii=True, sort_keys=True),
+        pricing_snapshot=json.dumps(snapshot, ensure_ascii=True, sort_keys=True, default=lambda o: float(o) if isinstance(o, Decimal) else str(o)),
     )
 
 
@@ -712,7 +713,7 @@ def _apply_pricing_result_to_reservation(reservation: Reservation, pricing: Rese
     reservation.pricing_snapshot = pricing.pricing_snapshot
 
 
-def _compute_deposit_amount(db: Session, *, hotel_id: int, gross_total: float) -> float:
+def _compute_deposit_amount(db: Session, *, hotel_id: int, gross_total) -> float:
     config = db.query(HotelConfiguration).filter(HotelConfiguration.id == hotel_id).first()
     deposit_pct = config.deposit_percentage if config else 30.0
-    return round(gross_total * (deposit_pct / 100.0), 2)
+    return round(float(gross_total) * (deposit_pct / 100.0), 2)

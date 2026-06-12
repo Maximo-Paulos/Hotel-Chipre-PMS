@@ -1,5 +1,5 @@
 from app.models.room import Room, RoomCategory
-from app.models.guest import Guest, GuestCompanion
+from app.models.guest import Guest, GuestCompanion, GuestTag, GuestRatingEnum, GuestTagTypeEnum
 from app.models.reservation import (
     Reservation,
     ReservationStatusEnum,
@@ -68,6 +68,26 @@ from app.models.payment_link_test import PaymentLinkTest
 from app.models.security_token import SecurityToken
 from app.models.rate_limit_event import RateLimitEvent
 from app.models.ai_assistant import AIAssistantSession, AIAssistantMessage, AIAssistantActionRun, AIAssistantInsight
+from app.models.audit_log import AuditLog, AuditActionEnum
+from app.models.voucher import HotelVoucher, VoucherRedemption, VoucherStatusEnum
+from app.models.refund import RefundRequest, RefundPathEnum, RefundStatusEnum
+from app.models.pending_action import (
+    PendingOperationalAction,
+    PendingActionTypeEnum,
+    PendingActionStatusEnum,
+    PendingActionPriorityEnum,
+)
+from app.models.cash_register import (
+    CashSession,
+    CashMovement,
+    CashCloseReport,
+    CashSessionStatusEnum,
+    CashMovementTypeEnum,
+)
+from app.models.waitlist import WaitlistEntry, WaitlistStatusEnum
+from app.models.payment_config import PaymentSurchargeConfig
+from app.models.hotel_api_key import HotelAPIKey, APIKeyPurposeEnum
+from app.models.room_block import RoomBlock, RoomBlockReasonEnum
 from app.models.analytics import (
     AnalyticsExportFormatEnum,
     AnalyticsCurrencyDisplayEnum,
@@ -88,7 +108,7 @@ from app.models.analytics import (
 
 __all__ = [
     "Room", "RoomCategory",
-    "Guest", "GuestCompanion",
+    "Guest", "GuestCompanion", "GuestTag", "GuestRatingEnum", "GuestTagTypeEnum",
     "Reservation", "ReservationStatusEnum", "ReservationOutcomeEnum",
     "ReservationGuestSegmentEnum", "ReservationGuestSegmentSourceEnum",
     "ReservationChannelCodeEnum", "ReservationCancellationReasonCodeEnum",
@@ -168,4 +188,28 @@ __all__ = [
     "FactRoomOccupancyStatusAtNightEnum",
     "FactReservationDaily",
     "FactRoomOccupancyDaily",
+    "AuditLog",
+    "AuditActionEnum",
+    "HotelVoucher",
+    "VoucherRedemption",
+    "VoucherStatusEnum",
+    "RefundRequest",
+    "RefundPathEnum",
+    "RefundStatusEnum",
+    "PendingOperationalAction",
+    "PendingActionTypeEnum",
+    "PendingActionStatusEnum",
+    "PendingActionPriorityEnum",
+    "CashSession",
+    "CashMovement",
+    "CashCloseReport",
+    "CashSessionStatusEnum",
+    "CashMovementTypeEnum",
+    "WaitlistEntry",
+    "WaitlistStatusEnum",
+    "PaymentSurchargeConfig",
+    "HotelAPIKey",
+    "APIKeyPurposeEnum",
+    "RoomBlock",
+    "RoomBlockReasonEnum",
 ]

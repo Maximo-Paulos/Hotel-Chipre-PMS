@@ -177,6 +177,17 @@ def test_companies_schema():
         "display_name",
         "tax_id",
         "country_code",
+        # v72 §3.3 contact
+        "contact_name",
+        "contact_email",
+        "contact_phone",
+        "administrative_contact",
+        # v72 §3.4-3.5 commercial conditions
+        "base_price",
+        "payment_deferred",
+        "deferred_days",
+        "requires_voucher",
+        "requires_signature",
         "notes",
         "is_active",
         "created_at",

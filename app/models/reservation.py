@@ -6,7 +6,7 @@ Also supports: cancelled (from any pre-checkin state)
 """
 import enum
 from sqlalchemy import (
-    Column, Integer, Float, String, ForeignKey, Enum, Text, DateTime, Date, Boolean,
+    Column, Integer, Float, Numeric, String, ForeignKey, Enum, Text, DateTime, Date, Boolean,
     CheckConstraint, UniqueConstraint, Index, Table
 )
 from sqlalchemy.orm import relationship, validates
@@ -141,14 +141,14 @@ class Reservation(Base):
     arrival_time_hint = Column(String(80), nullable=True)
 
     # Financial
-    total_amount = Column(Float, nullable=False, default=0.0)
-    amount_paid = Column(Float, nullable=False, default=0.0)
-    deposit_amount = Column(Float, nullable=False, default=0.0)
-    subtotal_amount = Column(Float, nullable=False, default=0.0)
-    tax_amount = Column(Float, nullable=False, default=0.0)
-    fee_amount = Column(Float, nullable=False, default=0.0)
-    commission_amount = Column(Float, nullable=False, default=0.0)
-    net_amount = Column(Float, nullable=False, default=0.0)
+    total_amount = Column(Numeric(12, 2), nullable=False, default=0)
+    amount_paid = Column(Numeric(12, 2), nullable=False, default=0)
+    deposit_amount = Column(Numeric(12, 2), nullable=False, default=0)
+    subtotal_amount = Column(Numeric(12, 2), nullable=False, default=0)
+    tax_amount = Column(Numeric(12, 2), nullable=False, default=0)
+    fee_amount = Column(Numeric(12, 2), nullable=False, default=0)
+    commission_amount = Column(Numeric(12, 2), nullable=False, default=0)
+    net_amount = Column(Numeric(12, 2), nullable=False, default=0)
     currency_code = Column(String(3), nullable=False, default="ARS")
     fx_rate_snapshot = Column(Float, nullable=True)
 
@@ -246,6 +246,7 @@ class Reservation(Base):
     allocation_status = Column(String(30), nullable=False, default="unassigned")
     allocation_locked = Column(Boolean, nullable=False, default=False)
     requires_manual_review = Column(Boolean, nullable=False, default=False)
+    mobility_restriction = Column(Boolean, nullable=False, default=False)
     payment_collection_model = Column(String(40), nullable=False, default="hotel_collect")
     settlement_status = Column(String(40), nullable=False, default="not_applicable")
 
@@ -286,12 +287,19 @@ class Reservation(Base):
         Index("ix_reservation_hotel_id", "hotel_id"),
         Index("ix_reservation_sellable_product_id", "sellable_product_id"),
         Index("ix_reservation_rate_plan_id", "rate_plan_id"),
+        # OTA deduplication (v72 §10.1): same channel+ID must not produce duplicate reservations
+        UniqueConstraint(
+            "hotel_id", "source_provider_code", "external_id",
+            name="uq_reservation_ota_external_id",
+        ),
     )
 
     @property
-    def balance_due(self) -> float:
+    def balance_due(self):
         """Outstanding balance on the reservation."""
-        return max(0.0, self.total_amount - self.amount_paid)
+        from decimal import Decimal
+        def _d(v): return Decimal(str(v)) if v is not None else Decimal("0")
+        return max(Decimal("0"), _d(self.total_amount) - _d(self.amount_paid))
 
     @property
     def nights(self) -> int:

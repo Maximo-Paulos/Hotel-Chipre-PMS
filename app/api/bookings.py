@@ -39,7 +39,7 @@ def _require_demo_mode():
 def _booking_to_read(res: Reservation) -> BookingRead:
     """Ensure computed fields land in the response."""
     result = BookingRead.model_validate(res)
-    result.balance_due = res.balance_due
+    result.balance_due = float(res.balance_due)
     result.nights = res.nights
     result.additional_guests = [
         {

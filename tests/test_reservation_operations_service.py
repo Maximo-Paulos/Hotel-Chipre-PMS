@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pytest
 from datetime import date
 
 from app.models.allocation import LLMFeedbackEvent, ManualOverrideReason
@@ -323,11 +324,11 @@ def test_rebook_ota_reservation_as_direct_persists_commercial_fields(
     assert result.new_reservation.sellable_product_id == target_product.id
     assert result.new_reservation.rate_plan_id == target_rate_plan.id
     assert result.new_reservation.tax_policy_id == target_tax_policy.id
-    assert result.new_reservation.total_amount == 326.7
-    assert result.new_reservation.tax_amount == 56.7
-    assert result.new_reservation.deposit_amount == 98.01
+    assert float(result.new_reservation.total_amount) == pytest.approx(326.7)
+    assert float(result.new_reservation.tax_amount) == pytest.approx(56.7)
+    assert float(result.new_reservation.deposit_amount) == pytest.approx(98.01)
     assert result.billing_adjustment is not None
-    assert result.billing_adjustment.total_amount == 126.7
+    assert float(result.billing_adjustment.total_amount) == pytest.approx(126.7)
 
 
 def test_run_persisted_allocation_assigns_rooms_and_persists_run(

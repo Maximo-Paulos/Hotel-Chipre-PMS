@@ -4,7 +4,7 @@ Supports: Efectivo (Cash), MercadoPago, PayPal, Credit/Debit Card.
 """
 import enum
 from sqlalchemy import (
-    Column, Integer, Float, String, ForeignKey, Enum, Text, DateTime,
+    Column, Integer, Float, Numeric, String, ForeignKey, Enum, Text, DateTime,
     CheckConstraint
 )
 from sqlalchemy.orm import relationship
@@ -46,16 +46,21 @@ class Transaction(Base):
     __tablename__ = "transactions"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    hotel_id = Column(Integer, nullable=False, index=True)
+    hotel_id = Column(
+        Integer,
+        ForeignKey("hotel_configuration.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     reservation_id = Column(Integer, ForeignKey("reservations.id", ondelete="CASCADE"), nullable=False)
 
     # Financial details
-    amount = Column(Float, nullable=False)
+    amount = Column(Numeric(12, 2), nullable=False)
     currency = Column(String(3), nullable=False, default="ARS")
-    gross_amount = Column(Float, nullable=True)
-    tax_amount = Column(Float, nullable=True)
-    fee_amount = Column(Float, nullable=True)
-    net_amount = Column(Float, nullable=True)
+    gross_amount = Column(Numeric(12, 2), nullable=True)
+    tax_amount = Column(Numeric(12, 2), nullable=True)
+    fee_amount = Column(Numeric(12, 2), nullable=True)
+    net_amount = Column(Numeric(12, 2), nullable=True)
     fx_rate_snapshot = Column(Float, nullable=True)
     provider_code = Column(String(50), nullable=True)
 

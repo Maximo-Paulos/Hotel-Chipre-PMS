@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, text
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint, text
 
 from app.database import Base
 
@@ -20,6 +20,19 @@ class Company(Base):
     display_name = Column(String(200), nullable=False)
     tax_id = Column(String(50), nullable=True)
     country_code = Column(String(2), nullable=True)
+    # Contact person (v72 §3.3)
+    contact_name = Column(String(200), nullable=True)
+    contact_email = Column(String(200), nullable=True)
+    contact_phone = Column(String(50), nullable=True)
+    administrative_contact = Column(String(200), nullable=True)
+
+    # Commercial conditions (v72 §3.4-3.5)
+    base_price = Column(Numeric(12, 2), nullable=True)          # negotiated base rate override
+    payment_deferred = Column(Boolean, nullable=False, default=False)  # invoice after stay
+    deferred_days = Column(Integer, nullable=True)              # net-X days for deferred billing
+    requires_voucher = Column(Boolean, nullable=False, default=False)
+    requires_signature = Column(Boolean, nullable=False, default=False)
+
     notes = Column(Text, nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=_utcnow)
