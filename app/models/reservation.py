@@ -270,6 +270,8 @@ class Reservation(Base):
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
     )
+    # Optimistic locking — increment on every update; reject if version mismatch (v72 security-audit §6)
+    version = Column(Integer, nullable=False, default=0)
 
     # Relationships
     guest = relationship("Guest", back_populates="reservations", lazy="joined")

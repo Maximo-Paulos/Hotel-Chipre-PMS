@@ -2,16 +2,17 @@
 Check-in Service.
 Manages the deep guest check-in flow:
   1. Validates all required guest data (document, terms acceptance, etc.)
-  2. Ensures reservation is fully_paid before check-in
-  3. Records actual check-in time
-  4. Transitions status to checked_in
-  5. Also handles check-out flow
+  2. Ensures reservation is fully_paid (or pre_check_in) before check-in
+  3. Blocks check-in if guest has an active prohibido_alojar tag (v72 §2.7)
+  4. Records actual check-in time
+  5. Transitions status to checked_in
+  6. Also handles check-out flow
 """
 from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
-from app.models.guest import Guest
+from app.models.guest import Guest, GuestTag, GuestTagTypeEnum
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.hotel_config import HotelConfiguration
 from app.services.reservation_service import transition_reservation_status, ReservationError
@@ -88,17 +89,35 @@ def perform_checkin(
         raise CheckInError("hotel_id is required for check-in")
     reservation.hotel_id = hotel_id
 
-    # Must be fully paid to check in
-    if reservation.status != ReservationStatusEnum.FULLY_PAID:
+    # Must be fully_paid or pre_check_in to check in
+    allowed_pre_checkin = {ReservationStatusEnum.FULLY_PAID, ReservationStatusEnum.PRE_CHECK_IN}
+    if reservation.status not in allowed_pre_checkin:
         raise CheckInError(
             f"Cannot check in: reservation status is '{reservation.status.value}'. "
-            f"Must be 'fully_paid'. Outstanding balance: ${reservation.balance_due:.2f}"
+            f"Must be 'fully_paid' or 'pre_check_in'. Outstanding balance: ${reservation.balance_due:.2f}"
         )
 
     # Load guest
     guest = db.query(Guest).filter(Guest.id == reservation.guest_id, Guest.hotel_id == hotel_id).first()
     if not guest:
         raise CheckInError("Guest record not found for this reservation")
+
+    # v72 §2.7 — block check-in if guest has an active prohibido_alojar tag
+    prohibido_tag = (
+        db.query(GuestTag)
+        .filter(
+            GuestTag.hotel_id == hotel_id,
+            GuestTag.guest_id == guest.id,
+            GuestTag.tag_type == GuestTagTypeEnum.PROHIBIDO_ALOJAR,
+        )
+        .first()
+    )
+    if prohibido_tag:
+        note = f" ({prohibido_tag.note})" if prohibido_tag.note else ""
+        raise CheckInError(
+            f"Check-in blocked — guest has an active 'prohibido_alojar' tag{note}. "
+            "An authorized override by a manager is required."
+        )
 
     # Validate guest data
     config = db.query(HotelConfiguration).filter(HotelConfiguration.id == hotel_id).first()

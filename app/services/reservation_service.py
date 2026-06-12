@@ -482,7 +482,15 @@ def update_reservation_fields(
     changed_by_user_id: Optional[int] = None,
     room_move_reason_code: Optional[str] = None,
     room_move_notes: Optional[str] = None,
+    client_version: Optional[int] = None,
 ) -> Reservation:
+    # Optimistic locking — reject stale writes (v72 security-audit §6)
+    if client_version is not None and reservation.version != client_version:
+        raise ReservationError(
+            f"Reservation was modified concurrently (expected version {client_version}, "
+            f"got {reservation.version}). Reload and retry."
+        )
+
     update_data = data.model_dump(exclude_unset=True)
     hotel_id = _resolve_hotel_id(hotel_id, room=reservation.room if hasattr(reservation, "room") else None)
 
@@ -559,6 +567,7 @@ def update_reservation_fields(
         if field in update_data:
             setattr(reservation, field, update_data[field])
 
+    reservation.version = (reservation.version or 0) + 1
     db.flush()
     return reservation
 

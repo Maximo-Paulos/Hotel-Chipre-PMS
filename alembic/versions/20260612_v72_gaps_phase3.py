@@ -32,8 +32,14 @@ def upgrade() -> None:
     # ── 2. room_move_events: add movement_group_id FK ────────────────────────
     with op.batch_alter_table("room_move_events") as batch_op:
         batch_op.add_column(
-            sa.Column("movement_group_id", sa.Integer,
-                      sa.ForeignKey("room_movement_groups.id", ondelete="SET NULL"), nullable=True)
+            sa.Column("movement_group_id", sa.Integer, nullable=True)
+        )
+        batch_op.create_foreign_key(
+            "fk_room_move_events_movement_group_id",
+            "room_movement_groups",
+            ["movement_group_id"],
+            ["id"],
+            ondelete="SET NULL",
         )
         batch_op.create_index("ix_room_move_events_group_id", ["movement_group_id"])
 
@@ -70,6 +76,7 @@ def downgrade() -> None:
 
     with op.batch_alter_table("room_move_events") as batch_op:
         batch_op.drop_index("ix_room_move_events_group_id")
+        batch_op.drop_constraint("fk_room_move_events_movement_group_id", type_="foreignkey")
         batch_op.drop_column("movement_group_id")
 
     op.drop_index("ix_room_movement_groups_hotel_id", table_name="room_movement_groups")
