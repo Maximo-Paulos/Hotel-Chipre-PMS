@@ -23,10 +23,13 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
-def _audit_action_enum(dialect_name: str) -> sa.Enum:
+def _audit_action_enum(dialect_name: str, create_type: bool = False) -> sa.Enum:
     values = ("create", "update", "delete", "status_change")
     if dialect_name == "postgresql":
-        return pg.ENUM(*values, name="audit_action_enum", create_type=True)
+        # create_type=False when used inside create_table — the type is created
+        # explicitly in upgrade() with checkfirst=True; True here would emit a
+        # second CREATE TYPE without checkfirst and fail with DuplicateObject.
+        return pg.ENUM(*values, name="audit_action_enum", create_type=create_type)
     return sa.Enum(*values, name="audit_action_enum", create_constraint=True)
 
 
@@ -35,7 +38,9 @@ def upgrade() -> None:
 
     # 1. Create audit_action_enum type (PostgreSQL only)
     if dialect_name == "postgresql":
-        _audit_action_enum(dialect_name).create(op.get_bind(), checkfirst=True)
+        _audit_action_enum(dialect_name, create_type=True).create(
+            op.get_bind(), checkfirst=True
+        )
 
     # 2. Create audit_logs table
     op.create_table(

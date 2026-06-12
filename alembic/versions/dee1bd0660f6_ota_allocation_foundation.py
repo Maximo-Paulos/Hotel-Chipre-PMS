@@ -981,3 +981,15 @@ def downgrade() -> None:
     op.drop_table('allocation_policy_profiles')
     op.drop_table('ota_providers')
     # ### end Alembic commands ###
+
+    # PG enum types created implicitly by sa.Enum in create_table are NOT
+    # dropped by op.drop_table — drop them explicitly so re-upgrade works.
+    if op.get_bind().dialect.name == "postgresql":
+        for _enum in (
+            "allocation_assignment_status_enum", "allocation_run_status_enum",
+            "billing_adjustment_type_enum", "llm_policy_suggestion_status_enum",
+            "ota_connection_status_enum", "ota_reservation_lifecycle_enum",
+            "ota_sync_job_status_enum", "reservation_adjustment_kind_enum",
+            "reservation_adjustment_status_enum", "room_move_type_enum",
+        ):
+            op.execute(f"DROP TYPE IF EXISTS {_enum}")

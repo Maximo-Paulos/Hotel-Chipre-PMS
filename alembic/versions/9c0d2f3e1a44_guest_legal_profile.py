@@ -26,6 +26,10 @@ guest_document_type_enum = sa.Enum(
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    if bind is not None and bind.dialect.name == "postgresql":
+        guest_document_type_enum.create(bind, checkfirst=True)
+
     with op.batch_alter_table("guests") as batch_op:
         batch_op.add_column(sa.Column("retention_until", sa.DateTime(), nullable=True))
         batch_op.alter_column(
@@ -65,3 +69,7 @@ def downgrade() -> None:
             postgresql_using="document_type::text",
         )
         batch_op.drop_column("retention_until")
+
+    bind = op.get_bind()
+    if bind is not None and bind.dialect.name == "postgresql":
+        guest_document_type_enum.drop(bind, checkfirst=True)

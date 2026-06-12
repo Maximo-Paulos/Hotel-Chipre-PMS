@@ -766,3 +766,25 @@ def downgrade() -> None:
 
     op.drop_column("hotel_configuration", "analytics_ai_enabled")
     op.drop_column("room_categories", "variable_cost_per_night")
+
+    # PG enum types created implicitly by sa.Enum in create_table are NOT
+    # dropped by op.drop_table — drop the analytics-owned ones explicitly so
+    # re-upgrade works. reservation_status_enum is NOT dropped here: the
+    # downgraded reservations.status column still uses it (baseline owns it).
+    if op.get_bind().dialect.name == "postgresql":
+        for _enum in (
+            "analytics_currency_display_enum", "analytics_export_format_enum",
+            "analytics_export_status_enum",
+            "fact_reservation_daily_channel_code_enum",
+            "fact_reservation_daily_guest_segment_enum",
+            "fact_reservation_daily_outcome_enum",
+            "fact_reservation_daily_row_kind_enum",
+            "fact_reservation_daily_status_enum",
+            "fact_room_occupancy_daily_status_at_night_enum",
+            "reservation_cancellation_reason_code_enum",
+            "reservation_channel_code_enum", "reservation_guest_segment_enum",
+            "reservation_guest_segment_source_enum",
+            "reservation_no_show_policy_applied_enum", "reservation_outcome_enum",
+            "room_state_event_reason_code_enum", "room_state_event_type_enum",
+        ):
+            op.execute(f"DROP TYPE IF EXISTS {_enum}")

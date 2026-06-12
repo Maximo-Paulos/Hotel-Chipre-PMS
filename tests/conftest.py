@@ -2,12 +2,74 @@
 Pytest configuration and fixtures.
 Uses an in-memory SQLite database for isolated, fast testing.
 """
+import os
+import re as _re
+import pathlib as _pathlib
+
+# ── Auto-derive DATABASE_URL_TEST (must happen before any test module loads) ──
+# Priority: explicit env var > DATABASE_URL from .env with /postgres → /hotel_chipre_test.
+# IMPORTANT: parse .env manually — do NOT load_dotenv() it. Exporting the full .env
+# (production DATABASE_URL, GEMMA_*, JWT_SECRET...) changes app behavior under test.
+def _derive_pg_test_dsn() -> str:
+    prod_url = os.environ.get("DATABASE_URL", "")
+    if not prod_url:
+        search = _pathlib.Path(__file__).resolve()
+        for _ in range(6):
+            search = search.parent
+            env_file = search / ".env"
+            if env_file.exists():
+                for line in env_file.read_text(encoding="utf-8").splitlines():
+                    line = line.strip()
+                    if line.startswith("DATABASE_URL="):
+                        prod_url = line.split("=", 1)[1].strip().strip('"').strip("'")
+                        break
+                break
+    if prod_url.startswith("postgresql"):
+        derived = _re.sub(r"/postgres(\?.*)?$", "/hotel_chipre_test", prod_url)
+        if derived != prod_url:
+            return derived
+    return ""
+
+
+if not os.environ.get("DATABASE_URL_TEST"):
+    _dsn = _derive_pg_test_dsn()
+    if _dsn:
+        os.environ["DATABASE_URL_TEST"] = _dsn
+
 import pytest
 from datetime import date, timedelta
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker, Session
 
 from app.database import Base
+
+
+# ── PostgreSQL fixtures (available when DATABASE_URL_TEST resolves to PG) ──
+
+_PG_DSN = os.environ.get("DATABASE_URL_TEST", "")
+
+
+@pytest.fixture(scope="session")
+def pg_engine():
+    if not _PG_DSN or not _PG_DSN.startswith("postgresql"):
+        pytest.skip("DATABASE_URL_TEST not set to a PostgreSQL DSN — skipping PostgreSQL tests")
+    engine = create_engine(_PG_DSN, echo=False)
+    Base.metadata.create_all(engine)
+    yield engine
+    Base.metadata.drop_all(engine)
+    engine.dispose()
+
+
+@pytest.fixture()
+def pg_session(pg_engine):
+    connection = pg_engine.connect()
+    transaction = connection.begin()
+    Session = sessionmaker(bind=connection)
+    session = Session()
+    yield session
+    session.close()
+    transaction.rollback()
+    connection.close()
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.guest import Guest, GuestCompanion, DocumentTypeEnum
 from app.models.reservation import Reservation, ReservationStatusEnum, ReservationSourceEnum

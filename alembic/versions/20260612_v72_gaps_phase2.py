@@ -81,7 +81,8 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime, nullable=False),
         sa.CheckConstraint("ends_at IS NULL OR ends_at > starts_at", name="ck_room_block_dates"),
         sa.CheckConstraint(
-            "(is_indefinite = 1 AND ends_at IS NULL) OR (is_indefinite = 0)",
+            # Cross-dialect: SQLite stores booleans as integers; PG rejects boolean = integer
+            "(is_indefinite AND ends_at IS NULL) OR (NOT is_indefinite)",
             name="ck_room_block_indefinite_consistency",
         ),
     )

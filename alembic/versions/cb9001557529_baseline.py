@@ -256,3 +256,13 @@ def downgrade() -> None:
     op.drop_table('connections')
     op.drop_table('users')
     # ### end Alembic commands ###
+
+    # PG enum types created implicitly by sa.Enum in create_table are NOT
+    # dropped by op.drop_table — drop them explicitly so re-upgrade works.
+    if op.get_bind().dialect.name == "postgresql":
+        for _enum in (
+            "ota_sync_status_enum", "payment_method_enum", "reservation_source_enum",
+            "reservation_status_enum", "room_status_enum", "transaction_status_enum",
+            "transaction_type_enum",
+        ):
+            op.execute(f"DROP TYPE IF EXISTS {_enum}")

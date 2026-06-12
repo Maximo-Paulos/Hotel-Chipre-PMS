@@ -66,6 +66,14 @@ from app.models.subscription import SubscriptionPlan, HotelSubscription, Subscri
 from app.models.subscription_v2 import Subscription, SubscriptionEvent
 from app.models.integration import IntegrationCatalog, IntegrationConnection, IntegrationEvent
 from app.models.payment_link_test import PaymentLinkTest
+from app.models.payment import (
+    Payment,
+    PaymentLink,
+    PaymentWebhookEvent,
+    PaymentProviderEnum,
+    PaymentStatusEnum,
+    PaymentLinkStatusEnum,
+)
 from app.models.security_token import SecurityToken
 from app.models.rate_limit_event import RateLimitEvent
 from app.models.ai_assistant import AIAssistantSession, AIAssistantMessage, AIAssistantActionRun, AIAssistantInsight
@@ -90,6 +98,9 @@ from app.models.payment_config import PaymentSurchargeConfig
 from app.models.hotel_api_key import HotelAPIKey, APIKeyPurposeEnum
 from app.models.room_block import RoomBlock, RoomBlockReasonEnum
 from app.models.company_document import CompanyDocument, CompanyDocumentTypeEnum, CompanyDocumentStatusEnum
+# master_admin models live outside app/models but share Base — import them so
+# Base.metadata is complete (create_all/drop_all in tests must see every table)
+import app.master_admin.models  # noqa: F401
 from app.models.analytics import (
     AnalyticsExportFormatEnum,
     AnalyticsCurrencyDisplayEnum,
@@ -170,6 +181,12 @@ __all__ = [
     "IntegrationConnection",
     "IntegrationEvent",
     "PaymentLinkTest",
+    "Payment",
+    "PaymentLink",
+    "PaymentWebhookEvent",
+    "PaymentProviderEnum",
+    "PaymentStatusEnum",
+    "PaymentLinkStatusEnum",
     "SecurityToken",
     "RateLimitEvent",
     "AIAssistantSession",

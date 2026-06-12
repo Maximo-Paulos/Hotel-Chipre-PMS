@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-06-12  
 **Worktree:** `clever-chebyshev-98b486`  
-**Alembic HEAD:** `20260612_v72_gaps_phase2`
+**Alembic HEAD:** `20260612_v72_gaps_phase6_payment_tables`
 
 ---
 
@@ -42,7 +42,7 @@
 | §2.6 | Guest rating: normal / excelente / complicado | `guests.rating` (GuestRatingEnum) | server_default='normal' | `20260612_v72_gaps_phase1` | `test_guest_rating_persists` | ✅ |
 | §2.6 | Guest behavioral tags | `guest_tags.(tag_type)`: no_pago, robo, conflictivo, robo_cosas, prohibido_alojar, requiere_deposito, vip, alergias, otro | FK CASCADE, index hotel+guest | `20260612_v72_gaps_phase1` + `phase2` | `test_guest_tag_persists`, `test_guest_tag_prohibido_alojar_enum_value` | ✅ |
 | §2.6 | Tag notes and expiry | `guest_tags.(note, expires_at)` | nullable | `20260612_v72_gaps_phase1` | `test_guest_tag_persists` | ✅ |
-| §2.7 | `prohibido_alojar` blocks check-in | `guest_tags.tag_type = 'prohibido_alojar'` | service-layer check required | — | `test_guest_tag_prohibido_alojar_persists` | ⚠️ DB ✅ / service check pending |
+| §2.7 | `prohibido_alojar` blocks check-in | `guest_tags.tag_type = 'prohibido_alojar'` | `perform_checkin()` blocks active tag by hotel+guest | `20260612_v72_gaps_phase1` | `tests/test_checkin_security.py` (`test_prohibido_alojar_*`) | ✅ |
 | §2.8 | Data retention policy | `guests.retention_until` | default = now+5yr | baseline | implicit | ✅ |
 
 ---
@@ -57,6 +57,7 @@
 | §3.4 | Negotiated base rate per company | `companies.base_price` (Numeric(12,2)) | nullable | `20260612_v72_gaps_phase2` | `test_company_commercial_fields_persists` | ✅ |
 | §3.5 | Deferred payment / voucher / signature requirements | `companies.(payment_deferred, deferred_days, requires_voucher, requires_signature)` | server_default=false | `20260612_v72_gaps_phase2` | `test_company_commercial_fields_persists` | ✅ |
 | §3.6 | Company linked to reservation | `reservations.company_id` FK companies | nullable | baseline | implicit | ✅ |
+| §3.6 | Company documents / vouchers for reservations | `company_documents.(hotel_id, reservation_id, company_id, doc_type, status, requires_signature, signed_at)` | FK to reservation/company, hotel indexes | `20260612_v72_gaps_phase4` | `tests/test_postgres_validation.py` (`test_enum_types_exist_in_postgres`) | ✅ |
 
 ---
 
@@ -69,7 +70,7 @@
 | §4.3 | Preference score 1-10 for allocation tiebreaker | `rooms.score` (Integer, nullable) | `ck_room_score_range` (1-10) | `20260612_v72_gaps_phase1` | `test_room_score_and_accessibility` | ✅ |
 | §4.4 | Accessibility flag for mobility-restricted guests | `rooms.is_accessible` (Boolean) | NOT NULL, default false | `20260612_v72_gaps_phase1` | `test_room_score_and_accessibility` | ✅ |
 | §4.5 | Room status / housekeeping state | `room_state_events.(event_type, reason_code)` | enum types | analytics migration | `test_room_state_events_*` | ✅ |
-| §4.6 | Room description | `rooms` — no `description` field yet | — | — | — | ❌ missing |
+| §4.6 | Room description | `rooms.description` (Text, nullable) | nullable | `20260612_v72_gaps_phase3` | `tests/test_postgres_validation.py` migration upgrade coverage | ✅ |
 
 ---
 
@@ -77,10 +78,11 @@
 
 | v72 § | Requirement | Table / Field | Constraint / Index | Migration | Test | Status |
 |-------|-------------|---------------|--------------------|-----------|------|--------|
-| §5.1 | Track individual room move events | `room_move_events.(reservation_id, from_room_id, to_room_id, moved_by_user_id, moved_at, reason)` | FK to reservations+rooms | `20260612_audit_log_and_transaction_fk` | implicit | ✅ |
+| §5.1 | Track individual room move events | `room_move_events.(reservation_id, movement_group_id, from_room_id, to_room_id, move_type, reason_code, reason_note, trigger_event, state_before, state_after, occurred_at, created_by_user_id)` | FK to reservations+rooms+room_movement_groups | `20260612_audit_log_and_transaction_fk` + `20260612_v72_gaps_phase3` + `20260612_v72_gaps_phase4` | `tests/test_postgres_validation.py` migration upgrade coverage | ✅ |
 | §5.2 | Move audit trail | `audit_logs` for move events | append-only | `20260612_audit_log_and_transaction_fk` | `test_audit_log_model.py` | ✅ |
 | §5.3 | Owner/manager can revert moves | Service-layer concern; DB has all FKs needed | — | — | — | ⚠️ DB ready / service pending |
-| §5.4 | Room movement groups (multiple rooms, same cause) | `RoomMovementGroup` table — NOT YET CREATED | — | — | — | ❌ missing |
+| §5.4 | Room movement groups (multiple rooms, same cause) | `room_movement_groups` + `room_move_events.movement_group_id` | FK `fk_room_move_events_movement_group_id`, index `ix_room_move_events_group_id` | `20260612_v72_gaps_phase3` | `tests/test_postgres_validation.py` migration upgrade coverage | ✅ |
+| §5.5 | Room move audit context fields | `room_move_events.(reason_note, trigger_event, state_before, state_after)` | nullable audit context | `20260612_v72_gaps_phase4` | `tests/test_postgres_validation.py` migration upgrade coverage | ✅ |
 
 ---
 
@@ -101,13 +103,14 @@
 
 | v72 § | Requirement | Table / Field | Constraint / Index | Migration | Test | Status |
 |-------|-------------|---------------|--------------------|-----------|------|--------|
-| §7.1 | State machine: pending→deposit_paid→fully_paid→checked_in→checked_out | `reservations.status` (ReservationStatusEnum) + `VALID_TRANSITIONS` | Enum + service validation | baseline | `test_reservation_state_machine*` | ✅ |
+| §7.1 | State machine: pending→deposit_paid→fully_paid→pre_check_in→checked_in→checked_out | `reservations.status` (ReservationStatusEnum) + `VALID_TRANSITIONS` | Enum + service validation | baseline + `20260612_v72_gaps_phase4` | `test_reservation_state_machine*`, `tests/test_checkin_security.py::test_pre_check_in_status_allows_checkin` | ✅ |
 | §7.2 | Cancellation from any pre-check-in state | `VALID_TRANSITIONS[PENDING/DEPOSIT_PAID/FULLY_PAID]` includes CANCELLED | code + `can_transition_to()` | baseline | `test_reservation_state_machine*` | ✅ |
 | §7.3 | No-show from fully_paid | `VALID_TRANSITIONS[FULLY_PAID]` includes NO_SHOW | code | baseline | implicit | ✅ |
 | §7.4 | Cancellation metadata | `reservations.(cancelled_at, cancelled_by_user_id, cancellation_reason_code, cancellation_reason_note)` | nullable | baseline | implicit | ✅ |
 | §7.5 | No-show policy applied | `reservations.no_show_policy_applied` (NoShowPolicyAppliedEnum) | NOT NULL, default NONE | baseline | implicit | ✅ |
 | §7.6 | Date constraint: checkout > checkin | `ck_reservation_dates` | CheckConstraint | baseline | `test_reservation_date_constraint` | ✅ |
 | §7.7 | Num adults ≥ 1, children ≥ 0 | `ck_reservation_adults_positive`, `ck_reservation_children_positive` | CheckConstraint | baseline | implicit | ✅ |
+| §7.8 | Optimistic locking for reservation updates | `reservations.version` + `update_reservation_fields(..., client_version=...)` | NOT NULL default 0; service rejects stale versions and increments on update | `20260612_v72_gaps_phase5` | `tests/test_checkin_security.py` (`test_*version*`, `test_stale_version_raises_reservation_error`) | ✅ |
 
 ---
 
@@ -125,7 +128,11 @@
 | §8.7 | Refund path 2: hotel voucher | `hotel_vouchers` + `voucher_redemptions` | FK + unique code per hotel | `20260612_vouchers_refunds_pending_actions` | `test_hotel_voucher_*` | ✅ |
 | §8.7 | Refund path 3: manual review | `refund_requests.path = 'manual_review'` | RefundPathEnum | `20260612_vouchers_refunds_pending_actions` | `test_refund_request_*` | ✅ |
 | §8.8 | Payment surcharge config | `payment_surcharge_configs.(hotel_id, payment_method, surcharge_pct, surcharge_fixed)` | `uq_surcharge_hotel_method` | `20260612_v72_gaps_phase1` | `test_payment_surcharge_config_*` | ✅ |
-| §8.9 | Billing adjustments | `billing_adjustments`, `reservation_adjustments` | FK to reservations | `20260612_audit_log_and_transaction_fk` | implicit | ✅ |
+| §8.9 | Billing adjustments | `billing_adjustments`, `reservation_adjustments` with Numeric(12,2) amounts | FK to reservations | `20260612_audit_log_and_transaction_fk` + `20260612_v72_gaps_phase3` | `tests/test_postgres_validation.py::test_numeric_precision_enforced_on_postgres` | ✅ |
+| §8.10 | Gateway payment tracking | `payments` — `app/models/payment.py::Payment` | amount > 0, FK `(hotel_id, reservation_id)`, unique `(hotel_id, provider, external_payment_id)`, performance indexes | `20260612_v72_gaps_phase6_payment_tables` | `tests/test_postgres_validation.py` migration upgrade coverage | ✅ |
+| §8.11 | Guest-facing payment links | `payment_links` — `app/models/payment.py::PaymentLink` | amount checks, FK `(hotel_id, reservation_id)`, unique `link_code`, unique external reference, status indexes | `20260612_v72_gaps_phase6_payment_tables` | `tests/test_postgres_validation.py` migration upgrade coverage | ✅ |
+| §8.12 | Payment webhook raw event log | `payment_webhook_events` — `app/models/payment.py::PaymentWebhookEvent` | FK `(hotel_id, payment_id)`, unique `(hotel_id, provider, webhook_id)`, unprocessed webhook index | `20260612_v72_gaps_phase6_payment_tables` | `tests/test_postgres_validation.py` migration upgrade coverage | ✅ |
+| §8.13 | Transactions vs payments source-of-truth rule | `transactions` remains canonical ledger; `payments` is gateway state only | documented idempotency/source-of-truth split | `20260612_v72_gaps_phase6_payment_tables` | `docs/data-foundations/transactions-vs-payments.md` | ✅ documented |
 
 ---
 
@@ -210,7 +217,7 @@
 
 | v72 § | Requirement | Table / Field | Constraint / Index | Migration | Test | Status |
 |-------|-------------|---------------|--------------------|-----------|------|--------|
-| §15.1 | Append-only audit log | `audit_logs.(hotel_id, action, entity_type, entity_id, actor_user_id, occurred_at)` | — | `20260612_audit_log_and_transaction_fk` | `test_audit_log_model.py` | ✅ |
+| §15.1 | Append-only audit log | `audit_logs.(hotel_id, table_name, record_id, action, actor_user_id, payload_before, payload_after, created_at)` | `ix_audit_logs_hotel_created`, `ix_audit_logs_hotel_table_record` | `20260612_audit_log_and_transaction_fk` | `test_audit_log_model.py` | ✅ |
 | §15.2 | Security tokens (sessions) | `security_tokens` | — | `20260408_security_tokens` | implicit | ✅ |
 | §15.3 | Rate limit events | `rate_limit_events` | — | `20260408_launch_security_hardening` | implicit | ✅ |
 
@@ -246,19 +253,22 @@
 
 ---
 
+## Cross-cutting PostgreSQL Validation
+
+| Area | Requirement | Evidence | Migration scope | Test | Status |
+|------|-------------|----------|-----------------|------|--------|
+| all | Real PostgreSQL validation suite exists for v72 database foundation | 8 skip-gated tests: empty DB upgrade, downgrade+reupgrade, Numeric precision, enum types, unique constraints, two EXPLAIN index checks, SELECT FOR UPDATE concurrency pattern | full Alembic chain through `20260612_v72_gaps_phase6_payment_tables` | `tests/test_postgres_validation.py` | ✅ suite present / not run in this docs-only task |
+
+---
+
 ## Gap summary
 
 ### Critical gaps (blocking DATABASE_FOUNDATION_COMPLETE)
 
 | Gap | Section | What's missing | Priority |
 |-----|---------|----------------|----------|
-| `rooms.description` | §4.6 | Free-text room description field | HIGH |
-| `RoomMovementGroup` table | §5.4 | Groups room moves by same cause; supports batch revert | HIGH |
-| `prohibido_alojar` service enforcement | §2.7 | Tag must block check-in at service layer (only DB exists) | HIGH |
 | `room_blocks` availability integration | §14.5 | Availability queries must exclude active blocks | HIGH |
-| PostgreSQL validation | all | Full migration + test suite run against real PG instance | CRITICAL |
-| Main branch merge | all | Payment/PaymentLink/reconciliation + Alembic chain reconcile | CRITICAL |
-| transactions↔payments convergence | §8 | Source-of-truth rule for Payment vs Transaction not defined | CRITICAL |
+| ~~Payment SQLAlchemy models~~ | §8.10-§8.12 | RESOLVED 2026-06-12: `app/models/payment.py` adds Payment, PaymentLink, PaymentWebhookEvent mirroring phase6; registered in `app/models/__init__.py` | RESOLVED |
 
 ### Non-critical gaps (post-foundation)
 
@@ -289,7 +299,11 @@ cb9001557529_baseline
   → 20260612_audit_log_and_transaction_fk
   → 20260612_vouchers_refunds_pending_actions
   → 20260612_v72_gaps_phase1
-  → 20260612_v72_gaps_phase2   ← HEAD
+  → 20260612_v72_gaps_phase2
+  → 20260612_v72_gaps_phase3
+  → 20260612_v72_gaps_phase4
+  → 20260612_v72_gaps_phase5
+  → 20260612_v72_gaps_phase6_payment_tables   ← HEAD
 ```
 
 Historical branches (non-blocking): `20260408_security_tokens`, `20260408_payment_link_email_sender_metadata`, `20260419_subscription_trial_comped`, `20260421_master_admin_system_owner`, `b7c1f0a8f9d2_add_payment_link_tests`, `d4f8c21e7b10_extend_payment_link_tests_states`, `9c0d2f3e1a44_guest_legal_profile`, `a7f3d2c1b9e8_ota_hardening`, `3eaf48a79290_sync_model_drift_missing_columns`, `dee1bd0660f6_ota_allocation_foundation`, `9b0becb6c658_add_integration_catalog`.

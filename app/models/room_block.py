@@ -72,7 +72,8 @@ class RoomBlock(Base):
             name="ck_room_block_dates",
         ),
         CheckConstraint(
-            "(is_indefinite = 1 AND ends_at IS NULL) OR (is_indefinite = 0)",
+            # Cross-dialect: SQLite stores booleans as integers; PG rejects boolean = integer
+            "(is_indefinite AND ends_at IS NULL) OR (NOT is_indefinite)",
             name="ck_room_block_indefinite_consistency",
         ),
         Index("ix_room_blocks_hotel_room", "hotel_id", "room_id"),

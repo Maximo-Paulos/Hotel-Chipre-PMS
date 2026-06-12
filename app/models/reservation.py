@@ -301,6 +301,8 @@ class Reservation(Base):
             "hotel_id", "source_provider_code", "external_id",
             name="uq_reservation_ota_external_id",
         ),
+        # Composite FK target for payments/payment_links (hotel_id, reservation_id)
+        UniqueConstraint("hotel_id", "id", name="uq_reservation_hotel_id_id"),
     )
 
     @property
