@@ -151,7 +151,13 @@ def run_persisted_allocation(
 
     if apply and solver_result.success:
         try:
-            apply_allocation_result(db, solver_result, hotel_id=hotel_id)
+            apply_allocation_result(
+                db,
+                solver_result,
+                hotel_id=hotel_id,
+                trigger_reason=trigger_type,
+                trigger_event=trigger_type,
+            )
         except AllocationError as exc:
             solver_result.success = False
             solver_result.error = str(exc)

@@ -106,6 +106,9 @@ def move_reservation_room(
     previous_room_id = reservation.room_id
     reservation.room_id = room.id
     reservation.category_id = room.category_id
+    if move_type == RoomMoveTypeEnum.MANUAL_MOVE:
+        reservation.allocation_locked = True
+        reservation.requires_manual_review = False
     event = RoomMoveEvent(
         hotel_id=hotel_id,
         reservation_id=reservation.id,

@@ -36,6 +36,7 @@ class ReservationSlot:
     check_out: date
     current_room_id: Optional[int]
     is_locked: bool  # True if checked_in (cannot be moved)
+    mobility_restriction: bool = False
     allowed_category_ids: list[int] = field(default_factory=list)
     category_priority_by_id: dict[int, int] = field(default_factory=dict)
 
@@ -65,6 +66,9 @@ class RoomSlot:
     room_id: int
     room_number: str
     category_id: int
+    floor: int = 0
+    score: Optional[int] = None
+    is_accessible: bool = False
 
 
 @dataclass
@@ -168,6 +172,7 @@ def run_allocation(
     unassigned_penalty = int(policy_weights.get("unassigned_penalty", 10000))
     fallback_priority_penalty = int(policy_weights.get("fallback_priority_penalty", 25))
     one_night_gap_penalty = int(policy_weights.get("minimize_one_night_gaps", room_usage_penalty * 2))
+    room_score_tiebreaker = int(policy_weights.get("room_score_tiebreaker", 1))
 
     model = cp_model.CpModel()
 
@@ -190,9 +195,15 @@ def run_allocation(
 
     # ── Hard Constraint 2: Category match (including upgrades with same bath type) ──
     for r_idx, res in enumerate(reservations):
+        mobility_floor = _lowest_available_compatible_floor(res, rooms, reservations)
         for h_idx, room in enumerate(rooms):
             if room.category_id not in res.effective_allowed_category_ids:
                 model.Add(x[r_idx, h_idx] == 0)
+            if res.mobility_restriction:
+                if not room.is_accessible:
+                    model.Add(x[r_idx, h_idx] == 0)
+                elif mobility_floor is not None and room.floor != mobility_floor:
+                    model.Add(x[r_idx, h_idx] == 0)
 
     # ── Hard Constraint 3: No temporal overlap on the same room ──
     for h_idx in range(len(rooms)):
@@ -279,6 +290,7 @@ def run_allocation(
     stability_bonus = []
     category_match_bonus = []
     fallback_penalties = []
+    room_score_bonus = []
 
     for r_idx, res in enumerate(reservations):
         for h_idx, room in enumerate(rooms):
@@ -296,6 +308,8 @@ def run_allocation(
                 fallback_penalties.append(
                     (x[r_idx, h_idx], res.category_priority(room.category_id) * fallback_priority_penalty)
                 )
+            if room.score is not None:
+                room_score_bonus.append((x[r_idx, h_idx], max(0, min(int(room.score), 10)) * room_score_tiebreaker))
 
     # Concentration bonus: penalize spreading across many rooms
     # For each room, add penalty if it has any reservation (encourages packing)
@@ -316,6 +330,7 @@ def run_allocation(
         sum(var * coeff for var, coeff in occupancy_score)
         + sum(var * coeff for var, coeff in stability_bonus)
         + sum(var * coeff for var, coeff in category_match_bonus)
+        + sum(var * coeff for var, coeff in room_score_bonus)
         - sum(room_usage[h_idx] * room_usage_penalty for h_idx in range(len(rooms)))
         - sum(var * coeff for var, coeff in fallback_penalties)
         - sum(gap * one_night_gap_penalty for gap in gap_penalties)
@@ -402,6 +417,8 @@ def _run_allocation_greedy(
         candidate_rooms = []
         for cat_id in res.effective_allowed_category_ids:
             candidate_rooms.extend(rooms_by_category.get(cat_id, []))
+        if res.mobility_restriction:
+            candidate_rooms = [room for room in candidate_rooms if room.is_accessible]
 
         # Prefer current room for stability, then exact category match, then rooms partially occupied
         if res.current_room_id is not None:
@@ -413,6 +430,8 @@ def _run_allocation_greedy(
                     -_adjacency_bonus_for_room(res, room_occupancy.get(r.room_id, [])),
                     0 if r.room_id == res.current_room_id else 1,
                     res.category_priority(r.category_id),
+                    r.floor if res.mobility_restriction else 0,
+                    -(r.score or 0),
                     -len(room_occupancy.get(r.room_id, [])),
                 ),
             )
@@ -425,6 +444,8 @@ def _run_allocation_greedy(
                     _one_night_gap_penalty_for_room(res, room_occupancy.get(r.room_id, [])),
                     -_adjacency_bonus_for_room(res, room_occupancy.get(r.room_id, [])),
                     res.category_priority(r.category_id),
+                    r.floor if res.mobility_restriction else 0,
+                    -(r.score or 0),
                     -len(room_occupancy.get(r.room_id, [])),
                 ),
             )
@@ -462,6 +483,10 @@ def apply_allocation_result(
     db: Session,
     result: AllocationResult,
     hotel_id: Optional[int] = None,
+    *,
+    trigger_reason: str = "allocation_recalculate",
+    trigger_event: Optional[str] = None,
+    created_by_user_id: Optional[int] = None,
 ) -> list[Reservation]:
     """
     Apply the solver's assignments to the database.
@@ -470,12 +495,46 @@ def apply_allocation_result(
     if result.error:
         raise AllocationError(result.error)
 
+    from app.models.operations import RoomMovementGroup, RoomMoveEvent, RoomMoveTypeEnum
+
     updated = []
+    pending_moves: list[tuple[Reservation, int, int | None]] = []
     for reservation_id, room_id in result.assignments.items():
         reservation = db.query(Reservation).filter(Reservation.id == reservation_id).first()
         if reservation and (hotel_id is None or getattr(reservation, "hotel_id", None) == hotel_id):
+            previous_room_id = reservation.room_id
+            if previous_room_id != room_id:
+                pending_moves.append((reservation, room_id, previous_room_id))
             reservation.room_id = room_id
             updated.append(reservation)
+
+    if pending_moves:
+        group_hotel_id = hotel_id if hotel_id is not None else pending_moves[0][0].hotel_id
+        movement_group = RoomMovementGroup(
+            hotel_id=group_hotel_id,
+            trigger_reason=trigger_reason,
+            notes=f"Allocation run moved {len(pending_moves)} reservation(s)",
+            created_by_user_id=created_by_user_id,
+        )
+        db.add(movement_group)
+        db.flush()
+        for reservation, room_id, previous_room_id in pending_moves:
+            status_value = reservation.status.value if hasattr(reservation.status, "value") else str(reservation.status)
+            db.add(
+                RoomMoveEvent(
+                    hotel_id=reservation.hotel_id,
+                    reservation_id=reservation.id,
+                    movement_group_id=movement_group.id,
+                    from_room_id=previous_room_id,
+                    to_room_id=room_id,
+                    move_type=RoomMoveTypeEnum.AUTO_ASSIGNMENT,
+                    reason_code=trigger_reason,
+                    trigger_event=trigger_event,
+                    state_before=f"status={status_value};room_id={previous_room_id}",
+                    state_after=f"status={status_value};room_id={room_id}",
+                    created_by_user_id=created_by_user_id,
+                )
+            )
             
     if result.unassigned_reservations:
         # No borres asignaciones existentes; informá al caller para que actúe.
@@ -509,6 +568,8 @@ def build_slots_from_db(
     if end_date is None:
         end_date = start_date + dt.timedelta(days=90)
     policy_constraints = policy_constraints or {}
+    from app.models.allocation import ReservationAllocationLock
+    from app.models.company import Company
     from app.services.room_block_service import blocked_room_ids_for_range
 
     # Load active reservations in the window
@@ -524,6 +585,33 @@ def build_slots_from_db(
         reservations_query = reservations_query.filter(Reservation.hotel_id == hotel_id)
 
     reservation_rows = reservations_query.all()
+    reservation_ids = [reservation.id for reservation in reservation_rows]
+    active_lock_ids: set[int] = set()
+    if reservation_ids:
+        active_lock_ids = {
+            row.reservation_id
+            for row in db.query(ReservationAllocationLock.reservation_id)
+            .filter(
+                ReservationAllocationLock.reservation_id.in_(reservation_ids),
+                ReservationAllocationLock.is_active == True,
+            )
+            .all()
+        }
+    company_ids = {
+        company_id
+        for company_id in {getattr(reservation, "company_id", None) for reservation in reservation_rows}
+        if company_id is not None
+    }
+    protected_company_ids: set[int] = set()
+    if company_ids:
+        company_query = db.query(Company).filter(Company.id.in_(company_ids))
+        if hotel_id is not None:
+            company_query = company_query.filter(Company.hotel_id == hotel_id)
+        protected_company_ids = {
+            company.id
+            for company in company_query.all()
+            if bool(company.requires_signature or company.payment_deferred)
+        }
 
     # Discover allowed categories intelligently
     from app.models.room import RoomCategory
@@ -587,7 +675,12 @@ def build_slots_from_db(
             check_in=res.check_in_date,
             check_out=res.check_out_date,
             current_room_id=res.room_id,
-            is_locked=(res.status == ReservationStatusEnum.CHECKED_IN or getattr(res, "allocation_locked", False)),
+            is_locked=_is_protected_reservation(
+                res,
+                active_lock_ids=active_lock_ids,
+                protected_company_ids=protected_company_ids,
+            ),
+            mobility_restriction=bool(getattr(res, "mobility_restriction", False)),
             allowed_category_ids=allowed,
             category_priority_by_id=priority_by_category,
         )
@@ -612,9 +705,63 @@ def build_slots_from_db(
             room_id=room.id,
             room_number=room.room_number,
             category_id=room.category_id,
+            floor=room.floor,
+            score=room.score,
+            is_accessible=bool(room.is_accessible),
         )
         for room in rooms
         if room.id not in blocked_room_ids
     ]
 
     return reservation_slots, room_slots
+
+
+def _lowest_compatible_floor(reservation: ReservationSlot, rooms: list[RoomSlot]) -> int | None:
+    floors = [
+        room.floor
+        for room in rooms
+        if room.is_accessible and room.category_id in reservation.effective_allowed_category_ids
+    ]
+    return min(floors) if floors else None
+
+
+def _lowest_available_compatible_floor(
+    reservation: ReservationSlot,
+    rooms: list[RoomSlot],
+    reservations: list[ReservationSlot],
+) -> int | None:
+    locked_occupancy = [
+        other
+        for other in reservations
+        if other.reservation_id != reservation.reservation_id
+        and other.is_locked
+        and other.current_room_id is not None
+        and _check_overlap(reservation, other)
+    ]
+    available_rooms = []
+    for room in rooms:
+        if not room.is_accessible or room.category_id not in reservation.effective_allowed_category_ids:
+            continue
+        if any(other.current_room_id == room.room_id for other in locked_occupancy):
+            continue
+        available_rooms.append(room)
+    return _lowest_compatible_floor(reservation, available_rooms)
+
+
+def _is_protected_reservation(
+    reservation: Reservation,
+    *,
+    active_lock_ids: set[int],
+    protected_company_ids: set[int],
+) -> bool:
+    return bool(
+        reservation.status in {ReservationStatusEnum.CHECKED_IN, ReservationStatusEnum.PRE_CHECK_IN}
+        or getattr(reservation, "actual_check_in", None) is not None
+        or getattr(reservation, "pre_check_in_at", None) is not None
+        or getattr(reservation, "allocation_locked", False)
+        or reservation.id in active_lock_ids
+        or (
+            getattr(reservation, "company_id", None) is not None
+            and reservation.company_id in protected_company_ids
+        )
+    )

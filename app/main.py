@@ -44,6 +44,8 @@ from app.api import (
     integrations,
     payment_link_tests,
     payment_links,
+    hotel_api_keys,
+    public_booking,
     permissions,
     laundry,
     stock,
@@ -57,6 +59,7 @@ from app.api import (
     rate_calendar,
     room_blocks,
     cash_register,
+    room_movement_groups,
 )
 import app.master_admin.models  # noqa: F401
 from app.master_admin.router import router as master_admin_router
@@ -151,6 +154,8 @@ app.include_router(invitations.router)
 app.include_router(integrations.router)
 app.include_router(payment_link_tests.router)
 app.include_router(payment_links.router)
+app.include_router(hotel_api_keys.router)
+app.include_router(public_booking.router)
 app.include_router(permissions.router)
 app.include_router(laundry.router)
 app.include_router(stock.router)
@@ -164,6 +169,7 @@ app.include_router(room_state_events.router)
 app.include_router(rate_calendar.router)
 app.include_router(room_blocks.router)
 app.include_router(cash_register.router)
+app.include_router(room_movement_groups.router)
 app.include_router(master_admin_router)
 
 # Frontend build paths
