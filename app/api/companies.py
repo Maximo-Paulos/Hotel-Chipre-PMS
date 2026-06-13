@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies.auth import AuthContext, require_roles
+from app.dependencies.auth import AuthContext, require_permission
 from app.schemas.analytics_api import CompanyCreate, CompanyRead, CompanyUpdate
 from app.services.analytics_service import (
     create_company,
@@ -15,6 +15,7 @@ from app.services.analytics_service import (
     reactivate_company,
     update_company,
 )
+from app.services.permission_service import PERMISSION_COMPANY_MANAGE
 
 
 router = APIRouter(prefix="/api/companies", tags=["Companies"])
@@ -23,7 +24,7 @@ router = APIRouter(prefix="/api/companies", tags=["Companies"])
 @router.get("", response_model=list[CompanyRead])
 def get_companies(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_COMPANY_MANAGE)),
 ):
     require_analytics_plan(db, context.hotel_id, "pro")
     return list_companies(db, context.hotel_id)
@@ -33,7 +34,7 @@ def get_companies(
 def create_new_company(
     payload: CompanyCreate,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_COMPANY_MANAGE)),
 ):
     require_analytics_plan(db, context.hotel_id, "pro")
     company = create_company(db, hotel_id=context.hotel_id, user_id=context.user_id or 0, payload=payload)
@@ -46,7 +47,7 @@ def create_new_company(
 def get_company(
     company_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_COMPANY_MANAGE)),
 ):
     require_analytics_plan(db, context.hotel_id, "pro")
     return get_company_or_404(db, context.hotel_id, company_id)
@@ -57,7 +58,7 @@ def patch_company(
     company_id: int,
     payload: CompanyUpdate,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_COMPANY_MANAGE)),
 ):
     require_analytics_plan(db, context.hotel_id, "pro")
     company = update_company(db, hotel_id=context.hotel_id, user_id=context.user_id or 0, company_id=company_id, payload=payload)
@@ -70,7 +71,7 @@ def patch_company(
 def deactivate_company_route(
     company_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_COMPANY_MANAGE)),
 ):
     require_analytics_plan(db, context.hotel_id, "pro")
     company = deactivate_company(db, hotel_id=context.hotel_id, user_id=context.user_id or 0, company_id=company_id)
@@ -83,7 +84,7 @@ def deactivate_company_route(
 def reactivate_company_route(
     company_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_COMPANY_MANAGE)),
 ):
     require_analytics_plan(db, context.hotel_id, "pro")
     company = reactivate_company(db, hotel_id=context.hotel_id, user_id=context.user_id or 0, company_id=company_id)

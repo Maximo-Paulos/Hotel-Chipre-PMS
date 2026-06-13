@@ -13,8 +13,18 @@ from app.database import get_db
 from app.models.guest import Guest, GuestCompanion, DocumentTypeEnum
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.schemas.guest import GuestCreate, GuestRead, GuestUpdate, GuestCompanionCreate, GuestCompanionRead
+from app.schemas.guest_tag import GuestRatingUpdate, GuestTagCreate, GuestTagRead
 from app.dependencies.auth import get_auth_context, AuthContext, require_permission
-from app.services.permission_service import PERMISSION_GUEST_EDIT
+from app.services.guest_service import (
+    GuestServiceError,
+    add_tag as add_guest_tag,
+    list_active_tags,
+    quick_profile,
+    resolve_tag as resolve_guest_tag,
+    search_guests,
+    set_rating,
+)
+from app.services.permission_service import PERMISSION_GUEST_EDIT, PERMISSION_GUEST_TAGS
 
 router = APIRouter(prefix="/api/guests", tags=["Guests"])
 
@@ -90,6 +100,16 @@ def list_guests(
     return query.offset(skip).limit(limit).all()
 
 
+@router.get("/search", response_model=list[GuestRead])
+def search_guest_records(
+    q: str,
+    limit: int = 20,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(get_auth_context),
+):
+    return search_guests(db, context.hotel_id, q, limit=limit)
+
+
 @router.get("/ledger/export")
 def export_guest_ledger(
     from_date: date,
@@ -152,6 +172,98 @@ def get_guest(
     if not guest:
         raise HTTPException(status_code=404, detail="Guest not found")
     return guest
+
+
+@router.get("/{guest_id}/quick-profile")
+def get_guest_quick_profile(
+    guest_id: int,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(get_auth_context),
+):
+    try:
+        return quick_profile(db, hotel_id=context.hotel_id, guest_id=guest_id)
+    except GuestServiceError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/{guest_id}/tags", response_model=list[GuestTagRead])
+def get_guest_tags(
+    guest_id: int,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(get_auth_context),
+):
+    try:
+        return list_active_tags(db, hotel_id=context.hotel_id, guest_id=guest_id)
+    except GuestServiceError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/{guest_id}/tags", response_model=GuestTagRead, status_code=status.HTTP_201_CREATED)
+def create_guest_tag(
+    guest_id: int,
+    data: GuestTagCreate,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_GUEST_TAGS)),
+):
+    try:
+        tag = add_guest_tag(
+            db,
+            hotel_id=context.hotel_id,
+            guest_id=guest_id,
+            tag_type=data.tag_type,
+            note=data.note,
+            expires_at=data.expires_at,
+            user_id=context.user_id,
+        )
+        db.commit()
+        db.refresh(tag)
+        return tag
+    except GuestServiceError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/{guest_id}/tags/{tag_id}/resolve", response_model=GuestTagRead)
+def resolve_tag(
+    guest_id: int,
+    tag_id: int,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_GUEST_TAGS)),
+):
+    try:
+        tag = resolve_guest_tag(
+            db,
+            hotel_id=context.hotel_id,
+            guest_id=guest_id,
+            tag_id=tag_id,
+            user_id=context.user_id,
+        )
+        db.commit()
+        db.refresh(tag)
+        return tag
+    except GuestServiceError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.patch("/{guest_id}/rating", response_model=GuestRead)
+def update_guest_rating(
+    guest_id: int,
+    data: GuestRatingUpdate,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_GUEST_TAGS)),
+):
+    try:
+        guest = set_rating(
+            db,
+            hotel_id=context.hotel_id,
+            guest_id=guest_id,
+            rating=data.rating,
+            user_id=context.user_id,
+        )
+        db.commit()
+        db.refresh(guest)
+        return guest
+    except GuestServiceError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.patch("/{guest_id}", response_model=GuestRead)

@@ -52,9 +52,11 @@ from app.api import (
     gemma_chat,
     analytics,
     companies,
+    company_documents,
     room_state_events,
     rate_calendar,
     room_blocks,
+    cash_register,
 )
 import app.master_admin.models  # noqa: F401
 from app.master_admin.router import router as master_admin_router
@@ -157,9 +159,11 @@ app.include_router(allocation_policy.router)
 app.include_router(gemma_chat.router)
 app.include_router(analytics.router)
 app.include_router(companies.router)
+app.include_router(company_documents.router)
 app.include_router(room_state_events.router)
 app.include_router(rate_calendar.router)
 app.include_router(room_blocks.router)
+app.include_router(cash_register.router)
 app.include_router(master_admin_router)
 
 # Frontend build paths

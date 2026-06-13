@@ -4,6 +4,7 @@ Pydantic schemas for Reservation.
 from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import date, datetime
+from decimal import Decimal
 from app.models.reservation import ReservationStatusEnum, ReservationSourceEnum
 from app.schemas.guest import GuestRead
 
@@ -21,6 +22,7 @@ class ReservationCreate(BaseModel):
     sellable_product_id: Optional[int] = None
     rate_plan_id: Optional[int] = None
     tax_policy_id: Optional[int] = None
+    company_id: Optional[int] = None
     check_in_date: date
     check_out_date: date
     num_adults: int = Field(default=1, gt=0)
@@ -31,6 +33,7 @@ class ReservationCreate(BaseModel):
     pricing_channel_code: Optional[str] = Field(default=None, max_length=50)
     guest_scope: str = Field(default="all", max_length=30)
     target_currency: Optional[str] = Field(default=None, min_length=3, max_length=3)
+    total_amount: Optional[Decimal] = Field(default=None, ge=0)
 
 
 class ReservationRead(BaseModel):
@@ -40,6 +43,7 @@ class ReservationRead(BaseModel):
     guest: Optional[GuestSummary] = None
     room_id: Optional[int]
     category_id: int
+    company_id: Optional[int] = None
     sellable_product_id: Optional[int] = None
     rate_plan_id: Optional[int] = None
     tax_policy_id: Optional[int] = None

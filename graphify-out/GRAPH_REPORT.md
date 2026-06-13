@@ -1,12 +1,12 @@
 # Graph Report - C:\PROJECTO\Hotel-Chipre-PMS\.claude\worktrees\clever-chebyshev-98b486  (2026-06-13)
 
 ## Corpus Check
-- 377 files · ~714,230 words
+- 381 files · ~723,423 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 3968 nodes · 13456 edges · 468 communities detected
-- Extraction: 37% EXTRACTED · 63% INFERRED · 0% AMBIGUOUS · INFERRED: 8486 edges (avg confidence: 0.59)
+- 4030 nodes · 13788 edges · 468 communities detected
+- Extraction: 37% EXTRACTED · 63% INFERRED · 0% AMBIGUOUS · INFERRED: 8737 edges (avg confidence: 0.59)
 - Token cost: 0 input · 0 output
 
 ## Community Hubs (Navigation)
@@ -480,126 +480,126 @@
 - [[_COMMUNITY_Community 467|Community 467]]
 
 ## God Nodes (most connected - your core abstractions)
-1. `HotelConfiguration` - 411 edges
-2. `Base` - 390 edges
-3. `Reservation` - 381 edges
-4. `ReservationStatusEnum` - 347 edges
-5. `Room` - 316 edges
-6. `RoomCategory` - 277 edges
-7. `Guest` - 251 edges
-8. `RoomStatusEnum` - 219 edges
+1. `HotelConfiguration` - 421 edges
+2. `Base` - 396 edges
+3. `Reservation` - 395 edges
+4. `ReservationStatusEnum` - 360 edges
+5. `Room` - 331 edges
+6. `RoomCategory` - 287 edges
+7. `Guest` - 260 edges
+8. `RoomStatusEnum` - 227 edges
 9. `ReservationError` - 164 edges
-10. `Transaction` - 155 edges
+10. `ReservationCreate` - 160 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `Alembic creates alembic_version with version_num VARCHAR(32) by default.     So` --uses--> `Base`  [INFERRED]
   C:\PROJECTO\Hotel-Chipre-PMS\alembic\env.py → C:\PROJECTO\Hotel-Chipre-PMS\app\database.py
-- `Base` --uses--> `graphify CLI - `graphify install` sets up the Claude Code skill.`  [INFERRED]
-  C:\PROJECTO\Hotel-Chipre-PMS\app\database.py → graphify_repo\graphify\__main__.py
-- `Check whether demo-only utilities should be exposed.` --uses--> `Base`  [INFERRED]
-  C:\PROJECTO\Hotel-Chipre-PMS\.claude\worktrees\clever-chebyshev-98b486\app\main.py → C:\PROJECTO\Hotel-Chipre-PMS\app\database.py
-- `Initialize database on application startup.` --uses--> `Base`  [INFERRED]
-  C:\PROJECTO\Hotel-Chipre-PMS\.claude\worktrees\clever-chebyshev-98b486\app\main.py → C:\PROJECTO\Hotel-Chipre-PMS\app\database.py
-- `Fallback page shown when the Vite build is missing.` --uses--> `Base`  [INFERRED]
-  C:\PROJECTO\Hotel-Chipre-PMS\.claude\worktrees\clever-chebyshev-98b486\app\main.py → C:\PROJECTO\Hotel-Chipre-PMS\app\database.py
+- `Base` --uses--> `Allocation, solver and LLM policy models.  The deterministic solver remains the`  [INFERRED]
+  C:\PROJECTO\Hotel-Chipre-PMS\app\database.py → app\models\allocation.py
+- `Base` --uses--> `Parse and return extra_policies as a dictionary.`  [INFERRED]
+  C:\PROJECTO\Hotel-Chipre-PMS\app\database.py → C:\PROJECTO\Hotel-Chipre-PMS\.claude\worktrees\clever-chebyshev-98b486\app\models\hotel_config.py
+- `Base` --uses--> `Serialize policies dict to JSON string.`  [INFERRED]
+  C:\PROJECTO\Hotel-Chipre-PMS\app\database.py → C:\PROJECTO\Hotel-Chipre-PMS\.claude\worktrees\clever-chebyshev-98b486\app\models\hotel_config.py
+- `Base` --uses--> `Operational reservation models for adjustments, room moves and audit history.`  [INFERRED]
+  C:\PROJECTO\Hotel-Chipre-PMS\app\database.py → app\models\operations.py
 
 ## Communities
 
 ### Community 0 - "Community 0"
-Cohesion: 0.03
-Nodes (416): AllocationEngine — Intelligent Room Assignment using Google OR-Tools (CP-SAT Sol, Count how many existing stays touch the candidate reservation without overlap., Run the CP-SAT solver to optimally assign rooms to reservations.          Args, Custom exception for allocation engine errors., Lightweight representation of a reservation for the solver., Greedy fallback allocation when OR-Tools is not available.     Simple first-fit, Return allowed categories, falling back to [category_id] if empty., Apply the solver's assignments to the database.     Updates room_id on each rese (+408 more)
+Cohesion: 0.04
+Nodes (346): AllocationResult, AllocationEngine — Intelligent Room Assignment using Google OR-Tools (CP-SAT Sol, Count how many existing stays touch the candidate reservation without overlap., Run the CP-SAT solver to optimally assign rooms to reservations.          Args, Custom exception for allocation engine errors., Lightweight representation of a reservation for the solver., Greedy fallback allocation when OR-Tools is not available.     Simple first-fit, Return allowed categories, falling back to [category_id] if empty. (+338 more)
 
 ### Community 1 - "Community 1"
-Cohesion: 0.02
-Nodes (223): AuditActionEnum, AuditLog, Tenant-scoped audit log for tracking mutations across core tables. Every write t, Append-only record of every significant mutation within a hotel tenant.     Do N, CashCloseReport, CashMovement, CashMovementTypeEnum, CashSession (+215 more)
+Cohesion: 0.01
+Nodes (305): ReservationAllocationLock, AuditActionEnum, AuditLog, Tenant-scoped audit log for tracking mutations across core tables. Every write t, Append-only record of every significant mutation within a hotel tenant.     Do N, Base, CashCloseReport, CashMovement (+297 more)
 
 ### Community 2 - "Community 2"
 Cohesion: 0.02
-Nodes (208): add integration catalog  Revision ID: 9b0becb6c658 Revises: 20260407_subscriptio, upgrade(), Dependency factory that enforces a permission via hotel membership roles., Dependency factory that enforces a permission via hotel membership roles., Dependency to enforce that the current user has one of the allowed roles in the, Dependency to enforce that the current user has one of the allowed roles in the, Dependency to enforce that the current user has one of the allowed roles in the, Return an authenticated context scoped to an active hotel membership. (+200 more)
+Nodes (240): add integration catalog  Revision ID: 9b0becb6c658 Revises: 20260407_subscriptio, upgrade(), _authenticate_user(), _decode_authorization_header(), get_auth_context(), get_current_user(), get_current_user_optional(), _parse_header_hotel_id() (+232 more)
 
 ### Community 3 - "Community 3"
-Cohesion: 0.02
-Nodes (229): record_manual_override_feedback(), availability(), _booking_to_read(), cancel_booking(), checkin_booking(), checkout_booking(), create_booking(), get_booking() (+221 more)
+Cohesion: 0.01
+Nodes (140): add subscription v2 tables  Revision ID: 20260407_subscription_tables Revises: 2, upgrade(), downgrade(), _fk_names(), launch security hardening  Revision ID: 20260408_launch_security_hardening Revis, upgrade(), reservation financial lifecycle  Revision ID: 20260410_reservation_financial_l, upgrade() (+132 more)
 
 ### Community 4 - "Community 4"
 Cohesion: 0.02
-Nodes (189): ABC, cleanup_expired_exports(), detect_no_shows(), _parse_datetime(), refresh_fact_reservation_daily(), refresh_fact_room_occupancy_daily(), App(), _authenticate_user() (+181 more)
+Nodes (167): record_manual_override_feedback(), record_hotel_audit_event(), availability(), _booking_to_read(), cancel_booking(), checkin_booking(), checkout_booking(), create_booking() (+159 more)
 
 ### Community 5 - "Community 5"
-Cohesion: 0.02
-Nodes (156): load(), submit(), masterAdminFetch(), readCookie(), safeJson(), acceptInvitation(), currentUser(), getInvitationInfo() (+148 more)
+Cohesion: 0.03
+Nodes (153): ABC, cleanup_expired_exports(), detect_no_shows(), _parse_datetime(), refresh_fact_reservation_daily(), refresh_fact_room_occupancy_daily(), App(), BillingDecision (+145 more)
 
 ### Community 6 - "Community 6"
-Cohesion: 0.04
-Nodes (144): ActiveAllocationPolicyRead, AllocationExplanationRead, AllocationFeedbackDraftRequest, AllocationPolicySuggestionApplyRequest, AllocationPolicySuggestionApplyResponse, AllocationPolicySuggestionCreate, AllocationPolicySuggestionReviewRequest, AllocationPolicyVersionCreate (+136 more)
+Cohesion: 0.05
+Nodes (129): get_mercadopago_adapter(), MercadoPagoAdapter, MercadoPago Payment Adapter. Wraps the MercadoPago SDK to create payment prefer, Service adapter for MercadoPago payment integration.     Creates checkout prefe, Lazy-initialize the MercadoPago SDK., Create a MercadoPago checkout preference.         Returns a redirect URL for th, Process an IPN (Instant Payment Notification) from MercadoPago.         Queries, BillingAdjustment (+121 more)
 
 ### Community 7 - "Community 7"
-Cohesion: 0.01
-Nodes (82): add subscription v2 tables  Revision ID: 20260407_subscription_tables Revises: 2, upgrade(), downgrade(), _fk_names(), launch security hardening  Revision ID: 20260408_launch_security_hardening Revis, upgrade(), reservation financial lifecycle  Revision ID: 20260410_reservation_financial_l, upgrade() (+74 more)
+Cohesion: 0.02
+Nodes (131): load(), submit(), acceptInvitation(), AuthResponse, _build_auth_response(), Config, currentUser(), _generate_code() (+123 more)
 
 ### Community 8 - "Community 8"
-Cohesion: 0.05
-Nodes (121): AuthContext, Minimal request context used by routers that expect a hotel scope., create_laundry_batch(), get_laundry_batch(), LaundryBatch, LaundryBatchCreate, LaundryBatchRead, LaundryItem (+113 more)
+Cohesion: 0.04
+Nodes (128): AllocationExplanationRead, AllocationFeedbackDraftRequest, AllocationPolicySuggestionApplyRequest, AllocationPolicySuggestionApplyResponse, AllocationPolicySuggestionCreate, AllocationPolicySuggestionRead, AllocationPolicySuggestionReviewRequest, AllocationPolicyVersionCreate (+120 more)
 
 ### Community 9 - "Community 9"
-Cohesion: 0.03
-Nodes (85): AllocationQuestionnaireDraft, draft_policy_from_questionnaire(), AnalyticsAIProvider, AnalyticsAIProviderConfig, AnalyticsAIProviderError, AnalyticsAIProviderStatus, AnalyticsAIRequest, AnalyticsAIResult (+77 more)
+Cohesion: 0.04
+Nodes (80): AnalyticsAIProvider, AnalyticsAIProviderConfig, AnalyticsAIProviderError, AnalyticsAIProviderStatus, AnalyticsAIRequest, AnalyticsAIResult, build_analytics_ai_config(), _build_analytics_messages() (+72 more)
 
 ### Community 10 - "Community 10"
 Cohesion: 0.04
 Nodes (120): AnalyticsAIUsageMonthly, AnalyticsAlertSetting, AnalyticsAlertSnooze, AnalyticsCurrencyDisplayEnum, AnalyticsExportFormatEnum, AnalyticsExportJob, AnalyticsExportStatusEnum, AnalyticsAIConfigRead (+112 more)
 
 ### Community 11 - "Community 11"
-Cohesion: 0.04
-Nodes (118): analytics_ai_chat(), analytics_ai_config(), analytics_alert_settings(), analytics_category_detail(), analytics_channels(), analytics_company_detail(), analytics_home(), analytics_insights_anomalies() (+110 more)
+Cohesion: 0.06
+Nodes (102): AuthContext, Minimal request context used by routers that expect a hotel scope., Parse and return extra_policies as a dictionary., Serialize policies dict to JSON string., compute_missing_guest_fields(), get_profile(), JurisdictionProfile, Jurisdiction profiles for guest/check-in validation.  AR remains the only launch (+94 more)
 
 ### Community 12 - "Community 12"
 Cohesion: 0.05
-Nodes (93): AllocationAssignment, AllocationAssignmentStatusEnum, AllocationExplanation, AllocationPolicyProfile, AllocationPolicyVersion, AllocationRun, AllocationRunStatusEnum, _adjacency_bonus_for_room() (+85 more)
+Nodes (111): analytics_ai_chat(), analytics_ai_config(), analytics_alert_settings(), analytics_category_detail(), analytics_channels(), analytics_company_detail(), analytics_home(), analytics_insights_anomalies() (+103 more)
 
 ### Community 13 - "Community 13"
-Cohesion: 0.04
-Nodes (35): BookingAdapter, _coerce_amount(), _infer_event_type(), NormalizedOTAReservation, OTAAdapterContext, OTAOperationResult, OTAProviderAdapter, Common contracts for OTA provider adapters.  The goal is to keep Booking, Expedi (+27 more)
+Cohesion: 0.05
+Nodes (89): AllocationAssignment, AllocationAssignmentStatusEnum, AllocationExplanation, AllocationPolicyProfile, AllocationPolicyVersion, AllocationRun, AllocationRunStatusEnum, _adjacency_bonus_for_room() (+81 more)
 
 ### Community 14 - "Community 14"
-Cohesion: 0.06
-Nodes (97): ensure_all_ota_webhook_secrets(), _ensure_membership_and_subscription(), ensure_plans_seeded(), get_or_create_hotel_for_owner(), Hotel helper utilities (ownership + bootstrap)., Seed default plans if missing., Find a hotel configuration owned by the given email, or create a new one.     Al, Find a hotel configuration owned by the given email, or create a new one.     A (+89 more)
+Cohesion: 0.04
+Nodes (34): BookingAdapter, _coerce_amount(), _infer_event_type(), NormalizedOTAReservation, OTAAdapterContext, OTAOperationResult, OTAProviderAdapter, Common contracts for OTA provider adapters.  The goal is to keep Booking, Expedi (+26 more)
 
 ### Community 15 - "Community 15"
 Cohesion: 0.06
-Nodes (55): IntegrationCatalog, IntegrationConnection, IntegrationEvent, _account_label_from_payload(), build_redirect_url(), connection_account_label(), decrypt_payload(), derive_expires_at() (+47 more)
+Nodes (96): ensure_all_ota_webhook_secrets(), _ensure_membership_and_subscription(), ensure_plans_seeded(), get_or_create_hotel_for_owner(), Hotel helper utilities (ownership + bootstrap)., Seed default plans if missing., Find a hotel configuration owned by the given email, or create a new one.     Al, Find a hotel configuration owned by the given email, or create a new one.     A (+88 more)
 
 ### Community 16 - "Community 16"
-Cohesion: 0.07
-Nodes (61): create_fx(), create_plan(), create_policy(), create_product(), FxPolicyBase, FxPolicyCreate, FxPolicyRead, FxPolicyUpdate (+53 more)
+Cohesion: 0.05
+Nodes (70): AIAssistantActionRun, AIAssistantInsight, AIAssistantMessage, AIAssistantSession, AI assistant session and message models.  Phase 1 keeps Gemma in read-only/propo, build_controlled_proposal(), _dedupe_preserve_order(), _detect_channel() (+62 more)
 
 ### Community 17 - "Community 17"
-Cohesion: 0.08
-Nodes (39): AIAssistantActionRun, AIAssistantInsight, AIAssistantMessage, AIAssistantSession, AI assistant session and message models.  Phase 1 keeps Gemma in read-only/propo, build_controlled_proposal(), _dedupe_preserve_order(), _detect_channel() (+31 more)
+Cohesion: 0.07
+Nodes (62): create_fx(), create_plan(), create_policy(), create_product(), FxPolicyBase, FxPolicyCreate, FxPolicyRead, FxPolicyUpdate (+54 more)
 
 ### Community 18 - "Community 18"
-Cohesion: 0.06
-Nodes (42): _derive_pg_test_dsn(), _DecimalAwareEncoder, _frontend_placeholder(), _is_demo_mode_enabled(), lifespan(), graphify CLI - `graphify install` sets up the Claude Code skill., Fallback page shown when the Vite build is missing., Serve the SPA shell. We no longer block by onboarding here to avoid     returni (+34 more)
+Cohesion: 0.09
+Nodes (45): _apply_financial_snapshot(), _cancel_existing_reservation_from_normalized(), _create_legacy_mapping(), _ensure_foundation_provider(), _extract_external_property_id(), generate_webhook_secret(), _hash_secret(), _hotel_default_currency() (+37 more)
 
 ### Community 19 - "Community 19"
-Cohesion: 0.1
-Nodes (43): _apply_financial_snapshot(), _cancel_existing_reservation_from_normalized(), _create_legacy_mapping(), _ensure_foundation_provider(), _extract_external_property_id(), _hash_secret(), _hotel_default_currency(), _mark_reservation_manual_review() (+35 more)
+Cohesion: 0.09
+Nodes (42): create_item(), create_stock_location(), delete_item(), delete_stock_location(), get_current_stock(), get_item(), get_stock_location(), list_items() (+34 more)
 
 ### Community 20 - "Community 20"
+Cohesion: 0.12
+Nodes (32): HotelPermissionOverride, Permission, Configurable permission matrix models., RolePermissionDefault, audit_permission_denied(), get_matrix(), Permission matrix resolution and mutation., Resolve override > default > deny for a hotel role permission. (+24 more)
+
+### Community 21 - "Community 21"
+Cohesion: 0.08
+Nodes (12): formatMoney(), getFormatter(), normalizeCurrencyCode(), defaultFormState(), exportVoucher(), handleCheckAvailability(), handlePayDeposit(), handlePayFull() (+4 more)
+
+### Community 22 - "Community 22"
 Cohesion: 0.19
 Nodes (25): get_daily_rate_calendar(), _aggregate_inventory_rules(), _build_direct_prices(), _build_missing_channel(), _build_ota_prices(), _default_restrictions(), get_daily_calendar(), _select_ota_price_rule() (+17 more)
 
-### Community 21 - "Community 21"
+### Community 23 - "Community 23"
 Cohesion: 0.11
 Nodes (15): Connection, ConnectionCreate, ConnectionRead, Pydantic schemas for external provider connections. Ensures credentials/setting, Payload to establish/update a provider connection., ConnectionError, Connection service to manage external provider credentials/settings. Provides a, Raised for validation problems while creating/updating a connection. (+7 more)
-
-### Community 22 - "Community 22"
-Cohesion: 0.13
-Nodes (12): _resolve_jurisdiction_code(), validate_guest_for_checkin(), Parse and return extra_policies as a dictionary., Serialize policies dict to JSON string., compute_missing_guest_fields(), get_profile(), JurisdictionProfile, Jurisdiction profiles for guest/check-in validation.  AR remains the only launch (+4 more)
-
-### Community 23 - "Community 23"
-Cohesion: 0.18
-Nodes (8): get_paypal_adapter(), PayPalAdapter, PayPal Payment Adapter. Wraps the PayPal REST SDK to create orders and capture, Execute (capture) a PayPal payment after customer approval.         Called when, Service adapter for PayPal payment integration.     Creates orders and processe, Process a PayPal webhook notification., Lazy-initialize the PayPal API., Create a PayPal payment (order).         Returns a redirect URL for the custome
 
 ### Community 24 - "Community 24"
 Cohesion: 0.23
@@ -618,24 +618,24 @@ Cohesion: 0.5
 Nodes (11): _build_client(), _cleanup_client(), _override_auth(), _seed_hotel(), test_date_to_before_date_from_returns_422(), test_endpoint_rejects_forbidden_role(), test_endpoint_requires_authentication(), test_multi_hotel_isolation_returns_404_for_foreign_category() (+3 more)
 
 ### Community 28 - "Community 28"
-Cohesion: 0.21
-Nodes (7): get_mercadopago_adapter(), MercadoPagoAdapter, MercadoPago Payment Adapter. Wraps the MercadoPago SDK to create payment prefer, Service adapter for MercadoPago payment integration.     Creates checkout prefe, Lazy-initialize the MercadoPago SDK., Create a MercadoPago checkout preference.         Returns a redirect URL for th, Process an IPN (Instant Payment Notification) from MercadoPago.         Queries
-
-### Community 29 - "Community 29"
 Cohesion: 0.43
 Nodes (7): client_with_db(), create_hotel_with_membership(), get_db_override_target(), test_reservations_list_isolated_by_hotel(), test_reset_endpoint_allows_testing_env(), test_room_cap_enforced(), test_rooms_list_isolated_by_hotel()
 
-### Community 30 - "Community 30"
+### Community 29 - "Community 29"
 Cohesion: 0.32
 Nodes (4): authed_client(), client_with_db(), get_auth_context_target(), get_db_override_target()
 
-### Community 31 - "Community 31"
+### Community 30 - "Community 30"
 Cohesion: 0.53
 Nodes (5): _ensure_wide_version_table(), get_url(), Alembic creates alembic_version with version_num VARCHAR(32) by default.     So, run_migrations_offline(), run_migrations_online()
 
-### Community 32 - "Community 32"
+### Community 31 - "Community 31"
 Cohesion: 0.33
 Nodes (0): 
+
+### Community 32 - "Community 32"
+Cohesion: 0.47
+Nodes (4): _seed_gmail_connection(), _seed_mercadopago_connection(), test_payment_link_test_requires_hotel_gmail_connection(), test_send_hotel_email_uses_connected_gmail()
 
 ### Community 33 - "Community 33"
 Cohesion: 0.6
@@ -2378,7 +2378,7 @@ Cohesion: 1.0
 Nodes (1): Ratio of actual intra-community edges to maximum possible.
 
 ## Knowledge Gaps
-- **509 isolated node(s):** `add hotel scope to core tables  Revision ID: 20260404_add_hotel_scope Revises: c`, `add subscription v2 tables  Revision ID: 20260407_subscription_tables Revises: 2`, `launch security hardening  Revision ID: 20260408_launch_security_hardening Revis`, `add sender metadata to payment link tests  Revision ID: 20260408_payment_link_`, `reservation financial lifecycle  Revision ID: 20260410_reservation_financial_l` (+504 more)
+- **515 isolated node(s):** `add hotel scope to core tables  Revision ID: 20260404_add_hotel_scope Revises: c`, `add subscription v2 tables  Revision ID: 20260407_subscription_tables Revises: 2`, `launch security hardening  Revision ID: 20260408_launch_security_hardening Revis`, `add sender metadata to payment link tests  Revision ID: 20260408_payment_link_`, `reservation financial lifecycle  Revision ID: 20260410_reservation_financial_l` (+510 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **Thin community `Community 48`** (2 nodes): `celery_app.py`, `Celery application configuration and async tasks for OTA synchronization.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
@@ -3224,17 +3224,17 @@ Nodes (1): Ratio of actual intra-community edges to maximum possible.
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `Base` connect `Community 1` to `Community 0`, `Community 2`, `Community 3`, `Community 4`, `Community 6`, `Community 8`, `Community 10`, `Community 11`, `Community 12`, `Community 13`, `Community 14`, `Community 15`, `Community 16`, `Community 17`, `Community 18`, `Community 21`, `Community 22`, `Community 31`?**
-  _High betweenness centrality (0.143) - this node is a cross-community bridge._
-- **Why does `HotelConfiguration` connect `Community 0` to `Community 1`, `Community 2`, `Community 3`, `Community 4`, `Community 6`, `Community 8`, `Community 10`, `Community 12`, `Community 13`, `Community 14`, `Community 15`, `Community 18`, `Community 20`, `Community 22`, `Community 27`?**
-  _High betweenness centrality (0.105) - this node is a cross-community bridge._
-- **Why does `String()` connect `Community 7` to `Community 2`, `Community 4`, `Community 5`?**
-  _High betweenness centrality (0.075) - this node is a cross-community bridge._
-- **Are the 404 inferred relationships involving `HotelConfiguration` (e.g. with `FastAPI routes for Hotel Configuration (Admin Panel).` and `Lightweight status so the frontend can check if SMTP is configured.`) actually correct?**
-  _`HotelConfiguration` has 404 INFERRED edges - model-reasoned connections that need verification._
-- **Are the 387 inferred relationships involving `Base` (e.g. with `Alembic creates alembic_version with version_num VARCHAR(32) by default.     So` and `_DecimalAwareEncoder`) actually correct?**
-  _`Base` has 387 INFERRED edges - model-reasoned connections that need verification._
-- **Are the 376 inferred relationships involving `Reservation` (e.g. with `FastAPI routes for Booking management (thin layer over Reservation). Provides b` and `Ensure computed fields land in the response.`) actually correct?**
-  _`Reservation` has 376 INFERRED edges - model-reasoned connections that need verification._
-- **Are the 345 inferred relationships involving `ReservationStatusEnum` (e.g. with `FastAPI routes for Booking management (thin layer over Reservation). Provides b` and `Ensure computed fields land in the response.`) actually correct?**
-  _`ReservationStatusEnum` has 345 INFERRED edges - model-reasoned connections that need verification._
+- **Why does `Base` connect `Community 1` to `Community 0`, `Community 2`, `Community 4`, `Community 6`, `Community 7`, `Community 8`, `Community 10`, `Community 11`, `Community 13`, `Community 14`, `Community 15`, `Community 16`, `Community 17`, `Community 19`, `Community 20`, `Community 23`, `Community 30`?**
+  _High betweenness centrality (0.154) - this node is a cross-community bridge._
+- **Why does `HotelConfiguration` connect `Community 0` to `Community 1`, `Community 2`, `Community 4`, `Community 6`, `Community 7`, `Community 8`, `Community 10`, `Community 11`, `Community 13`, `Community 14`, `Community 15`, `Community 19`, `Community 20`, `Community 22`, `Community 27`?**
+  _High betweenness centrality (0.102) - this node is a cross-community bridge._
+- **Why does `apiFetch()` connect `Community 7` to `Community 3`?**
+  _High betweenness centrality (0.055) - this node is a cross-community bridge._
+- **Are the 414 inferred relationships involving `HotelConfiguration` (e.g. with `FastAPI routes for Hotel Configuration (Admin Panel).` and `Lightweight status so the frontend can check if SMTP is configured.`) actually correct?**
+  _`HotelConfiguration` has 414 INFERRED edges - model-reasoned connections that need verification._
+- **Are the 393 inferred relationships involving `Base` (e.g. with `Alembic creates alembic_version with version_num VARCHAR(32) by default.     So` and `_DecimalAwareEncoder`) actually correct?**
+  _`Base` has 393 INFERRED edges - model-reasoned connections that need verification._
+- **Are the 390 inferred relationships involving `Reservation` (e.g. with `FastAPI routes for Booking management (thin layer over Reservation). Provides b` and `Ensure computed fields land in the response.`) actually correct?**
+  _`Reservation` has 390 INFERRED edges - model-reasoned connections that need verification._
+- **Are the 358 inferred relationships involving `ReservationStatusEnum` (e.g. with `FastAPI routes for Booking management (thin layer over Reservation). Provides b` and `Ensure computed fields land in the response.`) actually correct?**
+  _`ReservationStatusEnum` has 358 INFERRED edges - model-reasoned connections that need verification._

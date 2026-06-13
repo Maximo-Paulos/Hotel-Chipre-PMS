@@ -6,7 +6,7 @@ Uses pessimistic locking to prevent race conditions (overbooking).
 import json
 import string
 import random
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from decimal import Decimal
 from datetime import date
 from typing import Optional
@@ -14,6 +14,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from app.models.commercial import RatePlan, SellableProduct, TaxPolicy
+from app.models.company import Company
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.guest import Guest
 from app.models.reservation import Reservation, ReservationStatusEnum, ReservationSourceEnum
@@ -212,6 +213,88 @@ def calculate_reservation_pricing(
     )
 
 
+def _resolve_reservation_company(db: Session, *, hotel_id: int, company_id: int | None) -> Company | None:
+    if company_id is None:
+        return None
+    company = (
+        db.query(Company)
+        .filter(Company.id == company_id, Company.hotel_id == hotel_id, Company.is_active == True)
+        .first()
+    )
+    if company is None:
+        raise ReservationError("Company does not belong to the active hotel")
+    return company
+
+
+def _pricing_with_total(
+    db: Session,
+    *,
+    hotel_id: int,
+    pricing: ReservationPricingResult,
+    total_amount,
+    nightly_rate,
+    pricing_source: str,
+    company_id: int,
+) -> ReservationPricingResult:
+    total = round(float(total_amount), 2)
+    nightly = round(float(nightly_rate), 2)
+    snapshot = {
+        "pricing_source": pricing_source,
+        "company_id": company_id,
+        "nightly_rate": nightly,
+        "nights": pricing.nights,
+        "total_amount": total,
+    }
+    return replace(
+        pricing,
+        nightly_rate=nightly,
+        total_amount=total,
+        deposit_amount=_compute_deposit_amount(db, hotel_id=hotel_id, gross_total=total),
+        subtotal_amount=total,
+        tax_amount=0.0,
+        fee_amount=0.0,
+        commission_amount=0.0,
+        net_amount=total,
+        pricing_source=pricing_source,
+        pricing_snapshot=json.dumps(snapshot, ensure_ascii=True, sort_keys=True),
+    )
+
+
+def _apply_corporate_pricing(
+    db: Session,
+    *,
+    hotel_id: int,
+    pricing: ReservationPricingResult,
+    company: Company,
+    explicit_total,
+) -> ReservationPricingResult:
+    if explicit_total is not None:
+        nightly = float(explicit_total) / pricing.nights if pricing.nights else 0.0
+        return _pricing_with_total(
+            db,
+            hotel_id=hotel_id,
+            pricing=pricing,
+            total_amount=explicit_total,
+            nightly_rate=nightly,
+            pricing_source="manual_total_override",
+            company_id=company.id,
+        )
+
+    if company.base_price is None or pricing.rate_plan_id is not None:
+        return pricing
+
+    nightly = float(company.base_price)
+    return _pricing_with_total(
+        db,
+        hotel_id=hotel_id,
+        pricing=pricing,
+        total_amount=nightly * pricing.nights,
+        nightly_rate=nightly,
+        pricing_source="company_base_price",
+        company_id=company.id,
+    )
+
+
 def check_room_availability(
     db: Session,
     room_id: int,
@@ -321,6 +404,8 @@ def create_reservation(db: Session, data: ReservationCreate, hotel_id: Optional[
     if category.hotel_id != hotel_id:
         raise ReservationError("Room category does not belong to the active hotel")
 
+    company = _resolve_reservation_company(db, hotel_id=hotel_id, company_id=data.company_id)
+
     pricing = calculate_reservation_pricing(
         db,
         category_id=data.category_id,
@@ -335,6 +420,8 @@ def create_reservation(db: Session, data: ReservationCreate, hotel_id: Optional[
         target_currency=data.target_currency,
         occupancy=data.num_adults + data.num_children,
     )
+    if company is not None:
+        pricing = _apply_corporate_pricing(db, hotel_id=hotel_id, pricing=pricing, company=company, explicit_total=data.total_amount)
 
     room_id = data.room_id
     if room_id:
@@ -383,6 +470,7 @@ def create_reservation(db: Session, data: ReservationCreate, hotel_id: Optional[
         guest_id=data.guest_id,
         room_id=room_id,
         category_id=data.category_id,
+        company_id=data.company_id,
         sellable_product_id=pricing.sellable_product_id,
         rate_plan_id=pricing.rate_plan_id,
         tax_policy_id=pricing.tax_policy_id,
@@ -405,6 +493,8 @@ def create_reservation(db: Session, data: ReservationCreate, hotel_id: Optional[
         num_children=data.num_children,
         notes=data.notes,
         pricing_snapshot=pricing.pricing_snapshot,
+        allocation_locked=bool(company and (company.requires_signature or company.payment_deferred)),
+        requires_manual_review=bool(company and (company.requires_signature or company.payment_deferred)),
         payment_collection_model="hotel_collect" if data.source == ReservationSourceEnum.DIRECT else "unknown",
         settlement_status="not_applicable" if data.source == ReservationSourceEnum.DIRECT else "pending",
     )

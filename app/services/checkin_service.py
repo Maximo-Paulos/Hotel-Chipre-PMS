@@ -8,8 +8,10 @@ Manages the deep guest check-in flow:
   5. Transitions status to checked_in
   6. Also handles check-out flow
 """
+import json
 from datetime import datetime, timezone
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.models.guest import Guest, GuestTag, GuestTagTypeEnum
@@ -19,6 +21,7 @@ from app.services.reservation_service import transition_reservation_status, Rese
 from app.services.jurisdiction_profile import compute_missing_guest_fields
 from app.models.room import Room, RoomStatusEnum
 from app.services.guest_profile import get_guest_profile, validate_primary_guest_record
+from app.models.security_audit_log import SecurityAuditLog
 
 
 class CheckInError(Exception):
@@ -65,6 +68,9 @@ def perform_checkin(
     db: Session,
     reservation_id: int,
     hotel_id: int | None = None,
+    *,
+    override_prohibido: bool = False,
+    override_user_id: int | None = None,
 ) -> Reservation:
     """
     Full check-in process:
@@ -109,10 +115,30 @@ def perform_checkin(
             GuestTag.hotel_id == hotel_id,
             GuestTag.guest_id == guest.id,
             GuestTag.tag_type == GuestTagTypeEnum.PROHIBIDO_ALOJAR,
+            or_(GuestTag.expires_at.is_(None), GuestTag.expires_at > datetime.now(timezone.utc)),
         )
         .first()
     )
-    if prohibido_tag:
+    if prohibido_tag and override_prohibido:
+        db.add(
+            SecurityAuditLog(
+                hotel_id=hotel_id,
+                user_id=override_user_id,
+                action="checkin.prohibido_override",
+                resource_type="reservation",
+                resource_id=str(reservation.id),
+                details=json.dumps(
+                    {
+                        "guest_id": guest.id,
+                        "guest_tag_id": prohibido_tag.id,
+                        "tag_note": prohibido_tag.note,
+                        "overridden_by_user_id": override_user_id,
+                    },
+                    sort_keys=True,
+                ),
+            )
+        )
+    if prohibido_tag and not override_prohibido:
         note = f" ({prohibido_tag.note})" if prohibido_tag.note else ""
         raise CheckInError(
             f"Check-in blocked — guest has an active 'prohibido_alojar' tag{note}. "

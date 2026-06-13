@@ -28,6 +28,10 @@ PERMISSION_RESERVATION_CREATE = "reservation:create"
 PERMISSION_RESERVATION_ROOM_MOVE = "reservation:room_move"
 PERMISSION_CHECKIN_PERFORM = "checkin:perform"
 PERMISSION_ROOM_BLOCK = "room:block"
+PERMISSION_COMPANY_MANAGE = "company:manage"
+PERMISSION_CASH_OPERATE = "cash:operate"
+PERMISSION_CASH_APPROVE_DIFFERENCE = "cash:approve_difference"
+PERMISSION_CHECKIN_OVERRIDE_PROHIBIDO = "checkin:override_prohibido"
 
 PERMISSION_DEFINITIONS: dict[str, str] = {
     PERMISSION_CONFIG_MANAGE: "Manage hotel configuration",
@@ -38,6 +42,10 @@ PERMISSION_DEFINITIONS: dict[str, str] = {
     PERMISSION_RESERVATION_ROOM_MOVE: "Move reservations between rooms",
     PERMISSION_CHECKIN_PERFORM: "Perform guest check-in",
     PERMISSION_ROOM_BLOCK: "Create and resolve room blocks",
+    PERMISSION_COMPANY_MANAGE: "Manage companies and company reservation documents",
+    PERMISSION_CASH_OPERATE: "Operate cash register sessions and movements",
+    PERMISSION_CASH_APPROVE_DIFFERENCE: "Approve cash close differences",
+    PERMISSION_CHECKIN_OVERRIDE_PROHIBIDO: "Override prohibido_alojar check-in blocks",
 }
 
 DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
@@ -52,6 +60,10 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
         PERMISSION_RESERVATION_ROOM_MOVE: True,
         PERMISSION_CHECKIN_PERFORM: True,
         PERMISSION_ROOM_BLOCK: True,
+        PERMISSION_COMPANY_MANAGE: True,
+        PERMISSION_CASH_OPERATE: True,
+        PERMISSION_CASH_APPROVE_DIFFERENCE: True,
+        PERMISSION_CHECKIN_OVERRIDE_PROHIBIDO: True,
     },
     ROLE_RECEPTIONIST: {
         PERMISSION_CONFIG_MANAGE: False,
@@ -62,6 +74,10 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
         PERMISSION_RESERVATION_ROOM_MOVE: False,
         PERMISSION_CHECKIN_PERFORM: True,
         PERMISSION_ROOM_BLOCK: False,
+        PERMISSION_COMPANY_MANAGE: False,
+        PERMISSION_CASH_OPERATE: True,
+        PERMISSION_CASH_APPROVE_DIFFERENCE: False,
+        PERMISSION_CHECKIN_OVERRIDE_PROHIBIDO: False,
     },
     ROLE_HOUSEKEEPING: {
         PERMISSION_CONFIG_MANAGE: False,
@@ -72,6 +88,10 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
         PERMISSION_RESERVATION_ROOM_MOVE: False,
         PERMISSION_CHECKIN_PERFORM: False,
         PERMISSION_ROOM_BLOCK: False,
+        PERMISSION_COMPANY_MANAGE: False,
+        PERMISSION_CASH_OPERATE: False,
+        PERMISSION_CASH_APPROVE_DIFFERENCE: False,
+        PERMISSION_CHECKIN_OVERRIDE_PROHIBIDO: False,
     },
 }
 
