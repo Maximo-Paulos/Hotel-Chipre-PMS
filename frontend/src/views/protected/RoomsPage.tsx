@@ -1,7 +1,9 @@
-import { useMemo, useState } from "react";
+import { type FormEvent, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
+import { type RoomBlockCreatePayload, type RoomBlockReasonCode } from "../../api/roomBlocks";
 import { type RoomStatus } from "../../api/rooms";
+import { roomBlockReasonLabel, roomBlockReasonOptions, useRoomBlocks } from "../../hooks/useRoomBlocks";
 import { useSubscriptionStatus } from "../../hooks/useSubscription";
 import { roomStatusLabel, useRooms } from "../../hooks/useRooms";
 
@@ -15,11 +17,36 @@ const statusColors: Record<RoomStatus, string> = {
 
 const statusOptions: RoomStatus[] = ["available", "occupied", "cleaning"];
 
+const todayIso = () => new Date().toISOString().slice(0, 10);
+
+type BlockFormValues = {
+  room_id: string;
+  starts_at: string;
+  ends_at: string;
+  is_indefinite: boolean;
+  reason_code: RoomBlockReasonCode;
+  reason_note: string;
+};
+
+const emptyBlockForm = (): BlockFormValues => ({
+  room_id: "",
+  starts_at: todayIso(),
+  ends_at: "",
+  is_indefinite: false,
+  reason_code: "maintenance",
+  reason_note: ""
+});
+
 export function RoomsPage() {
   const { roomsQuery, categoriesQuery, updateStatusMutation } = useRooms();
+  const { blocksQuery, createBlockMutation, resolveBlockMutation } = useRoomBlocks();
   const rooms = useMemo(() => roomsQuery.data || [], [roomsQuery.data]);
   const categories = useMemo(() => categoriesQuery.data || [], [categoriesQuery.data]);
+  const activeBlocks = useMemo(() => blocksQuery.data || [], [blocksQuery.data]);
   const [pendingRoom, setPendingRoom] = useState<number | null>(null);
+  const [pendingBlockId, setPendingBlockId] = useState<number | null>(null);
+  const [blockForm, setBlockForm] = useState<BlockFormValues>(() => emptyBlockForm());
+  const [blockMessage, setBlockMessage] = useState<string | null>(null);
   const { data: subscription } = useSubscriptionStatus();
 
   const writeBlocked = subscription?.can_write === false;
@@ -36,6 +63,12 @@ export function RoomsPage() {
     categories.forEach((cat) => map.set(cat.id, { name: cat.name, code: cat.code, base_price_per_night: cat.base_price_per_night }));
     return map;
   }, [categories]);
+
+  const roomById = useMemo(() => {
+    const map = new Map<number, { room_number: string; floor: number }>();
+    rooms.forEach((room) => map.set(room.id, { room_number: room.room_number, floor: room.floor }));
+    return map;
+  }, [rooms]);
 
   const stats = useMemo(() => {
     return rooms.reduce(
@@ -56,6 +89,57 @@ export function RoomsPage() {
         onSettled: () => setPendingRoom(null)
       }
     );
+  };
+
+  const handleBlockFormChange = <Field extends keyof BlockFormValues>(field: Field, value: BlockFormValues[Field]) => {
+    setBlockForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const handleCreateBlock = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (actionsBlocked) return;
+    setBlockMessage(null);
+
+    const roomId = Number(blockForm.room_id);
+    if (!Number.isInteger(roomId) || roomId <= 0) {
+      setBlockMessage("Seleccioná una habitación para bloquear.");
+      return;
+    }
+    if (!blockForm.is_indefinite && !blockForm.ends_at) {
+      setBlockMessage("Indicá una fecha de fin o marcá el bloqueo como indefinido.");
+      return;
+    }
+
+    const payload: RoomBlockCreatePayload = {
+      room_id: roomId,
+      starts_at: blockForm.starts_at,
+      ends_at: blockForm.is_indefinite ? null : blockForm.ends_at,
+      is_indefinite: blockForm.is_indefinite,
+      reason_code: blockForm.reason_code,
+      reason_note: blockForm.reason_note.trim() || null
+    };
+
+    try {
+      await createBlockMutation.mutateAsync(payload);
+      setBlockForm(emptyBlockForm());
+      setBlockMessage("Bloqueo creado.");
+    } catch (error) {
+      setBlockMessage(error instanceof Error ? error.message : "No se pudo crear el bloqueo.");
+    }
+  };
+
+  const handleResolveBlock = async (blockId: number) => {
+    if (actionsBlocked) return;
+    setPendingBlockId(blockId);
+    setBlockMessage(null);
+    try {
+      await resolveBlockMutation.mutateAsync(blockId);
+      setBlockMessage("Bloqueo resuelto.");
+    } catch (error) {
+      setBlockMessage(error instanceof Error ? error.message : "No se pudo resolver el bloqueo.");
+    } finally {
+      setPendingBlockId(null);
+    }
   };
 
   return (
@@ -118,7 +202,7 @@ export function RoomsPage() {
                     value={room.status}
                     onChange={(e) => handleStatusUpdate(room.id, e.target.value as RoomStatus)}
                     className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-brand-400 focus:outline-none disabled:bg-slate-50"
-                    disabled={actionsBlocked || (pendingRoom === room.id && updateStatusMutation.isLoading)}
+                    disabled={actionsBlocked || (pendingRoom === room.id && updateStatusMutation.isPending)}
                   >
                     {statusOptions.map((status) => (
                       <option key={status} value={status}>
@@ -128,7 +212,7 @@ export function RoomsPage() {
                     <option value="maintenance">Mantenimiento</option>
                     <option value="blocked">Bloqueada</option>
                   </select>
-                  {pendingRoom === room.id && updateStatusMutation.isLoading && (
+                  {pendingRoom === room.id && updateStatusMutation.isPending && (
                     <p className="mt-2 text-xs text-slate-500">Guardando...</p>
                   )}
                 </div>
@@ -142,8 +226,163 @@ export function RoomsPage() {
           )}
         </div>
       </div>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-wide text-slate-500">Bloqueos</p>
+            <h2 className="text-lg font-semibold text-slate-900">Bloqueos activos ({activeBlocks.length})</h2>
+            <p className="text-sm text-slate-600">Reservá habitaciones fuera de venta por mantenimiento, limpieza o uso interno.</p>
+            {blocksQuery.error && <p className="mt-1 text-xs text-rose-700">No se pudo cargar: {(blocksQuery.error as Error).message}</p>}
+          </div>
+          {blocksQuery.isFetching && <p className="text-xs text-slate-500">Actualizando bloqueos...</p>}
+        </div>
+
+        <form className="mt-4 grid gap-4 rounded-lg border border-slate-200 bg-slate-50 p-4 lg:grid-cols-6" onSubmit={handleCreateBlock}>
+          <label className="space-y-1 text-sm lg:col-span-1">
+            <span className="text-slate-600">Habitación</span>
+            <select
+              required
+              value={blockForm.room_id}
+              onChange={(event) => handleBlockFormChange("room_id", event.target.value)}
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
+              disabled={actionsBlocked || createBlockMutation.isPending}
+            >
+              <option value="">Seleccionar</option>
+              {rooms.map((room) => (
+                <option key={room.id} value={room.id}>
+                  Hab. {room.room_number}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="space-y-1 text-sm lg:col-span-1">
+            <span className="text-slate-600">Desde</span>
+            <input
+              required
+              type="date"
+              value={blockForm.starts_at}
+              onChange={(event) => handleBlockFormChange("starts_at", event.target.value)}
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
+              disabled={actionsBlocked || createBlockMutation.isPending}
+            />
+          </label>
+
+          <label className="space-y-1 text-sm lg:col-span-1">
+            <span className="text-slate-600">Hasta</span>
+            <input
+              type="date"
+              value={blockForm.ends_at}
+              min={blockForm.starts_at}
+              onChange={(event) => handleBlockFormChange("ends_at", event.target.value)}
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 disabled:bg-slate-100"
+              disabled={actionsBlocked || blockForm.is_indefinite || createBlockMutation.isPending}
+              required={!blockForm.is_indefinite}
+            />
+          </label>
+
+          <label className="space-y-1 text-sm lg:col-span-1">
+            <span className="text-slate-600">Motivo</span>
+            <select
+              value={blockForm.reason_code}
+              onChange={(event) => handleBlockFormChange("reason_code", event.target.value as RoomBlockReasonCode)}
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
+              disabled={actionsBlocked || createBlockMutation.isPending}
+            >
+              {roomBlockReasonOptions.map((reason) => (
+                <option key={reason} value={reason}>
+                  {roomBlockReasonLabel[reason]}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="space-y-1 text-sm lg:col-span-2">
+            <span className="text-slate-600">Detalle</span>
+            <input
+              value={blockForm.reason_note}
+              onChange={(event) => handleBlockFormChange("reason_note", event.target.value)}
+              maxLength={500}
+              placeholder="Ej. reparación de aire acondicionado"
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
+              disabled={actionsBlocked || createBlockMutation.isPending}
+            />
+          </label>
+
+          <div className="flex flex-col gap-3 lg:col-span-6 sm:flex-row sm:items-center sm:justify-between">
+            <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={blockForm.is_indefinite}
+                onChange={(event) => {
+                  handleBlockFormChange("is_indefinite", event.target.checked);
+                  if (event.target.checked) handleBlockFormChange("ends_at", "");
+                }}
+                className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                disabled={actionsBlocked || createBlockMutation.isPending}
+              />
+              Bloqueo indefinido
+            </label>
+            <button
+              type="submit"
+              disabled={actionsBlocked || createBlockMutation.isPending}
+              className="rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
+            >
+              {createBlockMutation.isPending ? "Creando..." : "Crear bloqueo"}
+            </button>
+          </div>
+        </form>
+
+        {blockMessage && (
+          <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">{blockMessage}</div>
+        )}
+
+        <div className="mt-4 grid gap-3 lg:grid-cols-2">
+          {activeBlocks.map((block) => {
+            const room = roomById.get(block.room_id);
+            return (
+              <div key={block.id} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-slate-500">
+                      {room ? `Hab. ${room.room_number} · Piso ${room.floor}` : `Habitación ${block.room_id}`}
+                    </p>
+                    <h3 className="text-base font-semibold text-slate-900">{roomBlockReasonLabel[block.reason_code]}</h3>
+                    <p className="text-xs text-slate-500">{formatBlockDates(block.starts_at, block.ends_at, block.is_indefinite)}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleResolveBlock(block.id)}
+                    disabled={actionsBlocked || (pendingBlockId === block.id && resolveBlockMutation.isPending)}
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                  >
+                    {pendingBlockId === block.id && resolveBlockMutation.isPending ? "Resolviendo..." : "Resolver"}
+                  </button>
+                </div>
+                <p className="mt-3 text-sm text-slate-700">{block.reason_note || "Sin detalle adicional."}</p>
+              </div>
+            );
+          })}
+          {!blocksQuery.isLoading && activeBlocks.length === 0 && (
+            <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-600">
+              No hay bloqueos activos.
+            </div>
+          )}
+        </div>
+      </section>
     </div>
   );
+}
+
+function formatBlockDates(startsAt: string, endsAt?: string | null, isIndefinite?: boolean) {
+  const start = formatDate(startsAt);
+  if (isIndefinite) return `Desde ${start} · indefinido`;
+  return `Desde ${start} hasta ${endsAt ? formatDate(endsAt) : "sin fecha de fin"}`;
+}
+
+function formatDate(value: string) {
+  return new Date(`${value}T00:00:00`).toLocaleDateString("es-AR");
 }
 
 function StatusBadge({ label, value, className }: { label: string; value: number; className: string }) {

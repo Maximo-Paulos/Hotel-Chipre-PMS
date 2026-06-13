@@ -1,0 +1,10 @@
+Add Allocation Runs + Movement-Group Revert UI to the existing Reservations page in Hotel-Chipre-PMS frontend (React 18 + TS + Vite 5 + TanStack Query v5). You are in the integration trunk worktree; work in frontend/.
+
+Study conventions: frontend/src/api/client.ts, frontend/src/api/reservations.ts, frontend/src/views/protected/ReservationsPage.tsx (the page you will extend). Match style + Spanish labels. Derive contracts from backend app/api/reservations.py (allocation recalculate endpoint) and app/api/room_movement_groups.py (list groups + revert).
+
+Implement:
+- frontend/src/api/allocationRuns.ts (NEW): trigger allocation recalculation, list room movement groups, revert a movement group. Use the existing client wrapper.
+- Extend frontend/src/views/protected/ReservationsPage.tsx: add an "Asignacion" section/control to trigger a recalculation run and show recent movement groups with a "Revertir" action (guarded; uses mutations invalidating reservation queries).
+ONLY edit ReservationsPage.tsx and add allocationRuns.ts (+ hook if pattern matches). Do NOT touch RoomsPage, GuestsPage, router.tsx, AppShell.tsx, or other api modules.
+
+Evidence: `cd frontend && npm run build` MUST succeed. Commit with git if possible, else leave edits in the working tree. End by printing "INTEGRATION EDITS" naming files created/modified.

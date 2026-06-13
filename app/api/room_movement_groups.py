@@ -10,11 +10,22 @@ from app.services.permission_service import PERMISSION_RESERVATION_ROOM_MOVE
 from app.services.room_movement_group_service import (
     RoomMovementGroupError,
     get_group,
+    list_groups,
     revert_group,
 )
 
 
 router = APIRouter(prefix="/api/room-movement-groups", tags=["Room Movement Groups"])
+
+
+@router.get("/", response_model=list[RoomMovementGroupRead])
+@router.get("", response_model=list[RoomMovementGroupRead], include_in_schema=False)
+def list_room_movement_groups(
+    limit: int = 50,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_ROOM_MOVE)),
+):
+    return list_groups(db, hotel_id=context.hotel_id, limit=limit)
 
 
 @router.get("/{group_id}", response_model=RoomMovementGroupRead)

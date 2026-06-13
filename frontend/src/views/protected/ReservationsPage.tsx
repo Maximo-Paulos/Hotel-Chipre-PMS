@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   type Reservation,
@@ -8,6 +8,14 @@ import {
   type ReservationSource,
   type ReservationStatus
 } from "../../api/reservations";
+import {
+  listRoomMovementGroups,
+  revertRoomMovementGroup,
+  triggerAllocationRecalculation,
+  type AllocationRunResponse,
+  type RoomMovementGroup
+} from "../../api/allocationRuns";
+import { hasValidSession } from "../../api/client";
 import { type Guest } from "../../api/guests";
 import { checkRoomAvailability, type RoomAvailabilityResponse } from "../../api/rooms";
 import { type PaymentMethod } from "../../api/payments";
@@ -85,9 +93,21 @@ const reservationGuestLabel = (reservation: {
   guest_id: number;
 }) => (reservation.guest ? `${reservation.guest.first_name} ${reservation.guest.last_name}`.trim() : `Huesped #${reservation.guest_id}`);
 
+const formatDateTime = (value?: string | null) => {
+  if (!value) return "-";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleString("es-AR", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+};
 
 export function ReservationsPage() {
   const { session } = useSession();
+  const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState<ReservationStatus | "all" | "">("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
@@ -113,6 +133,11 @@ export function ReservationsPage() {
   const [calendarRange, setCalendarRange] = useState<"week" | "month">("week");
   const [detailsReservationId, setDetailsReservationId] = useState<number | null>(null);
   const [guestIdOpen, setGuestIdOpen] = useState<number | null>(null);
+  const [allocationForm, setAllocationForm] = useState({
+    apply: true,
+    horizon_start: todayIso(),
+    horizon_end: ""
+  });
   const toastTimeout = useRef<number | null>(null);
   const [toast, setToast] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
   const { data: subscription } = useSubscriptionStatus();
@@ -156,6 +181,39 @@ export function ReservationsPage() {
   });
   const { createMutation, updateMutation, cancelMutation, checkInMutation, checkOutMutation } = useReservationMutations(filters);
   const { resolveExternalMutation, clearManualReviewMutation } = useReservationActionMutations(filters);
+  const movementGroupsQuery = useQuery<RoomMovementGroup[]>({
+    queryKey: ["room-movement-groups", session.hotelId, 6],
+    queryFn: () => listRoomMovementGroups(6, session),
+    enabled: hasValidSession(session),
+    staleTime: 1000 * 15
+  });
+
+  const invalidateAllocationState = () => {
+    queryClient.invalidateQueries({ queryKey: ["reservations", session.hotelId] });
+    queryClient.invalidateQueries({ queryKey: ["reservation", session.hotelId] });
+    queryClient.invalidateQueries({ queryKey: ["reservation-operations", session.hotelId] });
+    queryClient.invalidateQueries({ queryKey: ["reservation-pending-actions", session.hotelId] });
+    queryClient.invalidateQueries({ queryKey: ["room-movement-groups", session.hotelId] });
+    queryClient.invalidateQueries({ queryKey: ["payment-summary", session.hotelId] });
+  };
+
+  const allocationRunMutation = useMutation<AllocationRunResponse, unknown, typeof allocationForm>({
+    mutationFn: (payload) =>
+      triggerAllocationRecalculation(
+        {
+          apply: payload.apply,
+          horizon_start: payload.horizon_start || null,
+          horizon_end: payload.horizon_end || null
+        },
+        session
+      ),
+    onSuccess: invalidateAllocationState
+  });
+
+  const revertMovementGroupMutation = useMutation<RoomMovementGroup, unknown, number>({
+    mutationFn: (groupId) => revertRoomMovementGroup(groupId, session),
+    onSuccess: invalidateAllocationState
+  });
 
   const showToast = (type: "success" | "error" | "info", message: string) => {
     if (toastTimeout.current) {
@@ -412,6 +470,46 @@ export function ReservationsPage() {
     });
   };
 
+  const handleAllocationRun = () => {
+    if (subscriptionBlocked) {
+      showToast("error", subscriptionBlockReason || "Accion bloqueada por suscripcion.");
+      return;
+    }
+    if (
+      allocationForm.horizon_start &&
+      allocationForm.horizon_end &&
+      new Date(allocationForm.horizon_end) < new Date(allocationForm.horizon_start)
+    ) {
+      showToast("error", "El horizonte hasta no puede ser anterior al desde.");
+      return;
+    }
+
+    allocationRunMutation.mutate(allocationForm, {
+      onSuccess: (run) => {
+        showToast(
+          "success",
+          `Asignacion recalculada: ${run.assignments_created} asignadas, ${run.moved_count} movimientos.`
+        );
+      },
+      onError: (err: unknown) =>
+        showToast("error", err instanceof Error ? err.message : "No se pudo recalcular la asignacion")
+    });
+  };
+
+  const handleRevertMovementGroup = (group: RoomMovementGroup) => {
+    const moves = group.move_events.length;
+    const confirmed = window.confirm(
+      `Revertir el grupo #${group.id}? Se intentaran deshacer ${moves} movimiento${moves === 1 ? "" : "s"} de habitacion.`
+    );
+    if (!confirmed) return;
+
+    revertMovementGroupMutation.mutate(group.id, {
+      onSuccess: () => showToast("success", `Grupo #${group.id} revertido`),
+      onError: (err: unknown) =>
+        showToast("error", err instanceof Error ? err.message : "No se pudo revertir el grupo")
+    });
+  };
+
   const handleCreateGuest = () => {
     guestMutation.mutate(guestForm, {
       onSuccess: (guest: Guest) => {
@@ -570,6 +668,7 @@ export function ReservationsPage() {
     });
     return map;
   }, [reservations]);
+  const recentMovementGroups = movementGroupsQuery.data ?? [];
 
   return (
     <div className="space-y-6">
@@ -898,6 +997,143 @@ export function ReservationsPage() {
             )}
           </div>
         )}
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-wide text-slate-500">Asignacion</p>
+            <h2 className="text-lg font-semibold text-slate-900">Recalculo y movimientos</h2>
+            <p className="text-sm text-slate-600">
+              Ejecuta una corrida de asignacion y permite revertir grupos recientes de movimientos de habitacion.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+            {allocationRunMutation.isPending ? <span>Recalculando...</span> : null}
+            {movementGroupsQuery.isFetching ? <span>Actualizando grupos...</span> : null}
+          </div>
+        </div>
+
+        <div className="mt-3 grid gap-3 md:grid-cols-5">
+          <label className="text-xs font-semibold text-slate-600">
+            Desde
+            <input
+              type="date"
+              value={allocationForm.horizon_start}
+              onChange={(e) => setAllocationForm((prev) => ({ ...prev, horizon_start: e.target.value }))}
+              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
+            />
+          </label>
+          <label className="text-xs font-semibold text-slate-600">
+            Hasta
+            <input
+              type="date"
+              value={allocationForm.horizon_end}
+              onChange={(e) => setAllocationForm((prev) => ({ ...prev, horizon_end: e.target.value }))}
+              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
+            />
+          </label>
+          <label className="flex items-center gap-2 self-end rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700">
+            <input
+              type="checkbox"
+              checked={allocationForm.apply}
+              onChange={(e) => setAllocationForm((prev) => ({ ...prev, apply: e.target.checked }))}
+              className="h-4 w-4 rounded border-slate-300 text-brand-600"
+            />
+            Aplicar cambios
+          </label>
+          <div className="flex items-end md:col-span-2">
+            <button
+              type="button"
+              onClick={handleAllocationRun}
+              disabled={allocationRunMutation.isPending || subscriptionBlocked}
+              className="w-full rounded-lg border border-brand-200 bg-brand-50 px-4 py-2 text-sm font-semibold text-brand-700 hover:border-brand-300 hover:bg-brand-100 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Recalcular asignacion
+            </button>
+          </div>
+        </div>
+
+        {allocationRunMutation.data ? (
+          <div className="mt-3 grid gap-2 rounded-lg border border-emerald-100 bg-emerald-50 p-3 text-sm text-emerald-900 sm:grid-cols-4">
+            <div>
+              <p className="text-xs text-emerald-700">Run</p>
+              <p className="font-semibold">#{allocationRunMutation.data.run_id}</p>
+            </div>
+            <div>
+              <p className="text-xs text-emerald-700">Estado</p>
+              <p className="font-semibold">{allocationRunMutation.data.status}</p>
+            </div>
+            <div>
+              <p className="text-xs text-emerald-700">Asignadas</p>
+              <p className="font-semibold">{allocationRunMutation.data.assignments_created}</p>
+            </div>
+            <div>
+              <p className="text-xs text-emerald-700">Movidas / sin asignar</p>
+              <p className="font-semibold">
+                {allocationRunMutation.data.moved_count} / {allocationRunMutation.data.unassigned_count}
+              </p>
+            </div>
+          </div>
+        ) : null}
+
+        <div className="mt-4 rounded-lg border border-slate-200">
+          <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2">
+            <p className="text-xs uppercase tracking-wide text-slate-500">Grupos recientes</p>
+            <button
+              type="button"
+              onClick={() => movementGroupsQuery.refetch()}
+              className="text-xs font-semibold text-brand-700 hover:underline"
+            >
+              Actualizar
+            </button>
+          </div>
+          {movementGroupsQuery.isError ? (
+            <div className="px-3 py-3 text-sm text-rose-700">
+              No se pudieron cargar los grupos de movimiento:{" "}
+              {movementGroupsQuery.error instanceof Error ? movementGroupsQuery.error.message : "error desconocido"}
+            </div>
+          ) : movementGroupsQuery.isLoading ? (
+            <div className="px-3 py-3 text-sm text-slate-500">Cargando grupos...</div>
+          ) : recentMovementGroups.length === 0 ? (
+            <div className="px-3 py-3 text-sm text-slate-600">Sin grupos de movimiento recientes.</div>
+          ) : (
+            <div className="divide-y divide-slate-200">
+              {recentMovementGroups.map((group) => {
+                const moveCount = group.move_events.length;
+                return (
+                  <div key={group.id} className="flex flex-col gap-3 px-3 py-3 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-semibold text-slate-900">Grupo #{group.id}</p>
+                        <span
+                          className={`rounded-full px-2 py-1 text-[11px] font-semibold ${
+                            group.is_reverted ? "bg-slate-100 text-slate-700" : "bg-amber-100 text-amber-800"
+                          }`}
+                        >
+                          {group.is_reverted ? "Revertido" : "Activo"}
+                        </span>
+                        <span className="text-xs text-slate-500">{formatDateTime(group.created_at)}</span>
+                      </div>
+                      <p className="mt-1 text-xs text-slate-600">
+                        {group.trigger_reason} - {moveCount} movimiento{moveCount === 1 ? "" : "s"}
+                      </p>
+                      {group.notes ? <p className="mt-1 text-xs text-slate-500">{group.notes}</p> : null}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleRevertMovementGroup(group)}
+                      disabled={group.is_reverted || revertMovementGroupMutation.isPending || subscriptionBlocked}
+                      className="rounded-lg border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-700 hover:border-rose-300 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Revertir
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white p-4 shadow-sm">

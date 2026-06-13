@@ -1,0 +1,10 @@
+Add Guest Tags + prohibido_alojar check-in override UI to the existing Guests page in Hotel-Chipre-PMS frontend (React 18 + TS + Vite 5 + TanStack Query v5). You are in the integration trunk worktree; work in frontend/.
+
+Study conventions: frontend/src/api/client.ts, frontend/src/api/guests.ts, frontend/src/views/protected/GuestsPage.tsx (the page you will extend). Match style + Spanish labels. Derive contracts from backend app/api/guests.py (tag endpoints: list/add/resolve, search, quick-profile) and app/api/checkin.py (checkin accepts override_prohibido flag).
+
+Implement:
+- Extend frontend/src/api/guests.ts (additive): add functions for guest tags (list/add/resolve), quick-profile, and a check-in call that can pass override_prohibido. Do not break existing exports.
+- Extend frontend/src/views/protected/GuestsPage.tsx: show a guest's active tags (incl prohibido_alojar) with add/resolve; surface a manager-only "override" affordance when a prohibido_alojar tag would block check-in. Use TanStack Query mutations with proper invalidation.
+ONLY edit GuestsPage.tsx and guests.ts (+ a hook/schema file if the pattern matches). Do NOT touch RoomsPage, ReservationsPage, router.tsx, AppShell.tsx, or other api modules.
+
+Evidence: `cd frontend && npm run build` MUST succeed. Commit with git if possible, else leave edits in the working tree. End by printing "INTEGRATION EDITS" naming files created/modified.

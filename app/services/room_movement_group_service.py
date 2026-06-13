@@ -23,6 +23,18 @@ def get_group(db: Session, *, hotel_id: int, group_id: int) -> RoomMovementGroup
     )
 
 
+def list_groups(db: Session, *, hotel_id: int, limit: int = 50) -> list[RoomMovementGroup]:
+    """Most recent movement groups for a hotel (newest first)."""
+    safe_limit = max(1, min(limit, 200))
+    return (
+        db.query(RoomMovementGroup)
+        .filter(RoomMovementGroup.hotel_id == hotel_id)
+        .order_by(RoomMovementGroup.created_at.desc(), RoomMovementGroup.id.desc())
+        .limit(safe_limit)
+        .all()
+    )
+
+
 def revert_group(
     db: Session,
     *,
