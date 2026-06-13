@@ -8,7 +8,7 @@ import string
 import random
 from dataclasses import dataclass, replace
 from decimal import Decimal
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import Optional
 
 from sqlalchemy.orm import Session
@@ -17,7 +17,13 @@ from app.models.commercial import RatePlan, SellableProduct, TaxPolicy
 from app.models.company import Company
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.guest import Guest
-from app.models.reservation import Reservation, ReservationStatusEnum, ReservationSourceEnum
+from app.models.reservation import (
+    Reservation,
+    ReservationNoShowPolicyAppliedEnum,
+    ReservationOutcomeEnum,
+    ReservationStatusEnum,
+    ReservationSourceEnum,
+)
 from app.models.hotel_config import HotelConfiguration
 from app.models.pricing import CategoryPricing
 from app.models.operations import ReservationStatusHistory
@@ -661,6 +667,60 @@ def update_reservation_fields(
         if field in update_data:
             setattr(reservation, field, update_data[field])
 
+    reservation.version = (reservation.version or 0) + 1
+    db.flush()
+    return reservation
+
+
+def assert_reservation_version(reservation: Reservation, client_version: int | None) -> None:
+    if client_version is None:
+        raise ReservationError("client_version is required for this reservation mutation")
+    if reservation.version != client_version:
+        raise ReservationError(
+            f"Reservation was modified concurrently (expected version {client_version}, "
+            f"got {reservation.version}). Reload and retry."
+        )
+
+
+def mark_reservation_no_show(
+    db: Session,
+    reservation: Reservation,
+    *,
+    hotel_id: int,
+    client_version: int,
+    changed_by_user_id: int | None = None,
+    notes: str | None = None,
+) -> Reservation:
+    """Mark a reservation no-show without creating any automatic charge."""
+    if reservation.hotel_id != hotel_id:
+        raise ReservationError("Reservation does not belong to the active hotel")
+    assert_reservation_version(reservation, client_version)
+    if reservation.status in (
+        ReservationStatusEnum.CHECKED_IN,
+        ReservationStatusEnum.CHECKED_OUT,
+        ReservationStatusEnum.CANCELLED,
+        ReservationStatusEnum.NO_SHOW,
+    ):
+        raise ReservationError(f"Cannot mark no-show from status '{reservation.status.value}'")
+
+    previous_status = reservation.status
+    reservation.status = ReservationStatusEnum.NO_SHOW
+    reservation.outcome = ReservationOutcomeEnum.NO_SHOW
+    reservation.no_show_confirmed_at = datetime.now(timezone.utc)
+    reservation.no_show_policy_applied = ReservationNoShowPolicyAppliedEnum.NONE
+    if notes:
+        reservation.notes = ((reservation.notes or "") + f"\n[NO-SHOW] {notes}").strip()
+    db.add(
+        ReservationStatusHistory(
+            hotel_id=hotel_id,
+            reservation_id=reservation.id,
+            from_status=previous_status.value if previous_status else None,
+            to_status=ReservationStatusEnum.NO_SHOW.value,
+            reason_code="no_show",
+            notes="Marked no-show without automatic charge",
+            changed_by_user_id=changed_by_user_id,
+        )
+    )
     reservation.version = (reservation.version or 0) + 1
     db.flush()
     return reservation

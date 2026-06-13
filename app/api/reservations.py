@@ -3,7 +3,7 @@ FastAPI routes for Reservations.
 Complete CRUD + cancel, modify, no-show, extend stay.
 """
 import logging
-from datetime import date, datetime, timezone
+from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -11,7 +11,16 @@ from app.database import get_db
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.room import Room, RoomCategory
 from app.models.hotel_config import HotelConfiguration
-from app.schemas.reservation import ReservationCreate, ReservationRead, ReservationUpdate
+from app.schemas.reservation import (
+    ReservationCreate,
+    ReservationDateChangeRequest,
+    ReservationDateChangeResponse,
+    ReservationExtensionRequest,
+    ReservationExtensionResponse,
+    ReservationNoShowRequest,
+    ReservationRead,
+    ReservationUpdate,
+)
 from app.schemas.reservation_operations import (
     AllocationRunRequest,
     AllocationRunResponse,
@@ -28,15 +37,17 @@ from app.schemas.reservation_operations import (
 from app.services.reservation_service import (
     create_reservation,
     transition_reservation_status,
-    check_room_availability,
     find_available_rooms,
     ReservationError,
     list_reservations as list_reservations_service,
     get_reservation_by_id,
+    mark_reservation_no_show,
     update_reservation_fields,
 )
 from app.services.reservation_operations_service import (
     ReservationOperationsError,
+    change_reservation_dates,
+    extend_reservation_stay,
     move_reservation_room,
     preview_ota_rebook_as_direct,
     rebook_ota_reservation_as_direct,
@@ -66,6 +77,10 @@ def _to_read(r: Reservation) -> ReservationRead:
         for g in r.additional_guests
     ]
     return result
+
+
+def _is_manager_context(context: AuthContext) -> bool:
+    return context.user_role in {"owner", "co_owner", "manager"}
 
 
 # Accept with and without trailing slash to avoid 405 when the FE omits it.
@@ -281,30 +296,67 @@ def cancel_reservation(
 @router.post("/{reservation_id}/noshow", response_model=ReservationRead)
 def mark_no_show(
     reservation_id: int,
+    payload: ReservationNoShowRequest,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "receptionist")),
 ):
-    """Mark a reservation as no-show (cancels it). Valid when guest doesn't arrive."""
+    """Mark a reservation as no-show without automatic charge."""
     r = get_reservation_by_id(db, reservation_id, context.hotel_id)
     if not r:
         raise HTTPException(status_code=404, detail="Reservation not found")
-    if r.status in (ReservationStatusEnum.CHECKED_IN, ReservationStatusEnum.CHECKED_OUT, ReservationStatusEnum.CANCELLED):
-        raise HTTPException(status_code=400, detail=f"Cannot mark no-show: reservation is '{r.status.value}'")
     try:
-        r.notes = (r.notes or '') + f'\n[NO-SHOW] Marcado como no-show el {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")}'
-        transition_reservation_status(
+        mark_reservation_no_show(
             db,
             r,
-            ReservationStatusEnum.CANCELLED,
-            context.hotel_id,
-            reason_code="no_show",
+            hotel_id=context.hotel_id,
+            client_version=payload.client_version,
             changed_by_user_id=context.user_id,
+            notes=payload.notes,
         )
         db.commit()
         db.refresh(r)
         return _to_read(r)
     except ReservationError as e:
+        db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/{reservation_id}/date-change", response_model=ReservationDateChangeResponse)
+def change_dates(
+    reservation_id: int,
+    payload: ReservationDateChangeRequest,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "receptionist")),
+):
+    r = get_reservation_by_id(db, reservation_id, context.hotel_id)
+    if not r:
+        raise HTTPException(status_code=404, detail="Reservation not found")
+    try:
+        result = change_reservation_dates(
+            db,
+            reservation=r,
+            hotel_id=context.hotel_id,
+            check_in_date=payload.check_in_date,
+            check_out_date=payload.check_out_date,
+            client_version=payload.client_version,
+            room_id=payload.room_id,
+            pricing_mode=payload.pricing_mode,
+            manager_authorized=_is_manager_context(context),
+            changed_by_user_id=context.user_id,
+            reason=payload.reason,
+        )
+        db.commit()
+        db.refresh(result.original_reservation)
+        db.refresh(result.reservation)
+        return ReservationDateChangeResponse(
+            original_reservation=_to_read(result.original_reservation),
+            reservation=_to_read(result.reservation),
+            recreated=result.recreated,
+        )
+    except ReservationOperationsError as e:
+        db.rollback()
+        status_code = 403 if "requiere gerente" in str(e) else 400
+        raise HTTPException(status_code=status_code, detail=str(e))
 
 
 @router.patch("/{reservation_id}", response_model=ReservationRead)
@@ -335,6 +387,7 @@ def modify_reservation(
             changed_by_user_id=context.user_id,
             room_move_reason_code="manual_update",
             room_move_notes="Cambio manual desde API de reservas",
+            client_version=data.client_version,
         )
         db.commit()
         db.refresh(r)
@@ -342,10 +395,10 @@ def modify_reservation(
     except ReservationError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@router.post("/{reservation_id}/extend", response_model=ReservationRead)
+@router.post("/{reservation_id}/extend", response_model=ReservationExtensionResponse)
 def extend_stay(
     reservation_id: int,
-    new_checkout: date,
+    payload: ReservationExtensionRequest,
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
 ):
@@ -353,41 +406,32 @@ def extend_stay(
     r = get_reservation_by_id(db, reservation_id, context.hotel_id)
     if not r:
         raise HTTPException(status_code=404, detail="Reservation not found")
-    if r.status not in (ReservationStatusEnum.CHECKED_IN, ReservationStatusEnum.FULLY_PAID):
-        raise HTTPException(status_code=400, detail=f"Can only extend stays that are checked-in or fully paid, got '{r.status.value}'")
-    if new_checkout <= r.check_out_date:
-        raise HTTPException(status_code=400, detail="New checkout must be after current checkout")
-    if r.room_id and not check_room_availability(
-        db,
-        r.room_id,
-        r.check_out_date,
-        new_checkout,
-        hotel_id=context.hotel_id,
-        exclude_reservation_id=r.id,
-    ):
-        raise HTTPException(status_code=400, detail="Room is not available for the extended dates")
-
-    extra_nights = (new_checkout - r.check_out_date).days
     try:
-        update_reservation_fields(
+        result = extend_reservation_stay(
             db,
-            r,
-            ReservationUpdate(check_out_date=new_checkout),
-            context.hotel_id,
+            reservation=r,
+            hotel_id=context.hotel_id,
+            new_checkout_date=payload.new_checkout_date,
+            client_version=payload.client_version,
+            pricing_mode=payload.pricing_mode,
+            payment_action=payload.payment_action,
+            immediate_payment=payload.immediate_payment,
+            payment_link=payload.payment_link,
             changed_by_user_id=context.user_id,
-            room_move_reason_code="extend_stay",
-            room_move_notes=f"Extension hasta {new_checkout}",
+            notes=payload.notes,
         )
-    except ReservationError as e:
+        db.commit()
+        db.refresh(r)
+        response = ReservationExtensionResponse(
+            reservation=_to_read(r),
+            extension_amount=result.extension_amount,
+            transaction=result.transaction,
+            payment_link=result.payment_link,
+        )
+        return response
+    except ReservationOperationsError as e:
+        db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
-    r.notes = (r.notes or '') + f"\n[EXTENSION] +{extra_nights} noches hasta {new_checkout}"
-
-    if r.balance_due > 0 and r.status == ReservationStatusEnum.FULLY_PAID:
-        r.status = ReservationStatusEnum.DEPOSIT_PAID
-
-    db.commit()
-    db.refresh(r)
-    return _to_read(r)
 
 
 @router.post("/{reservation_id}/room-move", response_model=ReservationRead)

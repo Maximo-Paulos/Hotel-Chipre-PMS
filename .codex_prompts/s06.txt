@@ -1,0 +1,20 @@
+Implement SLICE-06 "Reservation Lifecycle, Waitlist, No-show, Extensions" for Hotel-Chipre-PMS (FastAPI + SQLAlchemy 2; SQLite tests). You are already in the integration trunk worktree — do NOT merge or switch branches. Read docs/v72-vertical-slices-plan.md (SLICE-06) and docs/business-requirements-master-v72.md sections 7, 8 (cambios y extensiones), 9 (overbooking y lista de espera), 11 (reserva telefonica/manual).
+
+Context already present: waitlist_entries table + app/models/waitlist.py (WaitlistEntry, WaitlistStatusEnum) EXIST. reservations has version (optimistic lock — reservation_service.update_reservation_fields accepts client_version). State machine + VALID_TRANSITIONS in app/models/reservation.py. Permission matrix + require_permission exist (reservation:create). NO migration expected.
+
+Implement:
+- app/services/waitlist_service.py: add_to_waitlist (NO room assigned, status waiting; a waitlist entry must NOT be able to request a payment link), promote_from_waitlist (-> creates a real reservation when a room frees), cancel/expire. Hotel-scoped.
+- app/api/waitlist.py: CRUD endpoints gated by require_permission(reservation:create). Register router in app/main.py. app/schemas/waitlist.py.
+- Reservation operations (extend app/services/reservation_service.py + reservation_operations_service.py + app/api/reservations.py):
+  - no-show marking WITHOUT auto-charge (manual decision).
+  - date change WITHOUT payments: cancel + recreate path.
+  - date change WITH payments: requires manager permission and preserves transaction history (do NOT silently delete transactions).
+  - extension: requires an immediate payment OR a payment-link action (reuse payment_link_service).
+  - enforce optimistic locking (client_version) on these mutations.
+- app/schemas/reservation.py: add request/response schemas as needed.
+
+Tests (tests/test_waitlist_service.py + tests/test_reservation_lifecycle_v72.py): test_waitlist_entry_has_no_room_and_cannot_request_payment_link, test_no_show_can_be_marked_without_auto_charge, test_date_change_without_payments_cancels_and_recreates, test_date_change_with_payments_requires_manager_and_preserves_history, test_extension_requires_payment_or_link_action, plus optimistic-lock conflict test and cross-hotel isolation. TEST-FIXTURE RULE: db.flush() after adding HotelConfiguration before children (PRAGMA foreign_keys=ON). Keep existing reservation/checkin tests green.
+
+Do NOT modify payment gateway internals, cash, company, room-block, allocation_engine, laundry, stock, OTA, whatsapp files. You MAY edit reservations.py, reservation_service.py, reservation_operations_service.py, schemas/reservation.py, permission_service.py (append codes if needed), main.py.
+
+Evidence: `python -m pytest tests/ --ignore=tests/test_postgres_validation.py -q` before and after; trunk baseline 472 passed, 8 skipped, 0 failures; keep 0 failures + new tests. `python -c "import app.models; import app.main"` passes. If migration added, one alembic head. Commit with git if possible, else leave edits in the working tree. End with "INTEGRATION EDITS" listing exact edits to app/main.py, app/services/permission_service.py, app/services/reservation_service.py, app/services/reservation_operations_service.py, app/api/reservations.py, app/schemas/reservation.py.

@@ -10,6 +10,8 @@ Handles operational scenarios that go beyond a plain reservation update:
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date, datetime, timezone
+from decimal import Decimal
 from typing import Optional
 
 from sqlalchemy.orm import Session
@@ -23,20 +25,29 @@ from app.models.operations import (
     ReservationAdjustment,
     ReservationAdjustmentKindEnum,
     ReservationAdjustmentStatusEnum,
+    ReservationStatusHistory,
     RoomMoveEvent,
     RoomMoveTypeEnum,
 )
 from app.models.reservation import Reservation, ReservationSourceEnum, ReservationStatusEnum
 from app.models.room import Room, RoomCategory
+from app.models.transaction import Transaction
 from app.services.allocation_policy_service import record_manual_override_feedback
-from app.schemas.reservation import ReservationCreate
+from app.schemas.payment_link import PaymentLinkCreate
+from app.schemas.reservation import ReservationCreate, ReservationUpdate
+from app.schemas.transaction import PaymentRequest
+from app.services.payment_link_service import PaymentLinkError, create_link
+from app.services.payment_service import PaymentError, process_payment
 from app.services.pricing_policy_service import PricingPolicyError, quote_rate_plan_stay
 from app.services.reservation_service import (
     ReservationError,
     check_room_availability,
+    calculate_reservation_pricing,
     compute_reservation_pricing,
     create_reservation,
+    assert_reservation_version,
     transition_reservation_status,
+    update_reservation_fields,
 )
 
 
@@ -76,6 +87,247 @@ class OTARebookResult:
     new_reservation: Reservation
     billing_adjustment: BillingAdjustment | None
     preview: OTARebookPreview
+
+
+@dataclass(slots=True)
+class ReservationDateChangeResult:
+    original_reservation: Reservation
+    reservation: Reservation
+    recreated: bool
+
+
+@dataclass(slots=True)
+class ReservationExtensionResult:
+    reservation: Reservation
+    extension_amount: Decimal
+    transaction: Transaction | None = None
+    payment_link: object | None = None
+
+
+def _has_transactions(db: Session, *, hotel_id: int, reservation_id: int) -> bool:
+    return (
+        db.query(Transaction.id)
+        .filter(Transaction.hotel_id == hotel_id, Transaction.reservation_id == reservation_id)
+        .first()
+        is not None
+    )
+
+
+def change_reservation_dates(
+    db: Session,
+    *,
+    reservation: Reservation,
+    hotel_id: int,
+    check_in_date: date,
+    check_out_date: date,
+    client_version: int,
+    room_id: int | None = None,
+    pricing_mode: str = "recalculate",
+    manager_authorized: bool = False,
+    changed_by_user_id: int | None = None,
+    reason: str | None = None,
+) -> ReservationDateChangeResult:
+    if reservation.hotel_id != hotel_id:
+        raise ReservationOperationsError("La reserva no pertenece al hotel activo")
+    assert_reservation_version(reservation, client_version)
+    if check_out_date <= check_in_date:
+        raise ReservationOperationsError("Check-out must be after check-in")
+    if reservation.status in (
+        ReservationStatusEnum.CHECKED_IN,
+        ReservationStatusEnum.CHECKED_OUT,
+        ReservationStatusEnum.CANCELLED,
+        ReservationStatusEnum.NO_SHOW,
+    ):
+        raise ReservationOperationsError("No se pueden cambiar fechas en el estado actual")
+
+    has_transactions = _has_transactions(db, hotel_id=hotel_id, reservation_id=reservation.id)
+    target_room_id = room_id if room_id is not None else reservation.room_id
+
+    if not has_transactions:
+        previous_status = reservation.status
+        reservation.status = ReservationStatusEnum.CANCELLED
+        reservation.cancelled_at = datetime.now(timezone.utc)
+        reservation.cancelled_by_user_id = changed_by_user_id
+        reservation.cancellation_reason_note = reason or "Date change without payments: cancelled and recreated"
+        reservation.version = (reservation.version or 0) + 1
+        db.add(
+            ReservationStatusHistory(
+                hotel_id=hotel_id,
+                reservation_id=reservation.id,
+                from_status=previous_status.value if previous_status else None,
+                to_status=ReservationStatusEnum.CANCELLED.value,
+                reason_code="date_change_recreate",
+                notes=reservation.cancellation_reason_note,
+                changed_by_user_id=changed_by_user_id,
+            )
+        )
+        db.flush()
+        new_reservation = create_reservation(
+            db,
+            ReservationCreate(
+                guest_id=reservation.guest_id,
+                category_id=reservation.category_id,
+                room_id=target_room_id,
+                sellable_product_id=reservation.sellable_product_id,
+                rate_plan_id=reservation.rate_plan_id,
+                tax_policy_id=reservation.tax_policy_id,
+                company_id=reservation.company_id,
+                check_in_date=check_in_date,
+                check_out_date=check_out_date,
+                num_adults=reservation.num_adults,
+                num_children=reservation.num_children,
+                notes=((reservation.notes or "") + "\n[DATE CHANGE] Recreated from unpaid reservation").strip(),
+                source=reservation.source,
+                external_id=None,
+                pricing_channel_code=reservation.source_provider_code or reservation.source.value,
+                target_currency=reservation.currency_code,
+            ),
+            hotel_id=hotel_id,
+        )
+        db.flush()
+        return ReservationDateChangeResult(original_reservation=reservation, reservation=new_reservation, recreated=True)
+
+    if not manager_authorized:
+        raise ReservationOperationsError("Modificar fechas con pagos requiere gerente, dueno o codueno")
+
+    original_total = Decimal(str(reservation.total_amount or 0))
+    update_reservation_fields(
+        db,
+        reservation,
+        data=ReservationUpdate(
+            check_in_date=check_in_date,
+            check_out_date=check_out_date,
+            room_id=room_id,
+        ),
+        hotel_id=hotel_id,
+        changed_by_user_id=changed_by_user_id,
+        room_move_reason_code="date_change",
+        room_move_notes=reason,
+        client_version=client_version,
+    )
+    if pricing_mode == "keep_current_total":
+        reservation.total_amount = original_total
+        reservation.subtotal_amount = original_total
+        reservation.net_amount = original_total
+    reservation.notes = ((reservation.notes or "") + f"\n[DATE CHANGE] {reason or 'Date changed with payments preserved'}").strip()
+    db.flush()
+    return ReservationDateChangeResult(original_reservation=reservation, reservation=reservation, recreated=False)
+
+
+def _extension_amount(
+    db: Session,
+    *,
+    reservation: Reservation,
+    hotel_id: int,
+    new_checkout_date: date,
+    pricing_mode: str,
+) -> Decimal:
+    extra_nights = (new_checkout_date - reservation.check_out_date).days
+    if extra_nights <= 0:
+        raise ReservationOperationsError("New checkout must be after current checkout")
+    if pricing_mode == "original_average":
+        current_nights = max((reservation.check_out_date - reservation.check_in_date).days, 1)
+        average = Decimal(str(reservation.total_amount or 0)) / Decimal(current_nights)
+        return (average * Decimal(extra_nights)).quantize(Decimal("0.01"))
+    pricing = calculate_reservation_pricing(
+        db,
+        category_id=reservation.category_id,
+        check_in=reservation.check_out_date,
+        check_out=new_checkout_date,
+        hotel_id=hotel_id,
+        sellable_product_id=reservation.sellable_product_id,
+        rate_plan_id=reservation.rate_plan_id,
+        tax_policy_id=reservation.tax_policy_id,
+        pricing_channel_code=reservation.source_provider_code or reservation.source.value,
+        target_currency=reservation.currency_code,
+        occupancy=reservation.num_adults + reservation.num_children,
+    )
+    return Decimal(str(pricing.total_amount)).quantize(Decimal("0.01"))
+
+
+def extend_reservation_stay(
+    db: Session,
+    *,
+    reservation: Reservation,
+    hotel_id: int,
+    new_checkout_date: date,
+    client_version: int,
+    pricing_mode: str,
+    payment_action: str,
+    immediate_payment: PaymentRequest | None = None,
+    payment_link: PaymentLinkCreate | None = None,
+    changed_by_user_id: int | None = None,
+    notes: str | None = None,
+) -> ReservationExtensionResult:
+    if reservation.hotel_id != hotel_id:
+        raise ReservationOperationsError("La reserva no pertenece al hotel activo")
+    assert_reservation_version(reservation, client_version)
+    if reservation.status not in (ReservationStatusEnum.CHECKED_IN, ReservationStatusEnum.FULLY_PAID):
+        raise ReservationOperationsError("Solo se pueden extender reservas checked-in o fully-paid")
+    if reservation.room_id and not check_room_availability(
+        db,
+        reservation.room_id,
+        reservation.check_out_date,
+        new_checkout_date,
+        hotel_id=hotel_id,
+        exclude_reservation_id=reservation.id,
+    ):
+        raise ReservationOperationsError("La habitacion no esta disponible para la extension")
+
+    amount = _extension_amount(
+        db,
+        reservation=reservation,
+        hotel_id=hotel_id,
+        new_checkout_date=new_checkout_date,
+        pricing_mode=pricing_mode,
+    )
+    if amount <= Decimal("0.00"):
+        raise ReservationOperationsError("La extension debe tener importe positivo")
+
+    if payment_action == "immediate_payment":
+        if immediate_payment is None:
+            raise ReservationOperationsError("La extension requiere datos de pago inmediato")
+        if immediate_payment.reservation_id != reservation.id:
+            raise ReservationOperationsError("El pago inmediato debe pertenecer a esta reserva")
+        if Decimal(str(immediate_payment.amount)) < amount:
+            raise ReservationOperationsError("El pago inmediato debe cubrir el importe de la extension")
+    elif payment_action == "payment_link":
+        if payment_link is None:
+            raise ReservationOperationsError("La extension requiere generar link de pago")
+        if payment_link.reservation_id != reservation.id:
+            raise ReservationOperationsError("El link de pago debe pertenecer a esta reserva")
+        if Decimal(str(payment_link.requested_amount)) < amount:
+            raise ReservationOperationsError("El link de pago debe cubrir el importe de la extension")
+    else:
+        raise ReservationOperationsError("Accion de pago de extension invalida")
+
+    original_status = reservation.status
+    reservation.check_out_date = new_checkout_date
+    reservation.total_amount = (Decimal(str(reservation.total_amount or 0)) + amount).quantize(Decimal("0.01"))
+    reservation.subtotal_amount = (Decimal(str(reservation.subtotal_amount or 0)) + amount).quantize(Decimal("0.01"))
+    reservation.net_amount = (Decimal(str(reservation.net_amount or 0)) + amount).quantize(Decimal("0.01"))
+    reservation.notes = ((reservation.notes or "") + f"\n[EXTENSION] {notes or f'Extended to {new_checkout_date}'}").strip()
+    reservation.version = (reservation.version or 0) + 1
+
+    transaction = None
+    link = None
+    try:
+        if payment_action == "immediate_payment":
+            transaction = process_payment(db, immediate_payment, hotel_id=hotel_id)
+            if original_status == ReservationStatusEnum.CHECKED_IN and reservation.status != ReservationStatusEnum.CHECKED_IN:
+                reservation.status = ReservationStatusEnum.CHECKED_IN
+        else:
+            link = create_link(db, hotel_id, payment_link)
+    except (PaymentError, PaymentLinkError) as exc:
+        raise ReservationOperationsError(str(exc)) from exc
+
+    db.flush()
+    return ReservationExtensionResult(
+        reservation=reservation,
+        extension_amount=amount,
+        transaction=transaction,
+        payment_link=link,
+    )
 
 
 def move_reservation_room(

@@ -28,6 +28,7 @@ from app.api import (
     rooms,
     guests,
     reservations,
+    waitlist,
     payments,
     checkin,
     ota_webhooks,
@@ -138,6 +139,7 @@ app.include_router(reference.router)
 app.include_router(rooms.router)
 app.include_router(guests.router)
 app.include_router(reservations.router)
+app.include_router(waitlist.router)
 app.include_router(bookings.router)
 app.include_router(payments.router)
 app.include_router(checkin.router)

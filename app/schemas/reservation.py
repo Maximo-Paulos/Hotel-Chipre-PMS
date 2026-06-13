@@ -6,6 +6,8 @@ from typing import Optional
 from datetime import date, datetime
 from decimal import Decimal
 from app.models.reservation import ReservationStatusEnum, ReservationSourceEnum
+from app.schemas.payment_link import PaymentLinkCreate, PaymentLinkRead
+from app.schemas.transaction import PaymentRequest, TransactionRead
 from app.schemas.guest import GuestRead
 
 class GuestSummary(BaseModel):
@@ -78,6 +80,7 @@ class ReservationRead(BaseModel):
     additional_guests: list[GuestSummary] = []
     allocation_status: str = "unassigned"
     requires_manual_review: bool = False
+    version: int = 0
 
     model_config = {"from_attributes": True}
 
@@ -89,3 +92,41 @@ class ReservationUpdate(BaseModel):
     num_adults: Optional[int] = None
     num_children: Optional[int] = None
     notes: Optional[str] = None
+    client_version: Optional[int] = None
+
+
+class ReservationNoShowRequest(BaseModel):
+    client_version: int
+    notes: Optional[str] = Field(default=None, max_length=500)
+
+
+class ReservationDateChangeRequest(BaseModel):
+    check_in_date: date
+    check_out_date: date
+    client_version: int
+    room_id: Optional[int] = None
+    pricing_mode: str = Field(default="recalculate", pattern="^(recalculate|keep_current_total)$")
+    reason: Optional[str] = Field(default=None, max_length=500)
+
+
+class ReservationDateChangeResponse(BaseModel):
+    original_reservation: ReservationRead
+    reservation: ReservationRead
+    recreated: bool
+
+
+class ReservationExtensionRequest(BaseModel):
+    new_checkout_date: date
+    client_version: int
+    pricing_mode: str = Field(default="current_rate", pattern="^(current_rate|original_average)$")
+    payment_action: str = Field(default="payment_link", pattern="^(immediate_payment|payment_link)$")
+    immediate_payment: Optional[PaymentRequest] = None
+    payment_link: Optional[PaymentLinkCreate] = None
+    notes: Optional[str] = Field(default=None, max_length=500)
+
+
+class ReservationExtensionResponse(BaseModel):
+    reservation: ReservationRead
+    extension_amount: Decimal
+    transaction: Optional[TransactionRead] = None
+    payment_link: Optional[PaymentLinkRead] = None
