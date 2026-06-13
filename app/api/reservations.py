@@ -21,6 +21,7 @@ from app.schemas.reservation import (
     ReservationRead,
     ReservationUpdate,
 )
+from app.schemas.ota_manual import ManualOTAReservationCreate
 from app.schemas.reservation_operations import (
     AllocationRunRequest,
     AllocationRunResponse,
@@ -59,6 +60,7 @@ from app.services.reservation_action_service import (
     list_pending_reservation_actions,
     resolve_external_channel_follow_up,
 )
+from app.services.ota_manual_service import OTAManualReservationError, create_or_update_manual_ota_reservation
 from app.services.payment_service import PaymentError
 from app.services.allocation_runtime_service import run_persisted_allocation
 from app.dependencies.auth import get_auth_context, AuthContext, require_roles, require_permission
@@ -103,6 +105,33 @@ def create_new_reservation(
         db.refresh(reservation)
         return _to_read(reservation)
     except ReservationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/manual-ota", response_model=ReservationRead, status_code=status.HTTP_201_CREATED)
+def create_or_update_manual_ota(
+    data: ManualOTAReservationCreate,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_CREATE)),
+):
+    config = db.get(HotelConfiguration, context.hotel_id)
+    if config and not config.subscription_active:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail="SuscripciÃ³n inactiva. ReactivÃ¡ el plan para crear nuevas reservas.",
+        )
+    try:
+        reservation = create_or_update_manual_ota_reservation(
+            db,
+            hotel_id=context.hotel_id,
+            data=data,
+            actor_user_id=context.user_id,
+        )
+        db.commit()
+        db.refresh(reservation)
+        return _to_read(reservation)
+    except OTAManualReservationError as e:
+        db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
 

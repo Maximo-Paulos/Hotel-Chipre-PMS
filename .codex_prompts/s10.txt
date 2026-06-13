@@ -1,0 +1,14 @@
+Implement SLICE-10 "WhatsApp Bot Hooks" for Hotel-Chipre-PMS (FastAPI + SQLAlchemy 2; SQLite tests). You are already in the integration trunk worktree — do NOT merge or switch branches. Read docs/v72-vertical-slices-plan.md (SLICE-10) and docs/business-requirements-master-v72.md section 16.1 (WhatsApp bot).
+
+Context already present: app/services/hotel_api_key_service.py + app/dependencies/api_key_auth.py (X-API-Key auth resolving to a hotel) EXIST from SLICE-09. app/services/payment_link_service.py (create_link) exists. ReservationChannelCodeEnum has a WHATSAPP value. app/services/reservation_service.py create path. Permission matrix exists. NO migration expected.
+
+Implement:
+- app/services/whatsapp_booking_service.py: availability lookup, price/options, create_reservation (sets channel_code=WHATSAPP), generate_payment_link (sets sent_via_whatsapp=True on the PaymentLink), and a payment-confirmation callback handler that is idempotent. All STRICTLY scoped to the api-key's hotel_id.
+- app/api/whatsapp_hooks.py: PUBLIC endpoints authenticated ONLY via api_key_auth (the SLICE-09 dependency), NOT staff JWT. Endpoints: availability, options/prices, create reservation, generate payment link, payment confirmation callback. Register router in app/main.py.
+- app/schemas/whatsapp_hooks.py.
+
+Tests (tests/test_whatsapp_hooks_api.py + tests/test_whatsapp_booking_service.py): test_whatsapp_availability_uses_api_key_hotel_scope, test_whatsapp_create_reservation_sets_channel_code_whatsapp, test_whatsapp_generate_payment_link_sets_sent_via_whatsapp, test_whatsapp_payment_confirmation_is_idempotent, cross-hotel isolation (a key for hotel A cannot touch hotel B). TEST-FIXTURE RULE: db.flush() after adding HotelConfiguration before children (PRAGMA foreign_keys=ON).
+
+Do NOT modify cash, company, room-block, allocation, laundry, stock, ota, reservations.py router files. You MAY add whatsapp files, edit main.py, permission_service.py (append codes if needed), and CALL (not rewrite) hotel_api_key_service / payment_link_service / reservation_service / payment_webhook_service.
+
+Evidence: `python -m pytest tests/ --ignore=tests/test_postgres_validation.py -q` before and after; trunk baseline 479 passed, 8 skipped, 0 failures; keep 0 failures + new tests. `python -c "import app.models; import app.main"` passes. Commit with git if possible, else leave edits. End with "INTEGRATION EDITS" listing exact edits to app/main.py and app/services/permission_service.py.

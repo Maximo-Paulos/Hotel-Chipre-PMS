@@ -125,6 +125,15 @@ class OTAIntegrationService:
         if presented_hash != credential.webhook_secret_hash:
             raise OTAAuthError("Webhook OTA no autorizado")
 
+        payload_hotel_id = payload.get("hotel_id") if isinstance(payload, dict) else None
+        if payload_hotel_id not in (None, ""):
+            try:
+                parsed_payload_hotel_id = int(payload_hotel_id)
+            except (TypeError, ValueError) as exc:
+                raise OTAAuthError("Webhook OTA no coincide con el hotel configurado") from exc
+            if parsed_payload_hotel_id != hotel_id:
+                raise OTAAuthError("Webhook OTA no coincide con el hotel configurado")
+
         external_property_id = OTAIntegrationService._extract_external_property_id(payload)
         if credential.external_property_id and external_property_id:
             if str(credential.external_property_id).strip() != external_property_id:

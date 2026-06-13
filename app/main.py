@@ -47,6 +47,7 @@ from app.api import (
     payment_links,
     hotel_api_keys,
     public_booking,
+    whatsapp_hooks,
     permissions,
     laundry,
     stock,
@@ -158,6 +159,7 @@ app.include_router(payment_link_tests.router)
 app.include_router(payment_links.router)
 app.include_router(hotel_api_keys.router)
 app.include_router(public_booking.router)
+app.include_router(whatsapp_hooks.router)
 app.include_router(permissions.router)
 app.include_router(laundry.router)
 app.include_router(stock.router)
