@@ -1,0 +1,15 @@
+Implement SLICE-11 "Reports and Operational Alerts" for Hotel-Chipre-PMS (FastAPI + SQLAlchemy 2; SQLite tests). You are already in the integration trunk worktree — do NOT merge or switch branches. Read docs/v72-vertical-slices-plan.md (SLICE-11) and docs/business-requirements-master-v72.md sections 13 (Calendario/planilla) and 15 (Emails).
+
+Context already present: analytics facts/services exist (app/services/analytics_facts.py, analytics_service.py), app/api/reports.py exists, room_blocks + cash_register + payments + reservations all exist with hotel scoping. Permission matrix + require_permission exist. Hotel outbound email service exists (app/services/hotel_outbound_email_service.py or similar — inspect). NO migration expected.
+
+Implement:
+- app/services/operational_report_service.py: daily_report(hotel_id, date) aggregating: arrivals/departures, pending-payment reservations (balance_due > 0), late arrivals, available-with-review rooms, active room blocks, open cash session status. nightly_summary(hotel_id, date). All hotel-scoped, read-only (no writes except optional delivery log).
+- app/schemas/reports.py: report response schemas.
+- Extend app/api/reports.py with endpoints for the daily report and operational alerts, gated by require_permission (reuse an existing read permission or add "reports:view": owner/co_owner/manager True, receptionist True, housekeeping False).
+- Wire alert generation to the hotel outbound email identity for nightly delivery (call the existing email service; do NOT invent SMTP). If no scheduler exists, expose a trigger endpoint and note that a cron wires it later.
+
+Tests (tests/test_operational_reports.py): test_daily_report_includes_pending_payment_late_arrivals_and_room_blocks, test_daily_report_is_hotel_scoped, test_available_with_review_surfaces_in_report, test_reports_permission_denied_for_housekeeping. TEST-FIXTURE RULE: db.flush() after adding HotelConfiguration before children (PRAGMA foreign_keys=ON).
+
+Do NOT modify payment, cash, allocation, room-block, company, guest, laundry, stock model/service files (you may READ them). You MAY edit reports.py, analytics_facts.py (additive helpers only), permission_service.py, main.py, and the email service (additive).
+
+Evidence: `python -m pytest tests/ --ignore=tests/test_postgres_validation.py -q` before and after; trunk baseline 457 passed, 8 skipped, 0 failures; keep 0 failures + new tests. `python -c "import app.models; import app.main"` passes. Commit with git if possible, else leave edits. End with "INTEGRATION EDITS" listing exact edits to app/main.py, app/services/permission_service.py, app/api/reports.py.

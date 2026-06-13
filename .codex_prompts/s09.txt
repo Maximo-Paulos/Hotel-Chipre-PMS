@@ -1,0 +1,16 @@
+Implement SLICE-09 "Public Hotel API Keys and Booking Engine Hooks" for Hotel-Chipre-PMS (FastAPI + SQLAlchemy 2; SQLite tests). You are already in the integration trunk worktree — do NOT merge or switch branches. Read docs/v72-vertical-slices-plan.md (SLICE-09) and docs/business-requirements-master-v72.md section 16 (API publica del hotel).
+
+Context already present: hotel_api_keys table + app/models/hotel_api_key.py (HotelAPIKey, APIKeyPurposeEnum) EXIST (stores key_hash + key_prefix only, never plaintext). rate_limit_events table exists. Staff auth is JWT via app/dependencies/auth.py. Permission matrix exists. Likely NO migration; if you add one, down_revision="20260613_cash_open_idx", explicit names, cross-dialect.
+
+Implement:
+- app/services/hotel_api_key_service.py: issue_key (generate secret, return PLAINTEXT ONCE, store sha256 hash + prefix), verify_key (hash lookup, hotel-scoped, active check), revoke_key, list_keys (never expose hash).
+- app/dependencies/api_key_auth.py: a FastAPI dependency that authenticates a request via an X-API-Key header (separate from staff JWT), resolves the key to its hotel_id, and enforces a per-hotel/per-key rate limit (reuse rate_limit_events). Returns a lightweight public context with hotel_id.
+- app/api/hotel_api_keys.py: staff endpoints (owner/co_owner only) to issue/list/revoke keys, gated by require_permission (add code "apikey:manage": owner/co_owner True, others False). Register in main.py.
+- app/api/public_booking.py: PUBLIC endpoints authenticated ONLY by api_key_auth (NOT JWT): GET availability, GET rate/categories, POST reservation (scoped to the key's hotel), POST payment-link (reuse app/services/payment_link_service.create_link). All STRICTLY scoped to the key's hotel_id — never trust a hotel_id in the request body. Register in main.py.
+- app/schemas/hotel_api_key.py + public booking schemas.
+
+Tests (tests/test_hotel_api_key_service.py + tests/test_public_booking_api.py): test_api_key_secret_is_only_returned_once_and_hash_is_stored, test_public_availability_requires_active_api_key, test_public_reservation_is_scoped_to_key_hotel (a key for hotel A cannot create/read hotel B data), test_revoked_key_is_rejected, test_public_api_rate_limit_is_per_hotel_key. TEST-FIXTURE RULE: db.flush() after adding HotelConfiguration before children (PRAGMA foreign_keys=ON).
+
+Do NOT modify cash, company, room-block, allocation, laundry, stock, guest-tag, checkin files. You MAY edit main.py, permission_service.py, and call (not rewrite) payment_link_service/reservation_service/rate_calendar_service.
+
+Evidence: `python -m pytest tests/ --ignore=tests/test_postgres_validation.py -q` before and after; trunk baseline 457 passed, 8 skipped, 0 failures; keep 0 failures + new tests. `python -c "import app.models; import app.main"` passes. If migration added, one head. Commit with git if possible, else leave edits. End with "INTEGRATION EDITS" listing exact edits to app/main.py and app/services/permission_service.py (and any migration).

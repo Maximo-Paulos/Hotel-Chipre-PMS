@@ -32,6 +32,7 @@ PERMISSION_COMPANY_MANAGE = "company:manage"
 PERMISSION_CASH_OPERATE = "cash:operate"
 PERMISSION_CASH_APPROVE_DIFFERENCE = "cash:approve_difference"
 PERMISSION_CHECKIN_OVERRIDE_PROHIBIDO = "checkin:override_prohibido"
+PERMISSION_REPORTS_VIEW = "reports:view"
 
 PERMISSION_DEFINITIONS: dict[str, str] = {
     PERMISSION_CONFIG_MANAGE: "Manage hotel configuration",
@@ -46,6 +47,7 @@ PERMISSION_DEFINITIONS: dict[str, str] = {
     PERMISSION_CASH_OPERATE: "Operate cash register sessions and movements",
     PERMISSION_CASH_APPROVE_DIFFERENCE: "Approve cash close differences",
     PERMISSION_CHECKIN_OVERRIDE_PROHIBIDO: "Override prohibido_alojar check-in blocks",
+    PERMISSION_REPORTS_VIEW: "View operational and financial reports",
 }
 
 DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
@@ -64,6 +66,7 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
         PERMISSION_CASH_OPERATE: True,
         PERMISSION_CASH_APPROVE_DIFFERENCE: True,
         PERMISSION_CHECKIN_OVERRIDE_PROHIBIDO: True,
+        PERMISSION_REPORTS_VIEW: True,
     },
     ROLE_RECEPTIONIST: {
         PERMISSION_CONFIG_MANAGE: False,
@@ -78,6 +81,7 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
         PERMISSION_CASH_OPERATE: True,
         PERMISSION_CASH_APPROVE_DIFFERENCE: False,
         PERMISSION_CHECKIN_OVERRIDE_PROHIBIDO: False,
+        PERMISSION_REPORTS_VIEW: True,
     },
     ROLE_HOUSEKEEPING: {
         PERMISSION_CONFIG_MANAGE: False,
@@ -92,6 +96,7 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
         PERMISSION_CASH_OPERATE: False,
         PERMISSION_CASH_APPROVE_DIFFERENCE: False,
         PERMISSION_CHECKIN_OVERRIDE_PROHIBIDO: False,
+        PERMISSION_REPORTS_VIEW: False,
     },
 }
 

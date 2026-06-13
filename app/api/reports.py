@@ -8,13 +8,81 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from app.database import get_db
-from app.dependencies.auth import AuthContext, require_roles
+from app.dependencies.auth import AuthContext, require_permission, require_roles
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.transaction import Transaction, TransactionStatusEnum, PaymentMethodEnum
 from app.models.room import Room, RoomCategory
 from app.models.guest import Guest
+from app.schemas.reports import (
+    DailyOperationalReportRead,
+    NightlyOperationalSummaryRead,
+    OperationalReportDeliveryRead,
+)
+from app.services.hotel_outbound_email_service import HotelOutboundEmailError, send_hotel_email
+from app.services.operational_report_service import (
+    daily_report as build_daily_operational_report,
+    nightly_summary as build_nightly_summary,
+    nightly_summary_email_body,
+    operational_report_recipients,
+)
+from app.services.permission_service import PERMISSION_REPORTS_VIEW
 
 router = APIRouter(prefix="/api/reports", tags=["Reports"])
+
+
+@router.get("/operational/daily", response_model=DailyOperationalReportRead)
+def operational_daily_report(
+    report_date: date = Query(default=None, description="Date for the report (defaults to today)"),
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_VIEW)),
+):
+    if report_date is None:
+        report_date = date.today()
+    return build_daily_operational_report(db, context.hotel_id, report_date)
+
+
+@router.get("/operational/alerts", response_model=NightlyOperationalSummaryRead)
+def operational_alerts(
+    report_date: date = Query(default=None, description="Date for alerts (defaults to today)"),
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_VIEW)),
+):
+    if report_date is None:
+        report_date = date.today()
+    return build_nightly_summary(db, context.hotel_id, report_date)
+
+
+@router.post("/operational/nightly-summary/trigger", response_model=OperationalReportDeliveryRead)
+def trigger_nightly_summary_delivery(
+    report_date: date = Query(default=None, description="Date for the nightly summary (defaults to today)"),
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_VIEW)),
+):
+    if report_date is None:
+        report_date = date.today()
+    recipients = operational_report_recipients(db, context.hotel_id)
+    if not recipients:
+        raise HTTPException(status_code=400, detail="No operational report recipients configured for this hotel")
+
+    summary = build_nightly_summary(db, context.hotel_id, report_date)
+    try:
+        result = send_hotel_email(
+            db,
+            context.hotel_id,
+            to=recipients,
+            subject=f"Nightly operational summary - {report_date.isoformat()}",
+            body=nightly_summary_email_body(summary),
+        )
+    except HotelOutboundEmailError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    return OperationalReportDeliveryRead(
+        delivered=True,
+        channel=result.channel,
+        sender_email=result.sender_email,
+        provider_message_id=result.provider_message_id,
+        recipients=recipients,
+    )
 
 
 @router.get("/daily")
