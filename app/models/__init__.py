@@ -80,6 +80,8 @@ from app.models.ai_assistant import AIAssistantSession, AIAssistantMessage, AIAs
 from app.models.audit_log import AuditLog, AuditActionEnum
 from app.models.security_audit_log import SecurityAuditLog
 from app.models.permission import Permission, RolePermissionDefault, HotelPermissionOverride
+from app.models.laundry import LaundryBatch, LaundryItem
+from app.models.stock import StockItem, StockLocation, StockMovement
 from app.models.voucher import HotelVoucher, VoucherRedemption, VoucherStatusEnum
 from app.models.refund import RefundRequest, RefundPathEnum, RefundStatusEnum
 from app.models.pending_action import (
@@ -216,6 +218,11 @@ __all__ = [
     "Permission",
     "RolePermissionDefault",
     "HotelPermissionOverride",
+    "LaundryBatch",
+    "LaundryItem",
+    "StockItem",
+    "StockLocation",
+    "StockMovement",
     "HotelVoucher",
     "VoucherRedemption",
     "VoucherStatusEnum",

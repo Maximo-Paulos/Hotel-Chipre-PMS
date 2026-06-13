@@ -45,6 +45,8 @@ from app.api import (
     payment_link_tests,
     payment_links,
     permissions,
+    laundry,
+    stock,
     commercial,
     allocation_policy,
     gemma_chat,
@@ -147,6 +149,8 @@ app.include_router(integrations.router)
 app.include_router(payment_link_tests.router)
 app.include_router(payment_links.router)
 app.include_router(permissions.router)
+app.include_router(laundry.router)
+app.include_router(stock.router)
 app.include_router(commercial.router)
 app.include_router(allocation_policy.router)
 app.include_router(gemma_chat.router)
