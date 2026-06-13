@@ -22,6 +22,7 @@ from app.models.pricing import CategoryPricing
 from app.models.operations import ReservationStatusHistory
 from app.schemas.reservation import ReservationCreate, ReservationUpdate
 from app.services.pricing_policy_service import PricingPolicyError, StayPricingQuote, quote_rate_plan_stay
+from app.services.room_block_service import room_has_active_block
 
 
 class ReservationError(Exception):
@@ -231,6 +232,9 @@ def check_room_availability(
     hotel_id = _resolve_hotel_id(hotel_id, room=room)
     if room.hotel_id != hotel_id:
         raise ReservationError("Room does not belong to the active hotel")
+
+    if room_has_active_block(db, hotel_id=hotel_id, room_id=room_id, start_date=check_in, end_date=check_out):
+        return False
 
     query = db.query(Reservation).filter(
         Reservation.room_id == room_id,

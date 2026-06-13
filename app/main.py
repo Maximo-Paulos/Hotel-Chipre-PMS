@@ -54,6 +54,7 @@ from app.api import (
     companies,
     room_state_events,
     rate_calendar,
+    room_blocks,
 )
 import app.master_admin.models  # noqa: F401
 from app.master_admin.router import router as master_admin_router
@@ -158,6 +159,7 @@ app.include_router(analytics.router)
 app.include_router(companies.router)
 app.include_router(room_state_events.router)
 app.include_router(rate_calendar.router)
+app.include_router(room_blocks.router)
 app.include_router(master_admin_router)
 
 # Frontend build paths

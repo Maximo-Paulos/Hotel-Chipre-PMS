@@ -509,6 +509,7 @@ def build_slots_from_db(
     if end_date is None:
         end_date = start_date + dt.timedelta(days=90)
     policy_constraints = policy_constraints or {}
+    from app.services.room_block_service import blocked_room_ids_for_range
 
     # Load active reservations in the window
     reservations_query = db.query(Reservation).filter(
@@ -600,6 +601,11 @@ def build_slots_from_db(
     if hotel_id is not None:
         rooms_query = rooms_query.filter(Room.hotel_id == hotel_id)
     rooms = rooms_query.all()
+    blocked_room_ids = (
+        blocked_room_ids_for_range(db, hotel_id=hotel_id, start_date=start_date, end_date=end_date)
+        if hotel_id is not None
+        else set()
+    )
 
     room_slots = [
         RoomSlot(
@@ -608,6 +614,7 @@ def build_slots_from_db(
             category_id=room.category_id,
         )
         for room in rooms
+        if room.id not in blocked_room_ids
     ]
 
     return reservation_slots, room_slots

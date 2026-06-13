@@ -27,6 +27,7 @@ PERMISSION_GUEST_TAGS = "guest:tags"
 PERMISSION_RESERVATION_CREATE = "reservation:create"
 PERMISSION_RESERVATION_ROOM_MOVE = "reservation:room_move"
 PERMISSION_CHECKIN_PERFORM = "checkin:perform"
+PERMISSION_ROOM_BLOCK = "room:block"
 
 PERMISSION_DEFINITIONS: dict[str, str] = {
     PERMISSION_CONFIG_MANAGE: "Manage hotel configuration",
@@ -36,6 +37,7 @@ PERMISSION_DEFINITIONS: dict[str, str] = {
     PERMISSION_RESERVATION_CREATE: "Create reservations",
     PERMISSION_RESERVATION_ROOM_MOVE: "Move reservations between rooms",
     PERMISSION_CHECKIN_PERFORM: "Perform guest check-in",
+    PERMISSION_ROOM_BLOCK: "Create and resolve room blocks",
 }
 
 DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
@@ -49,6 +51,7 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
         PERMISSION_RESERVATION_CREATE: True,
         PERMISSION_RESERVATION_ROOM_MOVE: True,
         PERMISSION_CHECKIN_PERFORM: True,
+        PERMISSION_ROOM_BLOCK: True,
     },
     ROLE_RECEPTIONIST: {
         PERMISSION_CONFIG_MANAGE: False,
@@ -58,6 +61,7 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
         PERMISSION_RESERVATION_CREATE: True,
         PERMISSION_RESERVATION_ROOM_MOVE: False,
         PERMISSION_CHECKIN_PERFORM: True,
+        PERMISSION_ROOM_BLOCK: False,
     },
     ROLE_HOUSEKEEPING: {
         PERMISSION_CONFIG_MANAGE: False,
@@ -67,6 +71,7 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
         PERMISSION_RESERVATION_CREATE: False,
         PERMISSION_RESERVATION_ROOM_MOVE: False,
         PERMISSION_CHECKIN_PERFORM: False,
+        PERMISSION_ROOM_BLOCK: False,
     },
 }
 
