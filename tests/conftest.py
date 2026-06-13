@@ -70,6 +70,23 @@ def pg_session(pg_engine):
     session.close()
     transaction.rollback()
     connection.close()
+
+
+@pytest.fixture(autouse=True)
+def _stub_transactional_auth_email(request, monkeypatch):
+    """No real mail transport in tests — stub auth email senders.
+
+    Endpoints raise 503 (MasterEmailConnectionError) in production when mail is down;
+    that production path is intentionally exercised by test_auth_security.py, which is
+    excluded here so its 503 assertions still hold.
+    """
+    if request.node.path.name == "test_auth_security.py":
+        yield
+        return
+    monkeypatch.setattr("app.api.auth.send_verification_email", lambda *a, **k: True)
+    monkeypatch.setattr("app.api.auth.send_verification_success_email", lambda *a, **k: True)
+    monkeypatch.setattr("app.api.auth.send_reset_password_email", lambda *a, **k: True)
+    yield
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.guest import Guest, GuestCompanion, DocumentTypeEnum
 from app.models.reservation import Reservation, ReservationStatusEnum, ReservationSourceEnum

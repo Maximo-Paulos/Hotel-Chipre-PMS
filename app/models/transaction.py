@@ -5,7 +5,7 @@ Supports: Efectivo (Cash), MercadoPago, PayPal, Credit/Debit Card.
 import enum
 from sqlalchemy import (
     Column, Integer, Float, Numeric, String, ForeignKey, Enum, Text, DateTime,
-    CheckConstraint
+    CheckConstraint, Index
 )
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
@@ -97,6 +97,8 @@ class Transaction(Base):
     external_payment_id = Column(String(200), nullable=True)  # MP preference_id, PayPal order_id
     external_status = Column(String(50), nullable=True)       # Gateway-reported status
     gateway_response = Column(Text, nullable=True)            # Full JSON response from gateway
+    # Idempotency: dedupe gateway-driven transactions (hotel_id, reservation_id, idempotency_key)
+    idempotency_key = Column(String(100), nullable=True)
 
     # Description / notes
     description = Column(Text, nullable=True)
@@ -116,6 +118,15 @@ class Transaction(Base):
 
     __table_args__ = (
         CheckConstraint("amount != 0", name="ck_transaction_amount_nonzero"),
+        # Gateway idempotency: at most one transaction per idempotency_key per reservation.
+        # Partial index (key NOT NULL) so cash/manual transactions (null key) are unconstrained.
+        Index(
+            "uq_transactions_hotel_reservation_idempotency_key",
+            "hotel_id", "reservation_id", "idempotency_key",
+            unique=True,
+            sqlite_where=idempotency_key.isnot(None),
+            postgresql_where=idempotency_key.isnot(None),
+        ),
     )
 
     def __repr__(self) -> str:
