@@ -17,10 +17,14 @@ import { RegisterOwnerPage } from "./views/public/RegisterOwnerPage";
 import { ResetPasswordPage } from "./views/public/ResetPasswordPage";
 import { SoftwareParaHotelesPage } from "./views/public/SoftwareParaHotelesPage";
 import { VerifyEmailPage } from "./views/public/VerifyEmailPage";
+import { CashRegisterPage } from "./views/protected/CashRegisterPage";
+import { CompaniesPage } from "./views/protected/CompaniesPage";
 import { DashboardPage } from "./views/protected/DashboardPage";
 import { GuestsPage } from "./views/protected/GuestsPage";
+import { LaundryPage } from "./views/protected/LaundryPage";
 import { RateCalendarPage } from "./views/protected/RateCalendarPage";
 import { ReservationsPage } from "./views/protected/ReservationsPage";
+import { ReportsPage } from "./views/protected/ReportsPage";
 import { RoomsPage } from "./views/protected/RoomsPage";
 import { SettingsAssistantPage } from "./views/protected/SettingsAssistantPage";
 import SettingsSubscriptionPage from "./views/protected/SettingsSubscriptionPage";
@@ -29,6 +33,11 @@ import { SettingsHotelPage } from "./views/protected/SettingsHotelPage";
 import { SettingsSecurityPage } from "./views/protected/SettingsSecurityPage";
 import { SettingsTestsPage } from "./views/protected/SettingsTestsPage";
 import { SettingsUsersPage } from "./views/protected/SettingsUsersPage";
+import { SettingsApiKeysPage } from "./views/protected/SettingsApiKeysPage";
+import { SettingsPermissionsPage } from "./views/protected/SettingsPermissionsPage";
+import { SettingsWhatsAppPage } from "./views/protected/SettingsWhatsAppPage";
+import { StockPage } from "./views/protected/StockPage";
+import { WaitlistPage } from "./views/protected/WaitlistPage";
 import {
   AnalyticsCategoryDetailPage,
   AnalyticsAIChatPage,
@@ -39,7 +48,6 @@ import {
   AnalyticsRoomDetailPage,
   AnalyticsRoomsPage,
   AnalyticsSegmentsPage,
-  CompaniesSettingsPage,
   RoomStateEventsPage
 } from "./views/protected/analytics/AnalyticsPages";
 import { OnboardingWizard } from "./views/onboarding/OnboardingWizard";
@@ -117,16 +125,24 @@ const appRoutes = APP_HOST
           { path: "analytics/channels", element: <AnalyticsChannelsPage /> },
           { path: "analytics/operations", element: <AnalyticsOperationsPage /> },
           { path: "analytics/ai-chat", element: <AnalyticsAIChatPage /> },
-          { path: "settings/companies", element: <CompaniesSettingsPage /> },
+          { path: "settings/companies", element: <CompaniesPage /> },
           { path: "operacion/room-state-events", element: <RoomStateEventsPage /> },
           { path: "dashboard", element: <DashboardPage /> },
           { path: "huespedes", element: <GuestsPage /> },
           { path: "reservas", element: <ReservationsPage /> },
           { path: "habitaciones", element: <RoomsPage /> },
+          { path: "caja", element: <CashRegisterPage /> },
+          { path: "reportes", element: <ReportsPage /> },
+          { path: "operacion/lista-espera", element: <WaitlistPage /> },
+          { path: "operacion/lavanderia", element: <LaundryPage /> },
+          { path: "operacion/stock", element: <StockPage /> },
           { path: "operacion/tarifas", element: <RateCalendarPage /> },
           { path: "onboarding/*", element: <OnboardingGate /> },
           { path: "settings", element: <Navigate to="/settings/users" replace /> },
           { path: "settings/users", element: <SettingsUsersPage /> },
+          { path: "settings/api-keys", element: <SettingsApiKeysPage /> },
+          { path: "settings/permissions", element: <SettingsPermissionsPage /> },
+          { path: "settings/whatsapp", element: <SettingsWhatsAppPage /> },
           { path: "settings/assistant", element: <SettingsAssistantPage /> },
           { path: "settings/subscription", element: <SettingsSubscriptionPage /> },
           { path: "settings/connections", element: <SettingsConnectionsPage /> },
@@ -300,10 +316,50 @@ export const router = createBrowserRouter([
           )
         },
         {
+          path: "/caja",
+          element: (
+            <AppHostOnly>
+              <Navigate to="/caja" replace />
+            </AppHostOnly>
+          )
+        },
+        {
+          path: "/reportes",
+          element: (
+            <AppHostOnly>
+              <Navigate to="/reportes" replace />
+            </AppHostOnly>
+          )
+        },
+        {
           path: "/operacion/tarifas",
           element: (
             <AppHostOnly>
               <Navigate to="/operacion/tarifas" replace />
+            </AppHostOnly>
+          )
+        },
+        {
+          path: "/operacion/lista-espera",
+          element: (
+            <AppHostOnly>
+              <Navigate to="/operacion/lista-espera" replace />
+            </AppHostOnly>
+          )
+        },
+        {
+          path: "/operacion/lavanderia",
+          element: (
+            <AppHostOnly>
+              <Navigate to="/operacion/lavanderia" replace />
+            </AppHostOnly>
+          )
+        },
+        {
+          path: "/operacion/stock",
+          element: (
+            <AppHostOnly>
+              <Navigate to="/operacion/stock" replace />
             </AppHostOnly>
           )
         },

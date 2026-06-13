@@ -1,0 +1,18 @@
+Build frontend for API Keys, Permissions matrix, and WhatsApp settings in Hotel-Chipre-PMS (React 18 + TypeScript + Vite 5 + TanStack Query v5). You are in the integration trunk worktree. Work inside the frontend/ directory.
+
+FIRST study existing conventions: read frontend/src/api/client.ts, frontend/src/api/users.ts, frontend/src/views/protected/SettingsSecurityPage.tsx and SettingsUsersPage.tsx (settings page structure, TanStack Query, styling), frontend/src/router.tsx and frontend/src/ui/AppShell.tsx. Match that style exactly (Spanish UI labels).
+
+Derive API contracts from the backend routers in this worktree:
+- app/api/hotel_api_keys.py (issue key -> plaintext shown ONCE, list, revoke)
+- app/api/permissions.py (GET /api/permissions/matrix, PUT /api/permissions/override) — see app/services/permission_service.py for the role/permission codes
+- app/api/whatsapp_hooks.py + app/api/integrations.py (WhatsApp config surface)
+
+Implement (NEW files / additive edits following existing settings-page pattern):
+- frontend/src/api/apiKeys.ts + frontend/src/views/protected/SettingsApiKeysPage.tsx (issue key showing the secret once with a copy button + warning it will not be shown again, list keys by prefix, revoke).
+- frontend/src/api/permissions.ts + a permissions matrix editor (either a new SettingsPermissionsPage.tsx or a section added to SettingsSecurityPage.tsx) showing the role x permission grid with per-hotel override toggles (PUT override). owner/co_owner only.
+- frontend/src/api/whatsapp.ts + frontend/src/views/protected/SettingsWhatsAppPage.tsx (configure/show the WhatsApp bot hook + which API key it uses).
+- Register routes in router.tsx and nav items in AppShell.tsx (Spanish labels: "API Keys", "Permisos", "WhatsApp"; requiresRole owner/co_owner where appropriate).
+
+Do NOT touch companies, cash, reports, waitlist, laundry, stock files (other agents own them). All calls hotel-scoped via the existing client.
+
+Evidence: `cd frontend && npm run build` MUST succeed (no TS/build errors). Commit with git if possible, else leave edits in the working tree. End by printing "INTEGRATION EDITS" listing exact additions to frontend/src/router.tsx and frontend/src/ui/AppShell.tsx.

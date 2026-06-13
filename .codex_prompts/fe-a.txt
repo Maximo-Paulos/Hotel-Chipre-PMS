@@ -1,0 +1,18 @@
+Build frontend pages for Companies, Cash Register, and Reports in Hotel-Chipre-PMS (React 18 + TypeScript + Vite 5 + TanStack Query v5). You are in the integration trunk worktree. Work inside the frontend/ directory.
+
+FIRST study the existing conventions (do not invent new ones): read frontend/src/api/client.ts, frontend/src/api/guests.ts, frontend/src/api/reservations.ts (API client + query patterns), frontend/src/views/protected/GuestsPage.tsx and RoomsPage.tsx (page structure, TanStack Query usage, styling), frontend/src/router.tsx and frontend/src/ui/AppShell.tsx (route + nav registration). Match that style exactly (same fetch wrapper, same query/mutation hooks, same component idioms, Spanish UI labels).
+
+Derive the API contracts by reading the backend routers (this worktree has them):
+- app/api/companies.py + app/api/company_documents.py (companies CRUD, documents + signature status)
+- app/api/cash_register.py (open/close session, add movement, list, approve difference)
+- app/api/reports.py (operational daily report / alerts)
+
+Implement (NEW files; follow the existing api-module + page pattern):
+- frontend/src/api/companies.ts + frontend/src/views/protected/CompaniesPage.tsx (list/create companies, manage documents + signature status). A "/settings/companies" nav entry already exists — wire the route to this real page.
+- frontend/src/api/cashRegister.ts + frontend/src/views/protected/CashRegisterPage.tsx (open/close cash session, register movements, view arqueo/close report with difference + approval).
+- frontend/src/api/reports.ts + frontend/src/views/protected/ReportsPage.tsx (daily operational report: pending payments, arrivals/departures, room blocks, cash status).
+- Register routes in router.tsx and nav items in AppShell.tsx (Spanish labels: "Empresas", "Caja", "Reportes"; appropriate requiresRole/minPlan consistent with existing entries).
+
+Do NOT touch waitlist, laundry, stock, api-keys, permissions, whatsapp files (other agents own them). Keep all network calls hotel-scoped via the existing client (the X-Hotel-Id / auth is handled by client.ts).
+
+Evidence: run `cd frontend && npm run build` — it MUST succeed (no TS/build errors). If a pre-existing build error is unrelated to your files, report it but still ensure your files compile. Commit with git if possible, else leave edits in the working tree. End by printing "INTEGRATION EDITS" listing exact additions to frontend/src/router.tsx and frontend/src/ui/AppShell.tsx.

@@ -1,0 +1,18 @@
+Build frontend pages for Waitlist, Laundry, and Stock in Hotel-Chipre-PMS (React 18 + TypeScript + Vite 5 + TanStack Query v5). You are in the integration trunk worktree. Work inside the frontend/ directory.
+
+FIRST study existing conventions: read frontend/src/api/client.ts, frontend/src/api/guests.ts (client + query patterns), frontend/src/views/protected/GuestsPage.tsx and RoomsPage.tsx (page structure, TanStack Query, styling), frontend/src/router.tsx and frontend/src/ui/AppShell.tsx (route + nav). Match that style exactly (Spanish UI labels).
+
+Derive API contracts from the backend routers in this worktree:
+- app/api/waitlist.py (add to waitlist, promote, cancel/expire, list)
+- app/api/laundry.py (batches lifecycle collected->sent->received->closed, items)
+- app/api/stock.py (items, locations, movements in/out/adjustment, current stock, low stock)
+
+Implement (NEW files following the existing api-module + page pattern):
+- frontend/src/api/waitlist.ts + frontend/src/views/protected/WaitlistPage.tsx (list waitlist entries, add, promote to reservation, cancel).
+- frontend/src/api/laundry.ts + frontend/src/views/protected/LaundryPage.tsx (batches with status transitions + items).
+- frontend/src/api/stock.ts + frontend/src/views/protected/StockPage.tsx (items + movements + low-stock view).
+- Register routes in router.tsx and nav items in AppShell.tsx (Spanish labels: "Lista de espera", "Lavanderia", "Stock"; requiresRole consistent with existing operational entries — e.g. owner/co_owner/manager, housekeeping for laundry).
+
+Do NOT touch companies, cash, reports, api-keys, permissions, whatsapp files (other agents own them). All calls hotel-scoped via the existing client.
+
+Evidence: `cd frontend && npm run build` MUST succeed (no TS/build errors). Commit with git if possible, else leave edits in the working tree. End by printing "INTEGRATION EDITS" listing exact additions to frontend/src/router.tsx and frontend/src/ui/AppShell.tsx.
