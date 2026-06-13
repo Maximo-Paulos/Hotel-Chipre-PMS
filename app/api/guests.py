@@ -13,7 +13,8 @@ from app.database import get_db
 from app.models.guest import Guest, GuestCompanion, DocumentTypeEnum
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.schemas.guest import GuestCreate, GuestRead, GuestUpdate, GuestCompanionCreate, GuestCompanionRead
-from app.dependencies.auth import get_auth_context, AuthContext
+from app.dependencies.auth import get_auth_context, AuthContext, require_permission
+from app.services.permission_service import PERMISSION_GUEST_EDIT
 
 router = APIRouter(prefix="/api/guests", tags=["Guests"])
 
@@ -158,7 +159,7 @@ def update_guest(
     guest_id: int,
     data: GuestUpdate,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(get_auth_context),
+    context: AuthContext = Depends(require_permission(PERMISSION_GUEST_EDIT)),
 ):
     guest = db.query(Guest).filter(Guest.id == guest_id, Guest.hotel_id == context.hotel_id).first()
     if not guest:

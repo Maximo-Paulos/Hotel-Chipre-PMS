@@ -50,7 +50,8 @@ from app.services.reservation_action_service import (
 )
 from app.services.payment_service import PaymentError
 from app.services.allocation_runtime_service import run_persisted_allocation
-from app.dependencies.auth import get_auth_context, AuthContext, require_roles
+from app.dependencies.auth import get_auth_context, AuthContext, require_roles, require_permission
+from app.services.permission_service import PERMISSION_RESERVATION_CREATE, PERMISSION_RESERVATION_ROOM_MOVE
 
 router = APIRouter(prefix="/api/reservations", tags=["Reservations"])
 logger = logging.getLogger(__name__)
@@ -73,7 +74,7 @@ def _to_read(r: Reservation) -> ReservationRead:
 def create_new_reservation(
     data: ReservationCreate,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping")),
+    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_CREATE)),
 ):
     config = db.get(HotelConfiguration, context.hotel_id)
     if config and not config.subscription_active:
@@ -394,7 +395,7 @@ def room_move(
     reservation_id: int,
     payload: RoomMoveRequest,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping")),
+    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_ROOM_MOVE)),
 ):
     reservation = get_reservation_by_id(db, reservation_id, context.hotel_id)
     if not reservation:

@@ -44,6 +44,7 @@ from app.api import (
     integrations,
     payment_link_tests,
     payment_links,
+    permissions,
     commercial,
     allocation_policy,
     gemma_chat,
@@ -145,6 +146,7 @@ app.include_router(invitations.router)
 app.include_router(integrations.router)
 app.include_router(payment_link_tests.router)
 app.include_router(payment_links.router)
+app.include_router(permissions.router)
 app.include_router(commercial.router)
 app.include_router(allocation_policy.router)
 app.include_router(gemma_chat.router)

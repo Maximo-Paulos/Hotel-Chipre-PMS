@@ -13,7 +13,8 @@ from app.services.checkin_service import (
     CheckInError,
 )
 from app.models.guest import Guest
-from app.dependencies.auth import get_auth_context, AuthContext
+from app.dependencies.auth import get_auth_context, AuthContext, require_permission
+from app.services.permission_service import PERMISSION_CHECKIN_PERFORM
 
 router = APIRouter(prefix="/api/checkin", tags=["Check-in"])
 
@@ -22,7 +23,7 @@ router = APIRouter(prefix="/api/checkin", tags=["Check-in"])
 def checkin(
     reservation_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(get_auth_context),
+    context: AuthContext = Depends(require_permission(PERMISSION_CHECKIN_PERFORM)),
 ):
     try:
         reservation = perform_checkin(db, reservation_id, hotel_id=context.hotel_id)

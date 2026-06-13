@@ -78,6 +78,8 @@ from app.models.security_token import SecurityToken
 from app.models.rate_limit_event import RateLimitEvent
 from app.models.ai_assistant import AIAssistantSession, AIAssistantMessage, AIAssistantActionRun, AIAssistantInsight
 from app.models.audit_log import AuditLog, AuditActionEnum
+from app.models.security_audit_log import SecurityAuditLog
+from app.models.permission import Permission, RolePermissionDefault, HotelPermissionOverride
 from app.models.voucher import HotelVoucher, VoucherRedemption, VoucherStatusEnum
 from app.models.refund import RefundRequest, RefundPathEnum, RefundStatusEnum
 from app.models.pending_action import (
@@ -210,6 +212,10 @@ __all__ = [
     "FactRoomOccupancyDaily",
     "AuditLog",
     "AuditActionEnum",
+    "SecurityAuditLog",
+    "Permission",
+    "RolePermissionDefault",
+    "HotelPermissionOverride",
     "HotelVoucher",
     "VoucherRedemption",
     "VoucherStatusEnum",

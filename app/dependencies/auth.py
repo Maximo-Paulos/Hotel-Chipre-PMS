@@ -141,21 +141,30 @@ def get_auth_context(
 
 def require_permission(permission: str):
     """
-    Dependency factory that enforces a permission via hotel membership roles.
+    Dependency factory that enforces a permission via the configurable hotel
+    permission matrix (override > role default > deny). Denials are audited.
     """
 
-    permission_roles = {
-        "config:manage": {"owner", "co_owner"},
-    }
+    def dependency(
+        db: Session = Depends(get_db),
+        context: AuthContext = Depends(get_auth_context),
+    ) -> AuthContext:
+        # Imported here to avoid a circular import at module load time.
+        from app.services.permission_service import audit_permission_denied, resolve
 
-    def dependency(context: AuthContext = Depends(get_auth_context)) -> AuthContext:
         perms = context.permissions or set()
         perms.add(permission)
         context.permissions = perms
         if not context.is_verified:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Verifica tu email para usar el sistema")
-        allowed_roles = permission_roles.get(permission)
-        if allowed_roles and context.user_role not in allowed_roles:
+        if not resolve(db, context.hotel_id, context.user_role, permission):
+            audit_permission_denied(
+                db,
+                hotel_id=context.hotel_id,
+                user_id=context.user_id,
+                role=context.user_role,
+                permission_code=permission,
+            )
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tenes permisos para esta accion")
         return context
 
