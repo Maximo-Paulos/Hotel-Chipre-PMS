@@ -125,8 +125,8 @@ def upsert_seed_data() -> None:
         # completed status requires the JSON payloads present (not just the flags)
         onboarding.hotel_identity_json = '{"name": "Hotel E2E", "address": "Calle 1", "city": "BA", "country": "AR"}'
         onboarding.deposit_policy_json = '{"deposit_percentage": 30, "enable_full_payment": true}'
-        onboarding.payment_methods_json = '{"cash": true, "mercado_pago": true}'
-        onboarding.ota_channels_json = '{"booking": false, "expedia": false}'
+        onboarding.payment_methods_json = '{"cash": {"enabled": true}, "mercado_pago": {"enabled": true, "credentials": {"access_token": "TEST-TOKEN"}}}'
+        onboarding.ota_channels_json = '{"booking": {"enabled": false}, "expedia": {"enabled": false}}'
         onboarding.subscription_choice_json = '{"plan": "pro"}'
         onboarding.staff_json = '[{"name": "Owner E2E", "email": "owner@e2e.com", "role": "owner"}]'
         onboarding.updated_at = now
