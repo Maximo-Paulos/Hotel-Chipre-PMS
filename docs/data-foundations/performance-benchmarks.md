@@ -145,3 +145,24 @@ representative latency measurement = DEPLOY-TIME step on co-located PG. Measured
 | Allocation candidate build | < 150 ms |
 | Daily operational report | < 300 ms |
 | Balance from transactions | < 30 ms |
+
+### MEASURED — guest-search hot path (server-side EXPLAIN ANALYZE, real PostgreSQL)
+
+Captured via `tests/perf/explain_probe.py` against Supabase `hotel_chipre_test`,
+4000 seeded guests, single hotel. Server-side `Execution Time` (network-independent):
+
+| Query | Server exec | Plan | SLO (<30ms) |
+|-------|-------------|------|-------------|
+| guest search by document (exact) | 0.06 ms | Index | ✅ |
+| guest search last_name ILIKE '%..%' (trgm) | 5.63 ms | Index (GIN trgm) | ✅ |
+| guest search email ILIKE '%..%' (trgm) | 5.51 ms | Index (GIN trgm) | ✅ |
+| guest list by hotel_id (ORDER BY last_name) | 0.10 ms | Index | ✅ |
+
+Zero Seq Scans — the pg_trgm GIN indexes (migration 20260614_pg_perf_guest_trgm)
+are confirmed in use for ILIKE substring search, the V72 guest-search hot path.
+This is the network-independent authoritative metric and meets the SLO with wide margin.
+
+Still pending CO-LOCATED measurement (heavier reservation/availability/report seeding
+that the remote pooler cannot seed within practical time): availability, allocation
+candidate build, daily report. Their queries already use composite indexes
+(verified in tests/test_postgres_validation.py EXPLAIN tests).

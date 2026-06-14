@@ -36,13 +36,24 @@ with Session(e) as s:
     s.query(HotelConfiguration).filter_by(id=HID).delete()
     s.add(HotelConfiguration(id=HID, hotel_name="Perf", subscription_active=True))
     s.commit()
-with e.begin() as c:
-    # bulk seed 3000 guests in one round-trip
-    rows = [{"h": HID, "fn": f"Guest{i}", "ln": f"Last{i%500}", "dn": f"DOC{i:07d}",
-             "em": f"g{i}@perf.test", "ph": f"+5411{i:08d}", "tc": True} for i in range(3000)]
-    c.execute(text("INSERT INTO guests (hotel_id, first_name, last_name, document_number, email, phone, terms_accepted, created_at, updated_at) "
-                   "VALUES (:h,:fn,:ln,:dn,:em,:ph,:tc, NOW(), NOW())"), rows)
-    c.execute(text("ANALYZE guests"))
+N = 4000
+# Single multi-row INSERT = ONE round-trip (executemany would be N round-trips,
+# impractical over the remote pooler). Synthetic data, no injection risk.
+vals = ",".join(
+    f"({HID},'Guest{i}','Last{i%500}','DOC{i:07d}','g{i}@perf.test','+5411{i:08d}',true,NOW(),NOW())"
+    for i in range(N)
+)
+raw = e.raw_connection()
+try:
+    cur = raw.cursor()
+    cur.execute(
+        "INSERT INTO guests (hotel_id, first_name, last_name, document_number, email, phone, terms_accepted, created_at, updated_at) VALUES "
+        + vals
+    )
+    cur.execute("ANALYZE guests")
+    raw.commit()
+finally:
+    raw.close()
 
 print(f"seeded 3000 guests for hotel {HID}; EXPLAIN ANALYZE (server-side):")
 with e.connect() as c:
