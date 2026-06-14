@@ -1,0 +1,14 @@
+Add Playwright end-to-end tests for the new V72 frontend pages in Hotel-Chipre-PMS. You are in the integration trunk worktree. Work in frontend/.
+
+Goal: authenticated e2e specs that log in and visit each new page, asserting a key element renders (proving the page is wired to its backend endpoint, not disconnected).
+
+Setup:
+- Add @playwright/test as a devDependency in frontend/package.json and a playwright.config.ts (baseURL http://127.0.0.1:5173, the vite dev server; the vite dev proxy forwards /api to http://127.0.0.1:8040 by default — see frontend/vite.config.ts VITE_BACKEND_URL).
+- The backend must run on 127.0.0.1:8040 against a seeded SQLite DB. Create a helper script scripts/seed_e2e_backend.py (or reuse an approach) that: sets DATABASE_URL=sqlite:///./_e2e.db, runs alembic upgrade head, seeds HotelConfiguration(id=1, subscription_active=True), a verified owner User (owner@e2e.com / E2ePass1234!) via app.services.security.hash_password, and a HotelMembership(owner). Document in the spec README how to boot: `DATABASE_URL=sqlite:///./_e2e.db JWT_SECRET=... uvicorn app.main:app --port 8040`.
+- A global-setup or a documented manual step that boots backend(8040)+vite(5173). If you can start them headless within the test run, do so; otherwise add an npm script "e2e" and a short README with the two boot commands + `npx playwright test`.
+
+Specs (frontend/e2e/*.spec.ts): a login helper, then one spec per area visiting and asserting on: Caja (/caja), Empresas (/settings/companies), Reportes (/reportes), Lista de espera, Lavanderia, Stock, API Keys (/settings/api-keys), Permisos (/settings/permissions), WhatsApp (/settings/whatsapp), plus RoomsPage bloqueos section, ReservationsPage asignacion section, GuestsPage tags. Each: login, navigate, assert a heading/table/button unique to that page is visible; capture a screenshot into e2e/screenshots/.
+
+RUN the suite for real if you can boot both servers (use npx playwright install chromium first). Paste the actual pass/fail summary. If you cannot boot servers in this environment, still deliver the full specs + config + seed script + README, run `npx tsc --noEmit` or `npm run build` to prove the TS compiles, and mark the run as PENDING-manual with exact commands. Do NOT fabricate a passing run.
+
+Do NOT modify backend app/ code or existing frontend pages except minimal data-testid attributes if needed for stable selectors (prefer role/text selectors to avoid edits). Evidence: paste real output. Commit if possible, else leave files. End with "INTEGRATION EDITS".

@@ -46,3 +46,11 @@ frontend/dist/
 frontend/.playwright-cache/
 frontend/tmp-esbuild-check.cjs
 frontend/test-spawn.cjs
+
+# e2e artifacts
+frontend/e2e-report/
+frontend/test-results/
+frontend/e2e/screenshots/
+frontend/tsconfig.node.tsbuildinfo
+_e2e.db
+_verify*.db

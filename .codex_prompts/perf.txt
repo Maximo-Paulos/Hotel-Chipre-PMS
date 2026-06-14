@@ -1,0 +1,21 @@
+Add a PostgreSQL performance benchmark for Hotel-Chipre-PMS critical queries and document measured latency vs SLOs. You are in the integration trunk worktree (backend V72 complete). Read docs/data-foundations/ for context.
+
+A PostgreSQL test database is reachable: build the DSN from the root .env DATABASE_URL by replacing the trailing /postgres with /hotel_chipre_test (this is how tests/conftest.py derives DATABASE_URL_TEST). Use psycopg2/SQLAlchemy. Do NOT touch the production /postgres database.
+
+Implement:
+- tests/perf/benchmark_pg.py (NEW): a script that, against hotel_chipre_test:
+  1. Runs `alembic upgrade head` if needed (or assumes schema present), then seeds a realistic dataset for ONE hotel: ~40 rooms, ~5 categories, ~2000 reservations across a date range, transactions, room_blocks. Use bulk inserts. Make it idempotent/cleanup-safe (use a dedicated hotel_id like 90001 and delete it at start).
+  2. Measures wall-clock latency (median + p95 over >=20 iterations) of the CRITICAL queries/services:
+     - availability: app/services/reservation_service.check_room_availability and find_available_rooms
+     - allocation candidate build: app/services/allocation_engine.build_slots_from_db (or the documented entrypoint)
+     - balance: balance computation from transactions
+     - daily operational report: app/services/operational_report_service.daily_report
+     - guest search by document/last_name
+  3. Runs EXPLAIN (ANALYZE, BUFFERS) on the raw SQL of the hottest queries and asserts index usage (no unexpected Seq Scan on large tables) — print the plan.
+  4. Prints a table: query | median ms | p95 ms | index-used (y/n).
+- docs/data-foundations/performance-benchmarks.md (NEW): document the SLO targets (propose sensible ones, e.g. availability < 50ms p95, daily report < 300ms p95, guest search < 30ms p95) and paste the MEASURED results from your run, plus the EXPLAIN evidence of index usage. Be honest: if a query misses its SLO or does a Seq Scan, say so and recommend the index/fix.
+- If you find a missing index that a hot query needs, add it as a migration (down_revision = current head; check `python -m alembic heads`) and re-measure.
+
+Run the benchmark for real and paste actual numbers. Do NOT fabricate results. If the PG test DB is unreachable, say so explicitly and fall back to documenting the methodology + SLOs only (mark measured=PENDING).
+
+Evidence: paste the actual benchmark output table and EXPLAIN snippets in your final report. `python -c "import app.models"` must still pass. Commit with git if possible, else leave files in the working tree. End with "INTEGRATION EDITS" listing files created + any migration.
