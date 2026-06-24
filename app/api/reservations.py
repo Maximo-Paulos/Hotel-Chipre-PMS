@@ -4,7 +4,7 @@ Complete CRUD + cancel, modify, no-show, extend stay.
 """
 import logging
 from datetime import date
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -85,11 +85,39 @@ def _is_manager_context(context: AuthContext) -> bool:
     return context.user_role in {"owner", "co_owner", "manager"}
 
 
+def _trigger_reoptimization_bg(hotel_id: int, trigger_type: str = "new_reservation") -> None:
+    """
+    §5.2 — Run allocation engine in background after reservation changes.
+    Creates its own DB session; all errors are suppressed to never affect the booking flow.
+    """
+    from app.database import get_session_factory
+    from app.services.allocation_runtime_service import run_persisted_allocation
+
+    db = None
+    try:
+        SessionFactory = get_session_factory()
+        db = SessionFactory()
+        run_persisted_allocation(db, hotel_id=hotel_id, trigger_type=trigger_type)
+        db.commit()
+    except Exception:
+        logger.exception(
+            "Background reservation reoptimization failed for hotel_id=%s trigger_type=%s",
+            hotel_id,
+            trigger_type,
+        )
+        if db is not None:
+            db.rollback()
+    finally:
+        if db is not None:
+            db.close()
+
+
 # Accept with and without trailing slash to avoid 405 when the FE omits it.
 @router.post("/", response_model=ReservationRead, status_code=status.HTTP_201_CREATED)
 @router.post("", response_model=ReservationRead, status_code=status.HTTP_201_CREATED, include_in_schema=False)
 def create_new_reservation(
     data: ReservationCreate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_CREATE)),
 ):
@@ -103,6 +131,7 @@ def create_new_reservation(
         reservation = create_reservation(db, data, hotel_id=context.hotel_id)
         db.commit()
         db.refresh(reservation)
+        background_tasks.add_task(_trigger_reoptimization_bg, hotel_id=context.hotel_id)
         return _to_read(reservation)
     except ReservationError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -354,6 +383,7 @@ def mark_no_show(
 def change_dates(
     reservation_id: int,
     payload: ReservationDateChangeRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "receptionist")),
 ):
@@ -377,6 +407,11 @@ def change_dates(
         db.commit()
         db.refresh(result.original_reservation)
         db.refresh(result.reservation)
+        background_tasks.add_task(
+            _trigger_reoptimization_bg,
+            hotel_id=context.hotel_id,
+            trigger_type="reservation_date_change",
+        )
         return ReservationDateChangeResponse(
             original_reservation=_to_read(result.original_reservation),
             reservation=_to_read(result.reservation),
@@ -392,6 +427,7 @@ def change_dates(
 def modify_reservation(
     reservation_id: int,
     data: ReservationUpdate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
 ):
@@ -420,6 +456,12 @@ def modify_reservation(
         )
         db.commit()
         db.refresh(r)
+        if any(value is not None for value in (data.check_in_date, data.check_out_date, data.room_id)):
+            background_tasks.add_task(
+                _trigger_reoptimization_bg,
+                hotel_id=context.hotel_id,
+                trigger_type="reservation_update",
+            )
         return _to_read(r)
     except ReservationError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -428,6 +470,7 @@ def modify_reservation(
 def extend_stay(
     reservation_id: int,
     payload: ReservationExtensionRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
 ):
@@ -457,6 +500,11 @@ def extend_stay(
             transaction=result.transaction,
             payment_link=result.payment_link,
         )
+        background_tasks.add_task(
+            _trigger_reoptimization_bg,
+            hotel_id=context.hotel_id,
+            trigger_type="reservation_date_change",
+        )
         return response
     except ReservationOperationsError as e:
         db.rollback()
@@ -467,6 +515,7 @@ def extend_stay(
 def room_move(
     reservation_id: int,
     payload: RoomMoveRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_ROOM_MOVE)),
 ):
@@ -485,6 +534,11 @@ def room_move(
         )
         db.commit()
         db.refresh(reservation)
+        background_tasks.add_task(
+            _trigger_reoptimization_bg,
+            hotel_id=context.hotel_id,
+            trigger_type="reservation_room_move",
+        )
         return _to_read(reservation)
     except ReservationOperationsError as e:
         db.rollback()
