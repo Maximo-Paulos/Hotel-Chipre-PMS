@@ -103,6 +103,7 @@ from app.models.waitlist import WaitlistEntry, WaitlistStatusEnum
 from app.models.payment_config import PaymentSurchargeConfig
 from app.models.hotel_api_key import HotelAPIKey, APIKeyPurposeEnum
 from app.models.room_block import RoomBlock, RoomBlockReasonEnum
+from app.models.fx_rate_snapshot import FxRateSnapshot
 from app.models.company_document import CompanyDocument, CompanyDocumentTypeEnum, CompanyDocumentStatusEnum
 # master_admin models live outside app/models but share Base — import them so
 # Base.metadata is complete (create_all/drop_all in tests must see every table)
@@ -251,6 +252,7 @@ __all__ = [
     "APIKeyPurposeEnum",
     "RoomBlock",
     "RoomBlockReasonEnum",
+    "FxRateSnapshot",
     "CompanyDocument",
     "CompanyDocumentTypeEnum",
     "CompanyDocumentStatusEnum",
