@@ -59,6 +59,7 @@ from app.api import (
     company_documents,
     room_state_events,
     rate_calendar,
+    daily_rates,
     room_blocks,
     cash_register,
     room_movement_groups,
@@ -171,6 +172,7 @@ app.include_router(companies.router)
 app.include_router(company_documents.router)
 app.include_router(room_state_events.router)
 app.include_router(rate_calendar.router)
+app.include_router(daily_rates.router)
 app.include_router(room_blocks.router)
 app.include_router(cash_register.router)
 app.include_router(room_movement_groups.router)

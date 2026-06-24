@@ -30,6 +30,7 @@ from app.models.ota_core import (
     OTASyncEvent,
 )
 from app.models.pricing import CategoryPricing
+from app.models.daily_rate import DailyRate, PricePeriod
 from app.models.commercial import (
     SellableProduct,
     ProductRoomCompatibility,
@@ -149,6 +150,8 @@ __all__ = [
     "OTASyncJob",
     "OTASyncEvent",
     "CategoryPricing",
+    "DailyRate",
+    "PricePeriod",
     "SellableProduct",
     "ProductRoomCompatibility",
     "RatePlan",
