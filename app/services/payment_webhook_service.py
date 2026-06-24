@@ -20,7 +20,7 @@ from app.models.payment import Payment, PaymentLink, PaymentWebhookEvent
 from app.models.transaction import PaymentMethodEnum, Transaction, TransactionTypeEnum
 from app.schemas.transaction import PaymentGatewayResponse, PaymentRequest
 from app.services.payment_link_service import _money, refresh_link_collection
-from app.services.payment_service import process_payment
+from app.services.payment_service import calculate_base_amount_before_surcharge, process_payment
 
 
 class PaymentWebhookError(Exception):
@@ -121,12 +121,19 @@ def _ensure_completed_transaction(db: Session, payment: Payment, provider: str, 
     idempotency_key = f"{provider}:{payment.external_payment_id}:completed"
     if _transaction_exists(db, payment.hotel_id, payment.reservation_id, idempotency_key):
         return
+    payment_method = PaymentMethodEnum.MERCADO_PAGO if provider == "mercado_pago" else PaymentMethodEnum.PAYPAL
+    base_amount = calculate_base_amount_before_surcharge(
+        db,
+        hotel_id=payment.hotel_id,
+        payment_method=payment_method,
+        final_amount=_money(payment.amount),
+    )
     tx = process_payment(
         db,
         PaymentRequest(
             reservation_id=payment.reservation_id,
-            amount=float(_money(payment.amount)),
-            payment_method=PaymentMethodEnum.MERCADO_PAGO if provider == "mercado_pago" else PaymentMethodEnum.PAYPAL,
+            amount=float(base_amount),
+            payment_method=payment_method,
             transaction_type=TransactionTypeEnum.PARTIAL_PAYMENT,
             currency=payment.currency,
             description=f"{provider} payment {payment.external_payment_id}",

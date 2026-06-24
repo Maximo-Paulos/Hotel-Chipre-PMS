@@ -67,6 +67,7 @@ from app.models.subscription import SubscriptionPlan, HotelSubscription, Subscri
 from app.models.subscription_v2 import Subscription, SubscriptionEvent
 from app.models.integration import IntegrationCatalog, IntegrationConnection, IntegrationEvent
 from app.models.payment_link_test import PaymentLinkTest
+from app.models.payment_surcharge import PaymentSurcharge, PaymentSurchargeTypeEnum
 from app.models.payment import (
     Payment,
     PaymentLink,
@@ -188,6 +189,8 @@ __all__ = [
     "IntegrationConnection",
     "IntegrationEvent",
     "PaymentLinkTest",
+    "PaymentSurcharge",
+    "PaymentSurchargeTypeEnum",
     "Payment",
     "PaymentLink",
     "PaymentWebhookEvent",

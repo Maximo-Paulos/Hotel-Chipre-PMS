@@ -13,6 +13,7 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
+from app.models.payment_surcharge import PaymentSurcharge, PaymentSurchargeTypeEnum
 from app.models.operations import BillingAdjustment, ReservationStatusHistory
 from app.models.reservation import Reservation, ReservationSourceEnum, ReservationStatusEnum
 from app.models.transaction import (
@@ -111,6 +112,80 @@ def _resolve_payment_currency(reservation: Reservation, requested_currency: Opti
     return candidate[:3] if candidate else "ARS"
 
 
+def _payment_method_value(method) -> str:
+    return method.value if hasattr(method, "value") else str(method)
+
+
+def calculate_payment_surcharge(
+    db: Session,
+    *,
+    hotel_id: int,
+    payment_method,
+    base_amount,
+) -> dict:
+    base = Decimal(str(base_amount or 0)).quantize(Decimal("0.01"))
+    surcharge_record = (
+        db.query(PaymentSurcharge)
+        .filter(
+            PaymentSurcharge.hotel_id == hotel_id,
+            PaymentSurcharge.payment_method == _payment_method_value(payment_method),
+            PaymentSurcharge.is_active.is_(True),
+        )
+        .first()
+    )
+
+    surcharge_type = None
+    surcharge_value = None
+    surcharge_amount = Decimal("0.00")
+    if surcharge_record:
+        surcharge_type = (
+            surcharge_record.surcharge_type.value
+            if hasattr(surcharge_record.surcharge_type, "value")
+            else str(surcharge_record.surcharge_type)
+        )
+        surcharge_value = surcharge_record.amount
+        if surcharge_record.surcharge_type == PaymentSurchargeTypeEnum.FIXED:
+            surcharge_amount = Decimal(str(surcharge_record.amount)).quantize(Decimal("0.01"))
+        else:
+            surcharge_amount = (base * Decimal(str(surcharge_record.amount)) / Decimal("100")).quantize(Decimal("0.01"))
+
+    final_amount = (base + surcharge_amount).quantize(Decimal("0.01"))
+    return {
+        "base_amount": base,
+        "surcharge_type": surcharge_type,
+        "surcharge_value": surcharge_value,
+        "surcharge_amount": surcharge_amount,
+        "final_amount": final_amount,
+    }
+
+
+def calculate_base_amount_before_surcharge(
+    db: Session,
+    *,
+    hotel_id: int,
+    payment_method,
+    final_amount,
+) -> Decimal:
+    final = Decimal(str(final_amount or 0)).quantize(Decimal("0.01"))
+    surcharge_record = (
+        db.query(PaymentSurcharge)
+        .filter(
+            PaymentSurcharge.hotel_id == hotel_id,
+            PaymentSurcharge.payment_method == _payment_method_value(payment_method),
+            PaymentSurcharge.is_active.is_(True),
+        )
+        .first()
+    )
+    if not surcharge_record:
+        return final
+    if surcharge_record.surcharge_type == PaymentSurchargeTypeEnum.FIXED:
+        return max(Decimal("0.00"), final - Decimal(str(surcharge_record.amount))).quantize(Decimal("0.01"))
+    divisor = Decimal("1") + (Decimal(str(surcharge_record.amount)) / Decimal("100"))
+    if divisor <= 0:
+        return final
+    return (final / divisor).quantize(Decimal("0.01"))
+
+
 def process_payment(
     db: Session,
     request: PaymentRequest,
@@ -171,8 +246,16 @@ def process_payment(
     # 2. Validate payment method
     validate_payment_method_enabled(db, request.payment_method, resolved_hotel_id)
     transaction_currency = _resolve_payment_currency(reservation, request.currency)
+    surcharge_info = calculate_payment_surcharge(
+        db,
+        hotel_id=resolved_hotel_id,
+        payment_method=request.payment_method,
+        base_amount=request.amount,
+    )
+    surcharge_amount = Decimal("0.00") if is_refund else surcharge_info["surcharge_amount"]
+    gross_amount = (Decimal(str(request.amount)) + surcharge_amount).quantize(Decimal("0.01"))
 
-    # 3. Validate amount
+    # 3. Validate base amount; surcharge is charged on top and does not reduce balance due.
     _TOLERANCE = Decimal("0.01")
     if is_refund:
         if Decimal(str(request.amount)) > reservation.amount_paid + _TOLERANCE:
@@ -214,6 +297,8 @@ def process_payment(
         hotel_id=resolved_hotel_id,
         reservation_id=request.reservation_id,
         amount=request.amount,
+        gross_amount=gross_amount,
+        fee_amount=surcharge_amount,
         currency=transaction_currency,
         transaction_type=request.transaction_type,
         payment_method=request.payment_method,
@@ -238,6 +323,47 @@ def process_payment(
         )
 
     return transaction
+
+
+def get_payment_link_with_surcharge(
+    db: Session,
+    reservation_id: int,
+    hotel_id: int,
+    payment_method: str,
+    amount: Optional[float] = None,
+) -> dict:
+    """
+    Calculate surcharge for a payment link and return a guest-facing breakdown.
+    """
+    reservation = db.query(Reservation).filter(Reservation.id == reservation_id).first()
+    if not reservation:
+        raise PaymentError(f"Reservation {reservation_id} not found")
+    if reservation.hotel_id and reservation.hotel_id != hotel_id:
+        raise PaymentError(f"Reservation {reservation_id} does not belong to hotel {hotel_id}")
+
+    base_amount = Decimal(str(amount if amount is not None else reservation.balance_due)).quantize(Decimal("0.01"))
+    if base_amount <= 0:
+        raise PaymentError("Payment amount must be greater than zero")
+
+    surcharge_info = calculate_payment_surcharge(
+        db,
+        hotel_id=hotel_id,
+        payment_method=payment_method,
+        base_amount=base_amount,
+    )
+    final_amount = surcharge_info["final_amount"]
+    payment_url = f"/api/pay/{payment_method}/{reservation_id}?amount={final_amount}"
+    shareable_link = f"/pay/{reservation.confirmation_code}/{payment_method}"
+
+    return {
+        "base_amount": float(surcharge_info["base_amount"]),
+        "surcharge_type": surcharge_info["surcharge_type"],
+        "surcharge_value": surcharge_info["surcharge_value"],
+        "surcharge_amount": float(surcharge_info["surcharge_amount"]),
+        "final_amount": float(final_amount),
+        "payment_url": payment_url,
+        "shareable_link": shareable_link,
+    }
 
 
 def _update_reservation_financials(

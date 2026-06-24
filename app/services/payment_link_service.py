@@ -18,6 +18,7 @@ from app.models.payment import Payment, PaymentLink
 from app.models.reservation import Reservation
 from app.models.transaction import Transaction, TransactionStatusEnum, TransactionTypeEnum
 from app.schemas.payment_link import PaymentLinkCreate
+from app.services.payment_service import calculate_payment_surcharge
 
 
 class PaymentLinkError(Exception):
@@ -82,13 +83,19 @@ def create_link(db: Session, hotel_id: int, payload: PaymentLinkCreate) -> Payme
     if provider != "mercado_pago":
         raise PaymentLinkError("Solo mercado_pago esta habilitado para links de pago")
 
+    surcharge_info = calculate_payment_surcharge(
+        db,
+        hotel_id=hotel_id,
+        payment_method=provider,
+        base_amount=payload.requested_amount,
+    )
     link_code = _unique_link_code(db)
     link = PaymentLink(
         hotel_id=hotel_id,
         reservation_id=reservation.id,
         provider=provider,
         link_code=link_code,
-        requested_amount=_money(payload.requested_amount),
+        requested_amount=surcharge_info["final_amount"],
         collected_amount=Decimal("0.00"),
         currency=payload.currency or reservation.currency_code or "ARS",
         recipient_email=str(payload.recipient_email).strip().lower(),
