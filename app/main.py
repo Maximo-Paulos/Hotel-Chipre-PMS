@@ -63,6 +63,7 @@ from app.api import (
     daily_rates,
     room_blocks,
     cash_register,
+    movement_groups,
     room_movement_groups,
 )
 import app.master_admin.models  # noqa: F401
@@ -177,6 +178,7 @@ app.include_router(rate_calendar.router)
 app.include_router(daily_rates.router)
 app.include_router(room_blocks.router)
 app.include_router(cash_register.router)
+app.include_router(movement_groups.router)
 app.include_router(room_movement_groups.router)
 app.include_router(master_admin_router)
 
