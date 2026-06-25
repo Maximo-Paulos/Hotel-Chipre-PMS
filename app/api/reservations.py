@@ -45,6 +45,7 @@ from app.services.reservation_service import (
     get_reservation_by_id,
     mark_reservation_no_show,
     update_reservation_fields,
+    register_company_settlement,
 )
 from app.services.reservation_operations_service import (
     ReservationOperationsError,
@@ -292,6 +293,32 @@ def clear_manual_review(
     except ReservationActionError as e:
         db.rollback()
         raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/{reservation_id}/operations/register-settlement", response_model=ReservationRead)
+def register_settlement(
+    reservation_id: int,
+    payload: ReservationActionResolveRequest,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+):
+    """Register the deferred corporate collection (v72 §3.5): settled."""
+    reservation = get_reservation_by_id(db, reservation_id, context.hotel_id)
+    if not reservation:
+        raise HTTPException(status_code=404, detail="Reservation not found")
+    try:
+        register_company_settlement(
+            db,
+            reservation,
+            hotel_id=context.hotel_id,
+            actor_user_id=context.user_id,
+            notes=payload.notes,
+        )
+        db.commit()
+    except ReservationError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+    return _to_read(reservation)
 
 
 @router.get("/{reservation_id}", response_model=ReservationRead)

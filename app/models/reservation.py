@@ -256,6 +256,9 @@ class Reservation(Base):
     mobility_restriction = Column(Boolean, nullable=False, default=False)
     payment_collection_model = Column(String(40), nullable=False, default="hotel_collect")
     settlement_status = Column(String(40), nullable=False, default="not_applicable")
+    # Corporate deferred billing (v72 §3.5): due date = check_out + company.deferred_days.
+    # Set when a company reservation with payment_deferred is created/confirmed.
+    settlement_due_date = Column(Date, nullable=True)
 
     # Number of guests
     num_adults = Column(Integer, nullable=False, default=1)

@@ -9,7 +9,7 @@ import string
 import random
 from dataclasses import dataclass, replace
 from decimal import Decimal
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 from sqlalchemy.orm import Session
@@ -588,6 +588,18 @@ def create_reservation(db: Session, data: ReservationCreate, hotel_id: Optional[
             )
         room_id = available[0].id
 
+    # Corporate deferred billing (v72 §3.5): "a cobrar" / pago a N días.
+    # The reservation is settled later (off-system invoicing), so we flag it as
+    # deferred and compute a due date = check_out + company.deferred_days.
+    settlement_status = (
+        "not_applicable" if data.source == ReservationSourceEnum.DIRECT else "pending"
+    )
+    settlement_due_date = None
+    if company is not None and company.payment_deferred:
+        settlement_status = "deferred"
+        deferred_days = int(company.deferred_days or 0)
+        settlement_due_date = data.check_out_date + timedelta(days=deferred_days)
+
     confirmation_code = generate_confirmation_code()
     reservation = Reservation(
         confirmation_code=confirmation_code,
@@ -625,11 +637,62 @@ def create_reservation(db: Session, data: ReservationCreate, hotel_id: Optional[
         allocation_locked=bool(company and (company.requires_signature or company.payment_deferred)),
         requires_manual_review=bool(company and (company.requires_signature or company.payment_deferred)),
         payment_collection_model="hotel_collect" if data.source == ReservationSourceEnum.DIRECT else "unknown",
-        settlement_status="not_applicable" if data.source == ReservationSourceEnum.DIRECT else "pending",
+        settlement_status=settlement_status,
+        settlement_due_date=settlement_due_date,
     )
     db.add(reservation)
     db.flush()
     _invalidate_availability_cache(hotel_id)
+    return reservation
+
+
+def register_company_settlement(
+    db: Session,
+    reservation: Reservation,
+    hotel_id: int,
+    *,
+    actor_user_id: Optional[int] = None,
+    notes: Optional[str] = None,
+) -> Reservation:
+    """Register the deferred corporate collection (v72 §3.5).
+
+    Transitions settlement_status -> 'settled' for a company reservation that was
+    created with payment_deferred. Idempotent: re-registering a settled reservation
+    is a no-op. Audited via audit_log_service (best-effort).
+    """
+    if reservation.hotel_id != hotel_id:
+        raise ReservationError("Cross-hotel settlement is not allowed")
+    if reservation.company_id is None:
+        raise ReservationError("Solo las reservas de empresa admiten cobro diferido")
+    if reservation.settlement_status == "settled":
+        return reservation
+    if reservation.settlement_status not in {"deferred", "pending"}:
+        raise ReservationError(
+            f"La reserva no tiene un cobro diferido pendiente (settlement_status={reservation.settlement_status})"
+        )
+
+    before = {"settlement_status": reservation.settlement_status}
+    reservation.settlement_status = "settled"
+    db.flush()
+
+    try:
+        from app.services.audit_log_service import safe_create_audit_log
+
+        safe_create_audit_log(
+            db,
+            hotel_id=hotel_id,
+            table_name="reservations",
+            record_id=reservation.id,
+            action="update",
+            actor_user_id=actor_user_id,
+            payload_before=before,
+            payload_after={
+                "settlement_status": reservation.settlement_status,
+                "notes": notes,
+            },
+        )
+    except Exception:  # pragma: no cover - audit is best-effort
+        logging.getLogger(__name__).exception("settlement audit failed")
     return reservation
 
 
