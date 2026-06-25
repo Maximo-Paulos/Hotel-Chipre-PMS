@@ -342,6 +342,7 @@ def check_room_availability(
     query = db.query(Reservation).filter(
         Reservation.room_id == room_id,
         Reservation.hotel_id == hotel_id,
+        Reservation.deleted_at.is_(None),
         Reservation.status.notin_([
             ReservationStatusEnum.CANCELLED,
             ReservationStatusEnum.CHECKED_OUT,
@@ -378,6 +379,7 @@ def find_available_rooms(
     candidate_rooms = db.query(Room).filter(
         Room.category_id == category_id,
         Room.hotel_id == hotel_id,
+        Room.deleted_at.is_(None),
         Room.is_active == True,
         Room.status.in_([RoomStatusEnum.AVAILABLE, RoomStatusEnum.OCCUPIED, RoomStatusEnum.CLEANING]),
     ).all()
@@ -571,7 +573,10 @@ def list_reservations(
     from_date: Optional[date] = None,
     to_date: Optional[date] = None,
 ) -> list[Reservation]:
-    query = db.query(Reservation).filter(Reservation.hotel_id == hotel_id)
+    query = db.query(Reservation).filter(
+        Reservation.hotel_id == hotel_id,
+        Reservation.deleted_at.is_(None),
+    )
     if status_filter:
         query = query.filter(Reservation.status == status_filter)
     if from_date:
@@ -584,7 +589,11 @@ def list_reservations(
 def get_reservation_by_id(db: Session, reservation_id: int, hotel_id: int) -> Reservation | None:
     return (
         db.query(Reservation)
-        .filter(Reservation.id == reservation_id, Reservation.hotel_id == hotel_id)
+        .filter(
+            Reservation.id == reservation_id,
+            Reservation.hotel_id == hotel_id,
+            Reservation.deleted_at.is_(None),
+        )
         .first()
     )
 

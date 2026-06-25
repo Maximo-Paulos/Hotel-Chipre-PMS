@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies.auth import AuthContext, require_permission
+from app.models.audit_log import AuditActionEnum
 from app.models.company_document import CompanyDocument
 from app.schemas.company_document import CompanyDocumentCreate, CompanyDocumentRead, CompanyDocumentStatusUpdate
 from app.services.company_document_service import (
@@ -14,6 +17,7 @@ from app.services.company_document_service import (
     list_documents_for_reservation,
     set_signature_status,
 )
+from app.services import audit_log_service
 from app.services.permission_service import PERMISSION_COMPANY_MANAGE
 
 
@@ -23,7 +27,11 @@ router = APIRouter(prefix="/api/company-documents", tags=["Company Documents"])
 def _get_document_or_404(db: Session, *, hotel_id: int, document_id: int) -> CompanyDocument:
     document = (
         db.query(CompanyDocument)
-        .filter(CompanyDocument.id == document_id, CompanyDocument.hotel_id == hotel_id)
+        .filter(
+            CompanyDocument.id == document_id,
+            CompanyDocument.hotel_id == hotel_id,
+            CompanyDocument.deleted_at.is_(None),
+        )
         .first()
     )
     if document is None:
@@ -115,6 +123,19 @@ def delete_company_document(
     context: AuthContext = Depends(require_permission(PERMISSION_COMPANY_MANAGE)),
 ):
     document = _get_document_or_404(db, hotel_id=context.hotel_id, document_id=document_id)
-    db.delete(document)
+    before = audit_log_service.model_snapshot(document)
+    document.deleted_at = datetime.now(timezone.utc)
+    document.deleted_by_user_id = context.user_id
     db.commit()
+    db.refresh(document)
+    audit_log_service.safe_create_audit_log(
+        db,
+        hotel_id=context.hotel_id,
+        table_name="company_documents",
+        record_id=document.id,
+        action=AuditActionEnum.DELETE,
+        actor_user_id=context.user_id,
+        payload_before=before,
+        payload_after=audit_log_service.model_snapshot(document),
+    )
     return None

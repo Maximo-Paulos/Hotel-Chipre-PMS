@@ -79,6 +79,8 @@ class CompanyDocument(Base):
         onupdate=lambda: datetime.now(timezone.utc),
     )
     created_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    deleted_at = Column(DateTime, nullable=True)
+    deleted_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     __table_args__ = (
         Index("ix_company_documents_hotel_reservation", "hotel_id", "reservation_id"),

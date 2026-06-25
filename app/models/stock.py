@@ -31,6 +31,8 @@ class StockItem(Base):
     unit = Column(String(40), nullable=False)
     min_quantity = Column(Numeric(12, 2), nullable=True)
     active = Column(Boolean, nullable=False, server_default="1")
+    deleted_at = Column(DateTime, nullable=True)
+    deleted_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     movements = relationship("StockMovement", back_populates="item", lazy="selectin")
 
@@ -46,6 +48,8 @@ class StockLocation(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     hotel_id = Column(Integer, ForeignKey("hotel_configuration.id", name="fk_stock_locations_hotel_id"), nullable=False)
     name = Column(String(150), nullable=False)
+    deleted_at = Column(DateTime, nullable=True)
+    deleted_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     movements = relationship("StockMovement", back_populates="location", lazy="selectin")
 

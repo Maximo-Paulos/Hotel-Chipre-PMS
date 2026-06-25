@@ -224,7 +224,7 @@ def list_rooms(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping")),
 ):
-    return db.query(Room).filter(Room.hotel_id == context.hotel_id).all()
+    return db.query(Room).filter(Room.hotel_id == context.hotel_id, Room.deleted_at.is_(None)).all()
 
 
 @router.get("/availability")
@@ -277,7 +277,7 @@ def get_room(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping")),
 ):
-    room = db.query(Room).filter(Room.id == room_id, Room.hotel_id == context.hotel_id).first()
+    room = db.query(Room).filter(Room.id == room_id, Room.hotel_id == context.hotel_id, Room.deleted_at.is_(None)).first()
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
     return room
@@ -291,7 +291,7 @@ def update_room(
     context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
 ):
     """Generic room update (number, floor, notes, status, etc.)."""
-    room = db.query(Room).filter(Room.id == room_id, Room.hotel_id == context.hotel_id).first()
+    room = db.query(Room).filter(Room.id == room_id, Room.hotel_id == context.hotel_id, Room.deleted_at.is_(None)).first()
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
 
@@ -316,6 +316,7 @@ def update_room(
         active_res = db.query(Reservation).filter(
             Reservation.room_id == room_id,
             Reservation.hotel_id == context.hotel_id,
+            Reservation.deleted_at.is_(None),
             Reservation.status.notin_([ReservationStatusEnum.CANCELLED, ReservationStatusEnum.CHECKED_OUT]),
         ).count()
         if active_res > 0:
@@ -346,7 +347,7 @@ def update_room_status(
 ):
     """Update room status for housekeeping. When a room is set to cleaning/maintenance/blocked,
     any reservations assigned to it are automatically relocated by the allocation engine."""
-    room = db.query(Room).filter(Room.id == room_id, Room.hotel_id == context.hotel_id).first()
+    room = db.query(Room).filter(Room.id == room_id, Room.hotel_id == context.hotel_id, Room.deleted_at.is_(None)).first()
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
 
@@ -405,7 +406,7 @@ def update_room_category(
     context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
 ):
     """Update the category of a specific room."""
-    room = db.query(Room).filter(Room.id == room_id, Room.hotel_id == context.hotel_id).first()
+    room = db.query(Room).filter(Room.id == room_id, Room.hotel_id == context.hotel_id, Room.deleted_at.is_(None)).first()
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
 
@@ -472,7 +473,7 @@ def housekeeping_summary(
     context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping")),
 ):
     """Get housekeeping overview: how many rooms in each status."""
-    rooms = db.query(Room).filter(Room.hotel_id == context.hotel_id).all()
+    rooms = db.query(Room).filter(Room.hotel_id == context.hotel_id, Room.deleted_at.is_(None)).all()
     summary = {
         "total": len(rooms),
         "available": 0,
@@ -488,6 +489,7 @@ def housekeeping_summary(
         db.query(Reservation)
         .filter(
             Reservation.hotel_id == context.hotel_id,
+            Reservation.deleted_at.is_(None),
             Reservation.status == ReservationStatusEnum.CHECKED_IN,
         )
         .all()
@@ -518,30 +520,34 @@ def delete_room(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_roles("owner", "co_owner")),
 ):
-    """Delete a room when no active reservations are attached."""
-    room = db.query(Room).filter(Room.id == room_id, Room.hotel_id == context.hotel_id).first()
+    """Soft-delete a room when no active reservations are attached."""
+    room = db.query(Room).filter(Room.id == room_id, Room.hotel_id == context.hotel_id, Room.deleted_at.is_(None)).first()
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
 
     in_use = db.query(Reservation).filter(
         Reservation.room_id == room_id,
         Reservation.hotel_id == context.hotel_id,
+        Reservation.deleted_at.is_(None),
         Reservation.status.notin_([ReservationStatusEnum.CANCELLED, ReservationStatusEnum.CHECKED_OUT]),
     ).count()
     if in_use > 0:
         raise HTTPException(status_code=400, detail="Room has active reservations and cannot be deleted")
 
     before = audit_log_service.model_snapshot(room)
-    room_record_id = room.id
-    db.delete(room)
+    room.deleted_at = datetime.now(timezone.utc)
+    room.deleted_by_user_id = context.user_id
     db.commit()
+    db.refresh(room)
     audit_log_service.safe_create_audit_log(
         db,
         hotel_id=context.hotel_id,
         table_name="rooms",
-        record_id=room_record_id,
+        record_id=room.id,
         action=AuditActionEnum.DELETE,
         actor_user_id=context.user_id,
         payload_before=before,
+        payload_after=audit_log_service.model_snapshot(room),
     )
+    invalidate_hotel_operational_caches(context.hotel_id)
     return None

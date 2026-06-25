@@ -2,7 +2,7 @@
 FastAPI routes for Booking management (thin layer over Reservation).
 Provides basic CRUD plus a simple availability placeholder.
 """
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 import os
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.dependencies.auth import AuthContext, require_roles
 from app.models.reservation import Reservation, ReservationStatusEnum
+from app.models.audit_log import AuditActionEnum
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.guest import Guest
 from app.schemas.booking import BookingCreate, BookingRead, BookingUpdate
@@ -25,6 +26,7 @@ from app.services.reservation_service import (
 )
 from app.services.checkin_service import perform_checkin, perform_checkout, CheckInError
 from app.services.graph_projection import project_company_link, project_reservation_assignment
+from app.services import audit_log_service
 
 router = APIRouter(prefix="/api/bookings", tags=["Bookings"])
 
@@ -133,7 +135,7 @@ def list_bookings(
 ):
     bookings = (
         db.query(Reservation)
-        .filter(Reservation.hotel_id == context.hotel_id)
+        .filter(Reservation.hotel_id == context.hotel_id, Reservation.deleted_at.is_(None))
         .order_by(Reservation.check_in_date)
         .all()
     )
@@ -164,7 +166,15 @@ def get_booking(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping")),
 ):
-    booking = db.query(Reservation).filter(Reservation.id == booking_id, Reservation.hotel_id == context.hotel_id).first()
+    booking = (
+        db.query(Reservation)
+        .filter(
+            Reservation.id == booking_id,
+            Reservation.hotel_id == context.hotel_id,
+            Reservation.deleted_at.is_(None),
+        )
+        .first()
+    )
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
     return _booking_to_read(booking)
@@ -176,7 +186,15 @@ def cancel_booking(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
 ):
-    booking = db.query(Reservation).filter(Reservation.id == booking_id, Reservation.hotel_id == context.hotel_id).first()
+    booking = (
+        db.query(Reservation)
+        .filter(
+            Reservation.id == booking_id,
+            Reservation.hotel_id == context.hotel_id,
+            Reservation.deleted_at.is_(None),
+        )
+        .first()
+    )
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
     if booking.status in (ReservationStatusEnum.CHECKED_IN, ReservationStatusEnum.CHECKED_OUT):
@@ -229,7 +247,15 @@ def update_booking(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
 ):
-    booking = db.query(Reservation).filter(Reservation.id == booking_id, Reservation.hotel_id == context.hotel_id).first()
+    booking = (
+        db.query(Reservation)
+        .filter(
+            Reservation.id == booking_id,
+            Reservation.hotel_id == context.hotel_id,
+            Reservation.deleted_at.is_(None),
+        )
+        .first()
+    )
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
 
@@ -255,7 +281,15 @@ def update_booking(
 
     # Handle room change
         if "room_id" in data and data["room_id"] is not None:
-            room = db.query(Room).filter(Room.id == data["room_id"], Room.hotel_id == context.hotel_id).first()
+            room = (
+                db.query(Room)
+                .filter(
+                    Room.id == data["room_id"],
+                    Room.hotel_id == context.hotel_id,
+                    Room.deleted_at.is_(None),
+                )
+                .first()
+            )
             if not room:
                 raise HTTPException(status_code=400, detail="Room not found")
             if room.category_id != new_category_id:
@@ -337,7 +371,15 @@ def seed_demo_bookings(
         db.add(category)
         db.flush()
 
-    rooms = db.query(Room).filter(Room.category_id == category.id, Room.hotel_id == context.hotel_id).all()
+    rooms = (
+        db.query(Room)
+        .filter(
+            Room.category_id == category.id,
+            Room.hotel_id == context.hotel_id,
+            Room.deleted_at.is_(None),
+        )
+        .all()
+    )
     if not rooms:
         rooms = [
             Room(hotel_id=context.hotel_id, room_number="D1", floor=1, category_id=category.id, status=RoomStatusEnum.AVAILABLE),
@@ -380,12 +422,33 @@ def delete_booking(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
 ):
-    booking = db.query(Reservation).filter(Reservation.id == booking_id, Reservation.hotel_id == context.hotel_id).first()
+    booking = (
+        db.query(Reservation)
+        .filter(
+            Reservation.id == booking_id,
+            Reservation.hotel_id == context.hotel_id,
+            Reservation.deleted_at.is_(None),
+        )
+        .first()
+    )
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
     # Avoid deleting checked-in/checked-out bookings to preserve history
     if booking.status in {ReservationStatusEnum.CHECKED_IN, ReservationStatusEnum.CHECKED_OUT}:
         raise HTTPException(status_code=400, detail="Cannot delete an active/finished booking")
-    db.delete(booking)
+    before = audit_log_service.model_snapshot(booking)
+    booking.deleted_at = datetime.now(timezone.utc)
+    booking.deleted_by_user_id = context.user_id
     db.commit()
+    db.refresh(booking)
+    audit_log_service.safe_create_audit_log(
+        db,
+        hotel_id=context.hotel_id,
+        table_name="reservations",
+        record_id=booking.id,
+        action=AuditActionEnum.DELETE,
+        actor_user_id=context.user_id,
+        payload_before=before,
+        payload_after=audit_log_service.model_snapshot(booking),
+    )
     return {"deleted": True, "id": booking_id}

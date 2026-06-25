@@ -158,7 +158,12 @@ def delete_item(
     context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
 ):
     try:
-        delete_stock_item(db, hotel_id=context.hotel_id, item_id=item_id)
+        delete_stock_item(
+            db,
+            hotel_id=context.hotel_id,
+            item_id=item_id,
+            deleted_by_user_id=context.user_id,
+        )
     except StockError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     db.commit()
@@ -220,7 +225,12 @@ def delete_stock_location(
     context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
 ):
     try:
-        delete_location(db, hotel_id=context.hotel_id, location_id=location_id)
+        delete_location(
+            db,
+            hotel_id=context.hotel_id,
+            location_id=location_id,
+            deleted_by_user_id=context.user_id,
+        )
     except StockError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     db.commit()

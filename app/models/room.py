@@ -10,6 +10,7 @@ from sqlalchemy import (
     String,
     Float,
     Boolean,
+    DateTime,
     ForeignKey,
     Enum,
     Text,
@@ -85,6 +86,8 @@ class Room(Base):
     is_accessible = Column(Boolean, nullable=False, default=False)
     description = Column(Text, nullable=True)
     notes = Column(Text, nullable=True)
+    deleted_at = Column(DateTime, nullable=True)
+    deleted_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
 
     # Relationships
     category = relationship("RoomCategory", back_populates="rooms", lazy="joined")

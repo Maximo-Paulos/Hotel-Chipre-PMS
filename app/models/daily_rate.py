@@ -99,6 +99,10 @@ class PricePeriod(Base):
         nullable=False,
         default=lambda: datetime.now(timezone.utc),
     )
+    deleted_at = Column(DateTime, nullable=True)
+    deleted_by_user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
     __table_args__ = (
         Index("ix_price_period_hotel_cat", "hotel_id", "category_id"),

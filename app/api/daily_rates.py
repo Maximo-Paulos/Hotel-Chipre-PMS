@@ -174,6 +174,7 @@ def _resolve_source(
     if db.query(PricePeriod).filter(
         PricePeriod.hotel_id == hotel_id,
         PricePeriod.category_id == category_id,
+        PricePeriod.deleted_at.is_(None),
         PricePeriod.is_active == True,
         PricePeriod.start_date <= target_date,
         PricePeriod.end_date >= target_date,
@@ -444,7 +445,10 @@ def list_price_periods(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_roles(*_READ_ROLES)),
 ):
-    q = db.query(PricePeriod).filter(PricePeriod.hotel_id == context.hotel_id)
+    q = db.query(PricePeriod).filter(
+        PricePeriod.hotel_id == context.hotel_id,
+        PricePeriod.deleted_at.is_(None),
+    )
     if category_id is not None:
         q = q.filter(PricePeriod.category_id == category_id)
     if active_only:
@@ -505,7 +509,11 @@ def update_price_period(
 ):
     period = (
         db.query(PricePeriod)
-        .filter(PricePeriod.id == period_id, PricePeriod.hotel_id == context.hotel_id)
+        .filter(
+            PricePeriod.id == period_id,
+            PricePeriod.hotel_id == context.hotel_id,
+            PricePeriod.deleted_at.is_(None),
+        )
         .first()
     )
     if not period:
@@ -557,23 +565,29 @@ def delete_price_period(
 ):
     period = (
         db.query(PricePeriod)
-        .filter(PricePeriod.id == period_id, PricePeriod.hotel_id == context.hotel_id)
+        .filter(
+            PricePeriod.id == period_id,
+            PricePeriod.hotel_id == context.hotel_id,
+            PricePeriod.deleted_at.is_(None),
+        )
         .first()
     )
     if not period:
         raise HTTPException(status_code=404, detail="Price period not found")
     before = audit_log_service.model_snapshot(period)
-    period_record_id = period.id
-    db.delete(period)
+    period.deleted_at = datetime.now(timezone.utc)
+    period.deleted_by_user_id = context.user_id
     db.commit()
+    db.refresh(period)
     audit_log_service.safe_create_audit_log(
         db,
         hotel_id=context.hotel_id,
         table_name="price_periods",
-        record_id=period_record_id,
+        record_id=period.id,
         action=AuditActionEnum.DELETE,
         actor_user_id=context.user_id,
         payload_before=before,
+        payload_after=audit_log_service.model_snapshot(period),
     )
 
 
@@ -589,7 +603,11 @@ def apply_period_to_daily_rates(
 ):
     period = (
         db.query(PricePeriod)
-        .filter(PricePeriod.id == period_id, PricePeriod.hotel_id == context.hotel_id)
+        .filter(
+            PricePeriod.id == period_id,
+            PricePeriod.hotel_id == context.hotel_id,
+            PricePeriod.deleted_at.is_(None),
+        )
         .first()
     )
     if not period:

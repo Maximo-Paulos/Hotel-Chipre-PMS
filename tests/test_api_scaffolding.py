@@ -16,6 +16,7 @@ from app.models.guest import Guest, DocumentTypeEnum
 from app.models.hotel_config import HotelConfiguration
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.reservation import Reservation, ReservationStatusEnum
+from app.models.user import User
 
 
 @pytest.fixture
@@ -66,7 +67,9 @@ def api_client(monkeypatch: pytest.MonkeyPatch):
         with SessionLocal() as db:
             if not db.get(HotelConfiguration, 1):
                 db.add(HotelConfiguration(id=1, owner_email="owner@test.com", subscription_active=True))
-                db.commit()
+            if not db.get(User, 1):
+                db.add(User(id=1, email="owner@test.com", password_hash="test-hash", is_active=True, is_verified=True))
+            db.commit()
         yield client, SessionLocal
 
     main_module.app.dependency_overrides.clear()
@@ -113,6 +116,12 @@ def test_rooms_crud_smoke(api_client):
     list_resp = client.get("/api/rooms/")
     assert list_resp.status_code == 200
     assert list_resp.json() == []
+    get_resp = client.get(f"/api/rooms/{room_id}")
+    assert get_resp.status_code == 404
+    with SessionLocal() as db:
+        room = db.get(Room, room_id)
+        assert room is not None
+        assert room.deleted_at is not None
 
 
 def test_room_status_and_category_fetch(api_client):
@@ -198,6 +207,12 @@ def test_bookings_basic_flow(api_client):
     listing_after = client.get("/api/bookings/")
     assert listing_after.status_code == 200
     assert listing_after.json() == []
+    get_after = client.get(f"/api/bookings/{booking_id}")
+    assert get_after.status_code == 404
+    with SessionLocal() as db:
+        booking = db.get(Reservation, booking_id)
+        assert booking is not None
+        assert booking.deleted_at is not None
 
 
 def test_booking_status_and_overlap(api_client):

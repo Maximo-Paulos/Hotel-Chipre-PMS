@@ -18,7 +18,11 @@ class CompanyDocumentError(Exception):
 def _get_reservation(db: Session, *, hotel_id: int, reservation_id: int) -> Reservation:
     reservation = (
         db.query(Reservation)
-        .filter(Reservation.id == reservation_id, Reservation.hotel_id == hotel_id)
+        .filter(
+            Reservation.id == reservation_id,
+            Reservation.hotel_id == hotel_id,
+            Reservation.deleted_at.is_(None),
+        )
         .first()
     )
     if reservation is None:
@@ -84,7 +88,11 @@ def set_signature_status(
 ) -> CompanyDocument:
     document = (
         db.query(CompanyDocument)
-        .filter(CompanyDocument.id == document_id, CompanyDocument.hotel_id == hotel_id)
+        .filter(
+            CompanyDocument.id == document_id,
+            CompanyDocument.hotel_id == hotel_id,
+            CompanyDocument.deleted_at.is_(None),
+        )
         .first()
     )
     if document is None:
@@ -131,7 +139,11 @@ def set_signature_status(
 def list_documents_for_company(db: Session, *, hotel_id: int, company_id: int) -> list[CompanyDocument]:
     return (
         db.query(CompanyDocument)
-        .filter(CompanyDocument.hotel_id == hotel_id, CompanyDocument.company_id == company_id)
+        .filter(
+            CompanyDocument.hotel_id == hotel_id,
+            CompanyDocument.company_id == company_id,
+            CompanyDocument.deleted_at.is_(None),
+        )
         .order_by(CompanyDocument.created_at.desc(), CompanyDocument.id.desc())
         .all()
     )
@@ -140,7 +152,11 @@ def list_documents_for_company(db: Session, *, hotel_id: int, company_id: int) -
 def list_documents_for_reservation(db: Session, *, hotel_id: int, reservation_id: int) -> list[CompanyDocument]:
     return (
         db.query(CompanyDocument)
-        .filter(CompanyDocument.hotel_id == hotel_id, CompanyDocument.reservation_id == reservation_id)
+        .filter(
+            CompanyDocument.hotel_id == hotel_id,
+            CompanyDocument.reservation_id == reservation_id,
+            CompanyDocument.deleted_at.is_(None),
+        )
         .order_by(CompanyDocument.created_at.desc(), CompanyDocument.id.desc())
         .all()
     )

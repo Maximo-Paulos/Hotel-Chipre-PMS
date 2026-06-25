@@ -71,6 +71,7 @@ def get_price_for_date(
         .filter(
             PricePeriod.hotel_id == hotel_id,
             PricePeriod.category_id == category_id,
+            PricePeriod.deleted_at.is_(None),
             PricePeriod.is_active == True,
             PricePeriod.start_date <= target_date,
             PricePeriod.end_date >= target_date,
@@ -163,6 +164,7 @@ def apply_price_period(
             PricePeriod.id == period_id,
             PricePeriod.hotel_id == hotel_id,
             PricePeriod.category_id == category_id,
+            PricePeriod.deleted_at.is_(None),
         )
         .first()
     )

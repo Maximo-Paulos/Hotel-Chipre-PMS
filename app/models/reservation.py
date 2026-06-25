@@ -271,6 +271,8 @@ class Reservation(Base):
         onupdate=lambda: datetime.now(timezone.utc),
     )
     # Optimistic locking — increment on every update; reject if version mismatch (v72 security-audit §6)
+    deleted_at = Column(DateTime, nullable=True)
+    deleted_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     version = Column(Integer, nullable=False, default=0)
 
     # Relationships
