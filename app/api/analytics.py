@@ -58,6 +58,7 @@ from app.services.analytics_insights import (
     get_analytics_ai_status,
 )
 from app.models.analytics import AnalyticsExportStatusEnum
+from app.services.read_model_cache import get_cached_home_payload, get_cached_starter_summary_payload
 
 
 router = APIRouter(prefix="/api/analytics", tags=["Analytics"])
@@ -87,7 +88,17 @@ def starter_summary(
     context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
 ):
     require_analytics_plan(db, context.hotel_id, "starter")
-    return build_starter_summary_payload(db, hotel_id=context.hotel_id, date_from=date_from, date_to=date_to)
+    return get_cached_starter_summary_payload(
+        hotel_id=context.hotel_id,
+        date_from=date_from,
+        date_to=date_to,
+        producer=lambda: build_starter_summary_payload(
+            db,
+            hotel_id=context.hotel_id,
+            date_from=date_from,
+            date_to=date_to,
+        ),
+    )
 
 
 @router.get("/home", response_model=AnalyticsResponseEnvelopeRead)
@@ -101,14 +112,22 @@ def analytics_home(
     context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
 ):
     require_analytics_plan(db, context.hotel_id, "pro")
-    return build_home_payload(
-        db,
+    return get_cached_home_payload(
         hotel_id=context.hotel_id,
         date_from=date_from,
         date_to=date_to,
+        currency_display=currency_display,
         compare_previous=compare_previous,
         compare_yoy=compare_yoy,
-        currency_display=currency_display,
+        producer=lambda: build_home_payload(
+            db,
+            hotel_id=context.hotel_id,
+            date_from=date_from,
+            date_to=date_to,
+            compare_previous=compare_previous,
+            compare_yoy=compare_yoy,
+            currency_display=currency_display,
+        ),
     )
 
 

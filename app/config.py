@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379/0"
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/1"
+    READ_MODEL_CACHE_ENABLED: bool = True
+    READ_MODEL_AVAILABILITY_TTL_SECONDS: int = 15
+    READ_MODEL_ANALYTICS_TTL_SECONDS: int = 60
 
     # MercadoPago
     MP_ACCESS_TOKEN: str = ""
@@ -37,6 +40,7 @@ class Settings(BaseSettings):
     PAYPAL_CLIENT_ID: str = ""
     PAYPAL_CLIENT_SECRET: str = ""
     PAYPAL_MODE: str = "sandbox"  # "sandbox" or "live"
+    PAYPAL_WEBHOOK_ID: str = ""
 
     # OAuth client IDs for connections
     MERCADOPAGO_CLIENT_ID: str = ""
