@@ -43,7 +43,7 @@ def upgrade() -> None:
             nullable=False,
             server_default=sa.text("CURRENT_TIMESTAMP"),
         ),
-        sa.UniqueConstraint("hotel_id", "payment_method", name="uq_surcharge_hotel_method"),
+        sa.UniqueConstraint("hotel_id", "payment_method", name="uq_payment_surcharges_hotel_method"),
     )
 
 

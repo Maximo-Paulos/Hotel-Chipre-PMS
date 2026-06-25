@@ -54,5 +54,5 @@ class PaymentSurcharge(Base):
     created_at = Column(DateTime(timezone=True), nullable=False, default=_utcnow)
 
     __table_args__ = (
-        UniqueConstraint("hotel_id", "payment_method", name="uq_surcharge_hotel_method"),
+        UniqueConstraint("hotel_id", "payment_method", name="uq_payment_surcharges_hotel_method"),
     )
