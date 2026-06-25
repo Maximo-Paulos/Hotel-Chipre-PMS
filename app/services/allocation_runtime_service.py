@@ -135,12 +135,14 @@ def run_persisted_allocation(
             was_moved=reservation_id in solver_result.moved_reservations,
         )
 
+    review_reservations: list[Reservation] = []
     for reservation_id in solver_result.unassigned_reservations:
         reservation = db.get(Reservation, reservation_id)
         if reservation is None:
             continue
         reservation.allocation_status = "manual_review"
         reservation.requires_manual_review = True
+        review_reservations.append(reservation)
         _create_unassigned_explanation(
             db,
             hotel_id=hotel_id,
@@ -213,6 +215,19 @@ def run_persisted_allocation(
         ]
     )
     db.flush()
+
+    # §13.3 review routing: reviews that affect a reservation active today get an
+    # immediate alert; future reviews wait for the morning report. Best-effort —
+    # any failure here must never abort the allocation run.
+    if review_reservations:
+        try:
+            from app.services.operational_report_service import route_manual_review
+
+            for reservation in review_reservations:
+                route_manual_review(db, reservation)
+        except Exception:  # pragma: no cover - defensive guard
+            pass
+
     return PersistedAllocationResult(run=allocation_run, solver_result=solver_result)
 
 

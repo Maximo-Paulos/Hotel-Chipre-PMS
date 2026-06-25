@@ -8,6 +8,8 @@ from typing import Iterable
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
+import logging
+
 from app.models.cash_register import CashSession, CashSessionStatusEnum
 from app.models.hotel_config import HotelConfiguration
 from app.models.reservation import Reservation, ReservationStatusEnum
@@ -23,6 +25,9 @@ from app.schemas.reports import (
     OperationalReservationGroup,
     OperationalReservationSummary,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 ACTIVE_RESERVATION_STATUSES = (
@@ -301,6 +306,63 @@ def operational_report_recipients(db: Session, hotel_id: int) -> list[str]:
     return sorted(set(recipients))
 
 
+def daily_report_email_body(report: DailyOperationalReportRead) -> str:
+    lines = [
+        f"Daily operational report for hotel {report.hotel_id}",
+        f"Date: {report.report_date.isoformat()}",
+        "",
+        f"Arrivals: {report.arrivals.count}",
+        f"Departures: {report.departures.count}",
+        f"Pending payments: {report.pending_payments.count}",
+        f"Late arrivals: {len(report.late_arrivals)}",
+        f"Available with review: {len(report.available_with_review)}",
+        f"Active room blocks: {len(report.active_room_blocks)}",
+        f"Cash session: {report.cash_session.status}",
+    ]
+    if report.available_with_review:
+        lines.append("")
+        lines.append("Reservations available with review")
+        for item in report.available_with_review:
+            lines.append(
+                f"- {item.confirmation_code} (room {item.room_number or item.room_id}) "
+                f"check-in {item.check_in_date.isoformat()}"
+            )
+    if report.alerts:
+        lines.append("")
+        lines.append("Alerts")
+        for alert in report.alerts:
+            lines.append(f"- [{alert.severity}] {alert.code}: {alert.message}")
+    return "\n".join(lines)
+
+
+def manual_review_alert_body(reservation: Reservation, report_date: date) -> str:
+    room = reservation.room
+    return "\n".join(
+        [
+            f"Immediate review required for reservation {reservation.confirmation_code}",
+            f"Hotel: {reservation.hotel_id}",
+            f"Room: {room.room_number if room else reservation.room_id}",
+            f"Check-in: {reservation.check_in_date.isoformat()}",
+            f"Check-out: {reservation.check_out_date.isoformat()}",
+            f"Allocation status: {reservation.allocation_status}",
+            "",
+            (
+                "This reservation is active today and could not be cleanly allocated. "
+                "Please review the room assignment manually."
+            ),
+        ]
+    )
+
+
+def is_review_for_today(reservation: Reservation, today: date) -> bool:
+    """A review is 'for today' when the stay is active on `today`.
+
+    §13.3: reviews affecting a reservation checking in today or already in-house
+    today trigger an immediate alert; future reviews wait for the morning report.
+    """
+    return reservation.check_in_date <= today < reservation.check_out_date
+
+
 def nightly_summary_email_body(summary: NightlyOperationalSummaryRead) -> str:
     lines = [
         f"Nightly operational summary for hotel {summary.hotel_id}",
@@ -319,3 +381,63 @@ def nightly_summary_email_body(summary: NightlyOperationalSummaryRead) -> str:
         for alert in summary.alerts:
             lines.append(f"- [{alert.severity}] {alert.code}: {alert.message}")
     return "\n".join(lines)
+
+
+def route_manual_review(db: Session, reservation: Reservation, *, today: date | None = None) -> bool:
+    """§13.3 review routing.
+
+    If the reservation under manual review is active *today*, dispatch an
+    immediate alert email to the hotel's configured recipients. Future reviews
+    are intentionally left for the morning report (which surfaces them via
+    ``_available_with_review``) and this function is a no-op for them.
+
+    Fully best-effort: any failure (no recipients, email error, etc.) is
+    swallowed so the calling allocation flow is never aborted.
+
+    Returns True only when an immediate alert was actually sent.
+    """
+    # Imported lazily to avoid import cycles and to keep the email dependency
+    # optional in environments where Gmail is not configured.
+    from app.services.hotel_outbound_email_service import (
+        HotelOutboundEmailError,
+        send_hotel_email,
+    )
+
+    try:
+        if today is None:
+            today = date.today()
+        if not is_review_for_today(reservation, today):
+            return False
+        recipients = operational_report_recipients(db, reservation.hotel_id)
+        if not recipients:
+            logger.info(
+                "route_manual_review: no recipients for hotel %s, reservation %s; "
+                "deferring to morning report",
+                reservation.hotel_id,
+                reservation.id,
+            )
+            return False
+        send_hotel_email(
+            db,
+            reservation.hotel_id,
+            to=recipients,
+            subject=(
+                f"Immediate review required - reservation {reservation.confirmation_code}"
+            ),
+            body=manual_review_alert_body(reservation, today),
+        )
+        return True
+    except HotelOutboundEmailError as exc:
+        logger.warning(
+            "route_manual_review: email delivery failed for reservation %s: %s",
+            getattr(reservation, "id", None),
+            exc,
+        )
+        return False
+    except Exception as exc:  # defensive: never break the allocation flow
+        logger.warning(
+            "route_manual_review: unexpected failure for reservation %s: %s",
+            getattr(reservation, "id", None),
+            exc,
+        )
+        return False
