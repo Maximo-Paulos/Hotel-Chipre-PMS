@@ -100,7 +100,6 @@ from app.models.cash_register import (
     CashMovementTypeEnum,
 )
 from app.models.waitlist import WaitlistEntry, WaitlistStatusEnum
-from app.models.payment_config import PaymentSurchargeConfig
 from app.models.hotel_api_key import HotelAPIKey, APIKeyPurposeEnum
 from app.models.room_block import RoomBlock, RoomBlockReasonEnum
 from app.models.fx_rate_snapshot import FxRateSnapshot
@@ -247,7 +246,6 @@ __all__ = [
     "CashMovementTypeEnum",
     "WaitlistEntry",
     "WaitlistStatusEnum",
-    "PaymentSurchargeConfig",
     "HotelAPIKey",
     "APIKeyPurposeEnum",
     "RoomBlock",

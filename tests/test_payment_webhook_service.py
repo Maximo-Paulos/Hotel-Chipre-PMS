@@ -102,6 +102,73 @@ def test_completed_gateway_payment_creates_one_transaction(db):
     assert link.last_payment_at is not None
 
 
+def test_duplicate_same_webhook_is_idempotent_no_double_transaction(db):
+    """Re-delivering the SAME webhook must not create a 2nd transaction nor raise.
+
+    Exercises the §12 race fix: the event INSERT now lives inside begin_nested(),
+    and the Transaction is inserted with idempotency_key already set so a duplicate
+    collides on the unique index and is resolved as a replay.
+    """
+    reservation = _reservation(db)
+    link = _link(db, reservation)
+    payload = {
+        "webhook_id": "mp-hook-dup",
+        "payment_id": "mp-payment-dup",
+        "status": "approved",
+        "amount": "100.00",
+        "currency": "ARS",
+    }
+
+    first = ingest_webhook(db, hotel_id=1, provider="mercado_pago", webhook_id="mp-hook-dup", payload=payload, payment_link_id=link.id)
+    # Exact same webhook re-delivered (replay) -> must be idempotent, never 500.
+    second = ingest_webhook(db, hotel_id=1, provider="mercado_pago", webhook_id="mp-hook-dup", payload=payload, payment_link_id=link.id)
+
+    assert first["duplicate"] is False
+    assert second["duplicate"] is True
+    assert second["event_id"] == first["event_id"]
+    assert db.query(PaymentWebhookEvent).count() == 1
+    assert db.query(Payment).count() == 1
+    txs = db.query(Transaction).all()
+    assert len(txs) == 1
+    assert txs[0].status == TransactionStatusEnum.COMPLETED
+    assert txs[0].idempotency_key == "mercado_pago:mp-payment-dup:completed"
+
+
+def test_process_payment_replays_on_duplicate_idempotency_key(db):
+    """Two distinct webhooks for the same completed payment id -> one transaction.
+
+    Simulates concurrent/duplicate delivery hitting process_payment directly with
+    the same idempotency_key: the 2nd insert collides on the unique index inside the
+    savepoint and process_payment returns the EXISTING transaction (replay), not a 500.
+    """
+    from app.schemas.transaction import PaymentRequest, PaymentGatewayResponse
+    from app.models.transaction import PaymentMethodEnum, TransactionTypeEnum
+    from app.services.payment_service import process_payment
+
+    reservation = _reservation(db, hotel_id=2)
+    key = "mercado_pago:dup-key:completed"
+
+    def _request():
+        return PaymentRequest(
+            reservation_id=reservation.id,
+            amount=100.0,
+            payment_method=PaymentMethodEnum.MERCADO_PAGO,
+            transaction_type=TransactionTypeEnum.PARTIAL_PAYMENT,
+            currency="ARS",
+            description="dup",
+        )
+
+    gw = PaymentGatewayResponse(success=True, external_payment_id="dup-key", external_status="approved")
+
+    tx1 = process_payment(db, _request(), hotel_id=2, gateway_response=gw, idempotency_key=key)
+    db.flush()
+    tx2 = process_payment(db, _request(), hotel_id=2, gateway_response=gw, idempotency_key=key)
+    db.flush()
+
+    assert tx1.id == tx2.id
+    assert db.query(Transaction).filter(Transaction.idempotency_key == key).count() == 1
+
+
 def test_balance_due_uses_transactions_not_payments(db):
     reservation = _reservation(db)
     link = _link(db, reservation)

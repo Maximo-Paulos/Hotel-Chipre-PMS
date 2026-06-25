@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.payment_surcharge import PaymentSurcharge, PaymentSurchargeTypeEnum
@@ -191,6 +192,7 @@ def process_payment(
     request: PaymentRequest,
     hotel_id: Optional[int] = None,
     gateway_response: Optional[PaymentGatewayResponse] = None,
+    idempotency_key: Optional[str] = None,
 ) -> Transaction:
     """
     Process a payment for a reservation.
@@ -293,6 +295,10 @@ def process_payment(
         external_status = gateway_response.external_status
         raw_response = gateway_response.gateway_response
 
+    # idempotency_key is set AT CONSTRUCTION (before the INSERT) so a concurrent
+    # duplicate delivery collides on the partial unique index
+    # (hotel_id, reservation_id, idempotency_key) during the flush itself, rather
+    # than leaving a race window where the key is assigned after the row is visible.
     transaction = Transaction(
         hotel_id=resolved_hotel_id,
         reservation_id=request.reservation_id,
@@ -308,9 +314,32 @@ def process_payment(
         gateway_response=raw_response,
         description=request.description,
         processed_at=processed_at,
+        idempotency_key=idempotency_key,
     )
-    db.add(transaction)
-    db.flush()
+    if idempotency_key is not None:
+        # Savepoint: if a concurrent delivery already inserted this key, the unique
+        # index raises IntegrityError here; roll back ONLY this insert and replay the
+        # existing transaction (idempotent), never poisoning the outer transaction.
+        try:
+            with db.begin_nested():
+                db.add(transaction)
+                db.flush()
+        except IntegrityError:
+            existing = (
+                db.query(Transaction)
+                .filter(
+                    Transaction.hotel_id == resolved_hotel_id,
+                    Transaction.reservation_id == request.reservation_id,
+                    Transaction.idempotency_key == idempotency_key,
+                )
+                .first()
+            )
+            if existing is not None:
+                return existing
+            raise
+    else:
+        db.add(transaction)
+        db.flush()
 
     # 5. If completed, update reservation financial state
     if tx_status == TransactionStatusEnum.COMPLETED:

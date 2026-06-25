@@ -121,11 +121,14 @@ def _insert_event(
         raw_payload=payload,
         processed=False,
     )
-    db.add(event)
     try:
         # Savepoint so a concurrent-insert IntegrityError rolls back ONLY this event,
         # never the outer transaction (which holds the already-created Payment).
+        # The db.add() MUST happen inside begin_nested() so the pending INSERT is
+        # owned by the savepoint; otherwise an autoflush could emit it outside the
+        # savepoint and a concurrent duplicate would poison the outer transaction.
         with db.begin_nested():
+            db.add(event)
             db.flush()
     except IntegrityError:
         existing = _find_existing_event(db, hotel_id, provider, webhook_id)
@@ -159,7 +162,11 @@ def _ensure_completed_transaction(db: Session, payment: Payment, provider: str, 
         payment_method=payment_method,
         final_amount=_money(payment.amount),
     )
-    tx = process_payment(
+    # Pass idempotency_key into process_payment so the Transaction is INSERTED with
+    # the key already set. A concurrent duplicate delivery then collides on the unique
+    # index inside process_payment's savepoint and is resolved as a replay (no 2nd row,
+    # no 500) instead of leaving a race window where the key is assigned post-insert.
+    process_payment(
         db,
         PaymentRequest(
             reservation_id=payment.reservation_id,
@@ -176,8 +183,8 @@ def _ensure_completed_transaction(db: Session, payment: Payment, provider: str, 
             external_status=payment.status,
             gateway_response=json.dumps(payload, sort_keys=True, default=str),
         ),
+        idempotency_key=idempotency_key,
     )
-    tx.idempotency_key = idempotency_key
     db.flush()
 
 

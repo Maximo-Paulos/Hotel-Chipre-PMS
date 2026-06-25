@@ -36,7 +36,6 @@ from app.models.guest import GuestTag, GuestTagTypeEnum, GuestRatingEnum
 from app.models.room import Room
 from app.models.cash_register import CashSession, CashMovement, CashCloseReport, CashSessionStatusEnum, CashMovementTypeEnum
 from app.models.waitlist import WaitlistEntry, WaitlistStatusEnum
-from app.models.payment_config import PaymentSurchargeConfig
 from app.models.hotel_api_key import HotelAPIKey, APIKeyPurposeEnum
 from app.models.room_block import RoomBlock, RoomBlockReasonEnum
 from app.models.company import Company
@@ -659,47 +658,6 @@ def test_waitlist_entry_persists(db):
     saved = db.get(WaitlistEntry, entry.id)
     assert saved.status == WaitlistStatusEnum.WAITING
     assert saved.priority == 100
-
-
-# ---------------------------------------------------------------------------
-# v72 gaps phase 1 — payment surcharge config
-# ---------------------------------------------------------------------------
-
-def test_payment_surcharge_config_persists(db):
-    hotel = HotelConfiguration(id=750, hotel_name="H750", subscription_active=True)
-    db.add(hotel)
-    db.flush()
-    from app.models.transaction import PaymentMethodEnum
-    cfg = PaymentSurchargeConfig(
-        hotel_id=750, payment_method=PaymentMethodEnum.MERCADO_PAGO,
-        surcharge_pct="0.0350", is_active=True,
-        created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc),
-    )
-    db.add(cfg)
-    db.commit()
-    saved = db.get(PaymentSurchargeConfig, cfg.id)
-    assert float(saved.surcharge_pct) == pytest.approx(0.035)
-
-
-def test_payment_surcharge_unique_per_method(db):
-    hotel = HotelConfiguration(id=751, hotel_name="H751", subscription_active=True)
-    db.add(hotel)
-    db.flush()
-    from app.models.transaction import PaymentMethodEnum
-    from sqlalchemy.exc import IntegrityError
-    db.add(PaymentSurchargeConfig(
-        hotel_id=751, payment_method=PaymentMethodEnum.CASH,
-        surcharge_pct=None, surcharge_fixed="0",
-        created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc),
-    ))
-    db.commit()
-    db.add(PaymentSurchargeConfig(
-        hotel_id=751, payment_method=PaymentMethodEnum.CASH,
-        surcharge_pct=None, surcharge_fixed="0",
-        created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc),
-    ))
-    with pytest.raises(IntegrityError):
-        db.flush()
 
 
 # ---------------------------------------------------------------------------
