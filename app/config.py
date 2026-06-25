@@ -32,6 +32,19 @@ class Settings(BaseSettings):
     READ_MODEL_AVAILABILITY_TTL_SECONDS: int = 15
     READ_MODEL_ANALYTICS_TTL_SECONDS: int = 60
 
+    # NoSQL datastore foundations. Disabled by default; Postgres remains the
+    # transactional source of truth.
+    MONGO_URL: str = "mongodb://localhost:27017"
+    MONGO_DB: str = "hotel_pms"
+    MONGO_ENABLED: bool = False
+    CASSANDRA_HOSTS: str = "localhost"
+    CASSANDRA_KEYSPACE: str = "hotel_pms"
+    CASSANDRA_ENABLED: bool = False
+    NEO4J_URI: str = "bolt://localhost:7687"
+    NEO4J_USER: str = "neo4j"
+    NEO4J_PASSWORD: str = "neo4j"
+    NEO4J_ENABLED: bool = False
+
     # MercadoPago
     MP_ACCESS_TOKEN: str = ""
     MP_PUBLIC_KEY: str = ""

@@ -67,6 +67,7 @@ from app.api import (
     cash_register,
     movement_groups,
     room_movement_groups,
+    health,
 )
 import app.master_admin.models  # noqa: F401
 from app.master_admin.router import router as master_admin_router
@@ -185,6 +186,7 @@ app.include_router(cash_register.router)
 app.include_router(movement_groups.router)
 app.include_router(room_movement_groups.router)
 app.include_router(master_admin_router)
+app.include_router(health.router)
 
 # Frontend build paths
 BASE_DIR = Path(__file__).resolve().parent
