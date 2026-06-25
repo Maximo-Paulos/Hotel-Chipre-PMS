@@ -164,6 +164,7 @@ def _resolve_source(
 ) -> str:
     from app.models.daily_rate import DailyRate, PricePeriod
     from app.models.pricing import CategoryPricing
+    from app.models.room import RoomCategory
 
     if db.query(DailyRate).filter(
         DailyRate.hotel_id == hotel_id,
@@ -180,8 +181,11 @@ def _resolve_source(
         PricePeriod.end_date >= target_date,
     ).first():
         return "price_period"
-    if db.query(CategoryPricing).filter(
+    if db.query(CategoryPricing).join(
+        RoomCategory, RoomCategory.id == CategoryPricing.category_id
+    ).filter(
         CategoryPricing.category_id == category_id,
+        RoomCategory.hotel_id == hotel_id,
     ).first():
         return "category_pricing"
     return "none"

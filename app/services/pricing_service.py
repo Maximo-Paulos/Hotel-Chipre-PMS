@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 
 from app.models.daily_rate import DailyRate, PricePeriod
 from app.models.pricing import CategoryPricing
+from app.models.room import RoomCategory
 
 # Payment method column names on DailyRate / CategoryPricing
 _METHOD_COLS: dict[str, str] = {
@@ -85,7 +86,8 @@ def get_price_for_date(
     # 3. CategoryPricing flat fallback
     cat_pricing: Optional[CategoryPricing] = (
         db.query(CategoryPricing)
-        .filter(CategoryPricing.category_id == category_id)
+        .join(RoomCategory, RoomCategory.id == CategoryPricing.category_id)
+        .filter(CategoryPricing.category_id == category_id, RoomCategory.hotel_id == hotel_id)
         .first()
     )
     if cat_pricing is not None:

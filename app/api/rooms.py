@@ -178,7 +178,12 @@ def update_category_pricing(
     )
     if not category:
         raise HTTPException(status_code=404, detail="Category not found")
-    pricing = db.query(CategoryPricing).filter(CategoryPricing.category_id == category_id).first()
+    pricing = (
+        db.query(CategoryPricing)
+        .join(RoomCategory, RoomCategory.id == CategoryPricing.category_id)
+        .filter(CategoryPricing.category_id == category_id, RoomCategory.hotel_id == context.hotel_id)
+        .first()
+    )
     if not pricing:
         pricing = CategoryPricing(category_id=category_id)
         db.add(pricing)

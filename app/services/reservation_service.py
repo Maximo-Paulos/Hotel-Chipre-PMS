@@ -148,7 +148,10 @@ def calculate_reservation_pricing(
     target_currency: str | None = None,
     occupancy: int | None = None,
 ) -> ReservationPricingResult:
-    category = db.query(RoomCategory).filter(RoomCategory.id == category_id).first()
+    category_query = db.query(RoomCategory).filter(RoomCategory.id == category_id)
+    if hotel_id is not None:
+        category_query = category_query.filter(RoomCategory.hotel_id == hotel_id)
+    category = category_query.first()
     if not category:
         raise ReservationError(f"Room category with id={category_id} not found")
 
@@ -328,7 +331,10 @@ def check_room_availability(
     Check if a specific room is available for the given date range.
     A room is unavailable if there is ANY overlapping active reservation.
     """
-    room = db.query(Room).filter(Room.id == room_id).first()
+    room_query = db.query(Room).filter(Room.id == room_id)
+    if hotel_id is not None:
+        room_query = room_query.filter(Room.hotel_id == hotel_id)
+    room = room_query.first()
     if not room:
         raise ReservationError(f"Room with id={room_id} not found")
 
@@ -368,7 +374,10 @@ def find_available_rooms(
     Find all rooms of a given category that are available in the date range.
     Only considers rooms that are active and not in maintenance/blocked.
     """
-    category = db.query(RoomCategory).filter(RoomCategory.id == category_id).first()
+    category_query = db.query(RoomCategory).filter(RoomCategory.id == category_id)
+    if hotel_id is not None:
+        category_query = category_query.filter(RoomCategory.hotel_id == hotel_id)
+    category = category_query.first()
     if not category:
         raise ReservationError(f"Room category with id={category_id} not found")
 
@@ -412,15 +421,23 @@ def create_reservation(db: Session, data: ReservationCreate, hotel_id: Optional[
 
     Uses SELECT ... FOR UPDATE to prevent race conditions on room assignment.
     """
-    guest = db.query(Guest).filter(Guest.id == data.guest_id).first()
-    if not guest:
-        raise ReservationError(f"Guest with id={data.guest_id} not found")
-
-    category = db.query(RoomCategory).filter(RoomCategory.id == data.category_id).first()
+    category_query = db.query(RoomCategory).filter(RoomCategory.id == data.category_id)
+    if hotel_id is not None:
+        category_query = category_query.filter(RoomCategory.hotel_id == hotel_id)
+    category = category_query.first()
     if not category:
         raise ReservationError(f"Room category with id={data.category_id} not found")
 
     hotel_id = _resolve_hotel_id(hotel_id, category)
+
+    guest = (
+        db.query(Guest)
+        .filter(Guest.id == data.guest_id, Guest.hotel_id == hotel_id)
+        .first()
+    )
+    if not guest:
+        raise ReservationError(f"Guest with id={data.guest_id} not found")
+
     if guest.hotel_id != hotel_id:
         raise ReservationError("Guest does not belong to the active hotel")
     if category.hotel_id != hotel_id:

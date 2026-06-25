@@ -500,7 +500,10 @@ def apply_allocation_result(
     updated = []
     pending_moves: list[tuple[Reservation, int, int | None]] = []
     for reservation_id, room_id in result.assignments.items():
-        reservation = db.query(Reservation).filter(Reservation.id == reservation_id).first()
+        reservation_query = db.query(Reservation).filter(Reservation.id == reservation_id)
+        if hotel_id is not None:
+            reservation_query = reservation_query.filter(Reservation.hotel_id == hotel_id)
+        reservation = reservation_query.first()
         if reservation and (hotel_id is None or getattr(reservation, "hotel_id", None) == hotel_id):
             previous_room_id = reservation.room_id
             if previous_room_id != room_id:
@@ -571,6 +574,7 @@ def build_slots_from_db(
     from app.models.allocation import ReservationAllocationLock
     from app.models.company import Company
     from app.services.room_block_service import blocked_room_ids_for_range
+    has_hotel_context = hotel_id is not None
 
     # Load active reservations in the window
     reservations_query = db.query(Reservation).filter(
@@ -581,7 +585,7 @@ def build_slots_from_db(
         Reservation.check_in_date < end_date,
         Reservation.check_out_date > start_date,
     )
-    if hotel_id is not None:
+    if has_hotel_context:
         reservations_query = reservations_query.filter(Reservation.hotel_id == hotel_id)
 
     reservation_rows = reservations_query.all()
@@ -605,7 +609,7 @@ def build_slots_from_db(
     protected_company_ids: set[int] = set()
     if company_ids:
         company_query = db.query(Company).filter(Company.id.in_(company_ids))
-        if hotel_id is not None:
+        if has_hotel_context:
             company_query = company_query.filter(Company.hotel_id == hotel_id)
         protected_company_ids = {
             company.id
@@ -617,12 +621,12 @@ def build_slots_from_db(
     from app.models.room import RoomCategory
     from app.models.commercial import ProductRoomCompatibility, SellableProduct
     all_cat_query = db.query(RoomCategory)
-    if hotel_id is not None:
+    if has_hotel_context:
         all_cat_query = all_cat_query.filter(RoomCategory.hotel_id == hotel_id)
     all_cat = all_cat_query.all()
     cat_map = {c.id: c for c in all_cat}
     compat_query = db.query(ProductRoomCompatibility).filter(ProductRoomCompatibility.allows_auto_assignment == True)
-    if hotel_id is not None:
+    if has_hotel_context:
         compat_query = compat_query.filter(ProductRoomCompatibility.hotel_id == hotel_id)
     compatibility_rows = compat_query.order_by(ProductRoomCompatibility.priority.asc()).all()
     allow_category_fallback = bool(policy_constraints.get("allow_category_fallback", True))
@@ -640,7 +644,7 @@ def build_slots_from_db(
     product_map: dict[int, SellableProduct] = {}
     if product_ids:
         product_query = db.query(SellableProduct).filter(SellableProduct.id.in_(product_ids))
-        if hotel_id is not None:
+        if has_hotel_context:
             product_query = product_query.filter(SellableProduct.hotel_id == hotel_id)
         product_map = {product.id: product for product in product_query.all()}
 
@@ -691,12 +695,12 @@ def build_slots_from_db(
         Room.is_active == True,
         Room.status.in_([RoomStatusEnum.AVAILABLE, RoomStatusEnum.OCCUPIED, RoomStatusEnum.CLEANING]),
     )
-    if hotel_id is not None:
+    if has_hotel_context:
         rooms_query = rooms_query.filter(Room.hotel_id == hotel_id)
     rooms = rooms_query.all()
     blocked_room_ids = (
         blocked_room_ids_for_range(db, hotel_id=hotel_id, start_date=start_date, end_date=end_date)
-        if hotel_id is not None
+        if has_hotel_context
         else set()
     )
 

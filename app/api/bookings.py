@@ -275,35 +275,39 @@ def update_booking(
 
     # Validate existing room still matches category
     if booking.room_id is not None and booking.category_id != new_category_id:
-        room = db.query(Room).filter(Room.id == booking.room_id).first()
+        room = (
+            db.query(Room)
+            .filter(Room.id == booking.room_id, Room.hotel_id == context.hotel_id)
+            .first()
+        )
         if room and room.category_id != new_category_id:
             raise HTTPException(status_code=400, detail="Existing room does not belong to the new category; change room first")
 
     # Handle room change
-        if "room_id" in data and data["room_id"] is not None:
-            room = (
-                db.query(Room)
-                .filter(
-                    Room.id == data["room_id"],
-                    Room.hotel_id == context.hotel_id,
-                    Room.deleted_at.is_(None),
-                )
-                .first()
+    if "room_id" in data and data["room_id"] is not None:
+        room = (
+            db.query(Room)
+            .filter(
+                Room.id == data["room_id"],
+                Room.hotel_id == context.hotel_id,
+                Room.deleted_at.is_(None),
             )
-            if not room:
-                raise HTTPException(status_code=400, detail="Room not found")
-            if room.category_id != new_category_id:
-                raise HTTPException(status_code=400, detail="Room does not belong to the booking category")
-            if not check_room_availability(
-                db,
-                room.id,
-                new_ci,
-                new_co,
-                hotel_id=context.hotel_id,
-                exclude_reservation_id=booking.id,
-            ):
-                raise HTTPException(status_code=400, detail="Room is not available for the requested dates")
-            booking.room_id = room.id
+            .first()
+        )
+        if not room:
+            raise HTTPException(status_code=400, detail="Room not found")
+        if room.category_id != new_category_id:
+            raise HTTPException(status_code=400, detail="Room does not belong to the booking category")
+        if not check_room_availability(
+            db,
+            room.id,
+            new_ci,
+            new_co,
+            hotel_id=context.hotel_id,
+            exclude_reservation_id=booking.id,
+        ):
+            raise HTTPException(status_code=400, detail="Room is not available for the requested dates")
+        booking.room_id = room.id
 
     # Validate current room availability with new dates
     if booking.room_id and not check_room_availability(
