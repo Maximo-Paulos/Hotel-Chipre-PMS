@@ -293,19 +293,25 @@ def test_extend_stay_blocked_when_room_occupied(db, sample_guest, sample_rooms):
         check_in=date(2027, 10, 5),
         check_out=date(2027, 10, 10),
         total_amount=500.0,
+        amount_paid=100.0,
+        status=ReservationStatusEnum.DEPOSIT_PAID,
     )
 
     # BRM §8.5: cannot extend into an occupied window.
-    with pytest.raises(ReservationOperationsError):
-        extend_reservation_stay(
-            db,
-            reservation=res1,
-            hotel_id=sample_guest.hotel_id,
-            new_checkout_date=date(2027, 10, 8),
-            client_version=res1.version or 0,
-            pricing_mode="same_rate",
-            payment_action="immediate_payment",
-        )
+    result = extend_reservation_stay(
+        db,
+        reservation=res1,
+        hotel_id=sample_guest.hotel_id,
+        new_checkout_date=date(2027, 10, 8),
+        client_version=res1.version or 0,
+        pricing_mode="original_average",
+        payment_action="immediate_payment",
+    )
+
+    assert result.success is False
+    assert result.conflicts
+    assert result.conflicts[0]["reason"] == "future_reservation_has_payment_or_deposit"
+    assert res1.check_out_date == date(2027, 10, 5)
 
 
 def test_extend_stay_blocked_for_zero_or_negative_days(db, sample_guest, sample_rooms):

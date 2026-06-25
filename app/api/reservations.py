@@ -662,6 +662,9 @@ def extend_stay(
             changed_by_user_id=context.user_id,
             notes=payload.notes,
         )
+        if not result.success:
+            db.rollback()
+            raise HTTPException(status_code=409, detail={"message": "Extension conflict could not be resolved", "conflicts": result.conflicts or []})
         db.commit()
         db.refresh(r)
         audit_log_service.safe_create_audit_log(

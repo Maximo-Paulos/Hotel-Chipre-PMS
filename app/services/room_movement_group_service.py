@@ -5,10 +5,12 @@ from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
+from app.models.audit_log import AuditActionEnum
 from app.models.operations import RoomMoveEvent, RoomMovementGroup
 from app.models.reservation import Reservation
 from app.models.room import Room
 from app.models.security_audit_log import SecurityAuditLog
+from app.services import audit_log_service
 
 
 class RoomMovementGroupError(Exception):
@@ -33,6 +35,76 @@ def list_groups(db: Session, *, hotel_id: int, limit: int = 50) -> list[RoomMove
         .limit(safe_limit)
         .all()
     )
+
+
+def create_grouped_room_move(
+    db: Session,
+    *,
+    hotel_id: int,
+    reservation: Reservation,
+    to_room: Room,
+    trigger_reason: str,
+    reason_code: str,
+    reason_note: str,
+    move_type,
+    trigger_event: str,
+    created_by_user_id: int | None = None,
+    group_notes: str | None = None,
+) -> tuple[RoomMovementGroup, RoomMoveEvent]:
+    if reservation.hotel_id != hotel_id or to_room.hotel_id != hotel_id:
+        raise RoomMovementGroupError("Reservation and destination room must belong to the active hotel")
+    if reservation.room_id is None:
+        raise RoomMovementGroupError("Reservation has no source room to move")
+
+    before = audit_log_service.model_snapshot(reservation)
+    from_room_id = reservation.room_id
+    state_before = f"room_id={from_room_id};category_id={reservation.category_id}"
+
+    group = RoomMovementGroup(
+        hotel_id=hotel_id,
+        trigger_reason=trigger_reason,
+        notes=group_notes or reason_note,
+        is_reverted=False,
+        created_by_user_id=created_by_user_id,
+    )
+    db.add(group)
+    db.flush()
+
+    reservation.room_id = to_room.id
+    reservation.category_id = to_room.category_id
+    reservation.allocation_locked = True
+    reservation.requires_manual_review = False
+    reservation.allocation_status = "assigned"
+
+    event = RoomMoveEvent(
+        hotel_id=hotel_id,
+        reservation_id=reservation.id,
+        movement_group_id=group.id,
+        from_room_id=from_room_id,
+        to_room_id=to_room.id,
+        move_type=move_type,
+        reason_code=reason_code,
+        reason_note=reason_note,
+        trigger_event=trigger_event,
+        state_before=state_before,
+        state_after=f"room_id={to_room.id};category_id={to_room.category_id}",
+        notes=reason_note,
+        created_by_user_id=created_by_user_id,
+    )
+    db.add(event)
+    db.flush()
+
+    audit_log_service.queue_audit_log(
+        db,
+        hotel_id=hotel_id,
+        table_name="reservations",
+        record_id=reservation.id,
+        action=AuditActionEnum.UPDATE,
+        actor_user_id=created_by_user_id,
+        payload_before=before,
+        payload_after=audit_log_service.model_snapshot(reservation),
+    )
+    return group, event
 
 
 def revert_group(

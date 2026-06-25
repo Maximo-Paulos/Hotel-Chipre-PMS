@@ -66,6 +66,31 @@ def create_audit_log(
     return audit_log
 
 
+def queue_audit_log(
+    db: Session,
+    *,
+    hotel_id: int,
+    table_name: str,
+    record_id: int,
+    action: AuditActionEnum | str,
+    actor_user_id: int | None = None,
+    payload_before: dict[str, Any] | str | None = None,
+    payload_after: dict[str, Any] | str | None = None,
+) -> AuditLog:
+    audit_action = action if isinstance(action, AuditActionEnum) else AuditActionEnum(action)
+    audit_log = AuditLog(
+        hotel_id=hotel_id,
+        table_name=table_name,
+        record_id=record_id,
+        action=audit_action,
+        actor_user_id=actor_user_id,
+        payload_before=payload_before if isinstance(payload_before, str) else payload_json(payload_before),
+        payload_after=payload_after if isinstance(payload_after, str) else payload_json(payload_after),
+    )
+    db.add(audit_log)
+    return audit_log
+
+
 def safe_create_audit_log(
     db: Session,
     *,
