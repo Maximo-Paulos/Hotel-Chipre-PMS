@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.database import Base
 from app.models.audit_log import AuditActionEnum, AuditLog
+from app.services.audit_projection import project_audit_to_mongo
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +45,21 @@ def _payload(state: dict[str, Any] | None) -> str | None:
     if not state:
         return None
     return json.dumps(state, sort_keys=True, default=_json_default)
+
+
+def _audit_projection_doc(audit_log: AuditLog) -> dict[str, Any]:
+    action = audit_log.action.value if isinstance(audit_log.action, AuditActionEnum) else str(audit_log.action)
+    timestamp = audit_log.created_at.isoformat() if audit_log.created_at else None
+    return {
+        "hotel_id": audit_log.hotel_id,
+        "table_name": audit_log.table_name,
+        "record_id": audit_log.record_id,
+        "action": action,
+        "actor_user_id": audit_log.actor_user_id,
+        "payload_before": audit_log.payload_before,
+        "payload_after": audit_log.payload_after,
+        "timestamp": timestamp,
+    }
 
 
 def _get_model_for_table(table_name: str) -> type[Any] | None:
@@ -180,18 +196,27 @@ def audited_change(table_name: str, action: AuditActionEnum | str) -> Callable[[
                     return result
 
                 with db.begin_nested():
-                    db.add(
-                        AuditLog(
-                            hotel_id=hotel_id,
-                            table_name=table_name,
-                            record_id=final_record_id,
-                            action=audit_action,
-                            actor_user_id=actor_user_id,
-                            payload_before=_payload(before_state),
-                            payload_after=_payload(after_state),
-                        )
+                    audit_log = AuditLog(
+                        hotel_id=hotel_id,
+                        table_name=table_name,
+                        record_id=final_record_id,
+                        action=audit_action,
+                        actor_user_id=actor_user_id,
+                        payload_before=_payload(before_state),
+                        payload_after=_payload(after_state),
                     )
+                    db.add(audit_log)
                     db.flush()
+                    try:
+                        project_audit_to_mongo(_audit_projection_doc(audit_log))
+                    except Exception:
+                        logger.debug(
+                            "Audit Mongo projection failed for %s table=%s record_id=%s action=%s",
+                            func.__name__,
+                            table_name,
+                            final_record_id,
+                            audit_action.value,
+                        )
             except Exception:
                 logger.exception(
                     "Audit logging failed for %s table=%s record_id=%s action=%s",

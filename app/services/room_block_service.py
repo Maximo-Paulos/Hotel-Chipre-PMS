@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import date, datetime, timezone
 
 from sqlalchemy import or_
@@ -8,6 +9,10 @@ from sqlalchemy.orm import Session
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.room import Room
 from app.models.room_block import RoomBlock, RoomBlockReasonEnum
+from app.services.read_model_cache import invalidate_hotel_operational_caches
+
+
+logger = logging.getLogger(__name__)
 
 
 class RoomBlockError(Exception):
@@ -22,6 +27,13 @@ class ProtectedReservationConflictError(RoomBlockError):
         super().__init__(
             "Room block overlaps protected or checked-in reservations that require manual resolution"
         )
+
+
+def _invalidate_availability_cache(hotel_id: int) -> None:
+    try:
+        invalidate_hotel_operational_caches(hotel_id)
+    except Exception as exc:  # pragma: no cover - defensive cache isolation
+        logger.debug("room_block.availability_cache_invalidation_failed", extra={"hotel_id": hotel_id, "error": str(exc)})
 
 
 def _validate_range(starts_at: date, ends_at: date | None, is_indefinite: bool) -> None:
@@ -120,6 +132,7 @@ def create_block(
     )
     db.add(block)
     db.flush()
+    _invalidate_availability_cache(hotel_id)
     return block
 
 
@@ -157,4 +170,5 @@ def resolve_block(
         block.resolved_at = datetime.now(timezone.utc)
         block.resolved_by_user_id = resolved_by_user_id
         db.flush()
+        _invalidate_availability_cache(hotel_id)
     return block

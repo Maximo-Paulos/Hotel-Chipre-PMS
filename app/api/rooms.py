@@ -25,6 +25,7 @@ from app.schemas.room import (
 from app.services.reservation_service import ReservationError, find_available_rooms
 from app.dependencies.auth import get_auth_context, AuthContext, require_roles
 from app.services.allocation_runtime_service import run_persisted_allocation
+from app.services.read_model_cache import get_cached_availability_payload, invalidate_hotel_operational_caches
 from app.services.subscription_service import ensure_room_within_limit
 from app.services.analytics_service import record_hotel_audit_event
 
@@ -233,20 +234,29 @@ def room_availability(
             "message": "Provide category_id, check_in_date, and check_out_date to check availability.",
         }
     try:
-        available = find_available_rooms(
-            db,
-            category_id,
-            check_in_date,
-            check_out_date,
+        def producer():
+            available = find_available_rooms(
+                db,
+                category_id,
+                check_in_date,
+                check_out_date,
+                hotel_id=context.hotel_id,
+            )
+            return {
+                "status": "ok",
+                "count": len(available),
+                "available_rooms": [room.id for room in available],
+            }
+
+        return get_cached_availability_payload(
             hotel_id=context.hotel_id,
+            category_id=category_id,
+            check_in=check_in_date,
+            check_out=check_out_date,
+            producer=producer,
         )
     except ReservationError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    return {
-        "status": "ok",
-        "count": len(available),
-        "available_rooms": [room.id for room in available],
-    }
 
 
 @router.get("/{room_id}", response_model=RoomRead)
@@ -300,6 +310,7 @@ def update_room(
 
     db.commit()
     db.refresh(room)
+    invalidate_hotel_operational_caches(context.hotel_id)
     return room
 
 
@@ -321,6 +332,7 @@ def update_room_status(
         room.notes = data.notes
     db.commit()
     db.refresh(room)
+    invalidate_hotel_operational_caches(context.hotel_id)
     
     # If room was moved to an unavailable state, trigger reallocation
     realloc_result = None

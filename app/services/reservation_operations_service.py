@@ -39,6 +39,7 @@ from app.schemas.transaction import PaymentRequest
 from app.services.payment_link_service import PaymentLinkError, create_link
 from app.services.payment_service import PaymentError, process_payment
 from app.services.pricing_policy_service import PricingPolicyError, quote_rate_plan_stay
+from app.services.read_model_cache import invalidate_hotel_operational_caches
 from app.services.reservation_service import (
     ReservationError,
     check_room_availability,
@@ -53,6 +54,13 @@ from app.services.reservation_service import (
 
 class ReservationOperationsError(ReservationError):
     """Operational exception with business-friendly semantics."""
+
+
+def _invalidate_availability_cache(hotel_id: int) -> None:
+    try:
+        invalidate_hotel_operational_caches(hotel_id)
+    except Exception:
+        pass
 
 
 def _hotel_default_currency(db: Session, hotel_id: int) -> str:
@@ -322,6 +330,7 @@ def extend_reservation_stay(
         raise ReservationOperationsError(str(exc)) from exc
 
     db.flush()
+    _invalidate_availability_cache(hotel_id)
     return ReservationExtensionResult(
         reservation=reservation,
         extension_amount=amount,
@@ -373,6 +382,7 @@ def move_reservation_room(
     )
     db.add(event)
     db.flush()
+    _invalidate_availability_cache(hotel_id)
     record_manual_override_feedback(
         db,
         hotel_id=hotel_id,

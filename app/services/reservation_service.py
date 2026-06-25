@@ -4,6 +4,7 @@ Handles creation, state transitions, confirmation code generation, and availabil
 Uses pessimistic locking to prevent race conditions (overbooking).
 """
 import json
+import logging
 import string
 import random
 from dataclasses import dataclass, replace
@@ -29,7 +30,11 @@ from app.models.pricing import CategoryPricing
 from app.models.operations import ReservationStatusHistory
 from app.schemas.reservation import ReservationCreate, ReservationUpdate
 from app.services.pricing_policy_service import PricingPolicyError, StayPricingQuote, quote_rate_plan_stay
+from app.services.read_model_cache import invalidate_hotel_operational_caches
 from app.services.room_block_service import room_has_active_block
+
+
+logger = logging.getLogger(__name__)
 
 
 class ReservationError(Exception):
@@ -61,6 +66,15 @@ def generate_confirmation_code(prefix: str = "RES") -> str:
     """Generate a unique, human-readable confirmation code."""
     random_part = "".join(random.choices(string.ascii_uppercase + string.digits, k=8))
     return f"{prefix}-{random_part}"
+
+
+def _invalidate_availability_cache(hotel_id: int | None) -> None:
+    if hotel_id is None:
+        return
+    try:
+        invalidate_hotel_operational_caches(hotel_id)
+    except Exception as exc:  # pragma: no cover - defensive cache isolation
+        logger.debug("reservation.availability_cache_invalidation_failed", extra={"hotel_id": hotel_id, "error": str(exc)})
 
 
 def _resolve_hotel_id(
@@ -506,6 +520,7 @@ def create_reservation(db: Session, data: ReservationCreate, hotel_id: Optional[
     )
     db.add(reservation)
     db.flush()
+    _invalidate_availability_cache(hotel_id)
     return reservation
 
 
@@ -545,6 +560,7 @@ def transition_reservation_status(
         )
     )
     db.flush()
+    _invalidate_availability_cache(reservation.hotel_id)
     return reservation
 
 
@@ -669,6 +685,7 @@ def update_reservation_fields(
 
     reservation.version = (reservation.version or 0) + 1
     db.flush()
+    _invalidate_availability_cache(hotel_id)
     return reservation
 
 
@@ -723,6 +740,7 @@ def mark_reservation_no_show(
     )
     reservation.version = (reservation.version or 0) + 1
     db.flush()
+    _invalidate_availability_cache(hotel_id)
     return reservation
 
 
