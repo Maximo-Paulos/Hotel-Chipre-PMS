@@ -28,6 +28,7 @@ from app.services.pricing_service import (
     apply_price_period,
     get_price_for_date,
 )
+from app.services.timeseries_projection import project_daily_rate_change
 
 router = APIRouter(prefix="/api/rates", tags=["Daily Rates"])
 
@@ -306,6 +307,13 @@ def upsert_daily_rate(
 
     db.commit()
     db.refresh(row)
+    project_daily_rate_change(
+        context.hotel_id,
+        category_id,
+        row.date,
+        row.price,
+        row.updated_at,
+    )
     return row
 
 
@@ -346,9 +354,11 @@ def bulk_upsert_daily_rates(
     }
 
     created = updated = 0
+    touched_dates: list[date] = []
     current = payload.from_date
     while current <= payload.to_date:
         if current not in exclude:
+            touched_dates.append(current)
             if current in existing_map:
                 r = existing_map[current]
                 r.price = payload.price
@@ -378,6 +388,15 @@ def bulk_upsert_daily_rates(
         current += timedelta(days=1)
 
     db.commit()
+    changed_at = datetime.now(timezone.utc)
+    for touched_date in touched_dates:
+        project_daily_rate_change(
+            context.hotel_id,
+            category_id,
+            touched_date,
+            payload.price,
+            changed_at,
+        )
     return BulkRateOut(created=created, updated=updated)
 
 
@@ -528,4 +547,15 @@ def apply_period_to_daily_rates(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     db.commit()
+    current = period.start_date
+    changed_at = datetime.now(timezone.utc)
+    while current <= period.end_date:
+        project_daily_rate_change(
+            context.hotel_id,
+            period.category_id,
+            current,
+            period.price_per_night,
+            changed_at,
+        )
+        current += timedelta(days=1)
     return ApplyPeriodOut(applied_dates=count)

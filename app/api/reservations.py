@@ -65,6 +65,11 @@ from app.services.payment_service import PaymentError
 from app.services.allocation_runtime_service import run_persisted_allocation
 from app.dependencies.auth import get_auth_context, AuthContext, require_roles, require_permission
 from app.services.permission_service import PERMISSION_RESERVATION_CREATE, PERMISSION_RESERVATION_ROOM_MOVE
+from app.services.graph_projection import (
+    project_company_link,
+    project_reservation_assignment,
+    project_room_movement,
+)
 
 router = APIRouter(prefix="/api/reservations", tags=["Reservations"])
 logger = logging.getLogger(__name__)
@@ -112,6 +117,18 @@ def _trigger_reoptimization_bg(hotel_id: int, trigger_type: str = "new_reservati
             db.close()
 
 
+def _project_reservation_graph(hotel_id: int, reservation: Reservation) -> None:
+    project_reservation_assignment(
+        hotel_id,
+        reservation.id,
+        reservation.room_id,
+        reservation.guest_id,
+        reservation.status,
+    )
+    if reservation.company_id is not None:
+        project_company_link(hotel_id, reservation.company_id, reservation.id)
+
+
 # Accept with and without trailing slash to avoid 405 when the FE omits it.
 @router.post("/", response_model=ReservationRead, status_code=status.HTTP_201_CREATED)
 @router.post("", response_model=ReservationRead, status_code=status.HTTP_201_CREATED, include_in_schema=False)
@@ -131,6 +148,7 @@ def create_new_reservation(
         reservation = create_reservation(db, data, hotel_id=context.hotel_id)
         db.commit()
         db.refresh(reservation)
+        _project_reservation_graph(context.hotel_id, reservation)
         background_tasks.add_task(_trigger_reoptimization_bg, hotel_id=context.hotel_id)
         return _to_read(reservation)
     except ReservationError as e:
@@ -158,6 +176,7 @@ def create_or_update_manual_ota(
         )
         db.commit()
         db.refresh(reservation)
+        _project_reservation_graph(context.hotel_id, reservation)
         return _to_read(reservation)
     except OTAManualReservationError as e:
         db.rollback()
@@ -523,7 +542,7 @@ def room_move(
     if not reservation:
         raise HTTPException(status_code=404, detail="Reservation not found")
     try:
-        move_reservation_room(
+        event = move_reservation_room(
             db,
             reservation=reservation,
             to_room_id=payload.to_room_id,
@@ -534,6 +553,14 @@ def room_move(
         )
         db.commit()
         db.refresh(reservation)
+        _project_reservation_graph(context.hotel_id, reservation)
+        project_room_movement(
+            context.hotel_id,
+            reservation.id,
+            event.from_room_id,
+            event.to_room_id,
+            event.movement_group_id or event.id,
+        )
         background_tasks.add_task(
             _trigger_reoptimization_bg,
             hotel_id=context.hotel_id,

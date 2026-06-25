@@ -1,7 +1,7 @@
 """
 FastAPI routes for Room management + Housekeeping.
 """
-from datetime import date
+from datetime import date, datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -28,6 +28,7 @@ from app.services.allocation_runtime_service import run_persisted_allocation
 from app.services.read_model_cache import get_cached_availability_payload, invalidate_hotel_operational_caches
 from app.services.subscription_service import ensure_room_within_limit
 from app.services.analytics_service import record_hotel_audit_event
+from app.services.timeseries_projection import project_room_state_event
 
 router = APIRouter(prefix="/api/rooms", tags=["Rooms"])
 
@@ -333,6 +334,13 @@ def update_room_status(
     db.commit()
     db.refresh(room)
     invalidate_hotel_operational_caches(context.hotel_id)
+    project_room_state_event(
+        context.hotel_id,
+        room.id,
+        data.status.value,
+        datetime.now(timezone.utc),
+        {"source": "rooms.status.patch", "notes": data.notes},
+    )
     
     # If room was moved to an unavailable state, trigger reallocation
     realloc_result = None

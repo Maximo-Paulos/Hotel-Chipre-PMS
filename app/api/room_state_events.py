@@ -14,6 +14,7 @@ from app.services.analytics_service import (
     create_room_state_event,
     require_analytics_plan,
 )
+from app.services.timeseries_projection import project_room_state_event
 
 
 router = APIRouter(prefix="/api/room-state-events", tags=["Room State Events"])
@@ -48,6 +49,18 @@ def create_room_state_event_route(
     event = create_room_state_event(db, hotel_id=context.hotel_id, user_id=context.user_id or 0, payload=payload)
     db.commit()
     db.refresh(event)
+    project_room_state_event(
+        context.hotel_id,
+        event.room_id,
+        event.event_type.value if hasattr(event.event_type, "value") else str(event.event_type),
+        event.started_at,
+        {
+            "source": "room_state_events.create",
+            "reason_code": event.reason_code.value if hasattr(event.reason_code, "value") else str(event.reason_code),
+            "reason_note": event.reason_note,
+            "event_id": event.id,
+        },
+    )
     return event
 
 
@@ -61,4 +74,11 @@ def close_room_state_event_route(
     event = close_room_state_event(db, hotel_id=context.hotel_id, user_id=context.user_id or 0, event_id=event_id)
     db.commit()
     db.refresh(event)
+    project_room_state_event(
+        context.hotel_id,
+        event.room_id,
+        "room_state_event_closed",
+        event.ended_at or datetime.now(timezone.utc),
+        {"source": "room_state_events.close", "event_id": event.id},
+    )
     return event

@@ -24,6 +24,7 @@ from app.services.reservation_service import (
     compute_reservation_pricing,
 )
 from app.services.checkin_service import perform_checkin, perform_checkout, CheckInError
+from app.services.graph_projection import project_company_link, project_reservation_assignment
 
 router = APIRouter(prefix="/api/bookings", tags=["Bookings"])
 
@@ -52,6 +53,18 @@ def _booking_to_read(res: Reservation) -> BookingRead:
         for g in res.additional_guests
     ]
     return result
+
+
+def _project_booking_graph(hotel_id: int, booking: Reservation) -> None:
+    project_reservation_assignment(
+        hotel_id,
+        booking.id,
+        booking.room_id,
+        booking.guest_id,
+        booking.status,
+    )
+    if booking.company_id is not None:
+        project_company_link(hotel_id, booking.company_id, booking.id)
 
 
 @router.get("/availability")
@@ -139,6 +152,7 @@ def create_booking(
         booking = create_reservation(db, reservation_payload, hotel_id=context.hotel_id)
         db.commit()
         db.refresh(booking)
+        _project_booking_graph(context.hotel_id, booking)
         return _booking_to_read(booking)
     except ReservationError as e:
         raise HTTPException(status_code=400, detail=str(e))
