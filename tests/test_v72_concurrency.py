@@ -261,9 +261,6 @@ def test_allocation_respects_existing_reservations(db):
     assert total == 3
 
 
-@pytest.mark.xfail(
-    reason="BRM §9 waitlist gap: main branch has no reservation.is_wait_listed/wait_list_reason fields",
-)
 def test_allocation_overflow_can_be_waitlisted(db):
     _seed_hotel(db)
     category = _seed_category(db, code="OVF")

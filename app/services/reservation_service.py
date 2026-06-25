@@ -538,6 +538,13 @@ def create_reservation(db: Session, data: ReservationCreate, hotel_id: Optional[
     if company is not None:
         pricing = _apply_corporate_pricing(db, hotel_id=hotel_id, pricing=pricing, company=company, explicit_total=data.total_amount)
 
+    # Waitlist / overbooking (v72 §9): a wait-listed reservation is created with
+    # room_id=None and the denormalized flag set, so availability queries never
+    # count it as occupying a room. The caller (or §9.1 overbooking path) is
+    # responsible for requesting waitlist placement explicitly.
+    is_wait_listed = bool(getattr(data, "is_wait_listed", False))
+    wait_list_reason = getattr(data, "wait_list_reason", None)
+
     room_id = data.room_id
     if room_id:
         room = (
@@ -564,6 +571,9 @@ def create_reservation(db: Session, data: ReservationCreate, hotel_id: Optional[
             raise ReservationError(
                 f"Room {room.room_number} is not available for the requested dates"
             )
+    elif is_wait_listed:
+        # Overbooking accepted / explicit waitlist placement: no room is assigned.
+        room_id = None
     else:
         available = find_available_rooms(
             db,
@@ -607,6 +617,8 @@ def create_reservation(db: Session, data: ReservationCreate, hotel_id: Optional[
         external_id=data.external_id,
         num_adults=data.num_adults,
         num_children=data.num_children,
+        is_wait_listed=is_wait_listed,
+        wait_list_reason=wait_list_reason if is_wait_listed else None,
         notes=data.notes,
         mobility_restriction=data.mobility_restriction,
         pricing_snapshot=pricing.pricing_snapshot,

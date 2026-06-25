@@ -261,6 +261,12 @@ class Reservation(Base):
     num_adults = Column(Integer, nullable=False, default=1)
     num_children = Column(Integer, nullable=False, default=0)
 
+    # Waitlist / overbooking (v72 §9) — denormalized flags kept in sync with
+    # WaitlistEntry by the service layer. A wait-listed reservation has
+    # room_id=None so availability queries never count it as occupying a room.
+    is_wait_listed = Column(Boolean, nullable=False, default=False, server_default="0")
+    wait_list_reason = Column(String(255), nullable=True)
+
     notes = Column(Text, nullable=True)
 
     # Metadata

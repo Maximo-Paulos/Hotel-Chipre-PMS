@@ -119,6 +119,12 @@ def promote_from_waitlist(
     except ReservationError as exc:
         raise WaitlistError(str(exc)) from exc
 
+    # Sync the denormalized waitlist flags (v72 §9): a promoted entry yields a
+    # real, room-assigned reservation, so it must not be flagged as wait-listed.
+    if reservation.room_id is not None:
+        reservation.is_wait_listed = False
+        reservation.wait_list_reason = None
+
     entry.status = WaitlistStatusEnum.PROMOTED
     entry.promoted_reservation_id = reservation.id
     entry.promoted_at = datetime.now(timezone.utc)

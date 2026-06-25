@@ -152,11 +152,6 @@ def tiny_hotel(db: Session) -> dict:
 # 1. Waitlist model fields exist and are persisted
 # ===========================================================================
 
-@pytest.mark.xfail(
-    reason="main difiere de BRM §9: el waitlist se modela en tabla WaitlistEntry + "
-    "waitlist_service, NO como flags reservation.is_wait_listed/wait_list_reason (gap Phase 3/5)",
-    strict=False,
-)
 class TestWaitlistModelFields:
     """The Reservation model must have is_wait_listed and wait_list_reason fields."""
 
@@ -288,11 +283,6 @@ class TestOverbookingBlocked:
 class TestWaitlistCreation:
     """When hotel accepts overbooking, caller creates reservation with is_wait_listed=True."""
 
-    @pytest.mark.xfail(
-        reason="main difiere de BRM §9: waitlist via WaitlistEntry, no flag is_wait_listed en "
-        "reservation (gap Phase 3/5)",
-        strict=False,
-    )
     def test_waitlist_reservation_created_when_no_rooms(self, db: Session, tiny_hotel: dict):
         """
         When allow_overbooking=True the caller sets is_wait_listed=True and room_id=None.
@@ -361,11 +351,6 @@ class TestWaitlistCreation:
 # 4. Waitlist listing query
 # ===========================================================================
 
-@pytest.mark.xfail(
-    reason="main difiere de BRM §9: waitlist via WaitlistEntry, no flag is_wait_listed en "
-    "reservation (gap Phase 3/5)",
-    strict=False,
-)
 class TestWaitlistListing:
     """Only is_wait_listed=True reservations should appear in the waitlist query."""
 
@@ -490,12 +475,6 @@ class TestWaitlistResolveLogic:
         db.flush()
         return res
 
-    @pytest.mark.xfail(
-        reason="main difiere de BRM §9: 'resolve' del waitlist se hace via "
-        "waitlist_service.promote_from_waitlist sobre WaitlistEntry, no limpiando "
-        "reservation.is_wait_listed (gap Phase 3/5)",
-        strict=False,
-    )
     def test_resolve_assigns_room_and_clears_flag(self, db: Session, tiny_hotel: dict):
         """Resolving a waitlisted reservation sets room_id and clears is_wait_listed."""
         waitlisted = self._create_waitlisted(db, tiny_hotel)
@@ -515,12 +494,6 @@ class TestWaitlistResolveLogic:
         assert waitlisted.is_wait_listed is False
         assert waitlisted.room_id == room.id
 
-    @pytest.mark.xfail(
-        reason="main difiere de BRM §9: 'resolve' del waitlist se hace via "
-        "waitlist_service.promote_from_waitlist sobre WaitlistEntry, no limpiando "
-        "reservation.is_wait_listed (gap Phase 3/5)",
-        strict=False,
-    )
     def test_resolve_blocked_when_room_category_mismatch(self, db: Session, tiny_hotel: dict):
         """Resolving with a room of a different category must be blocked."""
         waitlisted = self._create_waitlisted(db, tiny_hotel)
@@ -528,12 +501,6 @@ class TestWaitlistResolveLogic:
 
         assert wrong_room.category_id != waitlisted.category_id
 
-    @pytest.mark.xfail(
-        reason="main difiere de BRM §9: 'resolve' del waitlist se hace via "
-        "waitlist_service.promote_from_waitlist sobre WaitlistEntry, no limpiando "
-        "reservation.is_wait_listed (gap Phase 3/5)",
-        strict=False,
-    )
     def test_resolve_blocked_when_room_occupied(self, db: Session, tiny_hotel: dict):
         """Resolving with an already-occupied room must be blocked."""
         # Book the std room first
@@ -565,12 +532,6 @@ class TestWaitlistResolveLogic:
                 hotel_id=HOTEL_ID,
             )
 
-    @pytest.mark.xfail(
-        reason="main difiere de BRM §9: 'resolve' del waitlist se hace via "
-        "waitlist_service.promote_from_waitlist sobre WaitlistEntry, no limpiando "
-        "reservation.is_wait_listed (gap Phase 3/5)",
-        strict=False,
-    )
     def test_resolve_persists_to_db(self, db: Session, tiny_hotel: dict):
         """After resolve, the DB row reflects the updated state."""
         waitlisted = self._create_waitlisted(db, tiny_hotel)
@@ -589,11 +550,6 @@ class TestWaitlistResolveLogic:
 # 6. Waitlisted reservations stay isolated (don't block availability)
 # ===========================================================================
 
-@pytest.mark.xfail(
-    reason="main difiere de BRM §9: no existe flag reservation.is_wait_listed; el aislamiento "
-    "de disponibilidad se logra con room_id=None en WaitlistEntry, no en reservation (gap Phase 3/5)",
-    strict=False,
-)
 class TestWaitlistIsolation:
     """is_wait_listed=True reservations with room_id=None must not affect availability."""
 

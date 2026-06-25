@@ -38,6 +38,9 @@ class ReservationCreate(BaseModel):
     target_currency: Optional[str] = Field(default=None, min_length=3, max_length=3)
     total_amount: Optional[Decimal] = Field(default=None, ge=0)
     mobility_restriction: bool = False
+    # Waitlist / overbooking (v72 §9)
+    is_wait_listed: bool = False
+    wait_list_reason: Optional[str] = Field(default=None, max_length=255)
 
 
 class ReservationRead(BaseModel):
@@ -83,6 +86,8 @@ class ReservationRead(BaseModel):
     allocation_status: str = "unassigned"
     requires_manual_review: bool = False
     mobility_restriction: bool = False
+    is_wait_listed: bool = False
+    wait_list_reason: Optional[str] = None
     version: int = 0
 
     model_config = {"from_attributes": True}
