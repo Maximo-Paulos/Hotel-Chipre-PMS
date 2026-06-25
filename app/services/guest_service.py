@@ -7,6 +7,8 @@ from typing import Any
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
+from app.decorators.audit_hooks import audited_change
+from app.models.audit_log import AuditActionEnum
 from app.models.guest import Guest, GuestRatingEnum, GuestTag, GuestTagTypeEnum
 from app.models.reservation import Reservation
 from app.models.security_audit_log import SecurityAuditLog
@@ -112,6 +114,7 @@ def quick_profile(db: Session, *, hotel_id: int, guest_id: int) -> dict[str, Any
     }
 
 
+@audited_change(table_name="guest_tags", action=AuditActionEnum.CREATE)
 def add_tag(
     db: Session,
     *,
@@ -146,6 +149,7 @@ def add_tag(
     return tag
 
 
+@audited_change(table_name="guest_tags", action=AuditActionEnum.STATUS_CHANGE)
 def resolve_tag(
     db: Session,
     *,
@@ -176,6 +180,7 @@ def resolve_tag(
     return tag
 
 
+@audited_change(table_name="guests", action=AuditActionEnum.UPDATE)
 def set_rating(
     db: Session,
     *,
