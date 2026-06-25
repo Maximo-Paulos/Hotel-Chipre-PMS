@@ -7,10 +7,14 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies.auth import AuthContext, require_roles
+from app.dependencies.auth import AuthContext, require_permission
 from app.models.room import Room
 from app.models.room_block import RoomBlock, RoomBlockReasonEnum
 from app.models.user import User
+from app.services.permission_service import (
+    PERMISSION_ROOM_BLOCK_CREATE,
+    PERMISSION_ROOM_BLOCK_RELEASE,
+)
 from app.services.room_block_service import (
     ProtectedReservationConflictError,
     RoomBlockError,
@@ -84,7 +88,7 @@ def create_room_block(
     room_id: int,
     payload: RoomBlockCreate,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("receptionist", "manager", "owner", "co_owner")),
+    context: AuthContext = Depends(require_permission(PERMISSION_ROOM_BLOCK_CREATE)),
 ):
     _validate_block_dates(payload.start_date, payload.end_date)
     room = db.query(Room).filter(Room.id == room_id, Room.hotel_id == context.hotel_id).first()
@@ -126,7 +130,7 @@ def create_room_block(
 def list_room_blocks(
     room_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("receptionist", "manager", "owner", "co_owner")),
+    context: AuthContext = Depends(require_permission(PERMISSION_ROOM_BLOCK_CREATE)),
 ):
     room = db.query(Room).filter(Room.id == room_id, Room.hotel_id == context.hotel_id).first()
     if not room:
@@ -148,7 +152,7 @@ def list_room_blocks(
 def release_room_block(
     block_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("manager", "owner", "co_owner")),
+    context: AuthContext = Depends(require_permission(PERMISSION_ROOM_BLOCK_RELEASE)),
 ):
     block = db.query(RoomBlock).filter(RoomBlock.id == block_id, RoomBlock.hotel_id == context.hotel_id).first()
     if not block:

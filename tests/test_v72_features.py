@@ -275,11 +275,6 @@ def test_reservation_is_motor_protected_set_on_manual_move(db, sample_guest, sam
     assert reservation.allocation_locked is True
 
 
-@pytest.mark.xfail(
-    reason="main difiere de BRM §9: no existen los campos reservation.is_wait_listed / "
-    "wait_list_reason (waitlist se modela en tabla waitlist aparte) (gap Phase 3/5)",
-    strict=False,
-)
 def test_reservation_is_wait_listed_field(db, sample_guest, sample_rooms):
     reservation = _reservation(
         db,

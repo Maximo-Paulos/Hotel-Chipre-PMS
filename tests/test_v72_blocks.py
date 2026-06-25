@@ -162,6 +162,51 @@ def test_release_room_block_public_api(blocks_client):
     assert client.get(f"/api/rooms/{room_id}/blocks").json() == []
 
 
+def test_receptionist_can_create_but_not_release_block_by_default(blocks_client):
+    # BRM §14.1: room_block permissions are configurable; receptionist default is
+    # create=True, release=False.
+    client, SessionLocal, auth_state = blocks_client
+    auth_state["role"] = "receptionist"
+    with SessionLocal() as db:
+        room = _seed_room(db, hotel_id=1, room_number="105")
+        room_id = room.id
+
+    create = client.post(
+        f"/api/rooms/{room_id}/blocks",
+        json={"start_date": "2026-11-01", "end_date": "2026-11-02", "reason": "Cleaning"},
+    )
+    assert create.status_code == 201, create.text
+
+    block_id = client.get(f"/api/rooms/{room_id}/blocks").json()[0]["id"]
+
+    release = client.delete(f"/api/blocks/{block_id}")
+    assert release.status_code == 403, release.text
+
+
+def test_hotel_override_removing_create_block_is_respected(blocks_client):
+    # BRM §14.1: a hotel override that revokes room_block:create yields 403.
+    from app.services.permission_service import (
+        PERMISSION_ROOM_BLOCK_CREATE,
+        set_override,
+    )
+
+    client, SessionLocal, auth_state = blocks_client
+    auth_state["role"] = "receptionist"
+    with SessionLocal() as db:
+        room = _seed_room(db, hotel_id=1, room_number="106")
+        room_id = room.id
+
+    with SessionLocal() as db:
+        set_override(db, 1, "receptionist", PERMISSION_ROOM_BLOCK_CREATE, False, user_id=None)
+        db.commit()
+
+    create = client.post(
+        f"/api/rooms/{room_id}/blocks",
+        json={"start_date": "2026-12-01", "end_date": "2026-12-02", "reason": "Hold"},
+    )
+    assert create.status_code == 403, create.text
+
+
 def test_room_blocks_public_api_is_hotel_scoped(blocks_client):
     client, SessionLocal, auth_state = blocks_client
     with SessionLocal() as db:

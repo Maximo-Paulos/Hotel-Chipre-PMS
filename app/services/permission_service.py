@@ -28,6 +28,8 @@ PERMISSION_RESERVATION_CREATE = "reservation:create"
 PERMISSION_RESERVATION_ROOM_MOVE = "reservation:room_move"
 PERMISSION_CHECKIN_PERFORM = "checkin:perform"
 PERMISSION_ROOM_BLOCK = "room:block"
+PERMISSION_ROOM_BLOCK_CREATE = "room_block:create"
+PERMISSION_ROOM_BLOCK_RELEASE = "room_block:release"
 PERMISSION_COMPANY_MANAGE = "company:manage"
 PERMISSION_CASH_OPERATE = "cash:operate"
 PERMISSION_CASH_APPROVE_DIFFERENCE = "cash:approve_difference"
@@ -44,6 +46,8 @@ PERMISSION_DEFINITIONS: dict[str, str] = {
     PERMISSION_RESERVATION_ROOM_MOVE: "Move reservations between rooms",
     PERMISSION_CHECKIN_PERFORM: "Perform guest check-in",
     PERMISSION_ROOM_BLOCK: "Create and resolve room blocks",
+    PERMISSION_ROOM_BLOCK_CREATE: "Create room blocks (BRM §14.1)",
+    PERMISSION_ROOM_BLOCK_RELEASE: "Release/resolve room blocks (BRM §14.1)",
     PERMISSION_COMPANY_MANAGE: "Manage companies and company reservation documents",
     PERMISSION_CASH_OPERATE: "Operate cash register sessions and movements",
     PERMISSION_CASH_APPROVE_DIFFERENCE: "Approve cash close differences",
@@ -64,6 +68,8 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
         PERMISSION_RESERVATION_ROOM_MOVE: True,
         PERMISSION_CHECKIN_PERFORM: True,
         PERMISSION_ROOM_BLOCK: True,
+        PERMISSION_ROOM_BLOCK_CREATE: True,
+        PERMISSION_ROOM_BLOCK_RELEASE: True,
         PERMISSION_COMPANY_MANAGE: True,
         PERMISSION_CASH_OPERATE: True,
         PERMISSION_CASH_APPROVE_DIFFERENCE: True,
@@ -80,6 +86,8 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
         PERMISSION_RESERVATION_ROOM_MOVE: False,
         PERMISSION_CHECKIN_PERFORM: True,
         PERMISSION_ROOM_BLOCK: False,
+        PERMISSION_ROOM_BLOCK_CREATE: True,
+        PERMISSION_ROOM_BLOCK_RELEASE: False,
         PERMISSION_COMPANY_MANAGE: False,
         PERMISSION_CASH_OPERATE: True,
         PERMISSION_CASH_APPROVE_DIFFERENCE: False,
@@ -96,6 +104,8 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
         PERMISSION_RESERVATION_ROOM_MOVE: False,
         PERMISSION_CHECKIN_PERFORM: False,
         PERMISSION_ROOM_BLOCK: False,
+        PERMISSION_ROOM_BLOCK_CREATE: False,
+        PERMISSION_ROOM_BLOCK_RELEASE: False,
         PERMISSION_COMPANY_MANAGE: False,
         PERMISSION_CASH_OPERATE: False,
         PERMISSION_CASH_APPROVE_DIFFERENCE: False,

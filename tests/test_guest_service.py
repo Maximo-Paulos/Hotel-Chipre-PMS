@@ -159,6 +159,79 @@ def test_guest_quick_profile_returns_recent_stays_and_tags(db):
     assert profile["active_tags"] == [active_tag]
 
 
+def test_quick_profile_includes_observations(db):
+    _hotel(db, 6110)
+    guest = _guest(db, 6110)
+    guest.observations = "VIP - prefiere planta alta"
+    db.flush()
+
+    profile = quick_profile(db, hotel_id=6110, guest_id=guest.id)
+
+    assert profile["observations"] == "VIP - prefiere planta alta"
+
+
+def test_quick_profile_classifies_stays_by_status(db):
+    from datetime import date, timedelta
+
+    _hotel(db, 6111)
+    guest = _guest(db, 6111)
+    category, room = _room(db, 6111)
+    today = date.today()
+
+    def _res(day_offset_in, day_offset_out, status, code):
+        r = Reservation(
+            hotel_id=6111,
+            guest_id=guest.id,
+            category_id=category.id,
+            room_id=room.id,
+            check_in_date=today + timedelta(days=day_offset_in),
+            check_out_date=today + timedelta(days=day_offset_out),
+            num_adults=1,
+            total_amount=Decimal("100.00"),
+            amount_paid=Decimal("100.00"),
+            status=status,
+            confirmation_code=code,
+        )
+        db.add(r)
+        db.flush()
+        return r
+
+    # previa: checked out in the past
+    _res(-10, -8, ReservationStatusEnum.CHECKED_OUT, "PREV1")
+    # futura: check-out in the future, active status
+    _res(5, 8, ReservationStatusEnum.FULLY_PAID, "FUT1")
+    # cancelada
+    _res(-3, -1, ReservationStatusEnum.CANCELLED, "CANC1")
+    # no-show
+    _res(-2, -1, ReservationStatusEnum.NO_SHOW, "NOSHOW1")
+
+    profile = quick_profile(db, hotel_id=6111, guest_id=guest.id)
+    by_status = profile["stays_by_status"]
+
+    assert {s["confirmation_code"] for s in by_status["previas"]} == {"PREV1"}
+    assert {s["confirmation_code"] for s in by_status["futuras"]} == {"FUT1"}
+    assert {s["confirmation_code"] for s in by_status["canceladas"]} == {"CANC1"}
+    assert {s["confirmation_code"] for s in by_status["no_show"]} == {"NOSHOW1"}
+    assert profile["total_stays"] == 4
+
+
+def test_quick_profile_pagination_returns_correct_page(db):
+    _hotel(db, 6112)
+    guest = _guest(db, 6112)
+    category, room = _room(db, 6112)
+    for day in range(1, 7):  # 6 stays, check_out days 2..7
+        _reservation(db, 6112, guest, category, room, day=day)
+
+    first_page = quick_profile(db, hotel_id=6112, guest_id=guest.id, offset=0, limit=2)
+    second_page = quick_profile(db, hotel_id=6112, guest_id=guest.id, offset=2, limit=2)
+
+    # ordered by check_out_date desc -> days 7,6 then 5,4
+    assert [s["check_out_date"].day for s in first_page["last_stays"]] == [7, 6]
+    assert [s["check_out_date"].day for s in second_page["last_stays"]] == [5, 4]
+    assert first_page["total_stays"] == 6
+    assert second_page["offset"] == 2
+
+
 def test_set_rating_audits_change(db):
     _hotel(db, 6104)
     _user(db, 88)

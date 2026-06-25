@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.decorators.audit_hooks import audited_change
 from app.models.audit_log import AuditActionEnum
 from app.models.guest import Guest, GuestRatingEnum, GuestTag, GuestTagTypeEnum
-from app.models.reservation import Reservation
+from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.security_audit_log import SecurityAuditLog
 
 
@@ -168,31 +168,81 @@ def list_active_tags(db: Session, *, hotel_id: int, guest_id: int) -> list[Guest
     )
 
 
-def quick_profile(db: Session, *, hotel_id: int, guest_id: int) -> dict[str, Any]:
+def _serialize_stay(stay: Reservation) -> dict[str, Any]:
+    return {
+        "reservation_id": stay.id,
+        "confirmation_code": stay.confirmation_code,
+        "status": stay.status,
+        "check_in_date": stay.check_in_date,
+        "check_out_date": stay.check_out_date,
+        "room_id": stay.room_id,
+        "room_number": stay.room.room_number if stay.room else None,
+        "notes": stay.notes,
+    }
+
+
+def quick_profile(
+    db: Session,
+    *,
+    hotel_id: int,
+    guest_id: int,
+    offset: int = 0,
+    limit: int = 5,
+) -> dict[str, Any]:
+    """BRM §2.5: quick guest profile with paginated stays and per-status breakdown.
+
+    Backward compatible: ``last_stays`` keeps the same shape (most recent stays,
+    paginated via ``offset``/``limit``). Adds ``observations`` and a
+    ``stays_by_status`` breakdown (previas / futuras / canceladas / no_show)
+    plus ``total_stays`` for the "Mostrar más" pagination.
+    """
+    from datetime import date as _date
+
     guest = _get_guest(db, hotel_id, guest_id)
-    last_stays = (
+
+    base_query = (
         db.query(Reservation)
         .filter(Reservation.hotel_id == hotel_id, Reservation.guest_id == guest_id)
         .order_by(Reservation.check_out_date.desc(), Reservation.id.desc())
-        .limit(5)
-        .all()
     )
+
+    total_stays = base_query.count()
+
+    page_offset = max(int(offset or 0), 0)
+    page_limit = max(int(limit if limit is not None else 5), 0)
+    page = base_query.offset(page_offset).limit(page_limit).all()
+
+    today = _date.today()
+    previas: list[dict[str, Any]] = []
+    futuras: list[dict[str, Any]] = []
+    canceladas: list[dict[str, Any]] = []
+    no_show: list[dict[str, Any]] = []
+
+    for stay in base_query.all():
+        serialized = _serialize_stay(stay)
+        if stay.status == ReservationStatusEnum.CANCELLED:
+            canceladas.append(serialized)
+        elif stay.status == ReservationStatusEnum.NO_SHOW:
+            no_show.append(serialized)
+        elif stay.check_out_date is not None and stay.check_out_date <= today:
+            previas.append(serialized)
+        else:
+            futuras.append(serialized)
+
     return {
         "guest": guest,
+        "observations": guest.observations,
         "active_tags": list_active_tags(db, hotel_id=hotel_id, guest_id=guest_id),
-        "last_stays": [
-            {
-                "reservation_id": stay.id,
-                "confirmation_code": stay.confirmation_code,
-                "status": stay.status,
-                "check_in_date": stay.check_in_date,
-                "check_out_date": stay.check_out_date,
-                "room_id": stay.room_id,
-                "room_number": stay.room.room_number if stay.room else None,
-                "notes": stay.notes,
-            }
-            for stay in last_stays
-        ],
+        "last_stays": [_serialize_stay(stay) for stay in page],
+        "total_stays": total_stays,
+        "offset": page_offset,
+        "limit": page_limit,
+        "stays_by_status": {
+            "previas": previas,
+            "futuras": futuras,
+            "canceladas": canceladas,
+            "no_show": no_show,
+        },
     }
 
 

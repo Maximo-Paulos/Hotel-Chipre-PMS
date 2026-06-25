@@ -207,11 +207,19 @@ def get_guest(
 @router.get("/{guest_id}/quick-profile")
 def get_guest_quick_profile(
     guest_id: int,
+    offset: int = 0,
+    limit: int = 5,
     db: Session = Depends(get_db),
     context: AuthContext = Depends(get_auth_context),
 ):
     try:
-        return quick_profile(db, hotel_id=context.hotel_id, guest_id=guest_id)
+        return quick_profile(
+            db,
+            hotel_id=context.hotel_id,
+            guest_id=guest_id,
+            offset=offset,
+            limit=limit,
+        )
     except GuestServiceError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
