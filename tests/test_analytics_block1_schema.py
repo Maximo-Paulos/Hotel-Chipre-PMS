@@ -96,6 +96,7 @@ def test_fact_reservation_daily_schema():
         "booking",
         "expedia",
         "despegar",
+        "company",
         "other_ota",
         "other_direct",
     ]
