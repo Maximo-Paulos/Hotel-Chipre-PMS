@@ -295,11 +295,6 @@ def test_reservation_is_wait_listed_field(db, sample_guest, sample_rooms):
     assert reservation.wait_list_reason == "Sin disponibilidad inmediata"
 
 
-@pytest.mark.xfail(
-    reason="main difiere de BRM §2: no existe find_or_create_guest / GuestCreatePayload "
-    "(dedup de huesped por documento no implementado) (gap Phase 3/5)",
-    strict=False,
-)
 def test_guest_dedup_find_existing(db, hotel_config):
     from app.services.guest_service import GuestCreatePayload, find_or_create_guest
 
@@ -319,11 +314,6 @@ def test_guest_dedup_find_existing(db, hotel_config):
     assert guest_b.id == guest_a.id
 
 
-@pytest.mark.xfail(
-    reason="main difiere de BRM §2: no existe find_or_create_guest / GuestCreatePayload "
-    "(dedup de huesped por documento no implementado) (gap Phase 3/5)",
-    strict=False,
-)
 def test_guest_dedup_creates_new_if_no_document(db, hotel_config):
     from app.services.guest_service import GuestCreatePayload, find_or_create_guest
 
@@ -341,11 +331,6 @@ def test_guest_dedup_creates_new_if_no_document(db, hotel_config):
     assert guest_b.id != guest_a.id
 
 
-@pytest.mark.xfail(
-    reason="main difiere de BRM §2: no existe find_or_create_guest / GuestCreatePayload "
-    "(dedup de huesped por documento no implementado) (gap Phase 3/5)",
-    strict=False,
-)
 def test_guest_dedup_creates_new_for_different_document(db, hotel_config):
     from app.services.guest_service import GuestCreatePayload, find_or_create_guest
 

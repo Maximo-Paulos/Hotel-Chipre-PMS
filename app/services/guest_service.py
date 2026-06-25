@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from dataclasses import dataclass, field
+from datetime import date, datetime, timezone
 from typing import Any
 
 from sqlalchemy import or_
@@ -56,6 +57,86 @@ def _active_tag_filter():
     return or_(GuestTag.expires_at.is_(None), GuestTag.expires_at > now)
 
 
+@dataclass
+class GuestCreatePayload:
+    """Input payload for :func:`find_or_create_guest` (BRM §2.1 dedup)."""
+
+    hotel_id: int
+    first_name: str
+    last_name: str
+    document_type: str | None = None
+    document_number: str | None = None
+    nationality: str | None = None
+    date_of_birth: date | None = None
+    gender: str | None = None
+    email: str | None = None
+    phone: str | None = None
+    address_line1: str | None = None
+    address_line2: str | None = None
+    city: str | None = None
+    state_province: str | None = None
+    postal_code: str | None = None
+    country: str | None = None
+    terms_accepted: bool = False
+    digital_signature: str | None = None
+    special_requests: str | None = None
+    observations: str | None = None
+    extra: dict[str, Any] = field(default_factory=dict)
+
+
+def find_or_create_guest(db: Session, payload: GuestCreatePayload) -> tuple[Guest, bool]:
+    """BRM §2.1: reuse an existing guest matched by (hotel, document) or create a new one.
+
+    Returns ``(guest, created)``. When the payload carries a document
+    (both ``document_type`` and ``document_number``) and a guest already exists
+    for that hotel, the existing record is reused (``created=False``). Without a
+    full document, a new guest is always created (``created=True``).
+    """
+    document_type = (payload.document_type or None)
+    document_number = (payload.document_number or "").strip() or None
+
+    if document_type and document_number:
+        existing = (
+            db.query(Guest)
+            .filter(
+                Guest.hotel_id == payload.hotel_id,
+                Guest.document_type == document_type,
+                Guest.document_number == document_number,
+            )
+            .one_or_none()
+        )
+        if existing is not None:
+            return existing, False
+
+    fields: dict[str, Any] = {
+        "hotel_id": payload.hotel_id,
+        "first_name": payload.first_name,
+        "last_name": payload.last_name,
+        "document_type": document_type,
+        "document_number": document_number,
+        "nationality": payload.nationality,
+        "date_of_birth": payload.date_of_birth,
+        "gender": payload.gender,
+        "email": payload.email,
+        "phone": payload.phone,
+        "address_line1": payload.address_line1,
+        "address_line2": payload.address_line2,
+        "city": payload.city,
+        "state_province": payload.state_province,
+        "postal_code": payload.postal_code,
+        "country": payload.country,
+        "terms_accepted": payload.terms_accepted,
+        "digital_signature": payload.digital_signature,
+        "special_requests": payload.special_requests,
+        "observations": payload.observations,
+        **(payload.extra or {}),
+    }
+    guest = Guest(**fields)
+    db.add(guest)
+    db.flush()
+    return guest, True
+
+
 def search_guests(db: Session, hotel_id: int, search: str, *, limit: int = 20) -> list[Guest]:
     term = (search or "").strip()
     query = db.query(Guest).filter(Guest.hotel_id == hotel_id)
@@ -66,6 +147,7 @@ def search_guests(db: Session, hotel_id: int, search: str, *, limit: int = 20) -
                 Guest.document_number.ilike(pattern),
                 Guest.phone.ilike(pattern),
                 Guest.email.ilike(pattern),
+                Guest.first_name.ilike(pattern),
                 Guest.last_name.ilike(pattern),
             )
         )

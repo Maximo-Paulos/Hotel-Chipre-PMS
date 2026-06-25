@@ -16,8 +16,10 @@ from app.schemas.guest import GuestCreate, GuestRead, GuestUpdate, GuestCompanio
 from app.schemas.guest_tag import GuestRatingUpdate, GuestTagCreate, GuestTagRead
 from app.dependencies.auth import get_auth_context, AuthContext, require_permission
 from app.services.guest_service import (
+    GuestCreatePayload,
     GuestServiceError,
     add_tag as add_guest_tag,
+    find_or_create_guest,
     list_active_tags,
     quick_profile,
     resolve_tag as resolve_guest_tag,
@@ -68,13 +70,16 @@ def create_guest(
 ):
     companions_data = data.companions
     guest_dict = data.model_dump(exclude={"companions"})
-    guest = Guest(**guest_dict, hotel_id=context.hotel_id)
-    db.add(guest)
-    db.flush()
+    guest, created = find_or_create_guest(
+        db,
+        GuestCreatePayload(hotel_id=context.hotel_id, **guest_dict),
+    )
 
-    for comp in companions_data:
-        companion = GuestCompanion(guest_id=guest.id, **comp.model_dump())
-        db.add(companion)
+    # BRM §2.1: an existing guest is reused; only attach companions to brand-new records.
+    if created:
+        for comp in companions_data:
+            companion = GuestCompanion(guest_id=guest.id, **comp.model_dump())
+            db.add(companion)
 
     db.commit()
     db.refresh(guest)

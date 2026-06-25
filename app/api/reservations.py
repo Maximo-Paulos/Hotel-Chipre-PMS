@@ -60,7 +60,11 @@ from app.services.reservation_action_service import (
     list_pending_reservation_actions,
     resolve_external_channel_follow_up,
 )
-from app.services.ota_manual_service import OTAManualReservationError, create_or_update_manual_ota_reservation
+from app.services.ota_manual_service import (
+    OTAManualReservationError,
+    create_or_update_manual_ota_reservation,
+    release_no_guarantee,
+)
 from app.services.payment_service import PaymentError
 from app.services.allocation_runtime_service import run_persisted_allocation
 from app.dependencies.auth import get_auth_context, AuthContext, require_roles, require_permission
@@ -367,6 +371,31 @@ def cancel_reservation(
         db.refresh(r)
         return _to_read(r)
     except ReservationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/{reservation_id}/release-no-guarantee", response_model=ReservationRead)
+def release_no_guarantee_reservation(
+    reservation_id: int,
+    reason: str | None = None,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+):
+    """§10.2 — Internally release a no-guarantee OTA reservation (no provider cancel call)."""
+    r = get_reservation_by_id(db, reservation_id, context.hotel_id)
+    if not r:
+        raise HTTPException(status_code=404, detail="Reservation not found")
+    try:
+        release_no_guarantee(
+            db,
+            reservation=r,
+            actor_user_id=context.user_id,
+            reason=reason,
+        )
+        db.commit()
+        db.refresh(r)
+        return _to_read(r)
+    except OTAManualReservationError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 

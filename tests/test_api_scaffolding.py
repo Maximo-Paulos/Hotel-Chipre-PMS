@@ -336,6 +336,93 @@ def test_checkin_api_blocks_missing_primary_guest_fields(api_client):
     assert "missing" in resp.json()["detail"].lower() or "required" in resp.json()["detail"].lower()
 
 
+def _seed_ota_no_guarantee_reservation(SessionLocal) -> int:
+    with SessionLocal() as db:
+        guest = Guest(first_name="OTA", last_name="Guest", hotel_id=1, terms_accepted=True)
+        category = RoomCategory(
+            hotel_id=1,
+            name="OTA Cat",
+            code="OTA_CAT",
+            base_price_per_night=100.0,
+            max_occupancy=2,
+        )
+        db.add_all([guest, category])
+        db.flush()
+        reservation = Reservation(
+            confirmation_code="OTA-REL-001",
+            hotel_id=1,
+            guest_id=guest.id,
+            category_id=category.id,
+            check_in_date=date(2026, 8, 1),
+            check_out_date=date(2026, 8, 3),
+            total_amount=200.0,
+            amount_paid=0.0,
+            deposit_amount=0.0,
+            subtotal_amount=200.0,
+            tax_amount=0.0,
+            fee_amount=0.0,
+            commission_amount=0.0,
+            net_amount=200.0,
+            currency_code="ARS",
+            status=ReservationStatusEnum.PENDING,
+            num_adults=1,
+            num_children=0,
+            source_provider_code="booking",
+            external_id="BKG-REL-1",
+            payment_collection_model="hotel_collect",
+        )
+        db.add(reservation)
+        db.commit()
+        return reservation.id
+
+
+def test_release_no_guarantee_endpoint_releases_ota_reservation(api_client):
+    client, SessionLocal = api_client
+    reservation_id = _seed_ota_no_guarantee_reservation(SessionLocal)
+
+    resp = client.post(f"/api/reservations/{reservation_id}/release-no-guarantee")
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["status"] == ReservationStatusEnum.CANCELLED.value
+
+    with SessionLocal() as db:
+        res = db.query(Reservation).filter(Reservation.id == reservation_id).first()
+        assert res.allocation_status == "internally_released"
+        assert res.settlement_status == "internal_release_no_guarantee"
+
+
+def test_release_no_guarantee_endpoint_forbidden_for_unauthorized_role(api_client):
+    client, SessionLocal = api_client
+    reservation_id = _seed_ota_no_guarantee_reservation(SessionLocal)
+
+    def receptionist_auth_context():
+        return AuthContext(
+            hotel_id=1,
+            user_id=2,
+            user_email="recep@test.com",
+            user_role="receptionist",
+            is_verified=True,
+            permissions=set(),
+        )
+
+    main_module.app.dependency_overrides[get_auth_context] = receptionist_auth_context
+    try:
+        resp = client.post(f"/api/reservations/{reservation_id}/release-no-guarantee")
+        assert resp.status_code == 403, resp.text
+    finally:
+        main_module.app.dependency_overrides[get_auth_context] = override_auth_context_owner
+
+
+def override_auth_context_owner():
+    return AuthContext(
+        hotel_id=1,
+        user_id=1,
+        user_email="owner@test.com",
+        user_role="owner",
+        is_verified=True,
+        permissions=set(),
+    )
+
+
 def test_guest_ledger_export_returns_csv_for_date_range(api_client):
     client, SessionLocal = api_client
     with SessionLocal() as db:
