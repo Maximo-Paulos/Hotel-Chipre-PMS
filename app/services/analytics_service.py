@@ -205,6 +205,15 @@ def _serialize_company(company: Company) -> dict[str, Any]:
         "display_name": company.display_name,
         "tax_id": company.tax_id,
         "country_code": company.country_code,
+        "contact_name": company.contact_name,
+        "email": company.contact_email,
+        "phone": company.contact_phone,
+        "administrative_contact": company.administrative_contact,
+        "base_price": float(company.base_price) if company.base_price is not None else None,
+        "payment_deferred": company.payment_deferred,
+        "deferred_days": company.deferred_days,
+        "requires_voucher": company.requires_voucher,
+        "requires_signature": company.requires_signature,
         "notes": company.notes,
         "is_active": company.is_active,
         "created_at": company.created_at,
@@ -342,6 +351,15 @@ def create_company(db: Session, *, hotel_id: int, user_id: int, payload: Company
         display_name=payload.display_name,
         tax_id=payload.tax_id,
         country_code=payload.country_code,
+        contact_name=payload.contact_name,
+        contact_email=payload.email,
+        contact_phone=payload.phone,
+        administrative_contact=payload.administrative_contact,
+        base_price=payload.base_price,
+        payment_deferred=payload.payment_deferred,
+        deferred_days=payload.deferred_days,
+        requires_voucher=payload.requires_voucher,
+        requires_signature=payload.requires_signature,
         notes=payload.notes,
         is_active=True,
     )
@@ -367,8 +385,12 @@ def update_company(db: Session, *, hotel_id: int, user_id: int, company_id: int,
         next_display_name = update_data.get("display_name", company.display_name)
         next_tax_id = update_data.get("tax_id", company.tax_id)
         _validate_company_uniques(db, hotel_id=hotel_id, display_name=next_display_name, tax_id=next_tax_id, exclude_id=company.id)
+    field_map = {
+        "email": "contact_email",
+        "phone": "contact_phone",
+    }
     for field, value in update_data.items():
-        setattr(company, field, value)
+        setattr(company, field_map.get(field, field), value)
     db.flush()
     _record_audit_event(
         db,

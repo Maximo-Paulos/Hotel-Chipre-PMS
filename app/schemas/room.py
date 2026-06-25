@@ -45,6 +45,9 @@ class RoomBase(BaseModel):
     category_id: int
     status: RoomStatusEnum = RoomStatusEnum.AVAILABLE
     is_active: bool = True
+    score: int = Field(default=5, ge=1, le=10)
+    is_accessible: bool = False
+    description: Optional[str] = None
     notes: Optional[str] = None
 
 
@@ -54,6 +57,9 @@ class RoomCreate(RoomBase):
 
 class RoomRead(RoomBase):
     id: int
+    score: Optional[int] = Field(default=None, ge=1, le=10)
+    is_accessible: bool = False
+    description: Optional[str] = None
     category: Optional[RoomCategoryRead] = None
     model_config = {"from_attributes": True}
 
@@ -64,6 +70,9 @@ class RoomUpdate(BaseModel):
     category_id: Optional[int] = None
     status: Optional[RoomStatusEnum] = None
     is_active: Optional[bool] = None
+    score: Optional[int] = Field(default=None, ge=1, le=10)
+    is_accessible: Optional[bool] = None
+    description: Optional[str] = None
     notes: Optional[str] = None
 
 

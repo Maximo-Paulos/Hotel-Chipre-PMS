@@ -295,7 +295,7 @@ def update_room(
     if payload.get("is_active") is True and room.is_active is False:
         ensure_room_within_limit(db, room.hotel_id)
 
-    for field in ("room_number", "floor", "status", "is_active", "notes"):
+    for field in ("room_number", "floor", "status", "is_active", "score", "is_accessible", "description", "notes"):
         if field in payload:
             setattr(room, field, payload[field])
 

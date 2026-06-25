@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import AliasChoices, BaseModel, Field, field_validator
 
 from app.models.analytics import RoomStateEventReasonCodeEnum, RoomStateEventTypeEnum
 from app.models.reservation import ReservationChannelCodeEnum
@@ -14,9 +14,26 @@ class CompanyBase(BaseModel):
     display_name: str = Field(..., min_length=1, max_length=200)
     tax_id: str | None = Field(default=None, max_length=50)
     country_code: str | None = Field(default=None, min_length=2, max_length=2)
+    contact_name: str | None = None
+    email: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("email", "contact_email"),
+        serialization_alias="email",
+    )
+    phone: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("phone", "contact_phone"),
+        serialization_alias="phone",
+    )
+    administrative_contact: str | None = None
+    base_price: float | None = None
+    payment_deferred: bool = False
+    deferred_days: int = 0
+    requires_voucher: bool = False
+    requires_signature: bool = False
     notes: str | None = None
 
-    @field_validator("tax_id", "country_code")
+    @field_validator("tax_id", "country_code", "contact_name", "email", "phone", "administrative_contact")
     @classmethod
     def _strip_optional_text(cls, value: str | None) -> str | None:
         if value is None:
@@ -41,9 +58,26 @@ class CompanyUpdate(BaseModel):
     display_name: str | None = Field(default=None, min_length=1, max_length=200)
     tax_id: str | None = Field(default=None, max_length=50)
     country_code: str | None = Field(default=None, min_length=2, max_length=2)
+    contact_name: str | None = None
+    email: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("email", "contact_email"),
+        serialization_alias="email",
+    )
+    phone: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("phone", "contact_phone"),
+        serialization_alias="phone",
+    )
+    administrative_contact: str | None = None
+    base_price: float | None = None
+    payment_deferred: bool | None = None
+    deferred_days: int | None = None
+    requires_voucher: bool | None = None
+    requires_signature: bool | None = None
     notes: str | None = None
 
-    @field_validator("tax_id", "country_code")
+    @field_validator("tax_id", "country_code", "contact_name", "email", "phone", "administrative_contact")
     @classmethod
     def _strip_optional_text(cls, value: str | None) -> str | None:
         if value is None:
