@@ -136,7 +136,6 @@ REQUIRED_TABLES = {
     "cash_movements",
     "cash_close_reports",
     "waitlist_entries",
-    "payment_surcharge_configs",
     "hotel_api_keys",
     # v72 gaps phase 2
     "room_blocks",
