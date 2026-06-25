@@ -62,6 +62,28 @@ class TestGreedyAllocation:
         result = _run_allocation_greedy(reservations, rooms)
         assert result.success is False
 
+    def test_capacity_constraint_assigns_only_room_with_enough_occupancy(self):
+        rooms = [
+            RoomSlot(room_id=1, room_number="101", category_id=1, max_occupancy=2),
+            RoomSlot(room_id=2, room_number="102", category_id=1, max_occupancy=4),
+        ]
+        reservations = [
+            ReservationSlot(
+                reservation_id=1,
+                category_id=1,
+                check_in=date(2026, 4, 1),
+                check_out=date(2026, 4, 3),
+                current_room_id=None,
+                is_locked=False,
+                num_guests=3,
+            )
+        ]
+
+        result = _run_allocation_greedy(reservations, rooms)
+
+        assert result.success is True
+        assert result.assignments[1] == 2
+
     def test_sequential_fits_one_room(self):
         rooms = make_rooms(1, 1)
         reservations = [make_res(i,1,date(2026,4,1)+timedelta(days=i*3),date(2026,4,1)+timedelta(days=i*3+2)) for i in range(5)]
@@ -102,6 +124,28 @@ class TestCPSATAllocation:
         reservations = [make_res(1,1,date(2026,4,1),date(2026,4,5)), make_res(2,1,date(2026,4,3),date(2026,4,7))]
         result = run_allocation(reservations, rooms)
         assert result.success is False
+
+    def test_cpsat_capacity_constraint_assigns_only_room_with_enough_occupancy(self):
+        rooms = [
+            RoomSlot(room_id=1, room_number="101", category_id=1, max_occupancy=2),
+            RoomSlot(room_id=2, room_number="102", category_id=1, max_occupancy=4),
+        ]
+        reservations = [
+            ReservationSlot(
+                reservation_id=1,
+                category_id=1,
+                check_in=date(2026, 4, 1),
+                check_out=date(2026, 4, 3),
+                current_room_id=None,
+                is_locked=False,
+                num_guests=3,
+            )
+        ]
+
+        result = run_allocation(reservations, rooms)
+
+        assert result.success is True
+        assert result.assignments[1] == 2
 
     def test_cpsat_compaction(self):
         rooms = make_rooms(1, 5)

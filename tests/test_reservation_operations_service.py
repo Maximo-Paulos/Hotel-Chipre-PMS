@@ -480,6 +480,58 @@ def test_move_reservation_room_creates_feedback_trace(
     assert feedback.manual_override_reason_id == override.id
 
 
+def test_move_reservation_room_creates_manual_audit_event(
+    db,
+    hotel_config,
+    sample_categories,
+    sample_rooms,
+    sample_guest,
+):
+    reservation = Reservation(
+        confirmation_code="ROOM-MOVE-AUDIT",
+        hotel_id=hotel_config.id,
+        guest_id=sample_guest.id,
+        room_id=sample_rooms[0].id,
+        category_id=sample_categories[0].id,
+        check_in_date=date(2026, 8, 13),
+        check_out_date=date(2026, 8, 15),
+        total_amount=120.0,
+        subtotal_amount=120.0,
+        net_amount=120.0,
+        amount_paid=0.0,
+        deposit_amount=36.0,
+        currency_code="ARS",
+        status=ReservationStatusEnum.PENDING,
+        source=ReservationSourceEnum.DIRECT,
+        num_adults=2,
+        num_children=0,
+    )
+    db.add(reservation)
+    db.flush()
+
+    from app.models.operations import RoomMoveEvent
+    from app.services.reservation_operations_service import move_reservation_room
+
+    previous_room_id = sample_rooms[0].id
+    new_room_id = sample_rooms[1].id
+    event = move_reservation_room(
+        db,
+        reservation=reservation,
+        to_room_id=new_room_id,
+        hotel_id=hotel_config.id,
+        moved_by_user_id=None,
+        reason_code="guest_preference",
+        notes="Prefiere otra orientacion",
+    )
+    db.commit()
+
+    persisted_event = db.get(RoomMoveEvent, event.id)
+    assert persisted_event.from_room_id == previous_room_id
+    assert persisted_event.to_room_id == new_room_id
+    assert persisted_event.trigger_event == "manual"
+    assert persisted_event.reason_code == "guest_preference"
+
+
 def test_move_reservation_room_requires_reason_code(
     db,
     hotel_config,

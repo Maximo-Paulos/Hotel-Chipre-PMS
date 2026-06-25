@@ -7,10 +7,11 @@ from sqlalchemy.orm import Session
 
 from app.models.audit_log import AuditActionEnum
 from app.models.operations import RoomMoveEvent, RoomMovementGroup
-from app.models.reservation import Reservation
+from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.room import Room
 from app.models.security_audit_log import SecurityAuditLog
 from app.services import audit_log_service
+from app.services.reservation_service import check_room_availability
 
 
 class RoomMovementGroupError(Exception):
@@ -113,7 +114,7 @@ def revert_group(
     hotel_id: int,
     group_id: int,
     reverted_by_user_id: int | None = None,
-) -> RoomMovementGroup:
+) -> dict:
     group = get_group(db, hotel_id=hotel_id, group_id=group_id)
     if group is None:
         raise RoomMovementGroupError("Movement group not found")
@@ -132,7 +133,8 @@ def revert_group(
     if not events:
         raise RoomMovementGroupError("Movement group has no linked room moves")
 
-    reverted_reservation_ids: list[int] = []
+    reverted: list[dict] = []
+    conflicts: list[dict] = []
     for event in events:
         if event.from_room_id is None:
             raise RoomMovementGroupError("Movement without source room cannot be reverted automatically")
@@ -147,31 +149,100 @@ def revert_group(
         if from_room is None:
             raise RoomMovementGroupError("Original room no longer exists")
 
+        conflicting_reservations = _active_reservation_conflicts_for_room(
+            db,
+            hotel_id=hotel_id,
+            room_id=from_room.id,
+            check_in=reservation.check_in_date,
+            check_out=reservation.check_out_date,
+            exclude_reservation_id=reservation.id,
+        )
+        original_room_available = check_room_availability(
+            db,
+            from_room.id,
+            reservation.check_in_date,
+            reservation.check_out_date,
+            hotel_id=hotel_id,
+            exclude_reservation_id=reservation.id,
+        )
+        if conflicting_reservations or not original_room_available:
+            conflicts.append(
+                {
+                    "move_event_id": event.id,
+                    "reservation_id": reservation.id,
+                    "original_room_id": from_room.id,
+                    "current_room_id": reservation.room_id,
+                    "check_in_date": reservation.check_in_date.isoformat(),
+                    "check_out_date": reservation.check_out_date.isoformat(),
+                    "conflicting_reservation_ids": [row.id for row in conflicting_reservations],
+                    "reason": "original_room_unavailable",
+                }
+            )
+            continue
+
         reservation.room_id = from_room.id
         reservation.category_id = from_room.category_id
         reservation.allocation_locked = True
         reservation.requires_manual_review = False
-        reverted_reservation_ids.append(reservation.id)
+        reverted.append(
+            {
+                "move_event_id": event.id,
+                "reservation_id": reservation.id,
+                "room_id": from_room.id,
+            }
+        )
 
-    group.is_reverted = True
-    group.reverted_by_user_id = reverted_by_user_id
-    group.reverted_at = datetime.now(timezone.utc)
+    if not conflicts:
+        group.is_reverted = True
+        group.reverted_by_user_id = reverted_by_user_id
+        group.reverted_at = datetime.now(timezone.utc)
     db.add(
         SecurityAuditLog(
             hotel_id=hotel_id,
             user_id=reverted_by_user_id,
-            action="room_movement_group.reverted",
+            action="room_movement_group.reverted" if not conflicts else "room_movement_group.revert_partial",
             resource_type="room_movement_group",
             resource_id=str(group.id),
             details=json.dumps(
                 {
                     "group_id": group.id,
                     "move_event_ids": [event.id for event in events],
-                    "reservation_ids": reverted_reservation_ids,
+                    "reverted": reverted,
+                    "conflicts": conflicts,
                 },
                 sort_keys=True,
             ),
         )
     )
     db.flush()
-    return group
+    return {"group": group, "reverted": reverted, "conflicts": conflicts}
+
+
+def _active_reservation_conflicts_for_room(
+    db: Session,
+    *,
+    hotel_id: int,
+    room_id: int,
+    check_in,
+    check_out,
+    exclude_reservation_id: int,
+) -> list[Reservation]:
+    return (
+        db.query(Reservation)
+        .filter(
+            Reservation.hotel_id == hotel_id,
+            Reservation.room_id == room_id,
+            Reservation.id != exclude_reservation_id,
+            Reservation.deleted_at.is_(None),
+            Reservation.status.notin_(
+                [
+                    ReservationStatusEnum.CANCELLED,
+                    ReservationStatusEnum.CHECKED_OUT,
+                ]
+            ),
+            Reservation.check_in_date < check_out,
+            Reservation.check_out_date > check_in,
+        )
+        .order_by(Reservation.check_in_date.asc(), Reservation.id.asc())
+        .all()
+    )

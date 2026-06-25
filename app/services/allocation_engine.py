@@ -36,6 +36,7 @@ class ReservationSlot:
     check_out: date
     current_room_id: Optional[int]
     is_locked: bool  # True if checked_in (cannot be moved)
+    num_guests: int = 1
     mobility_restriction: bool = False
     allowed_category_ids: list[int] = field(default_factory=list)
     category_priority_by_id: dict[int, int] = field(default_factory=dict)
@@ -66,6 +67,7 @@ class RoomSlot:
     room_id: int
     room_number: str
     category_id: int
+    max_occupancy: int = 2
     floor: int = 0
     score: Optional[int] = None
     is_accessible: bool = False
@@ -198,6 +200,8 @@ def run_allocation(
         mobility_floor = _lowest_available_compatible_floor(res, rooms, reservations)
         for h_idx, room in enumerate(rooms):
             if room.category_id not in res.effective_allowed_category_ids:
+                model.Add(x[r_idx, h_idx] == 0)
+            if room.max_occupancy < res.num_guests:
                 model.Add(x[r_idx, h_idx] == 0)
             if res.mobility_restriction:
                 if not room.is_accessible:
@@ -399,6 +403,7 @@ def _run_allocation_greedy(
 
     # Track room occupancy: room_id → list of (check_in, check_out)
     room_occupancy: dict[int, list[tuple[date, date]]] = {r.room_id: [] for r in rooms}
+    rooms_by_id = {room.room_id: room for room in rooms}
 
     # Sort reservations: locked first, then by check-in date, then by length (longer first)
     sorted_reservations = sorted(
@@ -409,14 +414,20 @@ def _run_allocation_greedy(
     for res in sorted_reservations:
         # If locked, assign to current room
         if res.is_locked and res.current_room_id is not None:
-            assignments[res.reservation_id] = res.current_room_id
-            room_occupancy[res.current_room_id].append((res.check_in, res.check_out))
+            current_room = rooms_by_id.get(res.current_room_id)
+            if current_room is not None and current_room.max_occupancy >= res.num_guests:
+                assignments[res.reservation_id] = res.current_room_id
+                room_occupancy[res.current_room_id].append((res.check_in, res.check_out))
             continue
 
         # Find available rooms from all allowed categories
         candidate_rooms = []
         for cat_id in res.effective_allowed_category_ids:
             candidate_rooms.extend(rooms_by_category.get(cat_id, []))
+        candidate_rooms = [
+            room for room in candidate_rooms
+            if room.max_occupancy >= res.num_guests
+        ]
         if res.mobility_restriction:
             candidate_rooms = [room for room in candidate_rooms if room.is_accessible]
 
@@ -684,6 +695,7 @@ def build_slots_from_db(
                 active_lock_ids=active_lock_ids,
                 protected_company_ids=protected_company_ids,
             ),
+            num_guests=max(1, int((res.num_adults or 0) + (res.num_children or 0))),
             mobility_restriction=bool(getattr(res, "mobility_restriction", False)),
             allowed_category_ids=allowed,
             category_priority_by_id=priority_by_category,
@@ -709,6 +721,7 @@ def build_slots_from_db(
             room_id=room.id,
             room_number=room.room_number,
             category_id=room.category_id,
+            max_occupancy=max(1, int(getattr(room.category, "max_occupancy", 1) or 1)),
             floor=room.floor,
             score=room.score,
             is_accessible=bool(room.is_accessible),

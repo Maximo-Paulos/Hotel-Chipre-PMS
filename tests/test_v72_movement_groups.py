@@ -19,6 +19,7 @@ from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.security_audit_log import SecurityAuditLog
 from app.models.user import User
+from app.services.room_movement_group_service import revert_group
 
 
 @pytest.fixture
@@ -158,6 +159,82 @@ def test_revert_movement_group_restores_original_room_and_audits(movement_api_cl
         assert group.reverted_by_user_id == 10
         assert audit.action == "room_movement_group.reverted"
         assert audit.resource_id == str(group_id)
+
+
+def test_revert_group_service_returns_reverted_without_conflicts(movement_api_client):
+    _, SessionLocal, _ = movement_api_client
+    with SessionLocal() as db:
+        seeded = _seed_group(db, hotel_id=1, suffix="SERVICE_OK", trigger_reason="allocation_run")
+        group_id = seeded["group"].id
+        reservation_id = seeded["reservation"].id
+        from_room_id = seeded["from_room"].id
+
+        result = revert_group(db, hotel_id=1, group_id=group_id, reverted_by_user_id=10)
+
+        db.flush()
+        reservation = db.get(Reservation, reservation_id)
+        group = db.get(RoomMovementGroup, group_id)
+        assert result["conflicts"] == []
+        assert result["reverted"] == [
+            {
+                "move_event_id": seeded["event"].id,
+                "reservation_id": reservation_id,
+                "room_id": from_room_id,
+            }
+        ]
+        assert reservation.room_id == from_room_id
+        assert group.is_reverted is True
+
+
+def test_revert_group_service_conflict_does_not_overwrite_original_room(movement_api_client):
+    _, SessionLocal, _ = movement_api_client
+    with SessionLocal() as db:
+        seeded = _seed_group(db, hotel_id=1, suffix="SERVICE_CONFLICT", trigger_reason="allocation_run")
+        reservation = seeded["reservation"]
+        from_room = seeded["from_room"]
+        to_room = seeded["to_room"]
+        group_id = seeded["group"].id
+
+        blocker = Guest(
+            hotel_id=1,
+            first_name="Blocked",
+            last_name="Guest",
+            document_type=DocumentTypeEnum.DNI,
+            document_number="BLOCK-ROOM-1",
+            terms_accepted=True,
+        )
+        db.add(blocker)
+        db.flush()
+        blocking_reservation = Reservation(
+            hotel_id=1,
+            confirmation_code="BLOCK-ORIGINAL-ROOM",
+            guest_id=blocker.id,
+            room_id=from_room.id,
+            category_id=from_room.category_id,
+            check_in_date=reservation.check_in_date,
+            check_out_date=reservation.check_out_date,
+            status=ReservationStatusEnum.PENDING,
+            total_amount=100,
+            amount_paid=0,
+            deposit_amount=0,
+        )
+        db.add(blocking_reservation)
+        db.flush()
+
+        result = revert_group(db, hotel_id=1, group_id=group_id, reverted_by_user_id=10)
+
+        db.flush()
+        db.refresh(reservation)
+        db.refresh(blocking_reservation)
+        group = db.get(RoomMovementGroup, group_id)
+        assert result["reverted"] == []
+        assert len(result["conflicts"]) == 1
+        assert result["conflicts"][0]["reservation_id"] == reservation.id
+        assert result["conflicts"][0]["original_room_id"] == from_room.id
+        assert result["conflicts"][0]["conflicting_reservation_ids"] == [blocking_reservation.id]
+        assert reservation.room_id == to_room.id
+        assert blocking_reservation.room_id == from_room.id
+        assert group.is_reverted is False
 
 
 def test_movement_group_hotel_isolation(movement_api_client):

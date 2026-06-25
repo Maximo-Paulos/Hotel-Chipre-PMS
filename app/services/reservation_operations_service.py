@@ -663,6 +663,7 @@ def move_reservation_room(
         raise ReservationOperationsError("La habitacion destino no esta disponible para esas fechas")
 
     previous_room_id = reservation.room_id
+    status_value = reservation.status.value if hasattr(reservation.status, "value") else str(reservation.status)
     reservation.room_id = room.id
     reservation.category_id = room.category_id
     if move_type == RoomMoveTypeEnum.MANUAL_MOVE:
@@ -675,6 +676,10 @@ def move_reservation_room(
         to_room_id=room.id,
         move_type=move_type,
         reason_code=reason_code,
+        reason_note=notes,
+        trigger_event="manual" if move_type == RoomMoveTypeEnum.MANUAL_MOVE else None,
+        state_before=f"status={status_value};room_id={previous_room_id}",
+        state_after=f"status={status_value};room_id={room.id}",
         notes=notes,
         created_by_user_id=moved_by_user_id,
     )

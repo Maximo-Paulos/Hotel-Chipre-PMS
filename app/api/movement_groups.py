@@ -158,12 +158,13 @@ def revert_movement_group(
     context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
 ):
     try:
-        group = revert_group(
+        result = revert_group(
             db,
             hotel_id=context.hotel_id,
             group_id=group_id,
             reverted_by_user_id=context.user_id,
         )
+        group = result["group"]
         db.commit()
         db.refresh(group)
         return _group_to_read(group)
