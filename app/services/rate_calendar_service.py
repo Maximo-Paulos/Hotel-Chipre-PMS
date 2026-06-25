@@ -10,8 +10,24 @@ from app.models.analytics import RoomStateEvent
 from app.models.commercial import ProductRoomCompatibility, RatePlan, RatePlanPrice, SellableProduct
 from app.models.hotel_config import HotelConfiguration
 from app.models.ota_core import OTAInventoryRule, OTAPriceRule, OTAProvider, OTARatePlanMapping, OTARoomMapping
-from app.models.reservation import Reservation, ReservationStatusEnum
+from app.models.reservation import Reservation, ReservationSourceEnum, ReservationStatusEnum
 from app.models.room import Room, RoomCategory
+
+
+# §13 calendar cell states (derived, no persistence).
+_CELL_STATE_PENDING_PAYMENT = "pending_payment"        # §13.1 borde amarillo
+_CELL_STATE_OTA_UNPAID = "ota_unpaid"                  # §13.2 OTA sin pago
+_CELL_STATE_AVAILABLE_WITH_REVIEW = "available_with_review"  # §13.3 disponible con revisión
+_OTA_SOURCES = (
+    ReservationSourceEnum.BOOKING,
+    ReservationSourceEnum.EXPEDIA,
+    ReservationSourceEnum.OTHER_OTA,
+)
+_CELL_STATE_SEVERITY = {
+    _CELL_STATE_PENDING_PAYMENT: "yellow",
+    _CELL_STATE_OTA_UNPAID: "orange",
+    _CELL_STATE_AVAILABLE_WITH_REVIEW: "blue",
+}
 
 
 _PROVIDER_ORDER = (
@@ -196,11 +212,25 @@ def get_daily_calendar(
             )
 
     reservations_by_day: dict[date, int] = defaultdict(int)
+    # §13 cell states derived from the reservations touching each day.
+    cell_state_flags_by_day: dict[date, set[str]] = defaultdict(set)
     for reservation in reservations:
+        has_balance = reservation.balance_due > 0
+        is_ota = reservation.source in _OTA_SOURCES
+        states: set[str] = set()
+        if has_balance:
+            states.add(_CELL_STATE_PENDING_PAYMENT)  # §13.1
+        if is_ota and has_balance:
+            states.add(_CELL_STATE_OTA_UNPAID)  # §13.2
+        if reservation.requires_manual_review:
+            states.add(_CELL_STATE_AVAILABLE_WITH_REVIEW)  # §13.3
+
         current = max(date_from, reservation.check_in_date)
         end = min(date_to + timedelta(days=1), reservation.check_out_date)
         while current < end:
             reservations_by_day[current] += 1
+            if states:
+                cell_state_flags_by_day[current] |= states
             current += timedelta(days=1)
 
     blocked_rooms_by_day: dict[date, set[int]] = defaultdict(set)
@@ -238,6 +268,17 @@ def get_daily_calendar(
     current_date = date_from
     while current_date <= date_to:
         reserved = reservations_by_day[current_date]
+        day_states = cell_state_flags_by_day.get(current_date, set())
+        cell_states = [
+            state
+            for state in (
+                _CELL_STATE_PENDING_PAYMENT,
+                _CELL_STATE_OTA_UNPAID,
+                _CELL_STATE_AVAILABLE_WITH_REVIEW,
+            )
+            if state in day_states
+        ]
+        cell_state_severities = [_CELL_STATE_SEVERITY[state] for state in cell_states]
         blocked = len(blocked_rooms_by_day[current_date])
         for_sale = max(total_rooms - reserved - blocked, 0)
         occupancy_pct = int(round((reserved / total_rooms) * 100)) if total_rooms else 0
@@ -306,6 +347,8 @@ def get_daily_calendar(
                 "for_sale": for_sale,
                 "status": "open" if for_sale > 0 else "closed",
                 "occupancy_pct": occupancy_pct,
+                "cell_states": cell_states,
+                "cell_state_severities": cell_state_severities,
                 "channels": channels,
             }
         )

@@ -42,6 +42,10 @@ class RateCalendarDay(BaseModel):
     for_sale: int
     status: str
     occupancy_pct: int
+    # §13 derived calendar cell states (e.g. pending_payment, ota_unpaid,
+    # available_with_review) plus a suggested severity/color per state.
+    cell_states: list[str] = Field(default_factory=list)
+    cell_state_severities: list[str] = Field(default_factory=list)
     channels: list[RateCalendarChannelDay] = Field(default_factory=list)
 
 
