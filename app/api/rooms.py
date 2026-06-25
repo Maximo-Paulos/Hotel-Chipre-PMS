@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from typing import Optional
 
 from app.database import get_db
+from app.models.audit_log import AuditActionEnum
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.pricing import CategoryPricing
@@ -28,6 +29,7 @@ from app.services.allocation_runtime_service import run_persisted_allocation
 from app.services.read_model_cache import get_cached_availability_payload, invalidate_hotel_operational_caches
 from app.services.subscription_service import ensure_room_within_limit
 from app.services.analytics_service import record_hotel_audit_event
+from app.services import audit_log_service
 from app.services.timeseries_projection import project_room_state_event
 
 router = APIRouter(prefix="/api/rooms", tags=["Rooms"])
@@ -205,6 +207,15 @@ def create_room(
     db.add(room)
     db.commit()
     db.refresh(room)
+    audit_log_service.safe_create_audit_log(
+        db,
+        hotel_id=context.hotel_id,
+        table_name="rooms",
+        record_id=room.id,
+        action=AuditActionEnum.CREATE,
+        actor_user_id=context.user_id,
+        payload_after=audit_log_service.model_snapshot(room),
+    )
     return room
 
 
@@ -284,6 +295,7 @@ def update_room(
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
 
+    before = audit_log_service.model_snapshot(room)
     payload = data.model_dump(exclude_unset=True)
     if "category_id" in payload and payload["category_id"] is not None:
         category = db.query(RoomCategory).filter(RoomCategory.id == payload["category_id"], RoomCategory.hotel_id == context.hotel_id).first()
@@ -311,6 +323,16 @@ def update_room(
 
     db.commit()
     db.refresh(room)
+    audit_log_service.safe_create_audit_log(
+        db,
+        hotel_id=context.hotel_id,
+        table_name="rooms",
+        record_id=room.id,
+        action=AuditActionEnum.UPDATE,
+        actor_user_id=context.user_id,
+        payload_before=before,
+        payload_after=audit_log_service.model_snapshot(room),
+    )
     invalidate_hotel_operational_caches(context.hotel_id)
     return room
 
@@ -328,11 +350,22 @@ def update_room_status(
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
 
+    before = audit_log_service.model_snapshot(room)
     room.status = data.status
     if data.notes is not None:
         room.notes = data.notes
     db.commit()
     db.refresh(room)
+    audit_log_service.safe_create_audit_log(
+        db,
+        hotel_id=context.hotel_id,
+        table_name="rooms",
+        record_id=room.id,
+        action=AuditActionEnum.STATUS_CHANGE,
+        actor_user_id=context.user_id,
+        payload_before=before,
+        payload_after=audit_log_service.model_snapshot(room),
+    )
     invalidate_hotel_operational_caches(context.hotel_id)
     project_room_state_event(
         context.hotel_id,
@@ -375,7 +408,8 @@ def update_room_category(
     room = db.query(Room).filter(Room.id == room_id, Room.hotel_id == context.hotel_id).first()
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
-    
+
+    before = audit_log_service.model_snapshot(room)
     category = (
         db.query(RoomCategory)
         .filter(RoomCategory.id == data.category_id, RoomCategory.hotel_id == context.hotel_id)
@@ -387,6 +421,16 @@ def update_room_category(
     room.category_id = data.category_id
     db.commit()
     db.refresh(room)
+    audit_log_service.safe_create_audit_log(
+        db,
+        hotel_id=context.hotel_id,
+        table_name="rooms",
+        record_id=room.id,
+        action=AuditActionEnum.UPDATE,
+        actor_user_id=context.user_id,
+        payload_before=before,
+        payload_after=audit_log_service.model_snapshot(room),
+    )
     return room
 
 
@@ -487,6 +531,17 @@ def delete_room(
     if in_use > 0:
         raise HTTPException(status_code=400, detail="Room has active reservations and cannot be deleted")
 
+    before = audit_log_service.model_snapshot(room)
+    room_record_id = room.id
     db.delete(room)
     db.commit()
+    audit_log_service.safe_create_audit_log(
+        db,
+        hotel_id=context.hotel_id,
+        table_name="rooms",
+        record_id=room_record_id,
+        action=AuditActionEnum.DELETE,
+        actor_user_id=context.user_id,
+        payload_before=before,
+    )
     return None

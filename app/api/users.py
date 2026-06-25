@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies.auth import get_auth_context, AuthContext, require_roles
+from app.models.audit_log import AuditActionEnum
 from app.models.user import User
 from app.models.hotel_membership import HotelMembership
 from app.schemas.auth import UserInfo
@@ -18,6 +19,7 @@ from app.config import get_settings
 from app.master_admin.email_provider import MasterEmailConnectionError
 from app.services.email_service import mailer
 from app.models.hotel_config import HotelConfiguration
+from app.services import audit_log_service
 
 router = APIRouter(prefix="/api/users", tags=["Users"])
 
@@ -123,11 +125,13 @@ def invite_user(
         .filter(HotelMembership.hotel_id == context.hotel_id, HotelMembership.user_id == user.id)
         .first()
     )
+    before = audit_log_service.model_snapshot(membership)
     if membership:
         membership.role = role
         membership.status = "invited"
     else:
-        db.add(HotelMembership(hotel_id=context.hotel_id, user_id=user.id, role=role, status="invited"))
+        membership = HotelMembership(hotel_id=context.hotel_id, user_id=user.id, role=role, status="invited")
+        db.add(membership)
 
     db.commit()
     db.refresh(user)
@@ -136,6 +140,17 @@ def invite_user(
         .filter(HotelMembership.hotel_id == context.hotel_id, HotelMembership.user_id == user.id)
         .first()
     )
+    if membership:
+        audit_log_service.safe_create_audit_log(
+            db,
+            hotel_id=context.hotel_id,
+            table_name="hotel_memberships",
+            record_id=membership.id,
+            action=AuditActionEnum.CREATE if before is None else AuditActionEnum.UPDATE,
+            actor_user_id=context.user_id,
+            payload_before=before,
+            payload_after=audit_log_service.model_snapshot(membership),
+        )
 
     hotel = db.get(HotelConfiguration, context.hotel_id)
     hotel_name = hotel.hotel_name if hotel else f"Hotel {context.hotel_id}"
@@ -196,8 +211,19 @@ def revoke_user(
     if membership.user_id == context.user_id:
         raise HTTPException(status_code=400, detail="No puedes revocar tu propio acceso")
     _assert_manageable_membership(context.user_role, membership, action="revocar")
+    before = audit_log_service.model_snapshot(membership)
     membership.status = "revoked"
     db.commit()
+    audit_log_service.safe_create_audit_log(
+        db,
+        hotel_id=context.hotel_id,
+        table_name="hotel_memberships",
+        record_id=membership.id,
+        action=AuditActionEnum.STATUS_CHANGE,
+        actor_user_id=context.user_id,
+        payload_before=before,
+        payload_after=audit_log_service.model_snapshot(membership),
+    )
 
 
 @router.patch("/{user_id}/role", response_model=UserInfo)
@@ -220,10 +246,21 @@ def update_role(
     if membership.user_id == context.user_id:
         raise HTTPException(status_code=400, detail="No puedes cambiar tu propio rol")
     _assert_manageable_membership(context.user_role, membership, action="modificar")
+    before = audit_log_service.model_snapshot(membership)
     membership.role = payload.role
     membership.status = "active"
     user = db.get(User, user_id)
     db.commit()
+    audit_log_service.safe_create_audit_log(
+        db,
+        hotel_id=context.hotel_id,
+        table_name="hotel_memberships",
+        record_id=membership.id,
+        action=AuditActionEnum.UPDATE,
+        actor_user_id=context.user_id,
+        payload_before=before,
+        payload_after=audit_log_service.model_snapshot(membership),
+    )
     if user:
         db.refresh(user)
         return _membership_user_info(user, membership.role)

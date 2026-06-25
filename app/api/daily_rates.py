@@ -22,8 +22,10 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies.auth import AuthContext, require_roles
+from app.models.audit_log import AuditActionEnum
 from app.models.daily_rate import DailyRate, PricePeriod
 from app.models.room import RoomCategory
+from app.services import audit_log_service
 from app.services.pricing_service import (
     apply_price_period,
     get_price_for_date,
@@ -282,6 +284,7 @@ def upsert_daily_rate(
         .first()
     )
     if existing is None:
+        before = None
         row = DailyRate(
             hotel_id=context.hotel_id,
             category_id=category_id,
@@ -296,6 +299,7 @@ def upsert_daily_rate(
         )
         db.add(row)
     else:
+        before = audit_log_service.model_snapshot(existing)
         existing.price = payload.price
         existing.price_cash = payload.price_cash
         existing.price_transfer = payload.price_transfer
@@ -307,6 +311,16 @@ def upsert_daily_rate(
 
     db.commit()
     db.refresh(row)
+    audit_log_service.safe_create_audit_log(
+        db,
+        hotel_id=context.hotel_id,
+        table_name="daily_rates",
+        record_id=row.id,
+        action=AuditActionEnum.CREATE if before is None else AuditActionEnum.UPDATE,
+        actor_user_id=context.user_id,
+        payload_before=before,
+        payload_after=audit_log_service.model_snapshot(row),
+    )
     project_daily_rate_change(
         context.hotel_id,
         category_id,
@@ -355,12 +369,14 @@ def bulk_upsert_daily_rates(
 
     created = updated = 0
     touched_dates: list[date] = []
+    touched_rows: list[tuple[DailyRate, dict | None]] = []
     current = payload.from_date
     while current <= payload.to_date:
         if current not in exclude:
             touched_dates.append(current)
             if current in existing_map:
                 r = existing_map[current]
+                before = audit_log_service.model_snapshot(r)
                 r.price = payload.price
                 r.price_cash = payload.price_cash
                 r.price_transfer = payload.price_transfer
@@ -368,26 +384,38 @@ def bulk_upsert_daily_rates(
                 r.price_paypal = payload.price_paypal
                 r.price_credit_card = payload.price_credit_card
                 r.updated_at = datetime.now(timezone.utc)
+                touched_rows.append((r, before))
                 updated += 1
             else:
-                db.add(
-                    DailyRate(
-                        hotel_id=context.hotel_id,
-                        category_id=category_id,
-                        date=current,
-                        price=payload.price,
-                        price_cash=payload.price_cash,
-                        price_transfer=payload.price_transfer,
-                        price_mercadopago=payload.price_mercadopago,
-                        price_paypal=payload.price_paypal,
-                        price_credit_card=payload.price_credit_card,
-                        created_by_user_id=context.user_id,
-                    )
+                r = DailyRate(
+                    hotel_id=context.hotel_id,
+                    category_id=category_id,
+                    date=current,
+                    price=payload.price,
+                    price_cash=payload.price_cash,
+                    price_transfer=payload.price_transfer,
+                    price_mercadopago=payload.price_mercadopago,
+                    price_paypal=payload.price_paypal,
+                    price_credit_card=payload.price_credit_card,
+                    created_by_user_id=context.user_id,
                 )
+                db.add(r)
+                touched_rows.append((r, None))
                 created += 1
         current += timedelta(days=1)
 
     db.commit()
+    for row, before in touched_rows:
+        audit_log_service.safe_create_audit_log(
+            db,
+            hotel_id=context.hotel_id,
+            table_name="daily_rates",
+            record_id=row.id,
+            action=AuditActionEnum.CREATE if before is None else AuditActionEnum.UPDATE,
+            actor_user_id=context.user_id,
+            payload_before=before,
+            payload_after=audit_log_service.model_snapshot(row),
+        )
     changed_at = datetime.now(timezone.utc)
     for touched_date in touched_dates:
         project_daily_rate_change(
@@ -452,6 +480,15 @@ def create_price_period(
     db.add(period)
     db.commit()
     db.refresh(period)
+    audit_log_service.safe_create_audit_log(
+        db,
+        hotel_id=context.hotel_id,
+        table_name="price_periods",
+        record_id=period.id,
+        action=AuditActionEnum.CREATE,
+        actor_user_id=context.user_id,
+        payload_after=audit_log_service.model_snapshot(period),
+    )
     return period
 
 
@@ -474,6 +511,7 @@ def update_price_period(
     if not period:
         raise HTTPException(status_code=404, detail="Price period not found")
 
+    before = audit_log_service.model_snapshot(period)
     if payload.name is not None:
         period.name = payload.name
     if payload.start_date is not None:
@@ -494,6 +532,16 @@ def update_price_period(
 
     db.commit()
     db.refresh(period)
+    audit_log_service.safe_create_audit_log(
+        db,
+        hotel_id=context.hotel_id,
+        table_name="price_periods",
+        record_id=period.id,
+        action=AuditActionEnum.UPDATE,
+        actor_user_id=context.user_id,
+        payload_before=before,
+        payload_after=audit_log_service.model_snapshot(period),
+    )
     return period
 
 
@@ -514,8 +562,19 @@ def delete_price_period(
     )
     if not period:
         raise HTTPException(status_code=404, detail="Price period not found")
+    before = audit_log_service.model_snapshot(period)
+    period_record_id = period.id
     db.delete(period)
     db.commit()
+    audit_log_service.safe_create_audit_log(
+        db,
+        hotel_id=context.hotel_id,
+        table_name="price_periods",
+        record_id=period_record_id,
+        action=AuditActionEnum.DELETE,
+        actor_user_id=context.user_id,
+        payload_before=before,
+    )
 
 
 @router.post(

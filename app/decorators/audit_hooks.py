@@ -98,7 +98,15 @@ def _extract_db(bound: inspect.BoundArguments) -> Session | None:
 def _extract_actor_user_id(bound: inspect.BoundArguments) -> int | None:
     value = _first_bound_value(
         bound,
-        ("actor_user_id", "user_id", "current_user_id", "override_user_id"),
+        (
+            "actor_user_id",
+            "user_id",
+            "current_user_id",
+            "override_user_id",
+            "changed_by_user_id",
+            "created_by_user_id",
+            "moved_by_user_id",
+        ),
     )
     return value if isinstance(value, int) else None
 

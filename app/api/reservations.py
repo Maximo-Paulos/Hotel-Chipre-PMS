@@ -8,6 +8,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.models.audit_log import AuditActionEnum
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.room import Room, RoomCategory
 from app.models.hotel_config import HotelConfiguration
@@ -69,6 +70,7 @@ from app.services.payment_service import PaymentError
 from app.services.allocation_runtime_service import run_persisted_allocation
 from app.dependencies.auth import get_auth_context, AuthContext, require_roles, require_permission
 from app.services.permission_service import PERMISSION_RESERVATION_CREATE, PERMISSION_RESERVATION_ROOM_MOVE
+from app.services import audit_log_service
 from app.services.graph_projection import (
     project_company_link,
     project_reservation_assignment,
@@ -152,6 +154,15 @@ def create_new_reservation(
         reservation = create_reservation(db, data, hotel_id=context.hotel_id)
         db.commit()
         db.refresh(reservation)
+        audit_log_service.safe_create_audit_log(
+            db,
+            hotel_id=context.hotel_id,
+            table_name="reservations",
+            record_id=reservation.id,
+            action=AuditActionEnum.CREATE,
+            actor_user_id=context.user_id,
+            payload_after=audit_log_service.model_snapshot(reservation),
+        )
         _project_reservation_graph(context.hotel_id, reservation)
         background_tasks.add_task(_trigger_reoptimization_bg, hotel_id=context.hotel_id)
         return _to_read(reservation)
@@ -358,6 +369,7 @@ def cancel_reservation(
 
     if r.status == ReservationStatusEnum.CANCELLED:
         raise HTTPException(status_code=400, detail="Reservation is already cancelled")
+    before = audit_log_service.model_snapshot(r)
     try:
         transition_reservation_status(
             db,
@@ -369,6 +381,16 @@ def cancel_reservation(
         )
         db.commit()
         db.refresh(r)
+        audit_log_service.safe_create_audit_log(
+            db,
+            hotel_id=context.hotel_id,
+            table_name="reservations",
+            record_id=r.id,
+            action=AuditActionEnum.STATUS_CHANGE,
+            actor_user_id=context.user_id,
+            payload_before=before,
+            payload_after=audit_log_service.model_snapshot(r),
+        )
         return _to_read(r)
     except ReservationError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -385,6 +407,7 @@ def release_no_guarantee_reservation(
     r = get_reservation_by_id(db, reservation_id, context.hotel_id)
     if not r:
         raise HTTPException(status_code=404, detail="Reservation not found")
+    before = audit_log_service.model_snapshot(r)
     try:
         release_no_guarantee(
             db,
@@ -394,6 +417,16 @@ def release_no_guarantee_reservation(
         )
         db.commit()
         db.refresh(r)
+        audit_log_service.safe_create_audit_log(
+            db,
+            hotel_id=context.hotel_id,
+            table_name="reservations",
+            record_id=r.id,
+            action=AuditActionEnum.STATUS_CHANGE,
+            actor_user_id=context.user_id,
+            payload_before=before,
+            payload_after=audit_log_service.model_snapshot(r),
+        )
         return _to_read(r)
     except OTAManualReservationError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -410,6 +443,7 @@ def mark_no_show(
     r = get_reservation_by_id(db, reservation_id, context.hotel_id)
     if not r:
         raise HTTPException(status_code=404, detail="Reservation not found")
+    before = audit_log_service.model_snapshot(r)
     try:
         mark_reservation_no_show(
             db,
@@ -421,6 +455,16 @@ def mark_no_show(
         )
         db.commit()
         db.refresh(r)
+        audit_log_service.safe_create_audit_log(
+            db,
+            hotel_id=context.hotel_id,
+            table_name="reservations",
+            record_id=r.id,
+            action=AuditActionEnum.STATUS_CHANGE,
+            actor_user_id=context.user_id,
+            payload_before=before,
+            payload_after=audit_log_service.model_snapshot(r),
+        )
         return _to_read(r)
     except ReservationError as e:
         db.rollback()
@@ -438,6 +482,7 @@ def change_dates(
     r = get_reservation_by_id(db, reservation_id, context.hotel_id)
     if not r:
         raise HTTPException(status_code=404, detail="Reservation not found")
+    before = audit_log_service.model_snapshot(r)
     try:
         result = change_reservation_dates(
             db,
@@ -455,6 +500,16 @@ def change_dates(
         db.commit()
         db.refresh(result.original_reservation)
         db.refresh(result.reservation)
+        audit_log_service.safe_create_audit_log(
+            db,
+            hotel_id=context.hotel_id,
+            table_name="reservations",
+            record_id=result.reservation.id,
+            action=AuditActionEnum.UPDATE,
+            actor_user_id=context.user_id,
+            payload_before=before,
+            payload_after=audit_log_service.model_snapshot(result.reservation),
+        )
         background_tasks.add_task(
             _trigger_reoptimization_bg,
             hotel_id=context.hotel_id,
@@ -491,6 +546,7 @@ def modify_reservation(
         raise HTTPException(status_code=404, detail="Reservation not found")
     if r.status in (ReservationStatusEnum.CHECKED_IN, ReservationStatusEnum.CHECKED_OUT, ReservationStatusEnum.CANCELLED):
         raise HTTPException(status_code=400, detail=("Cannot modify: reservation is " + r.status.value))
+    before = audit_log_service.model_snapshot(r)
     try:
         update_reservation_fields(
             db,
@@ -504,6 +560,16 @@ def modify_reservation(
         )
         db.commit()
         db.refresh(r)
+        audit_log_service.safe_create_audit_log(
+            db,
+            hotel_id=context.hotel_id,
+            table_name="reservations",
+            record_id=r.id,
+            action=AuditActionEnum.UPDATE,
+            actor_user_id=context.user_id,
+            payload_before=before,
+            payload_after=audit_log_service.model_snapshot(r),
+        )
         if any(value is not None for value in (data.check_in_date, data.check_out_date, data.room_id)):
             background_tasks.add_task(
                 _trigger_reoptimization_bg,
@@ -526,6 +592,7 @@ def extend_stay(
     r = get_reservation_by_id(db, reservation_id, context.hotel_id)
     if not r:
         raise HTTPException(status_code=404, detail="Reservation not found")
+    before = audit_log_service.model_snapshot(r)
     try:
         result = extend_reservation_stay(
             db,
@@ -542,6 +609,16 @@ def extend_stay(
         )
         db.commit()
         db.refresh(r)
+        audit_log_service.safe_create_audit_log(
+            db,
+            hotel_id=context.hotel_id,
+            table_name="reservations",
+            record_id=r.id,
+            action=AuditActionEnum.UPDATE,
+            actor_user_id=context.user_id,
+            payload_before=before,
+            payload_after=audit_log_service.model_snapshot(r),
+        )
         response = ReservationExtensionResponse(
             reservation=_to_read(r),
             extension_amount=result.extension_amount,
@@ -570,6 +647,7 @@ def room_move(
     reservation = get_reservation_by_id(db, reservation_id, context.hotel_id)
     if not reservation:
         raise HTTPException(status_code=404, detail="Reservation not found")
+    before = audit_log_service.model_snapshot(reservation)
     try:
         event = move_reservation_room(
             db,
@@ -582,6 +660,16 @@ def room_move(
         )
         db.commit()
         db.refresh(reservation)
+        audit_log_service.safe_create_audit_log(
+            db,
+            hotel_id=context.hotel_id,
+            table_name="reservations",
+            record_id=reservation.id,
+            action=AuditActionEnum.UPDATE,
+            actor_user_id=context.user_id,
+            payload_before=before,
+            payload_after=audit_log_service.model_snapshot(reservation),
+        )
         _project_reservation_graph(context.hotel_id, reservation)
         project_room_movement(
             context.hotel_id,

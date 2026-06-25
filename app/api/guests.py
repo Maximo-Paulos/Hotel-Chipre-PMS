@@ -26,6 +26,8 @@ from app.services.guest_service import (
     search_guests,
     set_rating,
 )
+from app.models.audit_log import AuditActionEnum
+from app.services import audit_log_service
 from app.services.permission_service import PERMISSION_GUEST_EDIT, PERMISSION_GUEST_TAGS
 
 router = APIRouter(prefix="/api/guests", tags=["Guests"])
@@ -76,13 +78,36 @@ def create_guest(
     )
 
     # BRM §2.1: an existing guest is reused; only attach companions to brand-new records.
+    new_companions = []
     if created:
         for comp in companions_data:
             companion = GuestCompanion(guest_id=guest.id, **comp.model_dump())
             db.add(companion)
+            new_companions.append(companion)
 
     db.commit()
     db.refresh(guest)
+    if created:
+        audit_log_service.safe_create_audit_log(
+            db,
+            hotel_id=context.hotel_id,
+            table_name="guests",
+            record_id=guest.id,
+            action=AuditActionEnum.CREATE,
+            actor_user_id=context.user_id,
+            payload_after=audit_log_service.model_snapshot(guest),
+        )
+    for companion in new_companions:
+        db.refresh(companion)
+        audit_log_service.safe_create_audit_log(
+            db,
+            hotel_id=context.hotel_id,
+            table_name="guest_companions",
+            record_id=companion.id,
+            action=AuditActionEnum.CREATE,
+            actor_user_id=context.user_id,
+            payload_after=audit_log_service.model_snapshot(companion),
+        )
     return guest
 
 
@@ -281,13 +306,24 @@ def update_guest(
     guest = db.query(Guest).filter(Guest.id == guest_id, Guest.hotel_id == context.hotel_id).first()
     if not guest:
         raise HTTPException(status_code=404, detail="Guest not found")
-        
+
+    before = audit_log_service.model_snapshot(guest)
     update_data = data.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(guest, key, value)
         
     db.commit()
     db.refresh(guest)
+    audit_log_service.safe_create_audit_log(
+        db,
+        hotel_id=context.hotel_id,
+        table_name="guests",
+        record_id=guest.id,
+        action=AuditActionEnum.UPDATE,
+        actor_user_id=context.user_id,
+        payload_before=before,
+        payload_after=audit_log_service.model_snapshot(guest),
+    )
     return guest
 
 @router.post("/{guest_id}/companions", response_model=list[GuestCompanionRead], status_code=status.HTTP_201_CREATED)
@@ -311,4 +347,13 @@ def add_companions(
     db.commit()
     for c in new_companions:
         db.refresh(c)
+        audit_log_service.safe_create_audit_log(
+            db,
+            hotel_id=context.hotel_id,
+            table_name="guest_companions",
+            record_id=c.id,
+            action=AuditActionEnum.CREATE,
+            actor_user_id=context.user_id,
+            payload_after=audit_log_service.model_snapshot(c),
+        )
     return new_companions

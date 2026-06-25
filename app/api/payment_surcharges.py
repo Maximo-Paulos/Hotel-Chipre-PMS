@@ -17,7 +17,9 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies.auth import AuthContext, require_roles
+from app.models.audit_log import AuditActionEnum
 from app.models.payment_surcharge import PaymentSurcharge, PaymentSurchargeTypeEnum
+from app.services import audit_log_service
 
 router = APIRouter(prefix="/api/payment-surcharges", tags=["Payment Surcharges"])
 
@@ -118,6 +120,15 @@ def create_payment_surcharge(
     db.add(surcharge)
     db.commit()
     db.refresh(surcharge)
+    audit_log_service.safe_create_audit_log(
+        db,
+        hotel_id=context.hotel_id,
+        table_name="payment_surcharges",
+        record_id=surcharge.id,
+        action=AuditActionEnum.CREATE,
+        actor_user_id=context.user_id,
+        payload_after=audit_log_service.model_snapshot(surcharge),
+    )
     return PaymentSurchargeRead.model_validate(surcharge)
 
 
@@ -129,6 +140,7 @@ def update_payment_surcharge(
     context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
 ) -> PaymentSurchargeRead:
     surcharge = _get_surcharge_or_404(db, surcharge_id, context.hotel_id)
+    before = audit_log_service.model_snapshot(surcharge)
 
     if payload.payment_method is not None:
         surcharge.payment_method = payload.payment_method
@@ -143,6 +155,16 @@ def update_payment_surcharge(
 
     db.commit()
     db.refresh(surcharge)
+    audit_log_service.safe_create_audit_log(
+        db,
+        hotel_id=context.hotel_id,
+        table_name="payment_surcharges",
+        record_id=surcharge.id,
+        action=AuditActionEnum.UPDATE,
+        actor_user_id=context.user_id,
+        payload_before=before,
+        payload_after=audit_log_service.model_snapshot(surcharge),
+    )
     return PaymentSurchargeRead.model_validate(surcharge)
 
 
@@ -153,7 +175,18 @@ def deactivate_payment_surcharge(
     context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
 ) -> PaymentSurchargeRead:
     surcharge = _get_surcharge_or_404(db, surcharge_id, context.hotel_id)
+    before = audit_log_service.model_snapshot(surcharge)
     surcharge.is_active = False
     db.commit()
     db.refresh(surcharge)
+    audit_log_service.safe_create_audit_log(
+        db,
+        hotel_id=context.hotel_id,
+        table_name="payment_surcharges",
+        record_id=surcharge.id,
+        action=AuditActionEnum.STATUS_CHANGE,
+        actor_user_id=context.user_id,
+        payload_before=before,
+        payload_after=audit_log_service.model_snapshot(surcharge),
+    )
     return PaymentSurchargeRead.model_validate(surcharge)
