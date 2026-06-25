@@ -10,6 +10,8 @@ A completed gateway Payment writes exactly one Transaction via payment_service.p
 (the canonical ledger). PaymentLink collection totals are recomputed from completed Payments.
 """
 from datetime import datetime, timezone
+import hashlib
+import hmac
 import json
 from typing import Any
 
@@ -25,6 +27,35 @@ from app.services.payment_service import calculate_base_amount_before_surcharge,
 
 class PaymentWebhookError(Exception):
     pass
+
+
+def _parse_mercadopago_signature_header(signature_header: str | None) -> dict[str, str]:
+    if not signature_header:
+        return {}
+    parts: dict[str, str] = {}
+    for chunk in signature_header.split(","):
+        key, separator, value = chunk.strip().partition("=")
+        if separator and key:
+            parts[key.strip()] = value.strip()
+    return parts
+
+
+def validate_mercadopago_webhook_signature(
+    secret: str,
+    *,
+    data_id: str,
+    request_id: str | None,
+    signature_header: str | None,
+) -> bool:
+    signature_parts = _parse_mercadopago_signature_header(signature_header)
+    ts = signature_parts.get("ts")
+    v1 = signature_parts.get("v1")
+    if not secret or not data_id or not request_id or not ts or not v1:
+        return False
+
+    manifest = f"id:{data_id};request-id:{request_id};ts:{ts};"
+    expected = hmac.new(secret.encode("utf-8"), manifest.encode("utf-8"), hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, v1)
 
 
 def _payload_value(payload: dict[str, Any], *keys: str) -> Any:
