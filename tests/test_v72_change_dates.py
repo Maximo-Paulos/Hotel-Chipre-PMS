@@ -144,11 +144,6 @@ def test_change_dates_blocked_when_room_conflict(db, sample_guest, sample_rooms)
         )
 
 
-@pytest.mark.xfail(
-    reason="main difiere de BRM §8.3: change_reservation_dates no valida fecha de check-in "
-    "en el pasado (no existe el chequeo 'pasado') (gap Phase 3/5)",
-    strict=False,
-)
 def test_change_dates_blocked_for_past_check_in(db, sample_guest, sample_rooms):
     """§8.3 — Changing to a past check-in date is rejected."""
     res = _reservation(

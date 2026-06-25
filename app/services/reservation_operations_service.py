@@ -140,6 +140,8 @@ def change_reservation_dates(
     assert_reservation_version(reservation, client_version)
     if check_out_date <= check_in_date:
         raise ReservationOperationsError("Check-out must be after check-in")
+    if check_in_date < date.today():
+        raise ReservationOperationsError("No se puede cambiar la fecha de check-in a una fecha en el pasado")
     if reservation.status in (
         ReservationStatusEnum.CHECKED_IN,
         ReservationStatusEnum.CHECKED_OUT,

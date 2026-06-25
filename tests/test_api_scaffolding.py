@@ -405,6 +405,83 @@ def test_release_no_guarantee_endpoint_releases_ota_reservation(api_client):
         assert res.settlement_status == "internal_release_no_guarantee"
 
 
+def test_add_reservation_guests_enforces_category_capacity(api_client):
+    client, SessionLocal = api_client
+
+    with SessionLocal() as db:
+        primary_guest = Guest(
+            first_name="Primary",
+            last_name="Guest",
+            document_type=DocumentTypeEnum.DNI,
+            document_number="CAP-PRIMARY",
+            hotel_id=1,
+        )
+        category = RoomCategory(
+            hotel_id=1,
+            name="Capacity Cat",
+            code="CAP_CAT",
+            base_price_per_night=100.0,
+            max_occupancy=2,
+        )
+        db.add_all([primary_guest, category])
+        db.flush()
+        reservation = Reservation(
+            confirmation_code="CAP-ADD-001",
+            hotel_id=1,
+            guest_id=primary_guest.id,
+            category_id=category.id,
+            check_in_date=date(2027, 4, 10),
+            check_out_date=date(2027, 4, 12),
+            total_amount=200.0,
+            amount_paid=0.0,
+            deposit_amount=60.0,
+            subtotal_amount=200.0,
+            tax_amount=0.0,
+            fee_amount=0.0,
+            commission_amount=0.0,
+            net_amount=200.0,
+            currency_code="ARS",
+            status=ReservationStatusEnum.PENDING,
+            num_adults=1,
+            num_children=0,
+        )
+        db.add(reservation)
+        db.commit()
+        reservation_id = reservation.id
+
+    up_to_capacity = client.post(
+        f"/api/reservations/{reservation_id}/guests",
+        json=[
+            {
+                "first_name": "Allowed",
+                "last_name": "Guest",
+                "document_type": DocumentTypeEnum.DNI.value,
+                "document_number": "CAP-ALLOWED",
+            }
+        ],
+    )
+    assert up_to_capacity.status_code == 200, up_to_capacity.text
+    assert len(up_to_capacity.json()["additional_guests"]) == 1
+
+    exceeding = client.post(
+        f"/api/reservations/{reservation_id}/guests",
+        json=[
+            {
+                "first_name": "Extra",
+                "last_name": "Guest",
+                "document_type": DocumentTypeEnum.DNI.value,
+                "document_number": "CAP-EXTRA",
+            }
+        ],
+    )
+    assert exceeding.status_code == 400
+    assert "capacity" in exceeding.json()["detail"].lower()
+
+    with SessionLocal() as db:
+        reservation = db.get(Reservation, reservation_id)
+        assert len(reservation.additional_guests) == 1
+
+
 def test_release_no_guarantee_endpoint_forbidden_for_unauthorized_role(api_client):
     client, SessionLocal = api_client
     reservation_id = _seed_ota_no_guarantee_reservation(SessionLocal)

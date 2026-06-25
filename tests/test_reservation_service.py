@@ -4,7 +4,8 @@ Tests for Reservation Service — booking creation, availability checks, state t
 import pytest
 from datetime import date
 
-from app.models.reservation import Reservation, ReservationStatusEnum
+from app.models.guest import DocumentTypeEnum, Guest
+from app.models.reservation import Reservation, ReservationChannelCodeEnum, ReservationSourceEnum, ReservationStatusEnum
 from app.models.room import Room
 from app.schemas.reservation import ReservationCreate
 from app.services.reservation_service import (
@@ -191,6 +192,77 @@ class TestReservationCreation:
         )
         with pytest.raises(ReservationError, match="not available"):
             create_reservation(db, data2)
+
+    @pytest.mark.parametrize(
+        ("document_number", "phone", "missing_field"),
+        [
+            (None, "+541155550001", "document_number"),
+            ("44555001", None, "phone"),
+        ],
+    )
+    def test_manual_phone_reservation_requires_guest_document_and_phone(
+        self,
+        db,
+        sample_categories,
+        hotel_config,
+        document_number,
+        phone,
+        missing_field,
+    ):
+        guest = Guest(
+            first_name="Manual",
+            last_name=f"Missing {missing_field}",
+            document_type=DocumentTypeEnum.DNI if document_number else None,
+            document_number=document_number,
+            phone=phone,
+            hotel_id=hotel_config.id,
+        )
+        db.add(guest)
+        db.flush()
+
+        data = ReservationCreate(
+            guest_id=guest.id,
+            category_id=sample_categories[0].id,
+            check_in_date=date(2027, 4, 1),
+            check_out_date=date(2027, 4, 3),
+            source=ReservationSourceEnum.DIRECT,
+            pricing_channel_code="phone",
+        )
+
+        with pytest.raises(ReservationError, match=missing_field):
+            create_reservation(db, data, hotel_id=hotel_config.id)
+
+    def test_manual_channel_reservation_allows_guest_with_document_and_phone(
+        self,
+        db,
+        sample_categories,
+        sample_rooms,
+        hotel_config,
+    ):
+        guest = Guest(
+            first_name="Manual",
+            last_name="Guest",
+            document_type=DocumentTypeEnum.DNI,
+            document_number="44555111",
+            phone="+541155551111",
+            hotel_id=hotel_config.id,
+        )
+        db.add(guest)
+        db.flush()
+
+        data = ReservationCreate(
+            guest_id=guest.id,
+            category_id=sample_categories[0].id,
+            check_in_date=date(2027, 4, 5),
+            check_out_date=date(2027, 4, 7),
+            source=ReservationSourceEnum.DIRECT,
+            channel_code=ReservationChannelCodeEnum.PHONE,
+        )
+
+        reservation = create_reservation(db, data, hotel_id=hotel_config.id)
+
+        assert reservation.id is not None
+        assert reservation.channel_code == ReservationChannelCodeEnum.PHONE
 
 
 def test_create_reservation_uses_rate_plan_quote_when_commercial_context_is_provided(

@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import date, datetime
 from decimal import Decimal
-from app.models.reservation import ReservationStatusEnum, ReservationSourceEnum
+from app.models.reservation import ReservationChannelCodeEnum, ReservationStatusEnum, ReservationSourceEnum
 from app.schemas.payment_link import PaymentLinkCreate, PaymentLinkRead
 from app.schemas.transaction import PaymentRequest, TransactionRead
 from app.schemas.guest import GuestRead
@@ -31,6 +31,7 @@ class ReservationCreate(BaseModel):
     num_children: int = Field(default=0, ge=0)
     notes: Optional[str] = None
     source: ReservationSourceEnum = ReservationSourceEnum.DIRECT
+    channel_code: Optional[ReservationChannelCodeEnum] = None
     external_id: Optional[str] = None
     pricing_channel_code: Optional[str] = Field(default=None, max_length=50)
     guest_scope: str = Field(default="all", max_length=30)

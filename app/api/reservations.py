@@ -319,7 +319,57 @@ def add_reservation_guests(
     reservation = get_reservation_by_id(db, reservation_id, context.hotel_id)
     if not reservation:
         raise HTTPException(status_code=404, detail="Reservation not found")
-        
+
+    category = reservation.category or db.query(RoomCategory).filter(
+        RoomCategory.id == reservation.category_id,
+        RoomCategory.hotel_id == context.hotel_id,
+    ).first()
+    if not category:
+        raise HTTPException(status_code=400, detail="Room category not found for reservation")
+
+    linked_guest_ids = {reservation.guest_id}
+    linked_guest_ids.update(g.id for g in reservation.additional_guests)
+    incoming_existing_guest_ids: set[int] = set()
+    incoming_new_document_numbers: set[str] = set()
+    incoming_new_without_document = 0
+
+    for guest_data in guests:
+        document_number = str(guest_data.document_number or "").strip()
+        if document_number:
+            if document_number in incoming_new_document_numbers:
+                continue
+            existing_guest_id = (
+                db.query(Guest.id)
+                .filter(
+                    Guest.document_number == document_number,
+                    Guest.hotel_id == context.hotel_id,
+                )
+                .limit(1)
+                .scalar()
+            )
+            if existing_guest_id:
+                if existing_guest_id not in linked_guest_ids:
+                    incoming_existing_guest_ids.add(existing_guest_id)
+            else:
+                incoming_new_document_numbers.add(document_number)
+        else:
+            incoming_new_without_document += 1
+
+    proposed_guest_count = (
+        len(linked_guest_ids)
+        + len(incoming_existing_guest_ids)
+        + len(incoming_new_document_numbers)
+        + incoming_new_without_document
+    )
+    if proposed_guest_count > category.max_occupancy:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Guest capacity exceeded for reservation room category: "
+                f"max_occupancy={category.max_occupancy}, requested_total={proposed_guest_count}"
+            ),
+        )
+
     for guest_data in guests:
         # Check if guest already exists by DocNum
         guest = None

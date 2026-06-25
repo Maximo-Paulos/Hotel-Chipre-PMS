@@ -20,6 +20,7 @@ from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.guest import Guest
 from app.models.reservation import (
     Reservation,
+    ReservationChannelCodeEnum,
     ReservationNoShowPolicyAppliedEnum,
     ReservationOutcomeEnum,
     ReservationStatusEnum,
@@ -40,6 +41,24 @@ logger = logging.getLogger(__name__)
 class ReservationError(Exception):
     """Custom exception for reservation business logic errors."""
     pass
+
+
+_MANUAL_TELEPHONIC_CHANNELS = {
+    "manual",
+    "telefono",
+    "phone",
+    "walk_in",
+}
+
+_CHANNEL_CODE_ALIASES = {
+    "phone": ReservationChannelCodeEnum.PHONE,
+    "telefono": ReservationChannelCodeEnum.PHONE,
+    "tel": ReservationChannelCodeEnum.PHONE,
+    "telephone": ReservationChannelCodeEnum.PHONE,
+    "walk_in": ReservationChannelCodeEnum.WALK_IN,
+    "walkin": ReservationChannelCodeEnum.WALK_IN,
+    "manual": ReservationChannelCodeEnum.OTHER_DIRECT,
+}
 
 
 @dataclass(slots=True)
@@ -249,6 +268,61 @@ def _resolve_reservation_company(db: Session, *, hotel_id: int, company_id: int 
     return company
 
 
+def _reservation_channel_indicator(value) -> str | None:
+    if value is None:
+        return None
+    raw = getattr(value, "value", value)
+    normalized = str(raw).strip().lower().replace("-", "_").replace(" ", "_")
+    return normalized or None
+
+
+def _is_manual_or_telephonic_reservation(data: ReservationCreate) -> bool:
+    return any(
+        indicator in _MANUAL_TELEPHONIC_CHANNELS
+        for indicator in (
+            _reservation_channel_indicator(data.channel_code),
+            _reservation_channel_indicator(data.pricing_channel_code),
+            _reservation_channel_indicator(data.source),
+        )
+    )
+
+
+def _validate_manual_telephonic_guest_requirements(guest: Guest, data: ReservationCreate) -> None:
+    if not _is_manual_or_telephonic_reservation(data):
+        return
+
+    missing = []
+    if not str(guest.document_number or "").strip():
+        missing.append("document_number")
+    if not str(guest.phone or "").strip():
+        missing.append("phone")
+
+    if missing:
+        raise ReservationError(
+            "Manual or telephonic reservations require guest document_number and phone; "
+            f"missing: {', '.join(missing)}"
+        )
+
+
+def _resolve_creation_channel_code(data: ReservationCreate) -> ReservationChannelCodeEnum:
+    if data.channel_code is not None:
+        return data.channel_code
+
+    indicator = _reservation_channel_indicator(data.pricing_channel_code)
+    if indicator in ReservationChannelCodeEnum._value2member_map_:
+        return ReservationChannelCodeEnum(indicator)
+    if indicator in _CHANNEL_CODE_ALIASES:
+        return _CHANNEL_CODE_ALIASES[indicator]
+
+    if data.source == ReservationSourceEnum.BOOKING:
+        return ReservationChannelCodeEnum.BOOKING
+    if data.source == ReservationSourceEnum.EXPEDIA:
+        return ReservationChannelCodeEnum.EXPEDIA
+    if data.source == ReservationSourceEnum.OTHER_OTA:
+        return ReservationChannelCodeEnum.OTHER_OTA
+    return ReservationChannelCodeEnum.OTHER_DIRECT
+
+
 def _pricing_with_total(
     db: Session,
     *,
@@ -442,8 +516,10 @@ def create_reservation(db: Session, data: ReservationCreate, hotel_id: Optional[
         raise ReservationError("Guest does not belong to the active hotel")
     if category.hotel_id != hotel_id:
         raise ReservationError("Room category does not belong to the active hotel")
+    _validate_manual_telephonic_guest_requirements(guest, data)
 
     company = _resolve_reservation_company(db, hotel_id=hotel_id, company_id=data.company_id)
+    channel_code = _resolve_creation_channel_code(data)
 
     pricing = calculate_reservation_pricing(
         db,
@@ -527,6 +603,7 @@ def create_reservation(db: Session, data: ReservationCreate, hotel_id: Optional[
         fx_rate_snapshot=pricing.fx_rate_snapshot,
         status=ReservationStatusEnum.PENDING,
         source=data.source,
+        channel_code=channel_code,
         external_id=data.external_id,
         num_adults=data.num_adults,
         num_children=data.num_children,
