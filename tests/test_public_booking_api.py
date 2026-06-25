@@ -164,6 +164,59 @@ def test_revoked_key_is_rejected(public_client_with_db):
     assert response.status_code == 401
 
 
+def _seed_reservation(db, hotel_id, category, guest, code, *, total=200, paid=50):
+    reservation = Reservation(
+        confirmation_code=code,
+        hotel_id=hotel_id,
+        guest_id=guest.id,
+        category_id=category.id,
+        check_in_date=date(2026, 9, 1),
+        check_out_date=date(2026, 9, 3),
+        total_amount=total,
+        amount_paid=paid,
+    )
+    db.add(reservation)
+    db.commit()
+    db.refresh(reservation)
+    return reservation
+
+
+def test_public_reservation_status_returns_own_reservation(public_client_with_db):
+    client, db = public_client_with_db
+    _hotel, category, _room, guest = _seed_hotel(db, 1)
+    _key, secret = _issue_public_key(db, 1)
+    reservation = _seed_reservation(db, 1, category, guest, "CONF-OWN-1", total=200, paid=50)
+
+    resp = client.get(f"/api/public/booking/reservations/{reservation.id}", headers=_headers(secret))
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["id"] == reservation.id
+    assert body["confirmation_code"] == "CONF-OWN-1"
+    assert body["status"] == "pending"
+    assert float(body["balance_due"]) == 150.0
+    assert float(body["amount_paid"]) == 50.0
+    assert body["payment_status"] == "partially_paid"
+
+    # Lookup by confirmation code also works and is scoped.
+    by_code = client.get("/api/public/booking/reservations/by-code/CONF-OWN-1", headers=_headers(secret))
+    assert by_code.status_code == 200, by_code.text
+    assert by_code.json()["id"] == reservation.id
+
+
+def test_public_reservation_status_other_hotel_is_404(public_client_with_db):
+    client, db = public_client_with_db
+    _hotel_a, category_a, _room_a, guest_a = _seed_hotel(db, 1)
+    _hotel_b, category_b, _room_b, guest_b = _seed_hotel(db, 2)
+    _key, secret_a = _issue_public_key(db, 1)
+    other = _seed_reservation(db, 2, category_b, guest_b, "CONF-OTHER-2")
+
+    resp = client.get(f"/api/public/booking/reservations/{other.id}", headers=_headers(secret_a))
+    assert resp.status_code == 404
+
+    by_code = client.get("/api/public/booking/reservations/by-code/CONF-OTHER-2", headers=_headers(secret_a))
+    assert by_code.status_code == 404
+
+
 def test_public_api_rate_limit_is_per_hotel_key(public_client_with_db):
     client, db = public_client_with_db
     _seed_hotel(db, 1)

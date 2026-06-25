@@ -60,8 +60,59 @@ class ReservationChannelCodeEnum(str, enum.Enum):
     BOOKING = "booking"
     EXPEDIA = "expedia"
     DESPEGAR = "despegar"
+    COMPANY = "company"          # v72 §16.2: corporate / empresa channel
     OTHER_OTA = "other_ota"
     OTHER_DIRECT = "other_direct"
+
+
+class ReportableOriginEnum(str, enum.Enum):
+    """v72 §16.2 reportable origin — the 7 business-level booking origins.
+
+    Derived (not stored) from channel_code + company_id + source. A reservation
+    with a company_id is always reported as ``empresa`` regardless of channel.
+    """
+    MANUAL_RECEPCION = "manual_recepcion"   # Manual recepción (walk-in / phone front-desk)
+    TELEFONO = "telefono"                   # Teléfono
+    WHATSAPP_BOT = "whatsapp_bot"           # WhatsApp Bot
+    WEB_PROPIA = "web_propia"               # Web propia
+    BOOKING_MANUAL = "booking_manual"       # Booking manual
+    EXPEDIA_MANUAL = "expedia_manual"       # Expedia manual
+    EMPRESA = "empresa"                     # Empresa (corporate / company_id set)
+
+
+def reportable_origin(reservation) -> "ReportableOriginEnum":
+    """Derive the BRM §16.2 reportable origin for a reservation.
+
+    Precedence:
+      1. If ``company_id`` is set → EMPRESA (overrides channel).
+      2. Otherwise map ``channel_code`` to the reportable origin.
+      3. Fall back on ``source`` for OTA values when channel is generic.
+    """
+    if getattr(reservation, "company_id", None):
+        return ReportableOriginEnum.EMPRESA
+
+    channel = getattr(reservation, "channel_code", None)
+    mapping = {
+        ReservationChannelCodeEnum.WALK_IN: ReportableOriginEnum.MANUAL_RECEPCION,
+        ReservationChannelCodeEnum.PHONE: ReportableOriginEnum.TELEFONO,
+        ReservationChannelCodeEnum.WHATSAPP: ReportableOriginEnum.WHATSAPP_BOT,
+        ReservationChannelCodeEnum.WEBSITE_DIRECT: ReportableOriginEnum.WEB_PROPIA,
+        ReservationChannelCodeEnum.BOOKING: ReportableOriginEnum.BOOKING_MANUAL,
+        ReservationChannelCodeEnum.EXPEDIA: ReportableOriginEnum.EXPEDIA_MANUAL,
+        ReservationChannelCodeEnum.COMPANY: ReportableOriginEnum.EMPRESA,
+    }
+    if channel in mapping:
+        return mapping[channel]
+
+    # Generic / OTA channels: fall back on source provider for OTA origins.
+    source = getattr(reservation, "source", None)
+    if source == ReservationSourceEnum.BOOKING:
+        return ReportableOriginEnum.BOOKING_MANUAL
+    if source == ReservationSourceEnum.EXPEDIA:
+        return ReportableOriginEnum.EXPEDIA_MANUAL
+
+    # other_ota / other_direct / despegar / unknown → default to manual reception.
+    return ReportableOriginEnum.MANUAL_RECEPCION
 
 
 class ReservationCancellationReasonCodeEnum(str, enum.Enum):

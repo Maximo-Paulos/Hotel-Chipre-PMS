@@ -102,5 +102,26 @@ class PublicReservationRead(ReservationRead):
     pass
 
 
+class PublicReservationStatusRead(BaseModel):
+    """Read-only reservation/payment status for the public API (v72 §16).
+
+    Scoped to the API key's hotel. Exposes only the queried reservation's own
+    state — never other guests' data.
+    """
+    id: int
+    confirmation_code: str
+    status: str
+    check_in_date: date
+    check_out_date: date
+    total_amount: Decimal
+    amount_paid: Decimal
+    balance_due: Decimal
+    currency_code: str = "ARS"
+    payment_status: str
+    settlement_status: str = "not_applicable"
+
+    model_config = {"from_attributes": True}
+
+
 class PublicPaymentLinkRead(PaymentLinkRead):
     pass

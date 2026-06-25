@@ -6,7 +6,11 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies.api_key_auth import PublicAPIContext, get_public_api_context
-from app.models.reservation import ReservationChannelCodeEnum, ReservationSourceEnum
+from app.models.reservation import (
+    Reservation,
+    ReservationChannelCodeEnum,
+    ReservationSourceEnum,
+)
 from app.models.room import RoomCategory
 from app.schemas.hotel_api_key import (
     PublicAvailabilityResponse,
@@ -16,6 +20,7 @@ from app.schemas.hotel_api_key import (
     PublicRateQuote,
     PublicReservationCreate,
     PublicReservationRead,
+    PublicReservationStatusRead,
 )
 from app.schemas.reservation import ReservationCreate
 from app.services.payment_link_service import PaymentLinkError, create_link
@@ -123,6 +128,85 @@ def public_create_reservation(
     except ReservationError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+def _derive_payment_status(reservation: Reservation) -> str:
+    """Coarse payment status derived from amounts (no sensitive detail)."""
+    from decimal import Decimal
+
+    def _d(value) -> Decimal:
+        return Decimal(str(value)) if value is not None else Decimal("0")
+
+    paid = _d(reservation.amount_paid)
+    total = _d(reservation.total_amount)
+    if paid <= Decimal("0"):
+        return "unpaid"
+    if paid >= total:
+        return "paid"
+    return "partially_paid"
+
+
+def _serialize_reservation_status(reservation: Reservation) -> PublicReservationStatusRead:
+    return PublicReservationStatusRead(
+        id=reservation.id,
+        confirmation_code=reservation.confirmation_code,
+        status=getattr(reservation.status, "value", reservation.status),
+        check_in_date=reservation.check_in_date,
+        check_out_date=reservation.check_out_date,
+        total_amount=reservation.total_amount,
+        amount_paid=reservation.amount_paid,
+        balance_due=reservation.balance_due,
+        currency_code=reservation.currency_code,
+        payment_status=_derive_payment_status(reservation),
+        settlement_status=reservation.settlement_status,
+    )
+
+
+@router.get("/reservations/by-code/{confirmation_code}", response_model=PublicReservationStatusRead)
+def public_reservation_status_by_code(
+    confirmation_code: str,
+    db: Session = Depends(get_db),
+    context: PublicAPIContext = Depends(get_public_api_context),
+):
+    """Read-only reservation/payment status by confirmation code (v72 §16).
+
+    Scoped to the API key's hotel; codes belonging to other hotels return 404.
+    """
+    reservation = (
+        db.query(Reservation)
+        .filter(
+            Reservation.confirmation_code == confirmation_code,
+            Reservation.hotel_id == context.hotel_id,
+        )
+        .first()
+    )
+    if reservation is None:
+        raise HTTPException(status_code=404, detail="Reserva no encontrada")
+    return _serialize_reservation_status(reservation)
+
+
+@router.get("/reservations/{reservation_id}", response_model=PublicReservationStatusRead)
+def public_reservation_status(
+    reservation_id: int,
+    db: Session = Depends(get_db),
+    context: PublicAPIContext = Depends(get_public_api_context),
+):
+    """Read-only reservation/payment status by id (v72 §16).
+
+    Scoped to the API key's hotel; reservations belonging to other hotels
+    return 404 so cross-hotel existence is never leaked.
+    """
+    reservation = (
+        db.query(Reservation)
+        .filter(
+            Reservation.id == reservation_id,
+            Reservation.hotel_id == context.hotel_id,
+        )
+        .first()
+    )
+    if reservation is None:
+        raise HTTPException(status_code=404, detail="Reserva no encontrada")
+    return _serialize_reservation_status(reservation)
 
 
 @router.post("/payment-link", response_model=PublicPaymentLinkRead, status_code=status.HTTP_201_CREATED)
