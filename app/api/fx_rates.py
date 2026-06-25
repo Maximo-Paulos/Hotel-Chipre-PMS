@@ -53,7 +53,9 @@ class FxSnapshotCreateResponse(BaseModel):
 
 
 @router.get("/rates", response_model=list[FxRateItem], summary="All current FX rates")
-async def get_all_rates():
+async def get_all_rates(
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+):
     try:
         rates = await fetch_all_rates()
     except Exception as exc:
@@ -81,7 +83,9 @@ async def get_all_rates():
 
 
 @router.get("/rates/usd/oficial", response_model=FxRateUsdOficial, summary="Official USD rate shortcut")
-async def get_usd_oficial_rate():
+async def get_usd_oficial_rate(
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+):
     data = await fetch_rate("oficial")
     if not data:
         raise HTTPException(
@@ -96,7 +100,10 @@ async def get_usd_oficial_rate():
 
 
 @router.get("/rates/{rate_type}", response_model=FxRateItem, summary="Single USD rate type")
-async def get_single_rate(rate_type: str):
+async def get_single_rate(
+    rate_type: str,
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+):
     if rate_type not in RATE_TYPES:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
