@@ -22,10 +22,11 @@ class SimpleRateLimiter:
         self._buckets: dict[str, list[datetime]] = defaultdict(list)
         self._lock = Lock()
 
-    def allow(self, key: str, db: Session | None = None) -> bool:
+    def allow(self, key: str, db: Session | None = None, limit: int | None = None) -> bool:
         normalized_key = self._normalize_key(key)
+        effective_limit = self.limit if limit is None else limit
         if db is not None:
-            return self._allow_db(normalized_key, db)
+            return self._allow_db(normalized_key, db, effective_limit)
 
         now = datetime.utcnow()
         with self._lock:
@@ -33,7 +34,7 @@ class SimpleRateLimiter:
             cutoff = now - self.window
             while bucket and bucket[0] < cutoff:
                 bucket.pop(0)
-            if len(bucket) >= self.limit:
+            if len(bucket) >= effective_limit:
                 return False
             bucket.append(now)
             return True
@@ -52,7 +53,7 @@ class SimpleRateLimiter:
             if normalized_key in self._buckets:
                 self._buckets.pop(normalized_key, None)
 
-    def _allow_db(self, key: str, db: Session) -> bool:
+    def _allow_db(self, key: str, db: Session, limit: int) -> bool:
         now = datetime.utcnow()
         cutoff = now - self.window
         db.query(RateLimitEvent).filter(
@@ -69,7 +70,7 @@ class SimpleRateLimiter:
             )
             .count()
         )
-        if active_count >= self.limit:
+        if active_count >= limit:
             return False
         db.add(RateLimitEvent(scope=self.scope, subject_key=key))
         db.flush()

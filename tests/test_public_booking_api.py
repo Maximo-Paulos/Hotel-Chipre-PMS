@@ -219,10 +219,10 @@ def test_public_reservation_status_other_hotel_is_404(public_client_with_db):
 
 def test_public_api_rate_limit_is_per_hotel_key(public_client_with_db):
     client, db = public_client_with_db
-    _seed_hotel(db, 1)
+    hotel, _category, _room, _guest = _seed_hotel(db, 1)
+    hotel.public_api_rate_limit_per_minute = 2
     key_a, secret_a = _issue_public_key(db, 1, "Key A")
     _key_b, secret_b = _issue_public_key(db, 1, "Key B")
-    public_api_limiter.limit = 2
     public_api_limiter.reset(f"hotel:1:key:{key_a.id}", db=db)
     db.commit()
 

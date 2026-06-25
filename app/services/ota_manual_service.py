@@ -19,6 +19,7 @@ from app.models.reservation import (
 )
 from app.models.security_audit_log import SecurityAuditLog
 from app.models.user import User
+from app.models.waitlist import WaitlistEntry, WaitlistStatusEnum
 from app.schemas.ota_manual import ManualOTAReservationCreate
 from app.schemas.reservation import ReservationCreate, ReservationUpdate
 from app.services.reservation_service import (
@@ -27,6 +28,7 @@ from app.services.reservation_service import (
     transition_reservation_status,
     update_reservation_fields,
 )
+from app.services.waitlist_service import promote_from_waitlist
 
 
 class OTAManualReservationError(Exception):
@@ -165,6 +167,11 @@ def release_no_guarantee(
     reservation.settlement_status = "internal_release_no_guarantee"
     reservation.requires_manual_review = False
     reservation.version = (reservation.version or 0) + 1
+    _attempt_waitlist_promotion_after_release(
+        db,
+        reservation=reservation,
+        actor_user_id=actor_user_id,
+    )
     _audit(
         db,
         hotel_id=reservation.hotel_id,
@@ -180,6 +187,67 @@ def release_no_guarantee(
     )
     db.flush()
     return reservation
+
+
+def _attempt_waitlist_promotion_after_release(
+    db: Session,
+    *,
+    reservation: Reservation,
+    actor_user_id: int | None,
+) -> None:
+    entry = (
+        db.query(WaitlistEntry)
+        .filter(
+            WaitlistEntry.hotel_id == reservation.hotel_id,
+            WaitlistEntry.category_id == reservation.category_id,
+            WaitlistEntry.check_in_date == reservation.check_in_date,
+            WaitlistEntry.check_out_date == reservation.check_out_date,
+            WaitlistEntry.status == WaitlistStatusEnum.WAITING,
+        )
+        .order_by(WaitlistEntry.priority.asc(), WaitlistEntry.created_at.asc(), WaitlistEntry.id.asc())
+        .first()
+    )
+    if entry is None:
+        _audit_waitlist_promotion(
+            db,
+            reservation=reservation,
+            user_id=actor_user_id,
+            details={"outcome": "no_candidate"},
+        )
+        return
+
+    try:
+        with db.begin_nested():
+            promoted_entry, promoted_reservation = promote_from_waitlist(
+                db,
+                reservation.hotel_id,
+                entry.id,
+                room_id=reservation.room_id,
+                notes=f"Promoted after OTA no-guarantee release {reservation.id}",
+            )
+    except Exception as exc:
+        _audit_waitlist_promotion(
+            db,
+            reservation=reservation,
+            user_id=actor_user_id,
+            details={
+                "outcome": "failed",
+                "waitlist_entry_id": entry.id,
+                "error": str(exc),
+            },
+        )
+        return
+
+    _audit_waitlist_promotion(
+        db,
+        reservation=reservation,
+        user_id=actor_user_id,
+        details={
+            "outcome": "promoted",
+            "waitlist_entry_id": promoted_entry.id,
+            "promoted_reservation_id": promoted_reservation.id,
+        },
+    )
 
 
 def _update_existing_manual_ota_reservation(
@@ -296,6 +364,23 @@ def _audit(
             resource_id=str(reservation.id),
             details=json.dumps(details, sort_keys=True, default=str),
         )
+    )
+
+
+def _audit_waitlist_promotion(
+    db: Session,
+    *,
+    reservation: Reservation,
+    user_id: int | None,
+    details: dict[str, Any],
+) -> None:
+    _audit(
+        db,
+        hotel_id=reservation.hotel_id,
+        user_id=user_id,
+        action="ota.no_guarantee.waitlist_promotion",
+        reservation=reservation,
+        details=details,
     )
 
 

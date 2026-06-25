@@ -11,13 +11,16 @@ from app.models.hotel_config import HotelConfiguration
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.security_audit_log import SecurityAuditLog
+from app.models.waitlist import WaitlistStatusEnum
 from app.schemas.ota_manual import ManualOTAReservationCreate
+from app.schemas.waitlist import WaitlistEntryCreate
 from app.services.ota_manual_service import (
     OTAManualReservationError,
     create_or_update_manual_ota_reservation,
     release_no_guarantee,
 )
 from app.services.ota_service import OTAIntegrationService
+from app.services.waitlist_service import add_to_waitlist
 
 
 def _seed_hotel(db, *, hotel_id: int, suffix: str = ""):
@@ -172,6 +175,94 @@ def test_no_guarantee_ota_internal_release_does_not_call_provider_cancel(db, mon
         resource_type="reservation",
         resource_id=str(reservation.id),
     ).count() == 1
+
+
+def test_release_no_guarantee_promotes_compatible_waitlist_entry(db):
+    category, room, ota_guest = _seed_hotel(db, hotel_id=1)
+    waitlist_guest = Guest(
+        hotel_id=1,
+        first_name="Waiting",
+        last_name="Guest",
+        document_type=DocumentTypeEnum.DNI,
+        document_number="WAIT-1",
+        email="waiting@test.local",
+        terms_accepted=True,
+    )
+    db.add(waitlist_guest)
+    db.flush()
+    reservation = create_or_update_manual_ota_reservation(
+        db,
+        hotel_id=1,
+        data=_manual_payload(guest_id=ota_guest.id, category_id=category.id, room_id=room.id),
+        actor_user_id=7,
+    )
+    entry = add_to_waitlist(
+        db,
+        1,
+        WaitlistEntryCreate(
+            guest_id=waitlist_guest.id,
+            category_id=category.id,
+            check_in_date=reservation.check_in_date,
+            check_out_date=reservation.check_out_date,
+            num_adults=2,
+            num_children=0,
+            priority=10,
+        ),
+    )
+    db.flush()
+
+    released = release_no_guarantee(
+        db,
+        reservation=reservation,
+        actor_user_id=9,
+        reason="guest did not confirm arrival",
+    )
+    db.flush()
+
+    assert released.status == ReservationStatusEnum.CANCELLED
+    assert entry.status == WaitlistStatusEnum.PROMOTED
+    assert entry.promoted_reservation_id is not None
+    promoted = db.get(Reservation, entry.promoted_reservation_id)
+    assert promoted is not None
+    assert promoted.hotel_id == 1
+    assert promoted.guest_id == waitlist_guest.id
+    assert promoted.room_id == room.id
+    audit = db.query(SecurityAuditLog).filter_by(
+        hotel_id=1,
+        action="ota.no_guarantee.waitlist_promotion",
+        resource_type="reservation",
+        resource_id=str(reservation.id),
+    ).one()
+    assert '"outcome": "promoted"' in audit.details
+    assert str(entry.id) in audit.details
+
+
+def test_release_no_guarantee_without_waitlist_still_succeeds(db):
+    category, room, guest = _seed_hotel(db, hotel_id=1)
+    reservation = create_or_update_manual_ota_reservation(
+        db,
+        hotel_id=1,
+        data=_manual_payload(guest_id=guest.id, category_id=category.id, room_id=room.id),
+        actor_user_id=7,
+    )
+    db.flush()
+
+    released = release_no_guarantee(
+        db,
+        reservation=reservation,
+        actor_user_id=9,
+        reason="guest did not confirm arrival",
+    )
+    db.flush()
+
+    assert released.status == ReservationStatusEnum.CANCELLED
+    audit = db.query(SecurityAuditLog).filter_by(
+        hotel_id=1,
+        action="ota.no_guarantee.waitlist_promotion",
+        resource_type="reservation",
+        resource_id=str(reservation.id),
+    ).one()
+    assert '"outcome": "no_candidate"' in audit.details
 
 
 def test_deprecated_ota_webhook_routes_return_410():
