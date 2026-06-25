@@ -6,13 +6,21 @@ from __future__ import annotations
 from datetime import date
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class RoomMoveRequest(BaseModel):
     to_room_id: int
-    reason_code: Optional[str] = None
+    reason_code: str = Field(..., min_length=1)
     notes: Optional[str] = None
+
+    @field_validator("reason_code")
+    @classmethod
+    def reason_code_must_not_be_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("reason_code is required")
+        return value
 
 
 class ReservationActionResolveRequest(BaseModel):

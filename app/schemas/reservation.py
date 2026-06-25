@@ -37,6 +37,7 @@ class ReservationCreate(BaseModel):
     guest_scope: str = Field(default="all", max_length=30)
     target_currency: Optional[str] = Field(default=None, min_length=3, max_length=3)
     total_amount: Optional[Decimal] = Field(default=None, ge=0)
+    mobility_restriction: bool = False
 
 
 class ReservationRead(BaseModel):
@@ -81,6 +82,7 @@ class ReservationRead(BaseModel):
     additional_guests: list[GuestSummary] = []
     allocation_status: str = "unassigned"
     requires_manual_review: bool = False
+    mobility_restriction: bool = False
     version: int = 0
 
     model_config = {"from_attributes": True}
@@ -93,6 +95,7 @@ class ReservationUpdate(BaseModel):
     num_adults: Optional[int] = None
     num_children: Optional[int] = None
     notes: Optional[str] = None
+    mobility_restriction: Optional[bool] = None
     client_version: Optional[int] = None
 
 
@@ -114,6 +117,7 @@ class ReservationDateChangeResponse(BaseModel):
     original_reservation: ReservationRead
     reservation: ReservationRead
     recreated: bool
+    status_transitioned: bool = False
 
 
 class ReservationExtensionRequest(BaseModel):

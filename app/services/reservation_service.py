@@ -608,6 +608,7 @@ def create_reservation(db: Session, data: ReservationCreate, hotel_id: Optional[
         num_adults=data.num_adults,
         num_children=data.num_children,
         notes=data.notes,
+        mobility_restriction=data.mobility_restriction,
         pricing_snapshot=pricing.pricing_snapshot,
         allocation_locked=bool(company and (company.requires_signature or company.payment_deferred)),
         requires_manual_review=bool(company and (company.requires_signature or company.payment_deferred)),
@@ -782,7 +783,7 @@ def update_reservation_fields(
                 )
             )
 
-    for field in ("num_adults", "num_children", "notes"):
+    for field in ("num_adults", "num_children", "notes", "mobility_restriction"):
         if field in update_data:
             setattr(reservation, field, update_data[field])
 

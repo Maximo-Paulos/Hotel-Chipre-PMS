@@ -102,6 +102,7 @@ class ReservationDateChangeResult:
     original_reservation: Reservation
     reservation: Reservation
     recreated: bool
+    status_transitioned: bool = False
 
 
 @dataclass(slots=True)
@@ -150,10 +151,14 @@ def change_reservation_dates(
     ):
         raise ReservationOperationsError("No se pueden cambiar fechas en el estado actual")
 
-    has_transactions = _has_transactions(db, hotel_id=hotel_id, reservation_id=reservation.id)
+    tiene_pago = (
+        reservation.status in (ReservationStatusEnum.DEPOSIT_PAID, ReservationStatusEnum.FULLY_PAID)
+        or Decimal(str(reservation.amount_paid or 0)) > Decimal("0")
+        or _has_transactions(db, hotel_id=hotel_id, reservation_id=reservation.id)
+    )
     target_room_id = room_id if room_id is not None else reservation.room_id
 
-    if not has_transactions:
+    if not tiene_pago:
         previous_status = reservation.status
         reservation.status = ReservationStatusEnum.CANCELLED
         reservation.cancelled_at = datetime.now(timezone.utc)
@@ -219,9 +224,29 @@ def change_reservation_dates(
         reservation.total_amount = original_total
         reservation.subtotal_amount = original_total
         reservation.net_amount = original_total
+    status_transitioned = False
+    if (
+        reservation.status != ReservationStatusEnum.FULLY_PAID
+        and Decimal(str(reservation.total_amount or 0)) <= Decimal(str(reservation.amount_paid or 0))
+    ):
+        transition_reservation_status(
+            db,
+            reservation,
+            ReservationStatusEnum.FULLY_PAID,
+            hotel_id,
+            reason_code="date_change_auto_fully_paid",
+            notes="Date change recalculated total below or equal to paid amount",
+            changed_by_user_id=changed_by_user_id,
+        )
+        status_transitioned = True
     reservation.notes = ((reservation.notes or "") + f"\n[DATE CHANGE] {reason or 'Date changed with payments preserved'}").strip()
     db.flush()
-    return ReservationDateChangeResult(original_reservation=reservation, reservation=reservation, recreated=False)
+    return ReservationDateChangeResult(
+        original_reservation=reservation,
+        reservation=reservation,
+        recreated=False,
+        status_transitioned=status_transitioned,
+    )
 
 
 def _extension_amount(
@@ -352,6 +377,10 @@ def move_reservation_room(
     notes: Optional[str] = None,
     move_type: RoomMoveTypeEnum = RoomMoveTypeEnum.MANUAL_MOVE,
 ) -> RoomMoveEvent:
+    if reason_code is None or not reason_code.strip():
+        raise ReservationOperationsError("reason_code is required for room moves")
+    reason_code = reason_code.strip()
+
     room = db.query(Room).filter(Room.id == to_room_id, Room.hotel_id == hotel_id).first()
     if not room:
         raise ReservationOperationsError("La habitacion destino no existe para este hotel")

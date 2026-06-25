@@ -478,3 +478,44 @@ def test_move_reservation_room_creates_feedback_trace(
     assert override.reason_code == "guest_preference"
     assert override.created_by_user_id is None
     assert feedback.manual_override_reason_id == override.id
+
+
+def test_move_reservation_room_requires_reason_code(
+    db,
+    hotel_config,
+    sample_categories,
+    sample_rooms,
+    sample_guest,
+):
+    reservation = Reservation(
+        confirmation_code="ROOM-MOVE-REASON",
+        hotel_id=hotel_config.id,
+        guest_id=sample_guest.id,
+        room_id=sample_rooms[0].id,
+        category_id=sample_categories[0].id,
+        check_in_date=date(2026, 8, 20),
+        check_out_date=date(2026, 8, 22),
+        total_amount=120.0,
+        subtotal_amount=120.0,
+        net_amount=120.0,
+        amount_paid=0.0,
+        deposit_amount=36.0,
+        currency_code="ARS",
+        status=ReservationStatusEnum.PENDING,
+        source=ReservationSourceEnum.DIRECT,
+        num_adults=2,
+        num_children=0,
+    )
+    db.add(reservation)
+    db.flush()
+
+    from app.services.reservation_operations_service import ReservationOperationsError, move_reservation_room
+
+    with pytest.raises(ReservationOperationsError, match="reason_code"):
+        move_reservation_room(
+            db,
+            reservation=reservation,
+            to_room_id=sample_rooms[1].id,
+            hotel_id=hotel_config.id,
+            reason_code=" ",
+        )

@@ -569,6 +569,7 @@ def change_dates(
             original_reservation=_to_read(result.original_reservation),
             reservation=_to_read(result.reservation),
             recreated=result.recreated,
+            status_transitioned=result.status_transitioned,
         )
     except ReservationOperationsError as e:
         db.rollback()
@@ -597,6 +598,10 @@ def modify_reservation(
     if r.status in (ReservationStatusEnum.CHECKED_IN, ReservationStatusEnum.CHECKED_OUT, ReservationStatusEnum.CANCELLED):
         raise HTTPException(status_code=400, detail=("Cannot modify: reservation is " + r.status.value))
     before = audit_log_service.model_snapshot(r)
+    mobility_restriction_changed = (
+        "mobility_restriction" in data.model_fields_set
+        and data.mobility_restriction != r.mobility_restriction
+    )
     try:
         update_reservation_fields(
             db,
@@ -620,7 +625,7 @@ def modify_reservation(
             payload_before=before,
             payload_after=audit_log_service.model_snapshot(r),
         )
-        if any(value is not None for value in (data.check_in_date, data.check_out_date, data.room_id)):
+        if any(value is not None for value in (data.check_in_date, data.check_out_date, data.room_id)) or mobility_restriction_changed:
             background_tasks.add_task(
                 _trigger_reoptimization_bg,
                 hotel_id=context.hotel_id,

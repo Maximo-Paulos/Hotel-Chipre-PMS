@@ -171,12 +171,6 @@ def test_change_dates_blocked_for_past_check_in(db, sample_guest, sample_rooms):
 # §8.4  Change dates — DEPOSIT_PAID reservation
 # ─────────────────────────────────────────────────────────────────────────────
 
-@pytest.mark.xfail(
-    reason="main difiere de BRM §8.4: 'deposito pagado' se detecta por filas Transaction, "
-    "no por amount_paid; ademas change_reservation_dates con pagos exige manager_authorized "
-    "y muta in-place sin exponer status_transitioned (gap Phase 3/5)",
-    strict=False,
-)
 def test_change_dates_deposit_paid_keeps_deposit(db, sample_guest, sample_rooms):
     """§8.4 — DEPOSIT_PAID reservation can change dates; deposit amount_paid is preserved."""
     res = _reservation(
@@ -209,11 +203,6 @@ def test_change_dates_deposit_paid_keeps_deposit(db, sample_guest, sample_rooms)
     assert result.status_transitioned is False
 
 
-@pytest.mark.xfail(
-    reason="main difiere de BRM §8.4: no hay auto-transicion a FULLY_PAID por recalculo de "
-    "fechas, ni flag status_transitioned en el resultado (gap Phase 3/5)",
-    strict=False,
-)
 def test_change_dates_deposit_paid_auto_fully_paid_when_new_total_lower(db, sample_guest, sample_rooms):
     """§8.4 — If new total <= amount_paid after date change, status auto-transitions to FULLY_PAID."""
     res = _reservation(
