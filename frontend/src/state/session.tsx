@@ -57,18 +57,52 @@ export const normalizeRole = (role?: string | null): Role | null => {
   return null;
 };
 
-const loadSession = (): SessionState => EMPTY_SESSION;
+const loadSession = (): SessionState => {
+  if (typeof localStorage === "undefined") return EMPTY_SESSION;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return EMPTY_SESSION;
+    const parsed = JSON.parse(raw) as Partial<SessionState>;
+    const hotelId = safeHotelId(parsed.hotelId);
+    const userId = typeof parsed.userId === "string" ? parsed.userId.trim() : "";
+    const accessToken = typeof parsed.accessToken === "string" ? parsed.accessToken.trim() : "";
+    // Only restore a session that actually carries valid credentials.
+    if (!hotelId || !userId || !accessToken) return EMPTY_SESSION;
+    return {
+      ...EMPTY_SESSION,
+      ...parsed,
+      userId,
+      hotelId,
+      accessToken,
+      role: normalizeRole(parsed.role as string | null | undefined),
+      baseRole: normalizeRole((parsed.baseRole ?? parsed.role) as string | null | undefined),
+    };
+  } catch {
+    return EMPTY_SESSION;
+  }
+};
+
+const persistSession = (session: SessionState) => {
+  if (typeof localStorage === "undefined") return;
+  try {
+    if (session.userId && session.hotelId && session.accessToken) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+    } else {
+      localStorage.removeItem(STORAGE_KEY);
+    }
+  } catch {
+    /* ignore storage quota / availability errors */
+  }
+};
 
 export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<SessionState>(() => loadSession());
 
-  // Always require re-login on page reload: clear any stale persisted session.
+  // Persist the session so reloads and deep-links into protected routes keep
+  // the user logged in instead of bouncing back to /login.
   useEffect(() => {
-    setSession(EMPTY_SESSION);
-    if (typeof localStorage !== "undefined") {
-      localStorage.removeItem(STORAGE_KEY);
-    }
-  }, []);
+    persistSession(session);
+  }, [session]);
 
   const login = (partial: Partial<SessionState>) => {
     setSession((prev) => ({

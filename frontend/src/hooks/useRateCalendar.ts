@@ -1,7 +1,13 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 
 import { hasValidSession } from "../api/client";
-import { getRateCalendarDaily, type RateCalendarResponse } from "../api/rate-calendar";
+import {
+  bulkUpsertDailyRates,
+  getRateCalendarDaily,
+  type BulkRateResult,
+  type DailyRatePrices,
+  type RateCalendarResponse
+} from "../api/rate-calendar";
 import { useSession } from "../state/session";
 
 const pad = (value: number) => String(value).padStart(2, "0");
@@ -41,5 +47,28 @@ export function useRateCalendar(categoryId: number | null, year: number) {
       ),
     enabled: hasValidSession(session) && typeof categoryId === "number" && categoryId > 0,
     staleTime: 60_000
+  });
+}
+
+export type BulkRateInput = DailyRatePrices & {
+  from_date: string;
+  to_date: string;
+  exclude_dates?: string[];
+};
+
+export function useBulkUpsertRates(categoryId: number | null) {
+  const { session } = useSession();
+  const queryClient = useQueryClient();
+
+  return useMutation<BulkRateResult, Error, BulkRateInput>({
+    mutationFn: (payload) => {
+      if (typeof categoryId !== "number" || categoryId <= 0) {
+        throw new Error("Seleccioná una categoría válida antes de guardar tarifas.");
+      }
+      return bulkUpsertDailyRates(categoryId, payload, session);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["rate-calendar", session.hotelId ?? null, categoryId] });
+    }
   });
 }

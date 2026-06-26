@@ -75,3 +75,45 @@ export const getRateCalendarDaily = (
     session
   });
 };
+
+// ── Daily rate editing (maps to backend /api/rates/...) ──
+
+export type DailyRatePrices = {
+  price: number;
+  price_cash?: number | null;
+  price_transfer?: number | null;
+  price_mercadopago?: number | null;
+  price_paypal?: number | null;
+  price_credit_card?: number | null;
+};
+
+export type DailyRateOut = DailyRatePrices & {
+  id: number;
+  hotel_id: number;
+  category_id: number;
+  date: string;
+};
+
+export type BulkRateResult = { created: number; updated: number };
+
+export const upsertDailyRate = (
+  categoryId: number,
+  payload: DailyRatePrices & { date: string },
+  session?: SessionLike
+) =>
+  apiFetch<DailyRateOut>(`/api/rates/category/${categoryId}/daily`, {
+    method: "POST",
+    data: payload,
+    session
+  });
+
+export const bulkUpsertDailyRates = (
+  categoryId: number,
+  payload: DailyRatePrices & { from_date: string; to_date: string; exclude_dates?: string[] },
+  session?: SessionLike
+) =>
+  apiFetch<BulkRateResult>(`/api/rates/category/${categoryId}/bulk`, {
+    method: "POST",
+    data: payload,
+    session
+  });
