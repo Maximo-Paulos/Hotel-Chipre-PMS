@@ -31,6 +31,16 @@ from app.services.security import create_signed_token, decode_signed_token
 
 router = APIRouter(prefix="/api/integrations", tags=["Integrations"])
 
+# Minimum credential fields required before a non-OAuth integration may be
+# marked "connected". Prevents empty/bogus payloads from flipping a provider
+# (e.g. WhatsApp) to connected without real credentials.
+_REQUIRED_CREDENTIAL_KEYS = {
+    "bearer_token": ("access_token", "token", "bearer_token", "api_key"),
+    "api_key": ("api_key", "access_token", "token"),
+    "signature": ("api_key", "shared_secret", "signature_key", "secret"),
+    "partner_api": ("api_key", "access_token", "token"),
+}
+
 
 def _ensure_enabled():
     if not get_settings().CONNECTIONS_ENABLED:
@@ -280,7 +290,54 @@ def connect_integration(
         db.commit()
         return IntegrationConnectResponse(redirect_url=redirect, status="pending")
 
-    conn = upsert_connection(db, context.hotel_id, integration_id, payload.payload or {}, status="connected")
+    # Non-OAuth providers (api_key / bearer_token / signature, e.g. WhatsApp).
+    # Never mark a connection "connected" without real credentials: an empty or
+    # bogus payload must be rejected instead of silently flipping to connected.
+    manual_payload = payload.payload or {}
+    required = _REQUIRED_CREDENTIAL_KEYS.get(integration.auth_type)
+    if required is not None:
+        has_credentials = any(str(manual_payload.get(k) or "").strip() for k in required)
+    else:
+        has_credentials = any(str(v or "").strip() for v in manual_payload.values())
+    if not has_credentials:
+        conn = upsert_connection(
+            db,
+            context.hotel_id,
+            integration_id,
+            {},
+            status="error",
+            last_error="Faltan credenciales para conectar esta integración",
+        )
+        record_event(
+            db,
+            conn.id,
+            "failure",
+            {"auth_type": integration.auth_type, "provider": integration.provider, "message": "missing_credentials"},
+        )
+        db.commit()
+        raise HTTPException(status_code=400, detail="Faltan credenciales para conectar esta integración")
+
+    try:
+        manual_payload = validate_provider_credentials(integration.provider, manual_payload)
+    except ValueError as exc:
+        conn = upsert_connection(
+            db,
+            context.hotel_id,
+            integration_id,
+            manual_payload,
+            status="error",
+            last_error=str(exc),
+        )
+        record_event(
+            db,
+            conn.id,
+            "failure",
+            {"auth_type": integration.auth_type, "provider": integration.provider, "message": str(exc)},
+        )
+        db.commit()
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    conn = upsert_connection(db, context.hotel_id, integration_id, manual_payload, status="connected")
     record_event(db, conn.id, "connect", {"auth_type": integration.auth_type, "provider": integration.provider})
     db.commit()
     return IntegrationConnectResponse(redirect_url=None, status="connected")

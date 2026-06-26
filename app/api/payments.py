@@ -17,6 +17,7 @@ from app.services.payment_service import (
 router = APIRouter(prefix="/api/payments", tags=["Payments"])
 
 
+@router.post("", response_model=TransactionRead, status_code=status.HTTP_201_CREATED, include_in_schema=False)
 @router.post("/", response_model=TransactionRead, status_code=status.HTTP_201_CREATED)
 def make_payment(
     data: PaymentRequest,

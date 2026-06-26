@@ -2,7 +2,7 @@ name: Build and Push Docker images
 
 on:
   push:
-    branches: [ "codex/integration-frontend-demo-state" ]
+    branches: [ "main" ]
   workflow_dispatch:
 
 env:

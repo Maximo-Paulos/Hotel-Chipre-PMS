@@ -4,6 +4,7 @@ FastAPI routes for Room management + Housekeeping.
 from datetime import date, datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel
 from typing import Optional
 
@@ -65,7 +66,14 @@ def create_category(
 ):
     category = RoomCategory(**data.model_dump(), hotel_id=context.hotel_id)
     db.add(category)
-    db.flush()
+    try:
+        db.flush()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Ya existe una categoría con ese código en este hotel",
+        )
     record_hotel_audit_event(
         db,
         hotel_id=context.hotel_id,
@@ -210,7 +218,14 @@ def create_room(
     ensure_room_within_limit(db, category.hotel_id)
     room = Room(**data.model_dump(), hotel_id=context.hotel_id)
     db.add(room)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Ya existe una habitación con ese número en este hotel",
+        )
     db.refresh(room)
     audit_log_service.safe_create_audit_log(
         db,
