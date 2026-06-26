@@ -1304,7 +1304,7 @@ export function ReservationsPage() {
 
       {formOpen && (
         <div className="fixed inset-0 z-30 flex items-center justify-center bg-slate-900/40 px-4 py-6">
-          <div className="w-full max-w-2xl rounded-xl border border-slate-200 bg-white p-6 shadow-xl">
+          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl border border-slate-200 bg-white p-6 shadow-xl">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-xs uppercase tracking-wide text-slate-500">{editing ? "Editar" : "Crear"}</p>
@@ -1621,7 +1621,7 @@ export function ReservationsPage() {
 
       {detailsReservation && (
         <div className="fixed inset-0 z-30 flex items-center justify-center bg-slate-900/30 px-4 py-6">
-          <div className="w-full max-w-3xl rounded-xl border border-slate-200 bg-white p-6 shadow-xl">
+          <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-xl border border-slate-200 bg-white p-6 shadow-xl">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-xs uppercase tracking-wide text-slate-500">Ficha</p>
@@ -1873,7 +1873,7 @@ export function ReservationsPage() {
 
       {guestIdOpen && (
         <div className="fixed inset-0 z-30 flex items-center justify-center bg-slate-900/30 px-4 py-6">
-          <div className="w-full max-w-2xl rounded-xl border border-slate-200 bg-white p-6 shadow-xl">
+          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl border border-slate-200 bg-white p-6 shadow-xl">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-xs uppercase tracking-wide text-slate-500">Ficha de Huésped</p>
