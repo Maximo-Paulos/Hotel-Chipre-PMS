@@ -93,12 +93,42 @@ export async function apiFetch<T = unknown>(path: string, options: RequestOption
     const detail = typeof payload === "object" && payload !== null && "detail" in (payload as Record<string, unknown>)
       ? (payload as Record<string, unknown>).detail
       : undefined;
-    const message = typeof detail === "string" ? detail : response.statusText || "Request failed";
+    const message = formatErrorDetail(detail) || response.statusText || "Request failed";
     throw new ApiError(response.status, message, payload);
   }
 
   return payload as T;
 }
+
+// FastAPI returns `detail` as a string for HTTPException, but as an array of
+// {loc, msg, type} objects for Pydantic 422 validation errors. Render both so
+// the UI shows the real backend validation message instead of "Request failed".
+const formatErrorDetail = (detail: unknown): string | null => {
+  if (typeof detail === "string") return detail.trim() || null;
+  if (Array.isArray(detail)) {
+    const messages = detail
+      .map((item) => {
+        if (typeof item === "string") return item;
+        if (item && typeof item === "object") {
+          const rec = item as Record<string, unknown>;
+          const msg = typeof rec.msg === "string" ? rec.msg : null;
+          const loc = Array.isArray(rec.loc)
+            ? rec.loc.filter((part) => part !== "body").join(".")
+            : null;
+          if (msg && loc) return `${loc}: ${msg}`;
+          return msg;
+        }
+        return null;
+      })
+      .filter((m): m is string => Boolean(m));
+    return messages.length ? messages.join(" · ") : null;
+  }
+  if (detail && typeof detail === "object") {
+    const rec = detail as Record<string, unknown>;
+    if (typeof rec.msg === "string") return rec.msg;
+  }
+  return null;
+};
 
 const safeJson = (text: string): unknown => {
   try {
