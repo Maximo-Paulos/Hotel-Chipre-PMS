@@ -2,8 +2,16 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { RateCalendarGrid } from "../../components/RateCalendarGrid";
+import { RateEditorGrid } from "../../components/RateEditorGrid";
 import { useCategories } from "../../hooks/useCategories";
-import { useBulkUpsertRates, useRateCalendar, resolveRateCalendarRange } from "../../hooks/useRateCalendar";
+import {
+  useBulkUpsertRates,
+  useCategoryDailyRates,
+  useRateCalendar,
+  useUpsertDailyRate,
+  resolveRateCalendarRange,
+  type SingleRateInput
+} from "../../hooks/useRateCalendar";
 
 const currentYear = new Date().getFullYear();
 const yearOptions = [currentYear, currentYear + 1, currentYear + 2];
@@ -41,7 +49,17 @@ export function RateCalendarPage() {
   );
 
   const calendarQuery = useRateCalendar(categoryId, year);
+  const dailyRatesQuery = useCategoryDailyRates(categoryId, year);
   const bulkSave = useBulkUpsertRates(categoryId);
+  const cellSave = useUpsertDailyRate(categoryId, year);
+  const [cellError, setCellError] = useState<string | null>(null);
+
+  const handleSaveCell = (payload: SingleRateInput) => {
+    setCellError(null);
+    cellSave.mutate(payload, {
+      onError: (err) => setCellError(err.message)
+    });
+  };
 
   const defaultRange = useMemo(() => resolveRateCalendarRange(year), [year]);
   const [fromDate, setFromDate] = useState(defaultRange.dateFrom);
@@ -180,13 +198,41 @@ export function RateCalendarPage() {
         </div>
       ) : null}
 
+      {selectedCategory && dailyRatesQuery.data ? (
+        <section className="space-y-2" data-testid="rate-editor-section">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-900">Planilla de precios por fecha</h2>
+              <p className="text-xs text-slate-500">
+                Editá el costo de {selectedCategory.name} en cualquier fecha, directo en la celda.
+              </p>
+            </div>
+            {cellSave.isPending ? (
+              <span className="text-xs font-medium text-slate-500">Guardando…</span>
+            ) : cellSave.isSuccess && !cellError ? (
+              <span className="text-xs font-medium text-emerald-600">Guardado ✓</span>
+            ) : null}
+          </div>
+          {cellError ? (
+            <p className="rounded-md bg-rose-50 p-2 text-sm text-rose-700">{cellError}</p>
+          ) : null}
+          <RateEditorGrid
+            dailyRates={dailyRatesQuery.data}
+            calendar={calendarQuery.data}
+            currencyCode={calendarQuery.data?.meta.hotel_currency_code ?? "ARS"}
+            onSaveCell={handleSaveCell}
+            disabled={cellSave.isPending}
+          />
+        </section>
+      ) : null}
+
       {selectedCategory ? (
         <form
           onSubmit={handleSaveRates}
           data-testid="rate-editor"
           className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
         >
-          <p className="text-sm font-semibold text-slate-900">Editar precios por rango</p>
+          <p className="text-sm font-semibold text-slate-900">Aplicar precio a un rango (carga masiva)</p>
           <p className="mb-3 text-xs text-slate-500">
             Aplica el precio a todas las fechas del rango (upsert). El precio base es obligatorio; los precios por
             medio de pago son opcionales.
@@ -280,7 +326,17 @@ export function RateCalendarPage() {
         </form>
       ) : null}
 
-      {calendarQuery.data ? <RateCalendarGrid calendar={calendarQuery.data} /> : null}
+      {calendarQuery.data ? (
+        <section className="space-y-2">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-900">Vista de canales y disponibilidad (lectura)</h2>
+            <p className="text-xs text-slate-500">
+              Tarifas y restricciones publicadas por canal (Directo, Booking, Expedia). Solo lectura.
+            </p>
+          </div>
+          <RateCalendarGrid calendar={calendarQuery.data} />
+        </section>
+      ) : null}
     </div>
   );
 }

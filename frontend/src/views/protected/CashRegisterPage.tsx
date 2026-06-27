@@ -40,7 +40,7 @@ export function CashRegisterPage() {
   );
   const movementsQuery = useCashMovements(selectedSession?.id);
   const mutations = useCashRegisterMutations(selectedSession?.id);
-  const movements = movementsQuery.data ?? [];
+  const movements = useMemo(() => movementsQuery.data ?? [], [movementsQuery.data]);
 
   const totals = useMemo(() => {
     return movements.reduce(

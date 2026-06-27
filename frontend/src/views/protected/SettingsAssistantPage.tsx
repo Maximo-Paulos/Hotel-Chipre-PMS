@@ -328,16 +328,16 @@ export function SettingsAssistantPage() {
                               </span>
                             )}
                           </div>
-                          {action.result?.created_suggestion_id && (
-                            <p className="text-xs text-emerald-800">Borrador creado: sugerencia #{String(action.result.created_suggestion_id)}</p>
+                          {Boolean(action.result?.created_suggestion_id) && (
+                            <p className="text-xs text-emerald-800">Borrador creado: sugerencia #{String(action.result?.created_suggestion_id)}</p>
                           )}
-                          {action.result?.suggestion_status && (
-                            <p className="text-xs text-slate-600">Estado del borrador: {String(action.result.suggestion_status)}</p>
+                          {Boolean(action.result?.suggestion_status) && (
+                            <p className="text-xs text-slate-600">Estado del borrador: {String(action.result?.suggestion_status)}</p>
                           )}
-                          {action.result?.created_version_id && (
+                          {Boolean(action.result?.created_version_id) && (
                             <p className="text-xs text-emerald-800">
-                              Version creada: #{String(action.result.created_version_id)}
-                              {action.result.version_number ? ` (v${String(action.result.version_number)})` : ""}
+                              Version creada: #{String(action.result?.created_version_id)}
+                              {action.result?.version_number ? ` (v${String(action.result.version_number)})` : ""}
                             </p>
                           )}
                         </div>

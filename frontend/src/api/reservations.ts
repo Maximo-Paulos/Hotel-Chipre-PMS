@@ -219,7 +219,7 @@ export type ReservationUpdatePayload = Partial<ReservationPayload> & {
 
 const buildQueryString = (filters: ReservationFilters = {}) => {
   const params = new URLSearchParams();
-  if (filters.status && filters.status !== "all" && filters.status !== "") {
+  if (filters.status && filters.status !== "all") {
     params.set("status_filter", filters.status);
   }
   if (filters.fromDate) params.set("from_date", filters.fromDate);

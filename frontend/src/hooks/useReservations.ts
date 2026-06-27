@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   clearReservationManualReview,
@@ -46,7 +46,7 @@ export function useReservations(filters: ReservationFilters) {
     queryKey: reservationsKey(session.hotelId, filters),
     queryFn: () => listReservations(filters, session),
     enabled: hasValidSession(session),
-    keepPreviousData: true,
+    placeholderData: keepPreviousData,
     staleTime: 1000 * 15
   });
 }

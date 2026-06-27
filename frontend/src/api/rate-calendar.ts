@@ -94,6 +94,28 @@ export type DailyRateOut = DailyRatePrices & {
   date: string;
 };
 
+// One row per date for the editable grid. `source` says where the effective
+// price came from (an explicit daily_rate, a price_period, the category base,
+// or none), and `daily_rate_id` is set only when an explicit row exists.
+export type DailyRateRangeRow = DailyRatePrices & {
+  date: string;
+  source: "daily_rate" | "price_period" | "category_pricing" | "none";
+  daily_rate_id: number | null;
+};
+
+export const getCategoryDailyRates = (
+  categoryId: number,
+  fromDate: string,
+  toDate: string,
+  session?: SessionLike
+) => {
+  const search = new URLSearchParams({ from_date: fromDate, to_date: toDate });
+  return apiFetch<DailyRateRangeRow[]>(`/api/rates/category/${categoryId}?${search.toString()}`, {
+    method: "GET",
+    session
+  });
+};
+
 export type BulkRateResult = { created: number; updated: number };
 
 export const upsertDailyRate = (

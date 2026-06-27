@@ -1,5 +1,5 @@
 ﻿import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { getHotelConfig, updateHotelConfig, type HotelConfig } from "../../api/config";
 import {
@@ -45,9 +45,12 @@ export function SettingsHotelPage() {
   const configQuery = useQuery({
     queryKey: ["hotel-config", session.hotelId],
     enabled: hasValidSession(session),
-    queryFn: () => getHotelConfig(session),
-    onSuccess: (data) => setForm(data)
+    queryFn: () => getHotelConfig(session)
   });
+
+  useEffect(() => {
+    if (configQuery.data) setForm(configQuery.data);
+  }, [configQuery.data]);
 
   const categoriesQuery = useQuery({
     queryKey: ["room-categories", session.hotelId],
@@ -212,8 +215,8 @@ export function SettingsHotelPage() {
               <input type="number" min={1} className="rounded-lg border border-slate-200 px-3 py-2 text-sm" placeholder="Ocupación máx" value={categoryForm.max_occupancy} onChange={(e) => setCategoryForm((p) => ({ ...p, max_occupancy: parseInt(e.target.value || "1", 10) }))} />
               <input className="rounded-lg border border-slate-200 px-3 py-2 text-sm md:col-span-2" placeholder="Amenidades" value={categoryForm.amenities ?? ""} onChange={(e) => setCategoryForm((p) => ({ ...p, amenities: e.target.value }))} />
               <input className="rounded-lg border border-slate-200 px-3 py-2 text-sm md:col-span-3" placeholder="Descripción" value={categoryForm.description ?? ""} onChange={(e) => setCategoryForm((p) => ({ ...p, description: e.target.value }))} />
-              <button type="button" className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60" disabled={createCategoryMutation.isLoading || !categoryForm.name || !categoryForm.code || categoryForm.base_price_per_night <= 0 || categoryForm.max_occupancy <= 0} onClick={() => createCategoryMutation.mutate(categoryForm)}>
-                {createCategoryMutation.isLoading ? "Guardando..." : "Agregar categoría"}
+              <button type="button" className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60" disabled={createCategoryMutation.isPending || !categoryForm.name || !categoryForm.code || categoryForm.base_price_per_night <= 0 || categoryForm.max_occupancy <= 0} onClick={() => createCategoryMutation.mutate(categoryForm)}>
+                {createCategoryMutation.isPending ? "Guardando..." : "Agregar categoría"}
               </button>
             </div>
             <div className="mt-4 grid gap-2 md:grid-cols-2">
@@ -263,8 +266,8 @@ export function SettingsHotelPage() {
                 ))}
               </select>
               <input className="rounded-lg border border-slate-200 px-3 py-2 text-sm md:col-span-2" placeholder="Notas" value={roomForm.notes ?? ""} onChange={(e) => setRoomForm((p) => ({ ...p, notes: e.target.value }))} />
-              <button type="button" className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60 md:col-span-2" disabled={createRoomMutation.isLoading || !roomForm.room_number || !roomForm.category_id} onClick={() => createRoomMutation.mutate(roomForm)}>
-                {createRoomMutation.isLoading ? "Guardando..." : "Agregar habitación"}
+              <button type="button" className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60 md:col-span-2" disabled={createRoomMutation.isPending || !roomForm.room_number || !roomForm.category_id} onClick={() => createRoomMutation.mutate(roomForm)}>
+                {createRoomMutation.isPending ? "Guardando..." : "Agregar habitación"}
               </button>
             </div>
             <div className="mt-4 grid gap-2 md:grid-cols-3">

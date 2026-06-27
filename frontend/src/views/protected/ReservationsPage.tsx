@@ -803,7 +803,7 @@ export function ReservationsPage() {
                         <button
                           type="button"
                           onClick={() => handleClearManualReview(action.reservation_id)}
-                          disabled={clearManualReviewMutation.isLoading}
+                          disabled={clearManualReviewMutation.isPending}
                           className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-semibold text-sky-700 hover:border-sky-300 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           Cerrar revisión
@@ -813,7 +813,7 @@ export function ReservationsPage() {
                         <button
                           type="button"
                           onClick={() => handleResolveExternal(action.reservation_id)}
-                          disabled={resolveExternalMutation.isLoading}
+                          disabled={resolveExternalMutation.isPending}
                           className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800 hover:border-amber-300 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           Marcar resuelto
@@ -1270,7 +1270,7 @@ export function ReservationsPage() {
                         </button>
                         <button
                           type="button"
-                          disabled={!canCancel(reservation.status) || cancelMutation.isLoading || subscriptionBlocked}
+                          disabled={!canCancel(reservation.status) || cancelMutation.isPending || subscriptionBlocked}
                           onClick={() => handleCancel(reservation.id)}
                           className="rounded-lg border border-rose-200 px-2 py-1 text-rose-700 hover:border-rose-300 disabled:cursor-not-allowed disabled:opacity-50"
                         >
@@ -1278,7 +1278,7 @@ export function ReservationsPage() {
                         </button>
                         <button
                           type="button"
-                          disabled={!canCheckIn(reservation.status) || checkInMutation.isLoading || subscriptionBlocked}
+                          disabled={!canCheckIn(reservation.status) || checkInMutation.isPending || subscriptionBlocked}
                           onClick={() => handleCheckIn(reservation.id)}
                           className="rounded-lg border border-emerald-200 px-2 py-1 text-emerald-700 hover:border-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
                         >
@@ -1286,7 +1286,7 @@ export function ReservationsPage() {
                         </button>
                         <button
                           type="button"
-                          disabled={!canCheckOut(reservation.status) || checkOutMutation.isLoading || subscriptionBlocked}
+                          disabled={!canCheckOut(reservation.status) || checkOutMutation.isPending || subscriptionBlocked}
                           onClick={() => handleCheckOut(reservation.id)}
                           className="rounded-lg border border-sky-200 px-2 py-1 text-sky-700 hover:border-sky-300 disabled:cursor-not-allowed disabled:opacity-50"
                         >
@@ -1367,7 +1367,7 @@ export function ReservationsPage() {
                     <p className="text-xs uppercase tracking-wide text-slate-500">Huésped rápido</p>
                     <p className="text-xs text-slate-600">Creá y asigná sin salir del formulario.</p>
                   </div>
-                  {guestMutation.isLoading && <span className="text-xs text-slate-500">Guardando...</span>}
+                  {guestMutation.isPending && <span className="text-xs text-slate-500">Guardando...</span>}
                 </div>
                 <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                   <input
@@ -1399,7 +1399,7 @@ export function ReservationsPage() {
                   <button
                     type="button"
                     onClick={handleCreateGuest}
-                    disabled={guestMutation.isLoading || !guestForm.first_name || !guestForm.last_name}
+                    disabled={guestMutation.isPending || !guestForm.first_name || !guestForm.last_name}
                     className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-xs font-semibold text-brand-700 hover:border-brand-300 hover:bg-brand-100 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     Crear Huésped y asignar ID
@@ -1560,7 +1560,7 @@ export function ReservationsPage() {
                     <button
                       type="button"
                       onClick={handlePayDeposit}
-                      disabled={paymentMutation.isLoading}
+                      disabled={paymentMutation.isPending}
                       className="rounded-lg border border-amber-200 bg-amber-100 px-3 py-2 text-sm font-semibold text-amber-800 hover:border-amber-300 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       Registrar Seña
@@ -1568,7 +1568,7 @@ export function ReservationsPage() {
                     <button
                       type="button"
                       onClick={handlePayFull}
-                      disabled={paymentMutation.isLoading}
+                      disabled={paymentMutation.isPending}
                       className="rounded-lg border border-emerald-200 bg-emerald-100 px-3 py-2 text-sm font-semibold text-emerald-800 hover:border-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       Pago total
@@ -1609,7 +1609,7 @@ export function ReservationsPage() {
                 <button
                   type="submit"
                   className="rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
-                  disabled={createMutation.isLoading || updateMutation.isLoading || subscriptionBlocked}
+                  disabled={createMutation.isPending || updateMutation.isPending || subscriptionBlocked}
                 >
                   {editing ? "Guardar cambios" : "Crear"}
                 </button>
@@ -1790,7 +1790,7 @@ export function ReservationsPage() {
                                 <button
                                   type="button"
                                   onClick={() => handleClearManualReview(detailsReservation.id)}
-                                  disabled={clearManualReviewMutation.isLoading}
+                                  disabled={clearManualReviewMutation.isPending}
                                   className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-semibold text-sky-700 hover:border-sky-300 disabled:cursor-not-allowed disabled:opacity-60"
                                 >
                                   Cerrar revisión
@@ -1800,7 +1800,7 @@ export function ReservationsPage() {
                                 <button
                                   type="button"
                                   onClick={() => handleResolveExternal(detailsReservation.id)}
-                                  disabled={resolveExternalMutation.isLoading}
+                                  disabled={resolveExternalMutation.isPending}
                                   className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800 hover:border-amber-300 disabled:cursor-not-allowed disabled:opacity-60"
                                 >
                                   Marcar resuelto

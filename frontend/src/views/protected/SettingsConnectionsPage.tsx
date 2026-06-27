@@ -506,7 +506,7 @@ export function SettingsConnectionsPage() {
                     disabled={connect.isPending}
                     type="button"
                   >
-                    {status === "connected" ? "Actualizar conexion" : "Conectar"}
+                    {status === "revoked" || status === "error" ? "Reconectar" : "Conectar"}
                   </button>
                 ) : null}
                 {isConnected && (

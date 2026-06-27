@@ -300,12 +300,12 @@ export function SettingsTestsPage() {
                   </div>
                 </div>
 
-                {(test.payment_link || test.status === "pending") && (
+                {(test.payment_url || test.status === "pending") && (
                   <div className="mt-3 flex flex-wrap gap-2">
-                    {test.payment_link && (
+                    {test.payment_url && (
                       <>
                         <a
-                          href={test.payment_link}
+                          href={test.payment_url}
                           target="_blank"
                           rel="noreferrer"
                           className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700"
@@ -315,7 +315,7 @@ export function SettingsTestsPage() {
                         <button
                           type="button"
                           className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700"
-                          onClick={() => navigator.clipboard?.writeText(test.payment_link || "")}
+                          onClick={() => navigator.clipboard?.writeText(test.payment_url || "")}
                         >
                           Copiar link
                         </button>

@@ -71,7 +71,7 @@ export function SettingsUsersPage() {
             <select
               className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
               value={inviteForm.role}
-              onChange={(e) => setInviteForm((p) => ({ ...p, role: e.target.value }))}
+              onChange={(e) => setInviteForm((p) => ({ ...p, role: e.target.value as InvitePayload["role"] }))}
             >
               <option value="co_owner">Co-owner</option>
               <option value="manager">Manager</option>
@@ -87,10 +87,10 @@ export function SettingsUsersPage() {
                   }
                 })
               }
-              disabled={inviteMutation.isLoading || !inviteForm.email}
+              disabled={inviteMutation.isPending || !inviteForm.email}
               className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-60"
             >
-              {inviteMutation.isLoading ? "Enviando..." : "Invitar"}
+              {inviteMutation.isPending ? "Enviando..." : "Invitar"}
             </button>
           </div>
           {inviteLink && (
@@ -140,7 +140,9 @@ export function SettingsUsersPage() {
                       <select
                         className="rounded-lg border border-slate-200 px-2 py-1 text-sm"
                         value={u.role}
-                        onChange={(e) => updateRoleMutation.mutate({ userId: u.id, role: e.target.value })}
+                        onChange={(e) =>
+                          updateRoleMutation.mutate({ userId: u.id, role: e.target.value as InvitePayload["role"] })
+                        }
                       >
                         <option value="co_owner">Co-owner</option>
                         <option value="manager">Manager</option>

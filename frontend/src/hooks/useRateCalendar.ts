@@ -3,9 +3,13 @@ import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { hasValidSession } from "../api/client";
 import {
   bulkUpsertDailyRates,
+  getCategoryDailyRates,
   getRateCalendarDaily,
+  upsertDailyRate,
   type BulkRateResult,
+  type DailyRateOut,
   type DailyRatePrices,
+  type DailyRateRangeRow,
   type RateCalendarResponse
 } from "../api/rate-calendar";
 import { useSession } from "../state/session";
@@ -50,6 +54,41 @@ export function useRateCalendar(categoryId: number | null, year: number) {
   });
 }
 
+export function useCategoryDailyRates(categoryId: number | null, year: number) {
+  const { session } = useSession();
+  const { dateFrom, dateTo } = resolveRateCalendarRange(year);
+
+  return useQuery<DailyRateRangeRow[]>({
+    queryKey: ["category-daily-rates", session.hotelId ?? null, categoryId, year],
+    queryFn: () => getCategoryDailyRates(categoryId as number, dateFrom, dateTo, session),
+    enabled: hasValidSession(session) && typeof categoryId === "number" && categoryId > 0,
+    staleTime: 60_000
+  });
+}
+
+export type SingleRateInput = DailyRatePrices & { date: string };
+
+export function useUpsertDailyRate(categoryId: number | null, year: number) {
+  const { session } = useSession();
+  const queryClient = useQueryClient();
+
+  return useMutation<DailyRateOut, Error, SingleRateInput>({
+    mutationFn: (payload) => {
+      if (typeof categoryId !== "number" || categoryId <= 0) {
+        throw new Error("Seleccioná una categoría válida antes de guardar tarifas.");
+      }
+      return upsertDailyRate(categoryId, payload, session);
+    },
+    onSuccess: () => {
+      // Refresh both the editable grid and the availability/channel view.
+      queryClient.invalidateQueries({
+        queryKey: ["category-daily-rates", session.hotelId ?? null, categoryId, year]
+      });
+      queryClient.invalidateQueries({ queryKey: ["rate-calendar", session.hotelId ?? null, categoryId] });
+    }
+  });
+}
+
 export type BulkRateInput = DailyRatePrices & {
   from_date: string;
   to_date: string;
@@ -69,6 +108,7 @@ export function useBulkUpsertRates(categoryId: number | null) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["rate-calendar", session.hotelId ?? null, categoryId] });
+      queryClient.invalidateQueries({ queryKey: ["category-daily-rates", session.hotelId ?? null, categoryId] });
     }
   });
 }

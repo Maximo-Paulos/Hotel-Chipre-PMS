@@ -1,5 +1,5 @@
 import { apiFetch, type SessionLike } from "./client";
-import { type UserInfo } from "./auth";
+import { type AuthUser as UserInfo } from "./auth";
 
 export type InvitePayload = {
   email: string;

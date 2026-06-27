@@ -23,7 +23,7 @@ type NavSection = {
   items: NavItem[];
 };
 
-const baseNav = [
+const baseNav: NavSection[] = [
   {
     title: "Analytics",
     items: [
@@ -124,7 +124,7 @@ export function AppShell() {
       .map((section) => {
         const items = section.items
           .filter((item) => !item.requiresRole || (role ? item.requiresRole.includes(role) : false))
-          .filter((item) => !item.minPlan || (subscription?.plan ? (planRank[subscription.plan] ?? 0) >= (planRank[item.minPlan] ?? 0) : false))
+          .filter((item) => !item.minPlan || (subscription?.plan ? (planRank[subscription.plan as keyof typeof planRank] ?? 0) >= (planRank[item.minPlan] ?? 0) : false))
           .filter((item) => !(item.to === "/onboarding" && onboarding?.completed));
         if (!items.length) return null;
         return { ...section, items } as NavSection;
