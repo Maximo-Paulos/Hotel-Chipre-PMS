@@ -88,15 +88,48 @@ def _render_server_default(column) -> str | None:
     return rendered
 
 
+def _column_fill_value(column):
+    """Best concrete default value for a NOT-NULL column, or None if unknown.
+
+    Prefers the model's Python-side ``default=`` (scalar), since many columns
+    (e.g. version=0, is_wait_listed=False) carry only that and no
+    ``server_default``. Falls back to parsing a scalar ``server_default``,
+    mapping SQLite-style boolean "0"/"1" to real booleans. Callable/sequence
+    defaults (e.g. timestamps) return None — those columns aren't backfilled.
+    """
+    from sqlalchemy import Boolean
+
+    default = column.default
+    if default is not None and getattr(default, "is_scalar", False):
+        return default.arg
+    server_default = column.server_default
+    if server_default is not None:
+        arg = getattr(server_default, "arg", None)
+        if arg is not None:
+            text = getattr(arg, "text", None)
+            raw = (text if text is not None else str(arg)).strip().strip("'\"")
+            if isinstance(column.type, Boolean):
+                low = raw.lower()
+                if low in ("0", "false", "f"):
+                    return False
+                if low in ("1", "true", "t"):
+                    return True
+            return raw
+    return None
+
+
 def _backfill_not_null_nulls(engine) -> None:
     """Fill NULLs in NOT-NULL model columns that carry a default.
 
-    A column added in an earlier self-heal pass without a usable default (e.g. a
-    boolean whose "0" default postgres rejected) exists as NULLable and may hold
-    NULLs. ``ADD COLUMN IF NOT EXISTS`` won't revisit it, yet those NULLs break
-    response serialization (the Pydantic schema expects a non-null value). This
-    backfills such NULLs with the model default. Idempotent: a no-op once filled.
+    A column added in an earlier self-heal pass without a usable default exists
+    as NULLable and may hold NULLs. ``ADD COLUMN IF NOT EXISTS`` won't revisit
+    it, yet those NULLs break response serialization (the Pydantic schema
+    expects a non-null value). This backfills such NULLs with the model default,
+    passed as a bound parameter so the driver handles typing/quoting. Idempotent:
+    a no-op once filled.
     """
+    from sqlalchemy import text as sa_text
+
     insp = inspect(engine)
     for table in Base.metadata.sorted_tables:
         try:
@@ -107,16 +140,16 @@ def _backfill_not_null_nulls(engine) -> None:
         for col in table.columns:
             if col.nullable:
                 continue
-            default_sql = _render_server_default(col)
-            if default_sql is None:
+            value = _column_fill_value(col)
+            if value is None:
                 continue
-            update = (
-                f'UPDATE "{table.name}" SET "{col.name}" = {default_sql} '
+            update = sa_text(
+                f'UPDATE "{table.name}" SET "{col.name}" = :v '
                 f'WHERE "{col.name}" IS NULL'
             )
             try:
                 with engine.begin() as conn:
-                    result = conn.exec_driver_sql(update)
+                    result = conn.execute(update, {"v": value})
                 if getattr(result, "rowcount", 0):
                     LOGGER.warning(
                         "schema self-heal: backfilled %s NULLs in %s.%s",
