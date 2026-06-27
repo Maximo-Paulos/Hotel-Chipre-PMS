@@ -2,11 +2,15 @@
 Database engine and session management.
 Supports both PostgreSQL (production) and SQLite (testing).
 """
+import logging
+
 from sqlalchemy import create_engine, event, inspect
 from sqlalchemy.orm import sessionmaker, DeclarativeBase, Session
 from typing import Generator
 
 from app.config import get_settings
+
+LOGGER = logging.getLogger(__name__)
 
 
 class Base(DeclarativeBase):
@@ -53,6 +57,75 @@ _engine = None
 _SessionLocal = None
 
 
+def _render_server_default(column) -> str | None:
+    """Return the SQL text of a column's server_default, if it has one."""
+    server_default = column.server_default
+    if server_default is None:
+        return None
+    arg = getattr(server_default, "arg", None)
+    if arg is None:
+        return None
+    try:
+        text = getattr(arg, "text", None)
+        return text if text is not None else str(arg)
+    except Exception:  # pragma: no cover - defensive
+        return None
+
+
+def _sync_missing_columns(engine) -> None:
+    """Additively add model columns that are missing from existing tables.
+
+    create_all() only creates missing *tables*; it never ALTERs an existing
+    table to add new *columns*. A production DB that predates a model column
+    therefore raises ``UndefinedColumn`` at query time (schema drift, since
+    deploys here run create_all() rather than Alembic). This patches that drift
+    idempotently: it only ADDs columns, never drops or alters existing ones.
+    New columns are added NULLable (even when the model marks them NOT NULL) so
+    existing rows don't violate the constraint; a server_default is included
+    when the model defines one. Each ALTER runs in its own transaction and
+    failures are logged, never raised, so a single odd column can't block boot.
+    """
+    insp = inspect(engine)
+    dialect = engine.dialect
+    for table in Base.metadata.sorted_tables:
+        try:
+            if not insp.has_table(table.name):
+                continue
+            existing = {c["name"] for c in insp.get_columns(table.name)}
+        except Exception:  # pragma: no cover - defensive
+            continue
+        for col in table.columns:
+            if col.name in existing:
+                continue
+            try:
+                coltype = col.type.compile(dialect=dialect)
+            except Exception:
+                LOGGER.warning(
+                    "schema self-heal: cannot render type for %s.%s; skipping",
+                    table.name, col.name,
+                )
+                continue
+            ddl = (
+                f'ALTER TABLE "{table.name}" '
+                f'ADD COLUMN IF NOT EXISTS "{col.name}" {coltype}'
+            )
+            default_sql = _render_server_default(col)
+            if default_sql is not None:
+                ddl += f" DEFAULT {default_sql}"
+            try:
+                with engine.begin() as conn:
+                    conn.exec_driver_sql(ddl)
+                LOGGER.warning(
+                    "schema self-heal: added missing column %s.%s",
+                    table.name, col.name,
+                )
+            except Exception as exc:
+                LOGGER.warning(
+                    "schema self-heal: could not add %s.%s: %s",
+                    table.name, col.name, exc,
+                )
+
+
 def init_db(database_url: str | None = None):
     """Initialize the database engine and create all tables."""
     global _engine, _SessionLocal
@@ -74,6 +147,10 @@ def init_db(database_url: str | None = None):
                     "ON reservations (hotel_id, id)"
                 )
     Base.metadata.create_all(bind=_engine)
+    # Patch column-level schema drift on existing PostgreSQL tables (create_all
+    # only handles missing tables, not missing columns).
+    if _engine.dialect.name == "postgresql":
+        _sync_missing_columns(_engine)
     return _engine
 
 
