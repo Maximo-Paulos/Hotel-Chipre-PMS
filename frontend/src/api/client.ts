@@ -1,5 +1,3 @@
-import type { HeadersInit } from "react";
-
 export type SessionLike = {
   hotelId?: number | null;
   userId?: string | null;
@@ -28,10 +26,30 @@ const normalizeHotelId = (hotelId?: number | string | null) => {
   return Number.isInteger(parsed) && (parsed as number) > 0 ? (parsed as number) : null;
 };
 
+// Decode a JWT's `exp` claim (seconds since epoch) without verifying the
+// signature. Returns null when the token is malformed or carries no exp.
+const jwtExpMs = (token: string): number | null => {
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    return typeof payload?.exp === "number" ? payload.exp * 1000 : null;
+  } catch {
+    return null;
+  }
+};
+
+export const isTokenExpired = (token?: string | null): boolean => {
+  if (!token) return false;
+  const expMs = jwtExpMs(token);
+  // 10s skew so a token about to expire isn't treated as valid for a request
+  // that would arrive after it lapses.
+  return expMs !== null && expMs <= Date.now() + 10_000;
+};
+
 export const hasValidSession = (session?: SessionLike) => {
   const hotelId = normalizeHotelId(session?.hotelId);
   const userId = typeof session?.userId === "string" ? session.userId.trim() : "";
   const accessToken = typeof session?.accessToken === "string" ? session.accessToken.trim() : "";
+  if (isTokenExpired(accessToken)) return false;
   return Boolean(hotelId && userId && accessToken && userId !== "guest");
 };
 
@@ -51,6 +69,22 @@ export const buildAuthHeaders = (session?: SessionLike): Record<string, string> 
   };
   headers.Authorization = `Bearer ${accessToken}`;
   return headers;
+};
+
+// Clear the persisted session and redirect to /login. Guarded so a burst of
+// concurrent 401s only triggers one navigation.
+let unauthorizedHandled = false;
+const handleUnauthorized = () => {
+  if (unauthorizedHandled || typeof window === "undefined") return;
+  unauthorizedHandled = true;
+  try {
+    localStorage.removeItem("hotel-pms-session");
+  } catch {
+    /* ignore */
+  }
+  if (window.location.pathname !== "/login") {
+    window.location.assign("/login?expired=1");
+  }
 };
 
 type RequestOptions = {
@@ -94,6 +128,12 @@ export async function apiFetch<T = unknown>(path: string, options: RequestOption
       ? (payload as Record<string, unknown>).detail
       : undefined;
     const message = formatErrorDetail(detail) || response.statusText || "Request failed";
+    // An expired/invalid token leaves a stale session in localStorage that
+    // would otherwise render every protected section as broken (repeated 401s).
+    // Clear it and bounce to login so the user can re-authenticate cleanly.
+    if (response.status === 401 && buildAuthHeaders(session).Authorization) {
+      handleUnauthorized();
+    }
     throw new ApiError(response.status, message, payload);
   }
 

@@ -126,7 +126,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_SECRET: str = ""
     SIGNED_TOKEN_SECRET: str = ""
     JWT_ALGORITHM: str = "HS256"
-    JWT_EXPIRES_MINUTES: int = 60
+    JWT_EXPIRES_MINUTES: int = 720  # 12h: there is no refresh flow, so a short TTL logs staff out mid-shift
     DEFAULT_SUBSCRIPTION_PLAN: str = "starter"
     LOGIN_RATE_LIMIT: int = 5  # attempts per window
     SUBSCRIPTION_ENFORCEMENT_ENABLED: bool = False  # legacy flag, kept for backward compatibility
