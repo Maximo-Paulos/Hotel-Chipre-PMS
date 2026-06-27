@@ -2,7 +2,7 @@
 Database engine and session management.
 Supports both PostgreSQL (production) and SQLite (testing).
 """
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, inspect
 from sqlalchemy.orm import sessionmaker, DeclarativeBase, Session
 from typing import Generator
 
@@ -60,6 +60,19 @@ def init_db(database_url: str | None = None):
     _SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_engine)
     # Import models so Base.metadata is fully populated (e.g., CategoryPricing)
     import app.models  # noqa: F401
+    # Self-heal: on an existing PostgreSQL DB, create_all() never ALTERs the
+    # already-present `reservations` table, so the composite unique key that
+    # newer tables (e.g. payment_links) reference via FK may be missing. Add it
+    # idempotently before create_all, otherwise creating those tables fails with
+    # "no unique constraint matching given keys for referenced table".
+    if _engine.dialect.name == "postgresql":
+        insp = inspect(_engine)
+        if insp.has_table("reservations"):
+            with _engine.begin() as conn:
+                conn.exec_driver_sql(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS uq_reservation_hotel_id_id "
+                    "ON reservations (hotel_id, id)"
+                )
     Base.metadata.create_all(bind=_engine)
     return _engine
 
