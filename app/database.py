@@ -105,18 +105,35 @@ def _sync_missing_columns(engine) -> None:
                     table.name, col.name,
                 )
                 continue
-            ddl = (
+            base_ddl = (
                 f'ALTER TABLE "{table.name}" '
                 f'ADD COLUMN IF NOT EXISTS "{col.name}" {coltype}'
             )
             default_sql = _render_server_default(col)
-            if default_sql is not None:
-                ddl += f" DEFAULT {default_sql}"
+            ddl = base_ddl + (f" DEFAULT {default_sql}" if default_sql is not None else "")
             try:
                 with engine.begin() as conn:
                     conn.exec_driver_sql(ddl)
                 LOGGER.warning(
                     "schema self-heal: added missing column %s.%s",
+                    table.name, col.name,
+                )
+                continue
+            except Exception as exc:
+                # A SQLite-style default (e.g. "0" for a boolean) can be rejected
+                # by postgres as a type mismatch. Adding the column without the
+                # default still heals the drift, so retry once without it.
+                if default_sql is None:
+                    LOGGER.warning(
+                        "schema self-heal: could not add %s.%s: %s",
+                        table.name, col.name, exc,
+                    )
+                    continue
+            try:
+                with engine.begin() as conn:
+                    conn.exec_driver_sql(base_ddl)
+                LOGGER.warning(
+                    "schema self-heal: added missing column %s.%s (without default)",
                     table.name, col.name,
                 )
             except Exception as exc:
