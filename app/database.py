@@ -58,7 +58,16 @@ _SessionLocal = None
 
 
 def _render_server_default(column) -> str | None:
-    """Return the SQL text of a column's server_default, if it has one."""
+    """Return the SQL text of a column's server_default, if it has one.
+
+    Boolean columns frequently carry a SQLite-style "0"/"1" server_default that
+    postgres rejects (boolean vs integer). Map those to proper boolean literals
+    so the column can be added WITH a default — which also backfills existing
+    rows, avoiding NULLs that would break NOT NULL constraints or response
+    serialization.
+    """
+    from sqlalchemy import Boolean
+
     server_default = column.server_default
     if server_default is None:
         return None
@@ -67,9 +76,57 @@ def _render_server_default(column) -> str | None:
         return None
     try:
         text = getattr(arg, "text", None)
-        return text if text is not None else str(arg)
+        rendered = text if text is not None else str(arg)
     except Exception:  # pragma: no cover - defensive
         return None
+    if isinstance(column.type, Boolean):
+        stripped = rendered.strip().strip("'\"").lower()
+        if stripped in ("0", "false", "f"):
+            return "false"
+        if stripped in ("1", "true", "t"):
+            return "true"
+    return rendered
+
+
+def _backfill_not_null_nulls(engine) -> None:
+    """Fill NULLs in NOT-NULL model columns that carry a default.
+
+    A column added in an earlier self-heal pass without a usable default (e.g. a
+    boolean whose "0" default postgres rejected) exists as NULLable and may hold
+    NULLs. ``ADD COLUMN IF NOT EXISTS`` won't revisit it, yet those NULLs break
+    response serialization (the Pydantic schema expects a non-null value). This
+    backfills such NULLs with the model default. Idempotent: a no-op once filled.
+    """
+    insp = inspect(engine)
+    for table in Base.metadata.sorted_tables:
+        try:
+            if not insp.has_table(table.name):
+                continue
+        except Exception:  # pragma: no cover - defensive
+            continue
+        for col in table.columns:
+            if col.nullable:
+                continue
+            default_sql = _render_server_default(col)
+            if default_sql is None:
+                continue
+            update = (
+                f'UPDATE "{table.name}" SET "{col.name}" = {default_sql} '
+                f'WHERE "{col.name}" IS NULL'
+            )
+            try:
+                with engine.begin() as conn:
+                    result = conn.exec_driver_sql(update)
+                if getattr(result, "rowcount", 0):
+                    LOGGER.warning(
+                        "schema self-heal: backfilled %s NULLs in %s.%s",
+                        result.rowcount, table.name, col.name,
+                    )
+            except Exception as exc:
+                LOGGER.warning(
+                    "schema self-heal: could not backfill %s.%s: %s",
+                    table.name, col.name, exc,
+                )
 
 
 def _sync_missing_columns(engine) -> None:
@@ -168,6 +225,7 @@ def init_db(database_url: str | None = None):
     # only handles missing tables, not missing columns).
     if _engine.dialect.name == "postgresql":
         _sync_missing_columns(_engine)
+        _backfill_not_null_nulls(_engine)
     return _engine
 
 
