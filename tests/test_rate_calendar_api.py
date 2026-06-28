@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import date
+
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -8,6 +10,7 @@ from sqlalchemy.pool import StaticPool
 from app.database import Base, get_db
 from app.dependencies.auth import AuthContext, get_auth_context
 from app.main import app as fastapi_app
+from app.models.daily_rate import DailyRate
 from app.models.hotel_config import HotelConfiguration
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.schemas.rate_calendar import RateCalendarResponse
@@ -175,6 +178,57 @@ def test_success_returns_expected_schema():
         assert parsed.meta.category_id == category.id
         assert len(parsed.days) == 2
         assert [channel.provider_code for channel in parsed.days[0].channels] == ["direct", "booking", "expedia"]
+    finally:
+        _cleanup_client(db, engine)
+
+
+def test_bulk_field_percent_update_preserves_base_prices_and_excludes_dates():
+    client, db, engine = _build_client()
+    try:
+        category = _seed_hotel(db, 1, "H1")
+        db.add_all(
+            [
+                DailyRate(hotel_id=1, category_id=category.id, date=date(2026, 5, 7), price=100.0),
+                DailyRate(
+                    hotel_id=1,
+                    category_id=category.id,
+                    date=date(2026, 5, 8),
+                    price=200.0,
+                    price_transfer=180.0,
+                ),
+                DailyRate(hotel_id=1, category_id=category.id, date=date(2026, 5, 9), price=300.0),
+            ]
+        )
+        db.commit()
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "manager")
+
+        response = client.post(
+            f"/api/rates/category/{category.id}/bulk-field",
+            json={
+                "from_date": "2026-05-07",
+                "to_date": "2026-05-09",
+                "field": "price_transfer",
+                "mode": "percent_delta",
+                "value": -10,
+                "exclude_dates": ["2026-05-08"],
+            },
+        )
+
+        assert response.status_code == 200, response.text
+        assert response.json() == {"created": 0, "updated": 2}
+
+        rows = {
+            row.date.isoformat(): row
+            for row in db.query(DailyRate)
+            .filter(DailyRate.category_id == category.id)
+            .order_by(DailyRate.date)
+        }
+        assert rows["2026-05-07"].price == 100.0
+        assert rows["2026-05-07"].price_transfer == 90.0
+        assert rows["2026-05-08"].price == 200.0
+        assert rows["2026-05-08"].price_transfer == 180.0
+        assert rows["2026-05-09"].price == 300.0
+        assert rows["2026-05-09"].price_transfer == 270.0
     finally:
         _cleanup_client(db, engine)
 

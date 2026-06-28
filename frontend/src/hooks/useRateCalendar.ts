@@ -3,10 +3,13 @@ import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { hasValidSession } from "../api/client";
 import {
   bulkUpsertDailyRates,
+  bulkUpdateDailyRateField,
   getCategoryDailyRates,
   getRateCalendarDaily,
   upsertDailyRate,
   type BulkRateResult,
+  type BulkRateField,
+  type BulkRateFieldMode,
   type DailyRateOut,
   type DailyRatePrices,
   type DailyRateRangeRow,
@@ -77,6 +80,15 @@ export type BulkRateInput = DailyRatePrices & {
   exclude_dates?: string[];
 };
 
+export type BulkRateFieldInput = {
+  from_date: string;
+  to_date: string;
+  field: BulkRateField;
+  mode: BulkRateFieldMode;
+  value: number;
+  exclude_dates?: string[];
+};
+
 export function useBulkUpsertRates(categoryId: number | null) {
   const { session } = useSession();
   const queryClient = useQueryClient();
@@ -87,6 +99,24 @@ export function useBulkUpsertRates(categoryId: number | null) {
         throw new Error("Seleccioná una categoría válida antes de guardar tarifas.");
       }
       return bulkUpsertDailyRates(categoryId, payload, session);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["rate-calendar", session.hotelId ?? null, categoryId] });
+      queryClient.invalidateQueries({ queryKey: ["category-daily-rates", session.hotelId ?? null, categoryId] });
+    }
+  });
+}
+
+export function useBulkUpdateRateField(categoryId: number | null) {
+  const { session } = useSession();
+  const queryClient = useQueryClient();
+
+  return useMutation<BulkRateResult, Error, BulkRateFieldInput>({
+    mutationFn: (payload) => {
+      if (typeof categoryId !== "number" || categoryId <= 0) {
+        throw new Error("Seleccioná una categoría válida antes de guardar tarifas.");
+      }
+      return bulkUpdateDailyRateField(categoryId, payload, session);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["rate-calendar", session.hotelId ?? null, categoryId] });

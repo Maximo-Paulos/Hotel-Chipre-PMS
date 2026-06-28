@@ -96,6 +96,15 @@ class BulkRateIn(BaseModel):
     exclude_dates: List[date] = Field(default_factory=list)
 
 
+class BulkFieldRateIn(BaseModel):
+    from_date: date
+    to_date: date
+    field: str = Field(..., pattern="^(price|price_cash|price_transfer|price_mercadopago|price_paypal|price_credit_card)$")
+    mode: str = Field(..., pattern="^(set|amount_delta|percent_delta)$")
+    value: float
+    exclude_dates: List[date] = Field(default_factory=list)
+
+
 class BulkRateOut(BaseModel):
     created: int
     updated: int
@@ -428,6 +437,117 @@ def bulk_upsert_daily_rates(
             category_id,
             touched_date,
             payload.price,
+            changed_at,
+        )
+    return BulkRateOut(created=created, updated=updated)
+
+
+# ---------------------------------------------------------------------------
+# POST /api/rates/category/{category_id}/bulk-field
+# ---------------------------------------------------------------------------
+
+
+def _bulk_field_value(base_price: float, current_value: float | None, payload: BulkFieldRateIn) -> float:
+    reference = base_price if payload.field != "price" else (current_value if current_value is not None else base_price)
+    if payload.mode == "set":
+        result = payload.value
+    elif payload.mode == "amount_delta":
+        result = reference + payload.value
+    else:
+        result = reference * (1 + (payload.value / 100.0))
+    if result < 0:
+        raise HTTPException(status_code=422, detail="Resulting rate value cannot be negative")
+    return round(float(result), 2)
+
+
+@router.post(
+    "/category/{category_id}/bulk-field",
+    response_model=BulkRateOut,
+    status_code=200,
+    summary="Bulk-update one daily rate field without overwriting other prices",
+)
+def bulk_update_daily_rate_field(
+    category_id: int,
+    payload: BulkFieldRateIn,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_roles(*_WRITE_ROLES)),
+):
+    if payload.to_date < payload.from_date:
+        raise HTTPException(status_code=422, detail="to_date must be >= from_date")
+    if (payload.to_date - payload.from_date).days > 730:
+        raise HTTPException(status_code=422, detail="Bulk range cannot exceed 730 days")
+
+    category = _get_category_or_404(db, context.hotel_id, category_id)
+    exclude = set(payload.exclude_dates)
+
+    existing_map: dict[date, DailyRate] = {
+        r.date: r
+        for r in db.query(DailyRate).filter(
+            DailyRate.hotel_id == context.hotel_id,
+            DailyRate.category_id == category_id,
+            DailyRate.date >= payload.from_date,
+            DailyRate.date <= payload.to_date,
+        )
+    }
+
+    created = updated = 0
+    touched_dates: list[date] = []
+    touched_rows: list[tuple[DailyRate, dict | None]] = []
+    current = payload.from_date
+    while current <= payload.to_date:
+        if current in exclude:
+            current += timedelta(days=1)
+            continue
+
+        touched_dates.append(current)
+        existing = existing_map.get(current)
+        if existing is None:
+            fallback_price = get_price_for_date(db, context.hotel_id, category_id, current)
+            source = _resolve_source(db, context.hotel_id, category_id, current)
+            base_price = fallback_price if source != "none" else float(category.base_price_per_night or 0.0)
+            row = DailyRate(
+                hotel_id=context.hotel_id,
+                category_id=category_id,
+                date=current,
+                price=round(float(base_price), 2),
+                created_by_user_id=context.user_id,
+            )
+            before = None
+            created += 1
+            db.add(row)
+        else:
+            row = existing
+            before = audit_log_service.model_snapshot(row)
+            updated += 1
+
+        base_price = round(float(row.price), 2)
+        current_value = getattr(row, payload.field)
+        setattr(row, payload.field, _bulk_field_value(base_price, current_value, payload))
+        row.updated_at = datetime.now(timezone.utc)
+        touched_rows.append((row, before))
+        current += timedelta(days=1)
+
+    db.commit()
+    for row, before in touched_rows:
+        audit_log_service.safe_create_audit_log(
+            db,
+            hotel_id=context.hotel_id,
+            table_name="daily_rates",
+            record_id=row.id,
+            action=AuditActionEnum.CREATE if before is None else AuditActionEnum.UPDATE,
+            actor_user_id=context.user_id,
+            payload_before=before,
+            payload_after=audit_log_service.model_snapshot(row),
+        )
+    changed_at = datetime.now(timezone.utc)
+    for touched_date in touched_dates:
+        row = existing_map.get(touched_date)
+        projected_price = row.price if row is not None else get_price_for_date(db, context.hotel_id, category_id, touched_date)
+        project_daily_rate_change(
+            context.hotel_id,
+            category_id,
+            touched_date,
+            projected_price,
             changed_at,
         )
     return BulkRateOut(created=created, updated=updated)
