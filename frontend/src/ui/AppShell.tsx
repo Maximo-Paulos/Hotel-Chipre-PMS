@@ -225,11 +225,11 @@ export function AppShell() {
           </nav>
         </aside>
 
-        <div className="flex min-h-screen flex-1 flex-col">
+        <div className="flex min-h-screen min-w-0 flex-1 flex-col">
           <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur">
             <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-3">
-                <Link to="/dashboard" className="flex items-center gap-2 text-lg font-semibold text-slate-900 md:hidden">
+              <div className="flex min-w-0 items-center gap-3">
+                <Link to="/dashboard" className="flex shrink-0 items-center gap-2 text-lg font-semibold text-slate-900 md:hidden">
                   <img
                     src="/brand/logo-avatar.png"
                     alt="Hotel Chipre PMS"
@@ -237,14 +237,14 @@ export function AppShell() {
                   />
                   <span className="leading-tight">Hotel Chipre PMS</span>
                 </Link>
-                <nav className="flex items-center gap-2 md:hidden">
+                <nav className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto md:hidden">
                   {visibleNavSections.find((section) => section.title === "Analytics")?.items.map((item) => (
                     <NavLink
                       key={item.to}
                       to={item.to}
                       className={({ isActive }) =>
                         cx(
-                          "rounded-full px-3 py-1 text-xs font-semibold",
+                          "shrink-0 rounded-full px-3 py-1 text-xs font-semibold",
                           isActive ? "bg-brand-100 text-brand-800" : "bg-slate-100 text-slate-600",
                         )
                       }
@@ -261,8 +261,8 @@ export function AppShell() {
             </div>
           </header>
 
-          <main className="flex-1 px-4 py-8 sm:px-8">
-            <div className="mx-auto max-w-6xl">
+          <main className="min-w-0 flex-1 px-4 py-8 sm:px-8">
+            <div className="mx-auto max-w-6xl min-w-0">
               <Outlet />
             </div>
           </main>

@@ -249,7 +249,39 @@ const mockCalendar = {
   ]
 };
 
-test("rate calendar page renders read-only grid", async ({ page }) => {
+const mockDailyRates = [
+  {
+    date: "2026-05-07",
+    price: 42000,
+    price_cash: 41000,
+    price_transfer: null,
+    price_mercadopago: null,
+    source: "daily_rate",
+    daily_rate_id: 101
+  },
+  {
+    date: "2026-05-08",
+    price: 43000,
+    price_cash: null,
+    price_transfer: null,
+    price_mercadopago: null,
+    source: "price_period",
+    daily_rate_id: null
+  },
+  {
+    date: "2026-05-09",
+    price: 41000,
+    price_cash: null,
+    price_transfer: null,
+    price_mercadopago: null,
+    source: "category_pricing",
+    daily_rate_id: null
+  }
+];
+
+test("rate calendar page renders annual editor and integrated channel view", async ({ page }) => {
+  const savedCells: unknown[] = [];
+
   await page.route("http://127.0.0.1:8040/api/**", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
@@ -347,6 +379,33 @@ test("rate calendar page renders read-only grid", async ({ page }) => {
       return;
     }
 
+    if (url.pathname.endsWith("/api/rates/category/7/daily") && request.method() === "POST") {
+      const payload = request.postDataJSON();
+      savedCells.push(payload);
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          id: 201,
+          hotel_id: 1,
+          category_id: 7,
+          ...payload
+        })
+      });
+      return;
+    }
+
+    if (url.pathname.endsWith("/api/rates/category/7") && request.method() === "GET") {
+      expect(url.searchParams.get("from_date")).toBeTruthy();
+      expect(url.searchParams.get("to_date")).toBeTruthy();
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(mockDailyRates)
+      });
+      return;
+    }
+
     if (url.pathname.endsWith("/api/rate-calendar/daily")) {
       expect(url.searchParams.get("category_id")).toBe("7");
       await route.fulfill({
@@ -375,7 +434,30 @@ test("rate calendar page renders read-only grid", async ({ page }) => {
 
   await expect(page.getByTestId("rate-calendar-page")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Calendario de tarifas y disponibilidad" })).toBeVisible();
+  await expect(page.getByTestId("rate-editor-grid")).toBeVisible();
+  await expect(page.getByLabel("Precio base 2026-05-07")).toBeVisible();
+  await expect(page.getByText("Edición masiva")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Aplicar al calendario" })).toBeVisible();
   await expect(page.getByTestId("rate-calendar-grid")).toBeVisible();
+
+  const firstBasePrice = page.getByLabel("Precio base 2026-05-07");
+  await expect(firstBasePrice).toHaveValue("42000");
+  await firstBasePrice.fill("");
+  await firstBasePrice.press("Enter");
+  await expect(firstBasePrice).toHaveValue("42000");
+  expect(savedCells).toHaveLength(0);
+
+  await firstBasePrice.fill("45000");
+  await firstBasePrice.press("Enter");
+  await expect.poll(() => savedCells.length).toBe(1);
+  expect(savedCells[0]).toMatchObject({
+    date: "2026-05-07",
+    price: 45000,
+    price_cash: 41000,
+    price_transfer: null,
+    price_mercadopago: null
+  });
+
   await expect(page.getByText("Booking.com")).toBeVisible();
   await expect(page.getByText("Falta mapeo").first()).toBeVisible();
   await expect(page.getByText("US$ 42")).toBeVisible();

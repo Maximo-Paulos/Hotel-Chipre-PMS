@@ -22,6 +22,7 @@ const PRICE_ROWS: Array<{ field: PriceField; label: string; required?: boolean }
 ];
 
 const WEEKDAY = new Intl.DateTimeFormat("es-AR", { weekday: "short" });
+const MONTH = new Intl.DateTimeFormat("es-AR", { month: "short" });
 const INTEGER_LABEL = new Intl.NumberFormat("es-AR");
 
 const SOURCE_LABEL: Record<DailyRateRangeRow["source"], string> = {
@@ -43,11 +44,23 @@ function parseInput(raw: string): { value: number | null; valid: boolean } {
   return { value: parsed, valid: true };
 }
 
+function markInvalid(input: HTMLInputElement, value: number | null) {
+  input.value = value === null ? "" : String(value);
+  input.setAttribute("aria-invalid", "true");
+  input.select();
+  window.setTimeout(() => {
+    if (input.isConnected) {
+      input.setAttribute("aria-invalid", "false");
+    }
+  }, 1200);
+}
+
 type Column = {
   index: number;
   row: DailyRateRangeRow;
   dayNum: string;
   weekday: string;
+  month: string;
   isWeekend: boolean;
   isToday: boolean;
   open: boolean;
@@ -60,7 +73,7 @@ function RowLabel({ children, sub, className }: { children: ReactNode; sub?: str
     <th
       scope="row"
       className={cx(
-        "sticky left-0 z-20 w-[176px] min-w-[176px] border-b border-r border-slate-200 bg-white px-3 py-2 text-left align-middle",
+        "sticky left-0 z-20 h-10 w-[260px] min-w-[260px] border-b border-r border-slate-200 bg-white px-4 py-2 text-left align-middle",
         className
       )}
     >
@@ -74,12 +87,15 @@ function RowLabel({ children, sub, className }: { children: ReactNode; sub?: str
 // grid behaves like a spreadsheet for fast rate entry.
 function focusSibling(el: HTMLElement, field: string, col: number, dir: number) {
   const table = el.closest("table");
-  if (!table) return;
+  if (!table) return false;
   const next = table.querySelector<HTMLInputElement>(`input[data-field="${field}"][data-col="${col + dir}"]`);
   if (next) {
+    el.dataset.skipBlurCommit = "true";
     next.focus();
     next.select();
+    return true;
   }
+  return false;
 }
 
 export function RateEditorGrid({ dailyRates, calendar, currencyCode, onSaveCell, disabled }: RateEditorGridProps) {
@@ -95,6 +111,7 @@ export function RateEditorGrid({ dailyRates, calendar, currencyCode, onSaveCell,
       row,
       dayNum: String(d.getDate()).padStart(2, "0"),
       weekday: WEEKDAY.format(d).replace(".", ""),
+      month: MONTH.format(d).replace(".", ""),
       isWeekend: dow === 0 || dow === 6,
       isToday: Boolean(day?.is_today),
       open: day ? day.status === "open" : true,
@@ -103,12 +120,15 @@ export function RateEditorGrid({ dailyRates, calendar, currencyCode, onSaveCell,
     };
   });
 
-  const commit = (row: DailyRateRangeRow, field: PriceField, raw: string) => {
+  const commit = (input: HTMLInputElement, row: DailyRateRangeRow, field: PriceField, raw: string) => {
     const { value, valid } = parseInput(raw);
-    if (!valid) return;
-    if (field === "price" && value === null) return; // base is mandatory; clearing is a no-op
     const current = row[field] ?? null;
-    if (value === current) return;
+    if (!valid || (field === "price" && value === null)) {
+      markInvalid(input, current);
+      return false;
+    }
+    input.setAttribute("aria-invalid", "false");
+    if (value === current) return true;
 
     onSaveCell({
       date: row.date,
@@ -117,43 +137,49 @@ export function RateEditorGrid({ dailyRates, calendar, currencyCode, onSaveCell,
       price_transfer: field === "price_transfer" ? value : row.price_transfer ?? null,
       price_mercadopago: field === "price_mercadopago" ? value : row.price_mercadopago ?? null
     });
+    return true;
   };
 
   const colTint = (c: Column) =>
-    c.isToday ? "bg-brand-50/70" : c.isWeekend ? "bg-slate-50/80" : "bg-white";
+    c.isToday ? "bg-blue-50/80" : c.isWeekend ? "bg-slate-50/80" : "bg-white";
 
   return (
     <div
       data-testid="rate-editor-grid"
-      className="overflow-x-auto rounded-xl border border-slate-200 bg-white"
+      className="overflow-x-auto bg-white"
     >
       <table className="w-max min-w-full border-separate border-spacing-0 text-sm">
         <thead>
           <tr>
-            <th className="sticky left-0 top-0 z-30 w-[176px] min-w-[176px] border-b border-r border-slate-200 bg-white px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
-              {calendar?.meta.category_name ?? "Categoría"}
+            <th className="sticky left-0 top-0 z-30 h-16 w-[260px] min-w-[260px] border-b border-r border-slate-200 bg-white px-4 py-3 text-left">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Campo / fecha</p>
+              <p className="truncate text-sm font-semibold text-slate-900">{calendar?.meta.category_name ?? "Categoría"}</p>
             </th>
             {columns.map((c) => (
               <th
                 key={c.row.date}
                 className={cx(
-                  "sticky top-0 z-10 min-w-[84px] border-b border-l border-slate-100 px-2 py-1.5 text-center align-middle",
+                  "sticky top-0 z-10 h-16 min-w-[96px] border-b border-r border-slate-200 px-2 py-2 text-center align-middle",
                   colTint(c),
-                  c.isToday && "ring-1 ring-inset ring-brand-300"
+                  c.isToday && "ring-1 ring-inset ring-blue-300"
                 )}
               >
-                <div className="flex flex-col items-center leading-tight">
+                <div className="flex flex-col items-center gap-0.5 leading-tight">
                   <span
                     className={cx(
                       "text-[11px] font-medium uppercase",
-                      c.isToday ? "text-brand-700" : c.isWeekend ? "text-slate-500" : "text-slate-400"
+                      c.isToday ? "text-blue-700" : c.isWeekend ? "text-slate-500" : "text-slate-400"
                     )}
                   >
                     {c.weekday}
                   </span>
-                  <span className={cx("text-base font-semibold", c.isToday ? "text-brand-700" : "text-slate-800")}>
+                  <span className={cx("text-lg font-semibold", c.isToday ? "text-blue-700" : "text-slate-800")}>
                     {c.dayNum}
                   </span>
+                  <span className="text-[10px] font-medium uppercase text-slate-400">{c.month}</span>
+                  {c.isToday ? (
+                    <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700">Hoy</span>
+                  ) : null}
                 </div>
               </th>
             ))}
@@ -166,40 +192,52 @@ export function RateEditorGrid({ dailyRates, calendar, currencyCode, onSaveCell,
             {columns.map((c) => (
               <td
                 key={`st-${c.row.date}`}
-                className={cx("min-w-[84px] border-b border-l border-slate-100 px-2 py-1.5 text-center", colTint(c))}
+                className={cx("min-w-[96px] border-b border-r border-slate-200 px-2 py-2 text-center", colTint(c))}
               >
                 <span
-                  role="img"
                   aria-label={c.open ? "Disponible" : "Cerrado"}
                   className={cx(
-                    "inline-block h-2.5 w-2.5 rounded-full",
-                    c.open ? "bg-emerald-500" : "bg-rose-400"
+                    "inline-flex rounded-full px-2 py-1 text-xs font-semibold",
+                    c.open ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
                   )}
                   title={c.open ? "Disponible" : "Cerrado"}
-                />
+                >
+                  {c.open ? "Abierto" : "Cerrado"}
+                </span>
               </td>
             ))}
           </tr>
           <tr>
-            <RowLabel sub="libres / reservadas">Disponibilidad</RowLabel>
+            <RowLabel>Para vender</RowLabel>
             {columns.map((c) => (
               <td
                 key={`av-${c.row.date}`}
                 className={cx(
-                  "min-w-[84px] border-b border-l border-slate-100 px-2 py-1.5 text-center text-xs text-slate-500",
+                  "min-w-[96px] border-b border-r border-slate-200 px-2 py-2 text-center text-sm",
                   colTint(c)
                 )}
               >
                 {c.forSale === null ? (
                   "—"
                 ) : (
-                  <span>
-                    <span className={cx("font-semibold", c.forSale > 0 ? "text-slate-700" : "text-rose-500")}>
-                      {INTEGER_LABEL.format(c.forSale)}
-                    </span>
-                    <span className="text-slate-300"> / {INTEGER_LABEL.format(c.reserved ?? 0)}</span>
+                  <span className={cx("font-semibold", c.forSale > 0 ? "text-slate-700" : "text-rose-500")}>
+                    {INTEGER_LABEL.format(c.forSale)}
                   </span>
                 )}
+              </td>
+            ))}
+          </tr>
+          <tr>
+            <RowLabel>Reservadas</RowLabel>
+            {columns.map((c) => (
+              <td
+                key={`rs-${c.row.date}`}
+                className={cx(
+                  "min-w-[96px] border-b border-r border-slate-200 px-2 py-2 text-center text-sm text-slate-600",
+                  colTint(c)
+                )}
+              >
+                {c.reserved === null ? "—" : INTEGER_LABEL.format(c.reserved)}
               </td>
             ))}
           </tr>
@@ -209,10 +247,10 @@ export function RateEditorGrid({ dailyRates, calendar, currencyCode, onSaveCell,
             <tr key={priceRow.field}>
               <RowLabel
                 sub={symbol}
-                className={cx(idx === 0 && "border-t-2 border-t-slate-200", priceRow.required && "bg-brand-50/30")}
+                className={cx(idx === 0 && "border-t-2 border-t-slate-200", priceRow.required && "bg-blue-50/40")}
               >
                 {priceRow.label}
-                {priceRow.required ? <span className="ml-0.5 text-brand-500">*</span> : null}
+                {priceRow.required ? <span className="ml-0.5 text-blue-500">*</span> : null}
               </RowLabel>
               {columns.map((c) => {
                 const row = c.row;
@@ -222,7 +260,7 @@ export function RateEditorGrid({ dailyRates, calendar, currencyCode, onSaveCell,
                   <td
                     key={`${priceRow.field}-${row.date}`}
                     className={cx(
-                      "min-w-[84px] border-b border-l border-slate-100 p-0",
+                      "min-w-[96px] border-b border-r border-slate-200 p-0.5",
                       idx === 0 && "border-t-2 border-t-slate-200",
                       colTint(c)
                     )}
@@ -239,28 +277,29 @@ export function RateEditorGrid({ dailyRates, calendar, currencyCode, onSaveCell,
                       data-col={c.index}
                       defaultValue={value ?? ""}
                       aria-label={`${priceRow.label} ${row.date}`}
+                      aria-invalid="false"
                       title={priceRow.field === "price" ? SOURCE_LABEL[row.source] : undefined}
                       placeholder={priceRow.required ? "0" : "—"}
                       onKeyDown={(event) => {
                         if (event.key === "Enter") {
                           event.preventDefault();
-                          commit(row, priceRow.field, event.currentTarget.value);
-                          focusSibling(event.currentTarget, priceRow.field, c.index, event.shiftKey ? -1 : 1);
+                          if (commit(event.currentTarget, row, priceRow.field, event.currentTarget.value)) {
+                            focusSibling(event.currentTarget, priceRow.field, c.index, event.shiftKey ? -1 : 1);
+                          }
                         }
                       }}
                       onBlur={(event) => {
-                        // Reject invalid input by reverting to the last value.
-                        if (!parseInput(event.target.value).valid) {
-                          event.target.value = value === null ? "" : String(value);
-                          event.target.setAttribute("aria-invalid", "false");
+                        if (event.currentTarget.dataset.skipBlurCommit === "true") {
+                          delete event.currentTarget.dataset.skipBlurCommit;
                           return;
                         }
-                        commit(row, priceRow.field, event.target.value);
+                        commit(event.currentTarget, row, priceRow.field, event.currentTarget.value);
                       }}
                       className={cx(
-                        "h-9 w-full px-2 text-right text-sm tabular-nums outline-none transition-shadow",
-                        "bg-white/60 ring-1 ring-inset ring-slate-200/70 hover:ring-brand-300",
-                        "focus:bg-white focus:ring-2 focus:ring-brand-500 disabled:opacity-50",
+                        "h-10 w-full rounded-lg px-2 text-right text-sm tabular-nums outline-none transition-shadow",
+                        "bg-white/80 ring-1 ring-inset ring-slate-200/80 hover:ring-blue-300",
+                        "focus:bg-white focus:ring-2 focus:ring-blue-500 disabled:opacity-50",
+                        "aria-[invalid=true]:bg-rose-50 aria-[invalid=true]:ring-rose-400",
                         inherited ? "italic text-slate-400" : "font-medium text-slate-900"
                       )}
                     />
