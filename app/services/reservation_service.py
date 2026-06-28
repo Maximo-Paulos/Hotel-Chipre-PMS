@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.models.commercial import RatePlan, SellableProduct, TaxPolicy
 from app.models.company import Company
+from app.models.daily_rate import DailyRate, PricePeriod
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.guest import Guest
 from app.models.reservation import (
@@ -31,6 +32,7 @@ from app.models.pricing import CategoryPricing
 from app.models.operations import ReservationStatusHistory
 from app.schemas.reservation import ReservationCreate, ReservationUpdate
 from app.services.pricing_policy_service import PricingPolicyError, StayPricingQuote, quote_rate_plan_stay
+from app.services.pricing_service import get_price_for_date
 from app.services.read_model_cache import invalidate_hotel_operational_caches
 from app.services.room_block_service import room_has_active_block
 
@@ -58,6 +60,24 @@ _CHANNEL_CODE_ALIASES = {
     "walk_in": ReservationChannelCodeEnum.WALK_IN,
     "walkin": ReservationChannelCodeEnum.WALK_IN,
     "manual": ReservationChannelCodeEnum.OTHER_DIRECT,
+}
+
+_PRICING_PAYMENT_METHOD_ALIASES = {
+    "bank_transfer": "transfer",
+    "wire_transfer": "transfer",
+    "mercado_pago": "mercadopago",
+    "mercadopago": "mercadopago",
+    "mp": "mercadopago",
+    "credit": "credit_card",
+    "creditcard": "credit_card",
+}
+
+_PRICING_PAYMENT_METHODS = {
+    "cash",
+    "transfer",
+    "mercadopago",
+    "paypal",
+    "credit_card",
 }
 
 
@@ -122,6 +142,7 @@ def compute_reservation_pricing(
     rate_plan_id: int | None = None,
     tax_policy_id: int | None = None,
     pricing_channel_code: str | None = None,
+    pricing_payment_method: str | None = None,
     guest_scope: str = "all",
     target_currency: str | None = None,
     occupancy: int | None = None,
@@ -140,6 +161,7 @@ def compute_reservation_pricing(
         rate_plan_id=rate_plan_id,
         tax_policy_id=tax_policy_id,
         pricing_channel_code=pricing_channel_code,
+        pricing_payment_method=pricing_payment_method,
         guest_scope=guest_scope,
         target_currency=target_currency,
         occupancy=occupancy,
@@ -163,6 +185,7 @@ def calculate_reservation_pricing(
     rate_plan_id: int | None = None,
     tax_policy_id: int | None = None,
     pricing_channel_code: str | None = None,
+    pricing_payment_method: str | None = None,
     guest_scope: str = "all",
     target_currency: str | None = None,
     occupancy: int | None = None,
@@ -181,6 +204,7 @@ def calculate_reservation_pricing(
     nights = (check_out - check_in).days
     if nights <= 0:
         raise ReservationError("Check-out date must be after check-in date")
+    pricing_payment_method = _normalize_pricing_payment_method(pricing_payment_method)
 
     sellable_product, rate_plan, tax_policy = _resolve_reservation_commercial_context(
         db,
@@ -220,20 +244,64 @@ def calculate_reservation_pricing(
             guest_scope=guest_scope,
         )
 
-    pricing = (
-        db.query(CategoryPricing)
-        .join(RoomCategory, RoomCategory.id == CategoryPricing.category_id)
-        .filter(CategoryPricing.category_id == category_id, RoomCategory.hotel_id == hotel_id)
-        .first()
+    return _daily_rate_pricing_result(
+        db,
+        hotel_id=hotel_id,
+        category=category,
+        check_in=check_in,
+        check_out=check_out,
+        nights=nights,
+        payment_method=pricing_payment_method,
+        sellable_product=sellable_product,
+        tax_policy=tax_policy,
     )
-    nightly_rate = pricing.price_cash if pricing and pricing.price_cash is not None else category.base_price_per_night
-    total_amount = round(nightly_rate * nights, 2)
+
+
+def _daily_rate_pricing_result(
+    db: Session,
+    *,
+    hotel_id: int,
+    category: RoomCategory,
+    check_in: date,
+    check_out: date,
+    nights: int,
+    payment_method: str | None,
+    sellable_product: SellableProduct | None,
+    tax_policy: TaxPolicy | None,
+) -> ReservationPricingResult:
+    breakdown = []
+    current = check_in
+    while current < check_out:
+        configured_source = _calendar_pricing_source(
+            db,
+            hotel_id=hotel_id,
+            category_id=category.id,
+            target_date=current,
+        )
+        price = get_price_for_date(
+            db,
+            hotel_id=hotel_id,
+            category_id=category.id,
+            target_date=current,
+            payment_method=payment_method,
+        )
+        source = configured_source or "category_base"
+        if configured_source is None:
+            price = float(category.base_price_per_night or 0.0)
+        price = round(float(price), 2)
+        breakdown.append({"date": current.isoformat(), "price": price, "source": source})
+        current += timedelta(days=1)
+
+    total_amount = round(sum(row["price"] for row in breakdown), 2)
+    nightly_rate = round(total_amount / nights, 2) if nights else 0.0
     deposit_amount = _compute_deposit_amount(db, hotel_id=hotel_id, gross_total=total_amount)
     snapshot = {
-        "pricing_source": "category_legacy",
+        "pricing_source": "daily_rates",
         "category_id": category.id,
-        "nightly_rate": nightly_rate,
+        "payment_method": payment_method,
         "nights": nights,
+        "nightly_rate": nightly_rate,
+        "breakdown": breakdown,
     }
     return ReservationPricingResult(
         nights=nights,
@@ -247,7 +315,7 @@ def calculate_reservation_pricing(
         net_amount=total_amount,
         currency_code=_get_hotel_default_currency(db, hotel_id=hotel_id),
         fx_rate_snapshot=None,
-        pricing_source="category_legacy",
+        pricing_source="daily_rates",
         sellable_product_id=sellable_product.id if sellable_product else None,
         rate_plan_id=None,
         tax_policy_id=tax_policy.id if tax_policy else None,
@@ -274,6 +342,53 @@ def _reservation_channel_indicator(value) -> str | None:
     raw = getattr(value, "value", value)
     normalized = str(raw).strip().lower().replace("-", "_").replace(" ", "_")
     return normalized or None
+
+
+def _normalize_pricing_payment_method(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = str(value).strip().lower().replace("-", "_").replace(" ", "_")
+    normalized = _PRICING_PAYMENT_METHOD_ALIASES.get(normalized, normalized)
+    if not normalized:
+        return None
+    if normalized not in _PRICING_PAYMENT_METHODS:
+        raise ReservationError(f"Unsupported pricing payment method: {value}")
+    return normalized
+
+
+def _calendar_pricing_source(
+    db: Session,
+    *,
+    hotel_id: int,
+    category_id: int,
+    target_date: date,
+) -> str | None:
+    if db.query(DailyRate.id).filter(
+        DailyRate.hotel_id == hotel_id,
+        DailyRate.category_id == category_id,
+        DailyRate.date == target_date,
+    ).first():
+        return "daily_rate"
+
+    if db.query(PricePeriod.id).filter(
+        PricePeriod.hotel_id == hotel_id,
+        PricePeriod.category_id == category_id,
+        PricePeriod.deleted_at.is_(None),
+        PricePeriod.is_active == True,
+        PricePeriod.start_date <= target_date,
+        PricePeriod.end_date >= target_date,
+    ).first():
+        return "price_period"
+
+    if db.query(CategoryPricing.category_id).join(
+        RoomCategory, RoomCategory.id == CategoryPricing.category_id
+    ).filter(
+        CategoryPricing.category_id == category_id,
+        RoomCategory.hotel_id == hotel_id,
+    ).first():
+        return "category_pricing"
+
+    return None
 
 
 def _is_manual_or_telephonic_reservation(data: ReservationCreate) -> bool:
@@ -389,6 +504,34 @@ def _apply_corporate_pricing(
         nightly_rate=nightly,
         pricing_source="company_base_price",
         company_id=company.id,
+    )
+
+
+def _apply_custom_deposit_amount(
+    pricing: ReservationPricingResult,
+    deposit_amount,
+) -> ReservationPricingResult:
+    if deposit_amount is None:
+        return pricing
+
+    deposit = round(float(deposit_amount), 2)
+    if deposit < 0:
+        raise ReservationError("Deposit amount must be greater than or equal to 0")
+    if deposit > pricing.total_amount:
+        raise ReservationError("Deposit amount cannot be greater than reservation total")
+
+    snapshot = {}
+    if pricing.pricing_snapshot:
+        try:
+            snapshot = json.loads(pricing.pricing_snapshot)
+        except json.JSONDecodeError:
+            snapshot = {"previous_pricing_snapshot": pricing.pricing_snapshot}
+    snapshot["deposit_amount_override"] = deposit
+
+    return replace(
+        pricing,
+        deposit_amount=deposit,
+        pricing_snapshot=json.dumps(snapshot, ensure_ascii=True, sort_keys=True),
     )
 
 
@@ -531,12 +674,14 @@ def create_reservation(db: Session, data: ReservationCreate, hotel_id: Optional[
         rate_plan_id=data.rate_plan_id,
         tax_policy_id=data.tax_policy_id,
         pricing_channel_code=data.pricing_channel_code,
+        pricing_payment_method=data.pricing_payment_method,
         guest_scope=data.guest_scope,
         target_currency=data.target_currency,
         occupancy=data.num_adults + data.num_children,
     )
     if company is not None:
         pricing = _apply_corporate_pricing(db, hotel_id=hotel_id, pricing=pricing, company=company, explicit_total=data.total_amount)
+    pricing = _apply_custom_deposit_amount(pricing, data.deposit_amount)
 
     # Waitlist / overbooking (v72 §9): a wait-listed reservation is created with
     # room_id=None and the denormalized flag set, so availability queries never

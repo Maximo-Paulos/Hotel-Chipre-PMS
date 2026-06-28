@@ -9,10 +9,16 @@ type RateEditorGridProps = {
   calendar?: RateCalendarResponse;
   currencyCode: string;
   onSaveCell: (payload: SingleRateInput) => void;
+  onSelectCell?: (field: PriceField, date: string) => void;
+  selectedRange?: {
+    field: PriceField;
+    startDate: string;
+    endDate: string;
+  } | null;
   disabled?: boolean;
 };
 
-type PriceField = "price" | "price_cash" | "price_transfer" | "price_mercadopago";
+export type PriceField = "price" | "price_cash" | "price_transfer" | "price_mercadopago";
 
 const PRICE_ROWS: Array<{ field: PriceField; label: string; required?: boolean }> = [
   { field: "price", label: "Precio base", required: true },
@@ -98,7 +104,15 @@ function focusSibling(el: HTMLElement, field: string, col: number, dir: number) 
   return false;
 }
 
-export function RateEditorGrid({ dailyRates, calendar, currencyCode, onSaveCell, disabled }: RateEditorGridProps) {
+export function RateEditorGrid({
+  dailyRates,
+  calendar,
+  currencyCode,
+  onSaveCell,
+  onSelectCell,
+  selectedRange,
+  disabled
+}: RateEditorGridProps) {
   const calendarByDate = new Map((calendar?.days ?? []).map((day) => [day.date, day]));
   const symbol = currencySymbol(currencyCode);
 
@@ -256,13 +270,19 @@ export function RateEditorGrid({ dailyRates, calendar, currencyCode, onSaveCell,
                 const row = c.row;
                 const value = row[priceRow.field] ?? null;
                 const inherited = priceRow.field === "price" && row.source !== "daily_rate";
+                const selected =
+                  selectedRange?.field === priceRow.field &&
+                  row.date >= selectedRange.startDate &&
+                  row.date <= selectedRange.endDate;
                 return (
                   <td
                     key={`${priceRow.field}-${row.date}`}
+                    onClick={() => onSelectCell?.(priceRow.field, row.date)}
                     className={cx(
-                      "min-w-[96px] border-b border-r border-slate-200 p-0.5",
+                      "min-w-[96px] border-b border-r border-slate-200 p-0.5 transition-colors",
                       idx === 0 && "border-t-2 border-t-slate-200",
-                      colTint(c)
+                      colTint(c),
+                      selected && "bg-blue-100 ring-2 ring-inset ring-blue-400"
                     )}
                   >
                     <input

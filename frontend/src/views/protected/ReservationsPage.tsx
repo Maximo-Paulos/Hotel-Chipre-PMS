@@ -21,6 +21,7 @@ import { checkRoomAvailability, type RoomAvailabilityResponse } from "../../api/
 import { type PaymentMethod } from "../../api/payments";
 import { useCategories } from "../../hooks/useCategories";
 import { useGuest, useGuestCreate } from "../../hooks/useGuests";
+import { addDaysIso, useCategoryDailyRates } from "../../hooks/useRateCalendar";
 import {
   usePendingReservationActions,
   useReservation,
@@ -49,12 +50,23 @@ type FormState = {
   status: ReservationStatus;
 };
 
+type PricingPaymentMethod = "base" | "cash" | "transfer" | "mercadopago" | "credit_card" | "paypal";
+
 const paymentMethodOptions: { value: PaymentMethod; label: string }[] = [
   { value: "cash", label: "Efectivo" },
   { value: "credit_card", label: "Crédito" },
   { value: "debit_card", label: "Débito" },
   { value: "mercado_pago", label: "MercadoPago" },
   { value: "bank_transfer", label: "Transferencia" },
+  { value: "paypal", label: "PayPal" }
+];
+
+const pricingPaymentMethodOptions: { value: PricingPaymentMethod; label: string }[] = [
+  { value: "base", label: "Tarifa base" },
+  { value: "cash", label: "Efectivo" },
+  { value: "transfer", label: "Transferencia" },
+  { value: "mercadopago", label: "Mercado Pago" },
+  { value: "credit_card", label: "Tarjeta de credito" },
   { value: "paypal", label: "PayPal" }
 ];
 
@@ -105,6 +117,35 @@ const formatDateTime = (value?: string | null) => {
   });
 };
 
+const diffNights = (checkIn: string, checkOut: string) => {
+  if (!checkIn || !checkOut) return 0;
+  const start = new Date(`${checkIn}T00:00:00`);
+  const end = new Date(`${checkOut}T00:00:00`);
+  const diff = end.getTime() - start.getTime();
+  return diff > 0 ? Math.round(diff / 86_400_000) : 0;
+};
+
+const rateForPaymentMethod = (
+  row: {
+    price: number;
+    price_cash?: number | null;
+    price_transfer?: number | null;
+    price_mercadopago?: number | null;
+    price_paypal?: number | null;
+    price_credit_card?: number | null;
+  },
+  method: PricingPaymentMethod,
+  categoryBasePrice: number
+) => {
+  const base = row.price > 0 ? row.price : categoryBasePrice;
+  if (method === "cash") return row.price_cash ?? base;
+  if (method === "transfer") return row.price_transfer ?? base;
+  if (method === "mercadopago") return row.price_mercadopago ?? base;
+  if (method === "credit_card") return row.price_credit_card ?? base;
+  if (method === "paypal") return row.price_paypal ?? base;
+  return base;
+};
+
 export function ReservationsPage() {
   const { session } = useSession();
   const queryClient = useQueryClient();
@@ -117,6 +158,8 @@ export function ReservationsPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [guestForm, setGuestForm] = useState({ first_name: "", last_name: "", email: "", phone: "" });
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
+  const [pricingPaymentMethod, setPricingPaymentMethod] = useState<PricingPaymentMethod>("base");
+  const [depositAmountInput, setDepositAmountInput] = useState("");
   const [availabilityForm, setAvailabilityForm] = useState<{
     category_id: string;
     check_in_date: string;
@@ -243,6 +286,60 @@ export function ReservationsPage() {
   }, [roomsQuery.data]);
 
   const availableRooms = formValues.category_id ? roomsByCategory[formValues.category_id] ?? [] : roomsQuery.data ?? [];
+  const selectedFormCategory = useMemo(
+    () => categoriesData.find((category) => String(category.id) === formValues.category_id) ?? null,
+    [categoriesData, formValues.category_id]
+  );
+  const quoteNights = diffNights(formValues.check_in_date, formValues.check_out_date);
+  const quoteCategoryId =
+    !editing && selectedFormCategory && quoteNights > 0 ? Number(selectedFormCategory.id) : null;
+  const quoteLastNight =
+    quoteNights > 0 && formValues.check_out_date ? addDaysIso(formValues.check_out_date, -1) : formValues.check_in_date || today;
+  const quoteRatesQuery = useCategoryDailyRates(
+    quoteCategoryId,
+    formValues.check_in_date || today,
+    quoteLastNight
+  );
+  const reservationQuote = useMemo(() => {
+    if (!selectedFormCategory || quoteNights <= 0) {
+      return null;
+    }
+    const categoryBasePrice = Number(selectedFormCategory.base_price_per_night ?? 0);
+    const rows = (quoteRatesQuery.data ?? []).filter(
+      (row) => row.date >= formValues.check_in_date && row.date < formValues.check_out_date
+    );
+    if (rows.length === 0) {
+      return {
+        nights: quoteNights,
+        total: 0,
+        rows: [] as Array<{ date: string; amount: number; source: string }>
+      };
+    }
+    const pricedRows = rows.map((row) => ({
+      date: row.date,
+      amount: rateForPaymentMethod(row, pricingPaymentMethod, categoryBasePrice),
+      source: row.source
+    }));
+    return {
+      nights: quoteNights,
+      total: pricedRows.reduce((sum, row) => sum + row.amount, 0),
+      rows: pricedRows
+    };
+  }, [
+    formValues.check_in_date,
+    formValues.check_out_date,
+    pricingPaymentMethod,
+    quoteNights,
+    quoteRatesQuery.data,
+    selectedFormCategory
+  ]);
+  const parsedDepositAmount = depositAmountInput.trim() === "" ? null : Number(depositAmountInput);
+  const depositPreview =
+    parsedDepositAmount !== null && Number.isFinite(parsedDepositAmount) && parsedDepositAmount >= 0
+      ? parsedDepositAmount
+      : null;
+  const quoteBalancePreview =
+    reservationQuote && depositPreview !== null ? Math.max(reservationQuote.total - depositPreview, 0) : null;
 
   const calendarDays = useMemo(() => {
     const days: Array<{
@@ -302,6 +399,8 @@ export function ReservationsPage() {
     setEditing(null);
     setFormValues(defaultFormState());
     setFormError(null);
+    setPricingPaymentMethod("base");
+    setDepositAmountInput("");
     setFormOpen(true);
   };
 
@@ -320,6 +419,8 @@ export function ReservationsPage() {
       status: reservation.status
     });
     setFormError(null);
+    setPricingPaymentMethod("base");
+    setDepositAmountInput("");
     setFormOpen(true);
   };
 
@@ -327,6 +428,7 @@ export function ReservationsPage() {
     setFormOpen(false);
     setEditing(null);
     setFormError(null);
+    setDepositAmountInput("");
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -383,6 +485,16 @@ export function ReservationsPage() {
       setFormError("La fecha de salida debe ser posterior al ingreso.");
       return;
     }
+    if (!editing && parsedDepositAmount !== null) {
+      if (!Number.isFinite(parsedDepositAmount) || parsedDepositAmount < 0) {
+        setFormError("Ingresá una seña válida o dejá el campo vacío.");
+        return;
+      }
+      if (reservationQuote && parsedDepositAmount > reservationQuote.total) {
+        setFormError("La seña no puede ser mayor al total final de la reserva.");
+        return;
+      }
+    }
 
     const commonPayload = {
       category_id: categoryIdNum,
@@ -411,7 +523,13 @@ export function ReservationsPage() {
         }
       );
     } else {
-      const createPayload = { ...commonPayload, guest_id: guestIdNum, source: formValues.source };
+      const createPayload = {
+        ...commonPayload,
+        guest_id: guestIdNum,
+        source: formValues.source,
+        pricing_payment_method: pricingPaymentMethod === "base" ? null : pricingPaymentMethod,
+        deposit_amount: parsedDepositAmount
+      };
       createMutation.mutate(createPayload, {
         onSuccess: () => {
           showToast("success", "Reserva creada");
@@ -1460,6 +1578,98 @@ export function ReservationsPage() {
                   />
                 </label>
               </div>
+
+              {!editing && (
+                <div className="rounded-lg border border-blue-100 bg-blue-50 p-3">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="text-xs font-semibold text-slate-600">
+                      Medio para calcular total
+                      <select
+                        value={pricingPaymentMethod}
+                        onChange={(e) => setPricingPaymentMethod(e.target.value as PricingPaymentMethod)}
+                        className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
+                      >
+                        {pricingPaymentMethodOptions.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="text-xs font-semibold text-slate-600">
+                      Seña manual
+                      <input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        value={depositAmountInput}
+                        onChange={(e) => setDepositAmountInput(e.target.value)}
+                        placeholder="Usar configuración del hotel"
+                        className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
+                      />
+                    </label>
+                  </div>
+
+                  <div className="mt-3 grid gap-2 sm:grid-cols-4">
+                    <div className="rounded-lg border border-blue-100 bg-white/80 px-3 py-2 text-sm text-slate-800">
+                      <p className="text-xs text-slate-500">Noches</p>
+                      <p className="font-semibold">{reservationQuote?.nights ?? quoteNights}</p>
+                    </div>
+                    <div className="rounded-lg border border-blue-100 bg-white/80 px-3 py-2 text-sm text-slate-800">
+                      <p className="text-xs text-slate-500">Total final</p>
+                      <p className="font-semibold">
+                        {quoteRatesQuery.isFetching ? "Actualizando..." : formatMoney(reservationQuote?.total ?? 0, "ARS")}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-blue-100 bg-white/80 px-3 py-2 text-sm text-slate-800">
+                      <p className="text-xs text-slate-500">Seña</p>
+                      <p className="font-semibold">
+                        {depositPreview !== null ? formatMoney(depositPreview, "ARS") : "Por configurar"}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-blue-100 bg-white/80 px-3 py-2 text-sm text-slate-800">
+                      <p className="text-xs text-slate-500">Saldo estimado</p>
+                      <p className="font-semibold">
+                        {quoteBalancePreview !== null ? formatMoney(quoteBalancePreview, "ARS") : "-"}
+                      </p>
+                    </div>
+                  </div>
+
+                  {reservationQuote?.rows.length ? (
+                    <div className="mt-3 overflow-x-auto rounded-lg border border-blue-100 bg-white/70">
+                      <table className="min-w-full text-left text-xs">
+                        <thead className="bg-white text-slate-500">
+                          <tr>
+                            <th className="px-3 py-2 font-semibold">Noche</th>
+                            <th className="px-3 py-2 font-semibold">Origen</th>
+                            <th className="px-3 py-2 text-right font-semibold">Importe</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {reservationQuote.rows.slice(0, 6).map((row) => (
+                            <tr key={row.date} className="border-t border-blue-100">
+                              <td className="px-3 py-2 text-slate-700">{row.date}</td>
+                              <td className="px-3 py-2 text-slate-500">{row.source}</td>
+                              <td className="px-3 py-2 text-right font-semibold text-slate-800">
+                                {formatMoney(row.amount, "ARS")}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      {reservationQuote.rows.length > 6 ? (
+                        <p className="border-t border-blue-100 px-3 py-2 text-xs text-slate-500">
+                          {reservationQuote.rows.length - 6} noches más incluidas en el total.
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-xs text-slate-600">
+                      Elegí categoría y fechas para calcular el precio desde Tarifas.
+                    </p>
+                  )}
+                </div>
+              )}
 
               <div className="grid gap-3 sm:grid-cols-3">
                 <label className="text-xs font-semibold text-slate-600">
