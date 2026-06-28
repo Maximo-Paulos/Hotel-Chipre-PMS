@@ -118,6 +118,13 @@ export const getCategoryDailyRates = (
 
 export type BulkRateResult = { created: number; updated: number };
 
+export type BulkRateField = keyof Pick<
+  DailyRatePrices,
+  "price" | "price_cash" | "price_transfer" | "price_mercadopago" | "price_paypal" | "price_credit_card"
+>;
+
+export type BulkRateFieldMode = "set" | "amount_delta" | "percent_delta";
+
 export const upsertDailyRate = (
   categoryId: number,
   payload: DailyRatePrices & { date: string },
@@ -135,6 +142,24 @@ export const bulkUpsertDailyRates = (
   session?: SessionLike
 ) =>
   apiFetch<BulkRateResult>(`/api/rates/category/${categoryId}/bulk`, {
+    method: "POST",
+    data: payload,
+    session
+  });
+
+export const bulkUpdateDailyRateField = (
+  categoryId: number,
+  payload: {
+    from_date: string;
+    to_date: string;
+    field: BulkRateField;
+    mode: BulkRateFieldMode;
+    value: number;
+    exclude_dates?: string[];
+  },
+  session?: SessionLike
+) =>
+  apiFetch<BulkRateResult>(`/api/rates/category/${categoryId}/bulk-field`, {
     method: "POST",
     data: payload,
     session

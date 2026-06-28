@@ -282,6 +282,7 @@ const mockDailyRates = [
 test("rate calendar page renders annual editor and integrated channel view", async ({ page }) => {
   const savedCells: unknown[] = [];
   const bulkRequests: unknown[] = [];
+  const fieldBulkRequests: unknown[] = [];
 
   await page.route("https://fonts.googleapis.com/**", async (route) => {
     await route.fulfill({ status: 200, contentType: "text/css", body: "" });
@@ -414,6 +415,17 @@ test("rate calendar page renders annual editor and integrated channel view", asy
       return;
     }
 
+    if (url.pathname.endsWith("/api/rates/category/7/bulk-field") && request.method() === "POST") {
+      const payload = request.postDataJSON();
+      fieldBulkRequests.push(payload);
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ created: 0, updated: 1 })
+      });
+      return;
+    }
+
     if (url.pathname.endsWith("/api/rates/category/7") && request.method() === "GET") {
       expect(url.searchParams.get("from_date")).toBeTruthy();
       expect(url.searchParams.get("to_date")).toBeTruthy();
@@ -494,6 +506,22 @@ test("rate calendar page renders annual editor and integrated channel view", asy
     from_date: "2026-05-07",
     to_date: "2026-05-09",
     price: 50000,
+    exclude_dates: ["2026-05-07", "2026-05-09"]
+  });
+
+  await page.getByLabel("Tipo de edición").selectOption("field");
+  await page.getByLabel("Campo rápido").selectOption("price_transfer");
+  await page.getByLabel("Acción").selectOption("percent_delta");
+  await page.getByLabel("Valor").fill("-10");
+  await page.getByTestId("rate-editor-save").click();
+
+  await expect.poll(() => fieldBulkRequests.length).toBe(1);
+  expect(fieldBulkRequests[0]).toMatchObject({
+    from_date: "2026-05-07",
+    to_date: "2026-05-09",
+    field: "price_transfer",
+    mode: "percent_delta",
+    value: -10,
     exclude_dates: ["2026-05-07", "2026-05-09"]
   });
 });
