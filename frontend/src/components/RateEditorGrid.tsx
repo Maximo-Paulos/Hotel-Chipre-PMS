@@ -14,14 +14,14 @@ type RateEditorGridProps = {
 
 type PriceField = "price" | "price_cash" | "price_transfer" | "price_mercadopago";
 
-const PRICE_ROWS: Array<{ field: PriceField; label: string; hint: string; required?: boolean }> = [
-  { field: "price", label: "Precio base", hint: "Tarifa mostrada por defecto", required: true },
-  { field: "price_cash", label: "Efectivo", hint: "Opcional" },
-  { field: "price_transfer", label: "Transferencia", hint: "Opcional" },
-  { field: "price_mercadopago", label: "Mercado Pago", hint: "Opcional" }
+const PRICE_ROWS: Array<{ field: PriceField; label: string; required?: boolean }> = [
+  { field: "price", label: "Precio base", required: true },
+  { field: "price_cash", label: "Efectivo" },
+  { field: "price_transfer", label: "Transferencia" },
+  { field: "price_mercadopago", label: "Mercado Pago" }
 ];
 
-const DATE_LABEL = new Intl.DateTimeFormat("es-AR", { weekday: "short", day: "2-digit", month: "2-digit" });
+const WEEKDAY = new Intl.DateTimeFormat("es-AR", { weekday: "short" });
 const INTEGER_LABEL = new Intl.NumberFormat("es-AR");
 
 const SOURCE_LABEL: Record<DailyRateRangeRow["source"], string> = {
@@ -31,18 +31,8 @@ const SOURCE_LABEL: Record<DailyRateRangeRow["source"], string> = {
   none: "Sin precio configurado"
 };
 
-function StickyLabelCell({ children, className }: { children: ReactNode; className?: string }) {
-  return (
-    <th
-      scope="row"
-      className={cx(
-        "sticky left-0 z-20 w-[240px] min-w-[240px] border-b border-r border-slate-200 bg-white px-4 py-3 text-left align-middle",
-        className
-      )}
-    >
-      {children}
-    </th>
-  );
+function currencySymbol(code: string) {
+  return code === "USD" ? "US$" : code === "ARS" ? "AR$" : code;
 }
 
 function parseInput(raw: string): { value: number | null; valid: boolean } {
@@ -53,18 +43,58 @@ function parseInput(raw: string): { value: number | null; valid: boolean } {
   return { value: parsed, valid: true };
 }
 
+type Column = {
+  row: DailyRateRangeRow;
+  dayNum: string;
+  weekday: string;
+  isWeekend: boolean;
+  isToday: boolean;
+  open: boolean;
+  forSale: number | null;
+  reserved: number | null;
+};
+
+function RowLabel({ children, sub, className }: { children: ReactNode; sub?: string; className?: string }) {
+  return (
+    <th
+      scope="row"
+      className={cx(
+        "sticky left-0 z-20 w-[176px] min-w-[176px] border-b border-r border-slate-200 bg-white px-3 py-2 text-left align-middle",
+        className
+      )}
+    >
+      <span className="block text-sm font-medium text-slate-800">{children}</span>
+      {sub ? <span className="block text-[11px] text-slate-400">{sub}</span> : null}
+    </th>
+  );
+}
+
 export function RateEditorGrid({ dailyRates, calendar, currencyCode, onSaveCell, disabled }: RateEditorGridProps) {
   const calendarByDate = new Map((calendar?.days ?? []).map((day) => [day.date, day]));
-  const currencyPrefix = currencyCode === "USD" ? "US$" : currencyCode === "ARS" ? "AR$" : currencyCode;
+  const symbol = currencySymbol(currencyCode);
+
+  const columns: Column[] = dailyRates.map((row) => {
+    const day = calendarByDate.get(row.date);
+    const d = new Date(`${row.date}T00:00:00`);
+    const dow = d.getDay();
+    return {
+      row,
+      dayNum: String(d.getDate()).padStart(2, "0"),
+      weekday: WEEKDAY.format(d).replace(".", ""),
+      isWeekend: dow === 0 || dow === 6,
+      isToday: Boolean(day?.is_today),
+      open: day ? day.status === "open" : true,
+      forSale: day ? day.for_sale : null,
+      reserved: day ? day.reserved : null
+    };
+  });
 
   const commit = (row: DailyRateRangeRow, field: PriceField, raw: string) => {
     const { value, valid } = parseInput(raw);
-    if (!valid) return; // invalid input: ignore, the input keeps the typed value until blur reverts via key
-    // The base price is mandatory (>= 0); clearing it is a no-op.
-    if (field === "price" && value === null) return;
-
+    if (!valid) return;
+    if (field === "price" && value === null) return; // base is mandatory; clearing is a no-op
     const current = row[field] ?? null;
-    if (value === current) return; // unchanged
+    if (value === current) return;
 
     onSaveCell({
       date: row.date,
@@ -75,149 +105,137 @@ export function RateEditorGrid({ dailyRates, calendar, currencyCode, onSaveCell,
     });
   };
 
+  const colTint = (c: Column) =>
+    c.isToday ? "bg-brand-50/70" : c.isWeekend ? "bg-slate-50/80" : "bg-white";
+
   return (
     <div
       data-testid="rate-editor-grid"
-      className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm"
+      className="overflow-x-auto rounded-xl border border-slate-200 bg-white"
     >
-      <table className="w-max min-w-full border-separate border-spacing-0">
+      <table className="w-max min-w-full border-separate border-spacing-0 text-sm">
         <thead>
           <tr>
-            <th className="sticky left-0 top-0 z-30 w-[240px] min-w-[240px] border-b border-r border-slate-200 bg-white px-4 py-3 text-left">
-              <p className="text-xs uppercase tracking-wide text-slate-500">Editar precios</p>
-              <p className="text-sm font-semibold text-slate-900">Clic en una celda para cambiar</p>
+            <th className="sticky left-0 top-0 z-30 w-[176px] min-w-[176px] border-b border-r border-slate-200 bg-white px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
+              {calendar?.meta.category_name ?? "Categoría"}
             </th>
-            {dailyRates.map((row) => {
-              const day = calendarByDate.get(row.date);
-              return (
-                <th
-                  key={row.date}
-                  className="sticky top-0 z-10 min-w-[104px] border-b border-slate-200 bg-white px-3 py-3 text-center align-top"
-                >
-                  <div className="flex flex-col items-center gap-1">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      {DATE_LABEL.format(new Date(`${row.date}T00:00:00`))}
-                    </span>
-                    {day?.is_today ? (
-                      <span className="rounded-full bg-brand-100 px-2 py-0.5 text-[11px] font-semibold text-brand-700">
-                        Hoy
-                      </span>
-                    ) : null}
-                  </div>
-                </th>
-              );
-            })}
+            {columns.map((c) => (
+              <th
+                key={c.row.date}
+                className={cx(
+                  "sticky top-0 z-10 min-w-[84px] border-b border-l border-slate-100 px-2 py-1.5 text-center align-middle",
+                  colTint(c),
+                  c.isToday && "ring-1 ring-inset ring-brand-300"
+                )}
+              >
+                <div className="flex flex-col items-center leading-tight">
+                  <span
+                    className={cx(
+                      "text-[11px] font-medium uppercase",
+                      c.isToday ? "text-brand-700" : c.isWeekend ? "text-slate-500" : "text-slate-400"
+                    )}
+                  >
+                    {c.weekday}
+                  </span>
+                  <span className={cx("text-base font-semibold", c.isToday ? "text-brand-700" : "text-slate-800")}>
+                    {c.dayNum}
+                  </span>
+                </div>
+              </th>
+            ))}
           </tr>
         </thead>
         <tbody>
           {/* Availability context (read-only) */}
           <tr>
-            <StickyLabelCell className="bg-slate-50">
-              <span className="text-sm font-semibold text-slate-900">Estado</span>
-            </StickyLabelCell>
-            {dailyRates.map((row) => {
-              const day = calendarByDate.get(row.date);
-              const open = day ? day.status === "open" : true;
-              return (
-                <td
-                  key={`status-${row.date}`}
-                  className="min-w-[104px] border-b border-slate-200 bg-slate-50 px-3 py-2 text-center"
-                >
-                  <span
-                    className={cx(
-                      "inline-flex rounded-full px-2 py-1 text-xs font-semibold",
-                      open ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-700"
-                    )}
-                  >
-                    {open ? "Disponible" : "Cerrado"}
+            <RowLabel className="bg-slate-50/70">Estado</RowLabel>
+            {columns.map((c) => (
+              <td
+                key={`st-${c.row.date}`}
+                className={cx("min-w-[84px] border-b border-l border-slate-100 px-2 py-1.5 text-center", colTint(c))}
+              >
+                <span
+                  className={cx(
+                    "inline-block h-2.5 w-2.5 rounded-full",
+                    c.open ? "bg-emerald-500" : "bg-rose-400"
+                  )}
+                  title={c.open ? "Disponible" : "Cerrado"}
+                />
+              </td>
+            ))}
+          </tr>
+          <tr>
+            <RowLabel sub="libres / reservadas">Disponibilidad</RowLabel>
+            {columns.map((c) => (
+              <td
+                key={`av-${c.row.date}`}
+                className={cx(
+                  "min-w-[84px] border-b border-l border-slate-100 px-2 py-1.5 text-center text-xs text-slate-500",
+                  colTint(c)
+                )}
+              >
+                {c.forSale === null ? (
+                  "—"
+                ) : (
+                  <span>
+                    <span className={cx("font-semibold", c.forSale > 0 ? "text-slate-700" : "text-rose-500")}>
+                      {INTEGER_LABEL.format(c.forSale)}
+                    </span>
+                    <span className="text-slate-300"> / {INTEGER_LABEL.format(c.reserved ?? 0)}</span>
                   </span>
-                </td>
-              );
-            })}
-          </tr>
-          <tr>
-            <StickyLabelCell>
-              <span className="text-sm font-medium text-slate-900">Disponibles</span>
-            </StickyLabelCell>
-            {dailyRates.map((row) => {
-              const day = calendarByDate.get(row.date);
-              return (
-                <td
-                  key={`for-sale-${row.date}`}
-                  className="min-w-[104px] border-b border-slate-200 px-3 py-2 text-center text-sm text-slate-700"
-                >
-                  {day ? INTEGER_LABEL.format(day.for_sale) : "—"}
-                </td>
-              );
-            })}
-          </tr>
-          <tr>
-            <StickyLabelCell>
-              <span className="text-sm font-medium text-slate-900">Reservadas</span>
-            </StickyLabelCell>
-            {dailyRates.map((row) => {
-              const day = calendarByDate.get(row.date);
-              return (
-                <td
-                  key={`reserved-${row.date}`}
-                  className="min-w-[104px] border-b border-slate-200 px-3 py-2 text-center text-sm text-slate-700"
-                >
-                  {day ? INTEGER_LABEL.format(day.reserved) : "—"}
-                </td>
-              );
-            })}
+                )}
+              </td>
+            ))}
           </tr>
 
           {/* Editable price rows */}
-          {PRICE_ROWS.map((priceRow) => (
+          {PRICE_ROWS.map((priceRow, idx) => (
             <tr key={priceRow.field}>
-              <StickyLabelCell className={priceRow.required ? "bg-brand-50/40" : undefined}>
-                <div className="space-y-0.5">
-                  <p className="text-sm font-semibold text-slate-900">
-                    {priceRow.label}
-                    {priceRow.required ? <span className="ml-1 text-brand-600">*</span> : null}
-                  </p>
-                  <p className="text-xs text-slate-500">{priceRow.hint}</p>
-                </div>
-              </StickyLabelCell>
-              {dailyRates.map((row) => {
+              <RowLabel
+                sub={symbol}
+                className={cx(idx === 0 && "border-t-2 border-t-slate-200", priceRow.required && "bg-brand-50/30")}
+              >
+                {priceRow.label}
+                {priceRow.required ? <span className="ml-0.5 text-brand-500">*</span> : null}
+              </RowLabel>
+              {columns.map((c) => {
+                const row = c.row;
                 const value = row[priceRow.field] ?? null;
                 const inherited = priceRow.field === "price" && row.source !== "daily_rate";
                 return (
                   <td
                     key={`${priceRow.field}-${row.date}`}
-                    className="min-w-[104px] border-b border-slate-200 px-1.5 py-1.5 text-center"
+                    className={cx(
+                      "min-w-[84px] border-b border-l border-slate-100 p-0",
+                      idx === 0 && "border-t-2 border-t-slate-200",
+                      colTint(c)
+                    )}
                   >
-                    <div className="relative flex items-center">
-                      <span className="pointer-events-none absolute left-2 text-[11px] text-slate-400">
-                        {currencyPrefix}
-                      </span>
-                      <input
-                        // Remount with fresh defaultValue whenever server data changes.
-                        key={`${row.date}-${priceRow.field}-${value ?? "null"}-${row.source}`}
-                        type="number"
-                        min={0}
-                        step="0.01"
-                        inputMode="decimal"
-                        disabled={disabled}
-                        defaultValue={value ?? ""}
-                        title={priceRow.field === "price" ? SOURCE_LABEL[row.source] : undefined}
-                        placeholder={priceRow.required ? "0" : "—"}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter") {
-                            event.preventDefault();
-                            (event.target as HTMLInputElement).blur();
-                          }
-                        }}
-                        onBlur={(event) => commit(row, priceRow.field, event.target.value)}
-                        className={cx(
-                          "w-full rounded-md border px-1 py-1.5 pl-7 text-right text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 disabled:opacity-60",
-                          inherited
-                            ? "border-dashed border-slate-300 italic text-slate-500"
-                            : "border-slate-200 text-slate-900"
-                        )}
-                      />
-                    </div>
+                    <input
+                      // Remount with fresh defaultValue whenever server data changes.
+                      key={`${row.date}-${priceRow.field}-${value ?? "null"}-${row.source}`}
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      inputMode="decimal"
+                      disabled={disabled}
+                      defaultValue={value ?? ""}
+                      title={priceRow.field === "price" ? SOURCE_LABEL[row.source] : undefined}
+                      placeholder={priceRow.required ? "0" : "—"}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          (event.target as HTMLInputElement).blur();
+                        }
+                      }}
+                      onBlur={(event) => commit(row, priceRow.field, event.target.value)}
+                      className={cx(
+                        "h-9 w-full bg-transparent px-2 text-right text-sm tabular-nums outline-none transition-colors",
+                        "hover:bg-brand-50/60 focus:bg-white focus:ring-2 focus:ring-inset focus:ring-brand-400 disabled:opacity-50",
+                        inherited ? "italic text-slate-400" : "font-medium text-slate-900",
+                        priceRow.required && !inherited && "text-slate-900"
+                      )}
+                    />
                   </td>
                 );
               })}
@@ -225,12 +243,6 @@ export function RateEditorGrid({ dailyRates, calendar, currencyCode, onSaveCell,
           ))}
         </tbody>
       </table>
-      <p className="border-t border-slate-100 px-4 py-2 text-xs text-slate-500">
-        El <span className="font-medium">Precio base</span> es obligatorio. Los precios en
-        <span className="mx-1 italic text-slate-500">cursiva con borde punteado</span>
-        son heredados (del período o del precio de categoría) hasta que fijes uno propio para esa fecha.
-        Editá una celda y salí del campo (o Enter) para guardar.
-      </p>
     </div>
   );
 }

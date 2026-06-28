@@ -16,50 +16,34 @@ import { useSession } from "../state/session";
 
 const pad = (value: number) => String(value).padStart(2, "0");
 
-const formatLocalIsoDate = (value: Date) =>
+export const formatLocalIsoDate = (value: Date) =>
   `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
 
-export const resolveRateCalendarRange = (year: number, today = new Date()) => {
-  const currentYear = today.getFullYear();
-  if (year === currentYear) {
-    return {
-      dateFrom: formatLocalIsoDate(today),
-      dateTo: `${year}-12-31`
-    };
-  }
+export const todayIso = () => formatLocalIsoDate(new Date());
 
-  return {
-    dateFrom: `${year}-01-01`,
-    dateTo: `${year}-12-31`
-  };
+/** Shift an ISO date (YYYY-MM-DD) by a number of days, returning ISO. */
+export const addDaysIso = (iso: string, days: number) => {
+  const base = new Date(`${iso}T00:00:00`);
+  base.setDate(base.getDate() + days);
+  return formatLocalIsoDate(base);
 };
 
-export function useRateCalendar(categoryId: number | null, year: number) {
+export function useRateCalendar(categoryId: number | null, dateFrom: string, dateTo: string) {
   const { session } = useSession();
-  const { dateFrom, dateTo } = resolveRateCalendarRange(year);
 
   return useQuery<RateCalendarResponse>({
-    queryKey: ["rate-calendar", session.hotelId ?? null, categoryId, year],
-    queryFn: () =>
-      getRateCalendarDaily(
-        {
-          categoryId: categoryId as number,
-          dateFrom,
-          dateTo
-        },
-        session
-      ),
+    queryKey: ["rate-calendar", session.hotelId ?? null, categoryId, dateFrom, dateTo],
+    queryFn: () => getRateCalendarDaily({ categoryId: categoryId as number, dateFrom, dateTo }, session),
     enabled: hasValidSession(session) && typeof categoryId === "number" && categoryId > 0,
     staleTime: 60_000
   });
 }
 
-export function useCategoryDailyRates(categoryId: number | null, year: number) {
+export function useCategoryDailyRates(categoryId: number | null, dateFrom: string, dateTo: string) {
   const { session } = useSession();
-  const { dateFrom, dateTo } = resolveRateCalendarRange(year);
 
   return useQuery<DailyRateRangeRow[]>({
-    queryKey: ["category-daily-rates", session.hotelId ?? null, categoryId, year],
+    queryKey: ["category-daily-rates", session.hotelId ?? null, categoryId, dateFrom, dateTo],
     queryFn: () => getCategoryDailyRates(categoryId as number, dateFrom, dateTo, session),
     enabled: hasValidSession(session) && typeof categoryId === "number" && categoryId > 0,
     staleTime: 60_000
@@ -68,7 +52,7 @@ export function useCategoryDailyRates(categoryId: number | null, year: number) {
 
 export type SingleRateInput = DailyRatePrices & { date: string };
 
-export function useUpsertDailyRate(categoryId: number | null, year: number) {
+export function useUpsertDailyRate(categoryId: number | null) {
   const { session } = useSession();
   const queryClient = useQueryClient();
 
@@ -79,11 +63,9 @@ export function useUpsertDailyRate(categoryId: number | null, year: number) {
       }
       return upsertDailyRate(categoryId, payload, session);
     },
+    // Prefix-match invalidation so every loaded date window refetches.
     onSuccess: () => {
-      // Refresh both the editable grid and the availability/channel view.
-      queryClient.invalidateQueries({
-        queryKey: ["category-daily-rates", session.hotelId ?? null, categoryId, year]
-      });
+      queryClient.invalidateQueries({ queryKey: ["category-daily-rates", session.hotelId ?? null, categoryId] });
       queryClient.invalidateQueries({ queryKey: ["rate-calendar", session.hotelId ?? null, categoryId] });
     }
   });
