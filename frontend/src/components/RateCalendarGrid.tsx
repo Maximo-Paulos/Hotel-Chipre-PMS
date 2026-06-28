@@ -14,6 +14,7 @@ type RateCalendarGridProps = {
   calendar: RateCalendarResponse;
   showHeader?: boolean;
   showSummaryRows?: boolean;
+  excludeProviderCodes?: string[];
 };
 
 type ChannelSummary = {
@@ -84,11 +85,15 @@ function getPriceForDay(channel: RateCalendarChannelDay | null, ratePlanId: numb
   return channel.prices.find((price) => price.rate_plan_id === ratePlanId) ?? null;
 }
 
-function buildChannelSummaries(days: RateCalendarDay[]): ChannelSummary[] {
+function buildChannelSummaries(days: RateCalendarDay[], excludeProviderCodes: string[] = []): ChannelSummary[] {
   const summaries = new Map<string, ChannelSummary>();
+  const excluded = new Set(excludeProviderCodes);
 
   days.forEach((day) => {
     day.channels.forEach((channel) => {
+      if (excluded.has(channel.provider_code)) {
+        return;
+      }
       let summary = summaries.get(channel.provider_code);
       if (!summary) {
         summary = {
@@ -239,8 +244,13 @@ function renderPriceValue(channel: RateCalendarChannelDay | null, price: RateCal
   return <span className="font-medium text-slate-900">{formatCurrency(price.base_amount, price.currency_code)}</span>;
 }
 
-export function RateCalendarGrid({ calendar, showHeader = true, showSummaryRows = true }: RateCalendarGridProps) {
-  const channelSummaries = buildChannelSummaries(calendar.days);
+export function RateCalendarGrid({
+  calendar,
+  showHeader = true,
+  showSummaryRows = true,
+  excludeProviderCodes = []
+}: RateCalendarGridProps) {
+  const channelSummaries = buildChannelSummaries(calendar.days, excludeProviderCodes);
 
   return (
     <div

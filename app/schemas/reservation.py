@@ -34,9 +34,11 @@ class ReservationCreate(BaseModel):
     channel_code: Optional[ReservationChannelCodeEnum] = None
     external_id: Optional[str] = None
     pricing_channel_code: Optional[str] = Field(default=None, max_length=50)
+    pricing_payment_method: Optional[str] = Field(default=None, max_length=30)
     guest_scope: str = Field(default="all", max_length=30)
     target_currency: Optional[str] = Field(default=None, min_length=3, max_length=3)
     total_amount: Optional[Decimal] = Field(default=None, ge=0)
+    deposit_amount: Optional[Decimal] = Field(default=None, ge=0)
     mobility_restriction: bool = False
     # Waitlist / overbooking (v72 §9)
     is_wait_listed: bool = False

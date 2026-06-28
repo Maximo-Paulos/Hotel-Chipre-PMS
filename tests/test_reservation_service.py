@@ -4,6 +4,7 @@ Tests for Reservation Service — booking creation, availability checks, state t
 import pytest
 from datetime import date
 
+from app.models.daily_rate import DailyRate
 from app.models.guest import DocumentTypeEnum, Guest
 from app.models.reservation import Reservation, ReservationChannelCodeEnum, ReservationSourceEnum, ReservationStatusEnum
 from app.models.room import Room
@@ -358,6 +359,55 @@ def test_create_reservation_uses_rate_plan_quote_when_commercial_context_is_prov
     assert res.total_amount == 290.4
     assert res.net_amount == 290.4
     assert res.currency_code == "ARS"
+
+
+def test_create_reservation_uses_daily_rates_for_payment_method_and_custom_deposit(
+    db,
+    hotel_config,
+    sample_categories,
+    sample_rooms,
+    sample_guest,
+):
+    category = sample_categories[0]
+    db.add_all(
+        [
+            DailyRate(
+                hotel_id=hotel_config.id,
+                category_id=category.id,
+                date=date(2026, 9, 1),
+                price=180.0,
+                price_transfer=150.0,
+            ),
+            DailyRate(
+                hotel_id=hotel_config.id,
+                category_id=category.id,
+                date=date(2026, 9, 2),
+                price=220.0,
+                price_transfer=175.0,
+            ),
+        ]
+    )
+    db.flush()
+
+    data = ReservationCreate(
+        guest_id=sample_guest.id,
+        category_id=category.id,
+        check_in_date=date(2026, 9, 1),
+        check_out_date=date(2026, 9, 3),
+        pricing_payment_method="transfer",
+        deposit_amount=75.0,
+    )
+
+    res = create_reservation(db, data, hotel_id=hotel_config.id)
+    db.flush()
+
+    assert res.total_amount == 325.0
+    assert res.subtotal_amount == 325.0
+    assert res.net_amount == 325.0
+    assert res.deposit_amount == 75.0
+    assert res.balance_due == 325.0
+    assert '"pricing_source": "daily_rates"' in (res.pricing_snapshot or "")
+    assert '"payment_method": "transfer"' in (res.pricing_snapshot or "")
 
 
 class TestStateTransitions:

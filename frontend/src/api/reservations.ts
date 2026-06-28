@@ -211,6 +211,8 @@ export type ReservationPayload = {
   notes?: string | null;
   source?: ReservationSource;
   external_id?: string | null;
+  pricing_payment_method?: string | null;
+  deposit_amount?: number | null;
 };
 
 export type ReservationUpdatePayload = Partial<ReservationPayload> & {

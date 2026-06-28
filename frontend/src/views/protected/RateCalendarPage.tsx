@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { RateCalendarGrid } from "../../components/RateCalendarGrid";
-import { RateEditorGrid } from "../../components/RateEditorGrid";
+import { RateEditorGrid, type PriceField } from "../../components/RateEditorGrid";
 import { useCategories } from "../../hooks/useCategories";
 import {
   todayIso,
@@ -15,6 +15,23 @@ import {
 
 const RANGE_LABEL = new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "short", year: "numeric" });
 
+const WEEKDAY_FILTERS = [
+  { value: 1, label: "Lun" },
+  { value: 2, label: "Mar" },
+  { value: 3, label: "Mie" },
+  { value: 4, label: "Jue" },
+  { value: 5, label: "Vie" },
+  { value: 6, label: "Sab" },
+  { value: 0, label: "Dom" }
+];
+
+const PRICE_FIELD_LABEL: Record<PriceField, string> = {
+  price: "Precio base",
+  price_cash: "Efectivo",
+  price_transfer: "Transferencia",
+  price_mercadopago: "Mercado Pago"
+};
+
 const toNumberOrNull = (value: string): number | null => {
   const trimmed = value.trim();
   if (trimmed === "") return null;
@@ -24,6 +41,8 @@ const toNumberOrNull = (value: string): number | null => {
 
 const formatRange = (from: string, to: string) =>
   `${RANGE_LABEL.format(new Date(`${from}T00:00:00`))} -> ${RANGE_LABEL.format(new Date(`${to}T00:00:00`))}`;
+
+const getIsoWeekday = (iso: string) => new Date(`${iso}T00:00:00`).getDay();
 
 const yearStart = (year: number) => {
   const today = todayIso();
@@ -92,11 +111,70 @@ export function RateCalendarPage() {
   const [priceTransfer, setPriceTransfer] = useState("");
   const [priceMercadopago, setPriceMercadopago] = useState("");
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [bulkMode, setBulkMode] = useState<"range" | "weekdays">("range");
+  const [selectedWeekdays, setSelectedWeekdays] = useState<number[]>([]);
+  const [selectionAnchor, setSelectionAnchor] = useState<{ field: PriceField; date: string } | null>(null);
+  const [selectedRange, setSelectedRange] = useState<{
+    field: PriceField;
+    startDate: string;
+    endDate: string;
+  } | null>(null);
 
   useEffect(() => {
     setFromDate(dateFrom);
     setToDate(dateTo);
   }, [dateFrom, dateTo]);
+
+  const rangeRows = useMemo(
+    () => (dailyRatesQuery.data ?? []).filter((row) => row.date >= fromDate && row.date <= toDate),
+    [dailyRatesQuery.data, fromDate, toDate]
+  );
+
+  const weekdaySet = useMemo(() => new Set(selectedWeekdays), [selectedWeekdays]);
+
+  const excludedDates = useMemo(() => {
+    if (bulkMode !== "weekdays") return [];
+    return rangeRows.filter((row) => !weekdaySet.has(getIsoWeekday(row.date))).map((row) => row.date);
+  }, [bulkMode, rangeRows, weekdaySet]);
+
+  const affectedDateCount = bulkMode === "weekdays" ? rangeRows.length - excludedDates.length : rangeRows.length;
+
+  const setNumberInput = (setter: React.Dispatch<React.SetStateAction<string>>, value?: number | null) => {
+    setter(value === null || value === undefined ? "" : String(value));
+  };
+
+  const handleSelectCell = (field: PriceField, date: string) => {
+    const row = dailyRatesQuery.data?.find((item) => item.date === date);
+    if (row) {
+      setNumberInput(setBasePrice, row.price);
+      setNumberInput(setPriceCash, row.price_cash);
+      setNumberInput(setPriceTransfer, row.price_transfer);
+      setNumberInput(setPriceMercadopago, row.price_mercadopago);
+    }
+
+    if (selectionAnchor && selectionAnchor.field === field) {
+      const startDate = selectionAnchor.date <= date ? selectionAnchor.date : date;
+      const endDate = selectionAnchor.date <= date ? date : selectionAnchor.date;
+      setSelectedRange({ field, startDate, endDate });
+      setFromDate(startDate);
+      setToDate(endDate);
+      setSelectionAnchor(null);
+      return;
+    }
+
+    setSelectionAnchor({ field, date });
+    setSelectedRange({ field, startDate: date, endDate: date });
+    setFromDate(date);
+    setToDate(date);
+  };
+
+  const toggleWeekday = (weekday: number) => {
+    setSelectedWeekdays((current) =>
+      current.includes(weekday)
+        ? current.filter((item) => item !== weekday)
+        : [...current, weekday].sort((a, b) => a - b)
+    );
+  };
 
   const handleSaveRates = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -110,6 +188,14 @@ export function RateCalendarPage() {
       setSaveError("La fecha final debe ser mayor o igual a la inicial.");
       return;
     }
+    if (bulkMode === "weekdays" && selectedWeekdays.length === 0) {
+      setSaveError("Elegí al menos un día de semana para aplicar la edición.");
+      return;
+    }
+    if (bulkMode === "weekdays" && affectedDateCount <= 0) {
+      setSaveError("No hay fechas afectadas dentro del rango y los días elegidos.");
+      return;
+    }
     bulkSave.mutate(
       {
         from_date: fromDate,
@@ -117,7 +203,8 @@ export function RateCalendarPage() {
         price,
         price_cash: toNumberOrNull(priceCash),
         price_transfer: toNumberOrNull(priceTransfer),
-        price_mercadopago: toNumberOrNull(priceMercadopago)
+        price_mercadopago: toNumberOrNull(priceMercadopago),
+        exclude_dates: excludedDates
       },
       { onError: (err) => setSaveError(err.message) }
     );
@@ -251,12 +338,19 @@ export function RateCalendarPage() {
               calendar={calendarQuery.data}
               currencyCode={currencyCode}
               onSaveCell={handleSaveCell}
+              onSelectCell={handleSelectCell}
+              selectedRange={selectedRange}
               disabled={cellSave.isPending}
             />
 
             {calendarQuery.data ? (
               <div className="border-t-2 border-slate-200">
-                <RateCalendarGrid calendar={calendarQuery.data} showHeader={false} showSummaryRows={false} />
+                <RateCalendarGrid
+                  calendar={calendarQuery.data}
+                  showHeader={false}
+                  showSummaryRows={false}
+                  excludeProviderCodes={["direct"]}
+                />
               </div>
             ) : null}
 
@@ -281,12 +375,75 @@ export function RateCalendarPage() {
                 <p className="mt-1 text-xs text-slate-500">Aplicá un precio a todas las fechas del rango seleccionado.</p>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Pill tone="blue">Rango</Pill>
+                <Pill tone="blue">{bulkMode === "weekdays" ? "Días de semana" : "Rango"}</Pill>
                 <Pill>Hotel / tarifa diaria</Pill>
               </div>
             </div>
 
             <form onSubmit={handleSaveRates} data-testid="rate-editor" id="rate-bulk-panel" className="mt-4">
+              <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 xl:flex-row xl:items-center xl:justify-between">
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setBulkMode("range")}
+                    className={`rounded-xl px-3 py-2 text-sm font-semibold ${
+                      bulkMode === "range"
+                        ? "bg-blue-600 text-white"
+                        : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-100"
+                    }`}
+                  >
+                    Rango
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBulkMode("weekdays")}
+                    className={`rounded-xl px-3 py-2 text-sm font-semibold ${
+                      bulkMode === "weekdays"
+                        ? "bg-blue-600 text-white"
+                        : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-100"
+                    }`}
+                  >
+                    Días de semana
+                  </button>
+                </div>
+
+                {bulkMode === "weekdays" ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    {WEEKDAY_FILTERS.map((day) => {
+                      const active = selectedWeekdays.includes(day.value);
+                      return (
+                        <button
+                          key={day.value}
+                          type="button"
+                          aria-pressed={active}
+                          onClick={() => toggleWeekday(day.value)}
+                          className={`h-9 min-w-10 rounded-xl px-3 text-sm font-semibold ${
+                            active
+                              ? "bg-slate-900 text-white"
+                              : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-100"
+                          }`}
+                        >
+                          {day.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
+
+                <div className="text-xs font-medium text-slate-500">
+                  {selectedRange ? (
+                    <span>
+                      Selección: {PRICE_FIELD_LABEL[selectedRange.field]} · {formatRange(selectedRange.startDate, selectedRange.endDate)}
+                    </span>
+                  ) : (
+                    <span>Click en una celda para cargar sus importes; segundo click en la misma fila arma el rango.</span>
+                  )}
+                  <span className="ml-2 text-slate-700">
+                    {affectedDateCount > 0 ? `${affectedDateCount} fechas afectadas` : "Sin fechas afectadas"}
+                  </span>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
                 <label className={labelClass}>
                   Desde
@@ -338,6 +495,9 @@ export function RateCalendarPage() {
                     setPriceTransfer("");
                     setPriceMercadopago("");
                     setSaveError(null);
+                    setSelectedWeekdays([]);
+                    setSelectionAnchor(null);
+                    setSelectedRange(null);
                   }}
                   className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
                 >

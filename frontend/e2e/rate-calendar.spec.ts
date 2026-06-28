@@ -281,6 +281,14 @@ const mockDailyRates = [
 
 test("rate calendar page renders annual editor and integrated channel view", async ({ page }) => {
   const savedCells: unknown[] = [];
+  const bulkRequests: unknown[] = [];
+
+  await page.route("https://fonts.googleapis.com/**", async (route) => {
+    await route.fulfill({ status: 200, contentType: "text/css", body: "" });
+  });
+  await page.route("https://fonts.gstatic.com/**", async (route) => {
+    await route.abort();
+  });
 
   await page.route("http://127.0.0.1:8040/api/**", async (route) => {
     const request = route.request();
@@ -395,6 +403,17 @@ test("rate calendar page renders annual editor and integrated channel view", asy
       return;
     }
 
+    if (url.pathname.endsWith("/api/rates/category/7/bulk") && request.method() === "POST") {
+      const payload = request.postDataJSON();
+      bulkRequests.push(payload);
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ created: 1, updated: 0 })
+      });
+      return;
+    }
+
     if (url.pathname.endsWith("/api/rates/category/7") && request.method() === "GET") {
       expect(url.searchParams.get("from_date")).toBeTruthy();
       expect(url.searchParams.get("to_date")).toBeTruthy();
@@ -423,7 +442,7 @@ test("rate calendar page renders annual editor and integrated channel view", asy
     });
   });
 
-  await page.goto("http://127.0.0.1:5173/login");
+  await page.goto("/login", { waitUntil: "domcontentloaded" });
   await page.locator('input[type="email"]').fill("owner@example.com");
   await page.locator('input[type="password"]').fill("demo-password");
   await page.getByTestId("login-submit").click();
@@ -439,6 +458,7 @@ test("rate calendar page renders annual editor and integrated channel view", asy
   await expect(page.getByText("Edición masiva")).toBeVisible();
   await expect(page.getByRole("button", { name: "Aplicar al calendario" })).toBeVisible();
   await expect(page.getByTestId("rate-calendar-grid")).toBeVisible();
+  await expect(page.getByText("Direct", { exact: true })).toHaveCount(0);
 
   const firstBasePrice = page.getByLabel("Precio base 2026-05-07");
   await expect(firstBasePrice).toHaveValue("42000");
@@ -461,4 +481,19 @@ test("rate calendar page renders annual editor and integrated channel view", asy
   await expect(page.getByText("Booking.com")).toBeVisible();
   await expect(page.getByText("Falta mapeo").first()).toBeVisible();
   await expect(page.getByText("US$ 42")).toBeVisible();
+
+  await page.getByLabel("Desde").fill("2026-05-07");
+  await page.getByLabel("Hasta").fill("2026-05-09");
+  await page.getByRole("button", { name: "Días de semana" }).click();
+  await page.getByRole("button", { name: "Vie" }).click();
+  await page.getByLabel("Precio base *").fill("50000");
+  await page.getByTestId("rate-editor-save").click();
+
+  await expect.poll(() => bulkRequests.length).toBe(1);
+  expect(bulkRequests[0]).toMatchObject({
+    from_date: "2026-05-07",
+    to_date: "2026-05-09",
+    price: 50000,
+    exclude_dates: ["2026-05-07", "2026-05-09"]
+  });
 });
