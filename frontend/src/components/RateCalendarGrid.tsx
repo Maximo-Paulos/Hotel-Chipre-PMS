@@ -12,6 +12,8 @@ import { InfoTip } from "./InfoTip";
 
 type RateCalendarGridProps = {
   calendar: RateCalendarResponse;
+  showHeader?: boolean;
+  showSummaryRows?: boolean;
 };
 
 type ChannelSummary = {
@@ -170,7 +172,7 @@ function DayHeaderCell({ day }: { day: RateCalendarDay }) {
   const demand = getDemandBadge(day);
 
   return (
-    <th className="sticky top-0 z-10 min-w-[96px] border-b border-slate-200 bg-white px-3 py-3 text-center align-top">
+    <th className="sticky top-0 z-10 min-w-[96px] border-b border-r border-slate-200 bg-white px-3 py-3 text-center align-top">
       <div className="flex flex-col items-center gap-1">
         <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
           {DATE_LABEL.format(new Date(`${day.date}T00:00:00`))}
@@ -194,7 +196,7 @@ function MetricCell({
   className?: string;
 }) {
   return (
-    <td className={cx("min-w-[96px] border-b border-slate-200 px-3 py-3 text-center text-sm text-slate-700", className)}>
+    <td className={cx("min-w-[96px] border-b border-r border-slate-200 px-3 py-3 text-center text-sm text-slate-700", className)}>
       {children}
     </td>
   );
@@ -237,57 +239,63 @@ function renderPriceValue(channel: RateCalendarChannelDay | null, price: RateCal
   return <span className="font-medium text-slate-900">{formatCurrency(price.base_amount, price.currency_code)}</span>;
 }
 
-export function RateCalendarGrid({ calendar }: RateCalendarGridProps) {
+export function RateCalendarGrid({ calendar, showHeader = true, showSummaryRows = true }: RateCalendarGridProps) {
   const channelSummaries = buildChannelSummaries(calendar.days);
 
   return (
     <div
       data-testid="rate-calendar-grid"
-      className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm"
+      className={cx("overflow-x-auto bg-white", showHeader && "rounded-2xl border border-slate-200 shadow-sm")}
     >
       <table className="w-max min-w-full border-separate border-spacing-0">
-        <thead>
-          <tr>
-            <th className="sticky left-0 top-0 z-30 w-[260px] min-w-[260px] border-b border-r border-slate-200 bg-white px-4 py-3 text-left">
-              <div>
-                <p className="text-xs uppercase tracking-wide text-slate-500">Categoría</p>
-                <p className="font-semibold text-slate-900">
-                  {calendar.meta.category_name} · {calendar.meta.category_code}
-                </p>
-              </div>
-            </th>
-            {calendar.days.map((day) => (
-              <DayHeaderCell key={day.date} day={day} />
-            ))}
-          </tr>
-        </thead>
+        {showHeader ? (
+          <thead>
+            <tr>
+              <th className="sticky left-0 top-0 z-30 w-[260px] min-w-[260px] border-b border-r border-slate-200 bg-white px-4 py-3 text-left">
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Categoría</p>
+                  <p className="font-semibold text-slate-900">
+                    {calendar.meta.category_name} · {calendar.meta.category_code}
+                  </p>
+                </div>
+              </th>
+              {calendar.days.map((day) => (
+                <DayHeaderCell key={day.date} day={day} />
+              ))}
+            </tr>
+          </thead>
+        ) : null}
         <tbody>
-          <tr>
-            <StickyLabelCell className="bg-slate-50">
-              <span className="text-sm font-semibold text-slate-900">Estado</span>
-            </StickyLabelCell>
-            {calendar.days.map((day) => (
-              <MetricCell key={`status-${day.date}`} className="bg-slate-50">
-                <StatusPill open={day.status === "open"} />
-              </MetricCell>
-            ))}
-          </tr>
-          <tr>
-            <StickyLabelCell>
-              <span className="text-sm font-semibold text-slate-900">Para vender</span>
-            </StickyLabelCell>
-            {calendar.days.map((day) => (
-              <MetricCell key={`for-sale-${day.date}`}>{INTEGER_LABEL.format(day.for_sale)}</MetricCell>
-            ))}
-          </tr>
-          <tr>
-            <StickyLabelCell>
-              <span className="text-sm font-semibold text-slate-900">Reservadas</span>
-            </StickyLabelCell>
-            {calendar.days.map((day) => (
-              <MetricCell key={`reserved-${day.date}`}>{INTEGER_LABEL.format(day.reserved)}</MetricCell>
-            ))}
-          </tr>
+          {showSummaryRows ? (
+            <>
+              <tr>
+                <StickyLabelCell className="bg-slate-50">
+                  <span className="text-sm font-semibold text-slate-900">Estado</span>
+                </StickyLabelCell>
+                {calendar.days.map((day) => (
+                  <MetricCell key={`status-${day.date}`} className="bg-slate-50">
+                    <StatusPill open={day.status === "open"} />
+                  </MetricCell>
+                ))}
+              </tr>
+              <tr>
+                <StickyLabelCell>
+                  <span className="text-sm font-semibold text-slate-900">Para vender</span>
+                </StickyLabelCell>
+                {calendar.days.map((day) => (
+                  <MetricCell key={`for-sale-${day.date}`}>{INTEGER_LABEL.format(day.for_sale)}</MetricCell>
+                ))}
+              </tr>
+              <tr>
+                <StickyLabelCell>
+                  <span className="text-sm font-semibold text-slate-900">Reservadas</span>
+                </StickyLabelCell>
+                {calendar.days.map((day) => (
+                  <MetricCell key={`reserved-${day.date}`}>{INTEGER_LABEL.format(day.reserved)}</MetricCell>
+                ))}
+              </tr>
+            </>
+          ) : null}
 
           {channelSummaries.map((summary) => (
             <Fragment key={summary.providerCode}>
