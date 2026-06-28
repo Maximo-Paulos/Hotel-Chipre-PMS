@@ -112,8 +112,11 @@ export function RateCalendarPage() {
 
   const inputClass =
     "rounded-lg border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500";
+  const focusRing =
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1";
   const navBtn =
-    "inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm transition-colors hover:bg-slate-50 disabled:opacity-50";
+    "inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm transition-colors hover:bg-slate-50 disabled:opacity-50 " +
+    focusRing;
 
   return (
     <div className="space-y-5" data-testid="rate-calendar-page">
@@ -175,7 +178,10 @@ export function RateCalendarPage() {
             </button>
             <button
               type="button"
-              className="inline-flex h-9 items-center rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600 shadow-sm hover:bg-slate-50"
+              className={
+                "inline-flex h-9 items-center rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600 shadow-sm hover:bg-slate-50 " +
+                focusRing
+              }
               onClick={() => setWindowStart(todayIso())}
             >
               Hoy
@@ -185,11 +191,12 @@ export function RateCalendarPage() {
                 <button
                   key={opt.days}
                   type="button"
+                  aria-pressed={windowDays === opt.days}
                   onClick={() => setWindowDays(opt.days)}
                   className={
                     windowDays === opt.days
-                      ? "bg-brand-600 px-3 py-2 text-xs font-semibold text-white"
-                      : "bg-white px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                      ? "bg-brand-600 px-3 py-2 text-xs font-semibold text-white " + focusRing
+                      : "bg-white px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 " + focusRing
                   }
                 >
                   {opt.label}
@@ -235,7 +242,12 @@ export function RateCalendarPage() {
               <button
                 type="button"
                 onClick={() => setShowBulk((v) => !v)}
-                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-sm hover:bg-slate-50"
+                aria-expanded={showBulk}
+                aria-controls="rate-bulk-panel"
+                className={
+                  "rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-sm hover:bg-slate-50 " +
+                  focusRing
+                }
               >
                 {showBulk ? "Ocultar carga masiva" : "Aplicar a un rango"}
               </button>
@@ -248,10 +260,12 @@ export function RateCalendarPage() {
             <form
               onSubmit={handleSaveRates}
               data-testid="rate-editor"
-              className="rounded-xl border border-slate-200 bg-slate-50/60 p-4"
+              id="rate-bulk-panel"
+              className="rounded-lg border border-slate-200 bg-slate-50/60 p-3"
             >
               <p className="mb-3 text-xs text-slate-500">
-                Aplica un mismo precio a todas las fechas del rango (sobrescribe). El precio base es obligatorio.
+                Aplica un mismo precio a todas las fechas del rango (sobrescribe). El precio base es obligatorio;
+                <span className="font-medium"> un campo opcional vacío borra ese precio</span> en todo el rango.
               </p>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
                 <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
@@ -328,7 +342,12 @@ export function RateCalendarPage() {
           <button
             type="button"
             onClick={() => setShowChannels((v) => !v)}
-            className="flex w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 text-left shadow-sm hover:bg-slate-50"
+            aria-expanded={showChannels}
+            aria-controls="rate-channel-grid"
+            className={
+              "flex w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 text-left shadow-sm hover:bg-slate-50 " +
+              focusRing
+            }
           >
             <span>
               <span className="text-sm font-semibold text-slate-900">Canales OTA (lectura)</span>
@@ -336,7 +355,11 @@ export function RateCalendarPage() {
             </span>
             <span className="text-slate-400">{showChannels ? "▲" : "▼"}</span>
           </button>
-          {showChannels ? <RateCalendarGrid calendar={calendarQuery.data} /> : null}
+          {showChannels ? (
+            <div id="rate-channel-grid">
+              <RateCalendarGrid calendar={calendarQuery.data} />
+            </div>
+          ) : null}
         </section>
       ) : null}
     </div>

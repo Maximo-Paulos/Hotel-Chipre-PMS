@@ -44,6 +44,7 @@ function parseInput(raw: string): { value: number | null; valid: boolean } {
 }
 
 type Column = {
+  index: number;
   row: DailyRateRangeRow;
   dayNum: string;
   weekday: string;
@@ -69,15 +70,28 @@ function RowLabel({ children, sub, className }: { children: ReactNode; sub?: str
   );
 }
 
+// Move focus to the same price row in the previous/next date column, so the
+// grid behaves like a spreadsheet for fast rate entry.
+function focusSibling(el: HTMLElement, field: string, col: number, dir: number) {
+  const table = el.closest("table");
+  if (!table) return;
+  const next = table.querySelector<HTMLInputElement>(`input[data-field="${field}"][data-col="${col + dir}"]`);
+  if (next) {
+    next.focus();
+    next.select();
+  }
+}
+
 export function RateEditorGrid({ dailyRates, calendar, currencyCode, onSaveCell, disabled }: RateEditorGridProps) {
   const calendarByDate = new Map((calendar?.days ?? []).map((day) => [day.date, day]));
   const symbol = currencySymbol(currencyCode);
 
-  const columns: Column[] = dailyRates.map((row) => {
+  const columns: Column[] = dailyRates.map((row, index) => {
     const day = calendarByDate.get(row.date);
     const d = new Date(`${row.date}T00:00:00`);
     const dow = d.getDay();
     return {
+      index,
       row,
       dayNum: String(d.getDate()).padStart(2, "0"),
       weekday: WEEKDAY.format(d).replace(".", ""),
@@ -155,6 +169,8 @@ export function RateEditorGrid({ dailyRates, calendar, currencyCode, onSaveCell,
                 className={cx("min-w-[84px] border-b border-l border-slate-100 px-2 py-1.5 text-center", colTint(c))}
               >
                 <span
+                  role="img"
+                  aria-label={c.open ? "Disponible" : "Cerrado"}
                   className={cx(
                     "inline-block h-2.5 w-2.5 rounded-full",
                     c.open ? "bg-emerald-500" : "bg-rose-400"
@@ -219,21 +235,33 @@ export function RateEditorGrid({ dailyRates, calendar, currencyCode, onSaveCell,
                       step="0.01"
                       inputMode="decimal"
                       disabled={disabled}
+                      data-field={priceRow.field}
+                      data-col={c.index}
                       defaultValue={value ?? ""}
+                      aria-label={`${priceRow.label} ${row.date}`}
                       title={priceRow.field === "price" ? SOURCE_LABEL[row.source] : undefined}
                       placeholder={priceRow.required ? "0" : "—"}
                       onKeyDown={(event) => {
                         if (event.key === "Enter") {
                           event.preventDefault();
-                          (event.target as HTMLInputElement).blur();
+                          commit(row, priceRow.field, event.currentTarget.value);
+                          focusSibling(event.currentTarget, priceRow.field, c.index, event.shiftKey ? -1 : 1);
                         }
                       }}
-                      onBlur={(event) => commit(row, priceRow.field, event.target.value)}
+                      onBlur={(event) => {
+                        // Reject invalid input by reverting to the last value.
+                        if (!parseInput(event.target.value).valid) {
+                          event.target.value = value === null ? "" : String(value);
+                          event.target.setAttribute("aria-invalid", "false");
+                          return;
+                        }
+                        commit(row, priceRow.field, event.target.value);
+                      }}
                       className={cx(
-                        "h-9 w-full bg-transparent px-2 text-right text-sm tabular-nums outline-none transition-colors",
-                        "hover:bg-brand-50/60 focus:bg-white focus:ring-2 focus:ring-inset focus:ring-brand-400 disabled:opacity-50",
-                        inherited ? "italic text-slate-400" : "font-medium text-slate-900",
-                        priceRow.required && !inherited && "text-slate-900"
+                        "h-9 w-full px-2 text-right text-sm tabular-nums outline-none transition-shadow",
+                        "bg-white/60 ring-1 ring-inset ring-slate-200/70 hover:ring-brand-300",
+                        "focus:bg-white focus:ring-2 focus:ring-brand-500 disabled:opacity-50",
+                        inherited ? "italic text-slate-400" : "font-medium text-slate-900"
                       )}
                     />
                   </td>
