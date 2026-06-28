@@ -7,6 +7,7 @@ import { useCategories } from "../../hooks/useCategories";
 import {
   todayIso,
   useBulkUpsertRates,
+  useBulkUpdateRateField,
   useCategoryDailyRates,
   useRateCalendar,
   useUpsertDailyRate,
@@ -31,6 +32,19 @@ const PRICE_FIELD_LABEL: Record<PriceField, string> = {
   price_transfer: "Transferencia",
   price_mercadopago: "Mercado Pago"
 };
+
+const BULK_FIELD_OPTIONS: Array<{ value: PriceField; label: string }> = [
+  { value: "price", label: "Precio base" },
+  { value: "price_cash", label: "Efectivo" },
+  { value: "price_transfer", label: "Transferencia" },
+  { value: "price_mercadopago", label: "Mercado Pago" }
+];
+
+const BULK_ACTION_OPTIONS = [
+  { value: "set", label: "Fijar valor" },
+  { value: "amount_delta", label: "Ajustar $" },
+  { value: "percent_delta", label: "Ajustar %" }
+] as const;
 
 const toNumberOrNull = (value: string): number | null => {
   const trimmed = value.trim();
@@ -97,6 +111,7 @@ export function RateCalendarPage() {
   const dailyRatesQuery = useCategoryDailyRates(categoryId, dateFrom, dateTo);
   const cellSave = useUpsertDailyRate(categoryId);
   const bulkSave = useBulkUpsertRates(categoryId);
+  const bulkFieldSave = useBulkUpdateRateField(categoryId);
 
   const [cellError, setCellError] = useState<string | null>(null);
   const handleSaveCell = (payload: SingleRateInput) => {
@@ -112,6 +127,10 @@ export function RateCalendarPage() {
   const [priceMercadopago, setPriceMercadopago] = useState("");
   const [saveError, setSaveError] = useState<string | null>(null);
   const [bulkMode, setBulkMode] = useState<"range" | "weekdays">("range");
+  const [bulkEditKind, setBulkEditKind] = useState<"all" | "field">("all");
+  const [bulkField, setBulkField] = useState<PriceField>("price_transfer");
+  const [bulkAction, setBulkAction] = useState<(typeof BULK_ACTION_OPTIONS)[number]["value"]>("set");
+  const [bulkFieldValue, setBulkFieldValue] = useState("");
   const [selectedWeekdays, setSelectedWeekdays] = useState<number[]>([]);
   const [selectionAnchor, setSelectionAnchor] = useState<{ field: PriceField; date: string } | null>(null);
   const [selectedRange, setSelectedRange] = useState<{
@@ -180,7 +199,7 @@ export function RateCalendarPage() {
     event.preventDefault();
     setSaveError(null);
     const price = toNumberOrNull(basePrice);
-    if (price === null) {
+    if (bulkEditKind === "all" && price === null) {
       setSaveError("Ingresá un precio base válido (>= 0).");
       return;
     }
@@ -196,6 +215,26 @@ export function RateCalendarPage() {
       setSaveError("No hay fechas afectadas dentro del rango y los días elegidos.");
       return;
     }
+    if (bulkEditKind === "field") {
+      const value = Number(bulkFieldValue.trim());
+      if (!Number.isFinite(value)) {
+        setSaveError("Ingresá un valor válido para la edición rápida.");
+        return;
+      }
+      bulkFieldSave.mutate(
+        {
+          from_date: fromDate,
+          to_date: toDate,
+          field: bulkField,
+          mode: bulkAction,
+          value,
+          exclude_dates: excludedDates
+        },
+        { onError: (err) => setSaveError(err.message) }
+      );
+      return;
+    }
+
     bulkSave.mutate(
       {
         from_date: fromDate,
@@ -454,35 +493,97 @@ export function RateCalendarPage() {
                   <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className={`${inputClass} normal-case tracking-normal text-slate-900`} />
                 </label>
                 <label className={labelClass}>
-                  Canal
-                  <input className={`${inputClass} normal-case tracking-normal text-slate-500`} value="Venta directa / Hotel" readOnly />
+                  Tipo de edición
+                  <select
+                    aria-label="Tipo de edición"
+                    value={bulkEditKind}
+                    onChange={(e) => setBulkEditKind(e.target.value as "all" | "field")}
+                    className={`${inputClass} normal-case tracking-normal text-slate-900`}
+                  >
+                    <option value="all">Varios importes</option>
+                    <option value="field">Un campo rápido</option>
+                  </select>
                 </label>
-                <label className={labelClass}>
-                  Campo
-                  <input className={`${inputClass} normal-case tracking-normal text-slate-500`} value="Precio base y medios" readOnly />
-                </label>
-                <label className={labelClass}>
-                  Precio base *
-                  <input type="number" min={0} step="0.01" value={basePrice} onChange={(e) => setBasePrice(e.target.value)} placeholder="0.00" className={`${inputClass} normal-case tracking-normal text-slate-900`} />
-                </label>
-                <label className={labelClass}>
-                  Efectivo
-                  <input type="number" min={0} step="0.01" value={priceCash} onChange={(e) => setPriceCash(e.target.value)} placeholder="opcional" className={`${inputClass} normal-case tracking-normal text-slate-900`} />
-                </label>
-                <label className={labelClass}>
-                  Transferencia
-                  <input type="number" min={0} step="0.01" value={priceTransfer} onChange={(e) => setPriceTransfer(e.target.value)} placeholder="opcional" className={`${inputClass} normal-case tracking-normal text-slate-900`} />
-                </label>
-                <label className={labelClass}>
-                  Mercado Pago
-                  <input type="number" min={0} step="0.01" value={priceMercadopago} onChange={(e) => setPriceMercadopago(e.target.value)} placeholder="opcional" className={`${inputClass} normal-case tracking-normal text-slate-900`} />
-                </label>
+                {bulkEditKind === "field" ? (
+                  <>
+                    <label className={labelClass}>
+                      Campo rápido
+                      <select
+                        aria-label="Campo rápido"
+                        value={bulkField}
+                        onChange={(e) => setBulkField(e.target.value as PriceField)}
+                        className={`${inputClass} normal-case tracking-normal text-slate-900`}
+                      >
+                        {BULK_FIELD_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className={labelClass}>
+                      Acción
+                      <select
+                        aria-label="Acción"
+                        value={bulkAction}
+                        onChange={(e) => setBulkAction(e.target.value as typeof bulkAction)}
+                        className={`${inputClass} normal-case tracking-normal text-slate-900`}
+                      >
+                        {BULK_ACTION_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className={labelClass}>
+                      Valor
+                      <input
+                        aria-label="Valor"
+                        type="number"
+                        step="0.01"
+                        value={bulkFieldValue}
+                        onChange={(e) => setBulkFieldValue(e.target.value)}
+                        placeholder={bulkAction === "percent_delta" ? "Ej: -10" : "0.00"}
+                        className={`${inputClass} normal-case tracking-normal text-slate-900`}
+                      />
+                    </label>
+                  </>
+                ) : (
+                  <>
+                    <label className={labelClass}>
+                      Canal
+                      <input className={`${inputClass} normal-case tracking-normal text-slate-500`} value="Venta directa / Hotel" readOnly />
+                    </label>
+                    <label className={labelClass}>
+                      Campo
+                      <input className={`${inputClass} normal-case tracking-normal text-slate-500`} value="Precio base y medios" readOnly />
+                    </label>
+                    <label className={labelClass}>
+                      Precio base *
+                      <input type="number" min={0} step="0.01" value={basePrice} onChange={(e) => setBasePrice(e.target.value)} placeholder="0.00" className={`${inputClass} normal-case tracking-normal text-slate-900`} />
+                    </label>
+                    <label className={labelClass}>
+                      Efectivo
+                      <input type="number" min={0} step="0.01" value={priceCash} onChange={(e) => setPriceCash(e.target.value)} placeholder="opcional" className={`${inputClass} normal-case tracking-normal text-slate-900`} />
+                    </label>
+                    <label className={labelClass}>
+                      Transferencia
+                      <input type="number" min={0} step="0.01" value={priceTransfer} onChange={(e) => setPriceTransfer(e.target.value)} placeholder="opcional" className={`${inputClass} normal-case tracking-normal text-slate-900`} />
+                    </label>
+                    <label className={labelClass}>
+                      Mercado Pago
+                      <input type="number" min={0} step="0.01" value={priceMercadopago} onChange={(e) => setPriceMercadopago(e.target.value)} placeholder="opcional" className={`${inputClass} normal-case tracking-normal text-slate-900`} />
+                    </label>
+                  </>
+                )}
               </div>
 
               {saveError ? <p className="mt-3 rounded-xl bg-rose-50 p-3 text-sm text-rose-700">{saveError}</p> : null}
-              {bulkSave.isSuccess && !saveError ? (
+              {(bulkSave.isSuccess || bulkFieldSave.isSuccess) && !saveError ? (
                 <p className="mt-3 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-700">
-                  Tarifas guardadas: {bulkSave.data.created} creadas, {bulkSave.data.updated} actualizadas.
+                  Tarifas guardadas: {(bulkFieldSave.data ?? bulkSave.data)?.created ?? 0} creadas,{" "}
+                  {(bulkFieldSave.data ?? bulkSave.data)?.updated ?? 0} actualizadas.
                 </p>
               ) : null}
 
@@ -494,6 +595,7 @@ export function RateCalendarPage() {
                     setPriceCash("");
                     setPriceTransfer("");
                     setPriceMercadopago("");
+                    setBulkFieldValue("");
                     setSaveError(null);
                     setSelectedWeekdays([]);
                     setSelectionAnchor(null);
@@ -505,11 +607,11 @@ export function RateCalendarPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={bulkSave.isPending}
+                  disabled={bulkSave.isPending || bulkFieldSave.isPending}
                   data-testid="rate-editor-save"
                   className="rounded-2xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-70"
                 >
-                  {bulkSave.isPending ? "Guardando..." : "Aplicar al calendario"}
+                  {bulkSave.isPending || bulkFieldSave.isPending ? "Guardando..." : "Aplicar al calendario"}
                 </button>
               </div>
             </form>
