@@ -297,6 +297,26 @@ def cancel_link(db: Session, hotel_id: int, link_id: int, reason: str | None = N
     return link
 
 
+def cancel_active_links_for_reservation(
+    db: Session, hotel_id: int, reservation_id: int, reason: str | None = None
+) -> int:
+    """Cancel every non-terminal payment link of a reservation (e.g. on cancellation),
+    so a guest can no longer pay a stale seña link. Completed/expired/cancelled links
+    are left untouched. Returns the number of links cancelled."""
+    links = list_links_for_reservation(db, hotel_id, reservation_id)
+    cancelled = 0
+    for link in links:
+        if link.status in {"pending", "partially_paid"}:
+            link.status = "cancelled"
+            link.cancelled_at = datetime.now(timezone.utc)
+            if reason:
+                link.last_error = f"cancelled: {reason}"
+            cancelled += 1
+    if cancelled:
+        db.flush()
+    return cancelled
+
+
 def expire_link(db: Session, hotel_id: int, link_id: int) -> PaymentLink:
     link = db.query(PaymentLink).filter(PaymentLink.id == link_id, PaymentLink.hotel_id == hotel_id).first()
     if not link:

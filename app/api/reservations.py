@@ -456,6 +456,13 @@ def cancel_reservation(
             reason_code="cancelled_by_user",
             changed_by_user_id=context.user_id,
         )
+        # Cancel any still-payable seña links so the guest can't pay a stale link.
+        try:
+            from app.services.payment_link_service import cancel_active_links_for_reservation
+
+            cancel_active_links_for_reservation(db, context.hotel_id, r.id, reason="reservation cancelled")
+        except Exception:  # best-effort; never block the cancellation
+            logger.exception("Failed cancelling payment links for reservation %s", r.id)
         db.commit()
         db.refresh(r)
         audit_log_service.safe_create_audit_log(
