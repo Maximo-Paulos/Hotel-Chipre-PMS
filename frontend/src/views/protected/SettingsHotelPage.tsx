@@ -15,8 +15,21 @@ import {
 import { useSession } from "../../state/session";
 import { hasValidSession } from "../../api/client";
 import { useTimezones } from "../../hooks/useTimezones";
+import { usePaymentSurcharges, usePaymentSurchargeMutations } from "../../hooks/usePaymentSurcharges";
+import { type PaymentSurchargeType } from "../../api/paymentSurcharges";
 
 const roomStatuses: RoomStatus[] = ["available", "occupied", "maintenance", "blocked", "cleaning"];
+
+const surchargeMethodOptions: { value: string; label: string }[] = [
+  { value: "cash", label: "Efectivo" },
+  { value: "mercado_pago", label: "MercadoPago" },
+  { value: "credit_card", label: "Tarjeta de crédito" },
+  { value: "debit_card", label: "Tarjeta de débito" },
+  { value: "bank_transfer", label: "Transferencia" },
+  { value: "paypal", label: "PayPal" }
+];
+const surchargeMethodLabel = (value: string) =>
+  surchargeMethodOptions.find((o) => o.value === value)?.label ?? value;
 
 export function SettingsHotelPage() {
   const { session } = useSession();
@@ -326,7 +339,94 @@ export function SettingsHotelPage() {
           </div>
         </form>
       )}
+
+      <PaymentSurchargesCard />
     </div>
+  );
+}
+
+function PaymentSurchargesCard() {
+  const surchargesQuery = usePaymentSurcharges();
+  const { createMutation, deactivateMutation } = usePaymentSurchargeMutations();
+  const [method, setMethod] = useState<string>("mercado_pago");
+  const [type, setType] = useState<PaymentSurchargeType>("percentage");
+  const [amount, setAmount] = useState<string>("");
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const active = (surchargesQuery.data ?? []).filter((s) => s.is_active);
+
+  const handleAdd = () => {
+    setFormError(null);
+    const value = Number(amount);
+    if (!Number.isFinite(value) || value < 0) {
+      setFormError("Ingresá un valor válido.");
+      return;
+    }
+    createMutation.mutate(
+      { payment_method: method, surcharge_type: type, amount: value },
+      {
+        onSuccess: () => setAmount(""),
+        onError: (err: unknown) => setFormError(err instanceof Error ? err.message : "No se pudo guardar el recargo.")
+      }
+    );
+  };
+
+  return (
+    <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div>
+        <h2 className="text-lg font-semibold text-slate-900">Recargos por medio de pago</h2>
+        <p className="text-sm text-slate-600">
+          Se aplican sobre el monto del cobro (fijo o porcentaje) y quedan como línea separada. El cobro en efectivo
+          se registra en la caja por el monto bruto.
+        </p>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-4 sm:items-end">
+        <label className="text-sm font-semibold text-slate-700">
+          Medio
+          <select className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" value={method} onChange={(e) => setMethod(e.target.value)}>
+            {surchargeMethodOptions.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        </label>
+        <label className="text-sm font-semibold text-slate-700">
+          Tipo
+          <select className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" value={type} onChange={(e) => setType(e.target.value as PaymentSurchargeType)}>
+            <option value="percentage">Porcentaje (%)</option>
+            <option value="fixed">Monto fijo</option>
+          </select>
+        </label>
+        <label className="text-sm font-semibold text-slate-700">
+          {type === "percentage" ? "Porcentaje" : "Monto"}
+          <input type="number" min={0} step="0.01" className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder={type === "percentage" ? "Ej. 10" : "Ej. 500"} />
+        </label>
+        <button type="button" onClick={handleAdd} disabled={createMutation.isPending} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60">
+          {createMutation.isPending ? "Guardando..." : "Agregar recargo"}
+        </button>
+      </div>
+      {formError && <p className="text-sm text-rose-700">{formError}</p>}
+
+      <div className="space-y-2">
+        {surchargesQuery.isLoading ? (
+          <p className="text-sm text-slate-600">Cargando recargos...</p>
+        ) : active.length === 0 ? (
+          <p className="text-sm text-slate-500">No hay recargos configurados.</p>
+        ) : (
+          active.map((s) => (
+            <div key={s.id} className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-sm">
+              <span className="text-slate-800">
+                <strong>{surchargeMethodLabel(s.payment_method)}</strong>:{" "}
+                {s.surcharge_type === "percentage" ? `${s.amount}%` : `$${s.amount}`}
+              </span>
+              <button type="button" onClick={() => deactivateMutation.mutate(s.id)} disabled={deactivateMutation.isPending} className="rounded-lg border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-60">
+                Quitar
+              </button>
+            </div>
+          ))
+        )}
+      </div>
+    </section>
   );
 }
 
