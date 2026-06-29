@@ -25,7 +25,9 @@ def make_payment(
     context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
 ):
     try:
-        transaction = process_payment(db, data, hotel_id=context.hotel_id)
+        transaction = process_payment(
+            db, data, hotel_id=context.hotel_id, actor_user_id=context.user_id
+        )
         db.commit()
         db.refresh(transaction)
         return transaction

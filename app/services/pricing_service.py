@@ -104,7 +104,141 @@ def get_price_for_date(
             if val is not None:
                 return float(val)
 
+    # 4. RoomCategory.base_price_per_night — final fallback so the resolver is the
+    #    single source of truth shared by the rate calendar, reservation pricing and
+    #    the rooms inventory view (never silently returns 0 when a base price exists).
+    category: Optional[RoomCategory] = (
+        db.query(RoomCategory)
+        .filter(RoomCategory.id == category_id, RoomCategory.hotel_id == hotel_id)
+        .first()
+    )
+    if category is not None and category.base_price_per_night is not None:
+        return float(category.base_price_per_night)
+
     return 0.0
+
+
+def resolve_rate_calendar(
+    db: Session,
+    hotel_id: int,
+    category_id: int,
+    from_date: date,
+    to_date: date,
+) -> list[dict]:
+    """Resolve the effective rate for every date in ``[from_date, to_date]`` using
+    a fixed number of queries (no per-date round-trips).
+
+    Returns one dict per date with the resolved base ``price``, the per-method
+    override columns (when the winning row carries them) and the ``source`` that
+    won: ``daily_rate`` | ``price_period`` | ``category_pricing`` | ``category_base``
+    | ``none``. ``daily_rate_id`` is set only when an explicit DailyRate row exists.
+
+    This is the single batched source of truth for the rate calendar grid and any
+    multi-night pricing; it mirrors :func:`get_price_for_date`'s priority order.
+    """
+    # Load everything once.
+    daily_rows: dict[date, DailyRate] = {
+        r.date: r
+        for r in db.query(DailyRate).filter(
+            DailyRate.hotel_id == hotel_id,
+            DailyRate.category_id == category_id,
+            DailyRate.date >= from_date,
+            DailyRate.date <= to_date,
+        )
+    }
+    periods: list[PricePeriod] = (
+        db.query(PricePeriod)
+        .filter(
+            PricePeriod.hotel_id == hotel_id,
+            PricePeriod.category_id == category_id,
+            PricePeriod.deleted_at.is_(None),
+            PricePeriod.is_active == True,
+            PricePeriod.start_date <= to_date,
+            PricePeriod.end_date >= from_date,
+        )
+        .order_by(PricePeriod.priority.desc(), PricePeriod.id.desc())
+        .all()
+    )
+    cat_pricing: Optional[CategoryPricing] = (
+        db.query(CategoryPricing)
+        .join(RoomCategory, RoomCategory.id == CategoryPricing.category_id)
+        .filter(CategoryPricing.category_id == category_id, RoomCategory.hotel_id == hotel_id)
+        .first()
+    )
+    category: Optional[RoomCategory] = (
+        db.query(RoomCategory)
+        .filter(RoomCategory.id == category_id, RoomCategory.hotel_id == hotel_id)
+        .first()
+    )
+    base_price = (
+        float(category.base_price_per_night)
+        if category is not None and category.base_price_per_night is not None
+        else None
+    )
+
+    cat_pricing_value: Optional[float] = None
+    if cat_pricing is not None:
+        for col in ("price_cash", "price_transfer", "price_mercadopago",
+                    "price_paypal", "price_credit_card"):
+            val = getattr(cat_pricing, col, None)
+            if val is not None:
+                cat_pricing_value = float(val)
+                break
+
+    def _period_for(target: date) -> Optional[PricePeriod]:
+        # periods is ordered by priority desc, id desc → first cover wins
+        for p in periods:
+            if p.start_date <= target <= p.end_date:
+                return p
+        return None
+
+    result: list[dict] = []
+    current = from_date
+    while current <= to_date:
+        row = daily_rows.get(current)
+        if row is not None:
+            result.append({
+                "date": current,
+                "price": float(row.price),
+                "price_cash": row.price_cash,
+                "price_transfer": row.price_transfer,
+                "price_mercadopago": row.price_mercadopago,
+                "price_paypal": row.price_paypal,
+                "price_credit_card": row.price_credit_card,
+                "source": "daily_rate",
+                "daily_rate_id": row.id,
+            })
+            current += timedelta(days=1)
+            continue
+
+        period = _period_for(current)
+        if period is not None:
+            price = float(period.price_per_night)
+            source = "price_period"
+        elif cat_pricing_value is not None:
+            price = cat_pricing_value
+            source = "category_pricing"
+        elif base_price is not None:
+            price = base_price
+            source = "category_base"
+        else:
+            price = 0.0
+            source = "none"
+
+        result.append({
+            "date": current,
+            "price": round(price, 2),
+            "price_cash": None,
+            "price_transfer": None,
+            "price_mercadopago": None,
+            "price_paypal": None,
+            "price_credit_card": None,
+            "source": source,
+            "daily_rate_id": None,
+        })
+        current += timedelta(days=1)
+
+    return result
 
 
 def get_prices_for_range(

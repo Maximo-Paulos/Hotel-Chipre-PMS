@@ -73,11 +73,12 @@ def checkin(
 @router.post("/checkout/{reservation_id}", response_model=ReservationRead)
 def checkout(
     reservation_id: int,
+    force: bool = False,
     db: Session = Depends(get_db),
     context: AuthContext = Depends(get_auth_context),
 ):
     try:
-        reservation = perform_checkout(db, reservation_id, hotel_id=context.hotel_id)
+        reservation = perform_checkout(db, reservation_id, hotel_id=context.hotel_id, force=force)
         db.commit()
         db.refresh(reservation)
         result = ReservationRead.model_validate(reservation)

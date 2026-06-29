@@ -255,3 +255,164 @@ def test_cross_hotel_isolation(db):
 
     assert db.query(CashCloseReport).filter(CashCloseReport.hotel_id == 1).count() == 1
     assert db.query(CashCloseReport).filter(CashCloseReport.hotel_id == 2).count() == 0
+
+
+def test_cash_payment_posts_income_movement_to_open_session(db):
+    """A cash payment on a reservation must land in the open caja as an INCOME
+    movement linked to the transaction, so the arqueo reconciles."""
+    from app.schemas.transaction import PaymentRequest
+    from app.services.cash_register_service import list_movements
+    from app.services.payment_service import process_payment
+
+    _hotel(db, 1)
+    _user(db, 10)
+    reservation = _reservation(db, 1, "CASH-PAY-1")
+    session = open_session(db, hotel_id=1, opened_by_user_id=10, opening_balance=Decimal("0.00"))
+
+    tx = process_payment(
+        db,
+        PaymentRequest(
+            reservation_id=reservation.id,
+            amount=30.0,
+            payment_method=PaymentMethodEnum.CASH,
+            transaction_type=TransactionTypeEnum.DEPOSIT,
+        ),
+        hotel_id=1,
+        actor_user_id=10,
+    )
+    db.flush()
+
+    movements = list_movements(db, hotel_id=1, session_id=session.id)
+    assert len(movements) == 1
+    movement = movements[0]
+    assert movement.movement_type == CashMovementTypeEnum.INCOME
+    assert movement.amount == Decimal("30.00")
+    assert movement.transaction_id == tx.id
+    assert movement.reservation_id == reservation.id
+
+
+def test_cash_payment_without_open_session_still_succeeds(db):
+    """With no open caja the cash payment still records the transaction; it just
+    is not posted to a session (best-effort, never blocks the sale)."""
+    from app.schemas.transaction import PaymentRequest
+    from app.services.payment_service import process_payment
+    from app.models.cash_register import CashMovement
+
+    _hotel(db, 1)
+    _user(db, 10)
+    reservation = _reservation(db, 1, "CASH-PAY-2")
+
+    tx = process_payment(
+        db,
+        PaymentRequest(
+            reservation_id=reservation.id,
+            amount=30.0,
+            payment_method=PaymentMethodEnum.CASH,
+            transaction_type=TransactionTypeEnum.DEPOSIT,
+        ),
+        hotel_id=1,
+        actor_user_id=10,
+    )
+    db.flush()
+
+    assert tx.status == TransactionStatusEnum.COMPLETED
+    assert db.query(CashMovement).filter(CashMovement.hotel_id == 1).count() == 0
+
+
+def test_session_summary_expected_balance_matches_arqueo(db):
+    """The live summary's expected_balance must equal the arqueo's expected
+    balance (single source of truth): opening + confirmed cash movements."""
+    from app.schemas.transaction import PaymentRequest
+    from app.services.cash_register_service import get_session_summary
+    from app.services.payment_service import process_payment
+
+    _hotel(db, 1)
+    _user(db, 10)
+    reservation = _reservation(db, 1, "CASH-SUM-1")
+    session = open_session(db, hotel_id=1, opened_by_user_id=10, opening_balance=Decimal("100.00"))
+
+    # Cash payment (auto-posts INCOME) + a manual expense.
+    process_payment(
+        db,
+        PaymentRequest(
+            reservation_id=reservation.id,
+            amount=30.0,
+            payment_method=PaymentMethodEnum.CASH,
+            transaction_type=TransactionTypeEnum.DEPOSIT,
+        ),
+        hotel_id=1,
+        actor_user_id=10,
+    )
+    add_movement(
+        db,
+        hotel_id=1,
+        session_id=session.id,
+        recorded_by_user_id=10,
+        movement_type=CashMovementTypeEnum.EXPENSE,
+        amount=Decimal("10.00"),
+    )
+    db.flush()
+
+    summary = get_session_summary(db, hotel_id=1, session_id=session.id)
+    # opening 100 + income 30 - expense 10 = 120
+    assert summary["expected_balance"] == Decimal("120.00")
+    assert summary["income_total"] == Decimal("30.00")
+    assert summary["expense_total"] == Decimal("10.00")
+
+    report = close_session(
+        db,
+        hotel_id=1,
+        session_id=session.id,
+        closed_by_user_id=10,
+        counted_balance=Decimal("120.00"),
+    )
+    # Live summary must match the arqueo's computed expected balance exactly.
+    assert summary["expected_balance"] == report.expected_balance
+    assert report.difference == Decimal("0.00")
+
+
+def test_cash_payment_with_surcharge_posts_gross_amount_to_caja(db):
+    """A cash payment carrying a payment surcharge must post the GROSS amount
+    (base + recargo) to the caja, since that is the cash physically received."""
+    from app.models.payment_surcharge import PaymentSurcharge, PaymentSurchargeTypeEnum
+    from app.schemas.transaction import PaymentRequest
+    from app.services.cash_register_service import list_movements
+    from app.services.payment_service import process_payment
+
+    _hotel(db, 1)
+    _user(db, 10)
+    reservation = _reservation(db, 1, "CASH-SUR-1")  # total 100
+    db.add(
+        PaymentSurcharge(
+            hotel_id=1,
+            payment_method="cash",
+            surcharge_type=PaymentSurchargeTypeEnum.PERCENTAGE,
+            amount=5.0,  # 5%
+            is_active=True,
+        )
+    )
+    db.flush()
+    session = open_session(db, hotel_id=1, opened_by_user_id=10, opening_balance=Decimal("0.00"))
+
+    tx = process_payment(
+        db,
+        PaymentRequest(
+            reservation_id=reservation.id,
+            amount=100.0,
+            payment_method=PaymentMethodEnum.CASH,
+            transaction_type=TransactionTypeEnum.FULL_PAYMENT,
+        ),
+        hotel_id=1,
+        actor_user_id=10,
+    )
+    db.flush()
+
+    assert tx.amount == Decimal("100.00")
+    assert tx.gross_amount == Decimal("105.00")
+    assert tx.fee_amount == Decimal("5.00")
+
+    movements = list_movements(db, hotel_id=1, session_id=session.id)
+    assert len(movements) == 1
+    # Caja holds the gross cash received (100 + 5% surcharge).
+    assert movements[0].amount == Decimal("105.00")
+    assert "recargo" in (movements[0].description or "")

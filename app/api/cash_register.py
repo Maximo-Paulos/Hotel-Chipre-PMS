@@ -10,12 +10,14 @@ from app.schemas.cash_register import (
     CashSessionClose,
     CashSessionOpen,
     CashSessionRead,
+    CashSessionSummaryRead,
 )
 from app.services.cash_register_service import (
     CashRegisterError,
     add_movement,
     approve_close_difference,
     close_session,
+    get_session_summary,
     list_movements,
     list_sessions,
     open_session,
@@ -93,6 +95,19 @@ def add_cash_movement(
     except CashRegisterError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.get("/api/cash-register/sessions/{session_id}/summary", response_model=CashSessionSummaryRead)
+@router.get("/cash-register/sessions/{session_id}/summary", response_model=CashSessionSummaryRead)
+def cash_session_summary(
+    session_id: int,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_CASH_OPERATE)),
+):
+    try:
+        return get_session_summary(db, hotel_id=context.hotel_id, session_id=session_id)
+    except CashRegisterError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
 
 
 @router.get("/api/cash-register/sessions/{session_id}/movements", response_model=list[CashMovementRead])

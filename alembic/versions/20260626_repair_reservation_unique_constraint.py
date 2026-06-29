@@ -53,8 +53,20 @@ def downgrade() -> None:
     dialect = bind.dialect.name
 
     if dialect == "postgresql":
+        # Only drop the index when it exists as a BARE index (the broken-deploy
+        # case this migration repairs). When phase-6 created it as a real UNIQUE
+        # constraint, the index is owned by that constraint and must NOT be dropped
+        # here — Postgres raises DependentObjectsStillExist. Leaving it untouched
+        # lets the phase-6 downgrade drop the constraint cleanly.
         bind.execute(sa.text(
-            "DROP INDEX IF EXISTS uq_reservation_hotel_id_id"
+            "DO $$\n"
+            "BEGIN\n"
+            "    IF NOT EXISTS (\n"
+            "        SELECT 1 FROM pg_constraint WHERE conname = 'uq_reservation_hotel_id_id'\n"
+            "    ) THEN\n"
+            "        EXECUTE 'DROP INDEX IF EXISTS uq_reservation_hotel_id_id';\n"
+            "    END IF;\n"
+            "END $$;"
         ))
     else:
         with op.batch_alter_table("reservations", recreate="always") as batch_op:

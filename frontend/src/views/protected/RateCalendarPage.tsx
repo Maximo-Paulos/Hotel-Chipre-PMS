@@ -235,6 +235,11 @@ export function RateCalendarPage() {
       return;
     }
 
+    if (price === null) {
+      setSaveError("Ingresá un precio base válido (>= 0).");
+      return;
+    }
+
     bulkSave.mutate(
       {
         from_date: fromDate,

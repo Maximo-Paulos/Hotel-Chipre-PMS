@@ -31,6 +31,11 @@ import {
   useReservations
 } from "../../hooks/useReservations";
 import { usePaymentMutation, usePaymentSummary } from "../../hooks/usePayments";
+import { useCashSessions } from "../../hooks/useCashRegister";
+import { usePaymentSurcharges } from "../../hooks/usePaymentSurcharges";
+import { grossWithSurcharge } from "../../api/paymentSurcharges";
+import { useHotelConfig } from "../../hooks/useHotelConfig";
+import { type HotelConfig } from "../../api/config";
 import { useRooms } from "../../hooks/useRooms";
 import { useSubscriptionStatus } from "../../hooks/useSubscription";
 import { useSession } from "../../state/session";
@@ -60,6 +65,22 @@ const paymentMethodOptions: { value: PaymentMethod; label: string }[] = [
   { value: "bank_transfer", label: "Transferencia" },
   { value: "paypal", label: "PayPal" }
 ];
+
+// Single source of truth for which payment methods are offered: the hotel
+// configuration (enable_* flags). Avoids offering a method the backend will reject.
+const paymentMethodEnabledFlag: Record<PaymentMethod, keyof HotelConfig> = {
+  cash: "enable_cash",
+  credit_card: "enable_credit_card",
+  debit_card: "enable_debit_card",
+  mercado_pago: "enable_mercado_pago",
+  bank_transfer: "enable_bank_transfer",
+  paypal: "enable_paypal"
+};
+
+const enabledPaymentMethods = (config?: HotelConfig | null) =>
+  config
+    ? paymentMethodOptions.filter((opt) => config[paymentMethodEnabledFlag[opt.value]] === true)
+    : paymentMethodOptions;
 
 const pricingPaymentMethodOptions: { value: PricingPaymentMethod; label: string }[] = [
   { value: "base", label: "Tarifa base" },
@@ -560,11 +581,23 @@ export function ReservationsPage() {
       onError: (err: unknown) => showToast("error", err instanceof Error ? err.message : "No se pudo hacer check-in")
     });
 
-  const handleCheckOut = (id: number) =>
-    checkOutMutation.mutate(id, {
+  const handleCheckOut = (reservation: Reservation) => {
+    // Cierra el loop cobro→estadía→egreso: si queda saldo, llevamos al operador a
+    // cobrarlo (Pago total, que cae en la caja) en vez de fallar el check-out.
+    const balance = reservation.balance_due ?? 0;
+    if (balance > 0.01) {
+      openEdit(reservation);
+      showToast(
+        "info",
+        `Saldo pendiente de ${formatMoney(balance, normalizeCurrencyCode(reservation.currency_code))}. Cobralo con "Pago total" (queda en la caja) y luego hacé el check-out.`
+      );
+      return;
+    }
+    checkOutMutation.mutate(reservation.id, {
       onSuccess: () => showToast("success", "Check-out registrado"),
       onError: (err: unknown) => showToast("error", err instanceof Error ? err.message : "No se pudo hacer check-out")
     });
+  };
 
   const handleCheckAvailability = () => {
     if (!availabilityForm.category_id || !availabilityForm.check_in_date || !availabilityForm.check_out_date) {
@@ -640,6 +673,29 @@ export function ReservationsPage() {
   };
 
   const paymentSummary = paymentSummaryQuery.data;
+  const hotelConfigQuery = useHotelConfig();
+  const availablePaymentMethods = useMemo(
+    () => enabledPaymentMethods(hotelConfigQuery.data),
+    [hotelConfigQuery.data]
+  );
+  // Keep the selected method valid: if config disables the current one, fall back
+  // to the first enabled method.
+  React.useEffect(() => {
+    if (availablePaymentMethods.length === 0) return;
+    if (!availablePaymentMethods.some((opt) => opt.value === paymentMethod)) {
+      setPaymentMethod(availablePaymentMethods[0].value);
+    }
+  }, [availablePaymentMethods, paymentMethod]);
+  const cashSessionsQuery = useCashSessions();
+  const hasOpenCashSession = useMemo(
+    () => (cashSessionsQuery.data ?? []).some((s) => s.status === "open"),
+    [cashSessionsQuery.data]
+  );
+  const surchargesQuery = usePaymentSurcharges();
+  const activeSurcharge = useMemo(
+    () => (surchargesQuery.data ?? []).find((s) => s.payment_method === paymentMethod && s.is_active) ?? null,
+    [surchargesQuery.data, paymentMethod]
+  );
   const detailsSummary = detailsSummaryQuery.data;
   const detailsOperations = detailsOperationsQuery.data;
   const detailsGuest = useGuest(detailsReservation?.guest_id || undefined).data;
@@ -1405,7 +1461,7 @@ export function ReservationsPage() {
                         <button
                           type="button"
                           disabled={!canCheckOut(reservation.status) || checkOutMutation.isPending || subscriptionBlocked}
-                          onClick={() => handleCheckOut(reservation.id)}
+                          onClick={() => handleCheckOut(reservation)}
                           className="rounded-lg border border-sky-200 px-2 py-1 text-sky-700 hover:border-sky-300 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           Check-out
@@ -1760,7 +1816,7 @@ export function ReservationsPage() {
                         onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
                         className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
                       >
-                        {paymentMethodOptions.map((opt) => (
+                        {availablePaymentMethods.map((opt) => (
                           <option key={opt.value} value={opt.value}>
                             {opt.label}
                           </option>
@@ -1788,6 +1844,33 @@ export function ReservationsPage() {
                     )}
                   </div>
 
+                  {paymentMethod === "cash" && (
+                    hasOpenCashSession ? (
+                      <p className="mt-2 text-xs text-emerald-700">
+                        El cobro en efectivo se registrará automáticamente en la caja abierta.
+                      </p>
+                    ) : (
+                      <p className="mt-2 text-xs text-amber-700">
+                        No hay caja abierta: el cobro en efectivo no quedará registrado en la caja.{" "}
+                        <Link to="/caja" className="font-semibold underline">
+                          Abrir caja
+                        </Link>
+                        .
+                      </p>
+                    )
+                  )}
+
+                  {activeSurcharge && paymentSummary && (paymentSummary.balance_due ?? 0) > 0 && (
+                    <p className="mt-2 text-xs text-amber-700">
+                      Recargo por {paymentMethodOptions.find((o) => o.value === paymentMethod)?.label ?? paymentMethod}:{" "}
+                      {activeSurcharge.surcharge_type === "percentage"
+                        ? `${activeSurcharge.amount}%`
+                        : formatMoney(activeSurcharge.amount, editingCurrencyCode)}
+                      . Pago total: saldo {formatMoney(paymentSummary.balance_due ?? 0, editingCurrencyCode)} → se cobra{" "}
+                      <strong>{formatMoney(grossWithSurcharge(paymentSummary.balance_due ?? 0, activeSurcharge), editingCurrencyCode)}</strong>.
+                    </p>
+                  )}
+
                   {paymentSummary?.transactions?.length ? (
                     <div className="mt-3 rounded-lg border border-emerald-100 bg-white/60 px-3 py-2 text-xs text-slate-700">
                       <p className="font-semibold text-slate-800">Movimientos</p>
@@ -1796,8 +1879,13 @@ export function ReservationsPage() {
                           <li key={tx.id} className="flex items-center justify-between">
                             <span>
                               {tx.type} · {tx.method}
+                              {tx.fee_amount && tx.fee_amount > 0 ? (
+                                <span className="text-amber-700"> · recargo {formatMoney(tx.fee_amount, tx.currency)}</span>
+                              ) : null}
                             </span>
-                            <span className="font-semibold">{formatMoney(tx.amount, tx.currency)}</span>
+                            <span className="font-semibold">
+                              {formatMoney(tx.gross_amount ?? tx.amount, tx.currency)}
+                            </span>
                           </li>
                         ))}
                       </ul>

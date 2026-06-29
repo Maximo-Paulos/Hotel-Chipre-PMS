@@ -126,6 +126,68 @@ def add_movement(
     return movement
 
 
+def get_open_session(db: Session, hotel_id: int) -> CashSession | None:
+    """Return the single open cash session for a hotel, or None if none is open."""
+    return (
+        db.query(CashSession)
+        .filter(
+            CashSession.hotel_id == hotel_id,
+            CashSession.status == CashSessionStatusEnum.OPEN,
+        )
+        .one_or_none()
+    )
+
+
+def record_cash_payment_movement(
+    db: Session,
+    *,
+    transaction: Transaction,
+    recorded_by_user_id: int | None = None,
+) -> CashMovement | None:
+    """Post a completed CASH transaction into the hotel's open cash session.
+
+    A real payment of physical cash must land in the caja so the arqueo matches.
+    A deposit/full payment becomes an INCOME movement; a cash refund becomes an
+    EXPENSE movement. Non-cash methods (gateway/card) never touch the physical
+    caja. Returns the created movement, or ``None`` when no session is open
+    (the payment itself still succeeds; the cash simply isn't tracked yet).
+    """
+    if transaction.payment_method != PaymentMethodEnum.CASH:
+        return None
+    if transaction.status != TransactionStatusEnum.COMPLETED:
+        return None
+
+    session = get_open_session(db, transaction.hotel_id)
+    if session is None:
+        return None
+
+    from app.models.transaction import TransactionTypeEnum
+
+    is_refund = transaction.transaction_type == TransactionTypeEnum.REFUND
+    movement_type = CashMovementTypeEnum.EXPENSE if is_refund else CashMovementTypeEnum.INCOME
+    label = "Devolución" if is_refund else "Cobro"
+    # The caja must hold the cash physically moved, i.e. the gross amount that
+    # includes any payment surcharge (gross_amount). Fall back to the base amount
+    # when no surcharge was recorded.
+    cash_amount = transaction.gross_amount if transaction.gross_amount is not None else transaction.amount
+    surcharge = _money(transaction.fee_amount or 0)
+    description = f"{label} reserva #{transaction.reservation_id} (tx #{transaction.id})"
+    if surcharge > 0:
+        description += f" · incl. recargo ${surcharge}"
+
+    return add_movement(
+        db,
+        hotel_id=transaction.hotel_id,
+        session_id=session.id,
+        recorded_by_user_id=recorded_by_user_id,
+        movement_type=movement_type,
+        amount=_money(cash_amount),
+        description=description,
+        reservation_id=transaction.reservation_id,
+        transaction_id=transaction.id,
+    )
+
+
 def _movement_sign(movement_type: CashMovementTypeEnum) -> Decimal:
     if movement_type == CashMovementTypeEnum.EXPENSE:
         return Decimal("-1")
@@ -166,6 +228,44 @@ def _confirmed_cash_movements_total(db: Session, session: CashSession, closed_at
                 continue
         total += _movement_sign(movement.movement_type) * _money(movement.amount)
     return _money(total)
+
+
+def get_session_summary(db: Session, *, hotel_id: int, session_id: int) -> dict:
+    """Authoritative live summary for a cash session.
+
+    ``expected_balance`` reuses the SAME confirmed-cash logic as the arqueo
+    (:func:`close_session`) so the number the UI shows always matches what the
+    close will compute — single source of truth. Raw income/expense/adjustment
+    totals are returned for display.
+    """
+    session = (
+        db.query(CashSession)
+        .filter(CashSession.id == session_id, CashSession.hotel_id == hotel_id)
+        .one_or_none()
+    )
+    if session is None:
+        raise CashRegisterError("Cash session not found for this hotel")
+
+    as_of = datetime.now(timezone.utc)
+    movements = list_movements(db, hotel_id=hotel_id, session_id=session_id)
+    income = sum((_money(m.amount) for m in movements if m.movement_type == CashMovementTypeEnum.INCOME), Decimal("0.00"))
+    expense = sum((_money(m.amount) for m in movements if m.movement_type == CashMovementTypeEnum.EXPENSE), Decimal("0.00"))
+    adjustment = sum((_money(m.amount) for m in movements if m.movement_type == CashMovementTypeEnum.ADJUSTMENT), Decimal("0.00"))
+    confirmed_total = _confirmed_cash_movements_total(db, session, as_of)
+    expected_balance = _money(session.opening_balance) + confirmed_total
+
+    return {
+        "session_id": session.id,
+        "status": session.status.value if hasattr(session.status, "value") else str(session.status),
+        "currency_code": session.currency_code,
+        "opening_balance": _money(session.opening_balance),
+        "income_total": _money(income),
+        "expense_total": _money(expense),
+        "adjustment_total": _money(adjustment),
+        "confirmed_cash_total": confirmed_total,
+        "expected_balance": expected_balance,
+        "movements_count": len(movements),
+    }
 
 
 def close_session(

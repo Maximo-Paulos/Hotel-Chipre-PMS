@@ -24,6 +24,11 @@ class RoomCategoryCreate(RoomCategoryBase):
 
 class RoomCategoryRead(RoomCategoryBase):
     id: int
+    # Today's effective nightly rate resolved from the single source of truth
+    # (DailyRate → PricePeriod → CategoryPricing → base_price_per_night). Kept in
+    # sync with the Tarifas calendar and reservation pricing. Falls back to
+    # base_price_per_night when no calendar rate is configured.
+    current_rate: Optional[float] = None
     model_config = {"from_attributes": True}
 
 # Updates for editing categories

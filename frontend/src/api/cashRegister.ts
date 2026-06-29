@@ -43,6 +43,19 @@ export type CashCloseReport = {
   closed_at: string;
 };
 
+export type CashSessionSummary = {
+  session_id: number;
+  status: CashSessionStatus;
+  currency_code: string;
+  opening_balance: number;
+  income_total: number;
+  expense_total: number;
+  adjustment_total: number;
+  confirmed_cash_total: number;
+  expected_balance: number;
+  movements_count: number;
+};
+
 export type CashSessionOpenPayload = {
   opening_balance: number;
   currency_code?: string;
@@ -71,6 +84,9 @@ export const openCashSession = (payload: CashSessionOpenPayload, session?: Sessi
 
 export const listCashMovements = (sessionId: number, session?: SessionLike) =>
   apiFetch<CashMovement[]>(`/api/cash-register/sessions/${sessionId}/movements`, { session });
+
+export const getCashSessionSummary = (sessionId: number, session?: SessionLike) =>
+  apiFetch<CashSessionSummary>(`/api/cash-register/sessions/${sessionId}/summary`, { session });
 
 export const addCashMovement = (sessionId: number, payload: CashMovementPayload, session?: SessionLike) =>
   apiFetch<CashMovement>(`/api/cash-register/sessions/${sessionId}/movements`, {

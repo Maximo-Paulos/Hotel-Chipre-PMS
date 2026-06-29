@@ -120,8 +120,9 @@ class TestGetPriceForDate:
         price = get_price_for_date(
             db, hotel_id=1, category_id=category.id, target_date=date(2026, 11, 10)
         )
-        # No active period → should fall to CategoryPricing or 0
-        assert price == 0.0
+        # No active period and no CategoryPricing → falls back to the category
+        # base_price_per_night (single source of truth), not 0.
+        assert price == category.base_price_per_night
 
     def test_falls_back_to_category_pricing_when_no_period(self, db, sample_categories):
         """Tier-3: CategoryPricing used when neither DailyRate nor PricePeriod exists."""
@@ -137,13 +138,14 @@ class TestGetPriceForDate:
         )
         assert price == 250.0
 
-    def test_returns_zero_when_no_pricing_at_all(self, db, sample_categories):
-        """Returns 0.0 when there is absolutely no pricing information."""
+    def test_falls_back_to_category_base_when_no_calendar_pricing(self, db, sample_categories):
+        """Final tier: with no DailyRate/PricePeriod/CategoryPricing the resolver
+        returns the category base_price_per_night (single source of truth)."""
         category = sample_categories[0]
         price = get_price_for_date(
             db, hotel_id=1, category_id=category.id, target_date=date(2027, 1, 1)
         )
-        assert price == 0.0
+        assert price == category.base_price_per_night
 
     def test_payment_method_returns_override_column(self, db, sample_categories):
         """per-method column (price_cash) wins over base price when specified."""
@@ -217,8 +219,9 @@ class TestGetPriceForDate:
         price_after = get_price_for_date(
             db, hotel_id=1, category_id=category.id, target_date=date(2026, 10, 1)
         )
-        assert price_before == 0.0
-        assert price_after == 0.0
+        # Outside the period the resolver falls back to the category base price.
+        assert price_before == category.base_price_per_night
+        assert price_after == category.base_price_per_night
 
 
 # ---------------------------------------------------------------------------
@@ -479,3 +482,43 @@ class TestPricePeriodModel:
         )
         # No apply was called — no rows
         assert rows == 0
+
+
+# ---------------------------------------------------------------------------
+# TestResolveRateCalendar — batched resolver must match per-date resolution
+# ---------------------------------------------------------------------------
+
+class TestResolveRateCalendar:
+    def test_batched_matches_per_date_and_reports_sources(self, db, sample_categories):
+        from datetime import timedelta
+        from app.models.pricing import CategoryPricing
+        from app.services.pricing_service import get_price_for_date, resolve_rate_calendar
+
+        category = sample_categories[0]  # base_price_per_night = 100
+        # Explicit daily rate on day 2
+        db.add(DailyRate(hotel_id=1, category_id=category.id, date=date(2026, 9, 2), price=140.0))
+        # Active price period covering days 4-6
+        _make_period(db, 1, category.id, start=date(2026, 9, 4), end=date(2026, 9, 6), price=175.0)
+        db.flush()
+
+        start, end = date(2026, 9, 1), date(2026, 9, 7)
+        rows = resolve_rate_calendar(db, 1, category.id, start, end)
+
+        assert len(rows) == 7
+        by_date = {r["date"]: r for r in rows}
+        # day 1: no config -> category_base (100)
+        assert by_date[date(2026, 9, 1)]["source"] == "category_base"
+        assert by_date[date(2026, 9, 1)]["price"] == 100.0
+        # day 2: explicit daily_rate
+        assert by_date[date(2026, 9, 2)]["source"] == "daily_rate"
+        assert by_date[date(2026, 9, 2)]["price"] == 140.0
+        assert by_date[date(2026, 9, 2)]["daily_rate_id"] is not None
+        # day 5: price_period
+        assert by_date[date(2026, 9, 5)]["source"] == "price_period"
+        assert by_date[date(2026, 9, 5)]["price"] == 175.0
+
+        # Batched price must equal per-date resolution for every day.
+        current = start
+        while current <= end:
+            assert by_date[current]["price"] == get_price_for_date(db, 1, category.id, current)
+            current += timedelta(days=1)

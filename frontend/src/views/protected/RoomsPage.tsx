@@ -59,8 +59,15 @@ export function RoomsPage() {
     : null;
 
   const categoryById = useMemo(() => {
-    const map = new Map<number, { name: string; code: string; base_price_per_night: number }>();
-    categories.forEach((cat) => map.set(cat.id, { name: cat.name, code: cat.code, base_price_per_night: cat.base_price_per_night }));
+    const map = new Map<number, { name: string; code: string; base_price_per_night: number; current_rate?: number | null }>();
+    categories.forEach((cat) =>
+      map.set(cat.id, {
+        name: cat.name,
+        code: cat.code,
+        base_price_per_night: cat.base_price_per_night,
+        current_rate: cat.current_rate
+      })
+    );
     return map;
   }, [categories]);
 
@@ -188,8 +195,14 @@ export function RoomsPage() {
                     <p className="text-xs uppercase tracking-wide text-slate-500">Hab. {room.room_number}</p>
                     <h2 className="text-lg font-semibold text-slate-900">{category?.name || room.category?.name || `Categoría ${room.category_id}`}</h2>
                     <p className="text-xs text-slate-500">
-                      Piso {room.floor} · {category?.code || room.category?.code || "sin código"} · $
-                      {category?.base_price_per_night || room.category?.base_price_per_night || "?"}/noche
+                      Piso {room.floor} · {category?.code || room.category?.code || "sin código"}
+                    </p>
+                    <p className="text-xs text-slate-600">
+                      Tarifa hoy:{" "}
+                      <span className="font-semibold text-slate-800">
+                        ${formatRate(category?.current_rate ?? category?.base_price_per_night ?? room.category?.base_price_per_night)}
+                      </span>
+                      /noche
                     </p>
                   </div>
                   <span className={`rounded-full px-2 py-1 text-xs font-semibold ${statusColors[room.status]}`}>
@@ -383,6 +396,11 @@ function formatBlockDates(startsAt: string, endsAt?: string | null, isIndefinite
 
 function formatDate(value: string) {
   return new Date(`${value}T00:00:00`).toLocaleDateString("es-AR");
+}
+
+function formatRate(value: number | null | undefined) {
+  if (value === null || value === undefined || !Number.isFinite(value)) return "?";
+  return value.toLocaleString("es-AR", { maximumFractionDigits: 0 });
 }
 
 function StatusBadge({ label, value, className }: { label: string; value: number; className: string }) {

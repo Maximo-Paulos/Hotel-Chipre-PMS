@@ -131,6 +131,22 @@ def _resolve_hotel_id(
     raise ReservationError("hotel_id is required for reservation operations")
 
 
+def _validate_reservation_occupancy(
+    category: RoomCategory,
+    num_adults: int | None,
+    num_children: int | None,
+) -> None:
+    total = (num_adults or 0) + (num_children or 0)
+    if total < 1:
+        raise ReservationError(f"La reserva debe tener al menos 1 huésped; se solicitaron {total}.")
+
+    max_occupancy = int(category.max_occupancy or 0)
+    if total > max_occupancy:
+        raise ReservationError(
+            f"La categoría admite hasta {max_occupancy} huéspedes; se solicitaron {total}."
+        )
+
+
 def compute_reservation_pricing(
     db: Session,
     category_id: int,
@@ -659,6 +675,7 @@ def create_reservation(db: Session, data: ReservationCreate, hotel_id: Optional[
         raise ReservationError("Guest does not belong to the active hotel")
     if category.hotel_id != hotel_id:
         raise ReservationError("Room category does not belong to the active hotel")
+    _validate_reservation_occupancy(category, data.num_adults, data.num_children)
     _validate_manual_telephonic_guest_requirements(guest, data)
 
     company = _resolve_reservation_company(db, hotel_id=hotel_id, company_id=data.company_id)
@@ -936,6 +953,19 @@ def update_reservation_fields(
 
     new_ci = update_data.get("check_in_date", reservation.check_in_date)
     new_co = update_data.get("check_out_date", reservation.check_out_date)
+
+    if "num_adults" in update_data or "num_children" in update_data:
+        category_query = db.query(RoomCategory).filter(RoomCategory.id == reservation.category_id)
+        if hotel_id is not None:
+            category_query = category_query.filter(RoomCategory.hotel_id == hotel_id)
+        category = category_query.first()
+        if not category:
+            raise ReservationError(f"Room category with id={reservation.category_id} not found")
+        _validate_reservation_occupancy(
+            category,
+            update_data.get("num_adults", reservation.num_adults),
+            update_data.get("num_children", reservation.num_children),
+        )
 
     if "check_in_date" in update_data or "check_out_date" in update_data:
         if new_co <= new_ci:

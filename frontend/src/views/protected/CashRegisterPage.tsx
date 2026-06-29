@@ -6,7 +6,8 @@ import {
   cashSessionStatusLabel,
   useCashMovements,
   useCashRegisterMutations,
-  useCashSessions
+  useCashSessions,
+  useCashSessionSummary
 } from "../../hooks/useCashRegister";
 
 const emptyMovementForm: CashMovementPayload = {
@@ -39,23 +40,23 @@ export function CashRegisterPage() {
     [openSession, selectedSessionId, sessions]
   );
   const movementsQuery = useCashMovements(selectedSession?.id);
+  const summaryQuery = useCashSessionSummary(selectedSession?.id);
   const mutations = useCashRegisterMutations(selectedSession?.id);
   const movements = useMemo(() => movementsQuery.data ?? [], [movementsQuery.data]);
 
-  const totals = useMemo(() => {
-    return movements.reduce(
-      (acc, movement) => {
-        const amount = Number(movement.amount);
-        if (movement.movement_type === "income") acc.income += amount;
-        if (movement.movement_type === "expense") acc.expense += amount;
-        if (movement.movement_type === "adjustment") acc.adjustment += amount;
-        return acc;
-      },
-      { income: 0, expense: 0, adjustment: 0 }
-    );
-  }, [movements]);
+  // Authoritative figures come from the backend summary (same logic as the
+  // arqueo), so the displayed "Esperado" always matches what the close computes.
+  const summary = summaryQuery.data;
+  const totals = useMemo(
+    () => ({
+      income: Number(summary?.income_total ?? 0),
+      expense: Number(summary?.expense_total ?? 0),
+      adjustment: Number(summary?.adjustment_total ?? 0)
+    }),
+    [summary]
+  );
 
-  const expectedBalance = Number(selectedSession?.opening_balance ?? 0) + totals.income - totals.expense + totals.adjustment;
+  const expectedBalance = Number(summary?.expected_balance ?? selectedSession?.opening_balance ?? 0);
   const currency = selectedSession?.currency_code ?? "ARS";
   const busy =
     mutations.openSessionMutation.isPending ||

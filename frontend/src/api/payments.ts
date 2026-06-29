@@ -26,6 +26,8 @@ export type PaymentSummary = {
   transactions: Array<{
     id: number;
     amount: number;
+    gross_amount?: number;
+    fee_amount?: number;
     currency: string;
     method: string;
     type: string;

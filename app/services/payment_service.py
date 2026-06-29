@@ -193,6 +193,7 @@ def process_payment(
     hotel_id: Optional[int] = None,
     gateway_response: Optional[PaymentGatewayResponse] = None,
     idempotency_key: Optional[str] = None,
+    actor_user_id: Optional[int] = None,
 ) -> Transaction:
     """
     Process a payment for a reservation.
@@ -350,6 +351,17 @@ def process_payment(
             request.transaction_type,
             resolved_hotel_id,
         )
+        # 6. Physical cash must land in the caja so the arqueo reconciles.
+        #    Best-effort: posts to the open session if one exists, otherwise the
+        #    payment still succeeds (cash simply isn't tracked in caja yet).
+        if request.payment_method == PaymentMethodEnum.CASH:
+            from app.services import cash_register_service
+
+            cash_register_service.record_cash_payment_movement(
+                db,
+                transaction=transaction,
+                recorded_by_user_id=actor_user_id,
+            )
 
     return transaction
 
@@ -541,6 +553,8 @@ def get_reservation_financial_summary(db: Session, hotel_id: Optional[int], rese
             {
                 "id": t.id,
                 "amount": t.amount,
+                "gross_amount": t.gross_amount if t.gross_amount is not None else t.amount,
+                "fee_amount": t.fee_amount or 0,
                 "currency": t.currency,
                 "method": t.payment_method.value,
                 "type": t.transaction_type.value,

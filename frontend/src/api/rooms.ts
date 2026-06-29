@@ -8,6 +8,8 @@ export type RoomCategory = {
   code: string;
   description?: string | null;
   base_price_per_night: number;
+  /** Today's effective nightly rate from the single source of truth (Tarifas/daily_rate). */
+  current_rate?: number | null;
   max_occupancy: number;
   amenities?: string | null;
 };

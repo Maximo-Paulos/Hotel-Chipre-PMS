@@ -4,6 +4,7 @@ import {
   addCashMovement,
   approveCashCloseDifference,
   closeCashSession,
+  getCashSessionSummary,
   listCashMovements,
   listCashSessions,
   openCashSession,
@@ -12,7 +13,8 @@ import {
   type CashMovementPayload,
   type CashSession,
   type CashSessionClosePayload,
-  type CashSessionOpenPayload
+  type CashSessionOpenPayload,
+  type CashSessionSummary
 } from "../api/cashRegister";
 import { hasValidSession } from "../api/client";
 import { useSession } from "../state/session";
@@ -40,6 +42,16 @@ export function useCashMovements(sessionId?: number) {
   });
 }
 
+export function useCashSessionSummary(sessionId?: number) {
+  const { session } = useSession();
+  return useQuery<CashSessionSummary>({
+    queryKey: sessionId ? ["cash-summary", session.hotelId, sessionId] : ["cash-summary", "none"],
+    queryFn: () => getCashSessionSummary(sessionId!, session),
+    enabled: Boolean(sessionId) && hasValidSession(session),
+    staleTime: 10 * 1000
+  });
+}
+
 export function useCashRegisterMutations(sessionId?: number) {
   const queryClient = useQueryClient();
   const { session } = useSession();
@@ -48,6 +60,7 @@ export function useCashRegisterMutations(sessionId?: number) {
   const invalidateMovements = () => {
     if (sessionId) {
       queryClient.invalidateQueries({ queryKey: cashMovementsKey(session.hotelId, sessionId) });
+      queryClient.invalidateQueries({ queryKey: ["cash-summary", session.hotelId, sessionId] });
     }
   };
 

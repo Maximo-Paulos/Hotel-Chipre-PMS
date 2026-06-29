@@ -63,6 +63,19 @@ class CashSessionClose(BaseModel):
     approve_difference: bool = False
 
 
+class CashSessionSummaryRead(BaseModel):
+    session_id: int
+    status: str
+    currency_code: str
+    opening_balance: Decimal
+    income_total: Decimal
+    expense_total: Decimal
+    adjustment_total: Decimal
+    confirmed_cash_total: Decimal
+    expected_balance: Decimal
+    movements_count: int
+
+
 class CashCloseReportRead(BaseModel):
     id: int
     hotel_id: int

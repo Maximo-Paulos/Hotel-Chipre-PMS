@@ -29,6 +29,7 @@ from app.services import audit_log_service
 from app.services.pricing_service import (
     apply_price_period,
     get_price_for_date,
+    resolve_rate_calendar,
 )
 from app.services.timeseries_projection import project_daily_rate_change
 
@@ -224,49 +225,10 @@ def get_category_rates(
 
     _get_category_or_404(db, context.hotel_id, category_id)
 
-    # Fetch all explicit DailyRate rows in range (dict by date for fast lookup)
-    rows: dict[date, DailyRate] = {
-        r.date: r
-        for r in db.query(DailyRate).filter(
-            DailyRate.hotel_id == context.hotel_id,
-            DailyRate.category_id == category_id,
-            DailyRate.date >= from_date,
-            DailyRate.date <= to_date,
-        )
-    }
-
-    result = []
-    current = from_date
-    while current <= to_date:
-        row = rows.get(current)
-        if row is not None:
-            result.append(
-                DailyRateFallbackOut(
-                    date=current,
-                    price=row.price,
-                    price_cash=row.price_cash,
-                    price_transfer=row.price_transfer,
-                    price_mercadopago=row.price_mercadopago,
-                    price_paypal=row.price_paypal,
-                    price_credit_card=row.price_credit_card,
-                    source="daily_rate",
-                    daily_rate_id=row.id,
-                )
-            )
-        else:
-            fallback_price = get_price_for_date(db, context.hotel_id, category_id, current)
-            source = _resolve_source(db, context.hotel_id, category_id, current)
-            result.append(
-                DailyRateFallbackOut(
-                    date=current,
-                    price=fallback_price,
-                    source=source,
-                    daily_rate_id=None,
-                )
-            )
-        current += timedelta(days=1)
-
-    return result
+    # Batched resolution: a fixed number of queries for the whole range instead of
+    # ~6 queries per date (previously up to ~2000 queries for a one-year calendar).
+    resolved = resolve_rate_calendar(db, context.hotel_id, category_id, from_date, to_date)
+    return [DailyRateFallbackOut(**row) for row in resolved]
 
 
 # ---------------------------------------------------------------------------

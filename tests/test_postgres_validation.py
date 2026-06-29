@@ -33,6 +33,33 @@ IS_PG = PG_DSN.startswith("postgresql")
 skip_if_no_pg = pytest.mark.skipif(not IS_PG, reason="Requires DATABASE_URL_TEST=postgresql DSN")
 
 
+def _reset_pg_to_clean_head(env, cwd):
+    """Rebuild the shared test DB into a pristine, fully-migrated schema.
+
+    The session-scoped ``pg_engine`` fixture creates the ORM tables lazily (only
+    when the first test that needs them runs — which is *after* the downgrade test)
+    and drops them all at session teardown. That leaves ``alembic_version`` pointing
+    at head while no tables exist. Running ``downgrade base`` against that
+    inconsistent state fails on missing relations, so reset the schema and re-apply
+    every migration from scratch before exercising the down/up cycle.
+    """
+    from sqlalchemy import create_engine, text
+
+    engine = create_engine(PG_DSN)
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("DROP SCHEMA public CASCADE"))
+            conn.execute(text("CREATE SCHEMA public"))
+    finally:
+        engine.dispose()
+
+    baseline = subprocess.run(
+        [sys.executable, "-m", "alembic", "upgrade", "head"],
+        capture_output=True, text=True, env=env, cwd=cwd
+    )
+    assert baseline.returncode == 0, f"alembic baseline upgrade failed:\n{baseline.stderr}"
+
+
 @skip_if_no_pg
 def test_alembic_upgrade_on_empty_database():
     """Alembic upgrade head succeeds on fresh PostgreSQL database."""
@@ -50,6 +77,10 @@ def test_alembic_downgrade_and_reupgrade():
     """Alembic downgrade to base then upgrade to head — idempotency check."""
     cwd = os.path.dirname(os.path.dirname(__file__))
     env = {**os.environ, "DATABASE_URL": PG_DSN}
+
+    # Establish a deterministic, fully-migrated baseline regardless of any leftover
+    # state from the pg_engine fixture or a prior run.
+    _reset_pg_to_clean_head(env, cwd)
 
     down = subprocess.run(
         [sys.executable, "-m", "alembic", "downgrade", "base"],

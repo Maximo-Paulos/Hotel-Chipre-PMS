@@ -25,6 +25,7 @@ from app.schemas.room import (
     RoomStatusUpdateResponse,
 )
 from app.services.reservation_service import ReservationError, find_available_rooms
+from app.services.pricing_service import get_price_for_date
 from app.dependencies.auth import get_auth_context, AuthContext, require_roles
 from app.services.allocation_runtime_service import run_persisted_allocation
 from app.services.read_model_cache import get_cached_availability_payload, invalidate_hotel_operational_caches
@@ -118,12 +119,25 @@ def update_category(
     return category
 
 
+def _attach_current_rate(db: Session, hotel_id: int, category: RoomCategory) -> RoomCategory:
+    """Resolve today's effective rate from the single source of truth and attach it
+    as a transient attribute so RoomCategoryRead serialises it. This keeps the rooms
+    inventory view in sync with the Tarifas calendar and reservation pricing."""
+    category.current_rate = get_price_for_date(
+        db, hotel_id, category.id, date.today()
+    )
+    return category
+
+
 @router.get("/categories", response_model=list[RoomCategoryRead])
 def list_categories(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping")),
 ):
-    return db.query(RoomCategory).filter(RoomCategory.hotel_id == context.hotel_id).all()
+    categories = db.query(RoomCategory).filter(RoomCategory.hotel_id == context.hotel_id).all()
+    for category in categories:
+        _attach_current_rate(db, context.hotel_id, category)
+    return categories
 
 
 @router.get("/categories/{category_id}", response_model=RoomCategoryRead)
@@ -139,7 +153,7 @@ def get_category(
     )
     if not category:
         raise HTTPException(status_code=404, detail="Category not found")
-    return category
+    return _attach_current_rate(db, context.hotel_id, category)
 
 
 @router.get("/categories/pricing/all", response_model=list[CategoryPricingRead])

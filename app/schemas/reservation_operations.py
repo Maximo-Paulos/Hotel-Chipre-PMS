@@ -87,6 +87,8 @@ class AllocationRunResponse(BaseModel):
 class ReservationTransactionSummaryRead(BaseModel):
     id: int
     amount: float
+    gross_amount: Optional[float] = None
+    fee_amount: Optional[float] = None
     currency: str
     method: str
     type: str

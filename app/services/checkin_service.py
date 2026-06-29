@@ -10,11 +10,13 @@ Manages the deep guest check-in flow:
 """
 import json
 from datetime import datetime, timezone
+from decimal import Decimal
 
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.models.guest import Guest, GuestTag, GuestTagTypeEnum
+from app.models.operations import BillingAdjustment
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.hotel_config import HotelConfiguration
 from app.services.reservation_service import transition_reservation_status, ReservationError
@@ -175,6 +177,8 @@ def perform_checkout(
     db: Session,
     reservation_id: int,
     hotel_id: int | None = None,
+    *,
+    force: bool = False,
 ) -> Reservation:
     """
     Check-out process:
@@ -200,6 +204,26 @@ def perform_checkout(
         raise CheckInError(
             f"Cannot check out: reservation status is '{reservation.status.value}'. "
             f"Must be 'checked_in'."
+        )
+
+    billing_adjustments = (
+        db.query(BillingAdjustment)
+        .filter(
+            BillingAdjustment.reservation_id == reservation_id,
+            BillingAdjustment.hotel_id == hotel_id,
+        )
+        .order_by(BillingAdjustment.effective_at, BillingAdjustment.id)
+        .all()
+    )
+    billing_adjustment_total = Decimal(str(round(sum(adj.total_amount for adj in billing_adjustments), 2)))
+    d_total = Decimal(str(reservation.total_amount or 0))
+    d_paid = Decimal(str(reservation.amount_paid or 0))
+    operational_total = d_total + billing_adjustment_total
+    operational_balance_due = max(Decimal("0"), operational_total - d_paid)
+    if operational_balance_due > Decimal("0.01") and not force:
+        raise CheckInError(
+            f"No se puede hacer check-out: la reserva tiene un saldo pendiente de ${operational_balance_due:.2f}. "
+            "Cobrá el saldo o forzá el check-out."
         )
 
     # Transition
