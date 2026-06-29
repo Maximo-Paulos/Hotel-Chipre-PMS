@@ -34,6 +34,7 @@ import { usePaymentMutation, usePaymentSummary } from "../../hooks/usePayments";
 import { useCashSessions } from "../../hooks/useCashRegister";
 import { usePaymentSurcharges } from "../../hooks/usePaymentSurcharges";
 import { grossWithSurcharge } from "../../api/paymentSurcharges";
+import { usePaymentLinks, usePaymentLinkCreate } from "../../hooks/usePaymentLinks";
 import { useHotelConfig } from "../../hooks/useHotelConfig";
 import { type HotelConfig } from "../../api/config";
 import { useRooms } from "../../hooks/useRooms";
@@ -696,6 +697,9 @@ export function ReservationsPage() {
     () => (surchargesQuery.data ?? []).find((s) => s.payment_method === paymentMethod && s.is_active) ?? null,
     [surchargesQuery.data, paymentMethod]
   );
+  const editingGuest = useGuest(editing?.guest_id || undefined).data;
+  const paymentLinksQuery = usePaymentLinks(editing?.id || undefined);
+  const paymentLinkCreate = usePaymentLinkCreate(editing?.id || undefined);
   const detailsSummary = detailsSummaryQuery.data;
   const detailsOperations = detailsOperationsQuery.data;
   const detailsGuest = useGuest(detailsReservation?.guest_id || undefined).data;
@@ -746,6 +750,35 @@ export function ReservationsPage() {
       {
         onSuccess: () => showToast("success", "Pago completo registrado"),
         onError: (err: unknown) => showToast("error", err instanceof Error ? err.message : "No se pudo registrar el pago")
+      }
+    );
+  };
+
+  const handleGenerateDepositLink = () => {
+    if (!editing || !paymentSummary) return;
+    const due = Math.max(paymentSummary.deposit_required - paymentSummary.amount_paid, 0) || (paymentSummary.balance_due ?? 0);
+    if (due <= 0.01) {
+      showToast("info", "No hay un monto pendiente para generar el link.");
+      return;
+    }
+    const email = editingGuest?.email?.trim();
+    if (!email) {
+      showToast("error", "El huésped no tiene email; agregá un email para enviar el link de seña.");
+      return;
+    }
+    paymentLinkCreate.mutate(
+      {
+        reservation_id: editing.id,
+        requested_amount: Number(due.toFixed(2)),
+        recipient_email: email,
+        recipient_name: editingGuest ? `${editingGuest.first_name} ${editingGuest.last_name}`.trim() : undefined,
+        recipient_phone: editingGuest?.phone || undefined,
+        currency: editingCurrencyCode,
+        title: `Seña reserva ${editing.confirmation_code}`
+      },
+      {
+        onSuccess: () => showToast("success", "Link de seña generado"),
+        onError: (err: unknown) => showToast("error", err instanceof Error ? err.message : "No se pudo generar el link")
       }
     );
   };
@@ -1870,6 +1903,46 @@ export function ReservationsPage() {
                       <strong>{formatMoney(grossWithSurcharge(paymentSummary.balance_due ?? 0, activeSurcharge), editingCurrencyCode)}</strong>.
                     </p>
                   )}
+
+                  <div className="mt-3 rounded-lg border border-sky-100 bg-sky-50/60 px-3 py-2 text-xs text-slate-700">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="font-semibold text-slate-800">Link de seña para el huésped</p>
+                      <button
+                        type="button"
+                        onClick={handleGenerateDepositLink}
+                        disabled={paymentLinkCreate.isPending}
+                        className="rounded-lg border border-sky-200 bg-white px-3 py-1 text-xs font-semibold text-sky-700 hover:border-sky-300 disabled:opacity-60"
+                      >
+                        {paymentLinkCreate.isPending ? "Generando..." : "Generar link"}
+                      </button>
+                    </div>
+                    {(paymentLinksQuery.data ?? []).length > 0 ? (
+                      <ul className="mt-2 space-y-1">
+                        {(paymentLinksQuery.data ?? []).map((lnk) => {
+                          const url = lnk.external_checkout_url || `${window.location.origin}/pay/${lnk.link_code}`;
+                          return (
+                            <li key={lnk.id} className="flex items-center justify-between gap-2">
+                              <span className="truncate">
+                                {formatMoney(lnk.requested_amount, lnk.currency)} · {lnk.status}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  navigator.clipboard?.writeText(url);
+                                  showToast("success", "Link copiado");
+                                }}
+                                className="shrink-0 rounded-lg border border-slate-200 px-2 py-1 font-semibold text-slate-700 hover:bg-white"
+                              >
+                                Copiar link
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    ) : (
+                      <p className="mt-1 text-slate-500">Sin links generados. Generá uno para cobrar la seña online (MercadoPago).</p>
+                    )}
+                  </div>
 
                   {paymentSummary?.transactions?.length ? (
                     <div className="mt-3 rounded-lg border border-emerald-100 bg-white/60 px-3 py-2 text-xs text-slate-700">
