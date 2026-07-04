@@ -5,6 +5,24 @@ Complementa (no reemplaza) a `docs/roadmap.md`, `docs/business-requirements-mast
 
 ---
 
+## Pase de seguridad 2026-07-04 — verificación de webhooks de pago
+
+Revisión focalizada de la verificación de firma/origen en los webhooks que mutan estado de pago
+(disparado por el foco que dejó el agente de seguridad). Producción verificada viva:
+`https://hotel-backend-s91u.onrender.com/health` → 200, `/api/rooms/categories` sin auth → 401 (deny-by-default OK).
+
+**Estado por proveedor:**
+- **Stripe** (`app/master_admin/stripe.py`, endpoint `/master-admin/stripe/webhook`): ✅ correcto. Fail-closed (503 sin secret), exige firma, protección de replay por timestamp, reconstruye `{ts}.{raw_body}` sobre el **body crudo** (`await request.body()`), y compara con `hmac.compare_digest` (tiempo constante).
+- **MercadoPago** (`app/services/payment_link_test_service.py`, endpoints en `payment_links.py` y `payment_link_tests.py`): ✅ correcto. La función usada **lanza** excepción en firma inválida (el caller la captura → 401), valida manifest HMAC-SHA256, replay por timestamp (300s) y `compare_digest`. Fail-open si el secret está vacío, pero **mitigado en prod** por `validate_runtime_security` (exige `MERCADOPAGO_WEBHOOK_SECRET` cuando MP está activo vía `MP_ACCESS_TOKEN` u OAuth).
+- **OTA** (`app/services/ota_service.py`, `/api/webhooks/{provider}/{hotel_id}/{secret}`): verifica el secret contra `webhook_secret_hash`. **FIX aplicado**: la comparación era `!=` (no constante) → ahora `hmac.compare_digest`. Riesgo bajo (compara hashes de alta entropía) pero es la práctica correcta. Cobertura: `test_ota_webhook_rejects_invalid_secret` (401) sigue verde.
+
+**Hallazgos abiertos (documentados, sin fix aplicado):**
+1. **PayPal `process_webhook`** (`app/adapters/paypal_adapter.py:156`): NO verifica autenticidad — confía en `event_type`/`status` del payload. **Riesgo latente, no vivo**: no hay ninguna ruta HTTP conectada a este método hoy. Antes de exponer un webhook de PayPal, agregar verificación con la API `verify-webhook-signature` de PayPal usando `PAYPAL_WEBHOOK_ID` + headers (`transmission_id`, `transmission_sig`, etc.). Severidad: media (si se conecta sin verificar, sería crítica).
+2. **Secret OTA en la URL** (`/api/webhooks/booking/{hotel_id}/{secret}`): el secreto viaja en el path → puede quedar en access logs / proxies / logs de Render. Mitigado en reposo (se guarda hasheado) y el diseño OTA a menudo obliga a URL. Considerar rotación periódica del secret y/o moverlo a header/query donde el proveedor lo permita. Severidad: media (defensa en profundidad).
+3. **MercadoPago fail-open** en secret vacío: mitigado en prod (ver arriba). No se cambió para no romper flujos de dev/test que corren sin secret.
+
+---
+
 ## Sesión 2026-07-03/04 — Auditoría semanal #1 (post-migración a macOS)
 
 ### Contexto

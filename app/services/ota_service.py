@@ -5,6 +5,7 @@ and outgoing inventory/availability updates.
 Uses row-level locking to handle race conditions on simultaneous bookings.
 """
 import hashlib
+import hmac
 import json
 import secrets
 import uuid
@@ -122,7 +123,8 @@ class OTAIntegrationService:
             raise OTAAuthError("Webhook OTA no configurado para este hotel")
 
         presented_hash = OTAIntegrationService._hash_secret(webhook_secret)
-        if presented_hash != credential.webhook_secret_hash:
+        # Constant-time compare to avoid leaking the stored hash via timing.
+        if not hmac.compare_digest(presented_hash, credential.webhook_secret_hash or ""):
             raise OTAAuthError("Webhook OTA no autorizado")
 
         payload_hotel_id = payload.get("hotel_id") if isinstance(payload, dict) else None
