@@ -43,6 +43,10 @@ Branch de trabajo: `chore/weekly-orchestrator-2026-07-03`.
 - **MCP servers del stack** en `.mcp.json` (sin secretos, con `${VAR}`): `supabase` (`@supabase/mcp-server-supabase` en read-only), `stripe` (`@stripe/mcp` — corregido: v0.3.3 solo acepta `--api-key`, no `--tools`), `render` (remoto `https://mcp.render.com/mcp`). Ambos paquetes npm verificados y con arranque probado. Falta que el usuario exporte `SUPABASE_ACCESS_TOKEN`/`SUPABASE_PROJECT_REF`, `STRIPE_SECRET_KEY` (usar `rk_*`), `RENDER_API_KEY`.
 - **8 subagentes especializados** en `.claude/agents/` (backend, frontend, database-migrations, security-auditor, qa-testing, performance-analyst, docs-writer, architecture-reviewer), con contexto del proyecto y del entorno macOS.
 - **PATH persistido** en `~/.zshrc` (node + uv). Guía: `docs/mcp-and-agents-setup.md`.
+- **graphify reinstalado** (`@sentropic/graphify` v0.17.x en `~/.local/node/bin/graphify`). Grafo regenerado con rutas macOS (5448 nodos, 263 comunidades) en `.graphify/`; el layout viejo `graphify-out/` (34MB, rutas `C:\`, 917 archivos trackeados) se eliminó. Hook y docs repunteados a `.graphify/`. Solo se commitea el core portable del grafo; el estado local (cache, instrucciones, worktree/branch json) va gitignoreado.
+- **gh CLI** v2.63.2 en `~/.local/bin/gh` — **sin autenticar** (no hay credenciales de GitHub; `gh auth login` es interactivo). **Push de la rama y PR quedan pendientes de que el usuario autentique.**
+- **HTTPie** instalado en el venv (`.venv/bin/http`), prereq del README.
+- Sin instalar (requieren brew/root): Docker, Redis. Playwright browsers: falta `npx playwright install chromium` para correr e2e.
 
 ### Deuda técnica pendiente (priorizada)
 1. **Naive vs aware datetimes**: `RateLimitEvent.created_at` usa default timezone-aware pero columnas `DateTime` sin timezone y comparaciones naive. Quedan ~11 usos de `utcnow()` en `app/`. Unificar criterio (naive-UTC en todo o `DateTime(timezone=True)` en todo) — riesgo bajo hoy, molesto de arrastrar.
