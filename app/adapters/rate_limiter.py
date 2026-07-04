@@ -6,7 +6,7 @@ limits survive process restarts and multiple workers. We keep an in-memory
 fallback for utility code that does not pass a session.
 """
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from threading import Lock
 
 from sqlalchemy.orm import Session
@@ -28,7 +28,7 @@ class SimpleRateLimiter:
         if db is not None:
             return self._allow_db(normalized_key, db, effective_limit)
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         with self._lock:
             bucket = self._buckets[normalized_key]
             cutoff = now - self.window
@@ -54,7 +54,7 @@ class SimpleRateLimiter:
                 self._buckets.pop(normalized_key, None)
 
     def _allow_db(self, key: str, db: Session, limit: int) -> bool:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         cutoff = now - self.window
         db.query(RateLimitEvent).filter(
             RateLimitEvent.scope == self.scope,

@@ -119,7 +119,8 @@ class Settings(BaseSettings):
     GEMMA_MAX_INPUT_CHARS: int = 4000
     GEMMA_RATE_LIMIT_WINDOW_SECONDS: int = 300
     GEMMA_RATE_LIMIT_MAX_MESSAGES: int = 20
-    ANALYTICS_EXPORTS_DIR: str = r"C:\PROJECTO\Hotel-Chipre-PMS\var\exports\analytics"
+    # Relative to the process working dir (repo root); override with an absolute path in prod.
+    ANALYTICS_EXPORTS_DIR: str = "./var/exports/analytics"
 
     # Auth
     JWT_SECRET: str = "change-me"
