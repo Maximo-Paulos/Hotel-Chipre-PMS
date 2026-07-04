@@ -22,12 +22,12 @@ Leer `docs/orchestrator-status.md` para estado actualizado.
 
 ## graphify
 
-This project has a graphify knowledge graph at graphify-out/.
+This project has a graphify knowledge graph at `.graphify/` (regenerado 2026-07-04 con `@sentropic/graphify` v0.17.x; el layout viejo `graphify-out/` quedó obsoleto y se eliminó).
 
 Rules:
-- Before answering architecture or codebase questions, read graphify-out/GRAPH_REPORT.md for god nodes and community structure
-- If graphify-out/wiki/index.md exists, navigate it instead of reading raw files
-- After modifying code files in this session, run `graphify update .` to keep the graph current (AST-only, no API cost)
+- Before answering architecture or codebase questions, read `.graphify/GRAPH_REPORT.md` for god nodes and community structure
+- If `.graphify/wiki/index.md` exists, navigate it instead of reading raw files
+- After modifying code files in this session, run `graphify update .` to keep the graph current (AST-only, no API cost). El binario está en `~/.local/node/bin/graphify`.
 
 ## Navegación de contexto (3 capas)
 1. **Primero:** consultar `graphify-out/graph.json` o `graphify-out/GRAPH_REPORT.md` para estructura del código
