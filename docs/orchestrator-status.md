@@ -44,9 +44,11 @@ Branch de trabajo: `chore/weekly-orchestrator-2026-07-03`.
 - **8 subagentes especializados** en `.claude/agents/` (backend, frontend, database-migrations, security-auditor, qa-testing, performance-analyst, docs-writer, architecture-reviewer), con contexto del proyecto y del entorno macOS.
 - **PATH persistido** en `~/.zshrc` (node + uv). Guía: `docs/mcp-and-agents-setup.md`.
 - **graphify reinstalado** (`@sentropic/graphify` v0.17.x en `~/.local/node/bin/graphify`). Grafo regenerado con rutas macOS (5448 nodos, 263 comunidades) en `.graphify/`; el layout viejo `graphify-out/` (34MB, rutas `C:\`, 917 archivos trackeados) se eliminó. Hook y docs repunteados a `.graphify/`. Solo se commitea el core portable del grafo; el estado local (cache, instrucciones, worktree/branch json) va gitignoreado.
-- **gh CLI** v2.63.2 en `~/.local/bin/gh` — **sin autenticar** (no hay credenciales de GitHub; `gh auth login` es interactivo). **Push de la rama y PR quedan pendientes de que el usuario autentique.**
-- **HTTPie** instalado en el venv (`.venv/bin/http`), prereq del README.
-- Sin instalar (requieren brew/root): Docker, Redis. Playwright browsers: falta `npx playwright install chromium` para correr e2e.
+- **gh CLI** v2.63.2 en `~/.local/bin/gh` — **autenticado** como Maximo-Paulos; git usa gh como credential helper. Rama pusheada y **PR #20 abierto** (https://github.com/Maximo-Paulos/Hotel-Chipre-PMS/pull/20).
+- **HTTPie** en el venv (`.venv/bin/http`), prereq del README.
+- **Redis 8.8.0** compilado desde fuente e instalado en `~/.local/bin` (server + cli). Smoke-test OK. Levantar con `redis-server --daemonize yes`.
+- **Playwright chromium** instalado. Para e2e (`npm run e2e`) activar el venv primero (`source .venv/bin/activate`); el webServer usa `python scripts/serve_e2e_backend.py`.
+- **No instalable sin admin/sudo** (documentado, no bloqueante): Docker (deploy compose), servidores Mongo/Cassandra/Neo4j (opcionales, off por defecto; drivers Python presentes).
 
 ### Deuda técnica pendiente (priorizada)
 1. **Naive vs aware datetimes**: `RateLimitEvent.created_at` usa default timezone-aware pero columnas `DateTime` sin timezone y comparaciones naive. Quedan ~11 usos de `utcnow()` en `app/`. Unificar criterio (naive-UTC en todo o `DateTime(timezone=True)` en todo) — riesgo bajo hoy, molesto de arrastrar.
