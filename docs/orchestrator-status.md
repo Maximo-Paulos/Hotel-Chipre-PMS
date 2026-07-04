@@ -48,7 +48,9 @@ Branch de trabajo: `chore/weekly-orchestrator-2026-07-03`.
 6. **`graphify-out/` desactualizado** (2026-06-27, rutas Windows).
 
 ### Riesgos abiertos
-- **Límite de sesión del plan** cortó la corrida multi-agente (9 agentes, ~755k tokens consumidos sin resultados). La auditoría profunda por agentes (backend/frontend/DB/seguridad/testing/perf/docs/arquitectura) quedó **pendiente de re-corrida**; el workflow es reanudable (`resumeFromRunId: wf_be237abb-7f4`). Esta sesión cubrió lo equivalente con auditoría directa del orquestador, pero con menor profundidad por área.
+- **Límite de sesión del plan** cortó la corrida multi-agente **dos veces** (intento 1: ~755k tokens, 39 min; intento 2 tras el reset: ~763k tokens en 4 min — la cuota restante no alcanzaba para un fan-out de 9 agentes). La auditoría profunda por agentes quedó **pendiente**; script del workflow guardado en la sesión (`weekly-orchestrator-audit-wf_be237abb-7f4.js`). Esta sesión cubrió lo equivalente con auditoría directa del orquestador, pero con menor profundidad por área.
+  - **Lección para la próxima corrida**: lanzar el workflow al inicio de una ventana de cuota fresca, o por etapas (2-3 agentes por vez) en vez de 9 simultáneos.
+  - Corroborado por el agente de DB antes de morir: cadena de migraciones con un solo head y merges resueltos (coincide con la validación local de `alembic upgrade head`).
 - El agente de seguridad alcanzó a señalar como foco: verificación de firma de webhooks Stripe y secretos de webhooks OTA — **verificar la próxima semana**.
 - Deploy (Render/Vercel/Docker) no se validó en esta sesión (sin Docker local).
 
