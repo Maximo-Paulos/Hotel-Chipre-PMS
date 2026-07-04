@@ -289,10 +289,13 @@ def test_booking_status_and_overlap(api_client):
     assert cancel.status_code == 200
     assert cancel.json()["status"] == ReservationStatusEnum.CANCELLED.value
 
-    # Mark booking2 as fully paid and perform check-in/out
+    # Mark booking2 as fully paid and perform check-in/out.
+    # Checkout (BR) rejects reservations with outstanding balance, so the paid
+    # amount must actually cover the total — status alone is not enough.
     with SessionLocal() as db:
         res = db.query(Reservation).filter(Reservation.id == booking2_id).first()
         res.status = ReservationStatusEnum.FULLY_PAID
+        res.amount_paid = res.total_amount
         db.commit()
 
     checkin = client.post(f"/api/bookings/{booking2_id}/checkin")

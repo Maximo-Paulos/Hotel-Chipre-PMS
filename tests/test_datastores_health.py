@@ -1,6 +1,7 @@
 import builtins
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -96,9 +97,10 @@ builtins.__import__ = guarded_import
 import app.main
 print("import ok")
 """
+    repo_root = Path(__file__).resolve().parents[1]
     result = subprocess.run(
         [sys.executable, "-c", script],
-        cwd="C:\\PROJECTO\\Hotel-Chipre-PMS",
+        cwd=repo_root,
         text=True,
         capture_output=True,
         timeout=60,

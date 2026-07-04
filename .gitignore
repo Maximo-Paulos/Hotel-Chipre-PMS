@@ -37,8 +37,25 @@ Thumbs.db
 
 # Local runtime artifacts
 *.log
+*.err
+pytest-full.out
 backend-runtime*.log
 frontend-runtime*.log
+
+# Local DB backups (never commit: may contain guest PII)
+backups/
+
+# Claude Code worktrees
+.claude/worktrees/
+
+# graphify: keep the portable graph core in-repo, ignore machine-local/regenerable state
+graphify-out/
+.graphify/cache/
+.graphify/description-instructions/
+.graphify/label-instructions/
+.graphify/branch.json
+.graphify/worktree.json
+.graphify/.graphify_describe_pending
 
 # Frontend
 frontend/node_modules/

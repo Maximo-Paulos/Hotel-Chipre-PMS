@@ -1,0 +1,31 @@
+{
+  "mcpServers": {
+    "supabase": {
+      "command": "/Users/maximopaulos/.local/node/bin/npx",
+      "args": [
+        "-y",
+        "@supabase/mcp-server-supabase@latest",
+        "--read-only",
+        "--project-ref=${SUPABASE_PROJECT_REF}"
+      ],
+      "env": {
+        "SUPABASE_ACCESS_TOKEN": "${SUPABASE_ACCESS_TOKEN}"
+      }
+    },
+    "stripe": {
+      "command": "/Users/maximopaulos/.local/node/bin/npx",
+      "args": [
+        "-y",
+        "@stripe/mcp",
+        "--api-key=${STRIPE_SECRET_KEY}"
+      ]
+    },
+    "render": {
+      "type": "http",
+      "url": "https://mcp.render.com/mcp",
+      "headers": {
+        "Authorization": "Bearer ${RENDER_API_KEY}"
+      }
+    }
+  }
+}

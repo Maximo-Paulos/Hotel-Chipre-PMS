@@ -1,10 +1,10 @@
 ## graphify
 
-This project has a graphify knowledge graph at graphify-out/.
+This project has a graphify knowledge graph at `.graphify/` (the legacy `graphify-out/` layout was removed on 2026-07-04).
 
 Rules:
-- Before answering architecture questions, planning structural changes, or making major refactors, read `graphify-out/GRAPH_REPORT.md` for god nodes, hotspots, and community structure
-- If graphify-out/wiki/index.md exists, navigate it instead of reading raw files
+- Before answering architecture questions, planning structural changes, or making major refactors, read `.graphify/GRAPH_REPORT.md` for god nodes, hotspots, and community structure
+- If `.graphify/wiki/index.md` exists, navigate it instead of reading raw files
 - After modifying code files in this session, run `graphify update .` if Graphify is installed and available in PATH, to keep the graph current (AST-only, no API cost)
 # AGENTS.md
 
