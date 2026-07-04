@@ -39,6 +39,11 @@ Branch de trabajo: `chore/weekly-orchestrator-2026-07-03`.
 - `README.md`: paso de activación de venv ahora cubre macOS/Linux y Windows.
 - `.env.example`: +45 variables que `app/config.py` soporta y no estaban documentadas (JWT avanzado, master admin, datastores opcionales, read-model cache, OTA URLs, identidad del hotel); `ANALYTICS_EXPORTS_DIR` dejó de apuntar a una ruta `C:\`.
 
+### Tooling agregado (2026-07-04, a pedido)
+- **MCP servers del stack** en `.mcp.json` (sin secretos, con `${VAR}`): `supabase` (`@supabase/mcp-server-supabase` en read-only), `stripe` (`@stripe/mcp` — corregido: v0.3.3 solo acepta `--api-key`, no `--tools`), `render` (remoto `https://mcp.render.com/mcp`). Ambos paquetes npm verificados y con arranque probado. Falta que el usuario exporte `SUPABASE_ACCESS_TOKEN`/`SUPABASE_PROJECT_REF`, `STRIPE_SECRET_KEY` (usar `rk_*`), `RENDER_API_KEY`.
+- **8 subagentes especializados** en `.claude/agents/` (backend, frontend, database-migrations, security-auditor, qa-testing, performance-analyst, docs-writer, architecture-reviewer), con contexto del proyecto y del entorno macOS.
+- **PATH persistido** en `~/.zshrc` (node + uv). Guía: `docs/mcp-and-agents-setup.md`.
+
 ### Deuda técnica pendiente (priorizada)
 1. **Naive vs aware datetimes**: `RateLimitEvent.created_at` usa default timezone-aware pero columnas `DateTime` sin timezone y comparaciones naive. Quedan ~11 usos de `utcnow()` en `app/`. Unificar criterio (naive-UTC en todo o `DateTime(timezone=True)` en todo) — riesgo bajo hoy, molesto de arrastrar.
 2. **Bundle frontend único de 755 kB** (gzip 182 kB): sin code-splitting. Separar vendor chunks / lazy routes con `manualChunks` o `React.lazy`.
