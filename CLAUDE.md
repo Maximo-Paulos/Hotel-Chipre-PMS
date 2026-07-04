@@ -8,15 +8,17 @@
 - **Pagos:** MercadoPago, PayPal, Stripe (pro/ultra)
 - **Mercado:** Argentina (ARS), expansión LATAM futura
 
-## Vault de memoria
-El proyecto tiene una base de conocimiento persistente en `C:\Users\macap\vault\`.
-- `vault/hotel-chipre-pms/` — decisiones, arquitectura, features, logs de sesión
-- `vault/CLAUDE.md` — instrucciones globales y comandos `/resume`, `/save`, `/status`
-- Para cargar contexto de sesión anterior: usar `/resume`
-- Para guardar sesión: usar `/save`
+## Base de conocimiento
+- `docs/orchestrator-status.md` — estado del proyecto, log de sesiones del orquestador semanal, deuda técnica y riesgos abiertos. **Leerlo al inicio de cada sesión de trabajo.**
+- (Histórico) El vault de Obsidian en `C:\Users\macap\vault\` pertenecía al entorno Windows anterior a la migración de julio 2026 y ya no está disponible en esta máquina.
+
+## Entorno local (macOS, desde julio 2026)
+- El repo se migró de Windows (`C:\PROJECTO\Hotel-Chipre-PMS`) a macOS. Si aparece una ruta `C:\...` hardcodeada en código, tests o docs, es un bug de migración: corregirla con rutas relativas o `Path(__file__)`.
+- Python del sistema es 3.9 (insuficiente): usar el venv del repo `.venv/` (Python 3.12, creado con `uv`). Ej.: `.venv/bin/python -m pytest -q`.
+- Node 20 standalone en `~/.local/node/bin` (agregarlo al PATH para `npm`).
 
 ## Estado actual de milestones
-Leer `docs/orchestrator-status.md` y `docs/milestone-acceptance-log.md` para estado actualizado.
+Leer `docs/orchestrator-status.md` para estado actualizado.
 
 ## graphify
 

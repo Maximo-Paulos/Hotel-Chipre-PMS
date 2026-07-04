@@ -2,8 +2,8 @@
 
 ## Quick Start (local trial)
 - Prereqs: Python 3.11+, Node 20+, npm, HTTPie (`pip install httpie`) or Postman.
-- 1. `python -m venv .venv`
-- 2. `.\\.venv\\Scripts\\activate`
+- 1. `python -m venv .venv` (o `uv venv --python 3.12 .venv` si usás [uv](https://docs.astral.sh/uv/))
+- 2. Activar: `source .venv/bin/activate` (macOS/Linux) · `.\.venv\Scripts\activate` (Windows)
 - 3. `pip install -r requirements.txt`
 - 4. `cd frontend && npm install`
 - 5. Build UI: `npm run build` (served from `frontend/dist`). If `spawn EPERM` aparece en OneDrive, corré el build en WSL/fuera de OneDrive o permití `esbuild.exe`.
