@@ -37,8 +37,16 @@ Thumbs.db
 
 # Local runtime artifacts
 *.log
+*.err
+pytest-full.out
 backend-runtime*.log
 frontend-runtime*.log
+
+# Local DB backups (never commit: may contain guest PII)
+backups/
+
+# Claude Code worktrees
+.claude/worktrees/
 
 # Frontend
 frontend/node_modules/
