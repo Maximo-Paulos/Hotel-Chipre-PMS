@@ -90,6 +90,8 @@ El repositorio ya alinea `.env.example`, `.env.render`, defaults frontend, SEO/s
 
 Vercel genera previews Git por rama, pero el `VITE_API_URL` de Production se dejó deliberadamente fuera de Preview: una preview sin backend aislado no es una preview QA válida ni debe tocar la API compartida. Render PR Previews permanece `Off`; cuando se habilite debe ser `Manual`, nunca automático, y sólo después de comprobar una Supabase Branch (o segunda DB QA aislada).
 
+`needs-verification`: los checks de PR actuales reportan Vercel bajo el espacio `maximo-paulos-projects`, mientras la configuración Production verificada vive en `maximopaulos1-4687s-projects`. Hasta reconciliar esa integración/proyecto, ninguna URL de preview Vercel se acepta como par válido del frontend de producción.
+
 El gate permanente exige: Vercel preview por rama, Render preview backend con `/health`, Supabase Branch por PR sin datos reales y un manifiesto que demuestre qué frontend apunta a qué backend. El frontend debe compilar con `VITE_API_URL` de ese backend; Render debe recibir `DATABASE_URL`, secretos QA, CORS y `FRONTEND_URL` propios. Si no hay Supabase Branches, el diseño se detiene hasta disponer de una segunda DB QA aislada; usar una DB compartida queda prohibido.
 
 El bootstrap de owner/hotel sintéticos y personas manager/recepción/housekeeping requiere verificación única manual por correo dedicado. Master-admin QA debe ser identidad distinta configurada en Render. Credenciales/sesiones locales permanecen en `.env.qa.local`/directorios ignorados.
