@@ -1,0 +1,3 @@
+interface:
+  display_name: "Release Gate"
+  short_description: "Aplica la puerta de entrega antes de cerrar o fusionar."

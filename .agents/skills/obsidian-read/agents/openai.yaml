@@ -1,0 +1,3 @@
+interface:
+  display_name: "Obsidian Read"
+  short_description: "Lee memoria curada del vault sin cargarlo completo."

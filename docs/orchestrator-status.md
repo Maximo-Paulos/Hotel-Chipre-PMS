@@ -40,7 +40,7 @@ Branch de trabajo: `chore/weekly-orchestrator-2026-07-03`.
 - La máquina no tenía Python 3.11+, Node, npm, brew ni Docker.
 - Se instaló **uv** en `~/.local/bin` (sin tocar el perfil del shell) y se creó `.venv/` con **Python 3.12.13**; `requirements.txt` instala completo sin conflictos.
 - Se instaló **Node 20.19.6 standalone** en `~/.local/node` (agregar `~/.local/node/bin` al PATH para npm).
-- `graphify` CLI **no está instalado** en esta máquina → `graphify update .` no se puede correr; el grafo en `graphify-out/` quedó congelado al 2026-06-27 (aún con rutas `C:\`). Regenerarlo cuando se reinstale la CLI.
+- Registro histórico: en ese momento el CLI no estaba instalado y el grafo quedó congelado al 2026-06-27 con rutas Windows. La fuente operativa actual es `.graphify/`; regenerar con la CLI disponible cuando corresponda.
 
 ### Bugs encontrados y corregidos
 1. `tests/test_datastores_health.py` — subprocess con `cwd="C:\\PROJECTO\\Hotel-Chipre-PMS"` hardcodeado (bug de migración). Fix: root del repo derivado con `Path(__file__)`.
@@ -61,7 +61,7 @@ Branch de trabajo: `chore/weekly-orchestrator-2026-07-03`.
 - **MCP servers del stack** en `.mcp.json` (sin secretos, con `${VAR}`): `supabase` (`@supabase/mcp-server-supabase` en read-only), `stripe` (`@stripe/mcp` — corregido: v0.3.3 solo acepta `--api-key`, no `--tools`), `render` (remoto `https://mcp.render.com/mcp`). Ambos paquetes npm verificados y con arranque probado. Falta que el usuario exporte `SUPABASE_ACCESS_TOKEN`/`SUPABASE_PROJECT_REF`, `STRIPE_SECRET_KEY` (usar `rk_*`), `RENDER_API_KEY`.
 - **8 subagentes especializados** en `.claude/agents/` (backend, frontend, database-migrations, security-auditor, qa-testing, performance-analyst, docs-writer, architecture-reviewer), con contexto del proyecto y del entorno macOS.
 - **PATH persistido** en `~/.zshrc` (node + uv). Guía: `docs/mcp-and-agents-setup.md`.
-- **graphify reinstalado** (`@sentropic/graphify` v0.17.x en `~/.local/node/bin/graphify`). Grafo regenerado con rutas macOS (5448 nodos, 263 comunidades) en `.graphify/`; el layout viejo `graphify-out/` (34MB, rutas `C:\`, 917 archivos trackeados) se eliminó. Hook y docs repunteados a `.graphify/`. Solo se commitea el core portable del grafo; el estado local (cache, instrucciones, worktree/branch json) va gitignoreado.
+- **graphify reinstalado** (`@sentropic/graphify` v0.17.x en `~/.local/node/bin/graphify`). Grafo regenerado con rutas macOS (5448 nodos, 263 comunidades) en `.graphify/`; se retiró el layout histórico de 34MB con rutas Windows. Hook y docs repunteados a `.graphify/`. Solo se commitea el core portable del grafo; el estado local (cache, instrucciones, worktree/branch json) va gitignoreado.
 - **gh CLI** v2.63.2 en `~/.local/bin/gh` — **autenticado** como Maximo-Paulos; git usa gh como credential helper. Rama pusheada y **PR #20 abierto** (https://github.com/Maximo-Paulos/Hotel-Chipre-PMS/pull/20).
 - **HTTPie** en el venv (`.venv/bin/http`), prereq del README.
 - **Redis 8.8.0** compilado desde fuente e instalado en `~/.local/bin` (server + cli). Smoke-test OK. Levantar con `redis-server --daemonize yes`.
@@ -74,7 +74,7 @@ Branch de trabajo: `chore/weekly-orchestrator-2026-07-03`.
 3. **Serialización Decimal→float**: warnings de Pydantic (`Expected float but got Decimal`) en schemas de reservas — los montos deberían declararse `Decimal` en los schemas de lectura.
 4. **Deprecaciones**: Pydantic class-based `Config` (migrar a `ConfigDict`), `pytest-asyncio` sin `asyncio_default_fixture_loop_scope`, passlib usa `crypt` (removido en Python 3.13 — bloquea upgrade futuro).
 5. **Historial de git contiene backups de DB** (`backups/*.backup` en commits viejos). Si esos dumps tienen datos reales de huéspedes, evaluar reescritura de historial antes de abrir el repo.
-6. **`graphify-out/` desactualizado** (2026-06-27, rutas Windows).
+6. **Grafo histórico desactualizado** (2026-06-27, rutas Windows).
 
 ### Riesgos abiertos
 - **Límite de sesión del plan** cortó la corrida multi-agente **dos veces** (intento 1: ~755k tokens, 39 min; intento 2 tras el reset: ~763k tokens en 4 min — la cuota restante no alcanzaba para un fan-out de 9 agentes). La auditoría profunda por agentes quedó **pendiente**; script del workflow guardado en la sesión (`weekly-orchestrator-audit-wf_be237abb-7f4.js`). Esta sesión cubrió lo equivalente con auditoría directa del orquestador, pero con menor profundidad por área.
@@ -98,5 +98,5 @@ Branch de trabajo: `chore/weekly-orchestrator-2026-07-03`.
 2. Revisar verificación de firmas de webhooks (Stripe, MercadoPago IPN, OTA) — foco heredado del agente de seguridad.
 3. Decidir política de datetimes (naive-UTC vs aware) y migrar los 13 `utcnow()`.
 4. Code-splitting del frontend.
-5. Reinstalar `graphify` y regenerar `graphify-out/` con rutas macOS.
+5. Reinstalar `graphify` y regenerar `.graphify/` con rutas macOS.
 6. Evaluar limpieza de historial de git por los backups de DB.

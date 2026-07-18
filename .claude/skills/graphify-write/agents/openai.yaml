@@ -1,0 +1,3 @@
+interface:
+  display_name: "Graphify Write"
+  short_description: "Actualiza y verifica Graphify después de cambios de código."

@@ -1,6 +1,6 @@
 ## graphify
 
-This project has a graphify knowledge graph at `.graphify/` (the legacy `graphify-out/` layout was removed on 2026-07-04).
+This project has its portable Graphify knowledge graph at `.graphify/`.
 
 Rules:
 - Before answering architecture questions, planning structural changes, or making major refactors, read `.graphify/GRAPH_REPORT.md` for god nodes, hotspots, and community structure

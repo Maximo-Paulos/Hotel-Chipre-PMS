@@ -1,0 +1,8 @@
+{
+  "name": "data-visualization",
+  "title": "Operational data visualization specialist",
+  "description": "Reviews analytics, charts, dashboards, and operational visualizations for correct data meaning and operator usability.",
+  "context_pack": "knowledge/10-context/data-visualization.md",
+  "focus": "Maintain metric definitions, filters, timezone and currency context, and distinguish advisory AI output from source-of-truth data.",
+  "validation": "Verify displayed figures against API contracts or fixtures and test empty, loading, and error states."
+}

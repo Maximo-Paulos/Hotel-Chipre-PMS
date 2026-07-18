@@ -1,0 +1,3 @@
+interface:
+  display_name: "Qa Persona Bootstrap"
+  short_description: "Prepara las cinco identidades QA sintéticas una única vez."

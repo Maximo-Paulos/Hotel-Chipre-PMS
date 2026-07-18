@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Read-only deterministic checks. Enable explicitly with:
+# git config core.hooksPath .githooks
+set -euo pipefail
+
+PYTHON_BIN=".venv/bin/python"
+if [[ ! -x "$PYTHON_BIN" ]]; then
+  PYTHON_BIN="python3"
+fi
+
+"$PYTHON_BIN" scripts/agent_ops/validate_setup.py
+
+if command -v graphify >/dev/null 2>&1; then
+  graphify check-update .
+fi

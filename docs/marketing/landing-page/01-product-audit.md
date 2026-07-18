@@ -2,7 +2,7 @@
 
 ## Alcance de la auditoria
 
-Se revisaron docs, backend, frontend, rutas publicas/protegidas, configuracion de despliegue, metadata actual y assets del repo. Tambien se uso `graphify-out/GRAPH_REPORT.md` como punto de entrada arquitectonico, segun `AGENTS.md`.
+Se revisaron docs, backend, frontend, rutas publicas/protegidas, configuracion de despliegue, metadata actual y assets del repo. Tambien se uso `.graphify/GRAPH_REPORT.md` como punto de entrada arquitectonico, segun `AGENTS.md`.
 
 ## Arquitectura general verificada
 

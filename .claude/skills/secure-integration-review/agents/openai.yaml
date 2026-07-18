@@ -1,0 +1,3 @@
+interface:
+  display_name: "Secure Integration Review"
+  short_description: "Revisa límites de seguridad de integraciones externas."

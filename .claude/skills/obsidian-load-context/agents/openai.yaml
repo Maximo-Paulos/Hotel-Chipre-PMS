@@ -1,0 +1,3 @@
+interface:
+  display_name: "Obsidian Load Context"
+  short_description: "Selecciona el pack Obsidian correcto antes de trabajar."

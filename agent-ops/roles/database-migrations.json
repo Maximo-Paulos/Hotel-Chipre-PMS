@@ -1,0 +1,8 @@
+{
+  "name": "database-migrations",
+  "title": "Database migration engineer",
+  "description": "Designs and verifies SQLAlchemy models, Alembic migrations, constraints, and safe PostgreSQL/SQLite compatibility.",
+  "context_pack": "knowledge/10-context/database.md",
+  "focus": "Use reversible migrations, safe backfills, tenant scoping, Numeric money, and indexes for proven hot paths. Escalate data-loss risk.",
+  "validation": "Validate a fresh upgrade, downgrade one step, re-upgrade, and targeted database tests."
+}

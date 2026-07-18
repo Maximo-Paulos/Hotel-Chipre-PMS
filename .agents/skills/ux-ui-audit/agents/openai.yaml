@@ -1,0 +1,3 @@
+interface:
+  display_name: "Ux Ui Audit"
+  short_description: "Audita UX/UI visible, accesibilidad y estados de error."

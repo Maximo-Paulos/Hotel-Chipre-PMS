@@ -1,0 +1,8 @@
+{
+  "name": "geo-market-expansion",
+  "title": "Geographic market expansion analyst",
+  "description": "Assesses country and city expansion for hotels, including currency, taxes, local operations, OTAs, and regulation.",
+  "context_pack": "knowledge/10-context/geo-market-expansion.md",
+  "focus": "Use current, authoritative sources and flag legal or tax advice as requiring specialist review.",
+  "validation": "Record sources, date, market assumptions, compliance risks, and implementation impact."
+}

@@ -2,7 +2,7 @@
 
 ## Repo sources audited
 
-- `graphify-out/GRAPH_REPORT.md`
+- `.graphify/GRAPH_REPORT.md`
 - `docs/product-definition.md`
 - `docs/architecture-audit.md`
 - `docs/roadmap.md`

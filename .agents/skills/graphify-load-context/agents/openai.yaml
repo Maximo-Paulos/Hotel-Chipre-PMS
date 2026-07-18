@@ -1,0 +1,3 @@
+interface:
+  display_name: "Graphify Load Context"
+  short_description: "Carga el mínimo contexto técnico para una tarea."

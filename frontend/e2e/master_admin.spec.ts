@@ -1,32 +1,10 @@
-import { test, expect, APIRequestContext } from "@playwright/test";
+import { test, expect } from "@playwright/test";
 
-const apiBase = process.env.E2E_API_URL || "http://localhost:8000";
-const email = "platform-admin@example.com";
-const password = "Master123!";
-const pin = process.env.E2E_MASTER_PIN || "1234";
-
-async function bootstrapMasterAdmin(request: APIRequestContext) {
-  const response = await request.post(`${apiBase}/api/auth/register`, {
-    data: { email, password, role: "platform_admin" }
-  });
-  expect(response.ok()).toBeTruthy();
-  const payload = await response.json();
-  if (payload.requires_verification) {
-    if (!payload.code) {
-      test.skip(true, "Master admin bootstrap requires auto-verify or exposed auth codes in the test environment.");
-    }
-    const verify = await request.post(`${apiBase}/api/auth/verify-email`, {
-      data: { email, code: payload.code }
-    });
-    expect(verify.ok()).toBeTruthy();
-  }
-}
+const email = process.env.E2E_MASTER_EMAIL || "master-admin@e2e.com";
+const password = process.env.E2E_MASTER_PASSWORD || "E2eMasterPass1234!";
+const pin = process.env.E2E_MASTER_PIN || "123456";
 
 test.describe.serial("Master admin smoke", () => {
-  test.beforeAll(async ({ request }) => {
-    await bootstrapMasterAdmin(request);
-  });
-
   test("login and open dashboard", async ({ page }) => {
     await page.goto("/adminpmsmaster/login");
     await page.getByLabel("Email").fill(email);
@@ -54,4 +32,3 @@ test.describe.serial("Master admin smoke", () => {
     await expect(page.getByText("Trazabilidad")).toBeVisible();
   });
 });
-

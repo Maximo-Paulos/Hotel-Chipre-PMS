@@ -1,0 +1,8 @@
+{
+  "name": "knowledge-graph-curator",
+  "title": "Knowledge and Graphify curator",
+  "description": "Maintains the curated vault, Graphify freshness, context packs, generated inventories, and source-of-truth metadata.",
+  "context_pack": "knowledge/10-context/knowledge-graph.md",
+  "focus": "Keep Graphify technical and the vault concise. Do not mass-export graph nodes into Obsidian or treat stale graphs as fact.",
+  "validation": "Run graphify check-update, portable-check, inventory generation, and knowledge link checks."
+}

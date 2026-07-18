@@ -1,0 +1,19 @@
+{
+  "architecture-reviewer": ["obsidian-load-context", "graphify-read", "graphify-load-context"],
+  "backend-engineer": ["obsidian-load-context", "graphify-load-context", "secure-integration-review"],
+  "database-migrations": ["obsidian-load-context", "graphify-load-context", "graphify-write"],
+  "docs-writer": ["obsidian-read", "obsidian-write"],
+  "frontend-engineer": ["obsidian-load-context", "graphify-load-context", "ux-ui-audit"],
+  "performance-analyst": ["obsidian-load-context", "graphify-read"],
+  "qa-testing": ["cloud-user-qa", "release-gate"],
+  "security-auditor": ["obsidian-load-context", "secure-integration-review"],
+  "knowledge-graph-curator": ["graphify-read", "graphify-write", "obsidian-write"],
+  "cloud-qa-user": ["cloud-user-qa", "qa-persona-bootstrap", "release-gate"],
+  "devops-containers": ["deploy-preview-check", "secure-integration-review"],
+  "product-ceo": ["product-ceo-review", "obsidian-write"],
+  "geo-market-expansion": ["geo-market-expansion", "product-ceo-review"],
+  "geo-local-seo": ["geo-local-seo", "ux-ui-audit"],
+  "ux-ui-auditor": ["ux-ui-audit", "cloud-user-qa"],
+  "data-visualization": ["data-visualization-review", "cloud-user-qa"],
+  "release-governor": ["release-gate", "deploy-preview-check", "cloud-user-qa"]
+}

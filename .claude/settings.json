@@ -1,12 +1,32 @@
 {
   "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".venv/bin/python scripts/agent_ops/context_status.py || true"
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".venv/bin/python scripts/agent_ops/context_status.py || true"
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Glob|Grep",
         "hooks": [
           {
             "type": "command",
-            "command": "[ -f .graphify/graph.json ] && echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"additionalContext\":\"graphify: Knowledge graph exists. Read .graphify/GRAPH_REPORT.md for god nodes and community structure before searching raw files.\"}}' || true"
+            "command": "[ -f knowledge/00-control/TASK_ROUTER.md ] && echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"additionalContext\":\"context: use knowledge/00-control/TASK_ROUTER.md and the assigned context pack before broad raw-code search; Graphify lives in .graphify/, never graphify-out/.\"}}' || true"
           }
         ]
       }

@@ -16,6 +16,7 @@ env/
 # Environment variables
 .env
 frontend/.env.local
+.env.qa.local
 
 # IDE
 .vscode/
@@ -56,6 +57,16 @@ graphify-out/
 .graphify/branch.json
 .graphify/worktree.json
 .graphify/.graphify_describe_pending
+
+# Local QA browser state and large/non-sensitive binary evidence
+.qa/
+artifacts/qa/
+
+# Keep Obsidian portable preferences only; ignore machine/session/layout state
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json
+.obsidian/graph.json
+.obsidian/cache/
 
 # Frontend
 frontend/node_modules/

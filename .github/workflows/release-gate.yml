@@ -1,0 +1,33 @@
+name: Release gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+jobs:
+  operating-system:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate agents, skills, vault and manifests
+        run: python scripts/agent_ops/validate_setup.py
+      - name: Require valid cloud evidence for functional changes
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          changed=$(git diff --name-only "$BASE_SHA..$HEAD_SHA")
+          if ! printf '%s\n' "$changed" | grep -Eq '^(app/|frontend/src/|alembic/)'; then
+            exit 0
+          fi
+          evidence=$(find qa/evidence -mindepth 2 -maxdepth 2 -name summary.json -print -quit)
+          test -n "$evidence"
+          python scripts/agent_ops/check_release_evidence.py "$evidence" --head "$HEAD_SHA"

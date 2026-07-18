@@ -1,0 +1,3 @@
+interface:
+  display_name: "Incident Triage"
+  short_description: "Triage seguro y reproducible de incidentes."

@@ -1,0 +1,3 @@
+interface:
+  display_name: "Deploy Preview Check"
+  short_description: "Comprueba que un preview sea aislado y apunte al backend correcto."

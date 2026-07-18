@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "task_id": "feature-123",
+  "code_sha": "abcdef1",
+  "app_url": "https://hotel-chipre-pms-git-feature-123.vercel.app",
+  "api_url": "https://hotel-chipre-pms-api-pr-123.onrender.com",
+  "health_url": "https://hotel-chipre-pms-api-pr-123.onrender.com/health",
+  "supabase_branch_ref": "pr-123",
+  "database_isolated": true,
+  "frontend_vite_api_url": "https://hotel-chipre-pms-api-pr-123.onrender.com",
+  "cors_frontend_url": "https://hotel-chipre-pms-git-feature-123.vercel.app",
+  "qa_secrets_isolated": true
+}

@@ -532,11 +532,10 @@ logger.audit(f"Move recorded: reason={reason_code}, user={user_id}")
 - **Pseudocódigo Detallado:** `MOTOR_RESERVAS_PSEUDOCODE.md`
 - **Summary (JSON):** `MOTOR_RESERVAS_SUMMARY.json`
 - **OR-Tools Docs:** https://developers.google.com/optimization/cp/cp_solver
-- **GraphQL Schema:** Ver `graphify-out/graph.json`
+- **Grafo técnico:** Ver `.graphify/graph.json`
 
 ---
 
 **Última actualización:** 2026-06-09  
 **Versión:** 1.0  
 **Status:** Ready for Implementation
-

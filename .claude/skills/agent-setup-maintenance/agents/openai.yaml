@@ -1,0 +1,3 @@
+interface:
+  display_name: "Agent Setup Maintenance"
+  short_description: "Mantiene roles, skills y hooks sincronizados y seguros."

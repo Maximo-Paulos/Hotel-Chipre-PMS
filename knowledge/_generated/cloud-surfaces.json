@@ -1,0 +1,17 @@
+{
+  "code_sha": "50abb05",
+  "canonical": [
+    "https://app.hotels-pms.com",
+    "https://hotels-pms.com",
+    "https://api.hotels-pms.com"
+  ],
+  "preview_contract": [
+    "Vercel frontend por PR (URL publicada en manifiesto de preview)",
+    "Render backend por PR con /health",
+    "Supabase Branch aislada por PR, sin datos reales"
+  ],
+  "historical_or_needs_verification": [
+    "Cualquier host hoteles-pms.com o onrender.com citado por documentación histórica",
+    "Callbacks de pagos, email, WhatsApp y OTAs: validar por contrato, no ejecutar en QA cloud"
+  ]
+}

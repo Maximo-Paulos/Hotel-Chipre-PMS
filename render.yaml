@@ -1,3 +1,9 @@
+previews:
+  # Deliberately manual until the provider has proven isolated Supabase Branch
+  # credentials and QA-only secrets for every generated environment.
+  generation: manual
+  expireAfterDays: 7
+
 services:
   - type: web
     name: hotel-chipre-pms-api

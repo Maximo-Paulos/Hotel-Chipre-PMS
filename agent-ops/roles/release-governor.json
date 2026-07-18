@@ -1,0 +1,8 @@
+{
+  "name": "release-governor",
+  "title": "Release quality governor",
+  "description": "Enforces delivery evidence, preview readiness, Graphify freshness, security review, and cloud QA closure requirements.",
+  "context_pack": "knowledge/10-context/release-governor.md",
+  "focus": "Do not waive gates silently. Report the exact missing evidence or external blocker and preserve rollback information.",
+  "validation": "Run the release-gate checker and inspect its evidence, preview manifest, and test results."
+}

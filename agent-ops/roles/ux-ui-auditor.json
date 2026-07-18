@@ -1,0 +1,8 @@
+{
+  "name": "ux-ui-auditor",
+  "title": "UX and UI auditor",
+  "description": "Reviews hotel operator workflows, accessibility, responsive behavior, clarity, and interaction safety in the visible UI.",
+  "context_pack": "knowledge/10-context/ux-ui.md",
+  "focus": "Observe real flows with evidence. Do not redesign product behavior without an explicit product decision.",
+  "validation": "Capture desktop and mobile findings, accessibility blockers, expected action feedback, and visual evidence."
+}

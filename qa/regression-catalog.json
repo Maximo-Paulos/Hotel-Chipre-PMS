@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "policy": {
+    "preview_only": true,
+    "required_personas": ["owner", "manager", "reception", "housekeeping", "master-admin"],
+    "external_exclusions": ["payment completion", "outgoing email", "webhook delivery", "OTA operation"],
+    "evidence_fields": ["persona", "preview_url", "precondition", "human_action", "expected", "observed", "evidence", "code_sha"]
+  },
+  "cases": [
+    {"id": "marketing-home", "personas": ["owner"], "route": "/", "checks": ["visible content", "primary navigation", "responsive"], "expected": "Marketing home renders without exposing application data."},
+    {"id": "marketing-pricing", "personas": ["owner"], "route": "/precios", "checks": ["visible content", "CTA", "responsive"], "expected": "Pricing route renders and CTA has an intentional destination."},
+    {"id": "marketing-functions", "personas": ["owner"], "route": "/funciones", "checks": ["visible content", "links", "responsive"], "expected": "Functions route renders with usable navigation."},
+    {"id": "marketing-pms-hotelero", "personas": ["owner"], "route": "/pms-hotelero", "checks": ["content", "canonical/navigation", "responsive"], "expected": "Public SEO route is usable on desktop and narrow viewport."},
+    {"id": "marketing-software-hoteles", "personas": ["owner"], "route": "/software-para-hoteles", "checks": ["content", "links", "responsive"], "expected": "Public SEO route is usable on desktop and narrow viewport."},
+    {"id": "marketing-faq", "personas": ["owner"], "route": "/faq", "checks": ["content", "accordion/buttons", "responsive"], "expected": "FAQ controls work with mouse and keyboard."},
+    {"id": "auth-login", "personas": ["owner", "manager", "reception", "housekeeping"], "route": "/login", "checks": ["successful login", "invalid password error", "keyboard focus"], "expected": "Each QA persona can log in and invalid credentials fail safely."},
+    {"id": "auth-owner-registration-contract", "personas": ["owner"], "route": "/register-owner", "checks": ["validation errors", "email verification boundary"], "expected": "Registration validates inputs; email verification is recorded as manual-only."},
+    {"id": "auth-recovery-contract", "personas": ["owner"], "route": "/forgot-password", "checks": ["validation errors", "no mailbox access"], "expected": "Recovery UI behaves safely without agent mailbox access."},
+    {"id": "auth-invitation", "personas": ["manager", "reception", "housekeeping"], "route": "/invitations/accept", "checks": ["validation", "expired/invalid state"], "expected": "Invitation flow exposes clear valid and invalid states."},
+    {"id": "onboarding", "personas": ["owner"], "route": "/onboarding", "checks": ["steps", "required form errors", "resume"], "expected": "Owner can complete or resume synthetic onboarding without data leak."},
+    {"id": "dashboard-permissions", "personas": ["owner", "manager", "reception", "housekeeping"], "route": "/dashboard", "checks": ["load", "empty/error state", "permission appropriate content"], "expected": "Dashboard loads only data permitted to the persona."},
+    {"id": "guests", "personas": ["owner", "manager", "reception"], "route": "/huespedes", "checks": ["list", "create/edit synthetic guest", "form errors", "search"], "expected": "Guest operations work within QA hotel."},
+    {"id": "reservations", "personas": ["owner", "manager", "reception"], "route": "/reservas", "checks": ["list", "create/update synthetic reservation", "conflict/error", "permission"], "expected": "Reservation lifecycle is visible and scoped to QA hotel."},
+    {"id": "rooms", "personas": ["owner", "manager", "reception", "housekeeping"], "route": "/habitaciones", "checks": ["room state", "permitted action", "denied action", "responsive"], "expected": "Room state and controls match persona permissions."},
+    {"id": "cash-register", "personas": ["owner", "manager", "reception"], "route": "/caja", "checks": ["open/list movement", "validation error", "role denial"], "expected": "Cash operations show safe validation and permission boundaries."},
+    {"id": "reports", "personas": ["owner", "manager"], "route": "/reportes", "checks": ["filters", "empty/error", "export boundary"], "expected": "Reports reconcile to QA data and respect access."},
+    {"id": "waitlist", "personas": ["owner", "manager", "reception"], "route": "/operacion/lista-espera", "checks": ["add/view synthetic item", "validation", "role"], "expected": "Waitlist actions are scoped and recover from errors."},
+    {"id": "laundry", "personas": ["owner", "manager", "housekeeping"], "route": "/operacion/lavanderia", "checks": ["list", "permitted status action", "role denial"], "expected": "Laundry workflow is usable by permitted staff only."},
+    {"id": "stock", "personas": ["owner", "manager", "housekeeping"], "route": "/operacion/stock", "checks": ["list", "permitted adjustment", "validation"], "expected": "Stock operations preserve validation and roles."},
+    {"id": "rate-calendar", "personas": ["owner", "manager"], "route": "/operacion/tarifas", "checks": ["calendar", "edit validation", "access denial"], "expected": "Rate calendar is accessible only to authorized roles."},
+    {"id": "analytics", "personas": ["owner", "manager"], "route": "/analytics", "checks": ["filters", "metric source/empty state", "responsive"], "expected": "Analytics renders clear, permissioned QA data."},
+    {"id": "analytics-subroutes", "personas": ["owner", "manager"], "route": "/analytics/rooms,/analytics/segments,/analytics/channels,/analytics/operations,/analytics/ai-chat", "checks": ["navigation", "filters", "empty/error"], "expected": "Analytics subroutes remain navigable and meaningful."},
+    {"id": "settings-users-permissions", "personas": ["owner", "manager"], "route": "/settings/users,/settings/permissions", "checks": ["invite/role boundary", "denied actions", "forms"], "expected": "User/permission management enforces authorization."},
+    {"id": "settings-api-and-integrations", "personas": ["owner"], "route": "/settings/api-keys,/settings/connections,/settings/whatsapp", "checks": ["masked secrets", "validation", "external exclusion"], "expected": "Integration configuration never reveals stored secrets or performs real delivery."},
+    {"id": "settings-hotel-security-subscription", "personas": ["owner"], "route": "/settings/hotel,/settings/security,/settings/subscription,/settings/assistant,/settings/tests,/settings/companies", "checks": ["forms", "validation errors", "permissions"], "expected": "Owner settings work with explicit error and save feedback."},
+    {"id": "public-api-key-contract", "personas": ["owner"], "route": "API public routes", "checks": ["missing/invalid key denied", "valid QA key contract", "no secret in evidence"], "expected": "Public flows validate API key without leaking it."},
+    {"id": "master-admin-login", "personas": ["master-admin"], "route": "/adminpmsmaster/login", "checks": ["email/password/PIN", "invalid error", "lockout-safe behavior"], "expected": "Separate QA master-admin can log in; invalid input is rejected."},
+    {"id": "master-admin-pages", "personas": ["master-admin"], "route": "/adminpmsmaster/dashboard,/adminpmsmaster/billing,/adminpmsmaster/email,/adminpmsmaster/stripe,/adminpmsmaster/audit", "checks": ["navigation", "access control", "no external side effect"], "expected": "Master-admin pages are reachable only to QA master identity."}
+  ]
+}

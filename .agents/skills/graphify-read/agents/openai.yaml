@@ -1,0 +1,3 @@
+interface:
+  display_name: "Graphify Read"
+  short_description: "Lee el grafo técnico sin modificarlo."

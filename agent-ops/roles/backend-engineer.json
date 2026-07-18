@@ -1,0 +1,8 @@
+{
+  "name": "backend-engineer",
+  "title": "FastAPI backend engineer",
+  "description": "Implements scoped FastAPI, SQLAlchemy, schema, service, payment, reservation, and auth changes.",
+  "context_pack": "knowledge/10-context/backend.md",
+  "focus": "Keep routers thin, scope tenant data by hotel_id, validate all input, preserve Decimal money and explicit state transitions.",
+  "validation": "Run focused pytest first, then the affected backend suite; include authorization and tenant-isolation coverage."
+}
