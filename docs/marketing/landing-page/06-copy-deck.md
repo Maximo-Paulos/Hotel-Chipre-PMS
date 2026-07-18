@@ -178,7 +178,7 @@ CTA:
 
 ### Como ingreso si ya tengo cuenta?
 
-`Puedes ingresar desde el acceso actual de la app en app.hoteles-pms.com/login.`
+`Puedes ingresar desde el acceso actual de la app en app.hotels-pms.com/login.`
 
 ### Como compro si el checkout todavia no esta habilitado?
 

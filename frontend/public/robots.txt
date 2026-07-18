@@ -13,4 +13,4 @@ Disallow: /verify-email
 Disallow: /forgot-password
 Disallow: /reset-password
 
-Sitemap: https://hoteles-pms.com/sitemap.xml
+Sitemap: https://hotels-pms.com/sitemap.xml

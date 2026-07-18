@@ -23,7 +23,7 @@ La meta no es "salir #1", sino maximizar:
 
 ### Recomendacion
 
-`https://hoteles-pms.com/` debe ser la landing principal indexable.
+`https://hotels-pms.com/` debe ser la landing principal indexable.
 
 ### Justificacion
 
@@ -169,8 +169,8 @@ Meta description:
 
 ### Recomendacion
 
-- `hoteles-pms.com`: marketing, indexable
-- `app.hoteles-pms.com`: producto, login, onboarding, settings, dashboard
+- `hotels-pms.com`: marketing, indexable
+- `app.hotels-pms.com`: producto, login, onboarding, settings, dashboard
 
 ### Politica recomendada
 
@@ -183,7 +183,7 @@ Meta description:
 1. Cada URL indexable del root domain debe apuntar canonical a si misma.
 2. Evitar duplicados entre root y subdominio app.
 3. Si `/pricing` sigue existiendo temporalmente en app, decidir una de dos:
-   - canonical a `https://hoteles-pms.com/precios` y noindex en app
+   - canonical a `https://hotels-pms.com/precios` y noindex en app
    - o retirar el valor SEO de la app page por completo
 
 Recomendacion: mover el valor SEO/comercial a root y dejar la app sin aspiracion organica.
@@ -290,8 +290,8 @@ Riesgos actuales probables:
 
 Crear propiedades para:
 
-- `https://hoteles-pms.com/`
-- opcional: `https://app.hoteles-pms.com/`
+- `https://hotels-pms.com/`
+- opcional: `https://app.hotels-pms.com/`
 
 Monitorear:
 

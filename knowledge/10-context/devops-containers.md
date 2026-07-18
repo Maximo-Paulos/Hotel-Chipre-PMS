@@ -1,9 +1,9 @@
 ---
 scope: Render, Vercel, Supabase, contenedores, CI y previews
 owner: devops-containers
-last_verified_commit: 50abb05
+last_verified_commit: bc938cf
 canonical_sources: [render.yaml, vercel.json, frontend/vercel.json, .github/workflows/, knowledge/20-system/cloud-and-deployment.md]
-graphify_minimum: graphify affected-flows app/main.py
+graphify_minimum: graphify affected-flows --files app/main.py
 required_validation: preview manifest + backend health + frontend VITE_API_URL exacta
 ---
 # Context pack — DevOps y contenedores

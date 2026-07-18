@@ -49,8 +49,8 @@ Elementos:
 
 Comportamiento:
 
-- `Ingresar` -> `https://app.hoteles-pms.com/login`
-- `Registrarte` -> `https://app.hoteles-pms.com/register-owner`
+- `Ingresar` -> `https://app.hotels-pms.com/login`
+- `Registrarte` -> `https://app.hotels-pms.com/register-owner`
 - sticky header en desktop
 - nav simplificada en mobile
 

@@ -42,9 +42,9 @@ Notas:
 
 Valores finales esperados:
 
-- `VITE_PUBLIC_SITE_URL=https://hoteles-pms.com`
-- `VITE_PUBLIC_APP_URL=https://app.hoteles-pms.com`
-- `VITE_PUBLIC_APP_HOSTNAME=app.hoteles-pms.com`
+- `VITE_PUBLIC_SITE_URL=https://hotels-pms.com`
+- `VITE_PUBLIC_APP_URL=https://app.hotels-pms.com`
+- `VITE_PUBLIC_APP_HOSTNAME=app.hotels-pms.com`
 - `VITE_ALLOW_INDEXING=true`
 
 Notas:

@@ -20,11 +20,11 @@ const ENV_APP_HOSTNAME = (import.meta.env.VITE_PUBLIC_APP_HOSTNAME as string | u
 const APP_URL_HOSTNAME = parseHostname(PUBLIC_APP_URL);
 const SITE_URL_HOSTNAME = parseHostname(PUBLIC_SITE_URL);
 
-export const PUBLIC_APP_HOSTNAME = ENV_APP_HOSTNAME || APP_URL_HOSTNAME || "app.hoteles-pms.com";
+export const PUBLIC_APP_HOSTNAME = ENV_APP_HOSTNAME || APP_URL_HOSTNAME || "app.hotels-pms.com";
 export const PUBLIC_SITE_HOSTNAME =
   SITE_URL_HOSTNAME || (PUBLIC_APP_HOSTNAME.startsWith("app.") ? PUBLIC_APP_HOSTNAME.slice(4) : "");
 export const ALLOW_INDEXING = String(import.meta.env.VITE_ALLOW_INDEXING ?? "").toLowerCase() === "true";
-export const PUBLIC_SALES_EMAIL = "ventas@hoteles-pms.com";
+export const PUBLIC_SALES_EMAIL = "ventas@hotels-pms.com";
 export const resolveSalesContactUrl = (subject = "Consulta sobre Hotel Chipre PMS") =>
   `mailto:${PUBLIC_SALES_EMAIL}?subject=${encodeURIComponent(subject)}`;
 

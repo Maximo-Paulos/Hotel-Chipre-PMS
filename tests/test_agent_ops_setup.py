@@ -119,6 +119,12 @@ def test_vault_links_and_context_frontmatter_are_valid() -> None:
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_canonical_cloud_surface_configuration_is_aligned() -> None:
+    command = [sys.executable, "scripts/agent_ops/check_cloud_surface_config.py"]
+    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def test_preview_manifest_example_isolation_contract() -> None:
     command = [sys.executable, "scripts/agent_ops/check_preview_manifest.py", "qa/preview-manifest.example.json"]
     result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)

@@ -1,9 +1,9 @@
 ---
 scope: auth, roles, tenancy, secretos, pagos, webhooks y PII
 owner: security-auditor
-last_verified_commit: 50abb05
+last_verified_commit: bc938cf
 canonical_sources: [app/config.py, app/api/auth.py, app/master_admin/, app/services/security.py]
-graphify_minimum: graphify affected-flows app/api/auth.py
+graphify_minimum: graphify affected-flows --files app/api/auth.py
 required_validation: security tests + review de autorización + logs redactados
 ---
 # Context pack — Seguridad

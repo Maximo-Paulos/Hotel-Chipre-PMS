@@ -1,9 +1,9 @@
 ---
 scope: analítica, gráficos, filtros, métricas y accesibilidad de datos
 owner: data-visualization
-last_verified_commit: 50abb05
-canonical_sources: [frontend/src/views/protected/analytics/, app/api/analytics.py, app/services/analytics]
-graphify_minimum: graphify affected-flows app/api/analytics.py
+last_verified_commit: bc938cf
+canonical_sources: [frontend/src/views/protected/analytics/, app/api/analytics.py, app/services/analytics_service.py]
+graphify_minimum: graphify affected-flows --files app/api/analytics.py
 required_validation: reconciliación de métrica + filtros + permisos + estado vacío/error
 ---
 # Context pack — Visualización de datos

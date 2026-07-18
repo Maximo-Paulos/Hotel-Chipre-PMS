@@ -1,9 +1,9 @@
 ---
 scope: API FastAPI, servicios de dominio e integraciones
 owner: backend-engineer
-last_verified_commit: 50abb05
+last_verified_commit: bc938cf
 canonical_sources: [app/main.py, app/api/, app/services/, knowledge/_generated/api-surface.md]
-graphify_minimum: graphify minimal-context app/main.py
+graphify_minimum: graphify minimal-context --files app/main.py --task backend
 required_validation: pytest focal + OpenAPI + graphify check-update
 ---
 # Context pack — Backend

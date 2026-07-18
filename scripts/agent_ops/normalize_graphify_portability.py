@@ -9,12 +9,14 @@ meaning while making the labels unambiguously human text.
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
 GRAPH = ROOT / ".graphify" / "graph.json"
+FLOWS = ROOT / ".graphify" / "flows.json"
 PATTERN = re.compile(r'("label"\s*:\s*")([^"\\]*)(")')
 
 
@@ -33,7 +35,18 @@ def main() -> int:
     normalized = PATTERN.sub(normalize_label, text)
     if count:
         GRAPH.write_text(normalized, encoding="utf-8")
-    print(f"Normalized {count} API route label(s) for portable Graphify artifacts.")
+    flow_normalized = False
+    if FLOWS.is_file():
+        flows = json.loads(FLOWS.read_text(encoding="utf-8"))
+        if flows.get("graphPath") != ".graphify/graph.json":
+            flows["graphPath"] = ".graphify/graph.json"
+            FLOWS.write_text(json.dumps(flows, indent=2) + "\n", encoding="utf-8")
+            flow_normalized = True
+    print(
+        "Normalized "
+        f"{count} API route label(s) and "
+        f"{'one' if flow_normalized else 'zero'} flow artifact path(s) for portable Graphify artifacts."
+    )
     return 0
 
 

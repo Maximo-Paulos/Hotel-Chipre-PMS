@@ -1,9 +1,9 @@
 ---
 scope: React, Vite, rutas, formularios, estado y UX de aplicación
 owner: frontend-engineer
-last_verified_commit: 50abb05
+last_verified_commit: bc938cf
 canonical_sources: [frontend/src/router.tsx, frontend/src/config/publicUrls.ts, frontend/src/views/, knowledge/_generated/frontend-routes.md]
-graphify_minimum: graphify minimal-context frontend/src/router.tsx
+graphify_minimum: graphify minimal-context --files frontend/src/router.tsx --task frontend
 required_validation: npm run lint + npm run typecheck + npm run build + Playwright focal
 ---
 # Context pack — Frontend

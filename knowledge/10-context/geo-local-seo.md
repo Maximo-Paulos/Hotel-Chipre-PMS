@@ -1,9 +1,9 @@
 ---
 scope: marketing público, SEO local, metadata y conversión
 owner: geo-local-seo
-last_verified_commit: 50abb05
+last_verified_commit: bc938cf
 canonical_sources: [frontend/src/router.tsx, frontend/src/content/marketing.ts, knowledge/_generated/frontend-routes.md]
-graphify_minimum: graphify minimal-context frontend/src/router.tsx
+graphify_minimum: graphify minimal-context --files frontend/src/router.tsx --task SEO-local
 required_validation: enlaces, metadata, mobile y rutas públicas validadas
 ---
 # Context pack — GEO SEO local

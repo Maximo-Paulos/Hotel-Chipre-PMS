@@ -82,7 +82,7 @@ def main() -> int:
     write(
         "graphify-summary.md",
         heading("Resumen Graphify")
-        + "`graphify summary .`:\n"
+        + "`graphify summary .graphify/graph.json`:\n"
         + fenced(graph_summary)
         + "`graphify check-update .`:\n"
         + fenced(graph_check)

@@ -1,9 +1,9 @@
 ---
 scope: experiencia, accesibilidad, responsive y coherencia visual
 owner: ux-ui-auditor
-last_verified_commit: 50abb05
+last_verified_commit: bc938cf
 canonical_sources: [frontend/src/views/, frontend/src/ui/, qa/regression-catalog.json]
-graphify_minimum: graphify minimal-context frontend/src/router.tsx
+graphify_minimum: graphify minimal-context --files frontend/src/router.tsx --task UX-UI
 required_validation: auditoría navegador por persona + evidencia
 ---
 # Context pack — UX/UI

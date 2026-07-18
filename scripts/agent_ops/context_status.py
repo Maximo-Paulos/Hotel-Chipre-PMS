@@ -31,7 +31,8 @@ def main() -> None:
     context = (
         f"context: consulta {router}; abre sólo el pack del rol. "
         f"Graphify: {state}. Para cambios de código, actualiza sólo al final con "
-        "`graphify update . --scope all --no-description --no-label`."
+        "`graphify update . --scope all --no-description --no-label`, "
+        "`graphify flows build`, normalización portable y checks."
     )
     print(json.dumps({"hookSpecificOutput": {"additionalContext": context}}))
 

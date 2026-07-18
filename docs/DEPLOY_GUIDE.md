@@ -19,14 +19,14 @@ Config:
 - Si el proyecto de Vercel usa `Root Directory = frontend`, la config equivalente vive en `frontend/vercel.json`.
 
 Dominios a conectar:
-- `hoteles-pms.com`
-- `app.hoteles-pms.com`
+- `hotels-pms.com`
+- `app.hotels-pms.com`
 
 Variables de entorno:
 - `VITE_API_URL=https://<render-service>.onrender.com/api`
-- `VITE_PUBLIC_SITE_URL=https://hoteles-pms.com`
-- `VITE_PUBLIC_APP_URL=https://app.hoteles-pms.com`
-- `VITE_PUBLIC_APP_HOSTNAME=app.hoteles-pms.com`
+- `VITE_PUBLIC_SITE_URL=https://hotels-pms.com`
+- `VITE_PUBLIC_APP_URL=https://app.hotels-pms.com`
+- `VITE_PUBLIC_APP_HOSTNAME=app.hotels-pms.com`
 - `VITE_ALLOW_INDEXING=true` en production
 
 ## 2) Render
@@ -42,14 +42,14 @@ Variables de entorno:
 - `APP_ENV=production`
 - `DATABASE_URL=postgresql+psycopg2://...` (Supabase)
 - `APP_BASE_URL=https://<render-service>.onrender.com`
-- `FRONTEND_URL=https://app.hoteles-pms.com`
-- `CORS_ORIGINS=https://hoteles-pms.com,https://app.hoteles-pms.com`
+- `FRONTEND_URL=https://app.hotels-pms.com`
+- `CORS_ORIGINS=https://hotels-pms.com,https://app.hotels-pms.com`
 - `JWT_SECRET=<strong secret>`
 - `MANAGER_PIN=<6+ digits>`
 - `INTEGRATIONS_ENCRYPTION_KEY=<fernet key>`
 - `EMAIL_PROVIDER=resend`
 - `RESEND_API_KEY=<resend key>`
-- `SYSTEM_EMAIL_FROM="Hotel Chipre PMS <noreply@auth.hoteles-pms.com>"`
+- `SYSTEM_EMAIL_FROM="Hotel Chipre PMS <noreply@auth.hotels-pms.com>"`
 - `SYSTEM_EMAIL_REPLY_TO=hotelxpms@gmail.com`
 - `ANALYTICS_EXPORTS_DIR=/var/exports/analytics`
 - `AI_ENABLED=false` until the hotel-specific IA provider is configured
@@ -70,14 +70,14 @@ Notas:
 
 ## 4) Qué validar después
 
-- `https://hoteles-pms.com/`
-- `https://hoteles-pms.com/precios`
-- `https://hoteles-pms.com/funciones`
-- `https://hoteles-pms.com/pms-hotelero`
-- `https://hoteles-pms.com/software-para-hoteles`
-- `https://hoteles-pms.com/faq`
-- `https://app.hoteles-pms.com/login`
-- `https://app.hoteles-pms.com/register-owner`
+- `https://hotels-pms.com/`
+- `https://hotels-pms.com/precios`
+- `https://hotels-pms.com/funciones`
+- `https://hotels-pms.com/pms-hotelero`
+- `https://hotels-pms.com/software-para-hoteles`
+- `https://hotels-pms.com/faq`
+- `https://app.hotels-pms.com/login`
+- `https://app.hotels-pms.com/register-owner`
 - `GET https://<render-service>.onrender.com/health`
 - Flujo de auth:
   - register
@@ -88,7 +88,7 @@ Notas:
 
 - DNS no resuelto: nameservers o CNAME mal puestos
 - CORS error: `CORS_ORIGINS` incorrecto en Render
-- Links de email rotos: `FRONTEND_URL` no apunta a `app.hoteles-pms.com`
+- Links de email rotos: `FRONTEND_URL` no apunta a `app.hotels-pms.com`
 - Frontend hablando con localhost: `VITE_API_URL` no configurado en Vercel
 - Email fallando al arrancar: falta `RESEND_API_KEY` o `SYSTEM_EMAIL_FROM`
 - SPA 404 en rutas internas: rewrites de Vercel ausentes o proyecto equivocado

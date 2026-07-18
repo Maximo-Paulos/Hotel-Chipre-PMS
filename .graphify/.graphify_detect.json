@@ -391,6 +391,7 @@
       "frontend/src/views/public/VerifyEmailPage.tsx",
       "frontend/vite.config.mjs",
       "reset.py",
+      "scripts/agent_ops/check_cloud_surface_config.py",
       "scripts/agent_ops/check_knowledge.py",
       "scripts/agent_ops/check_preview_manifest.py",
       "scripts/agent_ops/check_qa_evidence.py",
@@ -688,10 +689,10 @@
     ],
     "video": []
   },
-  "total_files": 679,
-  "total_words": 427395,
+  "total_files": 680,
+  "total_words": 428080,
   "needs_graph": true,
-  "warning": "Large corpus: 679 files · ~427,395 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
+  "warning": "Large corpus: 680 files · ~428,080 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
   "skipped_sensitive": [
     "alembic/versions/20260408_security_tokens.py",
     "app/adapters/memory_tokens.py",
@@ -703,7 +704,7 @@
   "graphifyignore_patterns": 55,
   "git": {
     "source_owner": "git",
-    "source_hash": "50abb05709ace064056c78c650210fbb4885f8b4",
+    "source_hash": "bc938cf1a0a359e634e85a658d1b2e7102f7d456",
     "branches": [
       "codex/feature/agent-ops-knowledge",
       "main"
@@ -717,9 +718,9 @@
     "source": "cli",
     "root": ".",
     "git_root": ".",
-    "head": "50abb05709ace064056c78c650210fbb4885f8b4",
+    "head": "bc938cf1a0a359e634e85a658d1b2e7102f7d456",
     "candidate_count": null,
-    "included_count": 679,
+    "included_count": 680,
     "excluded_untracked_count": 0,
     "excluded_ignored_count": 0,
     "excluded_sensitive_count": 6,

@@ -2,7 +2,7 @@
 
 ## Objetivo del plan
 
-Dejar un blueprint ejecutable por Codex, sin reinterpretacion amplia, para construir la landing principal en `https://hoteles-pms.com`.
+Dejar un blueprint ejecutable por Codex, sin reinterpretacion amplia, para construir la landing principal en `https://hotels-pms.com`.
 
 ## Milestone 0 - Alineacion de negocio y claims
 
@@ -105,7 +105,7 @@ Mantener una sola codebase frontend si acelera, pero con separacion fuerte entre
 
 ### Objetivo
 
-Construir `https://hoteles-pms.com/` como home indexable.
+Construir `https://hotels-pms.com/` como home indexable.
 
 ### Tareas
 
@@ -340,8 +340,8 @@ Publicar y medir.
 
 ### Tareas
 
-1. configurar `hoteles-pms.com`
-2. configurar `app.hoteles-pms.com`
+1. configurar `hotels-pms.com`
+2. configurar `app.hotels-pms.com`
 3. validar DNS/SSL
 4. desplegar
 5. hacer smoke test

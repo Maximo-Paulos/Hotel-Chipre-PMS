@@ -1,26 +1,26 @@
 # Resumen Graphify
 
-Generado: 2026-07-18T16:03:47.906809+00:00
-Commit: `50abb05`
+Generado: 2026-07-18T16:40:12.881433+00:00
+Commit: `bc938cf`
 
-`graphify summary .`:
+`graphify summary .graphify/graph.json`:
 ```text
 Graphify First-Hop Summary
-Graph: 5519 nodes, 17071 edges, 281 communities, density 0.0011, average degree 6.1863, undirected
+Graph: 5528 nodes, 17098 edges, 289 communities, density 0.0011, average degree 6.186, undirected
 
 Top hubs:
-  1. ReservationStatusEnum (degree 398, community 7 Community 7, app/models/reservation.py)
-  2. Reservation (degree 393, community 5 Community 5, app/models/reservation.py)
-  3. HotelConfiguration (degree 337, community 9 Community 9, app/models/hotel_config.py)
-  4. Base (degree 303, community 4 Community 4, app/database.py)
-  5. Room (degree 301, community 5 Community 5, app/models/room.py)
+  1. ReservationStatusEnum (degree 398, community 2 Community 2, app/models/reservation.py)
+  2. Reservation (degree 393, community 4 Community 4, app/models/reservation.py)
+  3. HotelConfiguration (degree 337, community 2 Community 2, app/models/hotel_config.py)
+  4. Base (degree 303, community 7 Community 7, app/database.py)
+  5. Room (degree 301, community 2 Community 2, app/models/room.py)
 
 Key communities:
-  1. Community 0 - Community 0: 191 nodes, 628 internal edges, density 0.0346; top nodes: main, chore/weekly-orchestrator-2026-07-03, codex/feature/agent-ops-knowledge
-  2. Community 1 - Community 1: 178 nodes, 248 internal edges, density 0.0157; top nodes: dc4b68a ojooooo, main.py, e34785c prueba
-  3. Community 2 - Community 2: 143 nodes, 639 internal edges, density 0.0629; top nodes: TransactionTypeEnum, PaymentMethodEnum, Transaction
-  4. Community 3 - Community 3: 128 nodes, 171 internal edges, density 0.021; top nodes: database.py, e202fdd feat(db): v72 gaps phase 1+2 — Numeric precision, new tables, search indexes, OTA dedup, c580b56 ojala si
-  5. Community 4 - Community 4: 123 nodes, 211 internal edges, density 0.0281; top nodes: Base, Base, PaymentLink
+  1. Community 0 - Community 0: 275 nodes, 406 internal edges, density 0.0108; top nodes: dc4b68a ojooooo, database.py, main.py
+  2. Community 1 - Community 1: 192 nodes, 701 internal edges, density 0.0382; top nodes: main, codex/feature/agent-ops-knowledge, chore/weekly-orchestrator-2026-07-03
+  3. Community 2 - Community 2: 174 nodes, 776 internal edges, density 0.0516; top nodes: ReservationStatusEnum, HotelConfiguration, Room
+  4. Community 3 - Community 3: 148 nodes, 663 internal edges, density 0.0609; top nodes: TransactionTypeEnum, PaymentMethodEnum, Transaction
+  5. Community 4 - Community 4: 115 nodes, 325 internal edges, density 0.0496; top nodes: Reservation, ReservationError, ReservationSourceEnum
 
 Next best action: Start with get_neighbors on "ReservationStatusEnum", then use query_graph for the user's specific question.
 ```

@@ -32,6 +32,7 @@ def main() -> int:
         (sys.executable, "scripts/agent_ops/render_agents.py", "--check"),
         (sys.executable, "scripts/agent_ops/sync_skills.py", "--check"),
         (sys.executable, "scripts/agent_ops/check_knowledge.py"),
+        (sys.executable, "scripts/agent_ops/check_cloud_surface_config.py"),
     ]
     failed = any(run(*command) for command in commands)
     failed = validate_json("qa/regression-catalog.json") or failed

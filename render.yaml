@@ -19,9 +19,9 @@ services:
       - key: JWT_SECRET
         generateValue: true
       - key: CORS_ORIGINS
-        sync: false   # set to https://hoteles-pms.com,https://app.hoteles-pms.com
+        sync: false   # set to https://hotels-pms.com,https://app.hotels-pms.com
       - key: FRONTEND_URL
-        sync: false   # set to https://app.hoteles-pms.com (used in invitation emails)
+        sync: false   # set to https://app.hotels-pms.com (used in invitation emails)
       - key: APP_BASE_URL
         sync: false   # set to your Render service URL, e.g. https://hotel-chipre-pms-api.onrender.com
       - key: MANAGER_PIN

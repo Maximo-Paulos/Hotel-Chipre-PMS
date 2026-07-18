@@ -46,7 +46,7 @@ La segunda version debe tratarse como posicionamiento recomendado, no como claim
 
 ## Estructura recomendada
 
-1. Home indexable en `https://hoteles-pms.com/`
+1. Home indexable en `https://hotels-pms.com/`
 2. Navegacion corta hacia `Funciones`, `Precios`, `FAQ` e `Ingresar`
 3. Hero con CTA dual: `Registrarte` y `Ingresar`
 4. Bloque de dolor -> solucion

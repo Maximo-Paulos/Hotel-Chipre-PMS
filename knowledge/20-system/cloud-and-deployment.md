@@ -1,12 +1,12 @@
 # Cloud y despliegue
 
-Estado: `confirmed` para URLs actuales y archivos declarativos; `needs-verification` para previews hasta aprovisionamiento externo.
+Estado: `confirmed` para los dominios actuales y archivos declarativos; `needs-verification` para variables privadas de proveedor y previews hasta aprovisionamiento externo.
 
 Superficies canónicas:
 
 - `https://app.hotels-pms.com` — aplicación.
 - `https://hotels-pms.com` — marketing.
-- `https://api.hotels-pms.com` — API/`/health`.
+- `https://api.hotels-pms.com` — API/`/health`; un primer intento del 2026-07-18 agotó 20 s, pero el reintento con 60 s devolvió HTTP 200. Tratarlo como posible cold start y vigilarlo en previews.
 
 La configuración actual usa `render.yaml` para el backend y `vercel.json`/`frontend/vercel.json` para Vite. El diseño de preview obligatorio es Vercel por rama → Render backend por rama → Supabase Branch aislada. Render debe recibir `DATABASE_URL`, secretos QA, `FRONTEND_URL` y CORS únicos; frontend debe construirse con su `VITE_API_URL` exacta. Si no existe Supabase Branch, se bloquea hasta tener una segunda DB aislada.
 

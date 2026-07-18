@@ -1,6 +1,6 @@
 # Estado exhaustivo del sistema — Hotel Chipre PMS
 
-Auditoría base: commit `50abb05` (`confirmed` para inventarios estáticos revisados el 2026-07-18); el setup de esta rama se valida sobre el worktree posterior.
+Auditoría base: commit `bc938cf` (`confirmed` para inventarios estáticos revisados el 2026-07-18); el setup de esta rama se valida sobre el worktree posterior.
 Fuentes principales: `app/main.py`, `app/config.py`, `app/models/`, `app/api/`, `app/services/`, `frontend/src/router.tsx`, `render.yaml`, `vercel.json`, Alembic y `.graphify/`.
 Artefactos reproducibles: [OpenAPI](../_generated/api-surface.md), [rutas frontend](../_generated/frontend-routes.md), [migración head](../_generated/migration-head.md), [superficies cloud](../_generated/cloud-surfaces.md), [resumen Graphify](../_generated/graphify-summary.md).
 
@@ -72,13 +72,13 @@ Analítica debe validar permisos, rango temporal, filtros, zona horaria, definic
 
 ## 8. Despliegue y URLs
 
-**Estado: `confirmed` para disponibilidad comprobada el 2026-07-18; no es sustituto de prueba de negocio.**
+**Estado: `confirmed` para los tres dominios comprobados el 2026-07-18; no es sustituto de prueba de negocio.**
 
 - `https://app.hotels-pms.com` respondió HTTP 200 y se identifica como frontend Vercel.
 - `https://hotels-pms.com` respondió HTTP 200 y se identifica como frontend Vercel.
-- `https://api.hotels-pms.com/health` respondió HTTP 200 y se identifica como backend Render.
+- `https://api.hotels-pms.com/health` agotó un primer intento de 20 s, pero un reintento con 60 s devolvió HTTP 200 y `{"status":"ok","system":"Hotel PMS v1.0.0"}`. Vigilar posible cold start antes del preview QA.
 
-`render.yaml` construye Python, ejecuta `alembic upgrade head` antes de Uvicorn y declara `/health`; su `DATABASE_URL`, URLs de CORS/frontend/base, email y secretos de integración son `sync:false`, por lo que requieren configuración manual del proveedor. `vercel.json` declara build Vite, output frontend y rewrite SPA. Hay documentación histórica que puede citar nombres de dominio/hosts distintos; se marca `historical` y no debe emplearse para configuración.
+El repositorio ya alinea `.env.example`, `.env.render`, defaults frontend, SEO/sitemap y `render.yaml` con `hotels-pms.com`; `render.yaml` construye Python, ejecuta `alembic upgrade head` antes de Uvicorn y declara `/health`. Sus `DATABASE_URL`, URLs de CORS/frontend/base, email y secretos de integración son `sync:false`, por lo que se deben confirmar manualmente en los proveedores sin exponer valores. `vercel.json` declara build Vite, output frontend y rewrite SPA. Hay documentación histórica que puede citar nombres de dominio/hosts distintos; se marca `historical` y no debe emplearse para configuración.
 
 ## 9. Previews y QA cloud requeridos
 
@@ -102,16 +102,16 @@ No se debe confundir “configuración creada” con “preview probado”: mien
 
 **Estado: `confirmed` para extracción AST actual; descripciones/labels semánticos se mantienen deliberadamente pendientes.**
 
-La actualización final AST produjo **5.519 nodos, 17.071 aristas y 281 comunidades**. Sus god nodes continúan orientando sobre `ReservationStatusEnum`, `Reservation`, `HotelConfiguration`, `Base` y `Room`; revisar el resumen generado antes de inferir impacto concreto. `graphify portable-check .graphify` pasó. `graphify check-update .` anuncia descripciones/labels pendientes porque esta política ejecuta explícitamente `--no-description --no-label`; no indica que la extracción AST esté vieja.
+La actualización final AST produjo **5.528 nodos, 17.098 aristas y 289 comunidades**, más **478 flujos ejecutables**. Sus god nodes continúan orientando sobre `ReservationStatusEnum`, `Reservation`, `HotelConfiguration`, `Base` y `Room`; revisar el resumen generado antes de inferir impacto concreto. `graphify portable-check .graphify` pasó. `graphify check-update .` anuncia descripciones/labels pendientes porque esta política ejecuta explícitamente `--no-description --no-label`; no indica que la extracción AST esté vieja.
 
-Cuando cambie código, se ejecuta `graphify update . --scope all --no-description --no-label`, `graphify portable-check` y `graphify check-update`. Usar `minimal-context`, `affected-flows` y `query`; no exportar el grafo completo como notas Obsidian.
+Cuando cambie código, se ejecuta `graphify update . --scope all --no-description --no-label`, `graphify flows build`, `.venv/bin/python scripts/agent_ops/normalize_graphify_portability.py`, `graphify portable-check` y `graphify check-update`. Usar `minimal-context`, `affected-flows` y `query`; no exportar el grafo completo como notas Obsidian.
 
 ## 12. Brechas entre código, documentación y operación
 
 **Estado: `confirmed` para las brechas observadas.**
 
 1. Existían referencias heredadas a un layout Graphify previo y a un vault Windows, mientras el grafo actual vive en `.graphify/` y el vault aprobado es `knowledge/`.
-2. La documentación puede contener URLs antiguas; el manifiesto canónico enumera los tres dominios actuales y deja el resto como histórico.
+2. Se corrigieron los defaults versionados que aún usaban `hoteles-pms.com`; las variables privadas de Render/Vercel deben verificarse contra el dominio canónico antes de QA.
 3. El blueprint Render existente configura servicio compartido, no evidencia de preview aislado ni Supabase Branch por PR.
 4. La disponibilidad HTTP actual no prueba login, permisos, formularios, botones ni recorridos de las cinco personas.
 5. Los E2E locales usan ahora el Python del `.venv`, backend `127.0.0.1:8040`, SQLite aislado y master-admin sintético; los previews deben declarar de forma equivalente `VITE_API_URL`/`E2E_API_URL` sin reutilizar esos datos locales.
@@ -119,7 +119,7 @@ Cuando cambie código, se ejecuta `graphify update . --scope all --no-descriptio
 ## 13. Prioridades inmediatas
 
 1. Validar y versionar el setup de agentes, skills, hooks, vault e inventarios de esta rama.
-2. Aprovisionar fuera del repositorio Supabase Branches, Render preview y Vercel preview con secretos QA aislados.
+2. Verificar las variables privadas de Render/Vercel y aprovisionar Supabase Branches, Render preview y Vercel preview con secretos QA aislados; exigir health estable antes de la regresión.
 3. Realizar bootstrap manual de las cinco identidades QA y guardar sólo metadatos no sensibles.
 4. Ejecutar baseline cloud completo y registrar evidencia por persona antes de activar el gate de merge funcional.
 5. Corregir cada discrepancia que revele la baseline, empezando por auth/tenancy, reservas/pagos y UX operativa.

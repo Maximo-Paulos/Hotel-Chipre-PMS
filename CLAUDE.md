@@ -29,7 +29,7 @@ This project has a portable Graphify knowledge graph at `.graphify/` (regenerado
 Rules:
 - Before answering architecture or codebase questions, read `.graphify/GRAPH_REPORT.md` for god nodes and community structure
 - If `.graphify/wiki/index.md` exists, navigate it instead of reading raw files
-- After modifying code files in this session, run `graphify update . --scope all --no-description --no-label`, followed by `graphify portable-check` and `graphify check-update`. El binario está en `~/.local/node/bin/graphify`.
+- After modifying code files in this session, run `graphify update . --scope all --no-description --no-label`, `graphify flows build`, `.venv/bin/python scripts/agent_ops/normalize_graphify_portability.py`, then `graphify portable-check` and `graphify check-update`. El binario está en `~/.local/node/bin/graphify`.
 
 ## Navegación de contexto (3 capas)
 1. **Primero:** consultar `knowledge/00-control/TASK_ROUTER.md` y el context pack asignado para decidir el mínimo contexto.
