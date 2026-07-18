@@ -1,6 +1,6 @@
 # Estado exhaustivo del sistema — Hotel Chipre PMS
 
-Auditoría base: commit `bc938cf` (`confirmed` para inventarios estáticos revisados el 2026-07-18); el setup de esta rama se valida sobre el worktree posterior.
+Auditoría base: commit `bc938cf` (`confirmed` para inventarios estáticos revisados el 2026-07-18); el setup de esta rama se valida sobre el worktree posterior. La configuración live de Vercel/Render se volvió a comprobar el 2026-07-18 y se documenta abajo como evidencia de proveedor, separada del código versionado.
 Fuentes principales: `app/main.py`, `app/config.py`, `app/models/`, `app/api/`, `app/services/`, `frontend/src/router.tsx`, `render.yaml`, `vercel.json`, Alembic y `.graphify/`.
 Artefactos reproducibles: [OpenAPI](../_generated/api-surface.md), [rutas frontend](../_generated/frontend-routes.md), [migración head](../_generated/migration-head.md), [superficies cloud](../_generated/cloud-surfaces.md), [resumen Graphify](../_generated/graphify-summary.md).
 
@@ -72,17 +72,23 @@ Analítica debe validar permisos, rango temporal, filtros, zona horaria, definic
 
 ## 8. Despliegue y URLs
 
-**Estado: `confirmed` para los tres dominios comprobados el 2026-07-18; no es sustituto de prueba de negocio.**
+**Estado: `confirmed` para los tres dominios y configuración pública comprobados el 2026-07-18; no es sustituto de prueba de negocio.**
 
 - `https://app.hotels-pms.com` respondió HTTP 200 y se identifica como frontend Vercel.
 - `https://hotels-pms.com` respondió HTTP 200 y se identifica como frontend Vercel.
-- `https://api.hotels-pms.com/health` agotó un primer intento de 20 s, pero un reintento con 60 s devolvió HTTP 200 y `{"status":"ok","system":"Hotel PMS v1.0.0"}`. Vigilar posible cold start antes del preview QA.
+- `https://api.hotels-pms.com/health` agotó un primer intento de 20 s, pero un reintento con 60 s devolvió HTTP 200 y `{"status":"ok","system":"Hotel PMS v1.0.0"}`. Render confirma que el plan actual es Free y puede dormir tras inactividad; vigilar ese cold start antes del preview QA.
 
-El repositorio ya alinea `.env.example`, `.env.render`, defaults frontend, SEO/sitemap y `render.yaml` con `hotels-pms.com`; `render.yaml` construye Python, ejecuta `alembic upgrade head` antes de Uvicorn y declara `/health`. Sus `DATABASE_URL`, URLs de CORS/frontend/base, email y secretos de integración son `sync:false`, por lo que se deben confirmar manualmente en los proveedores sin exponer valores. `vercel.json` declara build Vite, output frontend y rewrite SPA. Hay documentación histórica que puede citar nombres de dominio/hosts distintos; se marca `historical` y no debe emplearse para configuración.
+Vercel tiene `VITE_API_URL=https://api.hotels-pms.com/api` **sólo para Production** y se redeployó la versión de `main` `50abb05`; la deployment quedó `Ready` y el asset publicado contiene la URL canónica. Antes apuntaba a un proveedor histórico y aplicaba a todos los entornos; no volver a propagar Production a Preview. CORS preflight de la API confirmó explícitamente `https://app.hotels-pms.com`.
+
+Render tiene ahora healthcheck `/health` y su deploy live pasó esa comprobación. `needs-verification`: el servicio real fue creado/configurado fuera del Blueprint y su start command observado ejecuta Uvicorn sin `alembic upgrade head`; por lo tanto `render.yaml` es diseño declarativo, no prueba de que migraciones se ejecuten en producción. Los logs revelaron labels de enum PostgreSQL incompatibles con los valores de los modelos en los dominios OTA/allocation. La corrección está en el PR draft [#24](https://github.com/Maximo-Paulos/Hotel-Chipre-PMS/pull/24); requiere PostgreSQL aislado antes de merge/deploy. Se rotó el hook de deploy de Render; su valor nunca se registra aquí.
+
+El repositorio ya alinea `.env.example`, `.env.render`, defaults frontend, SEO/sitemap y `render.yaml` con `hotels-pms.com`. Sus `DATABASE_URL`, URLs de CORS/frontend/base, email y secretos de integración son `sync:false`, por lo que se deben confirmar manualmente en los proveedores sin exponer valores. `vercel.json` declara build Vite, output frontend y rewrite SPA. Hay documentación histórica que puede citar nombres de dominio/hosts distintos; se marca `historical` y no debe emplearse para configuración.
 
 ## 9. Previews y QA cloud requeridos
 
 **Estado: `needs-verification` — diseño documentado, aprovisionamiento externo pendiente.**
+
+Vercel genera previews Git por rama, pero el `VITE_API_URL` de Production se dejó deliberadamente fuera de Preview: una preview sin backend aislado no es una preview QA válida ni debe tocar la API compartida. Render PR Previews permanece `Off`; cuando se habilite debe ser `Manual`, nunca automático, y sólo después de comprobar una Supabase Branch (o segunda DB QA aislada).
 
 El gate permanente exige: Vercel preview por rama, Render preview backend con `/health`, Supabase Branch por PR sin datos reales y un manifiesto que demuestre qué frontend apunta a qué backend. El frontend debe compilar con `VITE_API_URL` de ese backend; Render debe recibir `DATABASE_URL`, secretos QA, CORS y `FRONTEND_URL` propios. Si no hay Supabase Branches, el diseño se detiene hasta disponer de una segunda DB QA aislada; usar una DB compartida queda prohibido.
 
@@ -115,11 +121,12 @@ Cuando cambie código, se ejecuta `graphify update . --scope all --no-descriptio
 3. El blueprint Render existente configura servicio compartido, no evidencia de preview aislado ni Supabase Branch por PR.
 4. La disponibilidad HTTP actual no prueba login, permisos, formularios, botones ni recorridos de las cinco personas.
 5. Los E2E locales usan ahora el Python del `.venv`, backend `127.0.0.1:8040`, SQLite aislado y master-admin sintético; los previews deben declarar de forma equivalente `VITE_API_URL`/`E2E_API_URL` sin reutilizar esos datos locales.
+6. El servicio Render live no ejecuta todavía las migraciones declaradas por el Blueprint y reportó incompatibilidad de labels enum OTA/allocation. El PR #24 lo corrige de modo reversible, pero no debe promoverse sin una base PostgreSQL aislada para validar upgrade/downgrade.
 
 ## 13. Prioridades inmediatas
 
-1. Validar y versionar el setup de agentes, skills, hooks, vault e inventarios de esta rama.
-2. Verificar las variables privadas de Render/Vercel y aprovisionar Supabase Branches, Render preview y Vercel preview con secretos QA aislados; exigir health estable antes de la regresión.
+1. Validar en PostgreSQL aislado el PR #24 de normalización de enums y, si pasa, hacer merge/promotion sin saltar la revisión de seguridad.
+2. Aprovisionar Supabase Branches o una segunda DB QA aislada; recién entonces habilitar Render Preview manual y conectar el Vercel Preview a su backend exacto.
 3. Realizar bootstrap manual de las cinco identidades QA y guardar sólo metadatos no sensibles.
 4. Ejecutar baseline cloud completo y registrar evidencia por persona antes de activar el gate de merge funcional.
 5. Corregir cada discrepancia que revele la baseline, empezando por auth/tenancy, reservas/pagos y UX operativa.
