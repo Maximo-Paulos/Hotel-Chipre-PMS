@@ -2,6 +2,12 @@
 
 Variables permitidas únicamente en `.env.qa.local` (ignorado): URLs preview y email/contraseña de `owner`, `manager`, `reception`, `housekeeping`, `master-admin`; no cookies, tokens, OTPs, capturas ni secretos de terceros. Usar `.env.qa.example` como nombres de variables.
 
+`DATABASE_URL`, claves Ed25519, secretos runtime, variables de lease y la capacidad
+efímera de bootstrap no pertenecen a `.env.qa.local`: viven sólo en GitHub
+Environment/Render o en `artifacts/qa/keys/` ignorado. El fingerprint combinado
+liga las cinco identidades y `QA_RUN_ID` al manifiesto provider-verificado sin
+versionar sus valores.
+
 Bootstrap único y manual:
 
 1. Crear owner y hotel sintético identificado por `QA_RUN_ID`.

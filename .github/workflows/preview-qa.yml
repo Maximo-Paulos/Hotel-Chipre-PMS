@@ -1,106 +1,35 @@
-name: Preview QA contract
+name: Preview QA untrusted contract
 
 on:
   pull_request:
     types: [opened, synchronize, reopened]
-  workflow_dispatch:
-    inputs:
-      task_id:
-        description: Non-sensitive task identifier
-        required: true
-      api_url:
-        description: Render preview URL already created for this PR
-        required: true
-      supabase_branch_ref:
-        description: Isolated Supabase Branch ref for this PR
-        required: true
 
+# This workflow intentionally has no Actions read permission, environment,
+# provider secret, or artifact download. It executes branch-controlled code
+# only for static diagnostics. The complete provider/bootstrap/browser cycle
+# runs from the trusted default-branch workflow instead.
 permissions:
   contents: read
-  pull-requests: write
 
 jobs:
   contract:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
-      - name: Validate preview design without provider secrets
+      - name: Validate only the static branch contract
         run: |
           python -m json.tool qa/preview-manifest.example.json >/dev/null
           python -m json.tool qa/regression-catalog.json >/dev/null
+          python scripts/agent_ops/validate_preview_manifest.py \
+            qa/preview-manifest.example.json --skip-freshness
           python scripts/agent_ops/render_agents.py --check
           python scripts/agent_ops/sync_skills.py --check
-      - name: Explain pending isolated preview prerequisites
-        if: github.event_name == 'pull_request'
+      - name: Explain the trusted cloud gate
         run: |
-          echo "Preview gate remains pending until Render/Supabase isolation is attested in a manifest."
-
-  deploy_frontend_for_verified_backend:
-    if: github.event_name == 'workflow_dispatch'
-    needs: contract
-    runs-on: ubuntu-latest
-    environment: preview-qa
-    outputs:
-      app_url: ${{ steps.deploy.outputs.app_url }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Require QA-only deployment secrets
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-        run: |
-          test -n "$VERCEL_TOKEN"
-          test -n "$VERCEL_ORG_ID"
-          test -n "$VERCEL_PROJECT_ID"
-      - name: Verify isolated Render preview health
-        env:
-          API_URL: ${{ inputs.api_url }}
-        run: |
-          case "$API_URL" in https://*) ;; *) exit 1 ;; esac
-          curl --fail --silent --show-error "$API_URL/health"
-      - name: Deploy Vercel preview pinned to this backend
-        id: deploy
-        working-directory: frontend
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-          API_URL: ${{ inputs.api_url }}
-        run: |
-          npm ci
-          APP_URL=$(npx vercel deploy --yes --token "$VERCEL_TOKEN" --build-env "VITE_API_URL=$API_URL" | tail -n 1)
-          printf 'app_url=%s\n' "$APP_URL" >> "$GITHUB_OUTPUT"
-      - name: Publish non-sensitive preview manifest artifact
-        env:
-          APP_URL: ${{ steps.deploy.outputs.app_url }}
-          API_URL: ${{ inputs.api_url }}
-          TASK_ID: ${{ inputs.task_id }}
-          SUPABASE_BRANCH_REF: ${{ inputs.supabase_branch_ref }}
-          SHA: ${{ github.sha }}
-        run: |
-          python - <<'PY'
-          import json, os
-          manifest = {
-              "schema_version": 1,
-              "task_id": os.environ["TASK_ID"],
-              "code_sha": os.environ["SHA"],
-              "app_url": os.environ["APP_URL"],
-              "api_url": os.environ["API_URL"],
-              "health_url": os.environ["API_URL"].rstrip("/") + "/health",
-              "supabase_branch_ref": os.environ["SUPABASE_BRANCH_REF"],
-              "database_isolated": True,
-              "frontend_vite_api_url": os.environ["API_URL"],
-              "cors_frontend_url": os.environ["APP_URL"],
-              "qa_secrets_isolated": True,
-          }
-          open("preview-manifest.json", "w", encoding="utf-8").write(json.dumps(manifest, indent=2) + "\n")
-          PY
-          python scripts/agent_ops/check_preview_manifest.py preview-manifest.json --expected-sha "$SHA"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: preview-manifest-${{ github.sha }}
-          path: preview-manifest.json
+          echo "This untrusted PR workflow never reads provider artifacts or secrets."
+          echo "Dispatch verify-preview-providers.yml from the default branch for isolated cloud QA."

@@ -2,10 +2,26 @@
 PostgreSQL validation tests.
 
 Run with:
-  DATABASE_URL_TEST=postgresql+psycopg2://postgres:pass@localhost:5432/hotel_chipre_test \
+  DATABASE_URL_TEST=<isolated-qa-dsn> \
+  POSTGRES_TEST_DATABASE_URL_EXPLICIT=<same-isolated-qa-dsn> \
+  POSTGRES_TEST_EXPECTED_HOST=<exact-qa-host> \
+  POSTGRES_TEST_EXPECTED_ROLE=<exact-qa-role> \
+  POSTGRES_TEST_EXPECTED_DATABASE=<exact-qa-database> \
+  POSTGRES_TEST_ISOLATED_BRANCH_REF=<non-production-ref-present-in-dsn> \
+  POSTGRES_TEST_PRODUCTION_REF=<canonical-production-ref> \
+  POSTGRES_TEST_PROVIDER_EVIDENCE_TOKEN=<short-lived-provider-token> \
+  QA_PROVIDER_EVIDENCE_PUBLIC_KEY=<ed25519-public-key-pem> \
+  RENDER_SERVICE_ID=<exact-preview-service-id> \
+  RENDER_GIT_COMMIT=<exact-preview-code-sha> \
+  POSTGRES_TEST_ISOLATION_CONFIRMED=1 \
+  ALLOW_DESTRUCTIVE_POSTGRES_TESTS=1 \
     pytest tests/test_postgres_validation.py -v
 
-All tests in this file are skipped unless DATABASE_URL_TEST points to a PostgreSQL DSN.
+All tests in this file are skipped unless the target passes the explicit isolation
+guard.  The guard intentionally refuses a DATABASE_URL_TEST value that was only
+derived from .env. Remote Supabase targets require Ed25519 provider evidence;
+loopback fixtures instead require an explicit local evidence JSON. This suite
+creates and drops schema objects.
 
 Covers:
 - Alembic upgrade from base to HEAD on empty database
@@ -13,7 +29,8 @@ Covers:
 - Enum types created correctly in PostgreSQL
 - Numeric(12,2) enforced correctly
 - All constraints active
-- Concurrent reservation insert integrity (SELECT FOR UPDATE pattern)
+- Deterministic PostgreSQL row-lock behavior used by allocation flows
+- Explicitly tracked evidence gap for concurrent reservation insertion
 - Multi-tenant hotel_id isolation
 - EXPLAIN ANALYZE index usage verification
 """
@@ -27,10 +44,30 @@ from decimal import Decimal
 
 import pytest
 
+from tests.postgres_test_safety import (
+    PostgresTargetSafetyError,
+    validate_postgres_test_target,
+)
+
 PG_DSN = os.getenv("DATABASE_URL_TEST", "")
 IS_PG = PG_DSN.startswith("postgresql")
 
-skip_if_no_pg = pytest.mark.skipif(not IS_PG, reason="Requires DATABASE_URL_TEST=postgresql DSN")
+
+def _target_safety_error() -> str | None:
+    if not IS_PG:
+        return "PostgreSQL DSN not configured"
+    try:
+        validate_postgres_test_target(PG_DSN, os.environ)
+    except PostgresTargetSafetyError:
+        return "PostgreSQL target is not explicitly proven isolated"
+    return None
+
+
+_PG_TARGET_SAFETY_ERROR = _target_safety_error()
+skip_if_no_pg = pytest.mark.skipif(
+    _PG_TARGET_SAFETY_ERROR is not None,
+    reason=_PG_TARGET_SAFETY_ERROR or "PostgreSQL target is unsafe",
+)
 
 
 def _reset_pg_to_clean_head(env, cwd):
@@ -45,7 +82,9 @@ def _reset_pg_to_clean_head(env, cwd):
     """
     from sqlalchemy import create_engine, text
 
-    engine = create_engine(PG_DSN)
+    safe_dsn = validate_postgres_test_target(PG_DSN, os.environ)
+    safe_env = {**env, "DATABASE_URL": safe_dsn}
+    engine = create_engine(safe_dsn)
     try:
         with engine.begin() as conn:
             conn.execute(text("DROP SCHEMA public CASCADE"))
@@ -55,7 +94,7 @@ def _reset_pg_to_clean_head(env, cwd):
 
     baseline = subprocess.run(
         [sys.executable, "-m", "alembic", "upgrade", "head"],
-        capture_output=True, text=True, env=env, cwd=cwd
+        capture_output=True, text=True, env=safe_env, cwd=cwd
     )
     assert baseline.returncode == 0, f"alembic baseline upgrade failed:\n{baseline.stderr}"
 
@@ -63,7 +102,8 @@ def _reset_pg_to_clean_head(env, cwd):
 @skip_if_no_pg
 def test_alembic_upgrade_on_empty_database():
     """Alembic upgrade head succeeds on fresh PostgreSQL database."""
-    env = {**os.environ, "DATABASE_URL": PG_DSN}
+    safe_dsn = validate_postgres_test_target(PG_DSN, os.environ)
+    env = {**os.environ, "DATABASE_URL": safe_dsn}
     result = subprocess.run(
         [sys.executable, "-m", "alembic", "upgrade", "head"],
         capture_output=True, text=True, env=env,
@@ -76,7 +116,8 @@ def test_alembic_upgrade_on_empty_database():
 def test_alembic_downgrade_and_reupgrade():
     """Alembic downgrade to base then upgrade to head — idempotency check."""
     cwd = os.path.dirname(os.path.dirname(__file__))
-    env = {**os.environ, "DATABASE_URL": PG_DSN}
+    safe_dsn = validate_postgres_test_target(PG_DSN, os.environ)
+    env = {**os.environ, "DATABASE_URL": safe_dsn}
 
     # Establish a deterministic, fully-migrated baseline regardless of any leftover
     # state from the pg_engine fixture or a prior run.
@@ -214,40 +255,81 @@ def test_explain_analyze_reservation_date_range_index(pg_engine):
 
 
 @skip_if_no_pg
-def test_concurrent_reservation_insert_uses_select_for_update(pg_engine):
-    """
-    Verify that the SELECT FOR UPDATE pattern prevents double-booking.
-    Two concurrent transactions trying to assign the same room to the same dates
-    must serialize: the second must either wait or see the first's insert.
-    This test uses two serial transactions to simulate the pattern.
+def test_room_row_lock_uses_skip_locked_deterministically(pg_engine):
+    """A competing allocator cannot acquire a room row already locked by T1.
+
+    This proves the PostgreSQL locking primitive only. It intentionally does not
+    claim that the complete reservation service prevents every double-booking
+    race; that separate end-to-end concurrency evidence remains tracked below.
     """
     from sqlalchemy import text
     from sqlalchemy.orm import sessionmaker
 
-    Session = sessionmaker(bind=pg_engine)
+    from app.models.hotel_config import HotelConfiguration
+    from app.models.room import Room, RoomCategory, RoomStatusEnum
+
+    Session = sessionmaker(bind=pg_engine, expire_on_commit=False)
+    setup = Session()
+    hotel = HotelConfiguration(id=9901, hotel_name="PG-Lock-Test", subscription_active=True)
+    category = RoomCategory(
+        hotel_id=hotel.id,
+        name="PG Lock Category",
+        code="PG-LOCK",
+        base_price_per_night=Decimal("100.00"),
+        max_occupancy=2,
+    )
+    setup.add_all([hotel, category])
+    setup.flush()
+    room = Room(
+        hotel_id=hotel.id,
+        category_id=category.id,
+        room_number="PG-LOCK-1",
+        floor=1,
+        status=RoomStatusEnum.AVAILABLE,
+        is_active=True,
+    )
+    setup.add(room)
+    setup.commit()
+
     s1 = Session()
     s2 = Session()
 
     try:
-        # T1: locks the availability check
-        s1.execute(text("""
-            SELECT id FROM rooms WHERE hotel_id = 9001
-            FOR UPDATE SKIP LOCKED
-            LIMIT 1
-        """))
+        locked = s1.execute(
+            text("SELECT id FROM rooms WHERE id = :room_id FOR UPDATE"),
+            {"room_id": room.id},
+        ).fetchall()
+        assert locked == [(room.id,)]
 
-        # T2: can still run its own query (SKIP LOCKED means it skips locked rows)
-        rows = s2.execute(text("""
-            SELECT id FROM rooms WHERE hotel_id = 9001
-            FOR UPDATE SKIP LOCKED
-            LIMIT 1
-        """)).fetchall()
-        # With SKIP LOCKED, T2 gets 0 rows (room locked by T1)
-        # This verifies the pattern works — no deadlock, proper isolation
-        assert len(rows) == 0 or True  # either 0 (locked) or none in table
-
+        competing = s2.execute(
+            text(
+                "SELECT id FROM rooms WHERE id = :room_id "
+                "FOR UPDATE SKIP LOCKED"
+            ),
+            {"room_id": room.id},
+        ).fetchall()
+        assert competing == []
     finally:
         s1.rollback()
         s2.rollback()
         s1.close()
         s2.close()
+        cleanup = Session()
+        try:
+            cleanup.query(Room).filter(Room.id == room.id).delete()
+            cleanup.query(RoomCategory).filter(RoomCategory.id == category.id).delete()
+            cleanup.query(HotelConfiguration).filter(HotelConfiguration.id == hotel.id).delete()
+            cleanup.commit()
+        finally:
+            cleanup.close()
+            setup.close()
+
+
+@pytest.mark.skip(
+    reason=(
+        "Evidence gap: deterministic two-transaction reservation insertion test "
+        "through the reservation service is not implemented yet"
+    )
+)
+def test_concurrent_reservation_insert_integrity_evidence_pending():
+    """Track the missing end-to-end double-booking concurrency evidence."""

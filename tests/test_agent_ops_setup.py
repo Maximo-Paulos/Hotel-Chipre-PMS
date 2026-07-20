@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import subprocess
 import sys
 import tomllib
 from pathlib import Path
+
+from scripts.agent_ops.check_qa_evidence import validate_evidence_bundle
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -126,44 +129,112 @@ def test_canonical_cloud_surface_configuration_is_aligned() -> None:
 
 
 def test_preview_manifest_example_isolation_contract() -> None:
-    command = [sys.executable, "scripts/agent_ops/check_preview_manifest.py", "qa/preview-manifest.example.json"]
+    command = [
+        sys.executable,
+        "scripts/agent_ops/validate_preview_manifest.py",
+        "qa/preview-manifest.example.json",
+        "--skip-freshness",
+    ]
     result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
     assert result.returncode == 0, result.stdout + result.stderr
 
 
-def test_qa_evidence_schema_accepts_full_catalog(tmp_path: Path) -> None:
+def write_complete_qa_evidence(tmp_path: Path) -> tuple[dict[str, object], Path]:
     catalog = json.loads((ROOT / "qa" / "regression-catalog.json").read_text(encoding="utf-8"))
-    sha = "abcdef1"
+    manifest = json.loads(
+        (ROOT / "qa" / "preview-manifest.example.json").read_text(encoding="utf-8")
+    )
+    sha = manifest["code_sha"]
     results = [
         {
             "persona": persona,
             "case_id": case["id"],
             "status": "passed",
-            "preview_url": "https://hotel-chipre-pms-git-qa.vercel.app",
+            "preview_url": manifest["app_url"],
             "precondition": "datos QA sintéticos disponibles",
             "human_action": "recorrer UI visible",
             "expected": case["expected"],
             "observed": "resultado esperado observado",
-            "evidence": f"sha256:{case['id']}-{persona}",
+            "evidence": "sha256:"
+            + hashlib.sha256(f"{case['id']}/{persona}".encode()).hexdigest(),
             "code_sha": sha,
         }
         for case in catalog["cases"]
         for persona in case["personas"]
     ]
-    evidence = {
-        "task_id": "qa-schema-test",
+    task_id = "qa-schema-test"
+    task_dir = tmp_path / task_id
+    task_dir.mkdir()
+    manifest_path = task_dir / "validated-preview-manifest.json"
+    manifest_raw = (json.dumps(manifest, indent=2, sort_keys=True) + "\n").encode()
+    manifest_path.write_bytes(manifest_raw)
+    evidence: dict[str, object] = {
+        "task_id": task_id,
         "code_sha": sha,
-        "preview": {
-            "app_url": "https://hotel-chipre-pms-git-qa.vercel.app",
-            "api_url": "https://hotel-chipre-pms-api-pr-qa.onrender.com",
+        "provider_evidence": {
+            "manifest_file": manifest_path.name,
+            "manifest_sha256": "sha256:" + hashlib.sha256(manifest_raw).hexdigest(),
+            "workflow_run_id": manifest["generated_by"]["workflow_run_id"],
+            "artifact_id": 987654321,
+            "task_id": manifest["task_id"],
+            "repository": manifest["generated_by"]["repository"],
+            "git_branch": manifest["generated_by"]["git_branch"],
+            "workflow_code_sha": manifest["generated_by"]["workflow_code_sha"],
+            "workflow_git_branch": manifest["generated_by"]["workflow_git_branch"],
         },
-        "executed_at": "2026-07-18T00:00:00Z",
+        "preview": {
+            "app_url": manifest["app_url"],
+            "api_origin": manifest["api_origin"],
+            "api_url": manifest["api_base_url"],
+            "health_url": manifest["health_url"],
+            "vercel_project_id": manifest["frontend"]["project_id"],
+            "vercel_deployment_id": manifest["frontend"]["deployment_id"],
+            "render_service_id": manifest["backend"]["service_id"],
+            "render_deployment_id": manifest["backend"]["deployment_id"],
+            "render_environment_id": manifest["configuration"]["environment_id"],
+            "supabase_project_ref": manifest["database"]["project_ref"],
+            "supabase_branch_ref": manifest["database"]["branch_ref"],
+        },
+        "executed_at": "2026-07-19T15:30:00Z",
         "results": results,
         "external_exclusions": catalog["policy"]["external_exclusions"],
         "blocked": False,
     }
-    path = tmp_path / "summary.json"
-    path.write_text(json.dumps(evidence), encoding="utf-8")
+    summary_path = task_dir / "summary.json"
+    summary_path.write_text(json.dumps(evidence), encoding="utf-8")
+    return evidence, summary_path
+
+
+def run_qa_evidence_check(path: Path) -> subprocess.CompletedProcess[str]:
     command = [sys.executable, "scripts/agent_ops/check_qa_evidence.py", str(path)]
-    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
-    assert result.returncode == 0, result.stdout + result.stderr
+    return subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
+
+
+def test_qa_evidence_schema_accepts_full_catalog(tmp_path: Path) -> None:
+    _, path = write_complete_qa_evidence(tmp_path)
+    _, _, errors = validate_evidence_bundle(path, attestation_mode="structural")
+    assert errors == []
+
+
+def test_qa_evidence_rejects_result_rows_outside_verified_preview(tmp_path: Path) -> None:
+    evidence, path = write_complete_qa_evidence(tmp_path)
+    evidence["results"][0]["preview_url"] = "https://app.hotels-pms.com"
+    path.write_text(json.dumps(evidence), encoding="utf-8")
+
+    result = run_qa_evidence_check(path)
+
+    assert result.returncode == 1
+    assert "preview_url" in result.stdout
+    assert "Traceback" not in result.stderr
+
+
+def test_qa_evidence_rejects_malformed_result_without_traceback(tmp_path: Path) -> None:
+    evidence, path = write_complete_qa_evidence(tmp_path)
+    evidence["results"][0] = None
+    path.write_text(json.dumps(evidence), encoding="utf-8")
+
+    result = run_qa_evidence_check(path)
+
+    assert result.returncode == 1
+    assert "result 0" in result.stdout
+    assert "Traceback" not in result.stderr

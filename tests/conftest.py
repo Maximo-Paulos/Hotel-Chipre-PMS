@@ -6,6 +6,11 @@ import os
 import re as _re
 import pathlib as _pathlib
 
+from tests.postgres_test_safety import (
+    PostgresTargetSafetyError,
+    validate_postgres_test_target,
+)
+
 # ── Auto-derive DATABASE_URL_TEST (must happen before any test module loads) ──
 # Priority: explicit env var > DATABASE_URL from .env with /postgres → /hotel_chipre_test.
 # IMPORTANT: parse .env manually — do NOT load_dotenv() it. Exporting the full .env
@@ -49,15 +54,29 @@ from app.database import Base
 _PG_DSN = os.environ.get("DATABASE_URL_TEST", "")
 
 
+def _validated_pg_dsn_or_skip() -> str:
+    if not _PG_DSN or not _PG_DSN.startswith("postgresql"):
+        pytest.skip("PostgreSQL test target is not configured")
+    try:
+        return validate_postgres_test_target(_PG_DSN, os.environ)
+    except PostgresTargetSafetyError:
+        pytest.skip("PostgreSQL test target is not explicitly proven isolated")
+
+
 @pytest.fixture(scope="session")
 def pg_engine():
-    if not _PG_DSN or not _PG_DSN.startswith("postgresql"):
-        pytest.skip("DATABASE_URL_TEST not set to a PostgreSQL DSN — skipping PostgreSQL tests")
-    engine = create_engine(_PG_DSN, echo=False)
-    Base.metadata.create_all(engine)
-    yield engine
-    Base.metadata.drop_all(engine)
-    engine.dispose()
+    safe_dsn = _validated_pg_dsn_or_skip()
+    engine = create_engine(safe_dsn, echo=False)
+    try:
+        Base.metadata.create_all(engine)
+        yield engine
+        # Refuse teardown mutations if the explicit provider evidence changed
+        # while the session was running. Leaving disposable QA objects behind
+        # is safer than dropping against an unproven target.
+        validate_postgres_test_target(safe_dsn, os.environ)
+        Base.metadata.drop_all(engine)
+    finally:
+        engine.dispose()
 
 
 @pytest.fixture()

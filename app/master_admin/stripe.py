@@ -8,6 +8,7 @@ import requests
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.master_admin.models import MasterStripeSettings
 from app.services.integration_service import decrypt_payload, encrypt_payload
 
@@ -72,6 +73,11 @@ def get_stripe_status(db: Session) -> dict[str, object]:
 
 
 def save_stripe_settings(db: Session, payload: dict[str, object]) -> dict[str, object]:
+    if not get_settings().CONNECTIONS_ENABLED:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Las integraciones externas estan deshabilitadas en este entorno",
+        )
     secret_key = _stripe_secret(payload)
     if not secret_key:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Falta el secret key de Stripe")

@@ -14,20 +14,23 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       - name: Validate agents, skills, vault and manifests
         run: python scripts/agent_ops/validate_setup.py
-      - name: Require valid cloud evidence for functional changes
+      - name: Require provider-bound cloud evidence for release-relevant changes
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          EXPECTED_REPOSITORY: ${{ github.repository }}
+          EXPECTED_BRANCH: ${{ github.event.pull_request.head.ref }}
+          EXPECTED_DEFAULT_BRANCH: ${{ github.event.pull_request.base.ref }}
         run: |
-          changed=$(git diff --name-only "$BASE_SHA..$HEAD_SHA")
-          if ! printf '%s\n' "$changed" | grep -Eq '^(app/|frontend/src/|alembic/)'; then
-            exit 0
-          fi
-          evidence=$(find qa/evidence -mindepth 2 -maxdepth 2 -name summary.json -print -quit)
-          test -n "$evidence"
-          python scripts/agent_ops/check_release_evidence.py "$evidence" --head "$HEAD_SHA"
+          python scripts/agent_ops/check_release_evidence.py \
+            --base "$BASE_SHA" \
+            --head "$HEAD_SHA" \
+            --repository "$EXPECTED_REPOSITORY" \
+            --branch "$EXPECTED_BRANCH" \
+            --default-branch "$EXPECTED_DEFAULT_BRANCH"

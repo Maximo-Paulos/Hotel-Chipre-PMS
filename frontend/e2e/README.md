@@ -19,15 +19,19 @@ npm run e2e -- e2e/v72-pages.spec.ts
 From the repository root:
 
 ```bash
-DATABASE_URL=sqlite:///./_e2e.db JWT_SECRET=e2e-local-jwt-secret-change-me-32chars python scripts/seed_e2e_backend.py
-DATABASE_URL=sqlite:///./_e2e.db JWT_SECRET=e2e-local-jwt-secret-change-me-32chars uvicorn app.main:app --host 127.0.0.1 --port 8040
+APP_ENV=test DATABASE_URL=sqlite:///./_e2e.db JWT_SECRET=e2e-local-jwt-secret-change-me-32chars python scripts/seed_e2e_backend.py
+APP_ENV=test DATABASE_URL=sqlite:///./_e2e.db JWT_SECRET=e2e-local-jwt-secret-change-me-32chars uvicorn app.main:app --host 127.0.0.1 --port 8040
 ```
 
 Or use the single-command wrapper:
 
 ```bash
-python scripts/serve_e2e_backend.py
+APP_ENV=test DATABASE_URL=sqlite:///./_e2e.db python scripts/serve_e2e_backend.py
 ```
+
+El seed/wrapper sólo admite SQLite en el path exacto `_e2e.db` del repositorio.
+Si hereda `APP_ENV=production`, un DSN PostgreSQL o cualquier otro path, termina
+antes de importar Alembic/FastAPI y no toca esa base.
 
 In another shell from `frontend/`:
 

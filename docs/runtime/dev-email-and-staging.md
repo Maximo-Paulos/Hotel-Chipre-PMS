@@ -12,11 +12,11 @@ In development and non-production modes, transactional email is captured as a de
 
 ## Recommended local startup
 
-```powershell
-set APP_ENV=development
-set TESTING=true
-set DEV_EMAIL_OUTBOX_PATH=C:\PROJECTO\Hotel-Chipre-PMS\tmp\dev-email-outbox.jsonl
-python -m uvicorn app.main:app --host 127.0.0.1 --port 8040
+```bash
+export APP_ENV=development
+export TESTING=true
+export DEV_EMAIL_OUTBOX_PATH="$PWD/tmp/dev-email-outbox.jsonl"
+.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8040
 ```
 
 ## Staging handoff

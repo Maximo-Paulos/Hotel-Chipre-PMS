@@ -1,6 +1,6 @@
 # Estado exhaustivo del sistema — Hotel Chipre PMS
 
-Auditoría base: commit `bc938cf` (`confirmed` para inventarios estáticos revisados el 2026-07-18); el setup de esta rama se valida sobre el worktree posterior. La configuración live de Vercel/Render se volvió a comprobar el 2026-07-18 y se documenta abajo como evidencia de proveedor, separada del código versionado.
+Auditoría base: commit `767226c0` más el worktree de preparación QA validado el 2026-07-19 (`confirmed` para inventarios y tests locales; el SHA final se registrará tras el refresh Graphify). La configuración live de Vercel/Render se comprobó el 2026-07-18; la sesión Supabase y la restricción de plan se comprobaron el 2026-07-19. La evidencia de proveedor permanece separada del código versionado.
 Fuentes principales: `app/main.py`, `app/config.py`, `app/models/`, `app/api/`, `app/services/`, `frontend/src/router.tsx`, `render.yaml`, `vercel.json`, Alembic y `.graphify/`.
 Artefactos reproducibles: [OpenAPI](../_generated/api-surface.md), [rutas frontend](../_generated/frontend-routes.md), [migración head](../_generated/migration-head.md), [superficies cloud](../_generated/cloud-surfaces.md), [resumen Graphify](../_generated/graphify-summary.md).
 
@@ -60,7 +60,7 @@ Master-admin se autentica con email, password y PIN y mantiene seguridad separad
 
 El backend registra pagos, payment links, surcharges, tests de link, transactions/refunds, cash register y grupos/movimientos. Los modelos de transacción incluyen una estrategia de idempotencia por hotel/reserva/clave. Existen adaptadores/superficies para integraciones, OTAs, OTA webhooks, WhatsApp y email.
 
-En QA cloud se permite crear un payment link real si el sistema lo requiere, pero está prohibido completarlo. No se envían correos, no se disparan webhooks y no se ejecutan operaciones OTA reales. Esas ramas se verifican mediante test de contrato, adapter o entorno local controlado, con exclusión explícita en evidencia QA.
+El runtime preview ahora falla al iniciar salvo que correo use provider `null`, conexiones estén deshabilitadas, PayPal esté en sandbox e IA/Gemma estén explícitamente apagadas. El verificador rechaza credenciales Resend/Gmail/Mercado Pago/PayPal/OTA/IA/Gemma y cualquier worker/cron hermano en el entorno Render QA; Stripe también se bloquea antes de llamar a red cuando `CONNECTIONS_ENABLED=false`. En esta baseline no se crean ni completan pagos reales, no se envían correos, no se disparan webhooks ni se ejecutan operaciones OTA. Esas ramas se verifican por contrato/local adapter y se excluyen explícitamente de la evidencia cloud.
 
 ## 7. IA Gemma y analítica
 
@@ -86,13 +86,15 @@ El repositorio ya alinea `.env.example`, `.env.render`, defaults frontend, SEO/s
 
 ## 9. Previews y QA cloud requeridos
 
-**Estado: `needs-verification` — diseño documentado, aprovisionamiento externo pendiente.**
+**Estado: `needs-verification` — implementación local verde; bootstrap en rama por defecto y aprovisionamiento externo pendientes.**
 
 Vercel genera previews Git por rama, pero el `VITE_API_URL` de Production se dejó deliberadamente fuera de Preview: una preview sin backend aislado no es una preview QA válida ni debe tocar la API compartida. Render PR Previews permanece `Off`; cuando se habilite debe ser `Manual`, nunca automático, y sólo después de comprobar una Supabase Branch (o segunda DB QA aislada).
 
 `needs-verification`: los checks de PR actuales reportan Vercel bajo el espacio `maximo-paulos-projects`, mientras la configuración Production verificada vive en `maximopaulos1-4687s-projects`. Hasta reconciliar esa integración/proyecto, ninguna URL de preview Vercel se acepta como par válido del frontend de producción.
 
-El gate permanente exige: Vercel preview por rama, Render preview backend con `/health`, Supabase Branch por PR sin datos reales y un manifiesto que demuestre qué frontend apunta a qué backend. El frontend debe compilar con `VITE_API_URL` de ese backend; Render debe recibir `DATABASE_URL`, secretos QA, CORS y `FRONTEND_URL` propios. Si no hay Supabase Branches, el diseño se detiene hasta disponer de una segunda DB QA aislada; usar una DB compartida queda prohibido.
+Supabase mostró que las branches persistentes requieren upgrade. El fallback confirmado es crear un segundo proyecto gratuito QA sin datos productivos y usarlo como baseline exclusiva serializada; usar la base principal queda prohibido. El workflow confiable adquiere un lease aleatorio, verifica proveedores, hace bootstrap con capacidad Ed25519 efímera, elimina esa capacidad, vuelve a verificar deployment/URLs, comprueba health/CORS/bundle y libera el lease aun ante fallos. Cuando Supabase Branches esté disponible se migra a una base por target.
+
+El gate permanente exige: Vercel preview por rama, Render backend QA con `/health`, base QA independiente y un manifiesto que demuestre qué frontend apunta a qué backend. `VITE_API_URL`, CORS, `FRONTEND_URL`, cinco personas y política de migración quedan ligados por proveedor/fingerprint. El token nunca se publica como artefacto ni cruza workflows. La clave pública de atestación humana ya existe en `qa/trust/`; las dos claves privadas distintas permanecen sólo bajo `artifacts/qa/keys/` ignorado y con permisos `0600`.
 
 El bootstrap de owner/hotel sintéticos y personas manager/recepción/housekeeping requiere verificación única manual por correo dedicado. Master-admin QA debe ser identidad distinta configurada en Render. Credenciales/sesiones locales permanecen en `.env.qa.local`/directorios ignorados.
 
@@ -100,9 +102,9 @@ Cada fila de la regresión registra persona, URL de preview, precondición, acci
 
 ## 10. Tests y validación local
 
-**Estado: `confirmed` para la ejecución local del setup el 2026-07-18; la QA cloud sigue `needs-verification`.**
+**Estado: `confirmed` para la ejecución local del setup el 2026-07-19; la QA cloud sigue `needs-verification`.**
 
-El repositorio contiene tests backend y frontend/e2e; los comandos concretos dependen del área. Para modificaciones de producto la puerta requiere tests focales, pytest backend, lint/typecheck/build frontend, migración sobre DB limpia y Playwright local antes del preview. En esta rama: `pytest` terminó con **758 passed, 16 skipped, 12 xfailed y 1 xpassed**; lint, typecheck y build frontend pasaron; Playwright pasó **18/18** contra SQLite aislado. Este setup añade validadores propios para paridad de agentes/skills, enlaces del vault, Graphify y esquema de evidencia.
+El repositorio contiene tests backend y frontend/e2e; los comandos concretos dependen del área. Para modificaciones de producto la puerta requiere tests focales, pytest backend, lint/typecheck/build frontend, migración sobre DB limpia y Playwright local antes del preview. En esta rama: `pytest` terminó con **1088 passed, 17 skipped, 12 xfailed y 1 xpassed**; lint, typecheck y build frontend pasaron; Playwright pasó **18/18** contra SQLite aislado. `validate_setup.py`, paridad de agentes/skills, enlaces del vault, YAML, compileall y `git diff --check` también pasaron. El build conserva una advertencia no bloqueante por chunk JS de 755,65 kB.
 
 No se debe confundir “configuración creada” con “preview probado”: mientras falten las credenciales/URLs aisladas, la validación cloud es un bloqueo documentado, no un éxito parcial.
 
@@ -110,7 +112,7 @@ No se debe confundir “configuración creada” con “preview probado”: mien
 
 **Estado: `confirmed` para extracción AST actual; descripciones/labels semánticos se mantienen deliberadamente pendientes.**
 
-La actualización final AST produjo **5.528 nodos, 17.098 aristas y 289 comunidades**, más **478 flujos ejecutables**. Sus god nodes continúan orientando sobre `ReservationStatusEnum`, `Reservation`, `HotelConfiguration`, `Base` y `Room`; revisar el resumen generado antes de inferir impacto concreto. `graphify portable-check .graphify` pasó. `graphify check-update .` anuncia descripciones/labels pendientes porque esta política ejecuta explícitamente `--no-description --no-label`; no indica que la extracción AST esté vieja.
+La actualización final AST produjo **6.171 nodos, 19.157 aristas y 297 comunidades**, más **501 flujos ejecutables**. Sus god nodes continúan orientando sobre `ReservationStatusEnum`, `Reservation`, `HotelConfiguration`, `Room` y `Guest`; revisar el resumen generado antes de inferir impacto concreto. `graphify portable-check` pasó. La única extracción omitida es el script PowerShell de smoke porque este runtime no tiene `tree-sitter-powershell`. `graphify check-update` anuncia descripciones/labels pendientes porque esta política ejecuta explícitamente `--no-description --no-label`; no indica que la extracción AST esté vieja.
 
 Cuando cambie código, se ejecuta `graphify update . --scope all --no-description --no-label`, `graphify flows build`, `.venv/bin/python scripts/agent_ops/normalize_graphify_portability.py`, `graphify portable-check` y `graphify check-update`. Usar `minimal-context`, `affected-flows` y `query`; no exportar el grafo completo como notas Obsidian.
 
@@ -127,8 +129,8 @@ Cuando cambie código, se ejecuta `graphify update . --scope all --no-descriptio
 
 ## 13. Prioridades inmediatas
 
-1. Validar en PostgreSQL aislado el PR #24 de normalización de enums y, si pasa, hacer merge/promotion sin saltar la revisión de seguridad.
-2. Aprovisionar Supabase Branches o una segunda DB QA aislada; recién entonces habilitar Render Preview manual y conectar el Vercel Preview a su backend exacto.
-3. Realizar bootstrap manual de las cinco identidades QA y guardar sólo metadatos no sensibles.
-4. Ejecutar baseline cloud completo y registrar evidencia por persona antes de activar el gate de merge funcional.
-5. Corregir cada discrepancia que revele la baseline, empezando por auth/tenancy, reservas/pagos y UX operativa.
+1. Llevar mediante una PR bootstrap mínima los workflows confiables, scripts, lock de dependencias y clave pública de atestación a `main`; no pueden proteger la misma PR que los introduce.
+2. Crear el segundo proyecto Supabase QA, el servicio/entorno Render QA y el GitHub Environment `preview-qa`; configurar Vercel Preview con el backend exacto y rotar cualquier hook expuesto.
+3. Ejecutar el ciclo confiable contra un target de prueba y validar en PostgreSQL real el PR #24 de normalización de enums.
+4. Realizar bootstrap de las cinco identidades sintéticas, ejecutar el catálogo cloud completo como usuario humano y firmar evidencia posterior al último `code_sha`.
+5. Activar protección de rama sólo tras la primera baseline verde; corregir primero cualquier brecha en auth/tenancy, reservas/pagos o UX operativa.

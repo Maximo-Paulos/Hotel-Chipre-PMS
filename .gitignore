@@ -67,6 +67,10 @@ artifacts/qa/
 .obsidian/workspace-mobile.json
 .obsidian/graph.json
 .obsidian/cache/
+knowledge/.obsidian/workspace.json
+knowledge/.obsidian/workspace-mobile.json
+knowledge/.obsidian/graph.json
+knowledge/.obsidian/cache/
 
 # Frontend
 frontend/node_modules/

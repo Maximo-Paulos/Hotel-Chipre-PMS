@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-18T16:40:11.081Z",
+  "generatedAt": "2026-07-20T03:53:12.476Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -117,6 +117,160 @@
       "warnings": []
     },
     {
+      "id": "flow:agent_ops_validate_preview_manifest_main",
+      "name": "main",
+      "entryPoint": "agent_ops_validate_preview_manifest_main",
+      "entryPointId": "agent_ops_validate_preview_manifest_main",
+      "path": [
+        "agent_ops_validate_preview_manifest_main",
+        "agent_ops_validate_preview_manifest_validate_manifest",
+        "agent_ops_validate_preview_manifest_write_github_output",
+        "agent_ops_validate_preview_manifest_https_preview_url",
+        "agent_ops_validate_preview_manifest_mapping",
+        "agent_ops_validate_preview_manifest_non_empty",
+        "agent_ops_validate_preview_manifest_origin",
+        "agent_ops_validate_preview_manifest_timestamp",
+        "agent_ops_validate_preview_manifest_valid_timestamp",
+        "agent_ops_validate_preview_manifest_validate_baseline_lease_id",
+        "agent_ops_validate_preview_manifest_validate_observation_time",
+        "agent_ops_validate_preview_manifest_canonical_host"
+      ],
+      "qualifiedPath": [
+        "agent_ops_validate_preview_manifest_main",
+        "agent_ops_validate_preview_manifest_validate_manifest",
+        "agent_ops_validate_preview_manifest_write_github_output",
+        "agent_ops_validate_preview_manifest_https_preview_url",
+        "agent_ops_validate_preview_manifest_mapping",
+        "agent_ops_validate_preview_manifest_non_empty",
+        "agent_ops_validate_preview_manifest_origin",
+        "agent_ops_validate_preview_manifest_timestamp",
+        "agent_ops_validate_preview_manifest_valid_timestamp",
+        "agent_ops_validate_preview_manifest_validate_baseline_lease_id",
+        "agent_ops_validate_preview_manifest_validate_observation_time",
+        "agent_ops_validate_preview_manifest_canonical_host"
+      ],
+      "depth": 3,
+      "nodeCount": 12,
+      "fileCount": 1,
+      "files": [
+        "scripts/agent_ops/validate_preview_manifest.py"
+      ],
+      "criticality": 0.43,
+      "warnings": []
+    },
+    {
+      "id": "flow:agent_ops_verify_preview_bundle_main",
+      "name": "main",
+      "entryPoint": "agent_ops_verify_preview_bundle_main",
+      "entryPointId": "agent_ops_verify_preview_bundle_main",
+      "path": [
+        "agent_ops_verify_preview_bundle_main",
+        "agent_ops_verify_preview_bundle_fetch_assets",
+        "agent_ops_verify_preview_bundle_asset_entries",
+        "agent_ops_verify_preview_bundle_bundleverificationerror",
+        "agent_ops_verify_preview_bundle_noredirect",
+        "agent_ops_verify_preview_bundle_origin"
+      ],
+      "qualifiedPath": [
+        "agent_ops_verify_preview_bundle_main",
+        "agent_ops_verify_preview_bundle_fetch_assets",
+        "agent_ops_verify_preview_bundle_asset_entries",
+        "agent_ops_verify_preview_bundle_bundleverificationerror",
+        "agent_ops_verify_preview_bundle_noredirect",
+        "agent_ops_verify_preview_bundle_origin"
+      ],
+      "depth": 3,
+      "nodeCount": 6,
+      "fileCount": 1,
+      "files": [
+        "scripts/agent_ops/verify_preview_bundle.py"
+      ],
+      "criticality": 0.43,
+      "warnings": []
+    },
+    {
+      "id": "flow:agent_ops_verify_preview_providers_main",
+      "name": "main",
+      "entryPoint": "agent_ops_verify_preview_providers_main",
+      "entryPointId": "agent_ops_verify_preview_providers_main",
+      "path": [
+        "agent_ops_verify_preview_providers_main",
+        "agent_ops_verify_preview_providers_build_manifest",
+        "agent_ops_verify_preview_providers_providerclients",
+        "agent_ops_verify_preview_providers_readonlyjsonapi",
+        "agent_ops_verify_preview_providers_required_env",
+        "agent_ops_verify_preview_providers_verificationconfig",
+        "agent_ops_verify_preview_providers_canonical_hostname",
+        "agent_ops_verify_preview_providers_connection_fingerprint",
+        "agent_ops_verify_preview_providers_iso_utc",
+        "agent_ops_verify_preview_providers_opaque_fingerprint",
+        "agent_ops_verify_preview_providers_public_origin",
+        "agent_ops_verify_preview_providers_select_render_preview",
+        "agent_ops_verify_preview_providers_select_supabase_preview",
+        "agent_ops_verify_preview_providers_select_vercel_preview",
+        "agent_ops_verify_preview_providers_string",
+        "agent_ops_verify_preview_providers_validate_baseline_lease_id",
+        "agent_ops_verify_preview_providers_validate_config",
+        "agent_ops_verify_preview_providers_verificationerror",
+        "agent_ops_verify_preview_providers_verify_dedicated_baseline_lease",
+        "agent_ops_verify_preview_providers_verify_github_target",
+        "agent_ops_verify_preview_providers_dict",
+        "agent_ops_verify_preview_providers_github_repo_from_url",
+        "agent_ops_verify_preview_providers_parse_timestamp",
+        "agent_ops_verify_preview_providers_render_env",
+        "agent_ops_verify_preview_providers_render_page",
+        "agent_ops_verify_preview_providers_require_recent",
+        "agent_ops_verify_preview_providers_verify_qa_external_effects_disabled",
+        "agent_ops_verify_preview_providers_database_identity",
+        "agent_ops_verify_preview_providers_list",
+        "agent_ops_verify_preview_providers_deployment_git_identity",
+        "agent_ops_verify_preview_providers_deployment_hosts",
+        "agent_ops_verify_preview_providers_decode_lease_entropy"
+      ],
+      "qualifiedPath": [
+        "agent_ops_verify_preview_providers_main",
+        "agent_ops_verify_preview_providers_build_manifest",
+        "agent_ops_verify_preview_providers_providerclients",
+        "agent_ops_verify_preview_providers_readonlyjsonapi",
+        "agent_ops_verify_preview_providers_required_env",
+        "agent_ops_verify_preview_providers_verificationconfig",
+        "agent_ops_verify_preview_providers_canonical_hostname",
+        "agent_ops_verify_preview_providers_connection_fingerprint",
+        "agent_ops_verify_preview_providers_iso_utc",
+        "agent_ops_verify_preview_providers_opaque_fingerprint",
+        "agent_ops_verify_preview_providers_public_origin",
+        "agent_ops_verify_preview_providers_select_render_preview",
+        "agent_ops_verify_preview_providers_select_supabase_preview",
+        "agent_ops_verify_preview_providers_select_vercel_preview",
+        "agent_ops_verify_preview_providers_string",
+        "agent_ops_verify_preview_providers_validate_baseline_lease_id",
+        "agent_ops_verify_preview_providers_validate_config",
+        "agent_ops_verify_preview_providers_verificationerror",
+        "agent_ops_verify_preview_providers_verify_dedicated_baseline_lease",
+        "agent_ops_verify_preview_providers_verify_github_target",
+        "agent_ops_verify_preview_providers_dict",
+        "agent_ops_verify_preview_providers_github_repo_from_url",
+        "agent_ops_verify_preview_providers_parse_timestamp",
+        "agent_ops_verify_preview_providers_render_env",
+        "agent_ops_verify_preview_providers_render_page",
+        "agent_ops_verify_preview_providers_require_recent",
+        "agent_ops_verify_preview_providers_verify_qa_external_effects_disabled",
+        "agent_ops_verify_preview_providers_database_identity",
+        "agent_ops_verify_preview_providers_list",
+        "agent_ops_verify_preview_providers_deployment_git_identity",
+        "agent_ops_verify_preview_providers_deployment_hosts",
+        "agent_ops_verify_preview_providers_decode_lease_entropy"
+      ],
+      "depth": 3,
+      "nodeCount": 32,
+      "fileCount": 1,
+      "files": [
+        "scripts/agent_ops/verify_preview_providers.py"
+      ],
+      "criticality": 0.43,
+      "warnings": []
+    },
+    {
       "id": "flow:services_ota_service_otaintegrationservice_upsert_webhook_credential",
       "name": ".upsert_webhook_credential",
       "entryPoint": "services_ota_service_otaintegrationservice_upsert_webhook_credential",
@@ -206,6 +360,34 @@
       "fileCount": 1,
       "files": [
         "app/master_admin/stripe.py"
+      ],
+      "criticality": 0.42,
+      "warnings": []
+    },
+    {
+      "id": "flow:agent_ops_verify_preview_bundle_discover",
+      "name": "discover",
+      "entryPoint": "agent_ops_verify_preview_bundle_discover",
+      "entryPointId": "agent_ops_verify_preview_bundle_discover",
+      "path": [
+        "agent_ops_verify_preview_bundle_discover",
+        "agent_ops_verify_preview_bundle_discover_script_urls",
+        "agent_ops_verify_preview_bundle_bundleverificationerror",
+        "agent_ops_verify_preview_bundle_origin",
+        "agent_ops_verify_preview_bundle_scriptparser"
+      ],
+      "qualifiedPath": [
+        "agent_ops_verify_preview_bundle_discover",
+        "agent_ops_verify_preview_bundle_discover_script_urls",
+        "agent_ops_verify_preview_bundle_bundleverificationerror",
+        "agent_ops_verify_preview_bundle_origin",
+        "agent_ops_verify_preview_bundle_scriptparser"
+      ],
+      "depth": 2,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "scripts/agent_ops/verify_preview_bundle.py"
       ],
       "criticality": 0.42,
       "warnings": []
@@ -463,6 +645,34 @@
       "warnings": []
     },
     {
+      "id": "flow:agent_ops_verify_preview_bundle_verify",
+      "name": "verify",
+      "entryPoint": "agent_ops_verify_preview_bundle_verify",
+      "entryPointId": "agent_ops_verify_preview_bundle_verify",
+      "path": [
+        "agent_ops_verify_preview_bundle_verify",
+        "agent_ops_verify_preview_bundle_asset_entries",
+        "agent_ops_verify_preview_bundle_bundleverificationerror",
+        "agent_ops_verify_preview_bundle_verify_asset_payloads",
+        "agent_ops_verify_preview_bundle_origin"
+      ],
+      "qualifiedPath": [
+        "agent_ops_verify_preview_bundle_verify",
+        "agent_ops_verify_preview_bundle_asset_entries",
+        "agent_ops_verify_preview_bundle_bundleverificationerror",
+        "agent_ops_verify_preview_bundle_verify_asset_payloads",
+        "agent_ops_verify_preview_bundle_origin"
+      ],
+      "depth": 2,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "scripts/agent_ops/verify_preview_bundle.py"
+      ],
+      "criticality": 0.42,
+      "warnings": []
+    },
+    {
       "id": "flow:api_auth_verify_email",
       "name": "verify_email",
       "entryPoint": "api_auth_verify_email",
@@ -510,6 +720,50 @@
         "app/master_admin/stripe.py"
       ],
       "criticality": 0.42,
+      "warnings": []
+    },
+    {
+      "id": "flow:agent_ops_verify_preview_providers_readonlyjsonapi_init",
+      "name": ".__init",
+      "entryPoint": "agent_ops_verify_preview_providers_readonlyjsonapi_init",
+      "entryPointId": "agent_ops_verify_preview_providers_readonlyjsonapi_init",
+      "path": [
+        "agent_ops_verify_preview_providers_readonlyjsonapi_init",
+        "agent_ops_verify_preview_providers_verificationerror"
+      ],
+      "qualifiedPath": [
+        "agent_ops_verify_preview_providers_readonlyjsonapi_init",
+        "agent_ops_verify_preview_providers_verificationerror"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "scripts/agent_ops/verify_preview_providers.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
+      "id": "flow:agent_ops_verify_preview_providers_readonlyjsonapi_get",
+      "name": ".get",
+      "entryPoint": "agent_ops_verify_preview_providers_readonlyjsonapi_get",
+      "entryPointId": "agent_ops_verify_preview_providers_readonlyjsonapi_get",
+      "path": [
+        "agent_ops_verify_preview_providers_readonlyjsonapi_get",
+        "agent_ops_verify_preview_providers_verificationerror"
+      ],
+      "qualifiedPath": [
+        "agent_ops_verify_preview_providers_readonlyjsonapi_get",
+        "agent_ops_verify_preview_providers_verificationerror"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "scripts/agent_ops/verify_preview_providers.py"
+      ],
+      "criticality": 0.41,
       "warnings": []
     },
     {
@@ -1347,6 +1601,90 @@
       "warnings": []
     },
     {
+      "id": "flow:scripts_bootstrap_cloud_qa_cli",
+      "name": "cli",
+      "entryPoint": "scripts_bootstrap_cloud_qa_cli",
+      "entryPointId": "scripts_bootstrap_cloud_qa_cli",
+      "path": [
+        "scripts_bootstrap_cloud_qa_cli",
+        "scripts_bootstrap_cloud_qa_main",
+        "scripts_bootstrap_cloud_qa_bootstrap_database",
+        "scripts_bootstrap_cloud_qa_load_config",
+        "scripts_bootstrap_cloud_qa_run_migrations",
+        "scripts_bootstrap_cloud_qa_runtime_database_environment",
+        "scripts_bootstrap_cloud_qa_upsert_qa_data",
+        "scripts_bootstrap_cloud_qa_flag",
+        "scripts_bootstrap_cloud_qa_persona",
+        "scripts_bootstrap_cloud_qa_qabootstrapconfig",
+        "scripts_bootstrap_cloud_qa_qabootstraperror",
+        "scripts_bootstrap_cloud_qa_required",
+        "scripts_bootstrap_cloud_qa_validate_database_target",
+        "scripts_bootstrap_cloud_qa_validate_email",
+        "scripts_bootstrap_cloud_qa_validate_password",
+        "scripts_bootstrap_cloud_qa_qa_marker",
+        "scripts_bootstrap_cloud_qa_qabootstrapresult",
+        "scripts_bootstrap_cloud_qa_postgres_identity",
+        "scripts_bootstrap_cloud_qa_required_port",
+        "scripts_bootstrap_cloud_qa_validate_non_production_target",
+        "scripts_bootstrap_cloud_qa_verify_provider_evidence_token",
+        "scripts_bootstrap_cloud_qa_target_identity_text",
+        "scripts_bootstrap_cloud_qa_b64url_decode",
+        "scripts_bootstrap_cloud_qa_database_connection_fingerprint",
+        "scripts_bootstrap_cloud_qa_evidence_signing_key",
+        "scripts_bootstrap_cloud_qa_load_provider_evidence_public_key",
+        "scripts_bootstrap_cloud_qa_providerevidence",
+        "scripts_bootstrap_cloud_qa_validate_isolation_contract",
+        "scripts_bootstrap_cloud_qa_validate_qa_database_role",
+        "scripts_bootstrap_cloud_qa_encode_provider_evidence_segment",
+        "scripts_bootstrap_cloud_qa_canonical_database_host",
+        "scripts_bootstrap_cloud_qa_validate_baseline_lease_id",
+        "scripts_bootstrap_cloud_qa_decode_baseline_lease_entropy"
+      ],
+      "qualifiedPath": [
+        "scripts_bootstrap_cloud_qa_cli",
+        "scripts_bootstrap_cloud_qa_main",
+        "scripts_bootstrap_cloud_qa_bootstrap_database",
+        "scripts_bootstrap_cloud_qa_load_config",
+        "scripts_bootstrap_cloud_qa_run_migrations",
+        "scripts_bootstrap_cloud_qa_runtime_database_environment",
+        "scripts_bootstrap_cloud_qa_upsert_qa_data",
+        "scripts_bootstrap_cloud_qa_flag",
+        "scripts_bootstrap_cloud_qa_persona",
+        "scripts_bootstrap_cloud_qa_qabootstrapconfig",
+        "scripts_bootstrap_cloud_qa_qabootstraperror",
+        "scripts_bootstrap_cloud_qa_required",
+        "scripts_bootstrap_cloud_qa_validate_database_target",
+        "scripts_bootstrap_cloud_qa_validate_email",
+        "scripts_bootstrap_cloud_qa_validate_password",
+        "scripts_bootstrap_cloud_qa_qa_marker",
+        "scripts_bootstrap_cloud_qa_qabootstrapresult",
+        "scripts_bootstrap_cloud_qa_postgres_identity",
+        "scripts_bootstrap_cloud_qa_required_port",
+        "scripts_bootstrap_cloud_qa_validate_non_production_target",
+        "scripts_bootstrap_cloud_qa_verify_provider_evidence_token",
+        "scripts_bootstrap_cloud_qa_target_identity_text",
+        "scripts_bootstrap_cloud_qa_b64url_decode",
+        "scripts_bootstrap_cloud_qa_database_connection_fingerprint",
+        "scripts_bootstrap_cloud_qa_evidence_signing_key",
+        "scripts_bootstrap_cloud_qa_load_provider_evidence_public_key",
+        "scripts_bootstrap_cloud_qa_providerevidence",
+        "scripts_bootstrap_cloud_qa_validate_isolation_contract",
+        "scripts_bootstrap_cloud_qa_validate_qa_database_role",
+        "scripts_bootstrap_cloud_qa_encode_provider_evidence_segment",
+        "scripts_bootstrap_cloud_qa_canonical_database_host",
+        "scripts_bootstrap_cloud_qa_validate_baseline_lease_id",
+        "scripts_bootstrap_cloud_qa_decode_baseline_lease_entropy"
+      ],
+      "depth": 7,
+      "nodeCount": 33,
+      "fileCount": 1,
+      "files": [
+        "scripts/bootstrap_cloud_qa.py"
+      ],
+      "criticality": 0.2958,
+      "warnings": []
+    },
+    {
       "id": "flow:services_integration_service_connection_account_label",
       "name": "connection_account_label",
       "entryPoint": "services_integration_service_connection_account_label",
@@ -1651,6 +1989,28 @@
       "warnings": []
     },
     {
+      "id": "flow:tests_conftest_pg_engine",
+      "name": "pg_engine",
+      "entryPoint": "tests_conftest_pg_engine",
+      "entryPointId": "tests_conftest_pg_engine",
+      "path": [
+        "tests_conftest_pg_engine",
+        "tests_conftest_validated_pg_dsn_or_skip"
+      ],
+      "qualifiedPath": [
+        "tests_conftest_pg_engine",
+        "tests_conftest_validated_pg_dsn_or_skip"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "tests/conftest.py"
+      ],
+      "criticality": 0.285,
+      "warnings": []
+    },
+    {
       "id": "flow:services_waitlist_service_request_payment_link_for_waitlist",
       "name": "request_payment_link_for_waitlist",
       "entryPoint": "services_waitlist_service_request_payment_link_for_waitlist",
@@ -1802,6 +2162,48 @@
       "fileCount": 1,
       "files": [
         "app/services/integration_service.py"
+      ],
+      "criticality": 0.2842,
+      "warnings": []
+    },
+    {
+      "id": "flow:scripts_bootstrap_cloud_qa_issue_provider_evidence_token",
+      "name": "issue_provider_evidence_token",
+      "entryPoint": "scripts_bootstrap_cloud_qa_issue_provider_evidence_token",
+      "entryPointId": "scripts_bootstrap_cloud_qa_issue_provider_evidence_token",
+      "path": [
+        "scripts_bootstrap_cloud_qa_issue_provider_evidence_token",
+        "scripts_bootstrap_cloud_qa_b64url_encode",
+        "scripts_bootstrap_cloud_qa_canonical_json",
+        "scripts_bootstrap_cloud_qa_evidence_signing_key",
+        "scripts_bootstrap_cloud_qa_manifest_provider_payload",
+        "scripts_bootstrap_cloud_qa_qabootstraperror",
+        "scripts_bootstrap_cloud_qa_database_connection_fingerprint",
+        "scripts_bootstrap_cloud_qa_postgres_identity",
+        "scripts_bootstrap_cloud_qa_validate_non_production_target",
+        "scripts_bootstrap_cloud_qa_validate_qa_database_role",
+        "scripts_bootstrap_cloud_qa_canonical_database_host",
+        "scripts_bootstrap_cloud_qa_target_identity_text"
+      ],
+      "qualifiedPath": [
+        "scripts_bootstrap_cloud_qa_issue_provider_evidence_token",
+        "scripts_bootstrap_cloud_qa_b64url_encode",
+        "scripts_bootstrap_cloud_qa_canonical_json",
+        "scripts_bootstrap_cloud_qa_evidence_signing_key",
+        "scripts_bootstrap_cloud_qa_manifest_provider_payload",
+        "scripts_bootstrap_cloud_qa_qabootstraperror",
+        "scripts_bootstrap_cloud_qa_database_connection_fingerprint",
+        "scripts_bootstrap_cloud_qa_postgres_identity",
+        "scripts_bootstrap_cloud_qa_validate_non_production_target",
+        "scripts_bootstrap_cloud_qa_validate_qa_database_role",
+        "scripts_bootstrap_cloud_qa_canonical_database_host",
+        "scripts_bootstrap_cloud_qa_target_identity_text"
+      ],
+      "depth": 3,
+      "nodeCount": 12,
+      "fileCount": 1,
+      "files": [
+        "scripts/bootstrap_cloud_qa.py"
       ],
       "criticality": 0.2842,
       "warnings": []
@@ -1965,6 +2367,94 @@
       "warnings": []
     },
     {
+      "id": "flow:agent_ops_provision_qa_bootstrap_main",
+      "name": "main",
+      "entryPoint": "agent_ops_provision_qa_bootstrap_main",
+      "entryPointId": "agent_ops_provision_qa_bootstrap_main",
+      "path": [
+        "agent_ops_provision_qa_bootstrap_main",
+        "agent_ops_provision_qa_bootstrap_provision",
+        "agent_ops_provision_qa_bootstrap_provisionerror",
+        "agent_ops_provision_qa_bootstrap_deployment_became_live",
+        "agent_ops_provision_qa_bootstrap_renderclient",
+        "agent_ops_provision_qa_bootstrap_renderclient_request",
+        "agent_ops_provision_qa_bootstrap_validate_capability",
+        "agent_ops_provision_qa_bootstrap_validate_current_render_target",
+        "agent_ops_provision_qa_bootstrap_object",
+        "agent_ops_provision_qa_bootstrap_canonical_json",
+        "agent_ops_provision_qa_bootstrap_decode_token_payload",
+        "agent_ops_provision_qa_bootstrap_canonical_hostname",
+        "agent_ops_provision_qa_bootstrap_connection_fingerprint",
+        "agent_ops_provision_qa_bootstrap_database_identity",
+        "agent_ops_provision_qa_bootstrap_github_repository",
+        "agent_ops_provision_qa_bootstrap_https_origin",
+        "agent_ops_provision_qa_bootstrap_render_env_values",
+        "agent_ops_provision_qa_bootstrap_required_env",
+        "agent_ops_provision_qa_bootstrap_string",
+        "agent_ops_provision_qa_bootstrap_validate_baseline_lease_id"
+      ],
+      "qualifiedPath": [
+        "agent_ops_provision_qa_bootstrap_main",
+        "agent_ops_provision_qa_bootstrap_provision",
+        "agent_ops_provision_qa_bootstrap_provisionerror",
+        "agent_ops_provision_qa_bootstrap_deployment_became_live",
+        "agent_ops_provision_qa_bootstrap_renderclient",
+        "agent_ops_provision_qa_bootstrap_renderclient_request",
+        "agent_ops_provision_qa_bootstrap_validate_capability",
+        "agent_ops_provision_qa_bootstrap_validate_current_render_target",
+        "agent_ops_provision_qa_bootstrap_object",
+        "agent_ops_provision_qa_bootstrap_canonical_json",
+        "agent_ops_provision_qa_bootstrap_decode_token_payload",
+        "agent_ops_provision_qa_bootstrap_canonical_hostname",
+        "agent_ops_provision_qa_bootstrap_connection_fingerprint",
+        "agent_ops_provision_qa_bootstrap_database_identity",
+        "agent_ops_provision_qa_bootstrap_github_repository",
+        "agent_ops_provision_qa_bootstrap_https_origin",
+        "agent_ops_provision_qa_bootstrap_render_env_values",
+        "agent_ops_provision_qa_bootstrap_required_env",
+        "agent_ops_provision_qa_bootstrap_string",
+        "agent_ops_provision_qa_bootstrap_validate_baseline_lease_id"
+      ],
+      "depth": 3,
+      "nodeCount": 20,
+      "fileCount": 1,
+      "files": [
+        "scripts/agent_ops/provision_qa_bootstrap.py"
+      ],
+      "criticality": 0.2675,
+      "warnings": []
+    },
+    {
+      "id": "flow:scripts_bootstrap_cloud_qa_build_provider_evidence_payload",
+      "name": "build_provider_evidence_payload",
+      "entryPoint": "scripts_bootstrap_cloud_qa_build_provider_evidence_payload",
+      "entryPointId": "scripts_bootstrap_cloud_qa_build_provider_evidence_payload",
+      "path": [
+        "scripts_bootstrap_cloud_qa_build_provider_evidence_payload",
+        "scripts_bootstrap_cloud_qa_canonical_provider_evidence_json",
+        "scripts_bootstrap_cloud_qa_qabootstraperror",
+        "scripts_bootstrap_cloud_qa_validate_isolation_contract",
+        "scripts_bootstrap_cloud_qa_validate_baseline_lease_id",
+        "scripts_bootstrap_cloud_qa_decode_baseline_lease_entropy"
+      ],
+      "qualifiedPath": [
+        "scripts_bootstrap_cloud_qa_build_provider_evidence_payload",
+        "scripts_bootstrap_cloud_qa_canonical_provider_evidence_json",
+        "scripts_bootstrap_cloud_qa_qabootstraperror",
+        "scripts_bootstrap_cloud_qa_validate_isolation_contract",
+        "scripts_bootstrap_cloud_qa_validate_baseline_lease_id",
+        "scripts_bootstrap_cloud_qa_decode_baseline_lease_entropy"
+      ],
+      "depth": 3,
+      "nodeCount": 6,
+      "fileCount": 1,
+      "files": [
+        "scripts/bootstrap_cloud_qa.py"
+      ],
+      "criticality": 0.2633,
+      "warnings": []
+    },
+    {
       "id": "flow:services_room_block_service_create_block",
       "name": "create_block",
       "entryPoint": "services_room_block_service_create_block",
@@ -2071,6 +2561,36 @@
       "warnings": []
     },
     {
+      "id": "flow:scripts_issue_qa_provider_evidence_main",
+      "name": "main",
+      "entryPoint": "scripts_issue_qa_provider_evidence_main",
+      "entryPointId": "scripts_issue_qa_provider_evidence_main",
+      "path": [
+        "scripts_issue_qa_provider_evidence_main",
+        "scripts_issue_qa_provider_evidence_issue_provider_evidence_token",
+        "scripts_issue_qa_provider_evidence_required",
+        "scripts_issue_qa_provider_evidence_write_private_token",
+        "scripts_issue_qa_provider_evidence_load_provider_evidence_private_key",
+        "scripts_issue_qa_provider_evidence_safe_output_path"
+      ],
+      "qualifiedPath": [
+        "scripts_issue_qa_provider_evidence_main",
+        "scripts_issue_qa_provider_evidence_issue_provider_evidence_token",
+        "scripts_issue_qa_provider_evidence_required",
+        "scripts_issue_qa_provider_evidence_write_private_token",
+        "scripts_issue_qa_provider_evidence_load_provider_evidence_private_key",
+        "scripts_issue_qa_provider_evidence_safe_output_path"
+      ],
+      "depth": 2,
+      "nodeCount": 6,
+      "fileCount": 1,
+      "files": [
+        "scripts/issue_qa_provider_evidence.py"
+      ],
+      "criticality": 0.2533,
+      "warnings": []
+    },
+    {
       "id": "flow:services_cash_register_service_record_cash_payment_movement",
       "name": "record_cash_payment_movement",
       "entryPoint": "services_cash_register_service_record_cash_payment_movement",
@@ -2122,6 +2642,30 @@
         "app/services/email_service.py"
       ],
       "criticality": 0.2533,
+      "warnings": []
+    },
+    {
+      "id": "flow:agent_ops_manage_qa_baseline_lease_renderclient_request",
+      "name": ".request",
+      "entryPoint": "agent_ops_manage_qa_baseline_lease_renderclient_request",
+      "entryPointId": "agent_ops_manage_qa_baseline_lease_renderclient_request",
+      "path": [
+        "agent_ops_manage_qa_baseline_lease_renderclient_request",
+        "agent_ops_manage_qa_baseline_lease_canonical_json",
+        "agent_ops_manage_qa_baseline_lease_leaseerror"
+      ],
+      "qualifiedPath": [
+        "agent_ops_manage_qa_baseline_lease_renderclient_request",
+        "agent_ops_manage_qa_baseline_lease_canonical_json",
+        "agent_ops_manage_qa_baseline_lease_leaseerror"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "scripts/agent_ops/manage_qa_baseline_lease.py"
+      ],
+      "criticality": 0.2433,
       "warnings": []
     },
     {
@@ -2266,6 +2810,38 @@
         "app/services/graph_projection.py"
       ],
       "criticality": 0.2433,
+      "warnings": []
+    },
+    {
+      "id": "flow:scripts_seed_e2e_backend_main",
+      "name": "main",
+      "entryPoint": "scripts_seed_e2e_backend_main",
+      "entryPointId": "scripts_seed_e2e_backend_main",
+      "path": [
+        "scripts_seed_e2e_backend_main",
+        "scripts_seed_e2e_backend_prepare_e2e_environment",
+        "scripts_seed_e2e_backend_run_migrations",
+        "scripts_seed_e2e_backend_upsert_seed_data",
+        "scripts_seed_e2e_backend_e2esafetyerror",
+        "scripts_seed_e2e_backend_normalize_sqlite_url",
+        "scripts_seed_e2e_backend_credentials"
+      ],
+      "qualifiedPath": [
+        "scripts_seed_e2e_backend_main",
+        "scripts_seed_e2e_backend_prepare_e2e_environment",
+        "scripts_seed_e2e_backend_run_migrations",
+        "scripts_seed_e2e_backend_upsert_seed_data",
+        "scripts_seed_e2e_backend_e2esafetyerror",
+        "scripts_seed_e2e_backend_normalize_sqlite_url",
+        "scripts_seed_e2e_backend_credentials"
+      ],
+      "depth": 2,
+      "nodeCount": 7,
+      "fileCount": 1,
+      "files": [
+        "scripts/seed_e2e_backend.py"
+      ],
+      "criticality": 0.2414,
       "warnings": []
     },
     {
@@ -2427,32 +3003,6 @@
       "warnings": []
     },
     {
-      "id": "flow:scripts_seed_e2e_backend_main",
-      "name": "main",
-      "entryPoint": "scripts_seed_e2e_backend_main",
-      "entryPointId": "scripts_seed_e2e_backend_main",
-      "path": [
-        "scripts_seed_e2e_backend_main",
-        "scripts_seed_e2e_backend_run_migrations",
-        "scripts_seed_e2e_backend_upsert_seed_data",
-        "scripts_seed_e2e_backend_normalize_sqlite_url"
-      ],
-      "qualifiedPath": [
-        "scripts_seed_e2e_backend_main",
-        "scripts_seed_e2e_backend_run_migrations",
-        "scripts_seed_e2e_backend_upsert_seed_data",
-        "scripts_seed_e2e_backend_normalize_sqlite_url"
-      ],
-      "depth": 2,
-      "nodeCount": 4,
-      "fileCount": 1,
-      "files": [
-        "scripts/seed_e2e_backend.py"
-      ],
-      "criticality": 0.2325,
-      "warnings": []
-    },
-    {
       "id": "flow:services_checkin_service_perform_checkin",
       "name": "perform_checkin",
       "entryPoint": "services_checkin_service_perform_checkin",
@@ -2502,6 +3052,50 @@
         "app/services/room_block_service.py"
       ],
       "criticality": 0.2325,
+      "warnings": []
+    },
+    {
+      "id": "flow:app_config_validate_runtime_security",
+      "name": "validate_runtime_security",
+      "entryPoint": "app_config_validate_runtime_security",
+      "entryPointId": "app_config_validate_runtime_security",
+      "path": [
+        "app_config_validate_runtime_security",
+        "app_config_get_settings",
+        "app_config_gmail_is_active",
+        "app_config_has_value",
+        "app_config_is_preview_qa_mode",
+        "app_config_is_production_mode",
+        "app_config_is_public_https_url",
+        "app_config_mercadopago_is_active",
+        "app_config_paypal_is_active",
+        "app_config_resend_is_active",
+        "app_config_validate_preview_qa_security",
+        "app_config_settings",
+        "app_config_normalized_env_value"
+      ],
+      "qualifiedPath": [
+        "app_config_validate_runtime_security",
+        "app_config_get_settings",
+        "app_config_gmail_is_active",
+        "app_config_has_value",
+        "app_config_is_preview_qa_mode",
+        "app_config_is_production_mode",
+        "app_config_is_public_https_url",
+        "app_config_mercadopago_is_active",
+        "app_config_paypal_is_active",
+        "app_config_resend_is_active",
+        "app_config_validate_preview_qa_security",
+        "app_config_settings",
+        "app_config_normalized_env_value"
+      ],
+      "depth": 2,
+      "nodeCount": 13,
+      "fileCount": 1,
+      "files": [
+        "app/config.py"
+      ],
+      "criticality": 0.2277,
       "warnings": []
     },
     {
@@ -3049,6 +3643,40 @@
       "warnings": []
     },
     {
+      "id": "flow:tests_postgres_test_safety_validate_postgres_test_target",
+      "name": "validate_postgres_test_target",
+      "entryPoint": "tests_postgres_test_safety_validate_postgres_test_target",
+      "entryPointId": "tests_postgres_test_safety_validate_postgres_test_target",
+      "path": [
+        "tests_postgres_test_safety_validate_postgres_test_target",
+        "tests_postgres_test_safety_canonical_identity",
+        "tests_postgres_test_safety_enabled",
+        "tests_postgres_test_safety_identity_contains",
+        "tests_postgres_test_safety_load_local_evidence",
+        "tests_postgres_test_safety_load_provider_evidence",
+        "tests_postgres_test_safety_postgrestargetsafetyerror",
+        "tests_postgres_test_safety_verify_remote_provider_evidence"
+      ],
+      "qualifiedPath": [
+        "tests_postgres_test_safety_validate_postgres_test_target",
+        "tests_postgres_test_safety_canonical_identity",
+        "tests_postgres_test_safety_enabled",
+        "tests_postgres_test_safety_identity_contains",
+        "tests_postgres_test_safety_load_local_evidence",
+        "tests_postgres_test_safety_load_provider_evidence",
+        "tests_postgres_test_safety_postgrestargetsafetyerror",
+        "tests_postgres_test_safety_verify_remote_provider_evidence"
+      ],
+      "depth": 1,
+      "nodeCount": 8,
+      "fileCount": 1,
+      "files": [
+        "tests/postgres_test_safety.py"
+      ],
+      "criticality": 0.2225,
+      "warnings": []
+    },
+    {
       "id": "flow:app_database_get_db",
       "name": "get_db",
       "entryPoint": "app_database_get_db",
@@ -3252,46 +3880,6 @@
         "app/api/movement_groups.py"
       ],
       "criticality": 0.2157,
-      "warnings": []
-    },
-    {
-      "id": "flow:app_config_validate_runtime_security",
-      "name": "validate_runtime_security",
-      "entryPoint": "app_config_validate_runtime_security",
-      "entryPointId": "app_config_validate_runtime_security",
-      "path": [
-        "app_config_validate_runtime_security",
-        "app_config_get_settings",
-        "app_config_gmail_is_active",
-        "app_config_has_value",
-        "app_config_is_production_mode",
-        "app_config_is_public_https_url",
-        "app_config_mercadopago_is_active",
-        "app_config_paypal_is_active",
-        "app_config_resend_is_active",
-        "app_config_settings",
-        "app_config_normalized_env_value"
-      ],
-      "qualifiedPath": [
-        "app_config_validate_runtime_security",
-        "app_config_get_settings",
-        "app_config_gmail_is_active",
-        "app_config_has_value",
-        "app_config_is_production_mode",
-        "app_config_is_public_https_url",
-        "app_config_mercadopago_is_active",
-        "app_config_paypal_is_active",
-        "app_config_resend_is_active",
-        "app_config_settings",
-        "app_config_normalized_env_value"
-      ],
-      "depth": 2,
-      "nodeCount": 11,
-      "fileCount": 1,
-      "files": [
-        "app/config.py"
-      ],
-      "criticality": 0.2155,
       "warnings": []
     },
     {
@@ -4037,6 +4625,40 @@
       "warnings": []
     },
     {
+      "id": "flow:agent_ops_check_release_evidence_main",
+      "name": "main",
+      "entryPoint": "agent_ops_check_release_evidence_main",
+      "entryPointId": "agent_ops_check_release_evidence_main",
+      "path": [
+        "agent_ops_check_release_evidence_main",
+        "agent_ops_check_release_evidence_changed_paths",
+        "agent_ops_check_release_evidence_git",
+        "agent_ops_check_release_evidence_is_release_relevant_path",
+        "agent_ops_check_release_evidence_releaseevidenceerror",
+        "agent_ops_check_release_evidence_resolve_commit",
+        "agent_ops_check_release_evidence_select_summary",
+        "agent_ops_check_release_evidence_validate_explicit_summary_path"
+      ],
+      "qualifiedPath": [
+        "agent_ops_check_release_evidence_main",
+        "agent_ops_check_release_evidence_changed_paths",
+        "agent_ops_check_release_evidence_git",
+        "agent_ops_check_release_evidence_is_release_relevant_path",
+        "agent_ops_check_release_evidence_releaseevidenceerror",
+        "agent_ops_check_release_evidence_resolve_commit",
+        "agent_ops_check_release_evidence_select_summary",
+        "agent_ops_check_release_evidence_validate_explicit_summary_path"
+      ],
+      "depth": 2,
+      "nodeCount": 8,
+      "fileCount": 1,
+      "files": [
+        "scripts/agent_ops/check_release_evidence.py"
+      ],
+      "criticality": 0.2012,
+      "warnings": []
+    },
+    {
       "id": "flow:services_subscription_entitlements_change_subscription_plan",
       "name": "change_subscription_plan",
       "entryPoint": "services_subscription_entitlements_change_subscription_plan",
@@ -4171,6 +4793,42 @@
       "warnings": []
     },
     {
+      "id": "flow:agent_ops_check_qa_evidence_main",
+      "name": "main",
+      "entryPoint": "agent_ops_check_qa_evidence_main",
+      "entryPointId": "agent_ops_check_qa_evidence_main",
+      "path": [
+        "agent_ops_check_qa_evidence_main",
+        "agent_ops_check_qa_evidence_fail",
+        "agent_ops_check_qa_evidence_validate_evidence_bundle",
+        "agent_ops_check_qa_evidence_load_json_object",
+        "agent_ops_check_qa_evidence_mapping",
+        "agent_ops_check_qa_evidence_nested_value",
+        "agent_ops_check_qa_evidence_positive_integer",
+        "agent_ops_check_qa_evidence_preview_origin",
+        "agent_ops_check_qa_evidence_utc_timestamp"
+      ],
+      "qualifiedPath": [
+        "agent_ops_check_qa_evidence_main",
+        "agent_ops_check_qa_evidence_fail",
+        "agent_ops_check_qa_evidence_validate_evidence_bundle",
+        "agent_ops_check_qa_evidence_load_json_object",
+        "agent_ops_check_qa_evidence_mapping",
+        "agent_ops_check_qa_evidence_nested_value",
+        "agent_ops_check_qa_evidence_positive_integer",
+        "agent_ops_check_qa_evidence_preview_origin",
+        "agent_ops_check_qa_evidence_utc_timestamp"
+      ],
+      "depth": 2,
+      "nodeCount": 9,
+      "fileCount": 1,
+      "files": [
+        "scripts/agent_ops/check_qa_evidence.py"
+      ],
+      "criticality": 0.1978,
+      "warnings": []
+    },
+    {
       "id": "flow:services_payment_service_process_payment",
       "name": "process_payment",
       "entryPoint": "services_payment_service_process_payment",
@@ -4206,6 +4864,60 @@
         "app/services/payment_service.py"
       ],
       "criticality": 0.195,
+      "warnings": []
+    },
+    {
+      "id": "flow:agent_ops_qa_evidence_attestation_main",
+      "name": "main",
+      "entryPoint": "agent_ops_qa_evidence_attestation_main",
+      "entryPointId": "agent_ops_qa_evidence_attestation_main",
+      "path": [
+        "agent_ops_qa_evidence_attestation_main",
+        "agent_ops_qa_evidence_attestation_attestationerror",
+        "agent_ops_qa_evidence_attestation_build_attestation",
+        "agent_ops_qa_evidence_attestation_private_key_from_sources",
+        "agent_ops_qa_evidence_attestation_write_attestation",
+        "agent_ops_qa_evidence_attestation_b64url_encode",
+        "agent_ops_qa_evidence_attestation_canonical_json",
+        "agent_ops_qa_evidence_attestation_iso_utc",
+        "agent_ops_qa_evidence_attestation_json_object",
+        "agent_ops_qa_evidence_attestation_public_key_fingerprint",
+        "agent_ops_qa_evidence_attestation_read_limited",
+        "agent_ops_qa_evidence_attestation_sha256",
+        "agent_ops_qa_evidence_attestation_summary_identity",
+        "agent_ops_qa_evidence_attestation_utc",
+        "agent_ops_qa_evidence_attestation_verify_local_artifacts",
+        "agent_ops_qa_evidence_attestation_load_private_key",
+        "agent_ops_qa_evidence_attestation_read_regular_nofollow",
+        "agent_ops_qa_evidence_attestation_public_key_bytes"
+      ],
+      "qualifiedPath": [
+        "agent_ops_qa_evidence_attestation_main",
+        "agent_ops_qa_evidence_attestation_attestationerror",
+        "agent_ops_qa_evidence_attestation_build_attestation",
+        "agent_ops_qa_evidence_attestation_private_key_from_sources",
+        "agent_ops_qa_evidence_attestation_write_attestation",
+        "agent_ops_qa_evidence_attestation_b64url_encode",
+        "agent_ops_qa_evidence_attestation_canonical_json",
+        "agent_ops_qa_evidence_attestation_iso_utc",
+        "agent_ops_qa_evidence_attestation_json_object",
+        "agent_ops_qa_evidence_attestation_public_key_fingerprint",
+        "agent_ops_qa_evidence_attestation_read_limited",
+        "agent_ops_qa_evidence_attestation_sha256",
+        "agent_ops_qa_evidence_attestation_summary_identity",
+        "agent_ops_qa_evidence_attestation_utc",
+        "agent_ops_qa_evidence_attestation_verify_local_artifacts",
+        "agent_ops_qa_evidence_attestation_load_private_key",
+        "agent_ops_qa_evidence_attestation_read_regular_nofollow",
+        "agent_ops_qa_evidence_attestation_public_key_bytes"
+      ],
+      "depth": 3,
+      "nodeCount": 18,
+      "fileCount": 1,
+      "files": [
+        "scripts/agent_ops/qa_evidence_attestation.py"
+      ],
+      "criticality": 0.1939,
       "warnings": []
     },
     {
@@ -4289,6 +5001,128 @@
       "warnings": []
     },
     {
+      "id": "flow:agent_ops_manage_qa_baseline_lease_main",
+      "name": "main",
+      "entryPoint": "agent_ops_manage_qa_baseline_lease_main",
+      "entryPointId": "agent_ops_manage_qa_baseline_lease_main",
+      "path": [
+        "agent_ops_manage_qa_baseline_lease_main",
+        "agent_ops_manage_qa_baseline_lease_acquire_to_github_output",
+        "agent_ops_manage_qa_baseline_lease_common_arguments",
+        "agent_ops_manage_qa_baseline_lease_leaseerror",
+        "agent_ops_manage_qa_baseline_lease_release",
+        "agent_ops_manage_qa_baseline_lease_acquire",
+        "agent_ops_manage_qa_baseline_lease_cleanup",
+        "agent_ops_manage_qa_baseline_lease_open_github_output",
+        "agent_ops_manage_qa_baseline_lease_renderclient",
+        "agent_ops_manage_qa_baseline_lease_service_id",
+        "agent_ops_manage_qa_baseline_lease_lease_id",
+        "agent_ops_manage_qa_baseline_lease_validated_snapshot",
+        "agent_ops_manage_qa_baseline_lease_mutate_env",
+        "agent_ops_manage_qa_baseline_lease_env_values",
+        "agent_ops_manage_qa_baseline_lease_object",
+        "agent_ops_manage_qa_baseline_lease_paths",
+        "agent_ops_manage_qa_baseline_lease_repository",
+        "agent_ops_manage_qa_baseline_lease_service_repository",
+        "agent_ops_manage_qa_baseline_lease_target_branch",
+        "agent_ops_manage_qa_baseline_lease_target_sha"
+      ],
+      "qualifiedPath": [
+        "agent_ops_manage_qa_baseline_lease_main",
+        "agent_ops_manage_qa_baseline_lease_acquire_to_github_output",
+        "agent_ops_manage_qa_baseline_lease_common_arguments",
+        "agent_ops_manage_qa_baseline_lease_leaseerror",
+        "agent_ops_manage_qa_baseline_lease_release",
+        "agent_ops_manage_qa_baseline_lease_acquire",
+        "agent_ops_manage_qa_baseline_lease_cleanup",
+        "agent_ops_manage_qa_baseline_lease_open_github_output",
+        "agent_ops_manage_qa_baseline_lease_renderclient",
+        "agent_ops_manage_qa_baseline_lease_service_id",
+        "agent_ops_manage_qa_baseline_lease_lease_id",
+        "agent_ops_manage_qa_baseline_lease_validated_snapshot",
+        "agent_ops_manage_qa_baseline_lease_mutate_env",
+        "agent_ops_manage_qa_baseline_lease_env_values",
+        "agent_ops_manage_qa_baseline_lease_object",
+        "agent_ops_manage_qa_baseline_lease_paths",
+        "agent_ops_manage_qa_baseline_lease_repository",
+        "agent_ops_manage_qa_baseline_lease_service_repository",
+        "agent_ops_manage_qa_baseline_lease_target_branch",
+        "agent_ops_manage_qa_baseline_lease_target_sha"
+      ],
+      "depth": 3,
+      "nodeCount": 20,
+      "fileCount": 1,
+      "files": [
+        "scripts/agent_ops/manage_qa_baseline_lease.py"
+      ],
+      "criticality": 0.1925,
+      "warnings": []
+    },
+    {
+      "id": "flow:agent_ops_trusted_release_gate_main",
+      "name": "main",
+      "entryPoint": "agent_ops_trusted_release_gate_main",
+      "entryPointId": "agent_ops_trusted_release_gate_main",
+      "path": [
+        "agent_ops_trusted_release_gate_main",
+        "agent_ops_trusted_release_gate_finalize_gate",
+        "agent_ops_trusted_release_gate_githubclient",
+        "agent_ops_trusted_release_gate_prepare_gate",
+        "agent_ops_trusted_release_gate_write_github_outputs",
+        "agent_ops_trusted_release_gate_trustedgateerror",
+        "agent_ops_trusted_release_gate_changed_blob_paths",
+        "agent_ops_trusted_release_gate_full_sha",
+        "agent_ops_trusted_release_gate_githubclient_blob",
+        "agent_ops_trusted_release_gate_githubclient_pull_request",
+        "agent_ops_trusted_release_gate_githubclient_repository_metadata",
+        "agent_ops_trusted_release_gate_githubclient_tree",
+        "agent_ops_trusted_release_gate_preparedevidence",
+        "agent_ops_trusted_release_gate_require_base_public_key",
+        "agent_ops_trusted_release_gate_require_evidence_ancestry",
+        "agent_ops_trusted_release_gate_require_provider_artifact_provenance",
+        "agent_ops_trusted_release_gate_require_pull_identity",
+        "agent_ops_trusted_release_gate_githubclient_get_json",
+        "agent_ops_trusted_release_gate_githubclient_compare",
+        "agent_ops_trusted_release_gate_githubclient_artifact",
+        "agent_ops_trusted_release_gate_githubclient_workflow",
+        "agent_ops_trusted_release_gate_githubclient_workflow_run",
+        "agent_ops_trusted_release_gate_positive_integer"
+      ],
+      "qualifiedPath": [
+        "agent_ops_trusted_release_gate_main",
+        "agent_ops_trusted_release_gate_finalize_gate",
+        "agent_ops_trusted_release_gate_githubclient",
+        "agent_ops_trusted_release_gate_prepare_gate",
+        "agent_ops_trusted_release_gate_write_github_outputs",
+        "agent_ops_trusted_release_gate_trustedgateerror",
+        "agent_ops_trusted_release_gate_changed_blob_paths",
+        "agent_ops_trusted_release_gate_full_sha",
+        "agent_ops_trusted_release_gate_githubclient_blob",
+        "agent_ops_trusted_release_gate_githubclient_pull_request",
+        "agent_ops_trusted_release_gate_githubclient_repository_metadata",
+        "agent_ops_trusted_release_gate_githubclient_tree",
+        "agent_ops_trusted_release_gate_preparedevidence",
+        "agent_ops_trusted_release_gate_require_base_public_key",
+        "agent_ops_trusted_release_gate_require_evidence_ancestry",
+        "agent_ops_trusted_release_gate_require_provider_artifact_provenance",
+        "agent_ops_trusted_release_gate_require_pull_identity",
+        "agent_ops_trusted_release_gate_githubclient_get_json",
+        "agent_ops_trusted_release_gate_githubclient_compare",
+        "agent_ops_trusted_release_gate_githubclient_artifact",
+        "agent_ops_trusted_release_gate_githubclient_workflow",
+        "agent_ops_trusted_release_gate_githubclient_workflow_run",
+        "agent_ops_trusted_release_gate_positive_integer"
+      ],
+      "depth": 3,
+      "nodeCount": 23,
+      "fileCount": 1,
+      "files": [
+        "scripts/agent_ops/trusted_release_gate.py"
+      ],
+      "criticality": 0.1909,
+      "warnings": []
+    },
+    {
       "id": "flow:services_subscription_service_set_entitlement_override",
       "name": "set_entitlement_override",
       "entryPoint": "services_subscription_service_set_entitlement_override",
@@ -4354,6 +5188,52 @@
         "app/services/subscription_service.py"
       ],
       "criticality": 0.19,
+      "warnings": []
+    },
+    {
+      "id": "flow:agent_ops_qa_evidence_attestation_verify_attestation",
+      "name": "verify_attestation",
+      "entryPoint": "agent_ops_qa_evidence_attestation_verify_attestation",
+      "entryPointId": "agent_ops_qa_evidence_attestation_verify_attestation",
+      "path": [
+        "agent_ops_qa_evidence_attestation_verify_attestation",
+        "agent_ops_qa_evidence_attestation_attestationerror",
+        "agent_ops_qa_evidence_attestation_b64url_decode",
+        "agent_ops_qa_evidence_attestation_canonical_json",
+        "agent_ops_qa_evidence_attestation_json_object",
+        "agent_ops_qa_evidence_attestation_load_public_key",
+        "agent_ops_qa_evidence_attestation_public_key_fingerprint",
+        "agent_ops_qa_evidence_attestation_read_limited",
+        "agent_ops_qa_evidence_attestation_sha256",
+        "agent_ops_qa_evidence_attestation_summary_identity",
+        "agent_ops_qa_evidence_attestation_utc",
+        "agent_ops_qa_evidence_attestation_b64url_encode",
+        "agent_ops_qa_evidence_attestation_public_key_bytes",
+        "agent_ops_qa_evidence_attestation_read_regular_nofollow"
+      ],
+      "qualifiedPath": [
+        "agent_ops_qa_evidence_attestation_verify_attestation",
+        "agent_ops_qa_evidence_attestation_attestationerror",
+        "agent_ops_qa_evidence_attestation_b64url_decode",
+        "agent_ops_qa_evidence_attestation_canonical_json",
+        "agent_ops_qa_evidence_attestation_json_object",
+        "agent_ops_qa_evidence_attestation_load_public_key",
+        "agent_ops_qa_evidence_attestation_public_key_fingerprint",
+        "agent_ops_qa_evidence_attestation_read_limited",
+        "agent_ops_qa_evidence_attestation_sha256",
+        "agent_ops_qa_evidence_attestation_summary_identity",
+        "agent_ops_qa_evidence_attestation_utc",
+        "agent_ops_qa_evidence_attestation_b64url_encode",
+        "agent_ops_qa_evidence_attestation_public_key_bytes",
+        "agent_ops_qa_evidence_attestation_read_regular_nofollow"
+      ],
+      "depth": 2,
+      "nodeCount": 14,
+      "fileCount": 1,
+      "files": [
+        "scripts/agent_ops/qa_evidence_attestation.py"
+      ],
+      "criticality": 0.1879,
       "warnings": []
     },
     {
@@ -7651,6 +8531,76 @@
       "warnings": []
     },
     {
+      "id": "flow:agent_ops_manage_qa_baseline_lease_renderclient_init",
+      "name": ".__init",
+      "entryPoint": "agent_ops_manage_qa_baseline_lease_renderclient_init",
+      "entryPointId": "agent_ops_manage_qa_baseline_lease_renderclient_init",
+      "path": [
+        "agent_ops_manage_qa_baseline_lease_renderclient_init",
+        "agent_ops_manage_qa_baseline_lease_leaseerror",
+        "agent_ops_manage_qa_baseline_lease_paths",
+        "agent_ops_manage_qa_baseline_lease_service_id"
+      ],
+      "qualifiedPath": [
+        "agent_ops_manage_qa_baseline_lease_renderclient_init",
+        "agent_ops_manage_qa_baseline_lease_leaseerror",
+        "agent_ops_manage_qa_baseline_lease_paths",
+        "agent_ops_manage_qa_baseline_lease_service_id"
+      ],
+      "depth": 1,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "scripts/agent_ops/manage_qa_baseline_lease.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:agent_ops_provision_qa_bootstrap_renderclient_init",
+      "name": ".__init",
+      "entryPoint": "agent_ops_provision_qa_bootstrap_renderclient_init",
+      "entryPointId": "agent_ops_provision_qa_bootstrap_renderclient_init",
+      "path": [
+        "agent_ops_provision_qa_bootstrap_renderclient_init",
+        "agent_ops_provision_qa_bootstrap_provisionerror"
+      ],
+      "qualifiedPath": [
+        "agent_ops_provision_qa_bootstrap_renderclient_init",
+        "agent_ops_provision_qa_bootstrap_provisionerror"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "scripts/agent_ops/provision_qa_bootstrap.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:agent_ops_trusted_release_gate_githubclient_init",
+      "name": ".__init",
+      "entryPoint": "agent_ops_trusted_release_gate_githubclient_init",
+      "entryPointId": "agent_ops_trusted_release_gate_githubclient_init",
+      "path": [
+        "agent_ops_trusted_release_gate_githubclient_init",
+        "agent_ops_trusted_release_gate_trustedgateerror"
+      ],
+      "qualifiedPath": [
+        "agent_ops_trusted_release_gate_githubclient_init",
+        "agent_ops_trusted_release_gate_trustedgateerror"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "scripts/agent_ops/trusted_release_gate.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:adapters_rate_limiter_simpleratelimiter_allow",
       "name": ".allow",
       "entryPoint": "adapters_rate_limiter_simpleratelimiter_allow",
@@ -8870,6 +9820,28 @@
       "fileCount": 1,
       "files": [
         "app/api/ota_webhooks.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:agent_ops_qa_bootstrap_contract_bootstrap_configuration_fingerprint",
+      "name": "bootstrap_configuration_fingerprint",
+      "entryPoint": "agent_ops_qa_bootstrap_contract_bootstrap_configuration_fingerprint",
+      "entryPointId": "agent_ops_qa_bootstrap_contract_bootstrap_configuration_fingerprint",
+      "path": [
+        "agent_ops_qa_bootstrap_contract_bootstrap_configuration_fingerprint",
+        "agent_ops_qa_bootstrap_contract_bootstrapconfigurationerror"
+      ],
+      "qualifiedPath": [
+        "agent_ops_qa_bootstrap_contract_bootstrap_configuration_fingerprint",
+        "agent_ops_qa_bootstrap_contract_bootstrapconfigurationerror"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "scripts/agent_ops/qa_bootstrap_contract.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -10962,50 +11934,6 @@
       "fileCount": 1,
       "files": [
         "scripts/agent_ops/check_knowledge.py"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
-      "id": "flow:agent_ops_check_qa_evidence_main",
-      "name": "main",
-      "entryPoint": "agent_ops_check_qa_evidence_main",
-      "entryPointId": "agent_ops_check_qa_evidence_main",
-      "path": [
-        "agent_ops_check_qa_evidence_main",
-        "agent_ops_check_qa_evidence_fail"
-      ],
-      "qualifiedPath": [
-        "agent_ops_check_qa_evidence_main",
-        "agent_ops_check_qa_evidence_fail"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "scripts/agent_ops/check_qa_evidence.py"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
-      "id": "flow:agent_ops_check_release_evidence_main",
-      "name": "main",
-      "entryPoint": "agent_ops_check_release_evidence_main",
-      "entryPointId": "agent_ops_check_release_evidence_main",
-      "path": [
-        "agent_ops_check_release_evidence_main",
-        "agent_ops_check_release_evidence_git"
-      ],
-      "qualifiedPath": [
-        "agent_ops_check_release_evidence_main",
-        "agent_ops_check_release_evidence_git"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "scripts/agent_ops/check_release_evidence.py"
       ],
       "criticality": 0.16,
       "warnings": []

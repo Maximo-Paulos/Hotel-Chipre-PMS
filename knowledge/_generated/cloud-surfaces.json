@@ -1,5 +1,5 @@
 {
-  "code_sha": "bc938cf",
+  "code_sha": "767226c",
   "canonical": [
     "https://app.hotels-pms.com",
     "https://hotels-pms.com",
@@ -7,8 +7,8 @@
   ],
   "preview_contract": [
     "Vercel frontend por PR (URL publicada en manifiesto de preview)",
-    "Render backend por PR con /health",
-    "Supabase Branch aislada por PR, sin datos reales"
+    "Render backend QA target-bound con /health y lease exclusivo",
+    "Segundo proyecto Supabase QA sin datos productivos como baseline serializada; Supabase Branch por PR al habilitar el plan"
   ],
   "historical_or_needs_verification": [
     "Cualquier host hoteles-pms.com o onrender.com citado por documentación histórica",

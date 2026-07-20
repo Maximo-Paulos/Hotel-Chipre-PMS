@@ -1,64 +1,77 @@
-"""
-Prepare the SQLite database used by Playwright E2E tests.
+"""Prepare the fixed local SQLite database used by Playwright E2E tests.
 
-Usage:
-    DATABASE_URL=sqlite:///./_e2e.db python scripts/seed_e2e_backend.py
+The safety check intentionally runs before importing Alembic or any ``app``
+module.  An inherited PostgreSQL URL or any SQLite path other than the fixed
+repository ``_e2e.db`` target is refused.
 """
 from __future__ import annotations
 
+import json
 import os
 import sys
+from collections.abc import MutableMapping
 from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
+E2E_DATABASE_PATH = ROOT_DIR / "_e2e.db"
+E2E_DATABASE_URL = f"sqlite:///{E2E_DATABASE_PATH.as_posix()}"
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-os.environ.setdefault("APP_ENV", "test")
-os.environ.setdefault("DATABASE_URL", "sqlite:///./_e2e.db")
-os.environ.setdefault("JWT_SECRET", "e2e-local-jwt-secret-change-me-32chars")
+
+class E2ESafetyError(RuntimeError):
+    """Raised before any database-capable dependency is imported."""
 
 
-def normalize_sqlite_url() -> None:
-    url = os.environ["DATABASE_URL"]
-    if not url.startswith("sqlite:///"):
-        return
-    raw_path = url.replace("sqlite:///", "", 1).replace("\\", "/")
+def prepare_e2e_environment(env: MutableMapping[str, str] | None = None) -> str:
+    """Validate and normalize the only database target allowed for local E2E.
+
+    Both values must be explicit. Existing values are never overwritten before
+    validation, so a missing or inherited production environment fails closed
+    rather than being silently redirected.
+    """
+
+    target = os.environ if env is None else env
+    app_env = target.get("APP_ENV")
+    if app_env != "test":
+        raise E2ESafetyError("local E2E requires APP_ENV=test")
+
+    url = target.get("DATABASE_URL") or ""
+    if not url.startswith("sqlite:///") or url.startswith("sqlite://///"):
+        raise E2ESafetyError("local E2E requires the fixed SQLite database")
+    if "?" in url or "#" in url:
+        raise E2ESafetyError("local E2E SQLite URL cannot contain query or fragment")
+    raw_path = url.removeprefix("sqlite:///").replace("\\", "/")
+    if not raw_path or raw_path == ":memory:":
+        raise E2ESafetyError("local E2E requires a persistent SQLite file")
     if len(raw_path) >= 3 and raw_path[0] == "/" and raw_path[2] == ":":
         raw_path = raw_path[1:]
     db_path = Path(raw_path)
     if not db_path.is_absolute():
         db_path = ROOT_DIR / db_path
-    if not db_path.parent.exists():
-        db_path = ROOT_DIR / "_e2e.db"
-    os.environ["DATABASE_URL"] = f"sqlite:///{db_path.resolve().as_posix()}"
+    if E2E_DATABASE_PATH.is_symlink():
+        raise E2ESafetyError("local E2E database path cannot be a symlink")
+    if db_path.resolve(strict=False) != E2E_DATABASE_PATH.resolve(strict=False):
+        raise E2ESafetyError("local E2E database path must be the repository _e2e.db")
 
-from app.database import get_session_factory, init_db  # noqa: E402
-from app.models import (  # noqa: E402
-    CategoryPricing,
-    Guest,
-    GuestTag,
-    HotelConfiguration,
-    HotelMembership,
-    IntegrationCatalog,
-    OnboardingState,
-    Room,
-    RoomCategory,
-    StockItem,
-    StockLocation,
-    User,
-)
-from app.services.security import hash_password  # noqa: E402
+    target["APP_ENV"] = "test"
+    target["DATABASE_URL"] = E2E_DATABASE_URL
+    target.setdefault("JWT_SECRET", "e2e-local-jwt-secret-change-me-32chars")
+    return E2E_DATABASE_URL
 
 
-OWNER_EMAIL = "owner@e2e.com"
-OWNER_PASSWORD = "E2ePass1234!"
+def _credentials(env: MutableMapping[str, str] | None = None) -> tuple[str, str]:
+    target = os.environ if env is None else env
+    return (
+        target.get("E2E_OWNER_EMAIL", "owner@e2e.com"),
+        target.get("E2E_OWNER_PASSWORD", "E2ePass1234!"),
+    )
 
 
 def run_migrations() -> None:
-    normalize_sqlite_url()
-    print(f"Running alembic with DATABASE_URL={os.environ['DATABASE_URL']}", file=sys.stderr, flush=True)
+    prepare_e2e_environment()
+    print("Running local E2E database migrations", file=sys.stderr, flush=True)
     from alembic import command
     from alembic.config import Config
 
@@ -69,8 +82,27 @@ def run_migrations() -> None:
 
 
 def upsert_seed_data() -> None:
-    normalize_sqlite_url()
-    init_db(os.environ["DATABASE_URL"])
+    database_url = prepare_e2e_environment()
+    owner_email, owner_password = _credentials()
+
+    from app.database import get_session_factory, init_db
+    from app.models import (
+        CategoryPricing,
+        Guest,
+        GuestTag,
+        HotelConfiguration,
+        HotelMembership,
+        IntegrationCatalog,
+        OnboardingState,
+        Room,
+        RoomCategory,
+        StockItem,
+        StockLocation,
+        User,
+    )
+    from app.services.security import hash_password
+
+    init_db(database_url)
     session_factory = get_session_factory()
     with session_factory() as db:
         now = datetime.now(timezone.utc)
@@ -80,17 +112,17 @@ def upsert_seed_data() -> None:
             hotel = HotelConfiguration(id=1)
             db.add(hotel)
         hotel.hotel_name = "Hotel Chipre E2E"
-        hotel.owner_email = OWNER_EMAIL
+        hotel.owner_email = owner_email
         hotel.subscription_active = True
         hotel.default_currency = "ARS"
         hotel.hotel_timezone = "America/Argentina/Buenos_Aires"
         hotel.updated_at = now
 
-        owner = db.query(User).filter(User.email.ilike(OWNER_EMAIL)).first()
+        owner = db.query(User).filter(User.email.ilike(owner_email)).first()
         if owner is None:
-            owner = User(email=OWNER_EMAIL)
+            owner = User(email=owner_email)
             db.add(owner)
-        owner.password_hash = hash_password(OWNER_PASSWORD)
+        owner.password_hash = hash_password(owner_password)
         owner.is_active = True
         owner.is_verified = True
         owner.role = "owner"
@@ -113,7 +145,7 @@ def upsert_seed_data() -> None:
             onboarding = OnboardingState(hotel_id=1)
             db.add(onboarding)
         onboarding.owner_name = "Owner E2E"
-        onboarding.owner_email = OWNER_EMAIL
+        onboarding.owner_email = owner_email
         onboarding.owner_phone = "1111111111"
         onboarding.owner_role = "owner"
         onboarding.identity_set = True
@@ -125,10 +157,12 @@ def upsert_seed_data() -> None:
         # completed status requires the JSON payloads present (not just the flags)
         onboarding.hotel_identity_json = '{"name": "Hotel E2E", "address": "Calle 1", "city": "BA", "country": "AR"}'
         onboarding.deposit_policy_json = '{"deposit_percentage": 30, "enable_full_payment": true}'
-        onboarding.payment_methods_json = '{"cash": {"enabled": true}, "mercado_pago": {"enabled": true, "credentials": {"access_token": "TEST-TOKEN"}}}'
+        onboarding.payment_methods_json = '{"cash": {"enabled": true}, "mercado_pago": {"enabled": false}}'
         onboarding.ota_channels_json = '{"booking": {"enabled": false}, "expedia": {"enabled": false}}'
         onboarding.subscription_choice_json = '{"plan": "pro"}'
-        onboarding.staff_json = '[{"name": "Owner E2E", "email": "owner@e2e.com", "role": "owner"}]'
+        onboarding.staff_json = json.dumps(
+            [{"name": "Owner E2E", "email": owner_email, "role": "owner"}]
+        )
         onboarding.updated_at = now
 
         category = (
@@ -212,9 +246,10 @@ def upsert_seed_data() -> None:
 
 
 def main() -> None:
+    prepare_e2e_environment()
     run_migrations()
     upsert_seed_data()
-    print(f"E2E database ready at {os.environ['DATABASE_URL']} ({OWNER_EMAIL} / {OWNER_PASSWORD})")
+    print("Local E2E database ready; credentials loaded from E2E_* environment/local defaults")
 
 
 if __name__ == "__main__":

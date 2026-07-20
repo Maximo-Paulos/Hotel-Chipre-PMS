@@ -6,18 +6,18 @@ Execute a controlled pilot of Hotel-Chipre-PMS with a repeatable preflight, oper
 
 ## Preflight
 
-Run from `C:\PROJECTO\Hotel-Chipre-PMS`:
+Run from the repository root on macOS/Linux:
 
-```powershell
-python -m alembic upgrade head
-python -m pytest tests/smoke/ -v
-python -m pytest -q
+```bash
+.venv/bin/python -m alembic upgrade head
+.venv/bin/python -m pytest tests/smoke/ -v
+.venv/bin/python -m pytest -q
 cd frontend
+npm run lint
+npx tsc --noEmit
 npm run build
 cd ..
 ```
-
-If `npm run lint` is required for release review, run it separately and treat existing unrelated lint errors as a known baseline until they are cleaned.
 
 ## Pilot Start Checklist
 
@@ -33,8 +33,8 @@ If `npm run lint` is required for release review, run it separately and treat ex
 
 Verify provider connection upsert:
 
-```powershell
-python -m pytest tests/smoke/test_connect_channels_smoke.py -v
+```bash
+.venv/bin/python -m pytest tests/smoke/test_connect_channels_smoke.py -v
 ```
 
 Expected result:
@@ -45,8 +45,8 @@ Expected result:
 
 Verify front-office recovery for flagged reservations:
 
-```powershell
-python -m pytest tests/smoke/test_manual_review_resolution.py -v
+```bash
+.venv/bin/python -m pytest tests/smoke/test_manual_review_resolution.py -v
 ```
 
 Expected result:
@@ -58,8 +58,8 @@ Expected result:
 
 Verify check-in and check-out:
 
-```powershell
-python -m pytest tests/smoke/test_reservation_operations.py -v
+```bash
+.venv/bin/python -m pytest tests/smoke/test_reservation_operations.py -v
 ```
 
 Expected result:
@@ -71,8 +71,8 @@ Expected result:
 
 Verify safe rejection paths:
 
-```powershell
-python -m pytest tests/smoke/test_payment_failures.py -v
+```bash
+.venv/bin/python -m pytest tests/smoke/test_payment_failures.py -v
 ```
 
 Expected result:

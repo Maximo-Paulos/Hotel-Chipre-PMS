@@ -384,8 +384,8 @@
     "hash": "4f13cde57e21a16d8c3fe94e5638641b"
   },
   "app/config.py": {
-    "mtime": 1783186364241.6196,
-    "hash": "7d01dcc0eeff1433da145407b432e5f0"
+    "mtime": 1784518400942.984,
+    "hash": "a78c71be425638d9e6fea7f704fa1ff1"
   },
   "app/database.py": {
     "mtime": 1783103274878.1143,
@@ -460,8 +460,8 @@
     "hash": "443c87ed794215b0f013c70b48a69365"
   },
   "app/master_admin/stripe.py": {
-    "mtime": 1783103274879.421,
-    "hash": "c9d768dd70c70eae339b6e8a882407bc"
+    "mtime": 1784518380151.5754,
+    "hash": "e5d73916428c2c1e283e7f3d38904729"
   },
   "app/middleware/__init__.py": {
     "mtime": 1783103274879.5007,
@@ -1084,7 +1084,7 @@
     "hash": "7a3b9410a3f2826001bb35bd2bd3818a"
   },
   "frontend/e2e/master_admin.spec.ts": {
-    "mtime": 1784390192136.2212,
+    "mtime": 1784398283671.4944,
     "hash": "a443176220eb1d4f6b9fa8fbe23f3d8b"
   },
   "frontend/e2e/rate-calendar.spec.ts": {
@@ -1092,7 +1092,7 @@
     "hash": "efd8e6db82a493985c8df57c1cd3ef47"
   },
   "frontend/e2e/smoke.spec.ts": {
-    "mtime": 1784390192136.4644,
+    "mtime": 1784398283671.6821,
     "hash": "d34d02bfc8084c072837ed4a9a20fe8a"
   },
   "frontend/e2e/v72-pages.spec.ts": {
@@ -1100,7 +1100,7 @@
     "hash": "0e6e7064b2d424b4f790b251f121211e"
   },
   "frontend/playwright.config.ts": {
-    "mtime": 1784390192135.9885,
+    "mtime": 1784398283671.9563,
     "hash": "3a802569996f7f57f76a16208951641d"
   },
   "frontend/src/App.tsx": {
@@ -1264,7 +1264,7 @@
     "hash": "57a89ac45220ec4f0caff2474b93b1f4"
   },
   "frontend/src/config/publicUrls.ts": {
-    "mtime": 1784392591451.6072,
+    "mtime": 1784398283672.3977,
     "hash": "7f22ce21b53de1939d720281f5585b27"
   },
   "frontend/src/content/integrationHelp.ts": {
@@ -1560,20 +1560,20 @@
     "hash": "898e2282ec17bf808e708770ada7811a"
   },
   "scripts/seed_e2e_backend.py": {
-    "mtime": 1783103275000.8672,
-    "hash": "cac21e73ded3edf20edbb5489291ce1d"
+    "mtime": 1784484797686.275,
+    "hash": "22206d881f63052918abfd47f97b0cb9"
   },
   "scripts/serve_e2e_backend.py": {
-    "mtime": 1783103275000.9392,
-    "hash": "62f711d1bcf77f354c6fa2d56d97761e"
+    "mtime": 1784484410234.3025,
+    "hash": "4820fe44041a3a042fe5ba10047f2757"
   },
   "tests/__init__.py": {
     "mtime": 1783103275001.143,
     "hash": "8d771d95e254e5e632c1dcfdef3bd38a"
   },
   "tests/conftest.py": {
-    "mtime": 1783103275001.2747,
-    "hash": "1fd089514c6b265b546acf5f6168eaf3"
+    "mtime": 1784484492765.3652,
+    "hash": "1aa1207f86bfb5fc88a6510d21cf6d80"
   },
   "tests/perf/__init__.py": {
     "mtime": 1783103275001.6475,
@@ -1928,8 +1928,8 @@
     "hash": "def707ff4f801e425305295deb70dda5"
   },
   "tests/test_postgres_validation.py": {
-    "mtime": 1783103275008.4988,
-    "hash": "7a12811474100585deb7870241422fe4"
+    "mtime": 1784487442326.8584,
+    "hash": "9603faab23aeaf22eb74f3377019ba03"
   },
   "tests/test_pricing_policy_service.py": {
     "mtime": 1783103275008.555,
@@ -1968,7 +1968,7 @@
     "hash": "d0fa42332fc9ad1e714cc5d5d98b12b2"
   },
   "tests/test_reservation_lifecycle_v72.py": {
-    "mtime": 1784390265456.0315,
+    "mtime": 1784398283680.6372,
     "hash": "de5fdff1559d1c5124abc1922756788e"
   },
   "tests/test_reservation_operations_api.py": {
@@ -2108,36 +2108,36 @@
     "hash": "a7cfa4273aaf35e4442251d4bd5f5ebc"
   },
   ".claude/agents/architecture-reviewer.md": {
-    "mtime": 1783183510590.5232,
-    "hash": "c2c68f87ebf9af4dbc2938ffb47ef529"
+    "mtime": 1784398283648.0996,
+    "hash": "9fec47dad04a873c609d65956aab08ab"
   },
   ".claude/agents/backend-engineer.md": {
-    "mtime": 1783183406722.9478,
-    "hash": "9f0a24f324a26bf065996e88f918d3c7"
+    "mtime": 1784398283648.2407,
+    "hash": "20a5dde6b040c5b968d0a182df84891b"
   },
   ".claude/agents/database-migrations.md": {
-    "mtime": 1783183435116.8933,
-    "hash": "d66b11075bd1db4e7d733bac2ac01ce4"
+    "mtime": 1784398283648.6055,
+    "hash": "1237c59f501fa41b54c9e67f5e295f78"
   },
   ".claude/agents/docs-writer.md": {
-    "mtime": 1783183496415.0605,
-    "hash": "bf1836f216a134d1bfca09ba8a85e3a6"
+    "mtime": 1784398283648.8584,
+    "hash": "51ea982be18b87e0c163c3669cab026f"
   },
   ".claude/agents/frontend-engineer.md": {
-    "mtime": 1783183418872.3298,
-    "hash": "c5256fda244c1e9e308e401b14b0fac2"
+    "mtime": 1784398283649.0103,
+    "hash": "175d947b9248da206b10351e44ec4906"
   },
   ".claude/agents/performance-analyst.md": {
-    "mtime": 1783183484303.4639,
-    "hash": "0c1698f3ac766f10932621a45bbf0229"
+    "mtime": 1784398283649.498,
+    "hash": "fc9242f066eeca1646242a7a1f010860"
   },
   ".claude/agents/qa-testing.md": {
-    "mtime": 1783183467721.1677,
-    "hash": "f653d08daa86871b3b1e50165858c473"
+    "mtime": 1784398283649.742,
+    "hash": "67ae25b203b95b9bd12816866060ef6b"
   },
   ".claude/agents/security-auditor.md": {
-    "mtime": 1783183449668.6946,
-    "hash": "7c2d500a59c3f77765eb032dad3cde62"
+    "mtime": 1784398283649.9866,
+    "hash": "fb011c0b7dc55e30c12faee3f2d7f1c7"
   },
   ".codex_prompts/d1.txt": {
     "mtime": 1783103274869.4485,
@@ -2216,19 +2216,19 @@
     "hash": "22648c4abec837a8b13d1eadffa033cf"
   },
   ".github/workflows/build-and-push.yml": {
-    "mtime": 1783103274870.6345,
-    "hash": "076afa216b517d12fb672b3d203a2eb7"
+    "mtime": 1783186478537.5864,
+    "hash": "d82c75cd5350285127d0ba85baa38d4a"
   },
   ".github/workflows/pr-validation.yml": {
     "mtime": 1783103274870.6938,
     "hash": "9c7fd615d83261c55e46096fcff2f761"
   },
   "AGENTS.md": {
-    "mtime": 1784388933365.5813,
+    "mtime": 1784398283666.9817,
     "hash": "d5b6871908a91488edef68c423b0f026"
   },
   "CLAUDE.md": {
-    "mtime": 1784392308785.6636,
+    "mtime": 1784398283667.1643,
     "hash": "e8562f8c7226ca1d26f59bdde8ae6aca"
   },
   "README.md": {
@@ -2268,7 +2268,7 @@
     "hash": "d44cfe18dec64c8aae68668e41619cff"
   },
   "docs/DEPLOY_GUIDE.md": {
-    "mtime": 1784392591452.8816,
+    "mtime": 1784398283669.8782,
     "hash": "6ef036c6c3e5bd111237d1904a11f4dd"
   },
   "docs/INCIDENT_PLAYBOOK.md": {
@@ -2276,8 +2276,8 @@
     "hash": "07e495d0beb01e687ec5fdfca47dd4b9"
   },
   "docs/PILOT_RUNBOOK.md": {
-    "mtime": 1783103274893.848,
-    "hash": "9d8916c68d95e6ae10dede32b7de0625"
+    "mtime": 1784515943359.1,
+    "hash": "949ac6829b3b7d3853a0cb4fb5486547"
   },
   "docs/analytics-r1.md": {
     "mtime": 1783103274894.0098,
@@ -2392,7 +2392,7 @@
     "hash": "f7a6b81d4fb33c05a9fc0433cc20e95c"
   },
   "docs/design/MOTOR_RESERVAS_QUICK_REFERENCE.md": {
-    "mtime": 1784388933366.74,
+    "mtime": 1784398283670.045,
     "hash": "e3c198468c9ed1ec6075fdf7ff5da576"
   },
   "docs/design/RBAC_DESIGN.md": {
@@ -2444,11 +2444,11 @@
     "hash": "5736995db6b9fae9ae8152c62b04fe2f"
   },
   "docs/marketing/landing-page/00-executive-summary.md": {
-    "mtime": 1784392618896.3438,
+    "mtime": 1784398283670.1992,
     "hash": "86b83a3d6a1e724c07a70a6ba850a215"
   },
   "docs/marketing/landing-page/01-product-audit.md": {
-    "mtime": 1784388933366.3823,
+    "mtime": 1784398283670.3455,
     "hash": "ee661498a535f2bbd4ade6d1082cafbf"
   },
   "docs/marketing/landing-page/02-competitor-benchmark.md": {
@@ -2460,19 +2460,19 @@
     "hash": "c0992f8f0ddd9046ca41575f3ab299b1"
   },
   "docs/marketing/landing-page/04-seo-strategy.md": {
-    "mtime": 1784392607621.0898,
+    "mtime": 1784398283670.4744,
     "hash": "49e4a01508787689af86276288d0a470"
   },
   "docs/marketing/landing-page/05-site-architecture-and-wireframe.md": {
-    "mtime": 1784392607621.515,
+    "mtime": 1784398283670.6348,
     "hash": "51869fbd5dd33151249e6fc1f27fb78c"
   },
   "docs/marketing/landing-page/06-copy-deck.md": {
-    "mtime": 1784392607621.7363,
+    "mtime": 1784398283670.77,
     "hash": "b88a9f5d0886d621b9dd2551a169ad0e"
   },
   "docs/marketing/landing-page/07-implementation-plan.md": {
-    "mtime": 1784392607622.092,
+    "mtime": 1784398283670.8994,
     "hash": "a6b3c20e584cfb0a631dbfa40dd5fcc2"
   },
   "docs/marketing/landing-page/08-risks-open-questions.md": {
@@ -2484,11 +2484,11 @@
     "hash": "3158b90e7baf795ce9bf0d71e5268f95"
   },
   "docs/marketing/landing-page/10-sources.md": {
-    "mtime": 1784388933366.1594,
+    "mtime": 1784398283671.0432,
     "hash": "c03c12f9e9e7fc1f8b93e8bc46f1f4b5"
   },
   "docs/marketing/landing-page/11-public-config.md": {
-    "mtime": 1784392607622.2732,
+    "mtime": 1784398283671.1904,
     "hash": "b783d8f1ce972bed562063987c6db13c"
   },
   "docs/master-admin-panel-blockers.md": {
@@ -2512,7 +2512,7 @@
     "hash": "d0474aaa3b5cb8b263fb35d25549ae16"
   },
   "docs/orchestrator-status.md": {
-    "mtime": 1784388933366.9722,
+    "mtime": 1784398283671.3386,
     "hash": "0a5555ae638635ee2bf9b0ed33bec34c"
   },
   "docs/product-definition.md": {
@@ -2524,8 +2524,8 @@
     "hash": "8fc1f74c53dba3b3a5f00719d2bc8f59"
   },
   "docs/runtime/dev-email-and-staging.md": {
-    "mtime": 1783103274899.7068,
-    "hash": "9b47c16dc7baba526bcbe0a3e8ee6ba0"
+    "mtime": 1784515943359.4067,
+    "hash": "0c6efe3b34b9c77bf56cbbba12fd7d1a"
   },
   "docs/security-baseline.md": {
     "mtime": 1783103274899.7717,
@@ -2552,19 +2552,19 @@
     "hash": "83dc87fe15f3432941dccc7e213fcc96"
   },
   "frontend/e2e/README.md": {
-    "mtime": 1783103274900.5266,
-    "hash": "cb958d17ee9384cdeb7e65c3e891e080"
+    "mtime": 1784484605653.2388,
+    "hash": "8565371c7e1ae5f96553c3c534e422db"
   },
   "frontend/index.html": {
-    "mtime": 1784392591451.8718,
+    "mtime": 1784398283671.8098,
     "hash": "8aed8b7f9053f572897c47587fbb2f17"
   },
   "frontend/public/robots.txt": {
-    "mtime": 1784392591452.0657,
+    "mtime": 1784398283672.0923,
     "hash": "92f303469b92ef1d7e9fab36057b2898"
   },
   "render.yaml": {
-    "mtime": 1784392591451.2847,
+    "mtime": 1784398283679.0537,
     "hash": "ba28d8480bf709bcb1251a22a7d13786"
   },
   "requirements.txt": {
@@ -2616,223 +2616,683 @@
     "hash": "67bd9ea043a1640125e2728858a467d5"
   },
   "scripts/agent_ops/check_knowledge.py": {
-    "mtime": 1784392416109.2737,
-    "hash": "c11ef2547c884c6534fc2684cce37774"
+    "mtime": 1784515611805.4414,
+    "hash": "755a98c5d8a79fc84b176f2244a6d14c"
   },
   "scripts/agent_ops/check_preview_manifest.py": {
-    "mtime": 1784389095348.391,
-    "hash": "e5813d31a4f6bc0c26dc7a0acaaf2261"
+    "mtime": 1784483658773.0366,
+    "hash": "e9fc6c4c7d8e60e9cb0e48b809db7148"
   },
   "scripts/agent_ops/check_qa_evidence.py": {
-    "mtime": 1784389036129.4387,
-    "hash": "40a907b77bd73e00a9b9173c6afc08a3"
+    "mtime": 1784517355569.0637,
+    "hash": "df0c77867c5dec37f2c0ab8ff14e7054"
   },
   "scripts/agent_ops/check_release_evidence.py": {
-    "mtime": 1784389183734.7747,
-    "hash": "d6ccd203aeab92ee3b205a86445a6b3d"
+    "mtime": 1784517419491.0854,
+    "hash": "c2cfe34d5a943a85fb6437ec0378ffbe"
   },
   "scripts/agent_ops/context_status.py": {
-    "mtime": 1784392416109.0054,
+    "mtime": 1784398283679.7295,
     "hash": "6e83f1692a084317b7a08f59b0c6df71"
   },
   "scripts/agent_ops/render_agents.py": {
-    "mtime": 1784389426607.973,
+    "mtime": 1784398283679.9539,
     "hash": "5ca37f81871995296f89a3f2f2301a5e"
   },
   "scripts/agent_ops/render_skills.py": {
-    "mtime": 1784392308784.5823,
+    "mtime": 1784398283680.0515,
     "hash": "14ed7187aa4a632e19602d4cd72883cf"
   },
   "scripts/agent_ops/sync_skills.py": {
-    "mtime": 1784388575169.195,
+    "mtime": 1784398283680.1548,
     "hash": "eceb535d69da8d14b0df4d1383b6a539"
   },
   "scripts/agent_ops/validate_setup.py": {
-    "mtime": 1784392789509.7092,
+    "mtime": 1784398283680.2646,
     "hash": "60ea5e5d1098d9fe1efd052e6a67b163"
   },
   "scripts/knowledge/generate_inventories.py": {
-    "mtime": 1784392140844.495,
-    "hash": "f8e19fb904f1612484c0eb5e4c07c4f6"
+    "mtime": 1784519572814.4846,
+    "hash": "7baa8f6e866297a7a9c4d6f51eb9d9ea"
   },
   "tests/test_agent_ops_setup.py": {
-    "mtime": 1784392789509.9734,
-    "hash": "b1271b054b1c9025cc5c9b672b78a843"
+    "mtime": 1784517590701.4548,
+    "hash": "e79a766c5d050c389b4abcf01997d02a"
   },
   "docs/dev-environment-and-tooling.md": {
     "mtime": 1783187317821.0437,
     "hash": "ece8b1a72f5eef7860dfaa86eec055a7"
   },
   "knowledge/00-control/DECISION-LOG.md": {
-    "mtime": 1784392758091.202,
-    "hash": "8840bd4168747396132bfde5237a8af5"
+    "mtime": 1784519436418.586,
+    "hash": "9a9f9b337fc8df50597fe59abfc5fec1"
   },
   "knowledge/00-control/SOURCE-OF-TRUTH.md": {
-    "mtime": 1784388723769.3145,
+    "mtime": 1784398283672.7246,
     "hash": "0e3e2f6829be94f80b0edeca0ed68c28"
   },
   "knowledge/00-control/STATUS-TODAY.md": {
-    "mtime": 1784392758092.3335,
-    "hash": "3ef02da15052815d98dea8552ecac72d"
+    "mtime": 1784519468986.7253,
+    "hash": "cd6de7d896f343a632fa66709ccc95d8"
   },
   "knowledge/00-control/TASK_ROUTER.md": {
-    "mtime": 1784388723769.0918,
+    "mtime": 1784398283672.9697,
     "hash": "79016824595bc42ad5a62e1983488cad"
   },
   "knowledge/00-control/tooling-patterns.md": {
-    "mtime": 1784388723769.776,
+    "mtime": 1784398283673.101,
     "hash": "9caa223c73b5731ceb56e0de1fea5668"
   },
   "knowledge/10-context/backend.md": {
-    "mtime": 1784392140840.8682,
+    "mtime": 1784398283673.2495,
     "hash": "56b4199b564826fa73e6498a72f625a2"
   },
   "knowledge/10-context/cloud-qa-user.md": {
-    "mtime": 1784392308785.3235,
+    "mtime": 1784398283673.362,
     "hash": "c65c12ce7b2c4d268da4e15a70a0c960"
   },
   "knowledge/10-context/data-visualization.md": {
-    "mtime": 1784392308785.4768,
+    "mtime": 1784398283673.4905,
     "hash": "2c752983558a12fcd90f350188a83b47"
   },
   "knowledge/10-context/database.md": {
-    "mtime": 1784392308785.1648,
+    "mtime": 1784398283673.6226,
     "hash": "5c1e48349bc96c7be8b817f91b02cbc8"
   },
   "knowledge/10-context/devops-containers.md": {
-    "mtime": 1784392140841.615,
-    "hash": "6703a376fab6063a2ed4fe0ae15b0837"
+    "mtime": 1784398369911.4094,
+    "hash": "d5bd34588d5b0a6bed7822939ab659da"
   },
   "knowledge/10-context/frontend.md": {
-    "mtime": 1784392140841.1182,
+    "mtime": 1784398283673.8948,
     "hash": "ba1b59040b5c0779e432eeb71fc16849"
   },
   "knowledge/10-context/geo-local-seo.md": {
-    "mtime": 1784392140843.276,
+    "mtime": 1784398283674.0024,
     "hash": "1809ff4c2fa19223255957d077ba5cf7"
   },
   "knowledge/10-context/geo-market-expansion.md": {
-    "mtime": 1784392140842.2627,
+    "mtime": 1784398283674.124,
     "hash": "121cdfdb0abbe732a0113a065f261d28"
   },
   "knowledge/10-context/knowledge-graph.md": {
-    "mtime": 1784392308784.8894,
+    "mtime": 1784398283674.2402,
     "hash": "d912c50b8c70dc8cd9d84c495c61c179"
   },
   "knowledge/10-context/product-ceo.md": {
-    "mtime": 1784392140842.1047,
+    "mtime": 1784398283674.3567,
     "hash": "2d75461e6771beaa41ff150847323ac6"
   },
   "knowledge/10-context/release-governor.md": {
-    "mtime": 1784392140844.281,
+    "mtime": 1784398283674.4763,
     "hash": "9792a737b6ff3aea6857b3d93dcf1ca1"
   },
   "knowledge/10-context/security.md": {
-    "mtime": 1784392140841.7788,
+    "mtime": 1784398283674.6108,
     "hash": "f0e4c62fc11b5e57e80709439b83d203"
   },
   "knowledge/10-context/ux-ui.md": {
-    "mtime": 1784392140843.4612,
+    "mtime": 1784398283674.718,
     "hash": "978de5d80ab639cb6aeadcabd385a97a"
   },
   "knowledge/20-system/ai-and-analytics.md": {
-    "mtime": 1784388790845.9685,
+    "mtime": 1784398283674.9023,
     "hash": "488777af707db719169a7cd7bd694354"
   },
   "knowledge/20-system/api-and-integrations.md": {
-    "mtime": 1784388790844.779,
+    "mtime": 1784398283675.0525,
     "hash": "e3f881a9744669fbc8eec6c894b3f9fe"
   },
   "knowledge/20-system/auth-security-and-tenancy.md": {
-    "mtime": 1784388790845.362,
+    "mtime": 1784398283675.1692,
     "hash": "7110834dc8c6ea4f30e8b50ed03ecae2"
   },
   "knowledge/20-system/cloud-and-deployment.md": {
-    "mtime": 1784392758091.8027,
-    "hash": "ca94c61dd85759738af6f2f671a67158"
+    "mtime": 1784398459678.9387,
+    "hash": "db90c008bb4198f3c2c13b80f0cdf678"
   },
   "knowledge/20-system/domain-and-data.md": {
-    "mtime": 1784388790844.6196,
+    "mtime": 1784398283675.3928,
     "hash": "254337160e9a29ef0bbf8bbf2d98c67c"
   },
   "knowledge/20-system/frontend-and-ux.md": {
-    "mtime": 1784388790845.0417,
+    "mtime": 1784398283675.5083,
     "hash": "3166195c94b6d7ff10ef99e66ca2d1a0"
   },
   "knowledge/20-system/product-and-personas.md": {
-    "mtime": 1784388790844.436,
+    "mtime": 1784398283675.647,
     "hash": "aabcb1c189625fd99e08226d72e0c2ba"
   },
   "knowledge/20-system/technical-debt-and-risks.md": {
-    "mtime": 1784392758092.105,
-    "hash": "14b5d4f1cfdfb805eeef97da370e60f5"
+    "mtime": 1784398283675.7751,
+    "hash": "d822950ae51086200cb46bb0bd876b16"
   },
   "knowledge/30-operations/cloud-regression-catalog.md": {
-    "mtime": 1784388790846.596,
+    "mtime": 1784398283675.936,
     "hash": "2a6b5228179719fc09085a8348bf9cb6"
   },
   "knowledge/30-operations/cloud-surface-manifest.md": {
-    "mtime": 1784392758091.5396,
-    "hash": "998837749915eb6285255d8a7876d8ba"
+    "mtime": 1784398342103.449,
+    "hash": "48c973e3b69246d1c9420c86d8c432e1"
   },
   "knowledge/30-operations/incident-and-recovery.md": {
-    "mtime": 1784388790846.7205,
+    "mtime": 1784398283676.2007,
     "hash": "c1e2bef455753b1cc9357f4d620868b4"
   },
   "knowledge/30-operations/qa-personas-and-bootstrap.md": {
-    "mtime": 1784388790846.4795,
-    "hash": "e9521be1b97bb379b8d2e6f9e9478f84"
+    "mtime": 1784519436418.3643,
+    "hash": "49b6c84c76210016ff301e40223e36b0"
   },
   "knowledge/40-delivery/qa-evidence-template.md": {
-    "mtime": 1784389174465.5962,
-    "hash": "0af806ced3d654920eb18e0f0e0745e9"
+    "mtime": 1784517597142.425,
+    "hash": "6914d43d6343d100b215f5495297ed4d"
   },
   "knowledge/40-delivery/release-gates.md": {
-    "mtime": 1784392308786.0588,
-    "hash": "df02422f864e71b28b7c52829bad7cb5"
+    "mtime": 1784519436418.0244,
+    "hash": "a1890bdc648e49f31571304b03adf321"
   },
   "knowledge/40-delivery/task-handoff-template.md": {
-    "mtime": 1784388790847.1526,
+    "mtime": 1784398283676.7454,
     "hash": "d72457a503e6ab01a330b2a92ba8832e"
   },
   "knowledge/README.md": {
-    "mtime": 1784388723768.8093,
+    "mtime": 1784398283676.8586,
     "hash": "3db5c8310924252e1fabbae64e2dc823"
   },
   "knowledge/_generated/README.md": {
-    "mtime": 1784392454597.8525,
-    "hash": "eb27e226b3464efc1969e746f27990b0"
+    "mtime": 1784398283677.0054,
+    "hash": "88e7b629d3c987dc2ac8923edb640768"
   },
   "knowledge/_generated/api-surface.md": {
-    "mtime": 1784392454151.5452,
-    "hash": "7892fa0cc145a46bd97913dd4f3f7ad2"
+    "mtime": 1784398283677.1523,
+    "hash": "2176e3b345d7562eab01ef6d508c886e"
   },
   "knowledge/_generated/cloud-surfaces.md": {
-    "mtime": 1784392454588.4856,
-    "hash": "2c5e4a2c64f95a85660ced23a2382c07"
+    "mtime": 1784398283677.4048,
+    "hash": "049adf24ed32ae9283e862f3ffd8a954"
   },
   "knowledge/_generated/frontend-routes.md": {
-    "mtime": 1784392454160.462,
-    "hash": "6ea5ce5d9b73071d37fdcd70b75fa7fd"
+    "mtime": 1784398283677.5308,
+    "hash": "569838941cfb6cd330bed77b55a21813"
   },
   "knowledge/_generated/graphify-summary.md": {
-    "mtime": 1784392454579.6274,
-    "hash": "5a56f8c141cc707dc660585ea3783993"
+    "mtime": 1784398283677.6462,
+    "hash": "8a64569a97e7add4f75e08184aeb3b9b"
   },
   "knowledge/_generated/migration-head.md": {
-    "mtime": 1784392454295.039,
-    "hash": "f30b0a7583c4d1f123abe0d60fd9c074"
+    "mtime": 1784398283677.746,
+    "hash": "86df718e359063a77538794b74c869e3"
   },
   "qa/evidence/README.md": {
-    "mtime": 1784389036129.2332,
-    "hash": "26e009a9d9ad12a0aa9ecabfb6c3d85a"
+    "mtime": 1784518061099.4763,
+    "hash": "16edea12dd11a133dc0e220e02a28a35"
   },
   "scripts/agent_ops/normalize_graphify_portability.py": {
-    "mtime": 1784392308784.3064,
+    "mtime": 1784398283679.834,
     "hash": "b252ad5584d6cda38f466722b3975a3c"
   },
   "scripts/agent_ops/check_cloud_surface_config.py": {
-    "mtime": 1784392789509.4666,
+    "mtime": 1784398283679.1958,
     "hash": "915e047a675341b5822869fb70626594"
+  },
+  "scripts/agent_ops/validate_preview_manifest.py": {
+    "mtime": 1784519087483.0461,
+    "hash": "6bacc23b5c1b98e0493fade5489c9611"
+  },
+  "scripts/bootstrap_cloud_qa.py": {
+    "mtime": 1784518819875.2915,
+    "hash": "cb88a437e098d8a511fb6deb24e82d68"
+  },
+  "tests/test_bootstrap_cloud_qa.py": {
+    "mtime": 1784519119737.752,
+    "hash": "bb09ec8d90c095c1ce0f3dcc90f4317f"
+  },
+  "tests/test_postgres_validation_safety.py": {
+    "mtime": 1784518947504.0432,
+    "hash": "8b0d73aa0a393839e7e8be8ecc587ad7"
+  },
+  "tests/test_preview_manifest_contract.py": {
+    "mtime": 1784517836058.9924,
+    "hash": "80b4333cd20b2cc06ed806e68bceaf07"
+  },
+  "scripts/README.qa-bootstrap.md": {
+    "mtime": 1784519414406.2207,
+    "hash": "2492b5bf7adeee41c43532ea32994d10"
+  },
+  "scripts/agent_ops/verify_preview_bundle.py": {
+    "mtime": 1784518523491.7556,
+    "hash": "b31cf230eb954db8eee68ab29405e028"
+  },
+  "scripts/agent_ops/verify_preview_providers.py": {
+    "mtime": 1784519087483.499,
+    "hash": "6a49650d60af4c2b9a57b1c5725632ad"
+  },
+  "scripts/issue_qa_provider_evidence.py": {
+    "mtime": 1784487539127.2117,
+    "hash": "927fa1d2eaff99556b387ae67af971b4"
+  },
+  "tests/postgres_test_safety.py": {
+    "mtime": 1784518929683.3208,
+    "hash": "14c31f7d3a77e17b7c5e5fb174c0e4f9"
+  },
+  "tests/test_e2e_seed_safety.py": {
+    "mtime": 1784484797686.5344,
+    "hash": "102bc5b272582af0e09789b36902b3b4"
+  },
+  "tests/test_preview_provider_verifier.py": {
+    "mtime": 1784518876278.872,
+    "hash": "b967fe01be6d7dad945a895b3eb97207"
+  },
+  "scripts/agent_ops/provision_qa_bootstrap.py": {
+    "mtime": 1784519087483.828,
+    "hash": "a8970f567571f810ee492043e48024f7"
+  },
+  "scripts/agent_ops/trusted_release_gate.py": {
+    "mtime": 1784518016175.5547,
+    "hash": "f016329a2c6b146bd07dee6e2f729049"
+  },
+  "tests/test_provision_qa_bootstrap.py": {
+    "mtime": 1784519022968.4868,
+    "hash": "26b64a15d9ce2b8107d1d929ee363b13"
+  },
+  "tests/test_release_evidence_contract.py": {
+    "mtime": 1784517076186.2583,
+    "hash": "5bcdf215215bb2afd0106f7fccda8291"
+  },
+  "tests/test_trusted_release_gate.py": {
+    "mtime": 1784517861507.0317,
+    "hash": "e021f4e2ec370170a17b6c43e83731b0"
+  },
+  ".githooks/pre-commit": {
+    "mtime": 1784398283657.9128,
+    "hash": "b0e1dc60969ccd5590d47ca33bfec963"
+  },
+  ".agents/skills/agent-setup-maintenance/SKILL.md": {
+    "mtime": 1784398283642.3325,
+    "hash": "7f2bc46168bc8fdeb6fc3d4b9111ac17"
+  },
+  ".agents/skills/agent-setup-maintenance/agents/openai.yaml": {
+    "mtime": 1784398283642.5366,
+    "hash": "967cc804617e0c6daf9d6c7a10b429dd"
+  },
+  ".agents/skills/cloud-user-qa/SKILL.md": {
+    "mtime": 1784398283642.688,
+    "hash": "78e68f7386e3788b82ec93105c4d356a"
+  },
+  ".agents/skills/cloud-user-qa/agents/openai.yaml": {
+    "mtime": 1784398283642.8386,
+    "hash": "16edeff38c514d364477c4f7aeb21532"
+  },
+  ".agents/skills/data-visualization-review/SKILL.md": {
+    "mtime": 1784398283643.003,
+    "hash": "62e2a84a1bc6e8b8a9057dbe3d27d17d"
+  },
+  ".agents/skills/data-visualization-review/agents/openai.yaml": {
+    "mtime": 1784398283643.1606,
+    "hash": "6bb9a290c5f1ca22cd45dc74a233fbc6"
+  },
+  ".agents/skills/deploy-preview-check/SKILL.md": {
+    "mtime": 1784398283643.3237,
+    "hash": "26741e1bdc585eb15ce227d6350412c3"
+  },
+  ".agents/skills/deploy-preview-check/agents/openai.yaml": {
+    "mtime": 1784398283643.487,
+    "hash": "9c09b9e7d1e31d25383e03d43df00004"
+  },
+  ".agents/skills/dev-up/SKILL.md": {
+    "mtime": 1784398283643.6462,
+    "hash": "1563fe65b353bf0e40548acd1a4df2c2"
+  },
+  ".agents/skills/geo-local-seo/SKILL.md": {
+    "mtime": 1784398283643.793,
+    "hash": "f4086f1839ebd3d8ff6aa761b451266b"
+  },
+  ".agents/skills/geo-local-seo/agents/openai.yaml": {
+    "mtime": 1784398283643.9397,
+    "hash": "a7a4ee77dd6da8981773eb2ae686b5af"
+  },
+  ".agents/skills/geo-market-expansion/SKILL.md": {
+    "mtime": 1784398283644.086,
+    "hash": "1ba813def89bdd26e0e501da3ae4f4be"
+  },
+  ".agents/skills/geo-market-expansion/agents/openai.yaml": {
+    "mtime": 1784398283644.2273,
+    "hash": "4a3802b6ad3354acdb57f69706e6772b"
+  },
+  ".agents/skills/graphify-load-context/SKILL.md": {
+    "mtime": 1784398283644.3684,
+    "hash": "837f1d137040339a77ce4afc9cb44d91"
+  },
+  ".agents/skills/graphify-load-context/agents/openai.yaml": {
+    "mtime": 1784398283644.508,
+    "hash": "6e92cc5d9e88e22c370a3a40e20c62e6"
+  },
+  ".agents/skills/graphify-read/SKILL.md": {
+    "mtime": 1784398283644.6558,
+    "hash": "93eaff240ba760e7a58369ec602a21df"
+  },
+  ".agents/skills/graphify-read/agents/openai.yaml": {
+    "mtime": 1784398283644.795,
+    "hash": "eb155a1a8e1aa45a671a4507c736f6b7"
+  },
+  ".agents/skills/graphify-write/SKILL.md": {
+    "mtime": 1784398283644.9365,
+    "hash": "720d5e5ead4eed1979606befbf315dc7"
+  },
+  ".agents/skills/graphify-write/agents/openai.yaml": {
+    "mtime": 1784398283645.0718,
+    "hash": "fd786dd876b32162a80ffef4897bbe6d"
+  },
+  ".agents/skills/incident-triage/SKILL.md": {
+    "mtime": 1784398283645.2085,
+    "hash": "e8232fcae72793a1c70659cc6d25f034"
+  },
+  ".agents/skills/incident-triage/agents/openai.yaml": {
+    "mtime": 1784398283645.342,
+    "hash": "2401b878bced3e59222d60a75ab15379"
+  },
+  ".agents/skills/new-migration/SKILL.md": {
+    "mtime": 1784398283645.4705,
+    "hash": "a468a1aafa3692fda77d17ad3db03d20"
+  },
+  ".agents/skills/obsidian-load-context/SKILL.md": {
+    "mtime": 1784398283645.6125,
+    "hash": "c50670fe8d18a5aa9e195eada79372ba"
+  },
+  ".agents/skills/obsidian-load-context/agents/openai.yaml": {
+    "mtime": 1784398283645.748,
+    "hash": "5a44b291a63b65f4316dbb59d42dc6ae"
+  },
+  ".agents/skills/obsidian-read/SKILL.md": {
+    "mtime": 1784398283645.881,
+    "hash": "9470db7fda22e6d964a607fc5ee70090"
+  },
+  ".agents/skills/obsidian-read/agents/openai.yaml": {
+    "mtime": 1784398283646.012,
+    "hash": "49210ca9dc1a3e2dc7659d0e9c805e31"
+  },
+  ".agents/skills/obsidian-write/SKILL.md": {
+    "mtime": 1784398283646.15,
+    "hash": "503e5069808b768535a56804ad700c4f"
+  },
+  ".agents/skills/obsidian-write/agents/openai.yaml": {
+    "mtime": 1784398283646.2812,
+    "hash": "32c48a2dd7379797c8ba4d096459915e"
+  },
+  ".agents/skills/product-ceo-review/SKILL.md": {
+    "mtime": 1784398283646.4133,
+    "hash": "88fae2a6d3e1d9d4c598611685acf8c2"
+  },
+  ".agents/skills/product-ceo-review/agents/openai.yaml": {
+    "mtime": 1784398283646.5547,
+    "hash": "638c5975d1325000228d3391a597df79"
+  },
+  ".agents/skills/qa-persona-bootstrap/SKILL.md": {
+    "mtime": 1784398283646.71,
+    "hash": "8ffb83de9489ffdfbc786ec142cea2cd"
+  },
+  ".agents/skills/qa-persona-bootstrap/agents/openai.yaml": {
+    "mtime": 1784398283646.8628,
+    "hash": "bdd2b69a7803613ec60e869562cdf3dd"
+  },
+  ".agents/skills/release-gate/SKILL.md": {
+    "mtime": 1784398283647.028,
+    "hash": "3c19144a1a25364f0cafef71eba4e5fe"
+  },
+  ".agents/skills/release-gate/agents/openai.yaml": {
+    "mtime": 1784398283647.2017,
+    "hash": "c61c9bc51a06623481ad199db2ceed4a"
+  },
+  ".agents/skills/secure-integration-review/SKILL.md": {
+    "mtime": 1784398283647.3608,
+    "hash": "850e46270104bd6bd1492c55c901e350"
+  },
+  ".agents/skills/secure-integration-review/agents/openai.yaml": {
+    "mtime": 1784398283647.5073,
+    "hash": "1462dbf4e00ea39db479341556a170db"
+  },
+  ".agents/skills/ux-ui-audit/SKILL.md": {
+    "mtime": 1784398283647.6824,
+    "hash": "0f2359a751e2ab26ef41d243e5887ede"
+  },
+  ".agents/skills/ux-ui-audit/agents/openai.yaml": {
+    "mtime": 1784398283647.8218,
+    "hash": "f88f2e0fc4b94cb53ef8d5ac709de4d6"
+  },
+  ".agents/skills/validate-all/SKILL.md": {
+    "mtime": 1784398283647.9502,
+    "hash": "e19735616b8c1eaaa48e0542ce4fa1f1"
+  },
+  ".claude/agents/cloud-qa-user.md": {
+    "mtime": 1784398283648.3474,
+    "hash": "f33e9338e2f6116b3e502b11b04b18be"
+  },
+  ".claude/agents/data-visualization.md": {
+    "mtime": 1784398283648.463,
+    "hash": "5e19f250b2a2f26003a6922435b36ad6"
+  },
+  ".claude/agents/devops-containers.md": {
+    "mtime": 1784398283648.712,
+    "hash": "6ada3e60f9bc2855ebd1a6fd6808667e"
+  },
+  ".claude/agents/geo-local-seo.md": {
+    "mtime": 1784398283649.126,
+    "hash": "af668e67e224e355d3d8c7fe755b04ab"
+  },
+  ".claude/agents/geo-market-expansion.md": {
+    "mtime": 1784398283649.2437,
+    "hash": "45aac0fc8a00c971f20c18c3e2bfdf4a"
+  },
+  ".claude/agents/knowledge-graph-curator.md": {
+    "mtime": 1784398283649.3486,
+    "hash": "728bc126fecc087742aadb557122d0d9"
+  },
+  ".claude/agents/product-ceo.md": {
+    "mtime": 1784398283649.6084,
+    "hash": "f63ffa3f8593db75da6967ad3d805584"
+  },
+  ".claude/agents/release-governor.md": {
+    "mtime": 1784398283649.8499,
+    "hash": "0f5d6b35c68e54dc357d2d878f263f79"
+  },
+  ".claude/agents/ux-ui-auditor.md": {
+    "mtime": 1784398283650.0967,
+    "hash": "cf1a7aef4382f30a15cf7db2cb34e110"
+  },
+  ".claude/skills/agent-setup-maintenance/SKILL.md": {
+    "mtime": 1784398283650.376,
+    "hash": "7f2bc46168bc8fdeb6fc3d4b9111ac17"
+  },
+  ".claude/skills/agent-setup-maintenance/agents/openai.yaml": {
+    "mtime": 1784398283650.5127,
+    "hash": "967cc804617e0c6daf9d6c7a10b429dd"
+  },
+  ".claude/skills/cloud-user-qa/SKILL.md": {
+    "mtime": 1784398283650.6528,
+    "hash": "78e68f7386e3788b82ec93105c4d356a"
+  },
+  ".claude/skills/cloud-user-qa/agents/openai.yaml": {
+    "mtime": 1784398283650.7932,
+    "hash": "16edeff38c514d364477c4f7aeb21532"
+  },
+  ".claude/skills/data-visualization-review/SKILL.md": {
+    "mtime": 1784398283650.9294,
+    "hash": "62e2a84a1bc6e8b8a9057dbe3d27d17d"
+  },
+  ".claude/skills/data-visualization-review/agents/openai.yaml": {
+    "mtime": 1784398283651.0544,
+    "hash": "6bb9a290c5f1ca22cd45dc74a233fbc6"
+  },
+  ".claude/skills/deploy-preview-check/SKILL.md": {
+    "mtime": 1784398283651.1792,
+    "hash": "26741e1bdc585eb15ce227d6350412c3"
+  },
+  ".claude/skills/deploy-preview-check/agents/openai.yaml": {
+    "mtime": 1784398283651.3083,
+    "hash": "9c09b9e7d1e31d25383e03d43df00004"
+  },
+  ".claude/skills/dev-up/SKILL.md": {
+    "mtime": 1784385853144.9224,
+    "hash": "1563fe65b353bf0e40548acd1a4df2c2"
+  },
+  ".claude/skills/geo-local-seo/SKILL.md": {
+    "mtime": 1784398283651.4424,
+    "hash": "f4086f1839ebd3d8ff6aa761b451266b"
+  },
+  ".claude/skills/geo-local-seo/agents/openai.yaml": {
+    "mtime": 1784398283651.575,
+    "hash": "a7a4ee77dd6da8981773eb2ae686b5af"
+  },
+  ".claude/skills/geo-market-expansion/SKILL.md": {
+    "mtime": 1784398283651.701,
+    "hash": "1ba813def89bdd26e0e501da3ae4f4be"
+  },
+  ".claude/skills/geo-market-expansion/agents/openai.yaml": {
+    "mtime": 1784398283651.8342,
+    "hash": "4a3802b6ad3354acdb57f69706e6772b"
+  },
+  ".claude/skills/graphify-load-context/SKILL.md": {
+    "mtime": 1784398283651.9697,
+    "hash": "837f1d137040339a77ce4afc9cb44d91"
+  },
+  ".claude/skills/graphify-load-context/agents/openai.yaml": {
+    "mtime": 1784398283652.1062,
+    "hash": "6e92cc5d9e88e22c370a3a40e20c62e6"
+  },
+  ".claude/skills/graphify-read/SKILL.md": {
+    "mtime": 1784398283652.2393,
+    "hash": "93eaff240ba760e7a58369ec602a21df"
+  },
+  ".claude/skills/graphify-read/agents/openai.yaml": {
+    "mtime": 1784398283652.4824,
+    "hash": "eb155a1a8e1aa45a671a4507c736f6b7"
+  },
+  ".claude/skills/graphify-write/SKILL.md": {
+    "mtime": 1784398283652.6133,
+    "hash": "720d5e5ead4eed1979606befbf315dc7"
+  },
+  ".claude/skills/graphify-write/agents/openai.yaml": {
+    "mtime": 1784398283652.7449,
+    "hash": "fd786dd876b32162a80ffef4897bbe6d"
+  },
+  ".claude/skills/incident-triage/SKILL.md": {
+    "mtime": 1784398283652.8745,
+    "hash": "e8232fcae72793a1c70659cc6d25f034"
+  },
+  ".claude/skills/incident-triage/agents/openai.yaml": {
+    "mtime": 1784398283653.0103,
+    "hash": "2401b878bced3e59222d60a75ab15379"
+  },
+  ".claude/skills/new-migration/SKILL.md": {
+    "mtime": 1784385853145.7053,
+    "hash": "a468a1aafa3692fda77d17ad3db03d20"
+  },
+  ".claude/skills/obsidian-load-context/SKILL.md": {
+    "mtime": 1784398283653.1458,
+    "hash": "c50670fe8d18a5aa9e195eada79372ba"
+  },
+  ".claude/skills/obsidian-load-context/agents/openai.yaml": {
+    "mtime": 1784398283653.286,
+    "hash": "5a44b291a63b65f4316dbb59d42dc6ae"
+  },
+  ".claude/skills/obsidian-read/SKILL.md": {
+    "mtime": 1784398283653.4165,
+    "hash": "9470db7fda22e6d964a607fc5ee70090"
+  },
+  ".claude/skills/obsidian-read/agents/openai.yaml": {
+    "mtime": 1784398283653.5483,
+    "hash": "49210ca9dc1a3e2dc7659d0e9c805e31"
+  },
+  ".claude/skills/obsidian-write/SKILL.md": {
+    "mtime": 1784398283653.679,
+    "hash": "503e5069808b768535a56804ad700c4f"
+  },
+  ".claude/skills/obsidian-write/agents/openai.yaml": {
+    "mtime": 1784398283653.8147,
+    "hash": "32c48a2dd7379797c8ba4d096459915e"
+  },
+  ".claude/skills/product-ceo-review/SKILL.md": {
+    "mtime": 1784398283653.9443,
+    "hash": "88fae2a6d3e1d9d4c598611685acf8c2"
+  },
+  ".claude/skills/product-ceo-review/agents/openai.yaml": {
+    "mtime": 1784398283654.074,
+    "hash": "638c5975d1325000228d3391a597df79"
+  },
+  ".claude/skills/qa-persona-bootstrap/SKILL.md": {
+    "mtime": 1784398283654.2031,
+    "hash": "8ffb83de9489ffdfbc786ec142cea2cd"
+  },
+  ".claude/skills/qa-persona-bootstrap/agents/openai.yaml": {
+    "mtime": 1784398283654.3281,
+    "hash": "bdd2b69a7803613ec60e869562cdf3dd"
+  },
+  ".claude/skills/release-gate/SKILL.md": {
+    "mtime": 1784398283654.465,
+    "hash": "3c19144a1a25364f0cafef71eba4e5fe"
+  },
+  ".claude/skills/release-gate/agents/openai.yaml": {
+    "mtime": 1784398283654.596,
+    "hash": "c61c9bc51a06623481ad199db2ceed4a"
+  },
+  ".claude/skills/secure-integration-review/SKILL.md": {
+    "mtime": 1784398283654.7249,
+    "hash": "850e46270104bd6bd1492c55c901e350"
+  },
+  ".claude/skills/secure-integration-review/agents/openai.yaml": {
+    "mtime": 1784398283654.8506,
+    "hash": "1462dbf4e00ea39db479341556a170db"
+  },
+  ".claude/skills/ux-ui-audit/SKILL.md": {
+    "mtime": 1784398283654.978,
+    "hash": "0f2359a751e2ab26ef41d243e5887ede"
+  },
+  ".claude/skills/ux-ui-audit/agents/openai.yaml": {
+    "mtime": 1784398283655.1094,
+    "hash": "f88f2e0fc4b94cb53ef8d5ac709de4d6"
+  },
+  ".claude/skills/validate-all/SKILL.md": {
+    "mtime": 1784385853145.3792,
+    "hash": "e19735616b8c1eaaa48e0542ce4fa1f1"
+  },
+  ".github/workflows/preview-qa.yml": {
+    "mtime": 1784517612518.233,
+    "hash": "f4818291bab31ba8a801e0e8e2b8026b"
+  },
+  ".github/workflows/release-gate.yml": {
+    "mtime": 1784515536144.5994,
+    "hash": "e3a15f3bb522d26ee5cc0f87f070332c"
+  },
+  ".graphify/GRAPH_REPORT.md": {
+    "mtime": 1784516473661.6326,
+    "hash": "0ada9f0a4f70b65b8710959d5971dfdd"
+  },
+  "scripts/agent_ops/manage_qa_baseline_lease.py": {
+    "mtime": 1784517879747.6167,
+    "hash": "aa343a93f9879082e2b550dce3b692cd"
+  },
+  "scripts/agent_ops/qa_bootstrap_contract.py": {
+    "mtime": 1784518770556.6472,
+    "hash": "c2dcc500504579d70168307f749cbc4a"
+  },
+  "scripts/agent_ops/qa_evidence_attestation.py": {
+    "mtime": 1784517916021.49,
+    "hash": "ed0ebe743724766cc47047f22f46f5be"
+  },
+  "tests/test_manage_qa_baseline_lease.py": {
+    "mtime": 1784517879747.8618,
+    "hash": "93233f8bfe3d901482ca1fa6111c35b5"
+  },
+  "tests/test_preview_external_effects_safety.py": {
+    "mtime": 1784518421686.9531,
+    "hash": "da80069b49c628e643aca8e2fc965091"
+  },
+  "tests/test_qa_evidence_attestation.py": {
+    "mtime": 1784518002108.2097,
+    "hash": "a1d7322589ec5207e0da5405706656d3"
+  },
+  "requirements-qa-trusted.txt": {
+    "mtime": 1784517681451.7644,
+    "hash": "dc395efe54c190662c41c3da3fe927a7"
   }
 }

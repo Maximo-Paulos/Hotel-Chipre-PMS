@@ -1,7 +1,7 @@
 # Superficies cloud
 
-Generado: 2026-07-18T16:40:12.891756+00:00
-Commit: `bc938cf`
+Generado: 2026-07-20T03:53:42.685793+00:00
+Commit: `767226c`
 
 ## canonical
 
@@ -12,8 +12,8 @@ Commit: `bc938cf`
 ## preview_contract
 
 - Vercel frontend por PR (URL publicada en manifiesto de preview)
-- Render backend por PR con /health
-- Supabase Branch aislada por PR, sin datos reales
+- Render backend QA target-bound con /health y lease exclusivo
+- Segundo proyecto Supabase QA sin datos productivos como baseline serializada; Supabase Branch por PR al habilitar el plan
 
 ## historical_or_needs_verification
 

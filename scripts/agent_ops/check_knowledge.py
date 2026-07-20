@@ -17,6 +17,7 @@ REQUIRED_FILES = {
     "00-control/DECISION-LOG.md", "00-control/tooling-patterns.md", "30-operations/cloud-regression-catalog.md",
     "40-delivery/release-gates.md", "40-delivery/qa-evidence-template.md", "40-delivery/task-handoff-template.md",
 }
+REQUIRED_OBSIDIAN_CONFIG = {"app.json", "appearance.json", "core-plugins.json"}
 MARKDOWN_LINK = re.compile(r"(?<!!)\[[^\]]*\]\(([^)]+)\)")
 
 
@@ -52,6 +53,21 @@ def main() -> int:
     for relative in sorted(REQUIRED_FILES):
         if not (KNOWLEDGE / relative).is_file():
             errors.append(f"missing vault file: knowledge/{relative}")
+    obsidian_dir = KNOWLEDGE / ".obsidian"
+    for filename in sorted(REQUIRED_OBSIDIAN_CONFIG):
+        path = obsidian_dir / filename
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            errors.append(f"invalid portable Obsidian config knowledge/.obsidian/{filename}: {error}")
+            continue
+        if not isinstance(payload, dict):
+            errors.append(f"portable Obsidian config knowledge/.obsidian/{filename} must be an object")
+    for filename in REQUIRED_OBSIDIAN_CONFIG:
+        if (ROOT / ".obsidian" / filename).is_file():
+            errors.append(
+                f"portable Obsidian config must live in knowledge/.obsidian, not .obsidian/{filename}"
+            )
     for path in sorted((KNOWLEDGE / "10-context").glob("*.md")):
         text = path.read_text(encoding="utf-8")
         if not text.startswith("---\n"):
