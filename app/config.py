@@ -189,12 +189,74 @@ def is_production_mode(settings: Settings | None = None) -> bool:
     return env in {"prod", "production"}
 
 
+def is_preview_qa_mode(settings: Settings | None = None) -> bool:
+    runtime_settings = settings or get_settings()
+    env = _normalized_env_value(
+        runtime_settings.APP_ENV or os.getenv("ENVIRONMENT") or os.getenv("APP_ENV")
+    )
+    return env in {"preview", "qa", "staging"}
+
+
+def _validate_preview_qa_security(runtime_settings: Settings) -> None:
+    """Fail closed when a cloud QA service could reach a live integration."""
+
+    errors: list[str] = []
+    exact_values = {
+        "EMAIL_PROVIDER": (runtime_settings.EMAIL_PROVIDER, "null"),
+        "PAYPAL_MODE": (runtime_settings.PAYPAL_MODE, "sandbox"),
+        "AI_PROVIDER": (runtime_settings.AI_PROVIDER, "disabled"),
+        "GEMMA_PROVIDER": (runtime_settings.GEMMA_PROVIDER, "disabled"),
+    }
+    for name, (value, expected) in exact_values.items():
+        if _normalized_env_value(value) != expected:
+            errors.append(f"{name} must be {expected} in preview QA")
+    if runtime_settings.CONNECTIONS_ENABLED:
+        errors.append("CONNECTIONS_ENABLED must be false in preview QA")
+    if runtime_settings.AI_ENABLED is not False:
+        errors.append("AI_ENABLED must be explicitly false in preview QA")
+    if runtime_settings.GEMMA_ENABLED:
+        errors.append("GEMMA_ENABLED must be false in preview QA")
+
+    forbidden_values = {
+        "AI_API_KEY": runtime_settings.AI_API_KEY,
+        "AI_BASE_URL": runtime_settings.AI_BASE_URL,
+        "BOOKING_USERNAME": runtime_settings.BOOKING_USERNAME,
+        "BOOKING_PASSWORD": runtime_settings.BOOKING_PASSWORD,
+        "EXPEDIA_API_KEY": runtime_settings.EXPEDIA_API_KEY,
+        "EXPEDIA_HOTEL_ID": runtime_settings.EXPEDIA_HOTEL_ID,
+        "GMAIL_CLIENT_ID": runtime_settings.GMAIL_CLIENT_ID,
+        "GMAIL_CLIENT_SECRET": runtime_settings.GMAIL_CLIENT_SECRET,
+        "GEMMA_API_KEY": runtime_settings.GEMMA_API_KEY,
+        "GEMMA_ENDPOINT_URL": runtime_settings.GEMMA_ENDPOINT_URL,
+        "MERCADOPAGO_CLIENT_ID": runtime_settings.MERCADOPAGO_CLIENT_ID,
+        "MERCADOPAGO_CLIENT_SECRET": runtime_settings.MERCADOPAGO_CLIENT_SECRET,
+        "MERCADOPAGO_WEBHOOK_SECRET": runtime_settings.MERCADOPAGO_WEBHOOK_SECRET,
+        "MP_ACCESS_TOKEN": runtime_settings.MP_ACCESS_TOKEN,
+        "MP_PUBLIC_KEY": runtime_settings.MP_PUBLIC_KEY,
+        "PAYPAL_CLIENT_ID": runtime_settings.PAYPAL_CLIENT_ID,
+        "PAYPAL_CLIENT_SECRET": runtime_settings.PAYPAL_CLIENT_SECRET,
+        "PAYPAL_WEBHOOK_ID": runtime_settings.PAYPAL_WEBHOOK_ID,
+        "RESEND_API_KEY": runtime_settings.RESEND_API_KEY,
+    }
+    configured = sorted(name for name, value in forbidden_values.items() if _has_value(value))
+    if configured:
+        errors.append(
+            "live integration credentials must be absent in preview QA: "
+            + ", ".join(configured)
+        )
+    if errors:
+        raise RuntimeError("Invalid preview QA security configuration: " + "; ".join(errors))
+
+
 def validate_runtime_security(settings: Settings | None = None) -> None:
     """
     Fail fast if the app is being started in production with placeholder secrets.
     Dev/test/demo are intentionally permissive so the local harness keeps working.
     """
     runtime_settings = settings or get_settings()
+    if is_preview_qa_mode(runtime_settings):
+        _validate_preview_qa_security(runtime_settings)
+        return
     if not is_production_mode(runtime_settings):
         return
 

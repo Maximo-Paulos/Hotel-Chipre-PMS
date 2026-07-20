@@ -1,0 +1,65 @@
+{
+  "schema_version": 2,
+  "evidence_type": "provider-verified-isolated-preview",
+  "task_id": "preview-abcdef123456",
+  "code_sha": "abcdef1234567890abcdef1234567890abcdef12",
+  "generated_at": "2026-07-19T15:00:00Z",
+  "generated_by": {
+    "kind": "provider-api-verifier",
+    "workflow_run_id": 123456789,
+    "workflow_path": ".github/workflows/verify-preview-providers.yml",
+    "github_environment": "preview-qa",
+    "event_name": "workflow_dispatch",
+    "actor_id": "12345",
+    "repository": "Maximo-Paulos/Hotel-Chipre-PMS",
+    "git_branch": "codex/feature-preview",
+    "target_ref_verified_by": "github-api",
+    "workflow_code_sha": "1111111111111111111111111111111111111111",
+    "workflow_git_branch": "main",
+    "evidence_sources": ["render-api", "supabase-management-api", "vercel-api"]
+  },
+  "app_url": "https://hotel-chipre-pms-git-feature-123.vercel.app",
+  "api_origin": "https://hotel-chipre-pms-api-pr-123.onrender.com",
+  "api_base_url": "https://hotel-chipre-pms-api-pr-123.onrender.com/api",
+  "health_url": "https://hotel-chipre-pms-api-pr-123.onrender.com/health",
+  "frontend_vite_api_url": "https://hotel-chipre-pms-api-pr-123.onrender.com/api",
+  "frontend": {
+    "provider": "vercel", "evidence_source": "vercel-api", "environment": "preview",
+    "deployment_id": "dpl-preview-123", "project_id": "prj-canonical", "team_id": "team-canonical",
+    "project_name": "hotel-chipre-pms", "deployment_url": "https://hotel-chipre-pms-unique.vercel.app",
+    "code_sha": "abcdef1234567890abcdef1234567890abcdef12", "git_branch": "codex/feature-preview",
+    "ready_at": "2026-07-19T14:50:00Z"
+  },
+  "backend": {
+    "provider": "render", "evidence_source": "render-api", "environment": "preview",
+    "service_url": "https://hotel-chipre-pms-api-pr-123.onrender.com", "service_id": "srv-preview-123",
+    "production_service_id": "srv-production-456", "deployment_id": "dep-preview-123",
+    "code_sha": "abcdef1234567890abcdef1234567890abcdef12", "git_branch": "codex/feature-preview",
+    "deployment_finished_at": "2026-07-19T14:45:00Z", "configuration_updated_at": "2026-07-19T14:40:00Z"
+  },
+  "database": {
+    "provider": "supabase", "evidence_source": "supabase-management-api",
+    "project_ref": "qaqaprojectrefabcd", "branch_type": "dedicated-qa-project", "isolation_mode": "dedicated-qa-baseline-exclusive", "branch_ref": "qaqaprojectrefabcd",
+    "production_branch_ref": "productionproduction", "branch_name": "hotel-chipre-qa", "git_branch": "codex/feature-preview",
+    "baseline_lease_id": "4Xg_G8qKL90Bct2WjR6nVmZkAwYx7PSfE3uQ1iNo5Lc",
+    "baseline_lease_target_sha": "abcdef1234567890abcdef1234567890abcdef12",
+    "baseline_lease_target_branch": "codex/feature-preview",
+    "with_data": false, "fingerprint_method": "sha256", "fingerprint_payload_version": "supabase-connection-v1",
+    "connection_fingerprint": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "production_connection_fingerprint": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+    "database_endpoint_distinct": true, "database_user_distinct": true,
+    "database_password_distinct": true, "jwt_identity_distinct": true, "updated_at": "2026-07-19T14:35:00Z"
+  },
+  "configuration": {
+    "evidence_source": "render-api", "frontend_url": "https://hotel-chipre-pms-git-feature-123.vercel.app",
+    "cors_origins": ["https://hotel-chipre-pms-git-feature-123.vercel.app"],
+    "environment_id": "env-preview-123", "production_environment_id": "env-production-456",
+    "qa_secrets_scope": "preview-service",
+    "required_secret_names_verified": ["AI_ENABLED", "AI_PROVIDER", "APP_BASE_URL", "APP_ENV", "CONNECTIONS_ENABLED", "CORS_ORIGINS", "DATABASE_URL", "EMAIL_PROVIDER", "FRONTEND_URL", "GEMMA_ENABLED", "GEMMA_PROVIDER", "INTEGRATIONS_ENCRYPTION_KEY", "JWT_SECRET", "MASTER_ADMIN_EMAIL", "MASTER_ADMIN_PASSWORD", "MASTER_ADMIN_PIN", "PAYPAL_MODE", "QA_BASELINE_LEASE_ID", "QA_BASELINE_LEASE_TARGET_BRANCH", "QA_BASELINE_LEASE_TARGET_SHA", "QA_BASELINE_ONLY", "QA_EMAIL_DOMAIN", "QA_EMAIL_DOMAIN_IS_DEDICATED", "QA_HOUSEKEEPING_EMAIL", "QA_HOUSEKEEPING_PASSWORD", "QA_MANAGER_EMAIL", "QA_MANAGER_PASSWORD", "QA_MASTER_ADMIN_EMAIL", "QA_MASTER_ADMIN_PASSWORD", "QA_MASTER_ADMIN_PIN", "QA_OWNER_EMAIL", "QA_OWNER_PASSWORD", "QA_PROVIDER_EVIDENCE_PUBLIC_KEY", "QA_RECEPTION_EMAIL", "QA_RECEPTION_PASSWORD", "QA_RUN_ID", "QA_RUN_MIGRATIONS"],
+    "distinct_from_production_verified": ["DATABASE_URL", "INTEGRATIONS_ENCRYPTION_KEY", "JWT_SECRET", "MASTER_ADMIN_EMAIL", "MASTER_ADMIN_PASSWORD", "MASTER_ADMIN_PIN"],
+    "distinctness_basis": "independent-render-environment-and-supabase-project",
+    "bootstrap_configuration_fingerprint": "sha256:12986d1dca60682f7a1aab54702541ba8edf56a16a717aa5ee246025a83e28ca",
+    "bootstrap_configuration_version": "qa-bootstrap-config-v1",
+    "values_redacted": true
+  }
+}
