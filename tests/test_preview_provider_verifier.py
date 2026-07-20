@@ -682,6 +682,14 @@ def test_pr_controlled_code_cannot_receive_provider_credentials_or_execute_in_ve
     assert "npm ci" not in consumer
 
 
+def test_untrusted_contract_installs_the_exact_hash_locked_linux_runtime() -> None:
+    workflow = open(".github/workflows/preview-qa.yml", encoding="utf-8").read()
+
+    assert "--require-hashes" in workflow
+    assert "--only-binary=:all:" in workflow
+    assert "-r requirements-qa-trusted.txt" in workflow
+
+
 def test_bootstrap_capability_never_crosses_a_workflow_or_artifact_boundary() -> None:
     workflow_path = Path(".github/workflows/verify-preview-providers.yml")
     workflow = workflow_path.read_text(encoding="utf-8")
