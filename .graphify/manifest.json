@@ -384,8 +384,8 @@
     "hash": "4f13cde57e21a16d8c3fe94e5638641b"
   },
   "app/config.py": {
-    "mtime": 1784518400942.984,
-    "hash": "a78c71be425638d9e6fea7f704fa1ff1"
+    "mtime": 1784531363755.0469,
+    "hash": "5423a6a9524c930f377ab626d3a8a128"
   },
   "app/database.py": {
     "mtime": 1783103274878.1143,
@@ -456,8 +456,8 @@
     "hash": "c8c097582158cbfb97d50db81368445f"
   },
   "app/master_admin/security.py": {
-    "mtime": 1783103274879.3572,
-    "hash": "443c87ed794215b0f013c70b48a69365"
+    "mtime": 1784531372576.969,
+    "hash": "5bcf0d042b8c9c12567b7d3d652079fa"
   },
   "app/master_admin/stripe.py": {
     "mtime": 1784518380151.5754,
@@ -1824,8 +1824,8 @@
     "hash": "faef5712014e865983d6a999d88480b7"
   },
   "tests/test_master_admin_panel.py": {
-    "mtime": 1783103275006.4197,
-    "hash": "42117ac86ff3abe7a9e736328a3d5342"
+    "mtime": 1784532039112.5144,
+    "hash": "894ddddcd93e59d744ef29243fd319f0"
   },
   "tests/test_mercadopago_webhook_signature.py": {
     "mtime": 1783103275006.4841,
@@ -2800,28 +2800,28 @@
     "hash": "3db5c8310924252e1fabbae64e2dc823"
   },
   "knowledge/_generated/README.md": {
-    "mtime": 1784519622701.8674,
-    "hash": "1e76e9d23d6f1783eb5fbcff684c1499"
+    "mtime": 1784529561131.339,
+    "hash": "c1a6d8fbdf9468fe2bfba43d12c941f7"
   },
   "knowledge/_generated/api-surface.md": {
-    "mtime": 1784519622267.7097,
-    "hash": "6a8dd928b19dc1a126863b93865bfacf"
+    "mtime": 1784529560672.3152,
+    "hash": "514f7a9a3a62dfcfdc8614be3059c6ae"
   },
   "knowledge/_generated/cloud-surfaces.md": {
-    "mtime": 1784519622694.1682,
-    "hash": "78ad604d2c9a7909b61e3de9a711745d"
+    "mtime": 1784529561123.7202,
+    "hash": "de930fe0b97035bf7c9b4bf886d2983c"
   },
   "knowledge/_generated/frontend-routes.md": {
-    "mtime": 1784519622275.9858,
-    "hash": "35e3439bed9427ae59dc24f4c4201c78"
+    "mtime": 1784529560682.2175,
+    "hash": "4d8f18c26e04e50d4ade130d0b07d855"
   },
   "knowledge/_generated/graphify-summary.md": {
-    "mtime": 1784519622685.6023,
-    "hash": "587eb49476e621eb7563965bb5a32053"
+    "mtime": 1784529561115.6707,
+    "hash": "3fc142a59a499435c17240eeb65a88b7"
   },
   "knowledge/_generated/migration-head.md": {
-    "mtime": 1784519622406.756,
-    "hash": "3437c35c2e9b44418a0f34e874450c4b"
+    "mtime": 1784529560835.5918,
+    "hash": "9d2da7e38d5352e6087a53f668bbd725"
   },
   "qa/evidence/README.md": {
     "mtime": 1784518061099.4763,
@@ -2836,36 +2836,36 @@
     "hash": "915e047a675341b5822869fb70626594"
   },
   "scripts/agent_ops/validate_preview_manifest.py": {
-    "mtime": 1784519087483.0461,
-    "hash": "6bacc23b5c1b98e0493fade5489c9611"
+    "mtime": 1784531730237.1772,
+    "hash": "95b40b3541cd0bba26f42b29db3a2985"
   },
   "scripts/bootstrap_cloud_qa.py": {
     "mtime": 1784518819875.2915,
     "hash": "cb88a437e098d8a511fb6deb24e82d68"
   },
   "tests/test_bootstrap_cloud_qa.py": {
-    "mtime": 1784519119737.752,
-    "hash": "bb09ec8d90c095c1ce0f3dcc90f4317f"
+    "mtime": 1784532109479.0898,
+    "hash": "40dcf5dcc6b3812c68ddf3ce0edceff6"
   },
   "tests/test_postgres_validation_safety.py": {
-    "mtime": 1784518947504.0432,
-    "hash": "8b0d73aa0a393839e7e8be8ecc587ad7"
+    "mtime": 1784532132386.983,
+    "hash": "5fa9e24ed5778b30a4cb504456bc826b"
   },
   "tests/test_preview_manifest_contract.py": {
     "mtime": 1784517836058.9924,
     "hash": "80b4333cd20b2cc06ed806e68bceaf07"
   },
   "scripts/README.qa-bootstrap.md": {
-    "mtime": 1784519414406.2207,
-    "hash": "2492b5bf7adeee41c43532ea32994d10"
+    "mtime": 1784531942515.6104,
+    "hash": "9db164f7aac4b713c768db81e2f86f22"
   },
   "scripts/agent_ops/verify_preview_bundle.py": {
     "mtime": 1784518523491.7556,
     "hash": "b31cf230eb954db8eee68ab29405e028"
   },
   "scripts/agent_ops/verify_preview_providers.py": {
-    "mtime": 1784519087483.499,
-    "hash": "6a49650d60af4c2b9a57b1c5725632ad"
+    "mtime": 1784531942515.0603,
+    "hash": "3580520ac8514c2966b3d5e031551e81"
   },
   "scripts/issue_qa_provider_evidence.py": {
     "mtime": 1784487539127.2117,
@@ -2880,20 +2880,20 @@
     "hash": "102bc5b272582af0e09789b36902b3b4"
   },
   "tests/test_preview_provider_verifier.py": {
-    "mtime": 1784518876278.872,
-    "hash": "b967fe01be6d7dad945a895b3eb97207"
+    "mtime": 1784531857939.3452,
+    "hash": "32abc57f6cd6f8e90d3dae80f30f087b"
   },
   "scripts/agent_ops/provision_qa_bootstrap.py": {
-    "mtime": 1784519087483.828,
-    "hash": "a8970f567571f810ee492043e48024f7"
+    "mtime": 1784531942515.3794,
+    "hash": "eaa96c0615dca3c6d99e2d5135ec4e3e"
   },
   "scripts/agent_ops/trusted_release_gate.py": {
     "mtime": 1784518016175.5547,
     "hash": "f016329a2c6b146bd07dee6e2f729049"
   },
   "tests/test_provision_qa_bootstrap.py": {
-    "mtime": 1784519022968.4868,
-    "hash": "26b64a15d9ce2b8107d1d929ee363b13"
+    "mtime": 1784531975944.303,
+    "hash": "4729d75747292862f2f4ea625c312dcb"
   },
   "tests/test_release_evidence_contract.py": {
     "mtime": 1784517076186.2583,
@@ -3272,8 +3272,8 @@
     "hash": "aa343a93f9879082e2b550dce3b692cd"
   },
   "scripts/agent_ops/qa_bootstrap_contract.py": {
-    "mtime": 1784518770556.6472,
-    "hash": "c2dcc500504579d70168307f749cbc4a"
+    "mtime": 1784532145582.894,
+    "hash": "af7ff5f86d8e366d62538f5a0d3e7aca"
   },
   "scripts/agent_ops/qa_evidence_attestation.py": {
     "mtime": 1784517916021.49,
@@ -3284,15 +3284,23 @@
     "hash": "93233f8bfe3d901482ca1fa6111c35b5"
   },
   "tests/test_preview_external_effects_safety.py": {
-    "mtime": 1784518421686.9531,
-    "hash": "da80069b49c628e643aca8e2fc965091"
+    "mtime": 1784531857939.0132,
+    "hash": "182eb1cd70d975ea0e10c077249f1d67"
   },
   "tests/test_qa_evidence_attestation.py": {
     "mtime": 1784518002108.2097,
     "hash": "a1d7322589ec5207e0da5405706656d3"
   },
   "requirements-qa-trusted.txt": {
-    "mtime": 1784517681451.7644,
-    "hash": "dc395efe54c190662c41c3da3fe927a7"
+    "mtime": 1784531094366.6155,
+    "hash": "ae7fe48db6631091be1599f7d0a6c221"
+  },
+  "scripts/agent_ops/generate_qa_local_env.py": {
+    "mtime": 1784531072843.732,
+    "hash": "917d7d296214256b955d5225c40c2877"
+  },
+  "tests/test_generate_qa_local_env.py": {
+    "mtime": 1784531144914.2368,
+    "hash": "e4b850aa1e626178745e3218f3afb2f7"
   }
 }

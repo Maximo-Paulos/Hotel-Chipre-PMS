@@ -397,6 +397,7 @@
       "scripts/agent_ops/check_qa_evidence.py",
       "scripts/agent_ops/check_release_evidence.py",
       "scripts/agent_ops/context_status.py",
+      "scripts/agent_ops/generate_qa_local_env.py",
       "scripts/agent_ops/manage_qa_baseline_lease.py",
       "scripts/agent_ops/normalize_graphify_portability.py",
       "scripts/agent_ops/provision_qa_bootstrap.py",
@@ -474,6 +475,7 @@
       "tests/test_foundation_models.py",
       "tests/test_gemma_chat_api.py",
       "tests/test_gemma_service.py",
+      "tests/test_generate_qa_local_env.py",
       "tests/test_gmail_integration.py",
       "tests/test_gmail_outbound_flow.py",
       "tests/test_guest_service.py",
@@ -713,10 +715,10 @@
     ],
     "video": []
   },
-  "total_files": 704,
-  "total_words": 464307,
+  "total_files": 706,
+  "total_words": 466434,
   "needs_graph": true,
-  "warning": "Large corpus: 704 files · ~464,307 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
+  "warning": "Large corpus: 706 files · ~466,434 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
   "skipped_sensitive": [
     "alembic/versions/20260408_security_tokens.py",
     "app/adapters/memory_tokens.py",
@@ -729,9 +731,10 @@
   "graphifyignore_patterns": 59,
   "git": {
     "source_owner": "git",
-    "source_hash": "2c8cad081686240891816b9b4a93fbad8e70c82c",
+    "source_hash": "365b26311cfcd0b7392bfa0bc70512d6674781f4",
     "branches": [
       "codex/feature/agent-ops-knowledge",
+      "codex/feature/trusted-qa-bootstrap",
       "codex/fix-render-postgres-enum-values",
       "main"
     ],
@@ -744,9 +747,9 @@
     "source": "cli",
     "root": ".",
     "git_root": ".",
-    "head": "2c8cad081686240891816b9b4a93fbad8e70c82c",
+    "head": "365b26311cfcd0b7392bfa0bc70512d6674781f4",
     "candidate_count": null,
-    "included_count": 704,
+    "included_count": 706,
     "excluded_untracked_count": 0,
     "excluded_ignored_count": 0,
     "excluded_sensitive_count": 7,
