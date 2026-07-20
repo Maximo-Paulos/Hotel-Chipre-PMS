@@ -2672,8 +2672,8 @@
     "hash": "0e3e2f6829be94f80b0edeca0ed68c28"
   },
   "knowledge/00-control/STATUS-TODAY.md": {
-    "mtime": 1784519468986.7253,
-    "hash": "cd6de7d896f343a632fa66709ccc95d8"
+    "mtime": 1784529497236.4587,
+    "hash": "176de6cace9ff9526106b16bcb61813a"
   },
   "knowledge/00-control/TASK_ROUTER.md": {
     "mtime": 1784398283672.9697,
@@ -2800,28 +2800,28 @@
     "hash": "3db5c8310924252e1fabbae64e2dc823"
   },
   "knowledge/_generated/README.md": {
-    "mtime": 1784398283677.0054,
-    "hash": "88e7b629d3c987dc2ac8923edb640768"
+    "mtime": 1784519622701.8674,
+    "hash": "1e76e9d23d6f1783eb5fbcff684c1499"
   },
   "knowledge/_generated/api-surface.md": {
-    "mtime": 1784398283677.1523,
-    "hash": "2176e3b345d7562eab01ef6d508c886e"
+    "mtime": 1784519622267.7097,
+    "hash": "6a8dd928b19dc1a126863b93865bfacf"
   },
   "knowledge/_generated/cloud-surfaces.md": {
-    "mtime": 1784398283677.4048,
-    "hash": "049adf24ed32ae9283e862f3ffd8a954"
+    "mtime": 1784519622694.1682,
+    "hash": "78ad604d2c9a7909b61e3de9a711745d"
   },
   "knowledge/_generated/frontend-routes.md": {
-    "mtime": 1784398283677.5308,
-    "hash": "569838941cfb6cd330bed77b55a21813"
+    "mtime": 1784519622275.9858,
+    "hash": "35e3439bed9427ae59dc24f4c4201c78"
   },
   "knowledge/_generated/graphify-summary.md": {
-    "mtime": 1784398283677.6462,
-    "hash": "8a64569a97e7add4f75e08184aeb3b9b"
+    "mtime": 1784519622685.6023,
+    "hash": "587eb49476e621eb7563965bb5a32053"
   },
   "knowledge/_generated/migration-head.md": {
-    "mtime": 1784398283677.746,
-    "hash": "86df718e359063a77538794b74c869e3"
+    "mtime": 1784519622406.756,
+    "hash": "3437c35c2e9b44418a0f34e874450c4b"
   },
   "qa/evidence/README.md": {
     "mtime": 1784518061099.4763,
