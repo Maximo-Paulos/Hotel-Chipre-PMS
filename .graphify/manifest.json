@@ -2880,8 +2880,8 @@
     "hash": "102bc5b272582af0e09789b36902b3b4"
   },
   "tests/test_preview_provider_verifier.py": {
-    "mtime": 1784531857939.3452,
-    "hash": "32abc57f6cd6f8e90d3dae80f30f087b"
+    "mtime": 1784533063051.1917,
+    "hash": "7fd05f7dc7362652658cc8f5515d5f6d"
   },
   "scripts/agent_ops/provision_qa_bootstrap.py": {
     "mtime": 1784531942515.3794,
@@ -3272,8 +3272,8 @@
     "hash": "aa343a93f9879082e2b550dce3b692cd"
   },
   "scripts/agent_ops/qa_bootstrap_contract.py": {
-    "mtime": 1784532145582.894,
-    "hash": "af7ff5f86d8e366d62538f5a0d3e7aca"
+    "mtime": 1784533063050.2979,
+    "hash": "cd920abd8e9cd2c7008c2eb80d5e3239"
   },
   "scripts/agent_ops/qa_evidence_attestation.py": {
     "mtime": 1784517916021.49,
@@ -3302,5 +3302,13 @@
   "tests/test_generate_qa_local_env.py": {
     "mtime": 1784531144914.2368,
     "hash": "e4b850aa1e626178745e3218f3afb2f7"
+  },
+  "scripts/agent_ops/compare_preview_manifests.py": {
+    "mtime": 1784533063050.746,
+    "hash": "3e6104119ea69eb9b7a1c4a05010ae57"
+  },
+  "tests/test_compare_preview_manifests.py": {
+    "mtime": 1784533063050.9392,
+    "hash": "3a088c470d672b722c1f1923d4fcb260"
   }
 }
