@@ -116,9 +116,16 @@ class FakeRender:
             "FRONTEND_URL": evidence["app_url"],
             "GEMMA_ENABLED": "false",
             "GEMMA_PROVIDER": "disabled",
+            "INTEGRATIONS_ENCRYPTION_KEY": "cXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXE=",
+            "JWT_SECRET": "qa-jwt-secret-that-is-at-least-32-bytes-long",
+            "MASTER_ADMIN_COOKIE_SECURE": "true",
             "MASTER_ADMIN_EMAIL": "master-admin@qa.example.test",
             "MASTER_ADMIN_PASSWORD": "MasterAdminQaPass005!",
             "MASTER_ADMIN_PIN": "830527",
+            "READ_MODEL_CACHE_ENABLED": "false",
+            "MONGO_ENABLED": "false",
+            "CASSANDRA_ENABLED": "false",
+            "NEO4J_ENABLED": "false",
             "PAYPAL_MODE": "sandbox",
             "QA_DATABASE_ISOLATED": "true",
             "QA_DATABASE_BRANCH_REF": evidence["database"]["project_ref"],
@@ -137,6 +144,7 @@ class FakeRender:
             "QA_MASTER_ADMIN_PIN": "830527",
             "QA_OWNER_EMAIL": "owner@qa.example.test",
             "QA_OWNER_PASSWORD": "OwnerQaPass001!",
+            "QA_PROVIDER_EVIDENCE_PUBLIC_KEY": "qa-ed25519-public-key",
             "QA_RECEPTION_EMAIL": "reception@qa.example.test",
             "QA_RECEPTION_PASSWORD": "ReceptionQaPass003!",
             "QA_RUN_ID": "qa-test-run-001",
@@ -207,6 +215,21 @@ class FakeRenderCleanupFailure(FakeRender):
         if method == "DELETE":
             self.calls.append((method, path, payload))
             raise ProvisionError("simulated cleanup failure")
+        return super().request(method, path, payload)
+
+
+class FakeRenderPutResponseLost(FakeRender):
+    """Render applied the token, but the runner never received the PUT response."""
+
+    def request(self, method: str, path: str, payload: object | None = None):
+        if method == "PUT":
+            self.calls.append((method, path, payload))
+            self.env["QA_PROVIDER_EVIDENCE_TOKEN"] = "installed-before-network-loss"
+            raise ProvisionError("simulated lost PUT response")
+        if method == "DELETE":
+            self.calls.append((method, path, payload))
+            self.env.pop("QA_PROVIDER_EVIDENCE_TOKEN", None)
+            return None
         return super().request(method, path, payload)
 
 
@@ -448,6 +471,25 @@ def test_cleanup_failure_blocks_success_and_requires_token_rotation() -> None:
         )
 
     assert render.calls[-1][0] == "DELETE"
+
+
+def test_lost_put_response_still_attempts_cleanup_of_applied_token() -> None:
+    evidence = manifest()
+    render = FakeRenderPutResponseLost(evidence)
+
+    with pytest.raises(ProvisionError, match="lost PUT response"):
+        provision(
+            evidence,
+            token_for(evidence),
+            target_sha=evidence["code_sha"],
+            production_service_id=evidence["backend"]["production_service_id"],
+            render_token="unused",
+            now=NOW,
+            client=render,
+        )
+
+    assert [call[0] for call in _mutating_calls(render)] == ["PUT", "DELETE"]
+    assert "QA_PROVIDER_EVIDENCE_TOKEN" not in render.env
 
 
 def test_pre_deploy_failure_is_terminal() -> None:

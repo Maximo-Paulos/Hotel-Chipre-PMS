@@ -25,6 +25,8 @@ if str(ROOT) not in sys.path:
 
 from scripts.agent_ops.qa_bootstrap_contract import (
     BOOTSTRAP_CONFIGURATION_VERSION,
+    FORBIDDEN_QA_CREDENTIAL_KEYS,
+    SAFE_QA_ENV_VALUES,
     BootstrapConfigurationError,
     bootstrap_configuration_fingerprint,
 )
@@ -285,6 +287,19 @@ def _validate_current_render_target(
         raise ProvisionError("Render QA FRONTEND_URL drifted from provider evidence")
     if _required_env(env_values, "CORS_ORIGINS") != app_origin:
         raise ProvisionError("Render QA CORS_ORIGINS drifted from provider evidence")
+    for key, expected in SAFE_QA_ENV_VALUES.items():
+        if env_values.get(key, "").strip().lower() != expected:
+            raise ProvisionError(f"Render QA environment variable {key} is unsafe")
+    configured_external_keys = sorted(
+        key
+        for key in FORBIDDEN_QA_CREDENTIAL_KEYS
+        if env_values.get(key, "").strip()
+    )
+    if configured_external_keys:
+        raise ProvisionError(
+            "Render QA environment contains external integration or datastore credentials: "
+            + ", ".join(configured_external_keys)
+        )
     if _required_env(env_values, "QA_DATABASE_ISOLATED").lower() != "true":
         raise ProvisionError("Render QA database is not explicitly isolated")
     try:
@@ -518,12 +533,12 @@ def provision(
     )
     quoted_service = urllib.parse.quote(service_id, safe="")
     token_path = f"/services/{quoted_service}/env-vars/QA_PROVIDER_EVIDENCE_TOKEN"
-    token_installed = False
+    token_install_attempted = False
     operation_error: Exception | None = None
     cleanup_error: ProvisionError | None = None
     try:
+        token_install_attempted = True
         render.request("PUT", token_path, {"value": token.strip()})
-        token_installed = True
         deployment = render.request(
             "POST", f"/services/{quoted_service}/deploys", {"commitId": target_sha}
         )
@@ -552,7 +567,7 @@ def provision(
     except Exception as error:  # cleanup must still run before propagating
         operation_error = error
     finally:
-        if token_installed:
+        if token_install_attempted:
             try:
                 render.request("DELETE", token_path)
             except ProvisionError as error:

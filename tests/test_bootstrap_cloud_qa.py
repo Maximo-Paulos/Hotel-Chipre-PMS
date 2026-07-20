@@ -58,6 +58,9 @@ def _bootstrap_values() -> dict[str, str]:
         "AI_PROVIDER": "disabled",
         "GEMMA_ENABLED": "false",
         "GEMMA_PROVIDER": "disabled",
+        "INTEGRATIONS_ENCRYPTION_KEY": "cXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXE=",
+        "JWT_SECRET": "qa-jwt-secret-that-is-at-least-32-bytes-long",
+        "MASTER_ADMIN_COOKIE_SECURE": "true",
         "QA_RUN_ID": "qa-test-run-001",
         "QA_EMAIL_DOMAIN": "qa.example.test",
         "QA_EMAIL_DOMAIN_IS_DEDICATED": "true",
@@ -75,6 +78,11 @@ def _bootstrap_values() -> dict[str, str]:
         "MASTER_ADMIN_EMAIL": "master-admin@qa.example.test",
         "MASTER_ADMIN_PASSWORD": "MasterAdminQaPass005!",
         "MASTER_ADMIN_PIN": "830527",
+        "READ_MODEL_CACHE_ENABLED": "false",
+        "MONGO_ENABLED": "false",
+        "CASSANDRA_ENABLED": "false",
+        "NEO4J_ENABLED": "false",
+        "QA_PROVIDER_EVIDENCE_PUBLIC_KEY": PUBLIC_KEY,
         "QA_RUN_MIGRATIONS": "false",
     }
 
@@ -194,7 +202,10 @@ def _provider_manifest(
             "required_secret_names_verified": ["DATABASE_URL", "JWT_SECRET"],
             "distinct_from_production_verified": ["DATABASE_URL", "JWT_SECRET"],
             "bootstrap_configuration_fingerprint": bootstrap_configuration_fingerprint(
-                bootstrap_env or _bootstrap_values()
+                {
+                    **(bootstrap_env or _bootstrap_values()),
+                    "DATABASE_URL": database_url,
+                }
             ),
             "bootstrap_configuration_version": BOOTSTRAP_CONFIGURATION_VERSION,
             "values_redacted": True,

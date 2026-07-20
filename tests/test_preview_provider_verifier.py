@@ -37,6 +37,10 @@ APP_URL = "https://hotel-chipre-pms-git-feature-team.vercel.app"
 API_URL = "https://hotel-chipre-pms-api-pr-123.onrender.com"
 LEASE_ID = "4Xg_G8qKL90Bct2WjR6nVmZkAwYx7PSfE3uQ1iNo5Lc"
 OTHER_LEASE_ID = "K7pV2bN9wQ4mX6sD8fH1jL3cR5tY0uA2eG9iO7zC4Bk"
+QA_FERNET_KEY = "cXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXE="
+PRODUCTION_FERNET_KEY = "cHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHA="
+QA_JWT_SECRET = "qa-jwt-secret-that-is-at-least-32-bytes-long"
+PRODUCTION_JWT_SECRET = "production-jwt-secret-that-is-distinct-and-long"
 
 
 class FakeApi:
@@ -73,11 +77,16 @@ def fixtures() -> tuple[VerificationConfig, ProviderClients, dict[str, FakeApi]]
         "FRONTEND_URL": APP_URL,
         "GEMMA_ENABLED": "false",
         "GEMMA_PROVIDER": "disabled",
-        "INTEGRATIONS_ENCRYPTION_KEY": "qa-fernet-key",
-        "JWT_SECRET": "qa-jwt-secret",
+        "INTEGRATIONS_ENCRYPTION_KEY": QA_FERNET_KEY,
+        "JWT_SECRET": QA_JWT_SECRET,
         "MASTER_ADMIN_EMAIL": "master-admin@qa.example.test",
+        "MASTER_ADMIN_COOKIE_SECURE": "true",
         "MASTER_ADMIN_PASSWORD": "MasterAdminQaPass005!",
         "MASTER_ADMIN_PIN": "830527",
+        "READ_MODEL_CACHE_ENABLED": "false",
+        "MONGO_ENABLED": "false",
+        "CASSANDRA_ENABLED": "false",
+        "NEO4J_ENABLED": "false",
         "PAYPAL_MODE": "sandbox",
         "QA_EMAIL_DOMAIN": "qa.example.test",
         "QA_EMAIL_DOMAIN_IS_DEDICATED": "true",
@@ -99,8 +108,8 @@ def fixtures() -> tuple[VerificationConfig, ProviderClients, dict[str, FakeApi]]
     production_env = {
         **preview_env,
         "DATABASE_URL": "postgresql://postgres.production:prod-db-pass@db.production.supabase.co:5432/postgres",
-        "INTEGRATIONS_ENCRYPTION_KEY": "prod-fernet-key",
-        "JWT_SECRET": "prod-jwt-secret",
+        "INTEGRATIONS_ENCRYPTION_KEY": PRODUCTION_FERNET_KEY,
+        "JWT_SECRET": PRODUCTION_JWT_SECRET,
         "MASTER_ADMIN_EMAIL": "prod-master@example.test",
         "MASTER_ADMIN_PASSWORD": "prod-master-password",
         "MASTER_ADMIN_PIN": "987654",
@@ -299,19 +308,21 @@ def configure_dedicated_baseline(
         "status": "ACTIVE_HEALTHY",
         "created_at": "2026-07-19T14:35:00Z",
     }
-    apis["supabase"].responses[f"/branches/{qa_ref}"] = {
-        "ref": qa_ref,
-        "status": "ACTIVE_HEALTHY",
-        "db_host": f"db.{qa_ref}.supabase.co",
-        "db_port": 5432,
-        "db_user": "postgres",
-        "db_pass": "qa-db-pass",
-        "jwt_secret": "qa-dedicated-jwt",
-    }
+    apis["supabase"].responses[f"/projects/{qa_ref}/config/database/pooler"] = [
+        {
+            "db_host": f"db.{qa_ref}.supabase.co",
+            "db_port": 5432,
+            "db_user": "postgres",
+            "db_name": "postgres",
+            "connection_string": (
+                f"postgresql://postgres:[YOUR-PASSWORD]@db.{qa_ref}.supabase.co:5432/postgres"
+            ),
+        }
+    ]
     return config
 
 
-def test_happy_path_is_provider_bound_and_never_reads_production_secret_values() -> None:
+def test_happy_path_compares_production_secrets_without_serializing_values() -> None:
     config, clients, apis = fixtures()
 
     manifest = build_manifest(config, clients, now=NOW)
@@ -345,7 +356,7 @@ def test_happy_path_is_provider_bound_and_never_reads_production_secret_values()
     )
     assert manifest["database"]["fingerprint_method"] == "sha256"
     assert manifest["database"]["connection_fingerprint"] != manifest["database"]["production_connection_fingerprint"]
-    assert "/services/srv-production/env-vars" not in {
+    assert "/services/srv-production/env-vars" in {
         path for path, _ in apis["render"].calls
     }
     assert "/branches/productionproduction" not in {
@@ -355,7 +366,10 @@ def test_happy_path_is_provider_bound_and_never_reads_production_secret_values()
     for secret in (
         "qa-db-pass",
         "prod-db-pass",
-        "qa-jwt-secret",
+        QA_JWT_SECRET,
+        PRODUCTION_JWT_SECRET,
+        QA_FERNET_KEY,
+        PRODUCTION_FERNET_KEY,
         "qa-supabase-jwt",
         "MasterAdminQaPass005!",
         "postgres.preview",
@@ -373,6 +387,11 @@ def test_happy_path_is_provider_bound_and_never_reads_production_secret_values()
         ("EMAIL_PROVIDER", "resend"),
         ("GEMMA_ENABLED", "true"),
         ("GEMMA_PROVIDER", "google_gemini_api"),
+        ("MASTER_ADMIN_COOKIE_SECURE", "false"),
+        ("READ_MODEL_CACHE_ENABLED", "true"),
+        ("MONGO_ENABLED", "true"),
+        ("CASSANDRA_ENABLED", "true"),
+        ("NEO4J_ENABLED", "true"),
         ("PAYPAL_MODE", "live"),
     ],
 )
@@ -392,10 +411,16 @@ def test_preview_rejects_external_effects_enabled(
     [
         "BOOKING_PASSWORD",
         "EXPEDIA_API_KEY",
+        "GEMMA_API_KEY",
+        "GEMMA_ENDPOINT_URL",
         "GMAIL_CLIENT_SECRET",
         "MERCADOPAGO_CLIENT_SECRET",
         "MP_ACCESS_TOKEN",
         "PAYPAL_CLIENT_SECRET",
+        "REDIS_URL",
+        "MONGO_URL",
+        "CASSANDRA_HOSTS",
+        "NEO4J_URI",
         "RESEND_API_KEY",
     ],
 )
@@ -448,6 +473,12 @@ def test_dedicated_free_qa_project_manifest_passes_the_consumer_contract() -> No
     assert manifest["database"]["branch_type"] == "dedicated-qa-project"
     assert manifest["database"]["isolation_mode"] == "dedicated-qa-baseline-exclusive"
     assert manifest["database"]["baseline_lease_id"] == LEASE_ID
+    assert f"/branches/{manifest['database']['project_ref']}" not in {
+        path for path, _ in apis["supabase"].calls
+    }
+    assert f"/projects/{manifest['database']['project_ref']}/config/database/pooler" in {
+        path for path, _ in apis["supabase"].calls
+    }
     assert validate_manifest(
         manifest,
         expected_sha=SHA,
@@ -455,6 +486,73 @@ def test_dedicated_free_qa_project_manifest_passes_the_consumer_contract() -> No
         expected_baseline_lease_id=LEASE_ID,
         now=NOW,
     ) == []
+
+
+@pytest.mark.parametrize("app_env", ["qa", "staging", "production"])
+def test_provider_requires_exact_preview_app_env(app_env: str) -> None:
+    config, clients, apis = fixtures()
+    set_render_preview_env(apis, "APP_ENV", app_env)
+
+    with pytest.raises(VerificationError, match="exactly preview"):
+        build_manifest(config, clients, now=NOW)
+
+
+@pytest.mark.parametrize(
+    ("key", "preview_value"),
+    [
+        ("JWT_SECRET", PRODUCTION_JWT_SECRET),
+        ("INTEGRATIONS_ENCRYPTION_KEY", PRODUCTION_FERNET_KEY),
+        ("MASTER_ADMIN_EMAIL", "prod-master@example.test"),
+        ("MASTER_ADMIN_PASSWORD", "prod-master-password"),
+        ("MASTER_ADMIN_PIN", "987654"),
+    ],
+)
+def test_provider_rejects_preview_secret_equal_to_production(
+    key: str,
+    preview_value: str,
+) -> None:
+    config, clients, apis = fixtures()
+    set_render_preview_env(apis, key, preview_value)
+
+    with pytest.raises(VerificationError, match=f"{key} equals production"):
+        build_manifest(config, clients, now=NOW)
+
+
+def test_provider_rejects_preview_database_password_equal_to_production() -> None:
+    config, clients, apis = fixtures()
+    set_render_preview_env(
+        apis,
+        "DATABASE_URL",
+        "postgresql://postgres.preview:prod-db-pass@db.preview.supabase.co:5432/postgres",
+    )
+
+    with pytest.raises(VerificationError, match="database password equals production"):
+        build_manifest(config, clients, now=NOW)
+
+
+@pytest.mark.parametrize(
+    ("key", "value", "message"),
+    [
+        ("JWT_SECRET", "too-short", "JWT_SECRET"),
+        (
+            "INTEGRATIONS_ENCRYPTION_KEY",
+            "ZGVmYXVsdC1pbnRlZ3JhdGlvbnMta2V5LXNlY3JldA==",
+            "INTEGRATIONS_ENCRYPTION_KEY",
+        ),
+        ("MASTER_ADMIN_PASSWORD", "short", "MASTER_ADMIN_PASSWORD"),
+        ("MASTER_ADMIN_PIN", "1234", "MASTER_ADMIN_PIN"),
+    ],
+)
+def test_provider_rejects_weak_preview_secrets(
+    key: str,
+    value: str,
+    message: str,
+) -> None:
+    config, clients, apis = fixtures()
+    set_render_preview_env(apis, key, value)
+
+    with pytest.raises(VerificationError, match=message):
+        build_manifest(config, clients, now=NOW)
 
 
 def test_dedicated_baseline_refuses_missing_render_lease_observation() -> None:
@@ -642,7 +740,9 @@ def test_workflow_has_no_human_evidence_inputs_and_publishes_sha_bound_artifact(
     assert "qa-bootstrap-token-${{ inputs.target_sha }}" not in workflow
     assert "download-artifact" not in workflow
     assert "verify_preview_bundle.py verify" in workflow
-    assert "Re-verify final provider state after bootstrap" in workflow
+    assert "Re-verify provider state after bootstrap" in workflow
+    assert "Re-verify providers immediately before evidence upload" in workflow
+    assert workflow.count("scripts/agent_ops/verify_preview_providers.py") == 3
     assert "manage_qa_baseline_lease.py release" in workflow
     assert "if: always() && steps.lease.outputs.lease_id != ''" in workflow
 
