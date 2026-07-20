@@ -36,6 +36,8 @@ if str(ROOT) not in sys.path:
 from scripts.agent_ops.qa_bootstrap_contract import (
     BOOTSTRAP_CONFIGURATION_KEYS,
     BOOTSTRAP_CONFIGURATION_VERSION,
+    FORBIDDEN_QA_CREDENTIAL_KEYS,
+    SAFE_QA_ENV_VALUES,
     BootstrapConfigurationError,
     bootstrap_configuration_fingerprint,
 )
@@ -73,41 +75,16 @@ REQUIRED_ENV_KEYS = {
     "INTEGRATIONS_ENCRYPTION_KEY",
     "JWT_SECRET",
     "MASTER_ADMIN_EMAIL",
+    "MASTER_ADMIN_COOKIE_SECURE",
     "MASTER_ADMIN_PASSWORD",
     "MASTER_ADMIN_PIN",
     "PAYPAL_MODE",
+    "READ_MODEL_CACHE_ENABLED",
+    "MONGO_ENABLED",
+    "CASSANDRA_ENABLED",
+    "NEO4J_ENABLED",
     "QA_PROVIDER_EVIDENCE_PUBLIC_KEY",
 } | set(BOOTSTRAP_CONFIGURATION_KEYS)
-SAFE_QA_ENV_VALUES = {
-    "AI_ENABLED": "false",
-    "AI_PROVIDER": "disabled",
-    "CONNECTIONS_ENABLED": "false",
-    "EMAIL_PROVIDER": "null",
-    "GEMMA_ENABLED": "false",
-    "GEMMA_PROVIDER": "disabled",
-    "PAYPAL_MODE": "sandbox",
-}
-FORBIDDEN_QA_CREDENTIAL_KEYS = {
-    "AI_API_KEY",
-    "AI_BASE_URL",
-    "BOOKING_PASSWORD",
-    "BOOKING_USERNAME",
-    "EXPEDIA_API_KEY",
-    "EXPEDIA_HOTEL_ID",
-    "GMAIL_CLIENT_ID",
-    "GMAIL_CLIENT_SECRET",
-    "GOOGLE_OAUTH_CLIENT_ID",
-    "GOOGLE_OAUTH_CLIENT_SECRET",
-    "MERCADOPAGO_CLIENT_ID",
-    "MERCADOPAGO_CLIENT_SECRET",
-    "MERCADOPAGO_WEBHOOK_SECRET",
-    "MP_ACCESS_TOKEN",
-    "MP_PUBLIC_KEY",
-    "PAYPAL_CLIENT_ID",
-    "PAYPAL_CLIENT_SECRET",
-    "PAYPAL_WEBHOOK_ID",
-    "RESEND_API_KEY",
-}
 DISTINCT_SECRET_KEYS = {
     "DATABASE_URL",
     "INTEGRATIONS_ENCRYPTION_KEY",
@@ -510,6 +487,62 @@ def _verify_qa_external_effects_disabled(values: Mapping[str, str]) -> None:
             "Render preview contains forbidden live integration credentials: "
             + ", ".join(configured)
         )
+    jwt_secret = values.get("JWT_SECRET", "").strip()
+    if jwt_secret == "change-me" or len(jwt_secret) < 32:
+        raise VerificationError("Render preview JWT_SECRET must be a strong preview-only value")
+    integration_key = values.get("INTEGRATIONS_ENCRYPTION_KEY", "").strip()
+    try:
+        decoded_key = base64.b64decode(integration_key, altchars=b"-_", validate=True)
+    except (ValueError, TypeError):
+        decoded_key = b""
+    if len(decoded_key) != 32 or integration_key == "ZGVmYXVsdC1pbnRlZ3JhdGlvbnMta2V5LXNlY3JldA==":
+        raise VerificationError(
+            "Render preview INTEGRATIONS_ENCRYPTION_KEY must be a non-default Fernet key"
+        )
+    if "@" not in values.get("MASTER_ADMIN_EMAIL", ""):
+        raise VerificationError("Render preview MASTER_ADMIN_EMAIL must be a QA identity")
+    if len(values.get("MASTER_ADMIN_PASSWORD", "").strip()) < 12:
+        raise VerificationError("Render preview MASTER_ADMIN_PASSWORD must be strong")
+    pin = values.get("MASTER_ADMIN_PIN", "").strip()
+    if not pin.isdigit() or len(pin) < 6 or pin == "1234":
+        raise VerificationError("Render preview MASTER_ADMIN_PIN must be a non-default 6+ digit PIN")
+
+
+def _database_password(database_url: str, *, label: str) -> str:
+    parsed = urllib.parse.urlsplit(database_url)
+    password = urllib.parse.unquote(parsed.password or "")
+    if not password:
+        raise VerificationError(f"{label} lacks a database password")
+    return password
+
+
+def _verify_render_secret_distinctness(
+    preview_values: Mapping[str, str],
+    production_values: Mapping[str, str],
+) -> list[str]:
+    missing = sorted(DISTINCT_SECRET_KEYS - preview_values.keys())
+    missing_production = sorted(DISTINCT_SECRET_KEYS - production_values.keys())
+    if missing or missing_production:
+        names = sorted(set(missing + missing_production))
+        raise VerificationError(
+            "Render cannot prove QA/production secret separation for: " + ", ".join(names)
+        )
+    for key in sorted(DISTINCT_SECRET_KEYS - {"DATABASE_URL"}):
+        preview_value = preview_values[key].strip()
+        production_value = production_values[key].strip()
+        if not preview_value or not production_value:
+            raise VerificationError(f"Render cannot prove {key} separation from production")
+        if hmac.compare_digest(preview_value, production_value):
+            raise VerificationError(f"Render preview {key} equals production")
+    preview_password = _database_password(
+        preview_values["DATABASE_URL"], label="Render preview DATABASE_URL"
+    )
+    production_password = _database_password(
+        production_values["DATABASE_URL"], label="Render production DATABASE_URL"
+    )
+    if hmac.compare_digest(preview_password, production_password):
+        raise VerificationError("Render preview database password equals production")
+    return sorted(DISTINCT_SECRET_KEYS)
 
 
 def _select_render_preview(
@@ -604,9 +637,11 @@ def _select_render_preview(
     for key in REQUIRED_ENV_KEYS:
         if not preview_env[key].strip():
             raise VerificationError(f"Render preview environment key {key} is empty")
-    if preview_env["APP_ENV"].strip().lower() not in {"preview", "qa", "staging"}:
-        raise VerificationError("Render preview APP_ENV is not a QA/preview environment")
+    if preview_env["APP_ENV"].strip().lower() != "preview":
+        raise VerificationError("Render preview APP_ENV must be exactly preview")
     _verify_qa_external_effects_disabled(preview_env)
+    production_env = _render_env(api, config.render_production_service_id)
+    distinct_secret_keys = _verify_render_secret_distinctness(preview_env, production_env)
     if _public_origin(preview_env["APP_BASE_URL"], "Render APP_BASE_URL", allowed_suffix="onrender.com") != api_origin:
         raise VerificationError("Render APP_BASE_URL does not match the preview service")
     return preview, preview_env, {
@@ -615,6 +650,7 @@ def _select_render_preview(
         "deploy": deploy,
         "deploy_finished_at": finished_at,
         "service_updated_at": updated_at,
+        "distinct_secret_keys": distinct_secret_keys,
     }
 
 
@@ -648,10 +684,11 @@ def _select_supabase_preview(
         raise VerificationError("Supabase production project identity mismatch")
     if production_project.get("status") != "ACTIVE_HEALTHY":
         raise VerificationError("Supabase production project is not healthy")
+    render_identity = _database_identity(render_database_url)
     if config.supabase_qa_project_ref:
         preview_ref = config.supabase_qa_project_ref.strip()
         qa_project = _dict(
-            api.get(f"/projects/{urllib.parse.quote(preview_ref, safe='') }"),
+            api.get(f"/projects/{urllib.parse.quote(preview_ref, safe='')}"),
             "Supabase dedicated QA project",
         )
         if qa_project.get("ref") != preview_ref:
@@ -666,6 +703,40 @@ def _select_supabase_preview(
             "with_data": False,
             "updated_at": _string(qa_project.get("created_at"), "Supabase dedicated QA created_at"),
             "_branch_type": "dedicated-qa-project",
+        }
+        pooler_entries = _list(
+            api.get(
+                f"/projects/{urllib.parse.quote(preview_ref, safe='')}/config/database/pooler"
+            ),
+            "Supabase dedicated QA pooler config",
+        )
+        matches: list[dict[str, Any]] = []
+        for value in pooler_entries:
+            pooler = _dict(value, "Supabase dedicated QA pooler entry")
+            try:
+                identity = (
+                    _canonical_hostname(
+                        _string(pooler.get("db_host"), "Supabase QA pooler db_host")
+                    ),
+                    int(pooler.get("db_port")),
+                    _string(pooler.get("db_user"), "Supabase QA pooler db_user"),
+                    _string(pooler.get("db_name"), "Supabase QA pooler db_name"),
+                )
+            except (TypeError, ValueError, VerificationError):
+                continue
+            if identity == render_identity:
+                matches.append(pooler)
+        if len(matches) != 1:
+            raise VerificationError(
+                "Supabase project pooler config does not identify exactly the Render QA database"
+            )
+        selected_pooler = matches[0]
+        preview_detail = {
+            "ref": preview_ref,
+            "status": qa_project.get("status"),
+            "db_host": selected_pooler.get("db_host"),
+            "db_port": selected_pooler.get("db_port"),
+            "db_user": selected_pooler.get("db_user"),
         }
     else:
         branches = _list(api.get(f"/projects/{production_ref}/branches"), "Supabase branches")
@@ -689,17 +760,15 @@ def _select_supabase_preview(
         if branch.get("preview_project_status") != "ACTIVE_HEALTHY":
             raise VerificationError("Supabase preview project is not healthy")
         branch["_branch_type"] = "preview"
-
-    preview_detail = _dict(
-        api.get(f"/branches/{urllib.parse.quote(preview_ref, safe='')}"),
-        "Supabase preview branch detail",
-    )
+        preview_detail = _dict(
+            api.get(f"/branches/{urllib.parse.quote(preview_ref, safe='')}"),
+            "Supabase preview branch detail",
+        )
     if preview_detail.get("ref") != preview_ref:
-        raise VerificationError("Supabase branch detail identity mismatch")
+        raise VerificationError("Supabase database detail identity mismatch")
     if preview_detail.get("status") != "ACTIVE_HEALTHY":
         raise VerificationError("Supabase preview database is not healthy")
-
-    render_host, render_port, render_user, render_database = _database_identity(render_database_url)
+    render_host, render_port, render_user, render_database = render_identity
     preview_host = _canonical_hostname(_string(preview_detail.get("db_host"), "Supabase preview db_host"))
     preview_port = preview_detail.get("db_port")
     preview_user = _string(preview_detail.get("db_user"), "Supabase preview db_user")
@@ -712,8 +781,6 @@ def _select_supabase_preview(
     )
     if preview_host == production_host or config.supabase_production_project_ref.lower() in preview_host.split("."):
         raise VerificationError("Supabase preview database endpoint identifies production")
-    if config.supabase_qa_project_ref and preview_ref.lower() not in preview_host.split("."):
-        raise VerificationError("Supabase dedicated QA database host is not tied to its trusted project ref")
     return branch, preview_detail, production_project
 
 
@@ -899,8 +966,8 @@ def build_manifest(
             _string(preview_db.get("db_user"), "Supabase preview db_user"),
             "postgres",
         ),
-        "database_password_distinct": True,
-        "jwt_identity_distinct": True,
+        "database_password_distinct": "DATABASE_URL" in render_meta["distinct_secret_keys"],
+        "jwt_identity_distinct": "JWT_SECRET" in render_meta["distinct_secret_keys"],
         "updated_at": _string(branch.get("updated_at"), "Supabase branch updated_at"),
     }
     required_env_names = set(REQUIRED_ENV_KEYS)
@@ -987,8 +1054,8 @@ def build_manifest(
             ),
             "qa_secrets_scope": "preview-service",
             "required_secret_names_verified": sorted(required_env_names),
-            "distinct_from_production_verified": sorted(DISTINCT_SECRET_KEYS),
-            "distinctness_basis": "independent-render-environment-and-supabase-project",
+            "distinct_from_production_verified": render_meta["distinct_secret_keys"],
+            "distinctness_basis": "provider-value-comparison-and-independent-resource-boundaries",
             "bootstrap_configuration_fingerprint": bootstrap_fingerprint,
             "bootstrap_configuration_version": BOOTSTRAP_CONFIGURATION_VERSION,
             "values_redacted": True,
@@ -1046,5 +1113,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-    "GEMMA_API_KEY",
-    "GEMMA_ENDPOINT_URL",

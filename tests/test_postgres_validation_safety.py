@@ -58,9 +58,16 @@ def _bootstrap_environment() -> dict[str, str]:
         "EMAIL_PROVIDER": "null",
         "GEMMA_ENABLED": "false",
         "GEMMA_PROVIDER": "disabled",
+        "INTEGRATIONS_ENCRYPTION_KEY": "cXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXE=",
+        "JWT_SECRET": "qa-jwt-secret-that-is-at-least-32-bytes-long",
+        "MASTER_ADMIN_COOKIE_SECURE": "true",
         "MASTER_ADMIN_EMAIL": "master-admin@qa.example.test",
         "MASTER_ADMIN_PASSWORD": "MasterAdminQaPass005!",
         "MASTER_ADMIN_PIN": "830527",
+        "READ_MODEL_CACHE_ENABLED": "false",
+        "MONGO_ENABLED": "false",
+        "CASSANDRA_ENABLED": "false",
+        "NEO4J_ENABLED": "false",
         "PAYPAL_MODE": "sandbox",
         "QA_EMAIL_DOMAIN": "qa.example.test",
         "QA_EMAIL_DOMAIN_IS_DEDICATED": "true",
@@ -73,6 +80,7 @@ def _bootstrap_environment() -> dict[str, str]:
         "QA_MASTER_ADMIN_PIN": "830527",
         "QA_OWNER_EMAIL": "owner@qa.example.test",
         "QA_OWNER_PASSWORD": "OwnerQaPass001!",
+        "QA_PROVIDER_EVIDENCE_PUBLIC_KEY": PUBLIC_KEY,
         "QA_RECEPTION_EMAIL": "reception@qa.example.test",
         "QA_RECEPTION_PASSWORD": "ReceptionQaPass003!",
         "QA_RUN_ID": "qa-postgres-safety",
@@ -163,7 +171,7 @@ def _provider_manifest(
             "production_environment_id": "env-production",
             "qa_secrets_scope": "preview-service",
             "bootstrap_configuration_fingerprint": bootstrap_configuration_fingerprint(
-                bootstrap_env
+                {**bootstrap_env, "DATABASE_URL": database_url}
             ),
             "bootstrap_configuration_version": BOOTSTRAP_CONFIGURATION_VERSION,
         },
@@ -230,6 +238,7 @@ def _safe_environment(
     if host not in {"localhost", "127.0.0.1", "::1"}:
         issued_at = int(time.time()) if token_now is None else token_now
         token_target = token_database_url or SAFE_DSN
+        environment["DATABASE_URL"] = token_target
         manifest = _provider_manifest(
             token_target,
             bootstrap_env=environment,

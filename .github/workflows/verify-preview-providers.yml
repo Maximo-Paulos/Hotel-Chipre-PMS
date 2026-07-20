@@ -116,7 +116,7 @@ jobs:
             "$RUNNER_TEMP/qa-provider-evidence.token" \
             --target-sha "$TARGET_SHA" \
             --production-service-id "$RENDER_PRODUCTION_SERVICE_ID"
-      - name: Re-verify final provider state after bootstrap
+      - name: Re-verify provider state after bootstrap
         env:
           BASELINE_LEASE_ID: ${{ steps.lease.outputs.lease_id }}
           GITHUB_TOKEN: ${{ github.token }}
@@ -125,9 +125,9 @@ jobs:
           VERCEL_ACCESS_TOKEN: ${{ secrets.VERCEL_ACCESS_TOKEN }}
         run: |
           python scripts/agent_ops/verify_preview_providers.py \
-            --output preview-manifest.json
+            --output "$RUNNER_TEMP/post-bootstrap-manifest.json"
           python scripts/agent_ops/validate_preview_manifest.py \
-            preview-manifest.json \
+            "$RUNNER_TEMP/post-bootstrap-manifest.json" \
             --expected-sha "$TARGET_SHA" \
             --expected-task-id "preview-${TARGET_SHA:0:12}" \
             --expected-workflow-run-id "$GITHUB_RUN_ID" \
@@ -141,7 +141,7 @@ jobs:
         run: |
           python - <<'PY'
           import json, os
-          manifest = json.load(open("preview-manifest.json", encoding="utf-8"))
+          manifest = json.load(open(os.path.join(os.environ["RUNNER_TEMP"], "post-bootstrap-manifest.json"), encoding="utf-8"))
           values = {
               "app_url": manifest["app_url"],
               "api_origin": manifest["api_origin"],
@@ -189,6 +189,26 @@ jobs:
           python scripts/agent_ops/verify_preview_bundle.py verify \
             --index "$RUNNER_TEMP/assets.json" --asset-dir "$RUNNER_TEMP/assets" \
             --app-url "$APP_URL" --api-base-url "$API_BASE_URL"
+      - name: Re-verify providers immediately before evidence upload
+        env:
+          BASELINE_LEASE_ID: ${{ steps.lease.outputs.lease_id }}
+          GITHUB_TOKEN: ${{ github.token }}
+          RENDER_API_TOKEN: ${{ secrets.RENDER_API_TOKEN }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          VERCEL_ACCESS_TOKEN: ${{ secrets.VERCEL_ACCESS_TOKEN }}
+        run: |
+          python scripts/agent_ops/verify_preview_providers.py \
+            --output preview-manifest.json
+          python scripts/agent_ops/validate_preview_manifest.py \
+            preview-manifest.json \
+            --expected-sha "$TARGET_SHA" \
+            --expected-task-id "preview-${TARGET_SHA:0:12}" \
+            --expected-workflow-run-id "$GITHUB_RUN_ID" \
+            --expected-repository "$GITHUB_REPOSITORY" \
+            --expected-branch "$TARGET_BRANCH" \
+            --expected-baseline-lease-id "$BASELINE_LEASE_ID" \
+            --expected-workflow-sha "$GITHUB_SHA" \
+            --expected-default-branch "$TRUSTED_DEFAULT_BRANCH"
       - name: Upload only final sanitized provider evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:

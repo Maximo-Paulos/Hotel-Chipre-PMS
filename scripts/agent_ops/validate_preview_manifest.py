@@ -455,9 +455,10 @@ def validate_manifest(
     distinct_names = configuration.get("distinct_from_production_verified")
     if not isinstance(distinct_names, list) or not {"DATABASE_URL", "JWT_SECRET"} <= set(distinct_names):
         errors.append("configuration.distinct_from_production_verified lacks required isolation")
-    if configuration.get("distinctness_basis") != "independent-render-environment-and-supabase-project":
+    if configuration.get("distinctness_basis") != "provider-value-comparison-and-independent-resource-boundaries":
         errors.append(
-            "configuration.distinctness_basis must use independent provider resource boundaries"
+            "configuration.distinctness_basis must use confidential provider value comparison "
+            "and independent resource boundaries"
         )
     bootstrap_fingerprint = configuration.get("bootstrap_configuration_fingerprint")
     if not isinstance(bootstrap_fingerprint, str) or not FINGERPRINT_RE.fullmatch(

@@ -66,10 +66,22 @@ seguro del preview, nunca en Git ni en `.env.qa.local`):
 - `QA_RUN_MIGRATIONS=true` sólo si el job debe ejecutar Alembic antes del seed
 
 El proveedor observa todos esos valores y publica únicamente un hash combinado
-`bootstrap_configuration_fingerprint` (`qa-bootstrap-config-v1`). El token lo
+`bootstrap_configuration_fingerprint` (`qa-bootstrap-config-v2`). El token lo
 firma y Render lo recalcula antes de instalar la capacidad; cambiar un email,
 password, PIN, run id, migraciones o switch de integración invalida el bootstrap
 sin revelar hashes individuales ni valores sensibles.
+
+Las cinco identidades sintéticas locales se generan una vez, sin imprimir sus
+secretos, mediante:
+
+```bash
+python scripts/agent_ops/generate_qa_local_env.py
+```
+
+El archivo `.env.qa.local` queda ignorado y con modo `0600`; contiene solamente
+las URLs y variables declaradas por `.env.qa.example`. No acepta el dominio
+productivo raíz, no escribe DSN, tokens o claves, y no reemplaza un archivo
+existente salvo una rotación explícita con `--rotate`.
 
 ## Producción de evidencia
 
