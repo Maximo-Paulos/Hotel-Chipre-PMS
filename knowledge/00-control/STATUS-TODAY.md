@@ -1,6 +1,6 @@
 # Estado exhaustivo del sistema — Hotel Chipre PMS
 
-Auditoría base: commit `767226c0` más el worktree de preparación QA validado el 2026-07-19 (`confirmed` para inventarios y tests locales; el SHA final se registrará tras el refresh Graphify). La configuración live de Vercel/Render se comprobó el 2026-07-18; la sesión Supabase y la restricción de plan se comprobaron el 2026-07-19. La evidencia de proveedor permanece separada del código versionado.
+Auditoría base: commit `19b8b7b` validado y publicado el 2026-07-19 (`confirmed` para inventarios, Graphify y tests locales). La configuración live de Vercel/Render se comprobó el 2026-07-18; la sesión Supabase y la restricción de plan se comprobaron el 2026-07-19. La evidencia de proveedor permanece separada del código versionado.
 Fuentes principales: `app/main.py`, `app/config.py`, `app/models/`, `app/api/`, `app/services/`, `frontend/src/router.tsx`, `render.yaml`, `vercel.json`, Alembic y `.graphify/`.
 Artefactos reproducibles: [OpenAPI](../_generated/api-surface.md), [rutas frontend](../_generated/frontend-routes.md), [migración head](../_generated/migration-head.md), [superficies cloud](../_generated/cloud-surfaces.md), [resumen Graphify](../_generated/graphify-summary.md).
 
