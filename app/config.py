@@ -2,7 +2,9 @@
 Application Configuration.
 Uses pydantic-settings for environment variable management.
 """
+import hmac
 import os
+from urllib.parse import urlsplit
 from cryptography.fernet import Fernet
 from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings
@@ -189,12 +191,133 @@ def is_production_mode(settings: Settings | None = None) -> bool:
     return env in {"prod", "production"}
 
 
+def is_preview_qa_mode(settings: Settings | None = None) -> bool:
+    runtime_settings = settings or get_settings()
+    env = _normalized_env_value(
+        runtime_settings.APP_ENV or os.getenv("ENVIRONMENT") or os.getenv("APP_ENV")
+    )
+    return env in {"preview", "qa", "staging"}
+
+
+def _validate_preview_qa_security(runtime_settings: Settings) -> None:
+    """Fail closed when a cloud QA service could reach a live integration."""
+
+    errors: list[str] = []
+    exact_values = {
+        "EMAIL_PROVIDER": (runtime_settings.EMAIL_PROVIDER, "null"),
+        "PAYPAL_MODE": (runtime_settings.PAYPAL_MODE, "sandbox"),
+        "AI_PROVIDER": (runtime_settings.AI_PROVIDER, "disabled"),
+        "GEMMA_PROVIDER": (runtime_settings.GEMMA_PROVIDER, "disabled"),
+    }
+    for name, (value, expected) in exact_values.items():
+        if _normalized_env_value(value) != expected:
+            errors.append(f"{name} must be {expected} in preview QA")
+    if runtime_settings.CONNECTIONS_ENABLED:
+        errors.append("CONNECTIONS_ENABLED must be false in preview QA")
+    if runtime_settings.AI_ENABLED is not False:
+        errors.append("AI_ENABLED must be explicitly false in preview QA")
+    if runtime_settings.GEMMA_ENABLED:
+        errors.append("GEMMA_ENABLED must be false in preview QA")
+    if runtime_settings.READ_MODEL_CACHE_ENABLED:
+        errors.append("READ_MODEL_CACHE_ENABLED must be false in preview QA")
+    if runtime_settings.MONGO_ENABLED:
+        errors.append("MONGO_ENABLED must be false in preview QA")
+    if runtime_settings.CASSANDRA_ENABLED:
+        errors.append("CASSANDRA_ENABLED must be false in preview QA")
+    if runtime_settings.NEO4J_ENABLED:
+        errors.append("NEO4J_ENABLED must be false in preview QA")
+    if runtime_settings.MASTER_ADMIN_COOKIE_SECURE is not True:
+        errors.append("MASTER_ADMIN_COOKIE_SECURE must be true in preview QA")
+
+    if (
+        not runtime_settings.JWT_SECRET
+        or runtime_settings.JWT_SECRET == "change-me"
+        or len(runtime_settings.JWT_SECRET.strip()) < 32
+    ):
+        errors.append("JWT_SECRET must be set to a strong preview-only value")
+    try:
+        Fernet(runtime_settings.INTEGRATIONS_ENCRYPTION_KEY.encode())
+    except Exception:
+        errors.append("INTEGRATIONS_ENCRYPTION_KEY must be a valid Fernet key in preview QA")
+    else:
+        if runtime_settings.INTEGRATIONS_ENCRYPTION_KEY == "ZGVmYXVsdC1pbnRlZ3JhdGlvbnMta2V5LXNlY3JldA==":
+            errors.append("INTEGRATIONS_ENCRYPTION_KEY cannot use the bundled default in preview QA")
+    if not _has_value(runtime_settings.MASTER_ADMIN_EMAIL) or "@" not in runtime_settings.MASTER_ADMIN_EMAIL:
+        errors.append("MASTER_ADMIN_EMAIL must be a distinct QA identity")
+    if len((runtime_settings.MASTER_ADMIN_PASSWORD or "").strip()) < 12:
+        errors.append("MASTER_ADMIN_PASSWORD must be a strong preview-only value")
+    manager_pin = str(runtime_settings.MASTER_ADMIN_PIN or "").strip()
+    if not manager_pin.isdigit() or len(manager_pin) < 6 or manager_pin == "1234":
+        errors.append("MASTER_ADMIN_PIN must be at least 6 digits and not the default in preview QA")
+    if (
+        runtime_settings.ACCESS_TOKEN_SECRET
+        and runtime_settings.SIGNED_TOKEN_SECRET
+        and hmac.compare_digest(
+            runtime_settings.ACCESS_TOKEN_SECRET,
+            runtime_settings.SIGNED_TOKEN_SECRET,
+        )
+    ):
+        errors.append("ACCESS_TOKEN_SECRET and SIGNED_TOKEN_SECRET must be distinct in preview QA")
+
+    local_url_fields = {
+        "REDIS_URL": runtime_settings.REDIS_URL,
+        "CELERY_BROKER_URL": runtime_settings.CELERY_BROKER_URL,
+        "CELERY_RESULT_BACKEND": runtime_settings.CELERY_RESULT_BACKEND,
+        "MONGO_URL": runtime_settings.MONGO_URL,
+        "NEO4J_URI": runtime_settings.NEO4J_URI,
+    }
+    for name, value in local_url_fields.items():
+        hostname = (urlsplit(value).hostname or "").lower()
+        if hostname not in {"localhost", "127.0.0.1", "::1"}:
+            errors.append(f"{name} must remain loopback-only while disabled in preview QA")
+    cassandra_hosts = {
+        value.strip().lower().removeprefix("[").removesuffix("]")
+        for value in runtime_settings.CASSANDRA_HOSTS.split(",")
+        if value.strip()
+    }
+    if not cassandra_hosts or not cassandra_hosts <= {"localhost", "127.0.0.1", "::1"}:
+        errors.append("CASSANDRA_HOSTS must remain loopback-only while disabled in preview QA")
+
+    forbidden_values = {
+        "AI_API_KEY": runtime_settings.AI_API_KEY,
+        "AI_BASE_URL": runtime_settings.AI_BASE_URL,
+        "BOOKING_USERNAME": runtime_settings.BOOKING_USERNAME,
+        "BOOKING_PASSWORD": runtime_settings.BOOKING_PASSWORD,
+        "EXPEDIA_API_KEY": runtime_settings.EXPEDIA_API_KEY,
+        "EXPEDIA_HOTEL_ID": runtime_settings.EXPEDIA_HOTEL_ID,
+        "GMAIL_CLIENT_ID": runtime_settings.GMAIL_CLIENT_ID,
+        "GMAIL_CLIENT_SECRET": runtime_settings.GMAIL_CLIENT_SECRET,
+        "GEMMA_API_KEY": runtime_settings.GEMMA_API_KEY,
+        "GEMMA_ENDPOINT_URL": runtime_settings.GEMMA_ENDPOINT_URL,
+        "MERCADOPAGO_CLIENT_ID": runtime_settings.MERCADOPAGO_CLIENT_ID,
+        "MERCADOPAGO_CLIENT_SECRET": runtime_settings.MERCADOPAGO_CLIENT_SECRET,
+        "MERCADOPAGO_WEBHOOK_SECRET": runtime_settings.MERCADOPAGO_WEBHOOK_SECRET,
+        "MP_ACCESS_TOKEN": runtime_settings.MP_ACCESS_TOKEN,
+        "MP_PUBLIC_KEY": runtime_settings.MP_PUBLIC_KEY,
+        "PAYPAL_CLIENT_ID": runtime_settings.PAYPAL_CLIENT_ID,
+        "PAYPAL_CLIENT_SECRET": runtime_settings.PAYPAL_CLIENT_SECRET,
+        "PAYPAL_WEBHOOK_ID": runtime_settings.PAYPAL_WEBHOOK_ID,
+        "RESEND_API_KEY": runtime_settings.RESEND_API_KEY,
+    }
+    configured = sorted(name for name, value in forbidden_values.items() if _has_value(value))
+    if configured:
+        errors.append(
+            "live integration credentials must be absent in preview QA: "
+            + ", ".join(configured)
+        )
+    if errors:
+        raise RuntimeError("Invalid preview QA security configuration: " + "; ".join(errors))
+
+
 def validate_runtime_security(settings: Settings | None = None) -> None:
     """
     Fail fast if the app is being started in production with placeholder secrets.
     Dev/test/demo are intentionally permissive so the local harness keeps working.
     """
     runtime_settings = settings or get_settings()
+    if is_preview_qa_mode(runtime_settings):
+        _validate_preview_qa_security(runtime_settings)
+        return
     if not is_production_mode(runtime_settings):
         return
 

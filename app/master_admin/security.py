@@ -12,7 +12,7 @@ from fastapi import HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 
 from app.adapters.rate_limiter import SimpleRateLimiter
-from app.config import get_settings, is_production_mode
+from app.config import get_settings, is_preview_qa_mode, is_production_mode
 from app.models.user import User
 from app.services.security import hash_password, verify_password
 from .models import MasterAdminAuditEvent, MasterAdminAuthLockout, MasterAdminSession
@@ -76,7 +76,7 @@ def _session_cookie_secure() -> bool:
     configured = getattr(settings, "MASTER_ADMIN_COOKIE_SECURE", None)
     if configured is not None:
         return bool(configured)
-    return is_production_mode()
+    return is_production_mode() or is_preview_qa_mode()
 
 
 def _session_cookie_samesite() -> str:

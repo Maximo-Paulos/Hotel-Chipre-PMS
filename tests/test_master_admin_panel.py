@@ -252,6 +252,26 @@ def test_master_session_cookie_uses_cross_site_settings_in_production(monkeypatc
     assert any("path=/api/" in header for header in normalized_headers)
 
 
+def test_master_session_cookie_defaults_secure_in_preview(monkeypatch):
+    monkeypatch.setattr(
+        master_security,
+        "get_settings",
+        lambda: type("PreviewSettings", (), {"MASTER_ADMIN_COOKIE_SECURE": None})(),
+    )
+    monkeypatch.setattr(master_security, "is_production_mode", lambda settings=None: False)
+    monkeypatch.setattr(master_security, "is_preview_qa_mode", lambda settings=None: True)
+    response = Response()
+
+    master_security.set_master_session_cookies(response, "session-token", "csrf-token")
+
+    headers = [
+        value.decode("latin-1").lower()
+        for key, value in response.raw_headers
+        if key.lower() == b"set-cookie"
+    ]
+    assert any("samesite=none" in header and "secure" in header for header in headers)
+
+
 def test_master_login_locks_out_after_repeated_failures(master_client, monkeypatch):
     client, SessionLocal = master_client
     monkeypatch.setenv("MASTER_ADMIN_PIN", "654321")

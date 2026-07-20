@@ -1,0 +1,15 @@
+# Linux CPython 3.12 runtime used only by the trusted default-branch QA workflow.
+# Update with an explicit dependency review; installs must use --require-hashes.
+cryptography==46.0.6 \
+    --hash=sha256:22259338084d6ae497a19bae5d4c66b7ca1387d3264d1c2c0e72d9e9b6a77b97 \
+    --hash=sha256:9a693028b9cbe51b5a1136232ee8f2bc242e4e19d456ded3fa7c86e43c713b4a
+cffi==2.1.0 \
+    --hash=sha256:1e9f50d192a3e525b15a75ab5114e442d83d657b7ec29182a991bc9a88fd3a66
+pycparser==3.0 \
+    --hash=sha256:b727414169a36b7d524c1c3e31839a521725078d7b2ff038656844266160a992
+SQLAlchemy==2.0.35 \
+    --hash=sha256:93a71c8601e823236ac0e5d087e4f397874a421017b3318fd92c0b14acf2b6db
+greenlet==3.5.3 \
+    --hash=sha256:87142215824be6ac05e2e8e2786eec307ccbc27c36723c3881959df654af6861
+typing_extensions==4.16.0 \
+    --hash=sha256:481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8
