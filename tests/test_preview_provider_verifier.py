@@ -417,6 +417,8 @@ def test_preview_rejects_external_effects_enabled(
         "MERCADOPAGO_CLIENT_SECRET",
         "MP_ACCESS_TOKEN",
         "PAYPAL_CLIENT_SECRET",
+        "QA_PROVIDER_EVIDENCE_PRIVATE_KEY",
+        "QA_PROVIDER_EVIDENCE_TOKEN",
         "REDIS_URL",
         "MONGO_URL",
         "CASSANDRA_HOSTS",
@@ -743,6 +745,7 @@ def test_workflow_has_no_human_evidence_inputs_and_publishes_sha_bound_artifact(
     assert "Re-verify provider state after bootstrap" in workflow
     assert "Re-verify providers immediately before evidence upload" in workflow
     assert workflow.count("scripts/agent_ops/verify_preview_providers.py") == 3
+    assert "compare_preview_manifests.py" in workflow
     assert "manage_qa_baseline_lease.py release" in workflow
     assert "if: always() && steps.lease.outputs.lease_id != ''" in workflow
 

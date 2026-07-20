@@ -209,6 +209,9 @@ jobs:
             --expected-baseline-lease-id "$BASELINE_LEASE_ID" \
             --expected-workflow-sha "$GITHUB_SHA" \
             --expected-default-branch "$TRUSTED_DEFAULT_BRANCH"
+          python scripts/agent_ops/compare_preview_manifests.py \
+            "$RUNNER_TEMP/post-bootstrap-manifest.json" \
+            preview-manifest.json
       - name: Upload only final sanitized provider evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
