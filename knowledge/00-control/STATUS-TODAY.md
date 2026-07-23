@@ -1,6 +1,6 @@
 # Estado exhaustivo del sistema — Hotel Chipre PMS
 
-Auditoría base: commit `19b8b7b` validado y publicado el 2026-07-19 (`confirmed` para inventarios, Graphify y tests locales). La configuración live de Vercel/Render se comprobó el 2026-07-18; la sesión Supabase y la restricción de plan se comprobaron el 2026-07-19. La evidencia de proveedor permanece separada del código versionado.
+Auditoría base: commit `71cb80e` revisado el 2026-07-23 (`confirmed` para inventarios, Graphify portátil, agentes/skills y validaciones del setup). La configuración live de Vercel/Render y las superficies públicas fueron comprobadas de forma read-only; la sesión Supabase está activa, pero el proyecto QA todavía no fue creado. La evidencia de proveedor permanece separada del código versionado.
 Fuentes principales: `app/main.py`, `app/config.py`, `app/models/`, `app/api/`, `app/services/`, `frontend/src/router.tsx`, `render.yaml`, `vercel.json`, Alembic y `.graphify/`.
 Artefactos reproducibles: [OpenAPI](../_generated/api-surface.md), [rutas frontend](../_generated/frontend-routes.md), [migración head](../_generated/migration-head.md), [superficies cloud](../_generated/cloud-surfaces.md), [resumen Graphify](../_generated/graphify-summary.md).
 
@@ -76,23 +76,23 @@ Analítica debe validar permisos, rango temporal, filtros, zona horaria, definic
 
 - `https://app.hotels-pms.com` respondió HTTP 200 y se identifica como frontend Vercel.
 - `https://hotels-pms.com` respondió HTTP 200 y se identifica como frontend Vercel.
-- `https://api.hotels-pms.com/health` agotó un primer intento de 20 s, pero un reintento con 60 s devolvió HTTP 200 y `{"status":"ok","system":"Hotel PMS v1.0.0"}`. Render confirma que el plan actual es Free y puede dormir tras inactividad; vigilar ese cold start antes del preview QA.
+- `https://api.hotels-pms.com/health` respondió HTTP 200 con `{"status":"ok","system":"Hotel PMS v1.0.0"}` en la comprobación más reciente. Render confirma que el plan actual es Free y puede dormir tras inactividad; vigilar ese cold start antes del preview QA.
 
-Vercel tiene `VITE_API_URL=https://api.hotels-pms.com/api` **sólo para Production** y se redeployó la versión de `main` `50abb05`; la deployment quedó `Ready` y el asset publicado contiene la URL canónica. Antes apuntaba a un proveedor histórico y aplicaba a todos los entornos; no volver a propagar Production a Preview. CORS preflight de la API confirmó explícitamente `https://app.hotels-pms.com`.
+Vercel tiene una integración autenticada para el proyecto `hotel-chipre-pms` y la producción pública responde. `VITE_API_URL=https://api.hotels-pms.com/api` queda deliberadamente sólo en Production: un Preview sin backend aislado no es QA válido. La integración histórica de checks y el proyecto consultado no se deben dar por reconciliados hasta generar un manifiesto de preview que pruebe el par frontend/backend exacto. CORS preflight de la API confirmó explícitamente `https://app.hotels-pms.com`.
 
-Render tiene ahora healthcheck `/health` y su deploy live pasó esa comprobación. `needs-verification`: el servicio real fue creado/configurado fuera del Blueprint y su start command observado ejecuta Uvicorn sin `alembic upgrade head`; por lo tanto `render.yaml` es diseño declarativo, no prueba de que migraciones se ejecuten en producción. Los logs revelaron labels de enum PostgreSQL incompatibles con los valores de los modelos en los dominios OTA/allocation. La corrección está en el PR draft [#24](https://github.com/Maximo-Paulos/Hotel-Chipre-PMS/pull/24); requiere PostgreSQL aislado antes de merge/deploy. Se rotó el hook de deploy de Render; su valor nunca se registra aquí.
+Render tiene ahora healthcheck `/health` y su deploy live pasó esa comprobación. `needs-verification`: el servicio real fue creado/configurado fuera del Blueprint y su start command observado ejecuta Uvicorn sin `alembic upgrade head`; por lo tanto `render.yaml` es diseño declarativo, no prueba de que migraciones se ejecuten en producción. El plan Free también deja deshabilitado el campo Pre-Deploy en la UI observada, por lo que el servicio QA necesita una estrategia compatible (o un plan que permita el bootstrap) antes de activar el gate. Los logs revelaron labels de enum PostgreSQL incompatibles con los valores de los modelos en los dominios OTA/allocation; la corrección está en el PR draft [#24] y requiere PostgreSQL aislado antes de merge/deploy. Se rotó el hook de deploy observado; su valor nunca se registra aquí.
 
 El repositorio ya alinea `.env.example`, `.env.render`, defaults frontend, SEO/sitemap y `render.yaml` con `hotels-pms.com`. Sus `DATABASE_URL`, URLs de CORS/frontend/base, email y secretos de integración son `sync:false`, por lo que se deben confirmar manualmente en los proveedores sin exponer valores. `vercel.json` declara build Vite, output frontend y rewrite SPA. Hay documentación histórica que puede citar nombres de dominio/hosts distintos; se marca `historical` y no debe emplearse para configuración.
 
 ## 9. Previews y QA cloud requeridos
 
-**Estado: `needs-verification` — implementación local verde; bootstrap en rama por defecto y aprovisionamiento externo pendientes.**
+**Estado: `needs-verification` — setup local y workflow confiable están preparados; el primer ciclo cloud aislado todavía no existe.**
 
 Vercel genera previews Git por rama, pero el `VITE_API_URL` de Production se dejó deliberadamente fuera de Preview: una preview sin backend aislado no es una preview QA válida ni debe tocar la API compartida. Render PR Previews permanece `Off`; cuando se habilite debe ser `Manual`, nunca automático, y sólo después de comprobar una Supabase Branch (o segunda DB QA aislada).
 
 `needs-verification`: los checks de PR actuales reportan Vercel bajo el espacio `maximo-paulos-projects`, mientras la configuración Production verificada vive en `maximopaulos1-4687s-projects`. Hasta reconciliar esa integración/proyecto, ninguna URL de preview Vercel se acepta como par válido del frontend de producción.
 
-Supabase mostró que las branches persistentes requieren upgrade. El fallback confirmado es crear un segundo proyecto gratuito QA sin datos productivos y usarlo como baseline exclusiva serializada; usar la base principal queda prohibido. El workflow confiable adquiere un lease aleatorio, verifica proveedores, hace bootstrap con capacidad Ed25519 efímera, elimina esa capacidad, vuelve a verificar deployment/URLs, comprueba health/CORS/bundle y libera el lease aun ante fallos. Cuando Supabase Branches esté disponible se migra a una base por target.
+Supabase mostró que las branches persistentes requieren upgrade. La sesión actual está en la pantalla de creación del proyecto `hotel-chipre-pms-qa`, con organización `HPMS`, región São Paulo y Data API desactivada; todavía falta enviar la creación y registrar sólo su referencia no sensible. El fallback aprobado es un segundo proyecto gratuito QA sin datos productivos y lease serializado; usar la base principal queda prohibido. El workflow confiable adquiere un lease aleatorio, verifica proveedores, hace bootstrap con capacidad Ed25519 efímera, elimina esa capacidad, vuelve a verificar deployment/URLs, comprueba health/CORS/bundle y libera el lease aun ante fallos. Cuando Supabase Branches esté disponible se migra a una base por target.
 
 El gate permanente exige: Vercel preview por rama, Render backend QA con `/health`, base QA independiente y un manifiesto que demuestre qué frontend apunta a qué backend. `VITE_API_URL`, CORS, `FRONTEND_URL`, cinco personas y política de migración quedan ligados por proveedor/fingerprint. El token nunca se publica como artefacto ni cruza workflows. La clave pública de atestación humana ya existe en `qa/trust/`; las dos claves privadas distintas permanecen sólo bajo `artifacts/qa/keys/` ignorado y con permisos `0600`.
 
@@ -102,9 +102,9 @@ Cada fila de la regresión registra persona, URL de preview, precondición, acci
 
 ## 10. Tests y validación local
 
-**Estado: `confirmed` para la ejecución local del setup el 2026-07-19; la QA cloud sigue `needs-verification`.**
+**Estado: `confirmed` para la ejecución local registrada hasta el 2026-07-23; la QA cloud sigue `needs-verification`.**
 
-El repositorio contiene tests backend y frontend/e2e; los comandos concretos dependen del área. Para modificaciones de producto la puerta requiere tests focales, pytest backend, lint/typecheck/build frontend, migración sobre DB limpia y Playwright local antes del preview. En esta rama: `pytest` terminó con **1088 passed, 17 skipped, 12 xfailed y 1 xpassed**; lint, typecheck y build frontend pasaron; Playwright pasó **18/18** contra SQLite aislado. `validate_setup.py`, paridad de agentes/skills, enlaces del vault, YAML, compileall y `git diff --check` también pasaron. El build conserva una advertencia no bloqueante por chunk JS de 755,65 kB.
+El repositorio contiene tests backend y frontend/e2e; los comandos concretos dependen del área. En esta auditoría actual: `pytest` terminó con **1155 passed, 17 skipped, 12 xfailed y 1 xpassed**; lint, typecheck y build frontend pasaron; `alembic upgrade head` llegó al head en una SQLite virgen; setup de vault/agentes y enlaces pasaron. Playwright local tiene baseline previa verde y debe repetirse si cambia la UI. El build conserva una advertencia no bloqueante por chunk JS de aproximadamente 755 kB.
 
 No se debe confundir “configuración creada” con “preview probado”: mientras falten las credenciales/URLs aisladas, la validación cloud es un bloqueo documentado, no un éxito parcial.
 
@@ -112,7 +112,7 @@ No se debe confundir “configuración creada” con “preview probado”: mien
 
 **Estado: `confirmed` para extracción AST actual; descripciones/labels semánticos se mantienen deliberadamente pendientes.**
 
-La actualización final AST produjo **6.171 nodos, 19.157 aristas y 297 comunidades**, más **501 flujos ejecutables**. Sus god nodes continúan orientando sobre `ReservationStatusEnum`, `Reservation`, `HotelConfiguration`, `Room` y `Guest`; revisar el resumen generado antes de inferir impacto concreto. `graphify portable-check` pasó. La única extracción omitida es el script PowerShell de smoke porque este runtime no tiene `tree-sitter-powershell`. `graphify check-update` anuncia descripciones/labels pendientes porque esta política ejecuta explícitamente `--no-description --no-label`; no indica que la extracción AST esté vieja.
+La actualización final AST, construida desde `71cb80e`, produjo **6.247 nodos, 19.588 aristas y 503 flujos ejecutables**. El reporte estructural y el resumen CLI muestran conteos de comunidades distintos (282 frente a 298); por eso la comunidad se usa sólo como orientación, no como KPI. Sus god nodes continúan orientando sobre `ReservationStatusEnum`, `Reservation`, `HotelConfiguration`, `Room` y `Guest`; revisar el resumen generado antes de inferir impacto concreto. `graphify portable-check` pasó después de normalizar cuatro labels de rutas y un artefacto de flujo. La única extracción omitida es el script PowerShell de smoke porque este runtime no tiene `tree-sitter-powershell`. `graphify check-update` anuncia sólo descripciones/labels semánticos pendientes porque esta política ejecuta explícitamente `--no-description --no-label`; la extracción AST está fresca respecto de `71cb80e`.
 
 Cuando cambie código, se ejecuta `graphify update . --scope all --no-description --no-label`, `graphify flows build`, `.venv/bin/python scripts/agent_ops/normalize_graphify_portability.py`, `graphify portable-check` y `graphify check-update`. Usar `minimal-context`, `affected-flows` y `query`; no exportar el grafo completo como notas Obsidian.
 
@@ -129,8 +129,8 @@ Cuando cambie código, se ejecuta `graphify update . --scope all --no-descriptio
 
 ## 13. Prioridades inmediatas
 
-1. Llevar mediante una PR bootstrap mínima los workflows confiables, scripts, lock de dependencias y clave pública de atestación a `main`; no pueden proteger la misma PR que los introduce.
-2. Crear el segundo proyecto Supabase QA, el servicio/entorno Render QA y el GitHub Environment `preview-qa`; configurar Vercel Preview con el backend exacto y rotar cualquier hook expuesto.
-3. Ejecutar el ciclo confiable contra un target de prueba y validar en PostgreSQL real el PR #24 de normalización de enums.
-4. Realizar bootstrap de las cinco identidades sintéticas, ejecutar el catálogo cloud completo como usuario humano y firmar evidencia posterior al último `code_sha`.
-5. Activar protección de rama sólo tras la primera baseline verde; corregir primero cualquier brecha en auth/tenancy, reservas/pagos o UX operativa.
+1. Crear y registrar el segundo proyecto Supabase QA aislado; no usar la base principal.
+2. Crear/configurar el servicio Render QA y resolver la limitación Pre-Deploy del plan Free sin degradar el aislamiento; dejar los secrets del GitHub Environment `preview-qa` completos.
+3. Reconciliar Vercel Preview con el backend QA exacto y producir el manifiesto de paridad frontend/backend.
+4. Ejecutar el ciclo confiable contra PostgreSQL real, validar el PR #24 de enums y completar el bootstrap de owner, manager, recepción, housekeeping y master-admin sintéticos.
+5. Ejecutar la regresión cloud humana completa, firmar evidencia posterior al último `code_sha`, revisar seguridad y recién entonces cerrar el PR #25 y activar protección permanente de `main`.

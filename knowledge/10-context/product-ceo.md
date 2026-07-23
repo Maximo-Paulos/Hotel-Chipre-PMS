@@ -1,7 +1,7 @@
 ---
 scope: producto, personas, métricas, prioridad y riesgos de negocio
 owner: product-ceo
-last_verified_commit: bc938cf
+last_verified_commit: 71cb80e
 canonical_sources: [knowledge/20-system/product-and-personas.md, knowledge/00-control/DECISION-LOG.md, docs/roadmap.md]
 graphify_minimum: graphify summary .graphify/graph.json
 required_validation: decisión trazable + impacto operativo + gate de release si afecta usuario

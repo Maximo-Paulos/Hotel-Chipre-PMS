@@ -62,7 +62,10 @@ graphify-out/
 .qa/
 artifacts/qa/
 
-# Keep Obsidian portable preferences only; ignore machine/session/layout state
+# Keep Obsidian portable preferences only; ignore machine/session/layout state.
+# The root-level directory is a local editor workspace; the portable vault is
+# versioned under knowledge/.obsidian/.
+.obsidian/
 .obsidian/workspace.json
 .obsidian/workspace-mobile.json
 .obsidian/graph.json

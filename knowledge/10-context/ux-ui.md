@@ -1,7 +1,7 @@
 ---
 scope: experiencia, accesibilidad, responsive y coherencia visual
 owner: ux-ui-auditor
-last_verified_commit: bc938cf
+last_verified_commit: 71cb80e
 canonical_sources: [frontend/src/views/, frontend/src/ui/, qa/regression-catalog.json]
 graphify_minimum: graphify minimal-context --files frontend/src/router.tsx --task UX-UI
 required_validation: auditoría navegador por persona + evidencia

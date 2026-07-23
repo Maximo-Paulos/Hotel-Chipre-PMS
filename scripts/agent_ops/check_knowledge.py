@@ -63,11 +63,10 @@ def main() -> int:
             continue
         if not isinstance(payload, dict):
             errors.append(f"portable Obsidian config knowledge/.obsidian/{filename} must be an object")
-    for filename in REQUIRED_OBSIDIAN_CONFIG:
-        if (ROOT / ".obsidian" / filename).is_file():
-            errors.append(
-                f"portable Obsidian config must live in knowledge/.obsidian, not .obsidian/{filename}"
-            )
+    # A repository-root `.obsidian/` can be a user's local workspace for opening
+    # this repository. It is intentionally ignored and must not invalidate the
+    # portable vault. Only `knowledge/.obsidian/` is part of the checked-in
+    # memory contract above.
     for path in sorted((KNOWLEDGE / "10-context").glob("*.md")):
         text = path.read_text(encoding="utf-8")
         if not text.startswith("---\n"):

@@ -115,7 +115,7 @@ def main() -> int:
     write(
         "README.md",
         heading("Artefactos generados")
-        + "Estos archivos se regeneran con `python scripts/knowledge/generate_inventories.py`. Las notas curadas deben enlazarlos en vez de copiar listados completos.\n",
+        + "Estos archivos se regeneran con `.venv/bin/python scripts/knowledge/generate_inventories.py`. Las notas curadas deben enlazarlos en vez de copiar listados completos.\n",
     )
     return 0
 
