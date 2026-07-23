@@ -10,7 +10,7 @@ Este proyecto usa un venv propio (Python 3.12) y Node 20 fuera del PATH por defe
 
 ## 1. Backend — tests
 ```sh
-cd /Users/maximopaulos/Desktop/Hotel-Chipre-PMS
+cd "$(git rev-parse --show-toplevel)"
 .venv/bin/python -m pytest -q
 ```
 Esperado: `~749 passed` (0 failed). Si algo falla, diagnosticá antes de seguir.
@@ -18,7 +18,7 @@ Esperado: `~749 passed` (0 failed). Si algo falla, diagnosticá antes de seguir.
 ## 2. Frontend — lint + typecheck + build
 ```sh
 export PATH="$HOME/.local/node/bin:$PATH"
-cd /Users/maximopaulos/Desktop/Hotel-Chipre-PMS/frontend
+cd "$(git rev-parse --show-toplevel)/frontend"
 npm run lint          # eslint --max-warnings=0
 npx tsc --noEmit      # typecheck
 npm run build         # vite build
@@ -27,7 +27,7 @@ Los tres deben pasar sin errores (el warning de chunk >500 kB es deuda conocida,
 
 ## 3. Migraciones — dry-run sobre SQLite virgen (nunca la DB de dev)
 ```sh
-cd /Users/maximopaulos/Desktop/Hotel-Chipre-PMS
+cd "$(git rev-parse --show-toplevel)"
 DATABASE_URL="sqlite:///$(mktemp -d)/mig.db" .venv/bin/python -m alembic upgrade head
 ```
 Debe llegar a `head` sin error.

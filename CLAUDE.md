@@ -14,6 +14,12 @@
 - `knowledge/00-control/SOURCE-OF-TRUTH.md` — jerarquía de evidencia y estados de certeza.
 - `docs/orchestrator-status.md` — histórico operativo útil, pero no reemplaza las fuentes anteriores.
 
+## Memoria local compartida
+- La memoria persistente vive en `/Users/maximopaulos/AI-Workspace/memory` y en esta vault `knowledge/`.
+- Antes de iniciar una tarea, ejecutar `/Users/maximopaulos/AI-Workspace/memory/tools/memoryctl context --agent claude`.
+- Crear checkpoints locales en decisiones, cambios relevantes, validaciones y bloqueos.
+- Si una nota contradice una instrucción actual o una fuente canónica, marcar `needs-verification` y consultar.
+
 ## Entorno local (macOS, desde julio 2026)
 - El repo se migró de Windows (`C:\PROJECTO\Hotel-Chipre-PMS`) a macOS. Si aparece una ruta `C:\...` hardcodeada en código, tests o docs, es un bug de migración: corregirla con rutas relativas o `Path(__file__)`.
 - Python del sistema es 3.9 (insuficiente): usar el venv del repo `.venv/` (Python 3.12, creado con `uv`). Ej.: `.venv/bin/python -m pytest -q`.

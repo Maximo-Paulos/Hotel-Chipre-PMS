@@ -6,6 +6,17 @@ Rules:
 - Before answering architecture questions, planning structural changes, or making major refactors, read `.graphify/GRAPH_REPORT.md` for god nodes, hotspots, and community structure
 - If `.graphify/wiki/index.md` exists, navigate it instead of reading raw files
 - After modifying code files in this session, run `graphify update .` if Graphify is installed and available in PATH, to keep the graph current (AST-only, no API cost)
+
+# Memoria local compartida
+
+La memoria persistente operativa vive en `/Users/maximopaulos/AI-Workspace/memory` y en `knowledge/` para este proyecto.
+
+- Antes de explorar o cambiar código, ejecutar `/Users/maximopaulos/AI-Workspace/memory/tools/memoryctl context --agent codex`.
+- Buscar en la memoria local antes de tomar decisiones y crear checkpoints en cambios importantes.
+- Si hay contradicción material entre memoria, instrucciones, runtime, código o tests, marcar `needs-verification` y preguntar.
+- No leer ni usar la memoria interna de la aplicación como fuente persistente.
+- Nunca guardar secretos, sesiones, tokens, cookies, claves privadas ni PII innecesaria.
+
 # AGENTS.md
 
 ## 0) Mission

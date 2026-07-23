@@ -11,3 +11,4 @@
 | 2026-07-19 | Verificación, bootstrap, re-verificación y cleanup de QA ocurren en un único workflow confiable. | confirmed | Elimina artefactos bearer y la ventana TOCTOU entre workflows. | Revisar tras el primer run real. |
 | 2026-07-19 | Preview QA inicia con integraciones externas fail-closed y sin workers/cron. | confirmed | Correo, pagos, OTA e IA podían usar configuración live fuera de producción. | Ampliar el guard si aparece un proveedor nuevo. |
 | 2026-07-19 | Evidencia humana y bootstrap usan dos pares Ed25519 distintos. | confirmed | Separa la firma local de artefactos de la capacidad máquina de Render. | Rotar si se compromete una clave. |
+| 2026-07-23 | La memoria persistente de agentes vive en `/Users/maximopaulos/AI-Workspace/memory`, con Git local sin remoto, y `knowledge/` conserva memoria específica del proyecto. | confirmed | Plan aprobado y contrato Markdown implementado localmente. | Revisar al registrar otro proyecto o agente. |

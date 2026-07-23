@@ -2224,12 +2224,12 @@
     "hash": "9c7fd615d83261c55e46096fcff2f761"
   },
   "AGENTS.md": {
-    "mtime": 1784398283666.9817,
-    "hash": "d5b6871908a91488edef68c423b0f026"
+    "mtime": 1784817282420.943,
+    "hash": "598b232aae6e5f6980b6c867c91ca6be"
   },
   "CLAUDE.md": {
-    "mtime": 1784398283667.1643,
-    "hash": "e8562f8c7226ca1d26f59bdde8ae6aca"
+    "mtime": 1784817282421.1782,
+    "hash": "7527e4dc9d32cf6f11f1468c56a84951"
   },
   "README.md": {
     "mtime": 1783186364241.4016,
@@ -2636,8 +2636,8 @@
     "hash": "6e83f1692a084317b7a08f59b0c6df71"
   },
   "scripts/agent_ops/render_agents.py": {
-    "mtime": 1784398283679.9539,
-    "hash": "5ca37f81871995296f89a3f2f2301a5e"
+    "mtime": 1784817282422.125,
+    "hash": "722ec2dd81d1d6e273d0a5e8f901d850"
   },
   "scripts/agent_ops/render_skills.py": {
     "mtime": 1784398283680.0515,
@@ -2664,16 +2664,16 @@
     "hash": "ece8b1a72f5eef7860dfaa86eec055a7"
   },
   "knowledge/00-control/DECISION-LOG.md": {
-    "mtime": 1784519436418.586,
-    "hash": "9a9f9b337fc8df50597fe59abfc5fec1"
+    "mtime": 1784817282421.9104,
+    "hash": "8d1538613d557db08a714d47e54125fc"
   },
   "knowledge/00-control/SOURCE-OF-TRUTH.md": {
-    "mtime": 1784398283672.7246,
-    "hash": "0e3e2f6829be94f80b0edeca0ed68c28"
+    "mtime": 1784817282421.6729,
+    "hash": "e82b4c0f2eeafde1697b43150bd2c836"
   },
   "knowledge/00-control/STATUS-TODAY.md": {
-    "mtime": 1784816582572.181,
-    "hash": "3afde0469ca981069091362a3746e8bd"
+    "mtime": 1784817186859.279,
+    "hash": "334434599252697217b6370252fa89fd"
   },
   "knowledge/00-control/TASK_ROUTER.md": {
     "mtime": 1784815960845.4307,
@@ -2700,8 +2700,8 @@
     "hash": "0948e4c11001b3383e2d9050a4c88ba5"
   },
   "knowledge/10-context/devops-containers.md": {
-    "mtime": 1784816582573.147,
-    "hash": "ef6233a856c967556a72a92bfaad24a3"
+    "mtime": 1784817095761.235,
+    "hash": "68840dfe21c701ba384ed289684bb109"
   },
   "knowledge/10-context/frontend.md": {
     "mtime": 1784816582573.3184,
@@ -2716,16 +2716,16 @@
     "hash": "7db1acb2f7f7166261b3b45f107c14dd"
   },
   "knowledge/10-context/knowledge-graph.md": {
-    "mtime": 1784816582573.8533,
-    "hash": "e636cef3b40b9547323c0dda97e467fc"
+    "mtime": 1784817095761.4526,
+    "hash": "92d3a661111d7429b686fd8d8ed9a006"
   },
   "knowledge/10-context/product-ceo.md": {
     "mtime": 1784816582574.1023,
     "hash": "dbe009a89b4ce4042f423f64c57f9c0a"
   },
   "knowledge/10-context/release-governor.md": {
-    "mtime": 1784816582574.3147,
-    "hash": "67533bb456764f3fdabc963b827d19ae"
+    "mtime": 1784817095761.643,
+    "hash": "2a750476b165b9e93f2be6d69dbd549b"
   },
   "knowledge/10-context/security.md": {
     "mtime": 1784816582574.4885,
@@ -2796,32 +2796,32 @@
     "hash": "d72457a503e6ab01a330b2a92ba8832e"
   },
   "knowledge/README.md": {
-    "mtime": 1784815894845.5955,
-    "hash": "f46217ce392a870638d63e976fc99898"
+    "mtime": 1784817282421.4265,
+    "hash": "84364af62f8c6b7d15983dd02b1a18bf"
   },
   "knowledge/_generated/README.md": {
-    "mtime": 1784816538951.742,
-    "hash": "67f72182dbef7ab1ddd151e4f29b4601"
+    "mtime": 1784817415591.0745,
+    "hash": "07387c5467f94085c41d253723bb9b66"
   },
   "knowledge/_generated/api-surface.md": {
-    "mtime": 1784816538483.621,
-    "hash": "ed67b1daa6f13e69feab5fa9aa3cad7c"
+    "mtime": 1784817415122.632,
+    "hash": "a68c009cbd8302919a79e35414f48a00"
   },
   "knowledge/_generated/cloud-surfaces.md": {
-    "mtime": 1784816538942.7358,
-    "hash": "d0402519253f4c64f394570f9b207faf"
+    "mtime": 1784817415583.039,
+    "hash": "10f6057918b0d3068fe99c2441a2f0c8"
   },
   "knowledge/_generated/frontend-routes.md": {
-    "mtime": 1784816538492.4292,
-    "hash": "d02151966aee10cda708787b51eb07a1"
+    "mtime": 1784817415131.124,
+    "hash": "9b0580551e259539f8a8aed39dbeb69e"
   },
   "knowledge/_generated/graphify-summary.md": {
-    "mtime": 1784816538934.316,
-    "hash": "ee9a4d84631a6d067b5b3013945958df"
+    "mtime": 1784817415575.0364,
+    "hash": "4b51b6121615d029d7dce5f848fd5b70"
   },
   "knowledge/_generated/migration-head.md": {
-    "mtime": 1784816538632.883,
-    "hash": "c7ddb19e304e0d38e9641b430e63056d"
+    "mtime": 1784817415267.8757,
+    "hash": "bfc6ecafb479a7902216b2e52b21fc16"
   },
   "qa/evidence/README.md": {
     "mtime": 1784518061099.4763,
@@ -3312,7 +3312,7 @@
     "hash": "3a088c470d672b722c1f1923d4fcb260"
   },
   "knowledge/00-control/START-HERE.md": {
-    "mtime": 1784816582571.933,
-    "hash": "cb943b2a83dc5c8f5d2e1085c4986277"
+    "mtime": 1784817095760.769,
+    "hash": "03af2737f29e44f71cc3e2cbac0b82f3"
   }
 }

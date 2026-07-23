@@ -1,6 +1,6 @@
 # Vault operativo — Hotel Chipre PMS
 
-Este directorio es el vault Obsidian versionado y la memoria curada del repositorio. Abrir `knowledge/` directamente como vault; no hay que sincronizar ni copiar notas a una ubicación externa.
+Este directorio es el vault Obsidian versionado y la memoria curada del repositorio. La memoria compartida entre proyectos vive en `/Users/maximopaulos/AI-Workspace/memory`; `knowledge/` conserva las decisiones y el contexto específicos de Hotel Chipre PMS. Abrir `knowledge/` directamente como vault.
 
 Orden de lectura: `00-control/TASK_ROUTER.md` → context pack del rol → fuentes canónicas mínimas → artefactos reproducibles de `_generated/`. La jerarquía de verdad es runtime/configuración y código > tests > Graphify > documentación histórica.
 

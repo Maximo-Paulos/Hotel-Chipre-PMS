@@ -10,7 +10,7 @@ Redis compilado en `~/.local/bin`. Rutas y puertos importan.
 
 ## Backend (FastAPI, puerto 8000)
 ```sh
-cd /Users/maximopaulos/Desktop/Hotel-Chipre-PMS
+cd "$(git rev-parse --show-toplevel)"
 # migraciones (usa DATABASE_URL de .env; por defecto SQLite local)
 .venv/bin/python -m alembic upgrade head
 # servidor con reload
@@ -21,7 +21,7 @@ Health: `GET http://127.0.0.1:8000/health`. Mutaciones necesitan header `X-Hotel
 ## Frontend (Vite, puerto 5173)
 ```sh
 export PATH="$HOME/.local/node/bin:$PATH"
-cd /Users/maximopaulos/Desktop/Hotel-Chipre-PMS/frontend
+cd "$(git rev-parse --show-toplevel)/frontend"
 npm run dev          # http://127.0.0.1:5173
 ```
 El dev server espera la API según `VITE_API_URL`.
@@ -36,7 +36,7 @@ Sólo hace falta si vas a ejercitar Celery/OTA; la app arranca sin él.
 ## e2e (Playwright)
 Activá el venv primero para que el webServer tome el Python correcto:
 ```sh
-cd /Users/maximopaulos/Desktop/Hotel-Chipre-PMS
+cd "$(git rev-parse --show-toplevel)"
 source .venv/bin/activate
 export PATH="$HOME/.local/node/bin:$PATH"
 cd frontend && npm run e2e

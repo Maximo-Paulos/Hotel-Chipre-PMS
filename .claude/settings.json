@@ -6,6 +6,10 @@
           {
             "type": "command",
             "command": ".venv/bin/python scripts/agent_ops/context_status.py || true"
+          },
+          {
+            "type": "command",
+            "command": "/usr/bin/python3 /Users/maximopaulos/AI-Workspace/memory/tools/memory_hook.py --agent claude"
           }
         ]
       }
@@ -16,6 +20,10 @@
           {
             "type": "command",
             "command": ".venv/bin/python scripts/agent_ops/context_status.py || true"
+          },
+          {
+            "type": "command",
+            "command": "/usr/bin/python3 /Users/maximopaulos/AI-Workspace/memory/tools/memory_hook.py --agent claude"
           }
         ]
       }
@@ -27,6 +35,10 @@
           {
             "type": "command",
             "command": "[ -f knowledge/00-control/TASK_ROUTER.md ] && echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"additionalContext\":\"context: use knowledge/00-control/TASK_ROUTER.md and the assigned context pack before broad raw-code search; Graphify lives in .graphify/, never graphify-out/.\"}}' || true"
+          },
+          {
+            "type": "command",
+            "command": "/usr/bin/python3 /Users/maximopaulos/AI-Workspace/memory/tools/memory_hook.py --agent claude"
           }
         ]
       }

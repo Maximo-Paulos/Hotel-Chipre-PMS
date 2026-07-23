@@ -14,7 +14,7 @@ Este proyecto: SQLAlchemy 2 en `app/models/`, Alembic en `alembic/versions/`, SQ
    - Índices para hot paths (búsqueda de huéspedes, reservas por fecha/hotel).
 2. **Generar la revisión**:
    ```sh
-   cd /Users/maximopaulos/Desktop/Hotel-Chipre-PMS
+   cd "$(git rev-parse --show-toplevel)"
    DATABASE_URL="sqlite:///$(mktemp -d)/gen.db" .venv/bin/python -m alembic revision -m "descripcion corta"
    ```
    (o `--autogenerate` si el modelo ya está y querés que infiera el diff — revisá SIEMPRE el archivo generado a mano).

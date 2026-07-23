@@ -1,7 +1,7 @@
 # Resumen Graphify
 
-Generado: 2026-07-23T14:31:08.354725+00:00
-Commit: `bf14bf5`
+Generado: 2026-07-23T14:36:55.565980+00:00
+Commit: `d25c542`
 
 `graphify summary .graphify/graph.json`:
 ```text
@@ -26,8 +26,9 @@ Next best action: Start with get_neighbors on "ReservationStatusEnum", then use 
 ```
 `graphify check-update .`:
 ```text
-[graphify check-update] Pending semantic updates in /Users/maximopaulos/Desktop/Hotel-Chipre-PMS.
+[graphify check-update] Pending semantic updates in /Users/maximopaulos/AI-Workspace/projects/Hotel-Chipre-PMS.
 [graphify check-update] graph was rebuilt by the fast git hook without descriptions/labels (.graphify_describe_pending)
-[graphify check-update] Run `graphify update --fill-missing` to add descriptions + salient labels.
+[graphify check-update] graph.json built from bf14bf5 but HEAD is d25c542
+[graphify check-update] Run the graphify skill with --update to refresh semantic data.
 ```
 Fuente técnica: `.graphify/`. Este artefacto no reemplaza `GRAPH_REPORT.md`.
