@@ -1,7 +1,7 @@
 # Alembic head
 
-Generado: 2026-07-20T06:39:20.825778+00:00
-Commit: `2c8cad0`
+Generado: 2026-07-23T14:22:18.622860+00:00
+Commit: `42dd238`
 
 ```text
 20260626_repair_reservation_unique_constraint (head)

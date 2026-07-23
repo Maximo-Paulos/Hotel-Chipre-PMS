@@ -1,7 +1,7 @@
 ---
 scope: definición de terminado, evidencia, gates y entrega
 owner: release-governor
-last_verified_commit: 71cb80e
+last_verified_commit: 42dd238
 canonical_sources: [knowledge/40-delivery/release-gates.md, knowledge/40-delivery/qa-evidence-template.md, qa/evidence/]
 graphify_minimum: graphify check-update .
 required_validation: todas las puertas del release gate

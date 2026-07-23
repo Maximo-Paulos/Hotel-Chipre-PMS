@@ -2616,8 +2616,8 @@
     "hash": "67bd9ea043a1640125e2728858a467d5"
   },
   "scripts/agent_ops/check_knowledge.py": {
-    "mtime": 1784515611805.4414,
-    "hash": "755a98c5d8a79fc84b176f2244a6d14c"
+    "mtime": 1784815894844.8445,
+    "hash": "be3beb35f3156f7ec9aa31632af15e73"
   },
   "scripts/agent_ops/check_preview_manifest.py": {
     "mtime": 1784483658773.0366,
@@ -2652,8 +2652,8 @@
     "hash": "60ea5e5d1098d9fe1efd052e6a67b163"
   },
   "scripts/knowledge/generate_inventories.py": {
-    "mtime": 1784519572814.4846,
-    "hash": "7baa8f6e866297a7a9c4d6f51eb9d9ea"
+    "mtime": 1784816153976.1633,
+    "hash": "6f4f020a9f44fbb8f8a86e85bbe760a7"
   },
   "tests/test_agent_ops_setup.py": {
     "mtime": 1784517590701.4548,
@@ -2672,68 +2672,68 @@
     "hash": "0e3e2f6829be94f80b0edeca0ed68c28"
   },
   "knowledge/00-control/STATUS-TODAY.md": {
-    "mtime": 1784529497236.4587,
-    "hash": "176de6cace9ff9526106b16bcb61813a"
+    "mtime": 1784816452674.4482,
+    "hash": "58f09b485a49553006ce2ce056b5b138"
   },
   "knowledge/00-control/TASK_ROUTER.md": {
-    "mtime": 1784398283672.9697,
-    "hash": "79016824595bc42ad5a62e1983488cad"
+    "mtime": 1784815960845.4307,
+    "hash": "03ca8d3a1919aa5c94d1c816e279a465"
   },
   "knowledge/00-control/tooling-patterns.md": {
     "mtime": 1784398283673.101,
     "hash": "9caa223c73b5731ceb56e0de1fea5668"
   },
   "knowledge/10-context/backend.md": {
-    "mtime": 1784398283673.2495,
-    "hash": "56b4199b564826fa73e6498a72f625a2"
+    "mtime": 1784815977604.026,
+    "hash": "3f1937d4986e25f2255b6c69c2fd0fe3"
   },
   "knowledge/10-context/cloud-qa-user.md": {
-    "mtime": 1784398283673.362,
-    "hash": "c65c12ce7b2c4d268da4e15a70a0c960"
+    "mtime": 1784815977607.1333,
+    "hash": "7b30e9af6a6bd65aab9cb0b44da7f478"
   },
   "knowledge/10-context/data-visualization.md": {
-    "mtime": 1784398283673.4905,
-    "hash": "2c752983558a12fcd90f350188a83b47"
+    "mtime": 1784815977607.3496,
+    "hash": "1a02da469ff6178ce461f9280b9f7613"
   },
   "knowledge/10-context/database.md": {
-    "mtime": 1784398283673.6226,
-    "hash": "5c1e48349bc96c7be8b817f91b02cbc8"
+    "mtime": 1784815977607.5283,
+    "hash": "24ad70e0f021d608805ff2cff2c6bc66"
   },
   "knowledge/10-context/devops-containers.md": {
-    "mtime": 1784398369911.4094,
-    "hash": "d5bd34588d5b0a6bed7822939ab659da"
+    "mtime": 1784815977607.8218,
+    "hash": "21a12a6a0cc23430f3f1562f5ecf2c3b"
   },
   "knowledge/10-context/frontend.md": {
-    "mtime": 1784398283673.8948,
-    "hash": "ba1b59040b5c0779e432eeb71fc16849"
+    "mtime": 1784815977608.0002,
+    "hash": "40d10e01b6c74753aee4e3646952d719"
   },
   "knowledge/10-context/geo-local-seo.md": {
-    "mtime": 1784398283674.0024,
-    "hash": "1809ff4c2fa19223255957d077ba5cf7"
+    "mtime": 1784815977608.1836,
+    "hash": "3e96a2f103e35cfef2cae5acc632ddc0"
   },
   "knowledge/10-context/geo-market-expansion.md": {
-    "mtime": 1784398283674.124,
-    "hash": "121cdfdb0abbe732a0113a065f261d28"
+    "mtime": 1784815977608.3406,
+    "hash": "9f6ae4b8060c57a2ff38e8e750528202"
   },
   "knowledge/10-context/knowledge-graph.md": {
-    "mtime": 1784398283674.2402,
-    "hash": "d912c50b8c70dc8cd9d84c495c61c179"
+    "mtime": 1784815977608.5085,
+    "hash": "89ee372d82462628710d1557deb69495"
   },
   "knowledge/10-context/product-ceo.md": {
-    "mtime": 1784398283674.3567,
-    "hash": "2d75461e6771beaa41ff150847323ac6"
+    "mtime": 1784815977608.6667,
+    "hash": "4cc0be9b3ff80744048af24e5016a052"
   },
   "knowledge/10-context/release-governor.md": {
-    "mtime": 1784398283674.4763,
-    "hash": "9792a737b6ff3aea6857b3d93dcf1ca1"
+    "mtime": 1784815977608.8445,
+    "hash": "165aca56ee7e0675c3c107773d5b12b4"
   },
   "knowledge/10-context/security.md": {
-    "mtime": 1784398283674.6108,
-    "hash": "f0e4c62fc11b5e57e80709439b83d203"
+    "mtime": 1784815977609.0217,
+    "hash": "7e6621264baa658c83be294025ffa22a"
   },
   "knowledge/10-context/ux-ui.md": {
-    "mtime": 1784398283674.718,
-    "hash": "978de5d80ab639cb6aeadcabd385a97a"
+    "mtime": 1784815977609.2244,
+    "hash": "27be93ea5c8c76302cf5f761942ce841"
   },
   "knowledge/20-system/ai-and-analytics.md": {
     "mtime": 1784398283674.9023,
@@ -2796,32 +2796,32 @@
     "hash": "d72457a503e6ab01a330b2a92ba8832e"
   },
   "knowledge/README.md": {
-    "mtime": 1784398283676.8586,
-    "hash": "3db5c8310924252e1fabbae64e2dc823"
+    "mtime": 1784815894845.5955,
+    "hash": "f46217ce392a870638d63e976fc99898"
   },
   "knowledge/_generated/README.md": {
-    "mtime": 1784529561131.339,
-    "hash": "c1a6d8fbdf9468fe2bfba43d12c941f7"
+    "mtime": 1784816413135.8125,
+    "hash": "918b05d108ef9f92c9296a70ffa42d2f"
   },
   "knowledge/_generated/api-surface.md": {
-    "mtime": 1784529560672.3152,
-    "hash": "514f7a9a3a62dfcfdc8614be3059c6ae"
+    "mtime": 1784816412696.147,
+    "hash": "593a242b33aa45a8e43338f18e5131f1"
   },
   "knowledge/_generated/cloud-surfaces.md": {
-    "mtime": 1784529561123.7202,
-    "hash": "de930fe0b97035bf7c9b4bf886d2983c"
+    "mtime": 1784816413127.533,
+    "hash": "775eec1aeba22f4e766c5d27039f32e2"
   },
   "knowledge/_generated/frontend-routes.md": {
-    "mtime": 1784529560682.2175,
-    "hash": "4d8f18c26e04e50d4ade130d0b07d855"
+    "mtime": 1784816412705.0469,
+    "hash": "4bb355d48cdb5a963ec688d063624d1e"
   },
   "knowledge/_generated/graphify-summary.md": {
-    "mtime": 1784529561115.6707,
-    "hash": "3fc142a59a499435c17240eeb65a88b7"
+    "mtime": 1784816413119.0854,
+    "hash": "de3489bfa6c5a63de9037f8388514eed"
   },
   "knowledge/_generated/migration-head.md": {
-    "mtime": 1784529560835.5918,
-    "hash": "9d2da7e38d5352e6087a53f668bbd725"
+    "mtime": 1784816412835.5474,
+    "hash": "221510d979091e0b7e6f473925b93d69"
   },
   "qa/evidence/README.md": {
     "mtime": 1784518061099.4763,
@@ -3310,5 +3310,9 @@
   "tests/test_compare_preview_manifests.py": {
     "mtime": 1784533063050.9392,
     "hash": "3a088c470d672b722c1f1923d4fcb260"
+  },
+  "knowledge/00-control/START-HERE.md": {
+    "mtime": 1784816147117.357,
+    "hash": "918c914518dfc75267e93a98b45fdcab"
   }
 }

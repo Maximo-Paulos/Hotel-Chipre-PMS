@@ -1,7 +1,7 @@
 ---
 scope: expansión por país o segmento, localización y cumplimiento operativo
 owner: geo-market-expansion
-last_verified_commit: 71cb80e
+last_verified_commit: 42dd238
 canonical_sources: [knowledge/20-system/product-and-personas.md, knowledge/20-system/cloud-and-deployment.md]
 graphify_minimum: graphify summary .graphify/graph.json
 required_validation: hipótesis, evidencia local y criterios de salida explícitos

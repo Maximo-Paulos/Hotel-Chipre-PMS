@@ -657,6 +657,7 @@
       "frontend/public/robots.txt",
       "knowledge/00-control/DECISION-LOG.md",
       "knowledge/00-control/SOURCE-OF-TRUTH.md",
+      "knowledge/00-control/START-HERE.md",
       "knowledge/00-control/STATUS-TODAY.md",
       "knowledge/00-control/TASK_ROUTER.md",
       "knowledge/00-control/tooling-patterns.md",
@@ -717,10 +718,10 @@
     ],
     "video": []
   },
-  "total_files": 708,
-  "total_words": 466952,
+  "total_files": 709,
+  "total_words": 467688,
   "needs_graph": true,
-  "warning": "Large corpus: 708 files · ~466,952 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
+  "warning": "Large corpus: 709 files · ~467,688 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
   "skipped_sensitive": [
     "alembic/versions/20260408_security_tokens.py",
     "app/adapters/memory_tokens.py",
@@ -730,10 +731,10 @@
     "frontend/src/views/public/ResetPasswordPage.tsx",
     "qa/trust/qa-evidence-public-key.pem"
   ],
-  "graphifyignore_patterns": 59,
+  "graphifyignore_patterns": 60,
   "git": {
     "source_owner": "git",
-    "source_hash": "dc543a63d692986bc02b24b34656ebe57f6de2ed",
+    "source_hash": "42dd238de3a590b32d16b6967710993310b2b36e",
     "branches": [
       "codex/feature/agent-ops-knowledge",
       "codex/feature/trusted-qa-bootstrap",
@@ -749,9 +750,9 @@
     "source": "cli",
     "root": ".",
     "git_root": ".",
-    "head": "dc543a63d692986bc02b24b34656ebe57f6de2ed",
+    "head": "42dd238de3a590b32d16b6967710993310b2b36e",
     "candidate_count": null,
-    "included_count": 708,
+    "included_count": 709,
     "excluded_untracked_count": 0,
     "excluded_ignored_count": 0,
     "excluded_sensitive_count": 7,
