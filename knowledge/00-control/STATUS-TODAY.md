@@ -88,6 +88,8 @@ El repositorio ya alinea `.env.example`, `.env.render`, defaults frontend, SEO/s
 
 **Estado: `needs-verification` — setup local y workflow confiable están preparados; el primer ciclo cloud aislado todavía no existe.**
 
+En la ejecución más reciente del PR #25 (`code_sha` `34ae6e9`), frontend y el contrato estático pasaron; `Supabase Preview` quedó omitido por diseño. `trusted-base-evidence` y `release-gate` bloquearon con el mensaje correcto **“exactly one QA summary candidate is required; found 0”**: el gate ya corre contra la base actual y está esperando evidencia cloud real, no un fixture. Se corrigió además el runtime del `release-gate` para instalar `requirements-qa-trusted.txt` antes de importar la validación criptográfica.
+
 Vercel genera previews Git por rama, pero el `VITE_API_URL` de Production se dejó deliberadamente fuera de Preview: una preview sin backend aislado no es una preview QA válida ni debe tocar la API compartida. Render PR Previews permanece `Off`; cuando se habilite debe ser `Manual`, nunca automático, y sólo después de comprobar una Supabase Branch (o segunda DB QA aislada).
 
 `needs-verification`: los checks de PR actuales reportan Vercel bajo el espacio `maximo-paulos-projects`, mientras la configuración Production verificada vive en `maximopaulos1-4687s-projects`. Hasta reconciliar esa integración/proyecto, ninguna URL de preview Vercel se acepta como par válido del frontend de producción.
