@@ -1,12 +1,12 @@
 # Resumen Graphify
 
-Generado: 2026-07-23T14:22:18.924185+00:00
-Commit: `42dd238`
+Generado: 2026-07-23T14:31:08.354725+00:00
+Commit: `bf14bf5`
 
 `graphify summary .graphify/graph.json`:
 ```text
 Graphify First-Hop Summary
-Graph: 6248 nodes, 19592 edges, 302 communities, density 0.001, average degree 6.2714, undirected
+Graph: 6251 nodes, 19636 edges, 290 communities, density 0.001, average degree 6.2825, undirected
 
 Top hubs:
   1. ReservationStatusEnum (degree 440, community 1 Community 1, app/models/reservation.py)
@@ -16,9 +16,9 @@ Top hubs:
   5. Guest (degree 317, community 1 Community 1, app/models/guest.py)
 
 Key communities:
-  1. Community 0 - Community 0: 289 nodes, 427 internal edges, density 0.0103; top nodes: dc4b68a ojooooo, database.py, main.py
+  1. Community 0 - Community 0: 265 nodes, 390 internal edges, density 0.0111; top nodes: dc4b68a ojooooo, database.py, main.py
   2. Community 1 - Community 1: 195 nodes, 1011 internal edges, density 0.0534; top nodes: ReservationStatusEnum, Reservation, Room
-  3. Community 2 - Community 2: 179 nodes, 992 internal edges, density 0.0623; top nodes: main, codex/feature/agent-ops-knowledge, codex/feature/trusted-qa-bootstrap
+  3. Community 2 - Community 2: 178 nodes, 985 internal edges, density 0.0625; top nodes: codex/feature/agent-ops-knowledge, main, codex/feature/trusted-qa-bootstrap
   4. Community 3 - Community 3: 169 nodes, 689 internal edges, density 0.0485; top nodes: TransactionTypeEnum, PaymentMethodEnum, Transaction
   5. Community 4 - Community 4: 127 nodes, 407 internal edges, density 0.0509; top nodes: HotelConfiguration, RoomCategory, ReservationSourceEnum
 

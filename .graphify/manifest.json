@@ -2672,8 +2672,8 @@
     "hash": "0e3e2f6829be94f80b0edeca0ed68c28"
   },
   "knowledge/00-control/STATUS-TODAY.md": {
-    "mtime": 1784816452674.4482,
-    "hash": "58f09b485a49553006ce2ce056b5b138"
+    "mtime": 1784816582572.181,
+    "hash": "3afde0469ca981069091362a3746e8bd"
   },
   "knowledge/00-control/TASK_ROUTER.md": {
     "mtime": 1784815960845.4307,
@@ -2684,56 +2684,56 @@
     "hash": "9caa223c73b5731ceb56e0de1fea5668"
   },
   "knowledge/10-context/backend.md": {
-    "mtime": 1784815977604.026,
-    "hash": "3f1937d4986e25f2255b6c69c2fd0fe3"
+    "mtime": 1784816582572.3628,
+    "hash": "c970258254ce58b8c21290b45383630c"
   },
   "knowledge/10-context/cloud-qa-user.md": {
-    "mtime": 1784815977607.1333,
-    "hash": "7b30e9af6a6bd65aab9cb0b44da7f478"
+    "mtime": 1784816582572.5823,
+    "hash": "608d1481bcca0833ed25f0e1d6abf1f9"
   },
   "knowledge/10-context/data-visualization.md": {
-    "mtime": 1784815977607.3496,
-    "hash": "1a02da469ff6178ce461f9280b9f7613"
+    "mtime": 1784816582572.7852,
+    "hash": "dd5e001cc6fb4faa25fdf84db19cb3bf"
   },
   "knowledge/10-context/database.md": {
-    "mtime": 1784815977607.5283,
-    "hash": "24ad70e0f021d608805ff2cff2c6bc66"
+    "mtime": 1784816582572.9744,
+    "hash": "0948e4c11001b3383e2d9050a4c88ba5"
   },
   "knowledge/10-context/devops-containers.md": {
-    "mtime": 1784815977607.8218,
-    "hash": "21a12a6a0cc23430f3f1562f5ecf2c3b"
+    "mtime": 1784816582573.147,
+    "hash": "ef6233a856c967556a72a92bfaad24a3"
   },
   "knowledge/10-context/frontend.md": {
-    "mtime": 1784815977608.0002,
-    "hash": "40d10e01b6c74753aee4e3646952d719"
+    "mtime": 1784816582573.3184,
+    "hash": "e3a92ad0add78be3f500d851412dff72"
   },
   "knowledge/10-context/geo-local-seo.md": {
-    "mtime": 1784815977608.1836,
-    "hash": "3e96a2f103e35cfef2cae5acc632ddc0"
+    "mtime": 1784816582573.4946,
+    "hash": "a5ee029ccaaa9f88bbb82fe7128f9b3e"
   },
   "knowledge/10-context/geo-market-expansion.md": {
-    "mtime": 1784815977608.3406,
-    "hash": "9f6ae4b8060c57a2ff38e8e750528202"
+    "mtime": 1784816582573.6685,
+    "hash": "7db1acb2f7f7166261b3b45f107c14dd"
   },
   "knowledge/10-context/knowledge-graph.md": {
-    "mtime": 1784815977608.5085,
-    "hash": "89ee372d82462628710d1557deb69495"
+    "mtime": 1784816582573.8533,
+    "hash": "e636cef3b40b9547323c0dda97e467fc"
   },
   "knowledge/10-context/product-ceo.md": {
-    "mtime": 1784815977608.6667,
-    "hash": "4cc0be9b3ff80744048af24e5016a052"
+    "mtime": 1784816582574.1023,
+    "hash": "dbe009a89b4ce4042f423f64c57f9c0a"
   },
   "knowledge/10-context/release-governor.md": {
-    "mtime": 1784815977608.8445,
-    "hash": "165aca56ee7e0675c3c107773d5b12b4"
+    "mtime": 1784816582574.3147,
+    "hash": "67533bb456764f3fdabc963b827d19ae"
   },
   "knowledge/10-context/security.md": {
-    "mtime": 1784815977609.0217,
-    "hash": "7e6621264baa658c83be294025ffa22a"
+    "mtime": 1784816582574.4885,
+    "hash": "4abe3b543cf6b64a938862ba573f501a"
   },
   "knowledge/10-context/ux-ui.md": {
-    "mtime": 1784815977609.2244,
-    "hash": "27be93ea5c8c76302cf5f761942ce841"
+    "mtime": 1784816582574.6519,
+    "hash": "2f672595ea2f9814d51d772d3c62e8c7"
   },
   "knowledge/20-system/ai-and-analytics.md": {
     "mtime": 1784398283674.9023,
@@ -2800,28 +2800,28 @@
     "hash": "f46217ce392a870638d63e976fc99898"
   },
   "knowledge/_generated/README.md": {
-    "mtime": 1784816413135.8125,
-    "hash": "918b05d108ef9f92c9296a70ffa42d2f"
+    "mtime": 1784816538951.742,
+    "hash": "67f72182dbef7ab1ddd151e4f29b4601"
   },
   "knowledge/_generated/api-surface.md": {
-    "mtime": 1784816412696.147,
-    "hash": "593a242b33aa45a8e43338f18e5131f1"
+    "mtime": 1784816538483.621,
+    "hash": "ed67b1daa6f13e69feab5fa9aa3cad7c"
   },
   "knowledge/_generated/cloud-surfaces.md": {
-    "mtime": 1784816413127.533,
-    "hash": "775eec1aeba22f4e766c5d27039f32e2"
+    "mtime": 1784816538942.7358,
+    "hash": "d0402519253f4c64f394570f9b207faf"
   },
   "knowledge/_generated/frontend-routes.md": {
-    "mtime": 1784816412705.0469,
-    "hash": "4bb355d48cdb5a963ec688d063624d1e"
+    "mtime": 1784816538492.4292,
+    "hash": "d02151966aee10cda708787b51eb07a1"
   },
   "knowledge/_generated/graphify-summary.md": {
-    "mtime": 1784816413119.0854,
-    "hash": "de3489bfa6c5a63de9037f8388514eed"
+    "mtime": 1784816538934.316,
+    "hash": "ee9a4d84631a6d067b5b3013945958df"
   },
   "knowledge/_generated/migration-head.md": {
-    "mtime": 1784816412835.5474,
-    "hash": "221510d979091e0b7e6f473925b93d69"
+    "mtime": 1784816538632.883,
+    "hash": "c7ddb19e304e0d38e9641b430e63056d"
   },
   "qa/evidence/README.md": {
     "mtime": 1784518061099.4763,
@@ -2844,7 +2844,7 @@
     "hash": "cb88a437e098d8a511fb6deb24e82d68"
   },
   "tests/test_bootstrap_cloud_qa.py": {
-    "mtime": 1784532109479.0898,
+    "mtime": 1784816939139.5833,
     "hash": "40dcf5dcc6b3812c68ddf3ce0edceff6"
   },
   "tests/test_postgres_validation_safety.py": {
@@ -2896,7 +2896,7 @@
     "hash": "4729d75747292862f2f4ea625c312dcb"
   },
   "tests/test_release_evidence_contract.py": {
-    "mtime": 1784517076186.2583,
+    "mtime": 1784816939139.756,
     "hash": "5bcdf215215bb2afd0106f7fccda8291"
   },
   "tests/test_trusted_release_gate.py": {
@@ -3312,7 +3312,7 @@
     "hash": "3a088c470d672b722c1f1923d4fcb260"
   },
   "knowledge/00-control/START-HERE.md": {
-    "mtime": 1784816147117.357,
-    "hash": "918c914518dfc75267e93a98b45fdcab"
+    "mtime": 1784816582571.933,
+    "hash": "cb943b2a83dc5c8f5d2e1085c4986277"
   }
 }

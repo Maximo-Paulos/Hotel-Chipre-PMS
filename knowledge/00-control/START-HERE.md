@@ -13,7 +13,7 @@ No leer todo el vault ni todo Graphify. Seguir este flujo:
 4. Ejecutar ese comando y abrir sólo las fuentes que el resultado señale.
 5. Para cambios, validar el área, actualizar la nota mínima y registrar evidencia con el `code_sha`.
 
-## Estado rápido al `42dd238`
+## Estado rápido al `bf14bf5`
 
 | Área | Estado | Evidencia mínima |
 | --- | --- | --- |

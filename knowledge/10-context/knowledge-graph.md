@@ -1,7 +1,7 @@
 ---
 scope: Graphify, arquitectura, hotspots, contexto mínimo y frescura
 owner: knowledge-graph-curator
-last_verified_commit: 42dd238
+last_verified_commit: bf14bf5
 canonical_sources: [.graphify/GRAPH_REPORT.md, knowledge/_generated/graphify-summary.md, .graphify/flows.json]
 consumers: [architecture-reviewer, docs-writer, knowledge-graph-curator]
 graphify_minimum: graphify check-update .
