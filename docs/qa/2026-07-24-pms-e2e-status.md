@@ -565,3 +565,12 @@ Provisionar el preview aislado con sus proveedores, repetir el smoke web/móvil
 y el recorrido de negocio con datos de prueba aislados. Recién después ejecutar
 las pruebas de carga/concurrencia y el gate de release; no usar el manifiesto de
 ejemplo como evidencia de despliegue.
+
+### Revalidación local posterior — Ficha de huésped y acompañantes
+
+Se agregó el journey guest-companion-journey.spec.ts para cubrir desde la
+interfaz la creación rápida de un huésped, su búsqueda por apellido y el alta de
+un acompañante con documento y relación. Pasó en Chromium y en WebKit iPhone 15.
+La prueba usa datos sintéticos con sufijo temporal y no ejecuta pagos, emails,
+webhooks ni integraciones externas. La regresión E2E completa quedó en 50/50
+sobre el commit 0510fa0.
