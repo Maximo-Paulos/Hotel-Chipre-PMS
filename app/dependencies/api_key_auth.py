@@ -11,6 +11,7 @@ from app.adapters.rate_limiter import SimpleRateLimiter
 from app.database import get_db
 from app.models.hotel_config import HotelConfiguration
 from app.services.hotel_api_key_service import HotelAPIKeyError, verify_key
+from app.services.tenant_context import set_tenant_hotel_context
 
 
 DEFAULT_PUBLIC_API_RATE_LIMIT_PER_MINUTE = 60
@@ -54,6 +55,10 @@ def get_public_api_context(
 
     context = PublicAPIContext(hotel_id=hotel_id, api_key_id=api_key_id, key_prefix=key_prefix)
     db.commit()
+    # API-key lookup happens before the hotel is known.  The migration keeps
+    # that hash-only lookup outside RLS; all subsequent public operations use
+    # the resolved tenant context in this transaction.
+    set_tenant_hotel_context(db, hotel_id)
     return context
 
 

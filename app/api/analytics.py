@@ -347,7 +347,7 @@ def export_analytics_xlsx(
     require_analytics_plan(db, context.hotel_id, "ultra")
     job = create_xlsx_export_job(db, hotel_id=context.hotel_id, user_id=context.user_id or 0, request=payload)
     db.commit()
-    background_tasks.add_task(generate_xlsx_export_job, job.id)
+    background_tasks.add_task(generate_xlsx_export_job, job.id, context.hotel_id)
     return get_export_job_read(db, hotel_id=context.hotel_id, job_id=job.id)
 
 

@@ -1,0 +1,47 @@
+"""Bind a SQLAlchemy transaction to the authenticated tenant.
+
+PostgreSQL RLS policies read these transaction-local settings.  The helpers are
+no-ops for SQLite so the existing local/test harness remains lightweight.  A
+context must be set again after every commit because ``is_local=true`` makes it
+transaction-scoped by design.
+"""
+from __future__ import annotations
+
+from sqlalchemy import text
+from sqlalchemy.orm import Session
+
+
+def _set_context_value(db: Session, setting_name: str, value: int | None) -> None:
+    if value is not None and value <= 0:
+        raise ValueError(f"{setting_name} must be a positive integer")
+
+    bind = db.get_bind()
+    if bind is None or bind.dialect.name != "postgresql":
+        return
+
+    db.execute(
+        text("SELECT set_config(:setting_name, :setting_value, true)"),
+        {
+            "setting_name": setting_name,
+            "setting_value": "" if value is None else str(value),
+        },
+    )
+
+
+def set_tenant_user_context(db: Session, user_id: int | None) -> None:
+    """Set the authenticated user id used by membership RLS policies."""
+
+    _set_context_value(db, "app.user_id", user_id)
+
+
+def set_tenant_hotel_context(db: Session, hotel_id: int | None) -> None:
+    """Set or clear the current hotel id for tenant-scoped RLS policies."""
+
+    _set_context_value(db, "app.hotel_id", hotel_id)
+
+
+def set_tenant_context(db: Session, *, user_id: int | None, hotel_id: int | None) -> None:
+    """Set both principals for a request or a single-hotel worker job."""
+
+    set_tenant_user_context(db, user_id)
+    set_tenant_hotel_context(db, hotel_id)

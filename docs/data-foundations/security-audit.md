@@ -16,11 +16,16 @@
 | OTA dedup per hotel | ✅ | `uq_reservation_ota_external_id` |
 | API keys per hotel | ✅ | `uq_hotel_api_key_name` |
 | Cross-hotel query leakage tested | ✅ | `tests/test_multi_tenancy_isolation.py` (17 tests) |
-| PostgreSQL RLS (row-level security) | ⚠️ NOT IMPLEMENTED | Planned post-launch; app-level scoping used now |
+| PostgreSQL RLS (row-level security) | ✅ MIGRATION ADDED | `20260724_tenant_rls_context`; transaction-local `app.hotel_id` with forced policies |
 | Service layer requires hotel_id on all operations | ✅ | Enforced by service method signatures |
 
-**Risk:** A bug in query construction that omits `hotel_id` filter could expose cross-hotel data.  
-**Mitigation:** Multi-tenancy test suite + code review gate. PG RLS as defense-in-depth post-launch.
+**Residual risk:** A worker or public entry point that fails to set a transaction
+context will be denied by PostgreSQL rather than receiving another hotel's
+rows. The API-key hash lookup is intentionally outside RLS until the hotel is
+resolved; it does not return plaintext credentials.
+
+**Mitigation:** Multi-tenancy test suite + RLS coverage contract + code review
+gate. Every new hotel-scoped model must be added to the explicit migration list.
 
 ---
 
@@ -134,7 +139,7 @@
 | `prohibido_alojar` check-in block not enforced in service layer | HIGH | Implement before pilot |
 | No optimistic locking on reservations | HIGH | Add `version` column + check in reservation service |
 | PII retention schedule not automated | MEDIUM | Scheduled job post-launch |
-| PostgreSQL RLS not implemented | MEDIUM | Defense-in-depth layer post-launch |
+| Worker context migration incomplete | HIGH | Instrument every background/maintenance session with `set_tenant_context` before managed rollout |
 | Redis distributed locks not wired to services | MEDIUM | Before high-concurrency deploy |
 | Payment idempotency key pattern incomplete | MEDIUM | Before Mercado Pago / PayPal go-live |
 | Digital signature storage in DB (should be external) | LOW | Move to Supabase Storage post-launch |

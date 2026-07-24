@@ -16,6 +16,7 @@ from app.models.hotel_membership import HotelMembership
 from app.models.user import User
 from app.services.hotel_service import get_memberships_for_user
 from app.services.security import decode_access_token
+from app.services.tenant_context import set_tenant_hotel_context, set_tenant_user_context
 
 
 @dataclass
@@ -122,12 +123,16 @@ def get_auth_context(
     """Return an authenticated context scoped to an active hotel membership."""
 
     user, payload = _authenticate_user(db, authorization)
+    # Membership resolution itself is protected by RLS and therefore needs
+    # the user principal before we can select the active hotel.
+    set_tenant_user_context(db, user.id)
     memberships = get_memberships_for_user(db, user.id)
     membership = _resolve_membership(
         memberships,
         requested_hotel_id=_parse_header_hotel_id(x_hotel_id),
         token_hotel_id=_parse_token_hotel_id(payload),
     )
+    set_tenant_hotel_context(db, membership.hotel_id)
 
     return AuthContext(
         hotel_id=membership.hotel_id,
@@ -199,6 +204,8 @@ def require_platform_admin():
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tenes permisos para esta accion")
 
         hotel_id = _parse_header_hotel_id(x_hotel_id) or _parse_token_hotel_id(payload) or 0
+        if hotel_id:
+            set_tenant_hotel_context(db, hotel_id)
         return AuthContext(
             hotel_id=hotel_id,
             user_id=user.id,

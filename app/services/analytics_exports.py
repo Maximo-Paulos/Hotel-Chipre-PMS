@@ -29,6 +29,7 @@ from app.services.analytics_service import (
     build_segments_payload,
     get_company_fact_detail,
 )
+from app.services.tenant_context import set_tenant_hotel_context
 
 
 def _now() -> datetime:
@@ -483,11 +484,16 @@ def _persist_export_file(job: AnalyticsExportJob, file_bytes: bytes) -> None:
     job.sha256_hex = hashlib.sha256(file_bytes).hexdigest()
 
 
-def generate_xlsx_export_job(job_id: int) -> None:
+def generate_xlsx_export_job(job_id: int, hotel_id: int | None = None) -> None:
     SessionLocal = get_session_factory()
     db = SessionLocal()
     try:
+        if not hotel_id or hotel_id <= 0:
+            raise ValueError("hotel_id is required for tenant-scoped analytics exports")
+        set_tenant_hotel_context(db, hotel_id)
         job = db.get(AnalyticsExportJob, job_id)
+        if job is not None and job.hotel_id != hotel_id:
+            raise ValueError("analytics export does not belong to the requested hotel")
         if not job:
             return
         if job.status == AnalyticsExportStatusEnum.EXPIRED:

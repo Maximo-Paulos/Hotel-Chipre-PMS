@@ -12,6 +12,7 @@ import httpx
 
 from app.tasks.celery_app import celery_app
 from app.config import get_settings
+from app.services.tenant_context import set_tenant_hotel_context
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,7 @@ def push_availability_update(
     category_id: int,
     start_date_str: str,
     end_date_str: str,
+    hotel_id: Optional[int] = None,
     database_url: Optional[str] = None,
 ):
     """
@@ -55,6 +57,9 @@ def push_availability_update(
         db = SessionLocal()
 
         try:
+            if not hotel_id or hotel_id <= 0:
+                raise ValueError("hotel_id is required for tenant-scoped OTA work")
+            set_tenant_hotel_context(db, hotel_id)
             start_date = date.fromisoformat(start_date_str)
             end_date = date.fromisoformat(end_date_str)
             from app.models.room import RoomCategory
@@ -64,7 +69,10 @@ def push_availability_update(
                 db, category_id, start_date, end_date
             )
 
-            category = db.query(RoomCategory).filter(RoomCategory.id == category_id).first()
+            category = db.query(RoomCategory).filter(
+                RoomCategory.id == category_id,
+                RoomCategory.hotel_id == hotel_id,
+            ).first()
             if not category:
                 return {"status": "skipped", "reason": "category not found"}
 
@@ -204,17 +212,22 @@ def sync_all_availability(self, days_ahead: int = 90, database_url: Optional[str
             today = date.today()
             end = today + timedelta(days=days_ahead)
 
-            categories = db.query(RoomCategory).all()
             results = {}
+            from app.models.hotel_config import HotelConfiguration
 
-            for cat in categories:
-                task_result = push_availability_update.delay(
-                    category_id=cat.id,
-                    start_date_str=today.isoformat(),
-                    end_date_str=end.isoformat(),
-                    database_url=url,
-                )
-                results[cat.code] = task_result.id
+            hotel_ids = [row[0] for row in db.query(HotelConfiguration.id).all()]
+            for hotel_id in hotel_ids:
+                set_tenant_hotel_context(db, hotel_id)
+                categories = db.query(RoomCategory).filter(RoomCategory.hotel_id == hotel_id).all()
+                for cat in categories:
+                    task_result = push_availability_update.delay(
+                        category_id=cat.id,
+                        hotel_id=hotel_id,
+                        start_date_str=today.isoformat(),
+                        end_date_str=end.isoformat(),
+                        database_url=url,
+                    )
+                    results[f"{hotel_id}:{cat.code}"] = task_result.id
 
             return results
 

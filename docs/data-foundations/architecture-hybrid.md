@@ -228,14 +228,25 @@ This ensures emails/webhooks are never lost even if the app crashes after the DB
 
 All domain tables have `hotel_id NOT NULL` FK to `hotel_configuration.id`.
 
-Isolation mechanism: **application-level scoping** (all queries filter by hotel_id).  
-No PostgreSQL row-level security (RLS) in Sprint 1 — planned for post-launch hardening.
+Isolation is enforced in two layers:
 
-Risk: a bug in query construction could accidentally omit `hotel_id` filter.  
-Mitigation:
+1. **Application scoping:** every authenticated request resolves an active
+   `AuthContext.hotel_id`; service methods require the hotel id explicitly.
+2. **PostgreSQL RLS:** migration `20260724_tenant_rls_context` enables and
+   forces row-level policies on every ORM table with `hotel_id`. Policies read
+   transaction-local `app.hotel_id` and fail closed when no context exists.
+
+The membership table additionally uses transaction-local `app.user_id` while
+the active hotel is being resolved. The public API-key table is the only
+documented exception: a SHA-256 hash lookup must resolve the hotel before an
+RLS context exists; all subsequent public operations set `app.hotel_id`.
+
+Mitigation and review gates:
 1. All service methods require `hotel_id` as a mandatory parameter
 2. All ORM queries through `db.query(Model).filter_by(hotel_id=hotel_id)` pattern
-3. Multi-tenancy isolation test suite (`tests/test_multi_tenancy_isolation.py`) verifies 17 isolation contracts
+3. Multi-tenancy isolation test suite (`tests/test_multi_tenancy_isolation.py`) verifies API behavior
+4. `tests/test_tenant_rls_contract.py` verifies the migration covers every hotel-scoped model table
+5. Worker and background entry points must call `set_tenant_context` before tenant-scoped work
 
 ---
 
@@ -243,7 +254,7 @@ Mitigation:
 
 | Feature | Reason | When |
 |---------|--------|------|
-| PostgreSQL RLS | Adds complexity; app-level scoping sufficient for pilot | Post-launch |
+| PostgreSQL RLS | Defense in depth for production scale; requires explicit transaction context | Implemented in `20260724_tenant_rls_context` |
 | Columnar analytics store | Volume not yet reached | >10M fact rows/hotel |
 | External search engine (Elasticsearch) | pg_trgm sufficient at current scale | Benchmark triggers |
 | Kafka/event streaming | Outbox pattern sufficient for Sprint 1 | High-volume integrations |

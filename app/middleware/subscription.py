@@ -10,6 +10,7 @@ from app.database import get_session_factory
 from app.master_admin.billing_policy import evaluate_hotel_write_access
 from app.services.subscription_entitlements import get_subscription_snapshot
 from app.services.security import decode_access_token
+from app.services.tenant_context import set_tenant_hotel_context
 
 
 class SubscriptionEnforcementMiddleware:
@@ -60,6 +61,7 @@ class SubscriptionEnforcementMiddleware:
         SessionLocal = get_session_factory()
         db = SessionLocal()
         try:
+            set_tenant_hotel_context(db, hotel_id)
             snapshot = get_subscription_snapshot(db, hotel_id)
             if snapshot.get("dirty"):
                 db.commit()

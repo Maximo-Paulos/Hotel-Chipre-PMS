@@ -104,11 +104,13 @@ def _trigger_reoptimization_bg(hotel_id: int, trigger_type: str = "new_reservati
     """
     from app.database import get_session_factory
     from app.services.allocation_runtime_service import run_persisted_allocation
+    from app.services.tenant_context import set_tenant_hotel_context
 
     db = None
     try:
         SessionFactory = get_session_factory()
         db = SessionFactory()
+        set_tenant_hotel_context(db, hotel_id)
         run_persisted_allocation(db, hotel_id=hotel_id, trigger_type=trigger_type)
         db.commit()
     except Exception:

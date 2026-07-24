@@ -11,6 +11,7 @@ from typing import Optional
 from app.config import get_settings
 from app.database import get_engine
 from app.models.analytics import AnalyticsExportJob, AnalyticsExportStatusEnum
+from app.services.tenant_context import set_tenant_hotel_context
 from app.tasks.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -50,6 +51,7 @@ def detect_no_shows(
         db = SessionLocal()
 
         try:
+            set_tenant_hotel_context(db, hotel_id)
             result = detect_no_shows_service(
                 db,
                 hotel_id=hotel_id,
@@ -96,6 +98,7 @@ def refresh_fact_reservation_daily(
         db = SessionLocal()
 
         try:
+            set_tenant_hotel_context(db, hotel_id)
             result = refresh_service(
                 db,
                 hotel_id=hotel_id,
@@ -143,6 +146,7 @@ def refresh_fact_room_occupancy_daily(
         db = SessionLocal()
 
         try:
+            set_tenant_hotel_context(db, hotel_id)
             result = refresh_service(
                 db,
                 hotel_id=hotel_id,
@@ -183,31 +187,36 @@ def cleanup_expired_exports(self, database_url: Optional[str] = None):
         expired_ids: list[int] = []
         try:
             now = datetime.now(timezone.utc)
-            jobs = (
-                db.query(AnalyticsExportJob)
-                .filter(AnalyticsExportJob.status != AnalyticsExportStatusEnum.EXPIRED)
-                .all()
-            )
-            for job in jobs:
-                expires_at = job.expires_at
-                if expires_at is None:
-                    continue
-                if expires_at.tzinfo is None:
-                    expires_at = expires_at.replace(tzinfo=timezone.utc)
-                else:
-                    expires_at = expires_at.astimezone(timezone.utc)
-                if expires_at > now:
-                    continue
-                job.status = AnalyticsExportStatusEnum.EXPIRED
-                expired_ids.append(job.id)
-                if job.file_path:
-                    path = Path(job.file_path)
-                    if path.exists():
-                        try:
-                            path.unlink()
-                        except OSError:
-                            logger.warning("analytics.cleanup_expired_exports could not delete %s", path)
-            db.commit()
+            from app.models.hotel_config import HotelConfiguration
+
+            hotel_ids = [row[0] for row in db.query(HotelConfiguration.id).all()]
+            for hotel_id in hotel_ids:
+                set_tenant_hotel_context(db, hotel_id)
+                jobs = (
+                    db.query(AnalyticsExportJob)
+                    .filter(AnalyticsExportJob.status != AnalyticsExportStatusEnum.EXPIRED)
+                    .all()
+                )
+                for job in jobs:
+                    expires_at = job.expires_at
+                    if expires_at is None:
+                        continue
+                    if expires_at.tzinfo is None:
+                        expires_at = expires_at.replace(tzinfo=timezone.utc)
+                    else:
+                        expires_at = expires_at.astimezone(timezone.utc)
+                    if expires_at > now:
+                        continue
+                    job.status = AnalyticsExportStatusEnum.EXPIRED
+                    expired_ids.append(job.id)
+                    if job.file_path:
+                        path = Path(job.file_path)
+                        if path.exists():
+                            try:
+                                path.unlink()
+                            except OSError:
+                                logger.warning("analytics.cleanup_expired_exports could not delete %s", path)
+                db.commit()
             return {"expired": len(expired_ids), "expired_ids": expired_ids}
         finally:
             db.close()

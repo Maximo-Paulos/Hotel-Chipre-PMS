@@ -19,6 +19,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.config import get_settings
 from app.database import get_engine
+from app.services.tenant_context import set_tenant_hotel_context
 from app.tasks.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -98,6 +99,7 @@ def _run_scheduled_reports(
         hotel_ids = _active_hotel_ids(db)
         for hotel_id in hotel_ids:
             try:
+                set_tenant_hotel_context(db, hotel_id)
                 if _send_report_for_hotel(db, hotel_id, report_date, kind=kind):
                     sent += 1
                 else:
