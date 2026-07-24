@@ -721,4 +721,5 @@ y Audit sean navegables desde la superficie visible.
 Master-admin aprobó **2/2** en iPhone SE, iPhone 15 e iPhone 15 Pro Max. La
 regresión total posterior aprobó **17/17 por dispositivo (51/51)**, con lint,
 typecheck y build en verde. No se usaron proveedores, email, Stripe ni acciones
-de plataforma externas.
+de plataforma externas. La E2E base completa de Chromium y smoke móvil también
+se reejecutó y aprobó **52/52**.
