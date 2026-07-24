@@ -168,3 +168,56 @@ test("owner completes the core reservation journey through the UI", async ({ pag
   await expect(page.getByText(/Caja sucesora: .* abierta con saldo \$0/)).toBeVisible();
   await expect(page.getByText(/Custodia: recepción confirmada\./)).toBeVisible();
 });
+
+test("owner completes guided stock movements through the UI", async ({ page }) => {
+  const suffix = Date.now().toString();
+  const itemName = `Toallas journey ${suffix}`;
+  const sku = `STK-${suffix.slice(-8)}`;
+
+  await login(page);
+  await navigateFromShell(page, "/operacion/stock");
+  await expect(page.getByRole("heading", { name: "Stock", exact: true })).toBeVisible();
+
+  const locationForm = page.locator("form").filter({ hasText: "Nueva ubicacion" });
+  await locationForm.getByLabel("Nombre").fill(`Lencería ${suffix}`);
+  await locationForm.getByRole("button", { name: "Crear ubicacion", exact: true }).click();
+  await expect(page.getByText("Ubicacion creada.", { exact: true })).toBeVisible();
+
+  const itemForm = page.locator("form").filter({ hasText: "Alta de stock" });
+  await itemForm.getByLabel("Nombre").fill(itemName);
+  await itemForm.getByLabel("SKU").fill(sku);
+  await itemForm.getByLabel("Minimo").fill("2");
+  await itemForm.getByRole("button", { name: "Crear item", exact: true }).click();
+  await expect(page.getByRole("heading", { name: itemName, exact: true })).toBeVisible();
+
+  const movementForm = page.locator("#stock-movement-form");
+  await page.getByRole("button", { name: `Registrar ingreso de ${itemName}`, exact: true }).click();
+  await expect(movementForm.getByRole("heading", { name: "Registrar Ingreso", exact: true })).toBeVisible();
+  await movementForm.getByLabel("Item").selectOption({ label: itemName });
+  await movementForm.getByLabel("Ubicacion").selectOption({ label: `Lencería ${suffix}` });
+  await movementForm.getByLabel("Cantidad").fill("10");
+  await movementForm.getByLabel("Motivo").fill("Compra inicial");
+  await movementForm.getByRole("button", { name: "Registrar Ingreso", exact: true }).click();
+  await expect(page.getByText("Movimiento registrado.", { exact: true })).toBeVisible();
+  await expect(movementForm.getByText(/^(?:10|10\.00) unidad$/, { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: `Registrar egreso de ${itemName}`, exact: true }).click();
+  await expect(movementForm.getByRole("heading", { name: "Registrar Egreso", exact: true })).toBeVisible();
+  await movementForm.getByLabel("Cantidad").fill("3");
+  await movementForm.getByLabel("Motivo").fill("Consumo habitación");
+  await movementForm.getByRole("button", { name: "Registrar Egreso", exact: true }).click();
+  await expect(page.getByText("Movimiento registrado.", { exact: true })).toBeVisible();
+  await expect(movementForm.getByText(/^(?:7|7\.00) unidad$/, { exact: true })).toBeVisible();
+
+  await movementForm.getByRole("button", { name: /^Ajuste/ }).click();
+  await movementForm.getByLabel("Cantidad").fill("1");
+  await movementForm.getByLabel("Motivo").fill("Conteo autorizado");
+  await movementForm.getByRole("button", { name: "Registrar Ajuste", exact: true }).click();
+  await expect(page.getByText("Movimiento registrado.", { exact: true })).toBeVisible();
+  await expect(movementForm.getByText(/^(?:8|8\.00) unidad$/, { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: `Registrar egreso de ${itemName}`, exact: true }).click();
+  await movementForm.getByLabel("Cantidad").fill("99");
+  await expect(movementForm.getByRole("alert")).toContainText("stock en negativo");
+  await expect(movementForm.getByRole("button", { name: "Registrar Egreso", exact: true })).toBeDisabled();
+});

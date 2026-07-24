@@ -12,6 +12,8 @@ from app.services.permission_service import (
     PERMISSION_GUEST_EDIT,
     PERMISSION_DEFINITIONS,
     PERMISSION_RESERVATION_CREATE,
+    PERMISSION_STOCK_ADJUST,
+    PERMISSION_STOCK_OPERATE,
     get_matrix,
     resolve,
     seed_default_permissions,
@@ -40,6 +42,9 @@ def test_default_permissions_seeded_for_owner_manager_reception_housekeeping(db)
     assert rows[("housekeeping", PERMISSION_GUEST_EDIT)] is False
     assert rows[("housekeeping", PERMISSION_RESERVATION_CREATE)] is False
     assert rows[("housekeeping", PERMISSION_CHECKIN_PERFORM)] is False
+    assert rows[("manager", PERMISSION_STOCK_OPERATE)] is True
+    assert rows[("manager", PERMISSION_STOCK_ADJUST)] is False
+    assert rows[("owner", PERMISSION_STOCK_ADJUST)] is True
 
 
 def test_permission_override_allows_receptionist_guest_edit(db):

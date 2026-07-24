@@ -15,9 +15,9 @@ repositorio.
 | Área | Resultado |
 | --- | --- |
 | Frontend lint/typecheck/build | Pasan. Vite informa un bundle principal de ~778 kB minificado; queda como deuda de performance. |
-| E2E desktop | 20/20 pasan en Chromium, incluyendo login, logout, admin, calendario de tarifas, configuración del hotel, el journey de negocio y páginas V72. La ejecución fresh completa queda en 28/28 al sumar móvil Chromium y los tres perfiles WebKit. |
-| E2E mobile | 2/2 pasan con Chromium emulando iPhone y verificando 375×812, 390×844 y 430×932; 6/6 pasan con Playwright WebKit en perfiles iPhone SE, iPhone 15 y iPhone 15 Pro Max; el journey mutante completo de reserva/pagos/check-in/out pasa 1/1 en WebKit iPhone 15. Esto no sustituye Safari nativo del simulador Xcode, que no está disponible en este host. |
-| Backend completo | 1209 pasan, 17 se omiten, 12 quedan xfail y 1 xpass en Python 3.12 limpio. El runner E2E rechaza explícitamente Python menor a 3.10. |
+| E2E desktop | 21/21 pasan en Chromium, incluyendo login, logout, admin, calendario de tarifas, configuración del hotel, los journeys de negocio y páginas V72. La ejecución fresh completa queda en 29/29 al sumar móvil Chromium y los tres perfiles WebKit. |
+| E2E mobile | 2/2 pasan con Chromium emulando iPhone y verificando 375×812, 390×844 y 430×932; 6/6 pasan con Playwright WebKit en perfiles iPhone SE, iPhone 15 y iPhone 15 Pro Max; los journeys mutantes de reserva/pagos/check-in/out e inventario pasan 2/2 en WebKit iPhone 15. Esto no sustituye Safari nativo del simulador Xcode, que no está disponible en este host. |
+| Backend completo | 1212 pasan, 17 se omiten, 12 quedan xfail y 1 xpass en Python 3.12 limpio. El runner E2E rechaza explícitamente Python menor a 3.10. |
 | Migración virgen | `alembic upgrade head` pasa sobre SQLite temporal hasta `20260724_extended_tenant_composite_fks`, incluyendo blobs privados, rotación, custodia y el cierre de claves tenant restantes. |
 | Backend focalizado | 56/56 pasan: motor de asignación, operaciones de reservas, check-in, check-out y seguridad del flujo. |
 | Analítica y trazabilidad | 27/27 pasan en contratos/API; cada envelope expone `data_as_of`, `source_lag_seconds` y `data_source`, y la UI lo muestra. |
@@ -48,7 +48,7 @@ el botón `Crear` podía aceptar un click mientras React Query todavía marcaba 
 cotización como `isFetching`, por lo que no se enviaba la reserva aunque ya se
 mostrara un total. Se corrigió bloqueando el submit hasta disponer de un
 `quote_token` vigente y mostrando `Actualizando...`; el journey ahora espera
-explícitamente el estado habilitado. La ejecución posterior quedó en 28/28.
+explícitamente el estado habilitado. La ejecución posterior quedó en 29/29.
 
 La corrección está validada localmente, pero el entorno web de QA debe recibir
 un despliegue antes de repetir la medición allí.
@@ -76,10 +76,17 @@ item y el registro de un egreso. El flujo funciona, pero la UX era poco clara:
 el egreso se iniciaba en un formulario separado, no mostraba stock actual y
 permitía terminar en stock negativo sin advertencia.
 
-La UI ahora agrega acciones rápidas por item, muestra el stock seleccionado y
-obliga el motivo para egresos/ajustes. El backend rechaza egresos que dejarían
-stock negativo y bloquea el item durante la comprobación para evitar que dos
-operadores descuenten la misma existencia en paralelo.
+La UI ahora usa acciones guiadas de Ingreso, Egreso y Ajuste, muestra el stock
+actual y el resultado previsto, mantiene el ítem seleccionado para operaciones
+repetitivas y permite asociar consumos buscando huésped o código de reserva en
+lugar de introducir IDs. El motivo es obligatorio. El backend rechaza egresos
+que dejarían stock negativo, bloquea el ítem durante la comprobación para evitar
+que dos operadores descuenten la misma existencia en paralelo y separa los
+permisos `stock:operate` y `stock:adjust`; la denegación del ajuste se audita.
+
+El journey UI de inventario pasa 1/1 en Chromium y 1/1 en WebKit iPhone 15:
+crea ubicación e ítem, registra ingreso, egreso, ajuste autorizado y verifica
+que un egreso superior al disponible quede bloqueado antes de enviar.
 
 La prueba creó datos identificables con prefijo `QA móvil` en el hotel de
 prueba. Quedan pendientes de limpieza o de una política explícita de fixtures
@@ -148,7 +155,7 @@ rápido con documento, registra una reserva con seña manual, cobra un parcial e
 efectivo, envía un comprobante de transferencia, lo aprueba y cobra el saldo
 restante en efectivo antes de completar check-in/check-out y cerrar la caja con
 rotación de custodia. El flujo pasa en 1/1 por Chromium y 1/1 por WebKit iPhone
-15, y forma parte de la suite completa 28/28. El fixture de imagen se genera con un
+15, y forma parte de la suite completa 29/29. El fixture de imagen se genera con un
 contenido único por ejecución para no falsear la protección anti-duplicados.
 
 Durante ese recorrido se detectó que la migración de asignación guardaba los
@@ -202,8 +209,9 @@ distribuidos no están habilitados y requeridos.
   provider-bound aislado para este SHA; el despliegue de la rama y la repetición
   de QA contra el preview/cloud aún no están realizados.
 - El journey central de onboarding operativo, habitaciones, categoría, reserva,
-  pagos mixtos (efectivo + comprobante de transferencia aprobado), check-in/out
-  ya pasa localmente; siguen pendientes en el preview aislado el Mercado Pago simulado,
+  pagos mixtos (efectivo + comprobante de transferencia aprobado), check-in/out,
+  cierre de caja e inventario guiado ya pasa localmente; siguen pendientes en el
+  preview aislado el Mercado Pago simulado,
   reportes, OTA, lavandería, carga y la repetición cloud de todo el ciclo. El
   contrato local de permisos pasa y su seed ya está protegido contra carreras.
 - No hay evidencia provider-bound para 10.000 hoteles, 10.000 usuarios

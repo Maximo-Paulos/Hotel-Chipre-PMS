@@ -10,7 +10,13 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies.auth import AuthContext, require_roles
+from app.dependencies.auth import AuthContext, require_permission
+from app.services.permission_service import (
+    PERMISSION_STOCK_ADJUST,
+    PERMISSION_STOCK_OPERATE,
+    audit_permission_denied,
+    resolve,
+)
 from app.services.stock_service import (
     StockError,
     create_location,
@@ -29,6 +35,19 @@ from app.services.stock_service import (
 )
 
 router = APIRouter(prefix="/api/stock", tags=["Stock"])
+
+
+def _ensure_adjustment_permission(db: Session, context: AuthContext) -> None:
+    if resolve(db, context.hotel_id, context.user_role, PERMISSION_STOCK_ADJUST):
+        return
+    audit_permission_denied(
+        db,
+        hotel_id=context.hotel_id,
+        user_id=context.user_id,
+        role=context.user_role,
+        permission_code=PERMISSION_STOCK_ADJUST,
+    )
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tenes permisos para ajustar stock")
 
 
 class StockItemCreate(BaseModel):
@@ -99,7 +118,7 @@ class StockMovementRead(BaseModel):
 def create_item(
     data: StockItemCreate,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_OPERATE)),
 ):
     item = create_stock_item(db, hotel_id=context.hotel_id, **data.model_dump())
     db.commit()
@@ -110,7 +129,7 @@ def create_item(
 @router.get("/items", response_model=list[StockItemRead])
 def list_items(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_OPERATE)),
 ):
     return list_stock_items(db, hotel_id=context.hotel_id)
 
@@ -118,7 +137,7 @@ def list_items(
 @router.get("/items/low-stock", response_model=list[StockItemRead])
 def list_low_stock_items(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_OPERATE)),
 ):
     return low_stock_items(db, hotel_id=context.hotel_id)
 
@@ -127,7 +146,7 @@ def list_low_stock_items(
 def get_item(
     item_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_OPERATE)),
 ):
     try:
         return get_stock_item(db, hotel_id=context.hotel_id, item_id=item_id)
@@ -140,7 +159,7 @@ def update_item(
     item_id: int,
     data: StockItemUpdate,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_OPERATE)),
 ):
     try:
         item = update_stock_item(db, hotel_id=context.hotel_id, item_id=item_id, **data.model_dump(exclude_unset=True))
@@ -155,7 +174,7 @@ def update_item(
 def delete_item(
     item_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_OPERATE)),
 ):
     try:
         delete_stock_item(
@@ -174,7 +193,7 @@ def delete_item(
 def create_stock_location(
     data: StockLocationCreate,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_OPERATE)),
 ):
     location = create_location(db, hotel_id=context.hotel_id, name=data.name)
     db.commit()
@@ -185,7 +204,7 @@ def create_stock_location(
 @router.get("/locations", response_model=list[StockLocationRead])
 def list_stock_locations(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_OPERATE)),
 ):
     return list_locations(db, hotel_id=context.hotel_id)
 
@@ -194,7 +213,7 @@ def list_stock_locations(
 def get_stock_location(
     location_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_OPERATE)),
 ):
     try:
         return get_location(db, hotel_id=context.hotel_id, location_id=location_id)
@@ -207,7 +226,7 @@ def update_stock_location(
     location_id: int,
     data: StockLocationCreate,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_OPERATE)),
 ):
     try:
         location = update_location(db, hotel_id=context.hotel_id, location_id=location_id, name=data.name)
@@ -222,7 +241,7 @@ def update_stock_location(
 def delete_stock_location(
     location_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_OPERATE)),
 ):
     try:
         delete_location(
@@ -241,9 +260,11 @@ def delete_stock_location(
 def create_movement(
     data: StockMovementCreate,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_OPERATE)),
 ):
     try:
+        if data.movement_type == "adjustment":
+            _ensure_adjustment_permission(db, context)
         movement = register_movement(
             db,
             hotel_id=context.hotel_id,
@@ -261,7 +282,7 @@ def create_movement(
 def get_current_stock(
     item_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_OPERATE)),
 ):
     try:
         quantity = current_stock(db, hotel_id=context.hotel_id, item_id=item_id)

@@ -12,6 +12,7 @@ import {
   type StockMovementCreate,
   type StockMovementType
 } from "../../api/stock";
+import { listReservations, type Reservation } from "../../api/reservations";
 import { hasValidSession } from "../../api/client";
 import { useSession } from "../../state/session";
 
@@ -20,6 +21,12 @@ const movementLabel: Record<StockMovementType, string> = {
   out: "Egreso",
   adjustment: "Ajuste"
 };
+
+const movementModeOptions: Array<{ type: StockMovementType; title: string; description: string }> = [
+  { type: "in", title: "Ingreso", description: "Compra, reposición o devolución" },
+  { type: "out", title: "Egreso", description: "Consumo, merma o entrega" },
+  { type: "adjustment", title: "Ajuste", description: "Corrección autorizada de inventario" }
+];
 
 const emptyItemForm = {
   name: "",
@@ -48,6 +55,7 @@ export function StockPage() {
   const [itemForm, setItemForm] = useState(emptyItemForm);
   const [locationForm, setLocationForm] = useState(emptyLocationForm);
   const [movementForm, setMovementForm] = useState(emptyMovementForm);
+  const [reservationSearch, setReservationSearch] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const enabled = hasValidSession(session);
 
@@ -69,10 +77,17 @@ export function StockPage() {
     enabled,
     staleTime: 30 * 1000
   });
+  const reservationsQuery = useQuery({
+    queryKey: ["stock-reservations", session.hotelId],
+    queryFn: () => listReservations({ status: "all" }, session),
+    enabled,
+    staleTime: 15 * 1000
+  });
 
   const items = useMemo(() => itemsQuery.data ?? [], [itemsQuery.data]);
   const locations = useMemo(() => locationsQuery.data ?? [], [locationsQuery.data]);
   const lowStock = useMemo(() => lowStockQuery.data ?? [], [lowStockQuery.data]);
+  const reservations = useMemo(() => reservationsQuery.data ?? [], [reservationsQuery.data]);
 
   const stockQueries = useQueries({
     queries: items.map((item) => ({
@@ -105,6 +120,25 @@ export function StockPage() {
     Number.isFinite(currentQuantity) &&
     Number.isFinite(requestedQuantity) &&
     requestedQuantity > currentQuantity;
+  const projectedQuantity =
+    currentQuantity !== null && Number.isFinite(currentQuantity) && Number.isFinite(requestedQuantity)
+      ? movementForm.movement_type === "out"
+        ? currentQuantity - requestedQuantity
+        : currentQuantity + requestedQuantity
+      : null;
+  const filteredReservations = useMemo(() => {
+    const search = reservationSearch.trim().toLocaleLowerCase();
+    const activeReservations = reservations.filter((reservation) => reservation.status !== "cancelled");
+    if (!search) return activeReservations.slice(0, 30);
+    return activeReservations
+      .filter((reservation) => reservationSearchText(reservation).includes(search))
+      .slice(0, 30);
+  }, [reservationSearch, reservations]);
+
+  const selectMovement = (itemId: number, movementType: StockMovementType) => {
+    setMovementForm((currentForm) => ({ ...currentForm, item_id: String(itemId), movement_type: movementType }));
+    document.getElementById("stock-movement-form")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
 
   const invalidateStock = () => {
     queryClient.invalidateQueries({ queryKey: ["stock-items", session.hotelId] });
@@ -145,7 +179,12 @@ export function StockPage() {
     mutationFn: (payload: StockMovementCreate) => createStockMovement(payload, session),
     onSuccess: () => {
       invalidateStock();
-      setMovementForm(emptyMovementForm);
+      setMovementForm((current) => ({
+        ...emptyMovementForm,
+        item_id: current.item_id,
+        location_id: current.location_id,
+        movement_type: current.movement_type
+      }));
       setMessage("Movimiento registrado.");
     }
   });
@@ -241,16 +280,17 @@ export function StockPage() {
                   <div className="mt-3 flex gap-2">
                     <button
                       type="button"
-                      className="flex-1 rounded-lg border border-brand-200 px-3 py-2 text-xs font-semibold text-brand-700 hover:bg-brand-50"
-                      onClick={() => setMovementForm((currentForm) => ({ ...currentForm, item_id: String(item.id), movement_type: "in" }))}
+                      className="min-h-11 flex-1 rounded-lg border border-brand-200 px-3 py-2 text-xs font-semibold text-brand-700 hover:bg-brand-50"
+                      onClick={() => selectMovement(item.id, "in")}
+                      aria-label={`Registrar ingreso de ${item.name}`}
                     >
                       Registrar ingreso
                     </button>
                     <button
                       type="button"
                       aria-label={`Registrar egreso de ${item.name}`}
-                      className="flex-1 rounded-lg border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50"
-                      onClick={() => setMovementForm((currentForm) => ({ ...currentForm, item_id: String(item.id), movement_type: "out" }))}
+                      className="min-h-11 flex-1 rounded-lg border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50"
+                      onClick={() => selectMovement(item.id, "out")}
                     >
                       Registrar egreso
                     </button>
@@ -270,8 +310,27 @@ export function StockPage() {
           <form id="stock-movement-form" className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm" onSubmit={handleCreateMovement}>
             <div>
               <p className="text-xs uppercase tracking-wide text-slate-500">Movimiento</p>
-              <h2 className="text-lg font-semibold text-slate-900">Registrar movimiento</h2>
-              <p className="mt-1 text-xs text-slate-500">Ingresá una cantidad positiva; los egresos se descuentan automáticamente.</p>
+              <h2 className="text-lg font-semibold text-slate-900">Registrar {movementLabel[movementForm.movement_type]}</h2>
+              <p className="mt-1 text-xs text-slate-500">Elegí una acción, revisá el resultado previsto y confirmá con un motivo.</p>
+            </div>
+            <div className="grid gap-2" role="group" aria-label="Acción de inventario">
+              {movementModeOptions.map((option) => {
+                const selected = movementForm.movement_type === option.type;
+                return (
+                  <button
+                    key={option.type}
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() => setMovementForm((current) => ({ ...current, movement_type: option.type }))}
+                    className={`min-h-11 rounded-lg border px-3 py-2 text-left text-sm ${
+                      selected ? "border-brand-300 bg-brand-50 text-brand-800" : "border-slate-200 bg-white text-slate-700"
+                    }`}
+                  >
+                    <span className="block font-semibold">{option.title}</span>
+                    <span className="block text-xs text-slate-500">{option.description}</span>
+                  </button>
+                );
+              })}
             </div>
             <label className="space-y-1 text-sm">
               <span className="text-slate-600">Item</span>
@@ -300,6 +359,11 @@ export function StockPage() {
                     Este egreso dejará el stock en negativo. Verificá la cantidad antes de confirmar.
                   </p>
                 )}
+                {projectedQuantity !== null && !willGoNegative && (
+                  <p className="mt-1 text-xs text-slate-600">
+                    Resultado previsto: <span className="font-semibold">{projectedQuantity.toFixed(2)} {selectedItem.unit}</span>
+                  </p>
+                )}
               </div>
             )}
             <label className="space-y-1 text-sm">
@@ -317,21 +381,7 @@ export function StockPage() {
                 ))}
               </select>
             </label>
-            <div className="grid grid-cols-2 gap-3">
-              <label className="space-y-1 text-sm">
-                <span className="text-slate-600">Tipo</span>
-                <select
-                  value={movementForm.movement_type}
-                  onChange={(event) =>
-                    setMovementForm((current) => ({ ...current, movement_type: event.target.value as StockMovementType }))
-                  }
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2"
-                >
-                  <option value="in">Ingreso</option>
-                  <option value="out">Egreso</option>
-                  <option value="adjustment">Ajuste</option>
-                </select>
-              </label>
+            <div>
               <label className="space-y-1 text-sm">
                 <span className="text-slate-600">Cantidad</span>
                 <input
@@ -351,24 +401,35 @@ export function StockPage() {
                 value={movementForm.reason}
                 onChange={(event) => setMovementForm((current) => ({ ...current, reason: event.target.value }))}
                 placeholder="Compra, consumo, ajuste mensual"
-                required={movementForm.movement_type !== "in"}
+                required
                 className="w-full rounded-lg border border-slate-300 px-3 py-2"
               />
             </label>
             <label className="space-y-1 text-sm">
-              <span className="text-slate-600">Reserva</span>
+              <span className="text-slate-600">Reserva asociada (opcional)</span>
               <input
-                type="number"
-                min={1}
-                value={movementForm.reservation_id}
-                onChange={(event) => setMovementForm((current) => ({ ...current, reservation_id: event.target.value }))}
-                placeholder="Opcional"
+                value={reservationSearch}
+                onChange={(event) => setReservationSearch(event.target.value)}
+                placeholder="Buscar huésped o código"
                 className="w-full rounded-lg border border-slate-300 px-3 py-2"
               />
+              <select
+                value={movementForm.reservation_id}
+                onChange={(event) => setMovementForm((current) => ({ ...current, reservation_id: event.target.value }))}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2"
+              >
+                <option value="">Sin reserva asociada</option>
+                {filteredReservations.map((reservation) => (
+                  <option key={reservation.id} value={reservation.id}>
+                    {reservationLabel(reservation)}
+                  </option>
+                ))}
+              </select>
+              {reservationsQuery.isFetching && <span className="text-xs text-slate-500">Buscando reservas...</span>}
             </label>
             <button
               type="submit"
-              disabled={createMovementMutation.isPending}
+              disabled={createMovementMutation.isPending || willGoNegative}
               className="w-full rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
             >
               Registrar {movementLabel[movementForm.movement_type]}
@@ -465,4 +526,13 @@ function StatusBadge({ label, value, className }: { label: string; value: number
       </div>
     </div>
   );
+}
+
+function reservationSearchText(reservation: Reservation) {
+  return `${reservation.confirmation_code} ${reservation.guest?.first_name ?? ""} ${reservation.guest?.last_name ?? ""}`.toLocaleLowerCase();
+}
+
+function reservationLabel(reservation: Reservation) {
+  const guestName = reservation.guest ? `${reservation.guest.first_name} ${reservation.guest.last_name}`.trim() : "Huésped sin nombre";
+  return `${reservation.confirmation_code} · ${guestName} · ${reservation.check_in_date}`;
 }

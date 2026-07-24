@@ -32,6 +32,8 @@ const permissionLabels: Record<string, string> = {
   "company:manage": "Companies",
   "cash:operate": "Operar caja",
   "cash:approve_difference": "Aprobar diferencias",
+  "stock:operate": "Operar inventario",
+  "stock:adjust": "Autorizar ajustes de inventario",
   "checkin:override_prohibido": "Override prohibido alojar",
   "reports:view": "Ver reportes",
   "apikey:manage": "Administrar API Keys"

@@ -11,6 +11,7 @@ from app.models.hotel_config import HotelConfiguration
 from app.services.permission_service import (
     PERMISSION_GUEST_EDIT,
     PERMISSION_RESERVATION_CREATE,
+    PERMISSION_STOCK_ADJUST,
 )
 
 
@@ -133,6 +134,36 @@ def test_override_in_hotel_a_does_not_affect_hotel_b():
         fastapi_app.dependency_overrides[get_auth_context] = _override_auth(2, "receptionist")
         hotel_b = client.get("/api/permissions/matrix")
         assert hotel_b.json()["matrix"]["receptionist"][PERMISSION_GUEST_EDIT]["allowed"] is False
+    finally:
+        fastapi_app.dependency_overrides.clear()
+        db.close()
+        engine.dispose()
+
+
+def test_stock_operator_cannot_adjust_without_explicit_adjust_permission():
+    client, db, engine = _client_with_db()
+    fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "manager")
+    try:
+        item_response = client.post(
+            "/api/stock/items",
+            json={"name": "Toallas", "unit": "unidad", "min_quantity": 2},
+        )
+        assert item_response.status_code == 201
+        item_id = item_response.json()["id"]
+
+        denied = client.post(
+            "/api/stock/movements",
+            json={"item_id": item_id, "movement_type": "adjustment", "quantity": "1", "reason": "Conteo"},
+        )
+        assert denied.status_code == 403
+        assert "stock:adjust" in (db.query(SecurityAuditLog).filter(SecurityAuditLog.action == "permission.denied").one().details or "")
+
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner", user_id=11)
+        allowed = client.post(
+            "/api/stock/movements",
+            json={"item_id": item_id, "movement_type": "adjustment", "quantity": "1", "reason": "Conteo autorizado"},
+        )
+        assert allowed.status_code == 201
     finally:
         fastapi_app.dependency_overrides.clear()
         db.close()

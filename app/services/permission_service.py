@@ -63,6 +63,8 @@ PERMISSION_ROOM_BLOCK_RELEASE = "room_block:release"
 PERMISSION_COMPANY_MANAGE = "company:manage"
 PERMISSION_CASH_OPERATE = "cash:operate"
 PERMISSION_CASH_APPROVE_DIFFERENCE = "cash:approve_difference"
+PERMISSION_STOCK_OPERATE = "stock:operate"
+PERMISSION_STOCK_ADJUST = "stock:adjust"
 PERMISSION_CHECKIN_OVERRIDE_PROHIBIDO = "checkin:override_prohibido"
 PERMISSION_REPORTS_VIEW = "reports:view"
 PERMISSION_APIKEY_MANAGE = "apikey:manage"
@@ -81,6 +83,8 @@ PERMISSION_DEFINITIONS: dict[str, str] = {
     PERMISSION_COMPANY_MANAGE: "Manage companies and company reservation documents",
     PERMISSION_CASH_OPERATE: "Operate cash register sessions and movements",
     PERMISSION_CASH_APPROVE_DIFFERENCE: "Approve cash close differences",
+    PERMISSION_STOCK_OPERATE: "Operate stock items, locations and movements",
+    PERMISSION_STOCK_ADJUST: "Authorize stock adjustments",
     PERMISSION_CHECKIN_OVERRIDE_PROHIBIDO: "Override prohibido_alojar check-in blocks",
     PERMISSION_REPORTS_VIEW: "View operational and financial reports",
     PERMISSION_APIKEY_MANAGE: "Manage public hotel API keys",
@@ -103,6 +107,8 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
         PERMISSION_COMPANY_MANAGE: True,
         PERMISSION_CASH_OPERATE: True,
         PERMISSION_CASH_APPROVE_DIFFERENCE: True,
+        PERMISSION_STOCK_OPERATE: True,
+        PERMISSION_STOCK_ADJUST: False,
         PERMISSION_CHECKIN_OVERRIDE_PROHIBIDO: True,
         PERMISSION_REPORTS_VIEW: True,
         PERMISSION_APIKEY_MANAGE: False,
