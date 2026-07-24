@@ -100,7 +100,9 @@ test("owner completes the core reservation journey through the UI", async ({ pag
   await checkOut.fill(localIsoDate(1));
   await reservationForm.getByPlaceholder("Usar configuración del hotel").fill("1000");
 
-  await reservationForm.getByRole("button", { name: "Crear", exact: true }).click();
+  const createReservationButton = reservationForm.getByRole("button", { name: "Crear", exact: true });
+  await expect(createReservationButton).toBeEnabled();
+  await createReservationButton.click();
   await expect(page.getByText("Reserva creada", { exact: true })).toBeVisible();
 
   const reservationTable = page.locator("table").filter({ hasText: "Código" });

@@ -15,8 +15,8 @@ repositorio.
 | Área | Resultado |
 | --- | --- |
 | Frontend lint/typecheck/build | Pasan. Vite informa un bundle principal de ~778 kB minificado; queda como deuda de performance. |
-| E2E desktop | 20/20 pasan en Chromium, incluyendo login, logout, admin, calendario de tarifas, configuración del hotel, el journey de negocio y páginas V72. La ejecución fresh completa queda en 22/22 al sumar móvil. |
-| E2E mobile | 2/2 pasan con Chromium emulando iPhone y verificando 375×812, 390×844 y 430×932: sin overflow horizontal y navegación móvil a Reservas. |
+| E2E desktop | 20/20 pasan en Chromium, incluyendo login, logout, admin, calendario de tarifas, configuración del hotel, el journey de negocio y páginas V72. La ejecución fresh completa queda en 28/28 al sumar móvil Chromium y los tres perfiles WebKit. |
+| E2E mobile | 2/2 pasan con Chromium emulando iPhone y verificando 375×812, 390×844 y 430×932; adicionalmente 6/6 pasan con Playwright WebKit en perfiles iPhone SE, iPhone 15 y iPhone 15 Pro Max: sin overflow horizontal y navegación móvil a Reservas. Esto no sustituye Safari nativo del simulador Xcode, que no está disponible en este host. |
 | Backend completo | 1209 pasan, 17 se omiten, 12 quedan xfail y 1 xpass en Python 3.12 limpio. El runner E2E rechaza explícitamente Python menor a 3.10. |
 | Migración virgen | `alembic upgrade head` pasa sobre SQLite temporal hasta `20260724_extended_tenant_composite_fks`, incluyendo blobs privados, rotación, custodia y el cierre de claves tenant restantes. |
 | Backend focalizado | 56/56 pasan: motor de asignación, operaciones de reservas, check-in, check-out y seguridad del flujo. |
@@ -40,6 +40,15 @@ corrigió el frontend para:
 - mantener la tabla horizontal solo para desktop;
 - limitar los contenedores flex/grid con `min-w-0`;
 - exponer también las rutas operativas en la navegación móvil.
+
+### Cotización vigente antes de crear una reserva
+
+La matriz E2E completa reprodujo una carrera bajo concurrencia de proyectos:
+el botón `Crear` podía aceptar un click mientras React Query todavía marcaba la
+cotización como `isFetching`, por lo que no se enviaba la reserva aunque ya se
+mostrara un total. Se corrigió bloqueando el submit hasta disponer de un
+`quote_token` vigente y mostrando `Actualizando...`; el journey ahora espera
+explícitamente el estado habilitado. La ejecución posterior quedó en 28/28.
 
 La corrección está validada localmente, pero el entorno web de QA debe recibir
 un despliegue antes de repetir la medición allí.

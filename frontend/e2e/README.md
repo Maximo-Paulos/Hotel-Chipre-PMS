@@ -12,6 +12,18 @@ npx playwright install chromium
 npm run e2e -- e2e/v72-pages.spec.ts
 ```
 
+The responsive smoke can also run against Playwright WebKit's iPhone
+descriptors (this is WebKit emulation, not an Xcode Safari Simulator):
+
+```bash
+npx playwright install webkit
+E2E_PYTHON=/absolute/path/to/python3.12 npx playwright test \
+  e2e/responsive-smoke.spec.ts \
+  --project=webkit-iphone-se \
+  --project=webkit-iphone-15 \
+  --project=webkit-iphone-15-pro-max
+```
+
 `playwright.config.ts` requires Python 3.10+ and selects `.venv312`, then
 `.venv`, then a supported interpreter on `PATH`. If the repository has a
 legacy Python 3.9 environment, pass the interpreter explicitly:

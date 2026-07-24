@@ -64,6 +64,21 @@ export default defineConfig({
       name: "mobile-chromium",
       testMatch: "**/responsive-smoke.spec.ts",
       use: { ...devices["iPhone 13"], browserName: "chromium" }
+    },
+    {
+      name: "webkit-iphone-se",
+      testMatch: "**/responsive-smoke.spec.ts",
+      use: { ...devices["iPhone SE"], browserName: "webkit" }
+    },
+    {
+      name: "webkit-iphone-15",
+      testMatch: "**/responsive-smoke.spec.ts",
+      use: { ...devices["iPhone 15"], browserName: "webkit" }
+    },
+    {
+      name: "webkit-iphone-15-pro-max",
+      testMatch: "**/responsive-smoke.spec.ts",
+      use: { ...devices["iPhone 15 Pro Max"], browserName: "webkit" }
     }
   ],
   webServer: [
