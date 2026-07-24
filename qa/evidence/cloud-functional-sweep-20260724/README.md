@@ -198,3 +198,22 @@ variables de proveedor.
 
 La conclusión sigue siendo `needs-verification`: falta un preview aislado o un
 SHA provider-bound que permita repetir el recorrido contra el artefacto exacto.
+
+## Revalidación visible owner — disponibilidad, Reportes y Analytics
+
+- Fecha: 2026-07-24.
+- Persona: owner QA autenticado; recorrido sólo lectura en la pestaña ya abierta
+  del navegador interno.
+- Dispositivo: navegador interno con viewport por defecto; no se ejecutaron
+  pagos, links, comprobantes, emails, webhooks, invitaciones ni confirmaciones
+  de reservas.
+- SHA cloud desplegado: `needs-verification`.
+
+| Superficie | Resultado observado | Evaluación |
+| --- | --- | --- |
+| Consulta de disponibilidad | Se seleccionó `Standard QA (#5)`, se ingresaron 2026-08-15 a 2026-08-17 y se ejecutó `Consultar`. La UI quedó en `Consultando...`; en la lectura posterior los campos volvieron a 2026-07-24/25 y no apareció una cotización. | P1 reproducible: la acción no conserva el rango ingresado y no llega a un estado utilizable |
+| Reportes | `/reportes` permaneció en `Cargando reporte...` después de 5 segundos. | P1: no hay datos ni error accionable dentro de la espera observada |
+| Analytics | `/analytics/operations` permaneció en `Cargando analytics...` después de 5 segundos. | P1: no hay datos ni error accionable dentro de la espera observada |
+
+Esta continuación confirma el bloqueo en el artefacto cloud visible, pero no lo
+atribuye al commit local porque el despliegue no expone un SHA verificable.
