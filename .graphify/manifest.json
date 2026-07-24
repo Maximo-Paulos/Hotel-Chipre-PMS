@@ -276,8 +276,8 @@
     "hash": "758293259d84c29dfdca922f105ac207"
   },
   "app/api/health.py": {
-    "mtime": 1784875656099.6401,
-    "hash": "82637afe2738bec49d5895d953e3b811"
+    "mtime": 1784877814015.8738,
+    "hash": "e9a226c05430f379ed950dfe6cba2390"
   },
   "app/api/hotel_api_keys.py": {
     "mtime": 1784862144875.0654,
@@ -384,8 +384,8 @@
     "hash": "b4351ec65d80e5a95ebc50aabd89d0a0"
   },
   "app/config.py": {
-    "mtime": 1784875484220.8608,
-    "hash": "cff6252a2fcc67e2a3b939d3b899bc3e"
+    "mtime": 1784877814016.2222,
+    "hash": "0d12ab40536ed5a7a0b14b2b6896f882"
   },
   "app/database.py": {
     "mtime": 1784862641428.6223,
@@ -428,8 +428,8 @@
     "hash": "bd135b0246c882e54594198526aa0cd9"
   },
   "app/main.py": {
-    "mtime": 1784863772659.4094,
-    "hash": "7f93695f42dc787b922e0ee4967e06dc"
+    "mtime": 1784877373271.0874,
+    "hash": "fbbab969029611b4b9e700f71f6cf952"
   },
   "app/master_admin/__init__.py": {
     "mtime": 1784862144877.3862,
@@ -1008,8 +1008,8 @@
     "hash": "fd561ba0ba19ec5955302e5a9c903276"
   },
   "app/services/read_model_cache.py": {
-    "mtime": 1784862144886.216,
-    "hash": "b0d3faa6f04f3a13000ea2f25963cf68"
+    "mtime": 1784877936734.3232,
+    "hash": "9d57bf31375c966341644bfe436e8012"
   },
   "app/services/reservation_action_service.py": {
     "mtime": 1784862144886.2725,
@@ -1068,8 +1068,8 @@
     "hash": "0aabafc5fd6e89b75b99709816e443df"
   },
   "app/tasks/analytics_tasks.py": {
-    "mtime": 1784863268797.0361,
-    "hash": "80cd671c05df5ae19be723e1679bca7f"
+    "mtime": 1784877753750.744,
+    "hash": "ad6180873d5788c8fdd36f18b89a195d"
   },
   "app/tasks/celery_app.py": {
     "mtime": 1784862144887.1638,
@@ -1100,8 +1100,8 @@
     "hash": "70ea4197fe8494bac4fc09ce0bd4dfb2"
   },
   "frontend/playwright.config.ts": {
-    "mtime": 1784876503486.881,
-    "hash": "bf6d1da2c0e1adff6e53602a59afdaef"
+    "mtime": 1784878115457.6523,
+    "hash": "bde009d07c0d67bae5a18696053f7081"
   },
   "frontend/src/App.tsx": {
     "mtime": 1784862144901.0059,
@@ -1128,8 +1128,8 @@
     "hash": "295cb406ea26fb1ee80d8ffac736b24c"
   },
   "frontend/src/api/client.ts": {
-    "mtime": 1784862144901.3816,
-    "hash": "df51ef04e3ffd07ddf1a44e5a9abd50e"
+    "mtime": 1784877498226.5671,
+    "hash": "2bea02f5387f016943558c306f2272a6"
   },
   "frontend/src/api/companies.ts": {
     "mtime": 1784862144901.4314,
@@ -1404,8 +1404,8 @@
     "hash": "080f58a661cb1eb1b0f8ae7c84334f59"
   },
   "frontend/src/ui/AppShell.tsx": {
-    "mtime": 1784864400122.1997,
-    "hash": "b9afca671bdf7cccfe6e6db5dae15ff0"
+    "mtime": 1784877498228.7458,
+    "hash": "c17f85b9fa6bb120a6bf5e2c0cbd5799"
   },
   "frontend/src/ui/HotelSelector.tsx": {
     "mtime": 1784862144905.4285,
@@ -1508,8 +1508,8 @@
     "hash": "e14e293688410e14212d44329660c984"
   },
   "frontend/src/views/protected/analytics/AnalyticsPages.tsx": {
-    "mtime": 1784876613923.323,
-    "hash": "fd11aa2a62131e70b8f39a05d26b9c13"
+    "mtime": 1784877498229.2646,
+    "hash": "b91df9e6884c6e8226961734c1fd7a94"
   },
   "frontend/src/views/public/AcceptInvitationPage.tsx": {
     "mtime": 1784862144907.3208,
@@ -1764,8 +1764,8 @@
     "hash": "47a88f453e1cb159870e0d83992e5fff"
   },
   "tests/test_datastores_health.py": {
-    "mtime": 1784875662044.5627,
-    "hash": "705752d322a50199afc76e4f2436d832"
+    "mtime": 1784877583870.8284,
+    "hash": "1817b72b1b0c4e66954bd98fb18cd7ac"
   },
   "tests/test_demo_mode.py": {
     "mtime": 1784862144931.486,
@@ -2304,8 +2304,8 @@
     "hash": "c751470c4516e1aba14cff2bc3bca10e"
   },
   "docs/data-foundations/architecture-hybrid.md": {
-    "mtime": 1784875681773.8135,
-    "hash": "2810b875a4bcd6f24fcbb55a152ce09d"
+    "mtime": 1784877814018.4824,
+    "hash": "ed4dadf4fcf6b8bf0e777bbd29241116"
   },
   "docs/data-foundations/der-conceptual-model.md": {
     "mtime": 1784862144888.967,
@@ -3360,8 +3360,8 @@
     "hash": "cc3b4c09ac92a7d389d9ad275a799aa0"
   },
   "docs/qa/2026-07-24-pms-e2e-status.md": {
-    "mtime": 1784876639451.4333,
-    "hash": "f23599999e726b3893394ed4ab69d033"
+    "mtime": 1784878127907.8396,
+    "hash": "6a2fe55a51c81482f622148acf361369"
   },
   "frontend/e2e/business-journey.spec.ts": {
     "mtime": 1784872135925.51,
@@ -3440,7 +3440,31 @@
     "hash": "138e6fb88e635dbdd0c740969612b8a2"
   },
   "docs/data-foundations/scale-readiness.md": {
-    "mtime": 1784875699448.8037,
-    "hash": "62a8b58a6929ca6f2e511c7e0ef04e8f"
+    "mtime": 1784877874585.941,
+    "hash": "f6b45c5d7c04ecf2ddb97d6c58291f98"
+  },
+  "app/api/events.py": {
+    "mtime": 1784877373270.604,
+    "hash": "0b17a8c19b150e4ea67c5c4598c2b51f"
+  },
+  "app/services/analytics_warehouse.py": {
+    "mtime": 1784877709899.9292,
+    "hash": "2b35f628496d79b6ea9d9865693cc85e"
+  },
+  "app/services/domain_events.py": {
+    "mtime": 1784878179742.478,
+    "hash": "8917939140a4e99dcb68966f319baea9"
+  },
+  "frontend/src/sync/crossTabSync.ts": {
+    "mtime": 1784877518032.5364,
+    "hash": "54ffc392b6c3514f4e8f19a3619ee59d"
+  },
+  "tests/test_analytics_warehouse.py": {
+    "mtime": 1784877644486.5813,
+    "hash": "6455c358a929a318dbda3c5a8cdbba9b"
+  },
+  "tests/test_domain_events.py": {
+    "mtime": 1784877408147.9392,
+    "hash": "11695cfb061c7061ec0e1cab30ed8eae"
   }
 }

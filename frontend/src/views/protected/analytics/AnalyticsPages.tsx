@@ -270,9 +270,10 @@ function usePlan() {
 }
 
 function useAnalyticsQuery<T>(path: string, params: Record<string, string | number | boolean | null | undefined> = {}) {
+  const { session } = useSession();
   const query = useQuery({
-    queryKey: ["analytics", path, params],
-    queryFn: async () => apiFetch<T>(`${path}${buildQuery(params)}`),
+    queryKey: ["analytics", session.hotelId, path, params],
+    queryFn: async () => apiFetch<T>(`${path}${buildQuery(params)}`, { session }),
     staleTime: 30_000
   });
   return query;

@@ -7,6 +7,7 @@ import { useOnboardingStatus } from "../hooks/useOnboardingStatus";
 import { useSubscriptionStatus } from "../hooks/useSubscription";
 import { useSession } from "../state/session";
 import { ApiError, hasValidSession } from "../api/client";
+import { useCrossTabSync } from "../sync/crossTabSync";
 
 import { HotelSelector } from "./HotelSelector";
 import { UserBadge } from "./UserBadge";
@@ -88,6 +89,8 @@ export function AppShell() {
   const isLoggedIn = hasValidSession(session);
   const isVerified = Boolean(session.isVerified);
   const role = session.role;
+
+  useCrossTabSync();
 
   const { data: onboarding, isFetching, error } = useOnboardingStatus({ enabled: isLoggedIn && isVerified });
   const { data: subscription } = useSubscriptionStatus();

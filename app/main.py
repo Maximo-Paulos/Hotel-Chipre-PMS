@@ -69,6 +69,7 @@ from app.api import (
     movement_groups,
     room_movement_groups,
     health,
+    events,
 )
 import app.master_admin.models  # noqa: F401
 from app.master_admin.router import router as master_admin_router
@@ -189,6 +190,7 @@ app.include_router(movement_groups.router)
 app.include_router(room_movement_groups.router)
 app.include_router(master_admin_router)
 app.include_router(health.router)
+app.include_router(events.router)
 
 # Frontend build paths
 BASE_DIR = Path(__file__).resolve().parent
@@ -294,6 +296,5 @@ def serve_spa(full_path: str, db: Session = Depends(get_db)):
     if candidate.is_file() and candidate.is_relative_to(FRONTEND_DIST):
         return FileResponse(candidate)
     return serve_frontend(db)
-
 
 

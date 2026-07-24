@@ -18,6 +18,8 @@ provider-bound evidence.
 | Critical concurrency | Redis/Valkey lease for cash close and persisted allocation, PostgreSQL row locks, production fail-closed config | ✅ contract-covered |
 | Analytics provenance | All analytics envelopes expose `data_as_of`, `source_lag_seconds`, and `data_source`; UI renders them | ✅ contract-covered |
 | Health visibility | `/health/datastores` reports PostgreSQL and Redis roles separately, including distributed locks | ✅ contract-covered |
+| Realtime invalidation | Tenant-scoped Redis revisions, authenticated SSE, `BroadcastChannel`/storage fallback, query invalidation guarded by `hotel_id` | ✅ contract-covered |
+| Derived warehouse boundary | PII-free ClickHouse HTTP adapter, `ReplacingMergeTree` schema, replayable projector task, PG↔warehouse count reconciliation | ✅ contract-covered; provider unverified |
 | iPhone-sized web layout | Fresh Chromium E2E at 375×812, 390×844, and 430×932 | ✅ local evidence |
 
 ## Provider-bound evidence still required
@@ -28,10 +30,10 @@ provider-bound evidence.
 2. Run the co-located PostgreSQL benchmark and capture server-side `EXPLAIN`
    plus median/p95 for availability, allocation candidates, payment balance,
    daily reports, and guest search.
-3. Add the warehouse path only behind explicit freshness metadata: PostgreSQL
-   remains the transactional source of truth, CDC/outbox drives ClickHouse,
-   and dashboards must show the measured lag rather than implying real-time
-   data.
+3. Provision ClickHouse and run the warehouse projector against the isolated
+   PostgreSQL facts. The local boundary is replayable and PII-free, but the
+   provider must prove CDC/outbox delivery, measured lag, idempotent replay and
+   PG↔warehouse reconciliation before any dashboard is labeled warehouse-backed.
 4. Run staged load tests at 10k steady concurrency and 20k burst, with
    per-tenant error rate, p95/p99 latency, connection-pool saturation, Redis
    contention, queue lag, and database CPU/IO captured as artifacts.

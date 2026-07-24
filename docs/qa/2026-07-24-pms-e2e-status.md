@@ -14,15 +14,16 @@ repositorio.
 
 | Área | Resultado |
 | --- | --- |
-| Frontend lint/typecheck/build | Pasan. Vite informa un bundle principal de ~768 kB minificado; queda como deuda de performance. |
+| Frontend lint/typecheck/build | Pasan. Vite informa un bundle principal de ~778 kB minificado; queda como deuda de performance. |
 | E2E desktop | 20/20 pasan en Chromium, incluyendo login, logout, admin, calendario de tarifas, configuración del hotel, el journey de negocio y páginas V72. La ejecución fresh completa queda en 22/22 al sumar móvil. |
 | E2E mobile | 2/2 pasan con Chromium emulando iPhone y verificando 375×812, 390×844 y 430×932: sin overflow horizontal y navegación móvil a Reservas. |
-| Backend completo | 1190 pasan, 17 se omiten, 12 quedan xfail y 1 xpass en Python 3.12 limpio. El runner E2E rechaza explícitamente Python menor a 3.10. |
+| Backend completo | 1199 pasan, 17 se omiten, 12 quedan xfail y 1 xpass en Python 3.12 limpio. El runner E2E rechaza explícitamente Python menor a 3.10. |
 | Migración virgen | `alembic upgrade head` pasa sobre SQLite temporal hasta `20260724_payment_proof_blobs`, incluyendo blobs privados, rotación y custodia. |
 | Backend focalizado | 56/56 pasan: motor de asignación, operaciones de reservas, check-in, check-out y seguridad del flujo. |
 | Analítica y trazabilidad | 27/27 pasan en contratos/API; cada envelope expone `data_as_of`, `source_lag_seconds` y `data_source`, y la UI lo muestra. |
 | Aislamiento/cache/concurrencia | 56/56 pasan en aislamiento multi-hotel, cache con fallback PG y locks Redis/Valkey; caja y allocation quedaron protegidos. |
 | Health de infraestructura | `/health/datastores` diferencia cache Redis de locks distribuidos y reporta si el lock es requerido. |
+| Realtime multi-tab/warehouse | Contrato local de revisiones Redis, SSE autenticado, `BroadcastChannel` tenant-scoped y adaptador ClickHouse PII-free con reconciliación. |
 | Graphify | `portable-check` pasa después de actualizar y normalizar el grafo; `check-update` reporta pendiente semántico porque no se generaron descripciones/labels LLM en este run. |
 
 ## Hallazgos y correcciones
@@ -177,8 +178,8 @@ distribuidos no están habilitados y requeridos.
   contrato local de permisos pasa y su seed ya está protegido contra carreras.
 - No hay evidencia provider-bound para 10.000 hoteles, 10.000 usuarios
   concurrentes ni burst de 20.000: falta preview aislado, PostgreSQL co-local,
-  Redis/Valkey administrado, carga instrumentada, autoscaling, CDC/ClickHouse y
-  métricas p95/p99. El ledger está en
+  Redis/Valkey administrado, ClickHouse real con CDC/reconciliación, carga
+  instrumentada, autoscaling y métricas p95/p99. El ledger está en
   [`docs/data-foundations/scale-readiness.md`](../data-foundations/scale-readiness.md).
 - La UI de analítica fue validada por build y contratos API, pero todavía no se
   repitió el journey completo contra un preview provider-bound.

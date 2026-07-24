@@ -21,6 +21,7 @@ from app.db.neo4j import get_neo4j_driver, neo4j_healthcheck
 def datastores_disabled(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("READ_MODEL_CACHE_ENABLED", "false")
     monkeypatch.setenv("DISTRIBUTED_LOCK_ENABLED", "false")
+    monkeypatch.setenv("REALTIME_EVENTS_ENABLED", "false")
     monkeypatch.setenv("MONGO_ENABLED", "false")
     monkeypatch.setenv("CASSANDRA_ENABLED", "false")
     monkeypatch.setenv("NEO4J_ENABLED", "false")

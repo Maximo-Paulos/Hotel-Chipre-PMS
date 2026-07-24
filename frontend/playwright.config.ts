@@ -77,6 +77,8 @@ export default defineConfig({
         APP_ENV: "test",
         DATABASE_URL: e2eDatabaseURL,
         E2E_RESET_DATABASE: "true",
+        REALTIME_EVENTS_ENABLED: "false",
+        CLICKHOUSE_ENABLED: "false",
         JWT_SECRET: jwtSecret,
         VITE_BACKEND_URL: backendURL,
         MASTER_ADMIN_EMAIL: "master-admin@e2e.com",

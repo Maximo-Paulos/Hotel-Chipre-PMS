@@ -23,7 +23,8 @@ Each data class has exactly ONE source of truth. No dual writes to two authorita
 | Distributed locks (allocation runs) | Redis | Prevent concurrent solver races |
 | Full-text search index | PostgreSQL pg_trgm | Volume doesn't justify external engine; benchmarks show <50ms |
 | AI assistant sessions/messages | PostgreSQL | Persistent, auditable |
-| Analytics/reporting facts | PostgreSQL (Fact tables) | OLAP queries via indexed fact tables; columnar engine if >10M rows/hotel |
+| Analytics/reporting facts | PostgreSQL (Fact tables) | Authoritative, auditable facts; ClickHouse is a derived read model for scale |
+| Analytics warehouse | ClickHouse | PII-free derived facts, replayable projection and explicit PG↔warehouse reconciliation |
 
 ---
 
@@ -135,6 +136,32 @@ lock:cash_close:{hotel_id}:{session_id}                TTL=60s   (arqueo lock)
 - On Redis unavailability: read caches degrade gracefully — query PG directly (no availability cache miss causes incorrect data, only slower response)
 - Cash close and allocation locks are different: local development may degrade to the PostgreSQL safeguards, but production must set `DISTRIBUTED_LOCK_ENABLED=true` and `DISTRIBUTED_LOCK_REQUIRED=true`.
 - Never serve stale availability as authoritative without re-checking PG
+
+### Tenant-scoped realtime invalidation
+
+`/api/events/stream` is an authenticated SSE stream backed by Redis/Valkey
+pub/sub. Channels and revision counters are hotel-scoped:
+
+```text
+hotel:{hotel_id}:events
+hotel:{hotel_id}:revision:{domain}
+```
+
+Events contain only domain, revision, entity identifiers and operational
+metadata. They never contain guest PII, credentials, payment proof bytes or
+tokens. The web client uses them only to invalidate React Query keys and then
+refetches PostgreSQL-backed APIs. `BroadcastChannel` plus the storage fallback
+keeps multiple tabs coherent without crossing hotel scopes.
+
+### ClickHouse derived warehouse
+
+`app.services.analytics_warehouse` owns the provider boundary. It creates only
+PII-free `ReplacingMergeTree` facts partitioned by `(hotel_id, month)` and
+ordered by tenant/date/entity. PostgreSQL `FactReservationDaily` remains the
+source of truth. The Celery projector is replayable and reports a hard
+reconciliation result for each hotel/date window; a mismatch is retried and
+must block a release gate. Provider connectivity and 10k/20k scale evidence
+remain deployment prerequisites, not local claims.
 
 ### Distributed lock pattern (allocation solver)
 

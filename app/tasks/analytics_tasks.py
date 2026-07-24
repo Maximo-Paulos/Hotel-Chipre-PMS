@@ -10,7 +10,13 @@ from typing import Optional
 
 from app.config import get_settings
 from app.database import get_engine
-from app.models.analytics import AnalyticsExportJob, AnalyticsExportStatusEnum
+from app.models.analytics import AnalyticsExportJob, AnalyticsExportStatusEnum, FactReservationDaily
+from app.services.analytics_warehouse import (
+    ensure_schema,
+    get_clickhouse_client,
+    project_reservation_fact_rows,
+    reconcile_reservation_fact_counts,
+)
 from app.services.tenant_context import set_tenant_hotel_context
 from app.tasks.celery_app import celery_app
 
@@ -165,6 +171,101 @@ def refresh_fact_room_occupancy_daily(
             db.close()
     except Exception as exc:
         logger.error("analytics.refresh_fact_room_occupancy_daily failed: %s", exc)
+        raise self.retry(exc=exc)
+
+
+@celery_app.task(
+    bind=True,
+    name="analytics.project_reservation_facts_to_clickhouse",
+    max_retries=3,
+    default_retry_delay=60,
+)
+def project_reservation_facts_to_clickhouse(
+    self,
+    hotel_id: int,
+    date_from_str: str,
+    date_to_str: str,
+    database_url: Optional[str] = None,
+):
+    """Project PostgreSQL facts and reconcile the derived ClickHouse window.
+
+    This is intentionally a pull-based CDC consumer: a future Debezium/WAL
+    trigger can enqueue the same task, while the task remains replayable and
+    safe because ClickHouse uses ReplacingMergeTree(version).
+    """
+
+    try:
+        from datetime import date
+        from sqlalchemy.orm import sessionmaker
+
+        client = get_clickhouse_client()
+        if client is None:
+            return {"status": "disabled", "hotel_id": hotel_id}
+
+        settings = get_settings()
+        url = database_url or settings.DATABASE_URL
+        engine = get_engine(url)
+        SessionLocal = sessionmaker(bind=engine)
+        db = SessionLocal()
+        date_from = date.fromisoformat(date_from_str)
+        date_to = date.fromisoformat(date_to_str)
+        try:
+            set_tenant_hotel_context(db, hotel_id)
+            source_rows = (
+                db.query(FactReservationDaily)
+                .filter(
+                    FactReservationDaily.hotel_id == hotel_id,
+                    FactReservationDaily.stay_date >= date_from,
+                    FactReservationDaily.stay_date <= date_to,
+                )
+                .order_by(FactReservationDaily.stay_date.asc(), FactReservationDaily.reservation_id.asc())
+                .all()
+            )
+            rows = [
+                {
+                    "hotel_id": fact.hotel_id,
+                    "reservation_id": fact.reservation_id,
+                    "stay_date": fact.stay_date,
+                    "room_id": fact.room_id,
+                    "category_id": fact.category_id,
+                    "revenue_gross_ars": fact.revenue_gross_ars,
+                    "status": getattr(fact.status, "value", fact.status),
+                }
+                for fact in source_rows
+            ]
+            ensure_schema(client)
+            sync_result = project_reservation_fact_rows(
+                client,
+                hotel_id=hotel_id,
+                date_from=date_from,
+                date_to=date_to,
+                rows=rows,
+            )
+            reconciliation = reconcile_reservation_fact_counts(
+                client,
+                hotel_id=hotel_id,
+                date_from=date_from,
+                date_to=date_to,
+                source_count=len(rows),
+            )
+            if not reconciliation.ok:
+                raise RuntimeError(
+                    f"ClickHouse reconciliation mismatch for hotel {hotel_id}: "
+                    f"source={reconciliation.source_count} warehouse={reconciliation.warehouse_count}"
+                )
+            return {
+                "status": "ok",
+                "hotel_id": hotel_id,
+                "date_from": date_from.isoformat(),
+                "date_to": date_to.isoformat(),
+                "rows": sync_result.rows,
+                "source_count": reconciliation.source_count,
+                "warehouse_count": reconciliation.warehouse_count,
+            }
+        finally:
+            db.close()
+    except Exception as exc:
+        logger.error("analytics.project_reservation_facts_to_clickhouse failed: %s", exc)
         raise self.retry(exc=exc)
 
 

@@ -36,6 +36,15 @@ class Settings(BaseSettings):
     DISTRIBUTED_LOCK_ENABLED: bool = True
     DISTRIBUTED_LOCK_REQUIRED: bool = False
     DISTRIBUTED_LOCK_DEFAULT_TTL_SECONDS: int = 60
+    REALTIME_EVENTS_ENABLED: bool = True
+    REALTIME_EVENTS_HEARTBEAT_SECONDS: int = 15
+    CLICKHOUSE_ENABLED: bool = False
+    CLICKHOUSE_REQUIRED: bool = False
+    CLICKHOUSE_URL: str = ""
+    CLICKHOUSE_DATABASE: str = "hotel_analytics"
+    CLICKHOUSE_USER: str = "default"
+    CLICKHOUSE_PASSWORD: str = ""
+    CLICKHOUSE_TIMEOUT_SECONDS: float = 5.0
 
     # NoSQL datastore foundations. Disabled by default; Postgres remains the
     # transactional source of truth.
@@ -329,6 +338,10 @@ def validate_runtime_security(settings: Settings | None = None) -> None:
 
     if not runtime_settings.DISTRIBUTED_LOCK_ENABLED or not runtime_settings.DISTRIBUTED_LOCK_REQUIRED:
         errors.append("DISTRIBUTED_LOCK_ENABLED and DISTRIBUTED_LOCK_REQUIRED must be true in production")
+    if runtime_settings.CLICKHOUSE_REQUIRED and (
+        not runtime_settings.CLICKHOUSE_ENABLED or not runtime_settings.CLICKHOUSE_URL.strip()
+    ):
+        errors.append("CLICKHOUSE_ENABLED and CLICKHOUSE_URL must be configured when CLICKHOUSE_REQUIRED=true")
 
     if not runtime_settings.JWT_SECRET or runtime_settings.JWT_SECRET == "change-me" or len(runtime_settings.JWT_SECRET.strip()) < 32:
         errors.append("JWT_SECRET must be set to a strong production value")

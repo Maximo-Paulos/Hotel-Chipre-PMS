@@ -1,3 +1,5 @@
+import { broadcastDomainChange } from "../sync/crossTabSync";
+
 export type SessionLike = {
   hotelId?: number | null;
   userId?: string | null;
@@ -135,6 +137,10 @@ export async function apiFetch<T = unknown>(path: string, options: RequestOption
       handleUnauthorized();
     }
     throw new ApiError(response.status, message, payload);
+  }
+
+  if (method !== "GET" && session?.hotelId) {
+    broadcastDomainChange(session.hotelId, path);
   }
 
   return payload as T;

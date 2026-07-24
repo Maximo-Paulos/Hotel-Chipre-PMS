@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-24T07:06:03.157Z",
+  "generatedAt": "2026-07-24T07:30:17.917Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -1933,6 +1933,28 @@
       "warnings": []
     },
     {
+      "id": "flow:services_analytics_warehouse_ensure_schema",
+      "name": "ensure_schema",
+      "entryPoint": "services_analytics_warehouse_ensure_schema",
+      "entryPointId": "services_analytics_warehouse_ensure_schema",
+      "path": [
+        "services_analytics_warehouse_ensure_schema",
+        "services_analytics_warehouse_clickhousehttpclient_execute"
+      ],
+      "qualifiedPath": [
+        "services_analytics_warehouse_ensure_schema",
+        "services_analytics_warehouse_clickhousehttpclient_execute"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/services/analytics_warehouse.py"
+      ],
+      "criticality": 0.285,
+      "warnings": []
+    },
+    {
       "id": "flow:api_gemma_chat_get_chat_history",
       "name": "get_chat_history",
       "entryPoint": "api_gemma_chat_get_chat_history",
@@ -2042,6 +2064,32 @@
       "fileCount": 1,
       "files": [
         "tests/conftest.py"
+      ],
+      "criticality": 0.285,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_analytics_warehouse_reconcile_reservation_fact_counts",
+      "name": "reconcile_reservation_fact_counts",
+      "entryPoint": "services_analytics_warehouse_reconcile_reservation_fact_counts",
+      "entryPointId": "services_analytics_warehouse_reconcile_reservation_fact_counts",
+      "path": [
+        "services_analytics_warehouse_reconcile_reservation_fact_counts",
+        "services_analytics_warehouse_clickhousehttpclient_execute",
+        "services_analytics_warehouse_reconciliationresult",
+        "services_analytics_warehouse_validate_hotel_id"
+      ],
+      "qualifiedPath": [
+        "services_analytics_warehouse_reconcile_reservation_fact_counts",
+        "services_analytics_warehouse_clickhousehttpclient_execute",
+        "services_analytics_warehouse_reconciliationresult",
+        "services_analytics_warehouse_validate_hotel_id"
+      ],
+      "depth": 1,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/services/analytics_warehouse.py"
       ],
       "criticality": 0.285,
       "warnings": []
@@ -2285,62 +2333,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_read_model_cache_invalidate_hotel_analytics_cache",
-      "name": "invalidate_hotel_analytics_cache",
-      "entryPoint": "services_read_model_cache_invalidate_hotel_analytics_cache",
-      "entryPointId": "services_read_model_cache_invalidate_hotel_analytics_cache",
-      "path": [
-        "services_read_model_cache_invalidate_hotel_analytics_cache",
-        "services_read_model_cache_invalidate_hotel_cache_prefixes",
-        "services_read_model_cache_get_redis_client",
-        "services_read_model_cache_cache_enabled",
-        "services_read_model_cache_settings"
-      ],
-      "qualifiedPath": [
-        "services_read_model_cache_invalidate_hotel_analytics_cache",
-        "services_read_model_cache_invalidate_hotel_cache_prefixes",
-        "services_read_model_cache_get_redis_client",
-        "services_read_model_cache_cache_enabled",
-        "services_read_model_cache_settings"
-      ],
-      "depth": 3,
-      "nodeCount": 5,
-      "fileCount": 1,
-      "files": [
-        "app/services/read_model_cache.py"
-      ],
-      "criticality": 0.28,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_read_model_cache_invalidate_hotel_operational_caches",
-      "name": "invalidate_hotel_operational_caches",
-      "entryPoint": "services_read_model_cache_invalidate_hotel_operational_caches",
-      "entryPointId": "services_read_model_cache_invalidate_hotel_operational_caches",
-      "path": [
-        "services_read_model_cache_invalidate_hotel_operational_caches",
-        "services_read_model_cache_invalidate_hotel_cache_prefixes",
-        "services_read_model_cache_get_redis_client",
-        "services_read_model_cache_cache_enabled",
-        "services_read_model_cache_settings"
-      ],
-      "qualifiedPath": [
-        "services_read_model_cache_invalidate_hotel_operational_caches",
-        "services_read_model_cache_invalidate_hotel_cache_prefixes",
-        "services_read_model_cache_get_redis_client",
-        "services_read_model_cache_cache_enabled",
-        "services_read_model_cache_settings"
-      ],
-      "depth": 3,
-      "nodeCount": 5,
-      "fileCount": 1,
-      "files": [
-        "app/services/read_model_cache.py"
-      ],
-      "criticality": 0.28,
-      "warnings": []
-    },
-    {
       "id": "flow:services_payment_link_service_create_link",
       "name": "create_link",
       "entryPoint": "services_payment_link_service_create_link",
@@ -2525,6 +2517,66 @@
       "warnings": []
     },
     {
+      "id": "flow:services_read_model_cache_invalidate_hotel_analytics_cache",
+      "name": "invalidate_hotel_analytics_cache",
+      "entryPoint": "services_read_model_cache_invalidate_hotel_analytics_cache",
+      "entryPointId": "services_read_model_cache_invalidate_hotel_analytics_cache",
+      "path": [
+        "services_read_model_cache_invalidate_hotel_analytics_cache",
+        "services_read_model_cache_invalidate_hotel_cache_prefixes",
+        "services_read_model_cache_publish_cache_event",
+        "services_read_model_cache_get_redis_client",
+        "services_read_model_cache_cache_enabled",
+        "services_read_model_cache_settings"
+      ],
+      "qualifiedPath": [
+        "services_read_model_cache_invalidate_hotel_analytics_cache",
+        "services_read_model_cache_invalidate_hotel_cache_prefixes",
+        "services_read_model_cache_publish_cache_event",
+        "services_read_model_cache_get_redis_client",
+        "services_read_model_cache_cache_enabled",
+        "services_read_model_cache_settings"
+      ],
+      "depth": 3,
+      "nodeCount": 6,
+      "fileCount": 1,
+      "files": [
+        "app/services/read_model_cache.py"
+      ],
+      "criticality": 0.2633,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_read_model_cache_invalidate_hotel_operational_caches",
+      "name": "invalidate_hotel_operational_caches",
+      "entryPoint": "services_read_model_cache_invalidate_hotel_operational_caches",
+      "entryPointId": "services_read_model_cache_invalidate_hotel_operational_caches",
+      "path": [
+        "services_read_model_cache_invalidate_hotel_operational_caches",
+        "services_read_model_cache_invalidate_hotel_cache_prefixes",
+        "services_read_model_cache_publish_cache_event",
+        "services_read_model_cache_get_redis_client",
+        "services_read_model_cache_cache_enabled",
+        "services_read_model_cache_settings"
+      ],
+      "qualifiedPath": [
+        "services_read_model_cache_invalidate_hotel_operational_caches",
+        "services_read_model_cache_invalidate_hotel_cache_prefixes",
+        "services_read_model_cache_publish_cache_event",
+        "services_read_model_cache_get_redis_client",
+        "services_read_model_cache_cache_enabled",
+        "services_read_model_cache_settings"
+      ],
+      "depth": 3,
+      "nodeCount": 6,
+      "fileCount": 1,
+      "files": [
+        "app/services/read_model_cache.py"
+      ],
+      "criticality": 0.2633,
+      "warnings": []
+    },
+    {
       "id": "flow:services_room_block_service_create_block",
       "name": "create_block",
       "entryPoint": "services_room_block_service_create_block",
@@ -2550,6 +2602,58 @@
         "app/services/room_block_service.py"
       ],
       "criticality": 0.26,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_analytics_warehouse_project_reservation_fact_rows",
+      "name": "project_reservation_fact_rows",
+      "entryPoint": "services_analytics_warehouse_project_reservation_fact_rows",
+      "entryPointId": "services_analytics_warehouse_project_reservation_fact_rows",
+      "path": [
+        "services_analytics_warehouse_project_reservation_fact_rows",
+        "services_analytics_warehouse_build_reservation_fact_row",
+        "services_analytics_warehouse_clickhousehttpclient_insert_json_each_row",
+        "services_analytics_warehouse_validate_hotel_id",
+        "services_analytics_warehouse_warehousesyncresult"
+      ],
+      "qualifiedPath": [
+        "services_analytics_warehouse_project_reservation_fact_rows",
+        "services_analytics_warehouse_build_reservation_fact_row",
+        "services_analytics_warehouse_clickhousehttpclient_insert_json_each_row",
+        "services_analytics_warehouse_validate_hotel_id",
+        "services_analytics_warehouse_warehousesyncresult"
+      ],
+      "depth": 1,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "app/services/analytics_warehouse.py"
+      ],
+      "criticality": 0.26,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_domain_events_domainevent_channel",
+      "name": ".channel",
+      "entryPoint": "services_domain_events_domainevent_channel",
+      "entryPointId": "services_domain_events_domainevent_channel",
+      "path": [
+        "services_domain_events_domainevent_channel",
+        "services_domain_events_channel_for_hotel",
+        "services_domain_events_validate_hotel_id"
+      ],
+      "qualifiedPath": [
+        "services_domain_events_domainevent_channel",
+        "services_domain_events_channel_for_hotel",
+        "services_domain_events_validate_hotel_id"
+      ],
+      "depth": 2,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/services/domain_events.py"
+      ],
+      "criticality": 0.2533,
       "warnings": []
     },
     {
@@ -3046,6 +3150,32 @@
         "app/services/gemma_service.py"
       ],
       "criticality": 0.2333,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_domain_events_iter_event_stream",
+      "name": "iter_event_stream",
+      "entryPoint": "services_domain_events_iter_event_stream",
+      "entryPointId": "services_domain_events_iter_event_stream",
+      "path": [
+        "services_domain_events_iter_event_stream",
+        "services_domain_events_channel_for_hotel",
+        "services_domain_events_format_sse",
+        "services_domain_events_validate_hotel_id"
+      ],
+      "qualifiedPath": [
+        "services_domain_events_iter_event_stream",
+        "services_domain_events_channel_for_hotel",
+        "services_domain_events_format_sse",
+        "services_domain_events_validate_hotel_id"
+      ],
+      "depth": 2,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/services/domain_events.py"
+      ],
+      "criticality": 0.2325,
       "warnings": []
     },
     {
@@ -3847,6 +3977,34 @@
       "warnings": []
     },
     {
+      "id": "flow:sync_crosstabsync_notifyifrelevant",
+      "name": "notifyIfRelevant",
+      "entryPoint": "sync_crosstabsync_notifyifrelevant",
+      "entryPointId": "sync_crosstabsync_notifyifrelevant",
+      "path": [
+        "sync_crosstabsync_notifyifrelevant",
+        "sync_crosstabsync_getsenderid",
+        "sync_crosstabsync_invalidatedomainqueries",
+        "sync_crosstabsync_parsemessage",
+        "sync_crosstabsync_normalizehotelid"
+      ],
+      "qualifiedPath": [
+        "sync_crosstabsync_notifyifrelevant",
+        "sync_crosstabsync_getsenderid",
+        "sync_crosstabsync_invalidatedomainqueries",
+        "sync_crosstabsync_parsemessage",
+        "sync_crosstabsync_normalizehotelid"
+      ],
+      "depth": 2,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/sync/crossTabSync.ts"
+      ],
+      "criticality": 0.22,
+      "warnings": []
+    },
+    {
       "id": "flow:api_gemma_chat_send_chat_message",
       "name": "send_chat_message",
       "entryPoint": "api_gemma_chat_send_chat_message",
@@ -4035,6 +4193,46 @@
       "warnings": []
     },
     {
+      "id": "flow:services_domain_events_publish_domain_event",
+      "name": "publish_domain_event",
+      "entryPoint": "services_domain_events_publish_domain_event",
+      "entryPointId": "services_domain_events_publish_domain_event",
+      "path": [
+        "services_domain_events_publish_domain_event",
+        "services_domain_events_domainevent",
+        "services_domain_events_domainevent_as_payload",
+        "services_domain_events_get_redis_client",
+        "services_domain_events_revision_key_for_hotel",
+        "services_domain_events_settings",
+        "services_domain_events_unavailable",
+        "services_domain_events_validate_event_input",
+        "services_domain_events_validate_hotel_id",
+        "services_domain_events_realtimeeventsunavailable",
+        "services_domain_events_required"
+      ],
+      "qualifiedPath": [
+        "services_domain_events_publish_domain_event",
+        "services_domain_events_domainevent",
+        "services_domain_events_domainevent_as_payload",
+        "services_domain_events_get_redis_client",
+        "services_domain_events_revision_key_for_hotel",
+        "services_domain_events_settings",
+        "services_domain_events_unavailable",
+        "services_domain_events_validate_event_input",
+        "services_domain_events_validate_hotel_id",
+        "services_domain_events_realtimeeventsunavailable",
+        "services_domain_events_required"
+      ],
+      "depth": 2,
+      "nodeCount": 11,
+      "fileCount": 1,
+      "files": [
+        "app/services/domain_events.py"
+      ],
+      "criticality": 0.2155,
+      "warnings": []
+    },
+    {
       "id": "flow:services_analytics_insights_build_analytics_chat_answer",
       "name": "build_analytics_chat_answer",
       "entryPoint": "services_analytics_insights_build_analytics_chat_answer",
@@ -4150,6 +4348,36 @@
       "fileCount": 1,
       "files": [
         "app/services/analytics_insights.py"
+      ],
+      "criticality": 0.2117,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_analytics_warehouse_get_clickhouse_client",
+      "name": "get_clickhouse_client",
+      "entryPoint": "services_analytics_warehouse_get_clickhouse_client",
+      "entryPointId": "services_analytics_warehouse_get_clickhouse_client",
+      "path": [
+        "services_analytics_warehouse_get_clickhouse_client",
+        "services_analytics_warehouse_clickhousehttpclient",
+        "services_analytics_warehouse_settings",
+        "services_analytics_warehouse_unavailable",
+        "services_analytics_warehouse_analyticswarehouseunavailable",
+        "services_analytics_warehouse_required"
+      ],
+      "qualifiedPath": [
+        "services_analytics_warehouse_get_clickhouse_client",
+        "services_analytics_warehouse_clickhousehttpclient",
+        "services_analytics_warehouse_settings",
+        "services_analytics_warehouse_unavailable",
+        "services_analytics_warehouse_analyticswarehouseunavailable",
+        "services_analytics_warehouse_required"
+      ],
+      "depth": 2,
+      "nodeCount": 6,
+      "fileCount": 1,
+      "files": [
+        "app/services/analytics_warehouse.py"
       ],
       "criticality": 0.2117,
       "warnings": []
@@ -7203,6 +7431,36 @@
       "warnings": []
     },
     {
+      "id": "flow:services_domain_events_get_realtime_client",
+      "name": "get_realtime_client",
+      "entryPoint": "services_domain_events_get_realtime_client",
+      "entryPointId": "services_domain_events_get_realtime_client",
+      "path": [
+        "services_domain_events_get_realtime_client",
+        "services_domain_events_get_redis_client",
+        "services_domain_events_settings",
+        "services_domain_events_unavailable",
+        "services_domain_events_realtimeeventsunavailable",
+        "services_domain_events_required"
+      ],
+      "qualifiedPath": [
+        "services_domain_events_get_realtime_client",
+        "services_domain_events_get_redis_client",
+        "services_domain_events_settings",
+        "services_domain_events_unavailable",
+        "services_domain_events_realtimeeventsunavailable",
+        "services_domain_events_required"
+      ],
+      "depth": 2,
+      "nodeCount": 6,
+      "fileCount": 1,
+      "files": [
+        "app/services/domain_events.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
       "id": "flow:api_allocation_policy_get_run",
       "name": "get_run",
       "entryPoint": "api_allocation_policy_get_run",
@@ -10055,6 +10313,32 @@
       "warnings": []
     },
     {
+      "id": "flow:sync_crosstabsync_broadcastdomainchange",
+      "name": "broadcastDomainChange",
+      "entryPoint": "sync_crosstabsync_broadcastdomainchange",
+      "entryPointId": "sync_crosstabsync_broadcastdomainchange",
+      "path": [
+        "sync_crosstabsync_broadcastdomainchange",
+        "sync_crosstabsync_domainforpath",
+        "sync_crosstabsync_getsenderid",
+        "sync_crosstabsync_normalizehotelid"
+      ],
+      "qualifiedPath": [
+        "sync_crosstabsync_broadcastdomainchange",
+        "sync_crosstabsync_domainforpath",
+        "sync_crosstabsync_getsenderid",
+        "sync_crosstabsync_normalizehotelid"
+      ],
+      "depth": 1,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/sync/crossTabSync.ts"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:services_gemma_action_catalog_build_controlled_proposal",
       "name": "build_controlled_proposal",
       "entryPoint": "services_gemma_action_catalog_build_controlled_proposal",
@@ -10861,16 +11145,18 @@
       "entryPointId": "api_health_datastores_healthcheck",
       "path": [
         "api_health_datastores_healthcheck",
+        "api_health_clickhouse_healthcheck",
         "api_health_postgres_healthcheck",
         "api_health_redis_healthcheck"
       ],
       "qualifiedPath": [
         "api_health_datastores_healthcheck",
+        "api_health_clickhouse_healthcheck",
         "api_health_postgres_healthcheck",
         "api_health_redis_healthcheck"
       ],
       "depth": 1,
-      "nodeCount": 3,
+      "nodeCount": 4,
       "fileCount": 1,
       "files": [
         "app/api/health.py"
@@ -13342,6 +13628,30 @@
       "fileCount": 1,
       "files": [
         "app/services/operational_report_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:sync_crosstabsync_runeventstream",
+      "name": "runEventStream",
+      "entryPoint": "sync_crosstabsync_runeventstream",
+      "entryPointId": "sync_crosstabsync_runeventstream",
+      "path": [
+        "sync_crosstabsync_runeventstream",
+        "sync_crosstabsync_normalizehotelid",
+        "sync_crosstabsync_parsesseframes"
+      ],
+      "qualifiedPath": [
+        "sync_crosstabsync_runeventstream",
+        "sync_crosstabsync_normalizehotelid",
+        "sync_crosstabsync_parsesseframes"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/sync/crossTabSync.ts"
       ],
       "criticality": 0.16,
       "warnings": []
