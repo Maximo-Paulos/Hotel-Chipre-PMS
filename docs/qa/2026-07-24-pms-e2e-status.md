@@ -649,3 +649,24 @@ Mercado Pago, Gmail, webhooks, WhatsApp ni dinero reales.
 El resultado no cierra el gate cloud: el artefacto publicado sigue sin SHA
 provider-bound y los P1 de disponibilidad, cotización, Reportes y Analytics
 siguen pendientes de repetición contra un preview aislado.
+
+### Revalidación local — navegación operacional por rol en Apple WebKit
+
+La matriz WebKit de negocio no incluía `role-journey.spec.ts` y ese test sólo
+interactuaba con el `aside` de escritorio. En iPhone, la aplicación expone la
+superficie operativa mediante `nav[aria-label="Navegación móvil"]`, por lo que la
+primera ejecución agotó el timeout intentando pulsar un enlace de escritorio
+oculto. No era un fallo confirmado de autorización: la sesión de manager y el
+enlace a Reportes estaban visibles en la navegación móvil.
+
+Se actualizó el journey para elegir la navegación visible del dispositivo,
+comprobar la ausencia de enlaces prohibidos y abrir la tarea permitida. Manager
+alcanzó Reportes, Recepción alcanzó Caja y Housekeeping alcanzó Lavandería:
+**3/3** en WebKit iPhone 15. La regresión serial de ese proyecto, incluyendo
+onboarding, reservas, pagos, inventario, caja y estos roles, terminó **14/14**
+en el commit `70c40d4`.
+
+No se modificaron permisos de producto, se usaron las personas sintéticas
+seedadas y no se ejecutó correo, pago, webhook ni integración externa. Esta
+evidencia sigue siendo local: no sustituye las cinco sesiones reales ni el
+preview cloud aislado que el gate funcional exige.
