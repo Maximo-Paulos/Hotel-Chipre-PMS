@@ -1096,8 +1096,8 @@
     "hash": "d34d02bfc8084c072837ed4a9a20fe8a"
   },
   "frontend/e2e/v72-pages.spec.ts": {
-    "mtime": 1784862144897.9106,
-    "hash": "0e6e7064b2d424b4f790b251f121211e"
+    "mtime": 1784865929782.72,
+    "hash": "309ae8769ff2fc4ac6c1dbc820dc7ff2"
   },
   "frontend/playwright.config.ts": {
     "mtime": 1784864498096.6167,
@@ -1472,8 +1472,8 @@
     "hash": "d66858ebd22abe0495960f0c9a231205"
   },
   "frontend/src/views/protected/SettingsHotelPage.tsx": {
-    "mtime": 1784862144906.6428,
-    "hash": "f23960fc31dbfe24ebd05d1a4daf5066"
+    "mtime": 1784865890935.91,
+    "hash": "7687a4c31686fd1e495491075c754f05"
   },
   "frontend/src/views/protected/SettingsPermissionsPage.tsx": {
     "mtime": 1784862144906.7031,
@@ -3358,5 +3358,9 @@
   "frontend/e2e/responsive-smoke.spec.ts": {
     "mtime": 1784864566560.9211,
     "hash": "c9ccb071243fec306b1f66559b803713"
+  },
+  "docs/qa/2026-07-24-pms-e2e-status.md": {
+    "mtime": 1784865900669.8652,
+    "hash": "65223802357b27a35ab178ff55ca2050"
   }
 }

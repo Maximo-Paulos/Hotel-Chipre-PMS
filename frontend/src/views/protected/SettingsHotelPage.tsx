@@ -20,6 +20,15 @@ import { type PaymentSurchargeType } from "../../api/paymentSurcharges";
 
 const roomStatuses: RoomStatus[] = ["available", "occupied", "maintenance", "blocked", "cleaning"];
 
+const paymentMethodConfigOptions: Array<{ key: keyof HotelConfig; label: string; helper: string }> = [
+  { key: "enable_cash", label: "Efectivo", helper: "Se registra en caja." },
+  { key: "enable_debit_card", label: "Tarjeta de débito", helper: "Cobro manual con tarjeta." },
+  { key: "enable_credit_card", label: "Tarjeta de crédito", helper: "Cobro manual con tarjeta." },
+  { key: "enable_mercado_pago", label: "Mercado Pago", helper: "Links y confirmación por webhook." },
+  { key: "enable_bank_transfer", label: "Transferencia", helper: "Requiere comprobante y aprobación." },
+  { key: "enable_paypal", label: "PayPal", helper: "Gateway externo." }
+];
+
 const surchargeMethodOptions: { value: string; label: string }[] = [
   { value: "cash", label: "Efectivo" },
   { value: "mercado_pago", label: "MercadoPago" },
@@ -187,6 +196,31 @@ export function SettingsHotelPage() {
               <input type="number" min={0} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" value={form.free_cancellation_hours ?? 0} onChange={(e) => handleChange("free_cancellation_hours", parseInt(e.target.value || "0", 10))} />
             </label>
           </div>
+
+          {ownerOnly && (
+            <div className="rounded-lg border border-slate-200 p-4">
+              <h3 className="text-sm font-semibold text-slate-800">Medios de pago habilitados</h3>
+              <p className="mt-1 text-xs text-slate-500">
+                Solo se muestran en reservas y cobros los medios activos. Transferencia exige comprobante; Mercado Pago se confirma por webhook.
+              </p>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {paymentMethodConfigOptions.map((option) => (
+                  <label key={option.key} className="flex items-start gap-2 rounded-lg border border-slate-200 p-3 text-sm text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(form[option.key])}
+                      onChange={(event) => handleChange(option.key, event.target.checked)}
+                      className="mt-0.5"
+                    />
+                    <span>
+                      <span className="block font-semibold text-slate-800">{option.label}</span>
+                      <span className="block text-xs text-slate-500">{option.helper}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
 
           {ownerOnly && (
             <div className="grid gap-4 md:grid-cols-2">
@@ -431,5 +465,4 @@ function PaymentSurchargesCard() {
 }
 
 export default SettingsHotelPage;
-
 

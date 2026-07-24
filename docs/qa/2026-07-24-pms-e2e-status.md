@@ -16,7 +16,7 @@ repositorio.
 | --- | --- |
 | Frontend build | Pasa. Vite informa un bundle principal de ~758 kB minificado; queda como deuda de performance. |
 | Frontend lint | Pasa sin warnings. |
-| E2E desktop | 18/18 pasan en Chromium, incluyendo login, logout, admin, calendario de tarifas y páginas V72. |
+| E2E desktop | 19/19 pasan en Chromium, incluyendo login, logout, admin, calendario de tarifas, configuración del hotel y páginas V72. |
 | E2E mobile | 2/2 pasan con viewport iPhone 13 sobre Chromium: sin overflow horizontal y navegación móvil a Reservas. |
 | Backend focalizado | 14/14 pasan: stock, RLS de tenants y comprobantes de transferencia. |
 | Graphify | `portable-check` y `check-update` pasan después de actualizar el grafo. |
@@ -53,6 +53,24 @@ de cambiar el dominio.
 La prueba creó datos identificables con prefijo `QA móvil` en el hotel de
 prueba. Quedan pendientes de limpieza o de una política explícita de fixtures
 reutilizables antes de repetir pruebas mutantes en el mismo hotel.
+
+### Pagos y caja
+
+Una reserva existente permitió comprobar el circuito de seña, pago total y
+balance: el saldo pasó de `$31.500` a `$0` y, con una caja abierta, el pago
+efectivo generó un ingreso de `$80.000` y un arqueo esperado de `$80.000`.
+Cuando no hay caja abierta, el entorno cloud todavía muestra el aviso de que
+el cobro no queda registrado; la rama agrega apertura automática para cerrar
+ese hueco.
+
+Durante la carga inicial de la ficha una consulta incompleta llegó a mostrar un
+saldo fallback incorrecto antes de reemplazarlo por el valor real. Debe
+mostrarse un estado de carga en lugar de un cero provisional.
+
+El hotel de QA no exponía controles para habilitar Mercado Pago ni
+Transferencia, por lo que el editor de reserva ofrecía solo Efectivo y Débito.
+La configuración local ahora incorpora toggles de medios de pago para el dueño;
+Transferencia queda documentada como flujo con comprobante y aprobación.
 
 ## Limitaciones actuales
 

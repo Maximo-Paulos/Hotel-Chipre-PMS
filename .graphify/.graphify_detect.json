@@ -655,6 +655,7 @@
       "docs/multi-agent-workflow.md",
       "docs/orchestrator-status.md",
       "docs/product-definition.md",
+      "docs/qa/2026-07-24-pms-e2e-status.md",
       "docs/roadmap.md",
       "docs/runtime/dev-email-and-staging.md",
       "docs/security-baseline.md",
@@ -729,10 +730,10 @@
     ],
     "video": []
   },
-  "total_files": 720,
-  "total_words": 472051,
+  "total_files": 721,
+  "total_words": 472909,
   "needs_graph": true,
-  "warning": "Large corpus: 720 files · ~472,051 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
+  "warning": "Large corpus: 721 files · ~472,909 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
   "skipped_sensitive": [
     "alembic/versions/20260408_security_tokens.py",
     "app/adapters/memory_tokens.py",
@@ -745,7 +746,7 @@
   "graphifyignore_patterns": 60,
   "git": {
     "source_owner": "git",
-    "source_hash": "a733848547a54d2df4161eb754451a0f51e842eb",
+    "source_hash": "0c6029d93dbb92193fcdaa882384f4e47da38204",
     "branches": [
       "codex/feature/agent-ops-knowledge",
       "codex/feature/pms-e2e-scale-hardening",
@@ -762,9 +763,9 @@
     "source": "cli",
     "root": ".",
     "git_root": ".",
-    "head": "a733848547a54d2df4161eb754451a0f51e842eb",
+    "head": "0c6029d93dbb92193fcdaa882384f4e47da38204",
     "candidate_count": null,
-    "included_count": 720,
+    "included_count": 721,
     "excluded_untracked_count": 0,
     "excluded_ignored_count": 0,
     "excluded_sensitive_count": 7,

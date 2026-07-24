@@ -12,6 +12,7 @@ const credentials = {
 const PAGES: Array<{ path: string; shot: string; marker: RegExp }> = [
   { path: "/caja", shot: "caja", marker: /cierre de arqueo/i },
   { path: "/settings/companies", shot: "empresas", marker: /empresas/i },
+  { path: "/settings/hotel", shot: "hotel-settings", marker: /medios de pago/i },
   { path: "/reportes", shot: "reportes", marker: /reporte/i },
   { path: "/operacion/lista-espera", shot: "waitlist", marker: /espera/i },
   { path: "/operacion/lavanderia", shot: "lavanderia", marker: /lavander/i },
