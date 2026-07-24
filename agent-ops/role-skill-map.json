@@ -15,5 +15,6 @@
   "geo-local-seo": ["geo-local-seo", "ux-ui-audit"],
   "ux-ui-auditor": ["ux-ui-audit", "cloud-user-qa"],
   "data-visualization": ["data-visualization-review", "cloud-user-qa"],
+  "data-architecture-specialist": ["obsidian-load-context", "graphify-read", "scale-data-architecture", "secure-integration-review"],
   "release-governor": ["release-gate", "deploy-preview-check", "cloud-user-qa"]
 }

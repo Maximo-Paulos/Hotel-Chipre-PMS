@@ -33,6 +33,7 @@ REQUIRED_ROLES = {
     "geo-local-seo",
     "ux-ui-auditor",
     "data-visualization",
+    "data-architecture-specialist",
     "release-governor",
 }
 
@@ -55,6 +56,7 @@ REQUIRED_SKILLS = {
     "data-visualization-review",
     "agent-setup-maintenance",
     "incident-triage",
+    "scale-data-architecture",
 }
 
 

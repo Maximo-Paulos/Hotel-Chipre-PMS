@@ -1,0 +1,4 @@
+interface:
+  display_name: "Scale Data Architecture"
+  short_description: "Audita aislamiento, datos y capacidad"
+  default_prompt: "Usa $scale-data-architecture para auditar aislamiento multi-tenant, rendimiento y arquitectura analítica con evidencia."
