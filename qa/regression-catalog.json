@@ -4,7 +4,7 @@
     "preview_only": true,
     "required_personas": ["owner", "manager", "reception", "housekeeping", "master-admin"],
     "external_exclusions": ["payment completion", "outgoing email", "webhook delivery", "OTA operation"],
-    "evidence_fields": ["persona", "preview_url", "precondition", "human_action", "expected", "observed", "evidence", "code_sha"]
+    "evidence_fields": ["persona", "device", "preview_url", "precondition", "human_action", "expected", "observed", "severity", "screenshot", "evidence", "code_sha"]
   },
   "cases": [
     {"id": "marketing-home", "personas": ["owner"], "route": "/", "checks": ["visible content", "primary navigation", "responsive"], "expected": "Marketing home renders without exposing application data."},
@@ -40,6 +40,7 @@
     {"id": "settings-hotel-security-subscription", "personas": ["owner"], "route": "/settings/hotel,/settings/security,/settings/subscription,/settings/assistant,/settings/tests,/settings/companies", "checks": ["forms", "validation errors", "permissions"], "expected": "Owner settings work with explicit error and save feedback."},
     {"id": "public-api-key-contract", "personas": ["owner"], "route": "API public routes", "checks": ["missing/invalid key denied", "valid QA key contract", "no secret in evidence"], "expected": "Public flows validate API key without leaking it."},
     {"id": "master-admin-login", "personas": ["master-admin"], "route": "/adminpmsmaster/login", "checks": ["email/password/PIN", "invalid error", "lockout-safe behavior"], "expected": "Separate QA master-admin can log in; invalid input is rejected."},
-    {"id": "master-admin-pages", "personas": ["master-admin"], "route": "/adminpmsmaster/dashboard,/adminpmsmaster/billing,/adminpmsmaster/email,/adminpmsmaster/stripe,/adminpmsmaster/audit", "checks": ["navigation", "access control", "no external side effect"], "expected": "Master-admin pages are reachable only to QA master identity."}
+    {"id": "master-admin-pages", "personas": ["master-admin"], "route": "/adminpmsmaster/dashboard,/adminpmsmaster/billing,/adminpmsmaster/email,/adminpmsmaster/stripe,/adminpmsmaster/audit", "checks": ["navigation", "access control", "no external side effect"], "expected": "Master-admin pages are reachable only to QA master identity."},
+    {"id": "cloud-functional-sweep-20260724", "scenario": "Barrido cloud read-only de rutas críticas y estados de integración", "personas": ["owner"], "device": ["desktop-default", "apple-viewport-attempt"], "preview_url": "https://app.hotels-pms.com", "preconditions": ["sesión QA abierta", "sin side effects externos"], "steps": ["navegar por rutas críticas", "esperar estados de carga", "leer DOM visible", "intentar viewport 375x812"], "route": "/dashboard,/reservas,/huespedes,/habitaciones,/caja,/reportes,/operacion/stock,/operacion/lavanderia,/analytics,/analytics/operations,/settings/connections,/settings/tests", "checks": ["shell visible", "error/loading states", "integration status", "Apple viewport capability"], "expected": "Reportes y Analytics muestran datos o errores accionables; la configuración externa no se ejecuta durante QA.", "observed": "Reportes muestra Failed to fetch; Analytics permanece cargando; Caja/Stock/Lavandería cargan; el viewport solicitado queda en 655px efectivos.", "severity": "P1", "screenshot": null, "evidence": "qa/evidence/cloud-functional-sweep-20260724/README.md", "code_sha": "b1f2bb5"}
   ]
 }

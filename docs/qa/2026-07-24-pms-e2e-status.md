@@ -15,8 +15,8 @@ repositorio.
 | Área | Resultado |
 | --- | --- |
 | Frontend lint/typecheck/build | Pasan. Vite informa un bundle principal de 787.32 kB minificado (190.67 kB gzip); queda como deuda de performance. |
-| E2E desktop | Pasan los journeys de Chromium de login, logout, admin, calendario de tarifas, configuración del hotel, negocio, operaciones diarias, páginas V72 y estado de error de Analytics. La ejecución fresh completa queda en 36/36 al sumar móvil Chromium y los tres perfiles WebKit. |
-| E2E mobile | 2/2 pasan con Chromium emulando iPhone y verificando 375×812, 390×844 y 430×932; 6/6 pasan con Playwright WebKit en perfiles iPhone SE, iPhone 15 y iPhone 15 Pro Max. La regresión de selector con nombre largo queda cubierta y la suite completa pasa 36/36. Esto no sustituye Safari nativo del simulador Xcode, que no está disponible en este host. |
+| E2E desktop | Pasan los journeys de Chromium de login, logout, admin, calendario de tarifas, configuración del hotel, negocio, operaciones diarias, páginas V72 y estado de error de Analytics. La ejecución fresh completa queda en 40/40 al sumar móvil Chromium y los tres perfiles WebKit. |
+| E2E mobile | 3/3 pasan con Chromium emulando iPhone y verificando 375×812, 390×844 y 430×932; 9/9 pasan con Playwright WebKit en perfiles iPhone SE, iPhone 15 y iPhone 15 Pro Max. La regresión de selector con nombre largo y touch targets críticos queda cubierta; la suite completa pasa 40/40. Esto no sustituye Safari nativo del simulador Xcode, que no está disponible en este host. |
 | Backend completo | 1220 pasan, 17 se omiten, 12 quedan xfail y 1 xpass en Python 3.12 limpio. El runner E2E rechaza explícitamente Python menor a 3.10. |
 | Forward-tests de arquitectura de datos | 2/2 pasan: una entidad de otro hotel no puede leerse ni adjuntarse, y una cotización queda invalidada antes de persistir la reserva cuando cambia la tarifa. |
 | Migración virgen | `alembic upgrade head` pasa sobre SQLite temporal hasta `20260724_room_move_enum_values`, incluyendo blobs privados, rotación, custodia, claves tenant restantes y el contrato de movimientos de habitación. |
@@ -98,7 +98,7 @@ repitió desde cero con:
 
 `E2E_PYTHON=/tmp/hpms-scale-venv-312/bin/python npm run e2e`
 
-y terminó `36 passed (1.1m)`. Esto confirma el baseline local, pero no cierra
+y terminó `40 passed (1.2m)`. Esto confirma el baseline local, pero no cierra
 el fallo cloud, los cinco roles reales, el preview aislado ni Safari nativo.
 
 El catálogo conserva gaps funcionales pendientes: onboarding/recuperación,
@@ -128,7 +128,7 @@ cotización como `isFetching`, por lo que no se enviaba la reserva aunque ya se
 mostrara un total. Se corrigió bloqueando el submit hasta disponer de un
 `quote_token` vigente y mostrando `Actualizando...`; el journey ahora espera
 explícitamente el estado habilitado. La ejecución posterior quedó integrada en
-la matriz fresh de 36/36.
+la matriz fresh de 40/40.
 
 La corrección está validada localmente, pero el entorno web de QA debe recibir
 un despliegue antes de repetir la medición allí.
@@ -181,10 +181,13 @@ ancho intrínseco del selector y del banner superior, que se propagaba al
 documento aunque la navegación horizontal interna fuera intencional.
 
 Se corrigieron las restricciones `min-w-0`/`max-w-full`/`overflow-hidden`, el
-salto de línea del banner y la espera determinista del fixture. La regresión
-WebKit pasó 8/8 y la suite fresh completa pasó 36/36 en Chromium, Chromium
-móvil y los tres perfiles WebKit. El cambio todavía no está desplegado en el
-cloud canónico, por lo que debe repetirse allí contra un preview autorizado.
+salto de línea del banner y la espera determinista del fixture. Además, en
+viewport móvil los controles operativos de Reservas, Caja, Stock y el banner
+reciben un área mínima de 44 px; los `select` nativos requieren `height`
+explícito en WebKit. La regresión móvil pasó 12/12 y la suite fresh completa
+pasó 40/40 en Chromium, Chromium móvil y los tres perfiles WebKit. El cambio
+todavía no está desplegado en el cloud canónico, por lo que debe repetirse allí
+contra un preview autorizado.
 
 También se agregó una regresión de UI para un `402` de Analytics: la pantalla
 ahora explica que el reporte requiere el plan correspondiente, ofrece
@@ -316,7 +319,7 @@ rápido con documento, registra una reserva con seña manual, cobra un parcial e
 efectivo, envía un comprobante de transferencia, lo aprueba y cobra el saldo
 restante en efectivo antes de completar check-in/check-out y cerrar la caja con
 rotación de custodia. El flujo pasa en 1/1 por Chromium y 1/1 por WebKit iPhone
-15, y forma parte de la suite completa 36/36. El fixture de imagen se genera con un
+15, y forma parte de la suite completa 40/40. El fixture de imagen se genera con un
 contenido único por ejecución para no falsear la protección anti-duplicados.
 
 ### Registro, verificación, recuperación y onboarding
@@ -330,7 +333,7 @@ pago podía sobrescribir un click humano. El perfil pendiente sólo conserva
 nombre, email, teléfono y rol en `sessionStorage`; nunca contraseña, token ni
 cookie.
 
-La regresión pasa en Chromium y la suite completa queda en 36/36 usando un
+La regresión pasa en Chromium y la suite completa queda en 40/40 usando un
 worker global sobre la SQLite aislada. La corrida con cinco workers reprodujo
 un `database is locked` durante un cobro concurrente; por eso no se considera
 evidencia funcional y las mutaciones locales se ejecutan serializadas.
@@ -377,12 +380,13 @@ distribuidos no están habilitados y requeridos.
 Con la sesión autenticada existente del navegador interno, hotel QA ID 4 y rol
 Dueño, `/reportes` se abrió en la pestaña controlada. La carga terminó en
 `No se pudo cargar el reporte: Failed to fetch`; `/analytics/operations`
-terminó en `No se pudo cargar analytics.`. No hubo errores ni warnings visibles
-en la consola del navegador. La salud pública del API y el preflight CORS
-responden, pero no existe todavía una respuesta autenticada ni traza del
-proveedor para aislar si el problema es backend, proxy o consulta. Esto
-mantiene ambos recorridos como bloqueadores funcionales P1 y requiere
-evidencia del preview/proveedor antes de corregir a ciegas.
+permaneció en `Cargando analytics...` después de aproximadamente 14 segundos.
+No hubo errores ni warnings visibles en la consola del navegador. La salud
+pública del API y el preflight CORS responden, pero no existe todavía una
+respuesta autenticada ni traza del proveedor para aislar si el problema es
+backend, proxy o consulta. Esto mantiene ambos recorridos como bloqueadores
+funcionales P1 y requiere evidencia del preview/proveedor antes de corregir a
+ciegas.
 
 La ejecución fue de solo lectura: no se crearon reservas, pagos, comprobantes,
 emails, webhooks ni cambios de configuración.
@@ -419,7 +423,7 @@ emails, webhooks ni cambios de configuración.
   proveedor: esas mediciones siguen pendientes en un preview aislado.
 - Las pruebas que mutan la SQLite local deben ejecutarse serializadas. La
   corrida paralela de cinco proyectos reprodujo `database is locked` durante
-  un cobro; una corrida secuencial con `--workers=1` pasa 36/36. Una corrida
+  un cobro; una corrida secuencial con `--workers=1` pasa 40/40. Una corrida
   paralela que arranque dos servidores E2E sobre el mismo archivo también puede
   fallar durante el reset con `table users already exists`; no es evidencia de
   un fallo funcional del PMS, pero sí una limitación del arnés local.
