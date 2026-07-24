@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 
 import { type OperationalReservationGroup, type OperationalReservationSummary } from "../../api/reports";
+import { ApiError } from "../../api/client";
 import { useDailyOperationalReport, useOperationalAlerts } from "../../hooks/useReports";
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -41,14 +42,25 @@ export function ReportsPage() {
       </header>
 
       {(reportQuery.error || alertsQuery.error) && (
-        <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
-          No se pudo cargar el reporte: {((reportQuery.error || alertsQuery.error) as Error).message}
+        <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-3 text-sm text-rose-800" role="alert">
+          <p>{reportsErrorMessage(reportQuery.error || alertsQuery.error)}</p>
+          <button
+            type="button"
+            onClick={() => {
+              void reportQuery.refetch();
+              void alertsQuery.refetch();
+            }}
+            disabled={reportQuery.isFetching || alertsQuery.isFetching}
+            className="mt-2 rounded-lg border border-rose-300 bg-white px-3 py-2 font-semibold text-rose-800 hover:bg-rose-100 disabled:opacity-60"
+          >
+            Reintentar
+          </button>
         </div>
       )}
 
       {reportQuery.isLoading ? (
         <div className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500 shadow-sm">Cargando reporte...</div>
-      ) : report ? (
+      ) : reportQuery.isError ? null : report ? (
         <>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <Metric label="Llegadas" value={String(report.arrivals.count)} />
@@ -136,6 +148,14 @@ export function ReportsPage() {
       )}
     </div>
   );
+}
+
+function reportsErrorMessage(error: unknown): string {
+  if (error instanceof ApiError) {
+    if (error.status === 402) return "Tu plan actual no incluye este reporte operativo.";
+    if (error.status === 403) return "No tenés permisos para consultar este reporte operativo.";
+  }
+  return "No se pudo cargar el reporte operativo. Revisá la conexión y reintentá.";
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
