@@ -704,3 +704,21 @@ tarifas usa fixtures/mock locales y, por tanto, demuestra la UX y el contrato
 del editor, no la propagación a un proveedor OTA. La integridad del cálculo de
 reservas y precios diarios sigue cubierta además por los tests de servicio y
 los journeys de reserva locales.
+
+### P1 corregido — master-admin usable en Apple WebKit
+
+Al incluir el quinto rol requerido en la matriz Apple, el primer recorrido de
+master-admin detectó un defecto funcional P1: en móvil el panel ocultaba todo
+el menú de navegación y el dashboard podía exceder el ancho del viewport. Por
+eso Billing Policy y Audit Log eran inalcanzables para ese rol desde un iPhone.
+
+La corrección agrega una navegación móvil horizontal con objetivos táctiles de
+al menos 44 px, permite que el contenedor principal se reduzca (`min-w-0`) y
+trunca el email largo. El journey ahora exige que la navegación sea visible,
+que `document.documentElement.scrollWidth` no supere el viewport y que Billing
+y Audit sean navegables desde la superficie visible.
+
+Master-admin aprobó **2/2** en iPhone SE, iPhone 15 e iPhone 15 Pro Max. La
+regresión total posterior aprobó **17/17 por dispositivo (51/51)**, con lint,
+typecheck y build en verde. No se usaron proveedores, email, Stripe ni acciones
+de plataforma externas.
