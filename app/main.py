@@ -296,5 +296,3 @@ def serve_spa(full_path: str, db: Session = Depends(get_db)):
     if candidate.is_file() and candidate.is_relative_to(FRONTEND_DIST):
         return FileResponse(candidate)
     return serve_frontend(db)
-
-

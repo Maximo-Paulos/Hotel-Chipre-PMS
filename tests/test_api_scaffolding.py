@@ -124,6 +124,60 @@ def test_rooms_crud_smoke(api_client):
         assert room.deleted_at is not None
 
 
+def test_guest_quick_profile_api_serializes_stays_without_relationship_recursion(api_client):
+    client, SessionLocal = api_client
+
+    with SessionLocal() as db:
+        category = RoomCategory(
+            hotel_id=1,
+            name="Quick profile category",
+            code="QPROFILE",
+            base_price_per_night=100.0,
+            max_occupancy=2,
+        )
+        guest = Guest(
+            hotel_id=1,
+            first_name="Profile",
+            last_name="Guest",
+            document_type=DocumentTypeEnum.DNI,
+            document_number="QP-1",
+        )
+        db.add_all([category, guest])
+        db.flush()
+        room = Room(
+            hotel_id=1,
+            room_number="QP-101",
+            floor=1,
+            category_id=category.id,
+            status=RoomStatusEnum.AVAILABLE,
+        )
+        db.add(room)
+        db.flush()
+        db.add(
+            Reservation(
+                confirmation_code="QP-RES-001",
+                hotel_id=1,
+                guest_id=guest.id,
+                room_id=room.id,
+                category_id=category.id,
+                check_in_date=date(2026, 7, 20),
+                check_out_date=date(2026, 7, 22),
+                total_amount=100.0,
+                amount_paid=100.0,
+                status=ReservationStatusEnum.CHECKED_OUT,
+            )
+        )
+        db.commit()
+        guest_id = guest.id
+
+    response = client.get(f"/api/guests/{guest_id}/quick-profile")
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["guest"]["id"] == guest_id
+    assert payload["last_stays"][0]["confirmation_code"] == "QP-RES-001"
+
+
 def test_room_status_and_category_fetch(api_client):
     client, SessionLocal = api_client
     with SessionLocal() as db:

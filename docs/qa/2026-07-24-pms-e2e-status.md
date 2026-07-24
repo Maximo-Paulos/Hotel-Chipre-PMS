@@ -29,6 +29,15 @@ repositorio.
 | Load runner | `scripts/scale/staged_http_load.py` validado por tests y help; no ejecutado contra provider por falta de preview aislado. |
 | Graphify | `portable-check` pasa después de actualizar y normalizar el grafo; `check-update` reporta pendiente semántico porque no se generaron descripciones/labels LLM en este run. |
 
+La combinación que recorre la jornada diaria y las páginas autenticadas quedó
+en 14/14 en Chromium serial después de corregir la serialización del perfil
+rápido de huésped. La ruta `GET /api/guests/{id}/quick-profile` devolvía
+instancias ORM con relaciones cíclicas (`Guest.reservations` y
+`GuestTag.guest`); después de crear una estadía, el encoder genérico de FastAPI
+podía terminar en `RecursionError`. La API ahora convierte el huésped y sus
+etiquetas a `GuestRead`/`GuestTagRead` JSON antes de responder, y una prueba de
+regresión cubre un huésped con una estadía existente.
+
 ## Hallazgos y correcciones
 
 ### Dashboard responsive
@@ -128,6 +137,13 @@ lavandería con item y habitación, y recorre `Recolectado → Enviado → Recib
 `200` de `/api/reports/operational/daily` junto con las secciones operativas
 visibles. La aserción de lavandería observa la tarjeta del lote, que es donde
 la UI representa el estado, además del mensaje de confirmación de cada cambio.
+
+### Perfil rápido de huésped después de una estadía
+
+La serialización del perfil rápido se validó con una reserva ya finalizada y
+conserva el resumen de estadías sin exponer el grafo ORM de relaciones. El
+contrato evita que una estadía existente cambie una respuesta válida en una
+recursión infinita del encoder.
 
 ### Pagos y caja
 

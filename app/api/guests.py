@@ -213,13 +213,24 @@ def get_guest_quick_profile(
     context: AuthContext = Depends(get_auth_context),
 ):
     try:
-        return quick_profile(
+        profile = quick_profile(
             db,
             hotel_id=context.hotel_id,
             guest_id=guest_id,
             offset=offset,
             limit=limit,
         )
+        # Do not return ORM instances here. Guest.reservations and
+        # GuestTag.guest form cyclic SQLAlchemy relationships; FastAPI's
+        # generic encoder can recurse indefinitely once the guest has a stay.
+        return {
+            **profile,
+            "guest": GuestRead.model_validate(profile["guest"]).model_dump(mode="json"),
+            "active_tags": [
+                GuestTagRead.model_validate(tag).model_dump(mode="json")
+                for tag in profile["active_tags"]
+            ],
+        }
     except GuestServiceError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
