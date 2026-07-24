@@ -51,3 +51,32 @@ Desplegar el SHA actual de la rama a un preview aislado con PostgreSQL/Redis con
 obtener una traza del request autenticado de Reportes/Analytics y repetir el
 barrido con una matriz completa, screenshots sanitizados y una cotización visible
 antes de permitir confirmar la reserva.
+
+## Revalidación owner con navegador interno — continuación
+
+- Fecha: 2026-07-24.
+- Persona: owner QA autenticado; no se probó una vista de rol como sustituto de
+  una sesión real.
+- Código local revisado: `aa8b60d`; SHA efectivamente desplegado: `needs-verification`.
+- Tipo de recorrido: lectura visible, consulta de disponibilidad y apertura del
+  formulario de reserva sin confirmar ninguna mutación financiera.
+
+| Superficie | Resultado visible | Evaluación |
+| --- | --- | --- |
+| Dashboard | Renderiza reservas próximas y bandeja operativa; queda una sección de acciones en carga durante el smoke. | Smoke P2 pendiente de traza |
+| Reservas | Renderiza 13 reservas y 12 acciones operativas abiertas; muestra reservas `unassigned`, saldos pendientes y duplicación de acciones para algunos códigos. | P1 operativo pendiente de conciliación |
+| Consulta de disponibilidad | Para `Compartida QA Codex (#7)` del 2026-07-30 al 2026-07-31 muestra `Disponibles: 1`. | Smoke aprobado |
+| Reserva rápida | Las categorías tardan aproximadamente 10 segundos en aparecer. Luego de seleccionar `Compartida QA Codex (#7)` y las fechas 2026-07-30/31, el formulario permanece en `Noches 0`, `Total final $ 0` y el mensaje inicial de cotización. | P1 reproducible |
+| Caja, Stock y Lavandería | Renderizan sus superficies operativas sin error visible en el recorrido corto; no se abrió caja ni se registraron movimientos en este recheck. | Sólo smoke |
+| Reportes | Reproduce `No se pudo cargar el reporte: Failed to fetch` y `No hay datos para mostrar.` | P1 reproducible |
+| Analytics/Operación | Después de aproximadamente 12 segundos termina en `No se pudo cargar analytics.`; el navegador no expuso logs de error visibles. | P1; falta traza autenticada |
+| Configuración de usuarios | Sólo aparece el owner. El formulario de invitación existe, pero no se envió ninguna invitación. | Personas manager/reception/housekeeping no verificadas |
+| Conexiones y pruebas | Mercado Pago no conectado y WhatsApp revocado; la pantalla de pruebas describe links enviados por Gmail. No se creó ningún link ni se activó integración. | Pendiente provider-bound |
+
+La pestaña del navegador fue dejada en el flujo cloud de QA para handoff. No se
+guardaron screenshots persistibles; el backend de captura sigue sin producir
+evidencia visual, por lo que esta revalidación no cierra la puerta funcional.
+
+No se crearon huéspedes nuevos, reservas, pagos, comprobantes, links, emails,
+webhooks, acciones OTA, invitaciones ni cambios de configuración durante esta
+continuación.
