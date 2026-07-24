@@ -17,7 +17,8 @@ repositorio.
 | Frontend lint/typecheck/build | Pasan. Vite informa un bundle principal de 785.37 kB minificado (190.07 kB gzip); queda como deuda de performance. |
 | E2E desktop | 22/22 pasan en Chromium, incluyendo login, logout, admin, calendario de tarifas, configuración del hotel, los journeys de negocio y páginas V72. La ejecución fresh completa queda en 30/30 al sumar móvil Chromium y los tres perfiles WebKit. |
 | E2E mobile | 2/2 pasan con Chromium emulando iPhone y verificando 375×812, 390×844 y 430×932; 6/6 pasan con Playwright WebKit en perfiles iPhone SE, iPhone 15 y iPhone 15 Pro Max; los journeys mutantes de reserva/pagos/check-in/out, inventario y cambio de habitación/no-show pasan 3/3 en WebKit iPhone 15. Esto no sustituye Safari nativo del simulador Xcode, que no está disponible en este host. |
-| Backend completo | 1212 pasan, 17 se omiten, 12 quedan xfail y 1 xpass en Python 3.12 limpio. El runner E2E rechaza explícitamente Python menor a 3.10. |
+| Backend completo | 1214 pasan, 17 se omiten, 12 quedan xfail y 1 xpass en Python 3.12 limpio. El runner E2E rechaza explícitamente Python menor a 3.10. |
+| Forward-tests de arquitectura de datos | 2/2 pasan: una entidad de otro hotel no puede leerse ni adjuntarse, y una cotización queda invalidada antes de persistir la reserva cuando cambia la tarifa. |
 | Migración virgen | `alembic upgrade head` pasa sobre SQLite temporal hasta `20260724_room_move_enum_values`, incluyendo blobs privados, rotación, custodia, claves tenant restantes y el contrato de movimientos de habitación. |
 | Backend focalizado | 56/56 pasan: motor de asignación, operaciones de reservas, check-in, check-out y seguridad del flujo. |
 | Analítica y trazabilidad | 27/27 pasan en contratos/API; cada envelope expone `data_as_of`, `source_lag_seconds` y `data_source`, y la UI lo muestra. |

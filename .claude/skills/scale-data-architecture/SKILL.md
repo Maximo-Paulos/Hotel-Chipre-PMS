@@ -29,6 +29,21 @@ Revisar cada ruta y servicio afectado en estas capas:
 
 Crear pruebas negativas con dos hoteles y entidades con IDs coincidentes. Exigir denegación o ausencia para lectura, modificación, pagos, disponibilidad, caja, stock, reportes, exportaciones y webhooks cruzados.
 
+## Forward-tests obligatorios
+
+Antes de cerrar una auditoría de arquitectura deben pasar dos contratos
+independientes y ejecutables, sin `xfail` ni mocks que oculten el límite:
+
+1. `tests/test_scale_data_architecture_forward.py::test_forward_multi_hotel_context_cannot_read_or_attach_foreign_entities`
+   debe probar lectura y escritura con una entidad válida de otro hotel.
+2. `tests/test_scale_data_architecture_forward.py::test_forward_stale_tariff_quote_cannot_persist_reservation`
+   debe cambiar una tarifa después de emitir la cotización y verificar que la
+   reserva no se persiste.
+
+La salida debe conservar el volumen de casos, el entorno y el SHA del código.
+Estos forward-tests son una puerta mínima; no reemplazan la matriz completa de
+endpoints hotel-scoped ni la validación provider-bound de PostgreSQL/RLS.
+
 ## Tarifas y consistencia entre superficies
 
 - Localizar la única función de cotización y comprobar que calendario, habitaciones, reserva rápida, API pública y edición la reutilicen.
