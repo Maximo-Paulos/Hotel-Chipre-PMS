@@ -4,7 +4,8 @@ import { Link, useNavigate } from "react-router-dom";
 import { ApiError } from "../../api/client";
 import { Seo } from "../../components/Seo";
 import { requestVerification, verifyEmail } from "../../api/auth";
-import { getOnboardingStatus } from "../../api/onboarding";
+import { getOnboardingStatus, setOwner } from "../../api/onboarding";
+import { clearPendingOwner, getPendingOwner } from "../../state/pendingOwner";
 import { normalizeRole, useSession } from "../../state/session";
 
 export function VerifyEmailPage() {
@@ -55,6 +56,15 @@ export function VerifyEmailPage() {
         accessToken: res.access_token,
         isVerified: true
       });
+      const pendingOwner = getPendingOwner();
+      if (pendingOwner && pendingOwner.email.trim().toLowerCase() === res.user.email.trim().toLowerCase()) {
+        await setOwner(pendingOwner, {
+          userId: res.user.email,
+          hotelId: res.hotel_id,
+          accessToken: res.access_token
+        });
+        clearPendingOwner();
+      }
       setMessage("Codigo correcto. Email verificado.");
       const status = await getOnboardingStatus({
         hotelId: res.hotel_id,

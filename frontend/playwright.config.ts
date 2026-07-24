@@ -1,5 +1,6 @@
 import { defineConfig, devices } from "@playwright/test";
 import { execFileSync } from "node:child_process";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -37,6 +38,9 @@ const e2eDbPath = path.join(repoRoot, "_e2e.db").replace(/\\/g, "/");
 const e2eDatabaseURL = process.env.E2E_DATABASE_URL || `sqlite:///${e2eDbPath}`;
 const jwtSecret =
   process.env.E2E_JWT_SECRET || "e2e-local-jwt-secret-change-me-32chars";
+const emailOutboxPath =
+  path.join(os.tmpdir(), "hotel-chipre-e2e-email-outbox.jsonl");
+process.env.E2E_EMAIL_OUTBOX_PATH = emailOutboxPath;
 
 export default defineConfig({
   testDir: "./e2e",
@@ -106,6 +110,7 @@ export default defineConfig({
         REALTIME_EVENTS_ENABLED: "false",
         CLICKHOUSE_ENABLED: "false",
         JWT_SECRET: jwtSecret,
+        DEV_EMAIL_OUTBOX_PATH: emailOutboxPath,
         VITE_BACKEND_URL: backendURL,
         MASTER_ADMIN_EMAIL: "master-admin@e2e.com",
         MASTER_ADMIN_PASSWORD: "E2eMasterPass1234!",

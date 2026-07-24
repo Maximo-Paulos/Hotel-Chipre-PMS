@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, Route, Routes, useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
@@ -106,6 +106,8 @@ export function OnboardingWizard() {
   const [staff, setStaffState] = useState<StaffPayload[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const paymentMethodsHydratedForHotel = useRef<number | null>(null);
+  const otaChannelsHydratedForHotel = useRef<number | null>(null);
 
   useEffect(() => {
     if (!status) return;
@@ -152,20 +154,22 @@ export function OnboardingWizard() {
       });
     }
 
-    if (status.payment_methods && !hasEnabledProvider(paymentsForm)) {
+    if (status.payment_methods && paymentMethodsHydratedForHotel.current !== status.hotel_id) {
       setPaymentsForm({
         mercado_pago: hydrateProvider(status.payment_methods.mercado_pago),
         paypal: hydrateProvider(status.payment_methods.paypal),
         stripe: hydrateProvider(status.payment_methods.stripe)
       });
+      paymentMethodsHydratedForHotel.current = status.hotel_id;
     }
 
-    if (status.ota_channels && !hasEnabledProvider(otaForm)) {
+    if (status.ota_channels && otaChannelsHydratedForHotel.current !== status.hotel_id) {
       setOtaForm({
         booking: hydrateProvider(status.ota_channels.booking),
         expedia: hydrateProvider(status.ota_channels.expedia),
         despegar: hydrateProvider(status.ota_channels.despegar)
       });
+      otaChannelsHydratedForHotel.current = status.hotel_id;
     }
 
     if (status.subscription_choice && subscriptionForm.plan_code === defaultSubscriptionForm.plan_code) {
@@ -186,9 +190,7 @@ export function OnboardingWizard() {
   }, [
     categories.length,
     identityForm.name,
-    otaForm,
     ownerForm.name,
-    paymentsForm,
     policyForm.deposit_percentage,
     rooms.length,
     session.email,
@@ -483,9 +485,6 @@ const refreshStatus = async (refetch: () => Promise<unknown>) => {
     /* silent */
   }
 };
-
-const hasEnabledProvider = (payload: Record<string, OnboardingProviderSetup>) =>
-  Object.values(payload).some((provider) => provider.enabled);
 
 const hydrateProvider = (provider?: OnboardingProviderSetup | null): OnboardingProviderSetup => ({
   enabled: Boolean(provider?.enabled),

@@ -4,8 +4,8 @@ import { Link, useNavigate } from "react-router-dom";
 import { ApiError } from "../../api/client";
 import { Seo } from "../../components/Seo";
 import { register, requestVerification } from "../../api/auth";
-import { setOwner } from "../../api/onboarding";
 import { normalizeRole, useSession } from "../../state/session";
+import { storePendingOwner } from "../../state/pendingOwner";
 
 export function RegisterOwnerPage() {
   const navigate = useNavigate();
@@ -40,15 +40,12 @@ export function RegisterOwnerPage() {
       };
       login(sessionData);
 
-      await setOwner(
-        {
-          name: `${form.name} ${form.lastName}`.trim(),
-          email: form.email,
-          phone: form.phone,
-          role: "Owner"
-        },
-        sessionData
-      );
+      storePendingOwner({
+        name: `${form.name} ${form.lastName}`.trim(),
+        email: form.email,
+        phone: form.phone,
+        role: "Owner"
+      });
 
       const codeResp = await requestVerification(form.email);
       if (codeResp.code) {
