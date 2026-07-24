@@ -690,3 +690,17 @@ cotización y conflicto, comprobantes y pagos mixtos simulados, estadía,
 inventario, caja, reportes, analytics, y las rutas permitidas de manager,
 recepción y housekeeping. La emulación usa WebKit de Playwright; la
 certificación en Safari nativo o en un dispositivo físico sigue pendiente.
+
+### Revalidación local — tarifas por método de pago en Apple WebKit
+
+El calendario de tarifas tenía prueba de interfaz con adaptador API aislado,
+pero no formaba parte de la matriz WebKit de negocio. Se incorporó para que los
+tres tamaños Apple comprueben la edición de precio base, efectivo y
+transferencia, la validación de importes vacíos, cambios masivos por días de la
+semana y el estado de mapeo de canales.
+
+Cada tamaño aprobó **15/15** escenarios, para un total de **45/45**. El caso de
+tarifas usa fixtures/mock locales y, por tanto, demuestra la UX y el contrato
+del editor, no la propagación a un proveedor OTA. La integridad del cálculo de
+reservas y precios diarios sigue cubierta además por los tests de servicio y
+los journeys de reserva locales.
