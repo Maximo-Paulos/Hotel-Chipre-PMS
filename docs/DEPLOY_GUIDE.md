@@ -35,8 +35,14 @@ Crear un Web Service desde `render.yaml`.
 
 Config del servicio:
 - Build command: `pip install -r requirements.txt`
-- Start command: `python -m alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}`
+- Pre-deploy command: `python -m alembic upgrade head`
+- Start command: `exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}`
 - Healthcheck: `/health`
+- El Blueprint declara autoscaling de 3 a 50 instancias con objetivos de CPU
+  60% y memoria 70%; requiere workspace Render Pro+ y debe validarse con
+  telemetría antes de certificar capacidad.
+- El Blueprint declara un worker Celery separado y un beat separado. Ambos
+  usan el Key Value Valkey administrado, persistente y privado.
 
 Regla de esquema:
 - Producción, preview, QA y staging deben ejecutar Alembic antes de iniciar la aplicación.
@@ -61,6 +67,16 @@ Variables de entorno:
 - Transfer-proof bytes are stored in the private `payment_proof_blobs` table; expose them only through the authenticated, tenant-scoped proof endpoint.
 - `AI_ENABLED=false` until the hotel-specific IA provider is configured
 - `GEMMA_ENABLED=false`
+
+Variables de capacidad y warehouse:
+- `REDIS_URL`, `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND`: provistas por el
+  servicio Key Value del Blueprint.
+- `DISTRIBUTED_LOCK_ENABLED=true`
+- `DISTRIBUTED_LOCK_REQUIRED=true`
+- `CLICKHOUSE_ENABLED=true`
+- `CLICKHOUSE_REQUIRED=true`
+- `CLICKHOUSE_URL`, `CLICKHOUSE_USER`, `CLICKHOUSE_PASSWORD`: cargar como
+  secretos en Render; nunca commitear valores.
 
 ## 3) Cloudflare DNS
 

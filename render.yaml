@@ -9,8 +9,19 @@ services:
     name: hotel-chipre-pms-api
     runtime: python
     buildCommand: pip install -r requirements.txt
-    startCommand: python -m alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}
+    preDeployCommand: python -m alembic upgrade head
+    startCommand: exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}
     healthCheckPath: /health
+    # Production capacity profile. Render autoscaling requires a Pro
+    # workspace; preview environments deliberately run minInstances only.
+    plan: standard
+    scaling:
+      minInstances: 3
+      maxInstances: 50
+      targetCPUPercent: 60
+      targetMemoryPercent: 70
+    previews:
+      numInstances: 3
     envVars:
       - key: APP_ENV
         value: production
@@ -42,5 +53,128 @@ services:
         value: "false"
       - key: ANALYTICS_EXPORTS_DIR
         value: /var/exports/analytics
-    plan: free
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: hotel-chipre-pms-redis
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          type: keyvalue
+          name: hotel-chipre-pms-redis
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          type: keyvalue
+          name: hotel-chipre-pms-redis
+          property: connectionString
+      - key: DISTRIBUTED_LOCK_ENABLED
+        value: "true"
+      - key: DISTRIBUTED_LOCK_REQUIRED
+        value: "true"
+      - key: CLICKHOUSE_ENABLED
+        value: "true"
+      - key: CLICKHOUSE_REQUIRED
+        value: "true"
+      - key: CLICKHOUSE_URL
+        sync: false
+      - key: CLICKHOUSE_DATABASE
+        value: hotel_analytics
+      - key: CLICKHOUSE_USER
+        sync: false
+      - key: CLICKHOUSE_PASSWORD
+        sync: false
     autoDeploy: true
+
+  - type: keyvalue
+    name: hotel-chipre-pms-redis
+    # Keep this private to Render services. Persistence is required for queue
+    # recovery; PostgreSQL remains the transactional source of truth.
+    ipAllowList: []
+    plan: standard
+    maxmemoryPolicy: noeviction
+    persistenceMode: journal-snapshot
+
+  - type: worker
+    name: hotel-chipre-pms-worker
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: celery -A app.tasks.celery_app worker --loglevel=INFO --concurrency=4
+    plan: standard
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: hotel-chipre-pms-redis
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          type: keyvalue
+          name: hotel-chipre-pms-redis
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          type: keyvalue
+          name: hotel-chipre-pms-redis
+          property: connectionString
+      - key: JWT_SECRET
+        sync: false
+      - key: DISTRIBUTED_LOCK_ENABLED
+        value: "true"
+      - key: DISTRIBUTED_LOCK_REQUIRED
+        value: "true"
+      - key: CLICKHOUSE_ENABLED
+        value: "true"
+      - key: CLICKHOUSE_REQUIRED
+        value: "true"
+      - key: CLICKHOUSE_URL
+        sync: false
+      - key: CLICKHOUSE_DATABASE
+        value: hotel_analytics
+      - key: CLICKHOUSE_USER
+        sync: false
+      - key: CLICKHOUSE_PASSWORD
+        sync: false
+
+  - type: worker
+    name: hotel-chipre-pms-beat
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: celery -A app.tasks.celery_app beat --loglevel=INFO
+    plan: standard
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: hotel-chipre-pms-redis
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          type: keyvalue
+          name: hotel-chipre-pms-redis
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          type: keyvalue
+          name: hotel-chipre-pms-redis
+          property: connectionString
+      - key: CLICKHOUSE_ENABLED
+        value: "true"
+      - key: CLICKHOUSE_REQUIRED
+        value: "true"
+      - key: CLICKHOUSE_URL
+        sync: false
+      - key: CLICKHOUSE_DATABASE
+        value: hotel_analytics
+      - key: CLICKHOUSE_USER
+        sync: false
+      - key: CLICKHOUSE_PASSWORD
+        sync: false

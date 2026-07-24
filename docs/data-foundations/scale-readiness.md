@@ -19,7 +19,9 @@ provider-bound evidence.
 | Analytics provenance | All analytics envelopes expose `data_as_of`, `source_lag_seconds`, and `data_source`; UI renders them | ✅ contract-covered |
 | Health visibility | `/health/datastores` reports PostgreSQL and Redis roles separately, including distributed locks | ✅ contract-covered |
 | Realtime invalidation | Tenant-scoped Redis revisions, authenticated SSE, `BroadcastChannel`/storage fallback, query invalidation guarded by `hotel_id` | ✅ contract-covered |
-| Derived warehouse boundary | PII-free ClickHouse HTTP adapter, `ReplacingMergeTree` schema, replayable projector task, PG↔warehouse count reconciliation | ✅ contract-covered; provider unverified |
+| Derived warehouse boundary | PII-free ClickHouse dimensions plus reservation/payment/cash/stock facts, `ReplacingMergeTree` schema, idempotent payment materialized read model, replayable projector, PG↔warehouse count+amount reconciliation | ✅ contract-covered; provider unverified |
+| Derived warehouse scheduling | Celery five-minute bounded replay and nightly full-window reconciliation; mismatch logs and retries block publication | ✅ local contract; provider scheduler/alert unverified |
+| Runtime capacity profile | Render Blueprint declares 3–50 autoscaling at CPU 60%/memory 70%, separate worker/beat services, persistent Valkey and pre-deploy Alembic | ✅ IaC declared; provider plan/telemetry unverified |
 | Load runner | `scripts/scale/staged_http_load.py` emits aggregate steady/burst p50/p95/p99, status counts and transport errors without response bodies | ✅ executable; not run against provider |
 | iPhone-sized web layout | Fresh Chromium E2E at 375×812, 390×844, and 430×932 | ✅ local evidence |
 
@@ -31,16 +33,19 @@ provider-bound evidence.
 2. Run the co-located PostgreSQL benchmark and capture server-side `EXPLAIN`
    plus median/p95 for availability, allocation candidates, payment balance,
    daily reports, and guest search.
-3. Provision ClickHouse and run the warehouse projector against the isolated
-   PostgreSQL facts. The local boundary is replayable and PII-free, but the
-   provider must prove CDC/outbox delivery, measured lag, idempotent replay and
-   PG↔warehouse reconciliation before any dashboard is labeled warehouse-backed.
+3. Provision ClickHouse in the PostgreSQL region and run the warehouse
+   projector against the isolated PostgreSQL facts. The local boundary is
+   replayable and PII-free, but the provider must prove ClickPipes CDC/outbox
+   delivery, measured lag, idempotent replay and PG↔warehouse reconciliation
+   for reservations, payments, cash and stock before any dashboard is labeled
+   warehouse-backed.
 4. Run `scripts/scale/staged_http_load.py` at 10k steady concurrency and 20k
    burst, with
    per-tenant error rate, p95/p99 latency, connection-pool saturation, Redis
    contention, queue lag, and database CPU/IO captured as artifacts.
-5. Verify rollback, alerting, autoscaling, backup/PITR, and tenant-isolation
-   probes against the same isolated environment.
+5. Verify rollback, alerting, the Render 3–50 autoscaling profile, persistent
+   Valkey behavior, Supabase PITR/read replicas, and tenant-isolation probes
+   against the same isolated environment.
 6. Run the complete journey in WebKit/Safari/iOS evidence. The current machine
    does not expose `xcrun simctl`, so Apple Simulator evidence is blocked until
    an Apple-capable runner is provisioned.

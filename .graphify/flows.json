@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-24T07:40:24.062Z",
+  "generatedAt": "2026-07-24T07:57:29.617Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -2100,6 +2100,58 @@
       "fileCount": 1,
       "files": [
         "tests/conftest.py"
+      ],
+      "criticality": 0.285,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_analytics_warehouse_project_operational_fact_rows",
+      "name": "project_operational_fact_rows",
+      "entryPoint": "services_analytics_warehouse_project_operational_fact_rows",
+      "entryPointId": "services_analytics_warehouse_project_operational_fact_rows",
+      "path": [
+        "services_analytics_warehouse_project_operational_fact_rows",
+        "services_analytics_warehouse_clickhousehttpclient_insert_json_each_row",
+        "services_analytics_warehouse_validate_hotel_id",
+        "services_analytics_warehouse_warehousesyncresult"
+      ],
+      "qualifiedPath": [
+        "services_analytics_warehouse_project_operational_fact_rows",
+        "services_analytics_warehouse_clickhousehttpclient_insert_json_each_row",
+        "services_analytics_warehouse_validate_hotel_id",
+        "services_analytics_warehouse_warehousesyncresult"
+      ],
+      "depth": 1,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/services/analytics_warehouse.py"
+      ],
+      "criticality": 0.285,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_analytics_warehouse_reconcile_derived_fact",
+      "name": "reconcile_derived_fact",
+      "entryPoint": "services_analytics_warehouse_reconcile_derived_fact",
+      "entryPointId": "services_analytics_warehouse_reconcile_derived_fact",
+      "path": [
+        "services_analytics_warehouse_reconcile_derived_fact",
+        "services_analytics_warehouse_clickhousehttpclient_execute",
+        "services_analytics_warehouse_factreconciliationresult",
+        "services_analytics_warehouse_validate_hotel_id"
+      ],
+      "qualifiedPath": [
+        "services_analytics_warehouse_reconcile_derived_fact",
+        "services_analytics_warehouse_clickhousehttpclient_execute",
+        "services_analytics_warehouse_factreconciliationresult",
+        "services_analytics_warehouse_validate_hotel_id"
+      ],
+      "depth": 1,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/services/analytics_warehouse.py"
       ],
       "criticality": 0.285,
       "warnings": []
@@ -6085,6 +6137,34 @@
       "warnings": []
     },
     {
+      "id": "flow:tasks_analytics_tasks_project_all_derived_facts_incremental",
+      "name": "project_all_derived_facts_incremental",
+      "entryPoint": "tasks_analytics_tasks_project_all_derived_facts_incremental",
+      "entryPointId": "tasks_analytics_tasks_project_all_derived_facts_incremental",
+      "path": [
+        "tasks_analytics_tasks_project_all_derived_facts_incremental",
+        "tasks_analytics_tasks_project_all_hotels_window",
+        "tasks_analytics_tasks_project_operational_window",
+        "tasks_analytics_tasks_date_window",
+        "tasks_analytics_tasks_decimal_total"
+      ],
+      "qualifiedPath": [
+        "tasks_analytics_tasks_project_all_derived_facts_incremental",
+        "tasks_analytics_tasks_project_all_hotels_window",
+        "tasks_analytics_tasks_project_operational_window",
+        "tasks_analytics_tasks_date_window",
+        "tasks_analytics_tasks_decimal_total"
+      ],
+      "depth": 3,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "app/tasks/analytics_tasks.py"
+      ],
+      "criticality": 0.18,
+      "warnings": []
+    },
+    {
       "id": "flow:services_timeseries_projection_project_daily_rate_change",
       "name": "project_daily_rate_change",
       "entryPoint": "services_timeseries_projection_project_daily_rate_change",
@@ -6246,6 +6326,34 @@
       "fileCount": 1,
       "files": [
         "app/api/movement_groups.py"
+      ],
+      "criticality": 0.18,
+      "warnings": []
+    },
+    {
+      "id": "flow:tasks_analytics_tasks_reconcile_all_derived_facts_nightly",
+      "name": "reconcile_all_derived_facts_nightly",
+      "entryPoint": "tasks_analytics_tasks_reconcile_all_derived_facts_nightly",
+      "entryPointId": "tasks_analytics_tasks_reconcile_all_derived_facts_nightly",
+      "path": [
+        "tasks_analytics_tasks_reconcile_all_derived_facts_nightly",
+        "tasks_analytics_tasks_project_all_hotels_window",
+        "tasks_analytics_tasks_project_operational_window",
+        "tasks_analytics_tasks_date_window",
+        "tasks_analytics_tasks_decimal_total"
+      ],
+      "qualifiedPath": [
+        "tasks_analytics_tasks_reconcile_all_derived_facts_nightly",
+        "tasks_analytics_tasks_project_all_hotels_window",
+        "tasks_analytics_tasks_project_operational_window",
+        "tasks_analytics_tasks_date_window",
+        "tasks_analytics_tasks_decimal_total"
+      ],
+      "depth": 3,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "app/tasks/analytics_tasks.py"
       ],
       "criticality": 0.18,
       "warnings": []
@@ -7776,6 +7884,32 @@
       "fileCount": 1,
       "files": [
         "frontend/src/views/protected/analytics/AnalyticsPages.tsx"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
+      "id": "flow:tasks_analytics_tasks_project_operational_facts_to_clickhouse",
+      "name": "project_operational_facts_to_clickhouse",
+      "entryPoint": "tasks_analytics_tasks_project_operational_facts_to_clickhouse",
+      "entryPointId": "tasks_analytics_tasks_project_operational_facts_to_clickhouse",
+      "path": [
+        "tasks_analytics_tasks_project_operational_facts_to_clickhouse",
+        "tasks_analytics_tasks_project_operational_window",
+        "tasks_analytics_tasks_date_window",
+        "tasks_analytics_tasks_decimal_total"
+      ],
+      "qualifiedPath": [
+        "tasks_analytics_tasks_project_operational_facts_to_clickhouse",
+        "tasks_analytics_tasks_project_operational_window",
+        "tasks_analytics_tasks_date_window",
+        "tasks_analytics_tasks_decimal_total"
+      ],
+      "depth": 2,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/tasks/analytics_tasks.py"
       ],
       "criticality": 0.17,
       "warnings": []
@@ -10375,6 +10509,32 @@
       "warnings": []
     },
     {
+      "id": "flow:services_analytics_warehouse_build_cash_movement_fact_row",
+      "name": "build_cash_movement_fact_row",
+      "entryPoint": "services_analytics_warehouse_build_cash_movement_fact_row",
+      "entryPointId": "services_analytics_warehouse_build_cash_movement_fact_row",
+      "path": [
+        "services_analytics_warehouse_build_cash_movement_fact_row",
+        "services_analytics_warehouse_date_value",
+        "services_analytics_warehouse_enum_value",
+        "services_analytics_warehouse_positive_id"
+      ],
+      "qualifiedPath": [
+        "services_analytics_warehouse_build_cash_movement_fact_row",
+        "services_analytics_warehouse_date_value",
+        "services_analytics_warehouse_enum_value",
+        "services_analytics_warehouse_positive_id"
+      ],
+      "depth": 1,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/services/analytics_warehouse.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:services_gemma_action_catalog_build_controlled_proposal",
       "name": "build_controlled_proposal",
       "entryPoint": "services_gemma_action_catalog_build_controlled_proposal",
@@ -10425,6 +10585,100 @@
       "warnings": []
     },
     {
+      "id": "flow:services_analytics_warehouse_build_hotel_dimension_row",
+      "name": "build_hotel_dimension_row",
+      "entryPoint": "services_analytics_warehouse_build_hotel_dimension_row",
+      "entryPointId": "services_analytics_warehouse_build_hotel_dimension_row",
+      "path": [
+        "services_analytics_warehouse_build_hotel_dimension_row",
+        "services_analytics_warehouse_positive_id"
+      ],
+      "qualifiedPath": [
+        "services_analytics_warehouse_build_hotel_dimension_row",
+        "services_analytics_warehouse_positive_id"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/services/analytics_warehouse.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_analytics_warehouse_build_payment_fact_row",
+      "name": "build_payment_fact_row",
+      "entryPoint": "services_analytics_warehouse_build_payment_fact_row",
+      "entryPointId": "services_analytics_warehouse_build_payment_fact_row",
+      "path": [
+        "services_analytics_warehouse_build_payment_fact_row",
+        "services_analytics_warehouse_date_value",
+        "services_analytics_warehouse_enum_value",
+        "services_analytics_warehouse_positive_id"
+      ],
+      "qualifiedPath": [
+        "services_analytics_warehouse_build_payment_fact_row",
+        "services_analytics_warehouse_date_value",
+        "services_analytics_warehouse_enum_value",
+        "services_analytics_warehouse_positive_id"
+      ],
+      "depth": 1,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/services/analytics_warehouse.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_analytics_warehouse_build_room_category_dimension_row",
+      "name": "build_room_category_dimension_row",
+      "entryPoint": "services_analytics_warehouse_build_room_category_dimension_row",
+      "entryPointId": "services_analytics_warehouse_build_room_category_dimension_row",
+      "path": [
+        "services_analytics_warehouse_build_room_category_dimension_row",
+        "services_analytics_warehouse_positive_id"
+      ],
+      "qualifiedPath": [
+        "services_analytics_warehouse_build_room_category_dimension_row",
+        "services_analytics_warehouse_positive_id"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/services/analytics_warehouse.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_analytics_warehouse_build_room_dimension_row",
+      "name": "build_room_dimension_row",
+      "entryPoint": "services_analytics_warehouse_build_room_dimension_row",
+      "entryPointId": "services_analytics_warehouse_build_room_dimension_row",
+      "path": [
+        "services_analytics_warehouse_build_room_dimension_row",
+        "services_analytics_warehouse_enum_value",
+        "services_analytics_warehouse_positive_id"
+      ],
+      "qualifiedPath": [
+        "services_analytics_warehouse_build_room_dimension_row",
+        "services_analytics_warehouse_enum_value",
+        "services_analytics_warehouse_positive_id"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/services/analytics_warehouse.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:services_allocation_engine_build_slots_from_db",
       "name": "build_slots_from_db",
       "entryPoint": "services_allocation_engine_build_slots_from_db",
@@ -10446,6 +10700,32 @@
       "fileCount": 1,
       "files": [
         "app/services/allocation_engine.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_analytics_warehouse_build_stock_movement_fact_row",
+      "name": "build_stock_movement_fact_row",
+      "entryPoint": "services_analytics_warehouse_build_stock_movement_fact_row",
+      "entryPointId": "services_analytics_warehouse_build_stock_movement_fact_row",
+      "path": [
+        "services_analytics_warehouse_build_stock_movement_fact_row",
+        "services_analytics_warehouse_date_value",
+        "services_analytics_warehouse_enum_value",
+        "services_analytics_warehouse_positive_id"
+      ],
+      "qualifiedPath": [
+        "services_analytics_warehouse_build_stock_movement_fact_row",
+        "services_analytics_warehouse_date_value",
+        "services_analytics_warehouse_enum_value",
+        "services_analytics_warehouse_positive_id"
+      ],
+      "depth": 1,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/services/analytics_warehouse.py"
       ],
       "criticality": 0.16,
       "warnings": []

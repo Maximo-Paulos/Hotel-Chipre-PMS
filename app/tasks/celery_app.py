@@ -28,6 +28,17 @@ celery_app.conf.update(
 # timezone configured above (Celery `timezone`). Morning report at 08:00,
 # nightly summary at 23:00.
 celery_app.conf.beat_schedule = {
+    # Derived analytics is replayable from PostgreSQL. ClickPipes CDC remains
+    # the production low-latency path; these jobs provide bounded recovery and
+    # an explicit reconciliation signal every five minutes and nightly.
+    "analytics-derived-facts-incremental": {
+        "task": "analytics.project_all_derived_facts_incremental",
+        "schedule": 300.0,
+    },
+    "analytics-derived-facts-nightly-reconciliation": {
+        "task": "analytics.reconcile_all_derived_facts_nightly",
+        "schedule": crontab(hour=2, minute=30),
+    },
     "operational-morning-reports": {
         "task": "reports.send_morning_reports",
         "schedule": crontab(hour=8, minute=0),

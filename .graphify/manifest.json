@@ -1068,12 +1068,12 @@
     "hash": "0aabafc5fd6e89b75b99709816e443df"
   },
   "app/tasks/analytics_tasks.py": {
-    "mtime": 1784877753750.744,
-    "hash": "ad6180873d5788c8fdd36f18b89a195d"
+    "mtime": 1784879538371.9639,
+    "hash": "18fe119a3adee8b0264dee44d58ec2bf"
   },
   "app/tasks/celery_app.py": {
-    "mtime": 1784862144887.1638,
-    "hash": "3ffdd241059dde51fddfbbea58deee08"
+    "mtime": 1784879363869.6177,
+    "hash": "3e862fa9c9dc21ca9a23f71a0cac37be"
   },
   "app/tasks/ota_tasks.py": {
     "mtime": 1784863268797.5598,
@@ -2268,8 +2268,8 @@
     "hash": "d44cfe18dec64c8aae68668e41619cff"
   },
   "docs/DEPLOY_GUIDE.md": {
-    "mtime": 1784873311581.53,
-    "hash": "c9001929ab218d83c12941863275b9b5"
+    "mtime": 1784879523761.5913,
+    "hash": "c498863fc91ff2e5a899be208686669a"
   },
   "docs/INCIDENT_PLAYBOOK.md": {
     "mtime": 1784862144888.0237,
@@ -2304,8 +2304,8 @@
     "hash": "c751470c4516e1aba14cff2bc3bca10e"
   },
   "docs/data-foundations/architecture-hybrid.md": {
-    "mtime": 1784877814018.4824,
-    "hash": "ed4dadf4fcf6b8bf0e777bbd29241116"
+    "mtime": 1784879523761.303,
+    "hash": "90d4a3c454fae68894727e0df0508402"
   },
   "docs/data-foundations/der-conceptual-model.md": {
     "mtime": 1784862144888.967,
@@ -2564,8 +2564,8 @@
     "hash": "92f303469b92ef1d7e9fab36057b2898"
   },
   "render.yaml": {
-    "mtime": 1784862144919.3445,
-    "hash": "ba28d8480bf709bcb1251a22a7d13786"
+    "mtime": 1784879499595.5825,
+    "hash": "f1f79d909725b643cc1c65725c9037a0"
   },
   "requirements.txt": {
     "mtime": 1784862144919.6294,
@@ -3360,8 +3360,8 @@
     "hash": "cc3b4c09ac92a7d389d9ad275a799aa0"
   },
   "docs/qa/2026-07-24-pms-e2e-status.md": {
-    "mtime": 1784878420099.1611,
-    "hash": "99e7b7fe3f372f31eec27c0dadecd956"
+    "mtime": 1784879824224.2715,
+    "hash": "aebb3f9f9f8997804cf9492f30c41868"
   },
   "frontend/e2e/business-journey.spec.ts": {
     "mtime": 1784872135925.51,
@@ -3440,16 +3440,16 @@
     "hash": "138e6fb88e635dbdd0c740969612b8a2"
   },
   "docs/data-foundations/scale-readiness.md": {
-    "mtime": 1784878420098.8513,
-    "hash": "7484839bdc4c843ab90e2f1be6c43e0c"
+    "mtime": 1784879824223.9988,
+    "hash": "b30d3d2f8af5f80f00b9486317aedcae"
   },
   "app/api/events.py": {
     "mtime": 1784877373270.604,
     "hash": "0b17a8c19b150e4ea67c5c4598c2b51f"
   },
   "app/services/analytics_warehouse.py": {
-    "mtime": 1784878300092.4873,
-    "hash": "b203901825b97377ebcd3815d7e0efe8"
+    "mtime": 1784879796508.2065,
+    "hash": "da58883f1caf16e48f0cdfba647f511f"
   },
   "app/services/domain_events.py": {
     "mtime": 1784878179742.478,
@@ -3460,8 +3460,8 @@
     "hash": "8a20b782aa4a0b24319b3b614cd8d1f5"
   },
   "tests/test_analytics_warehouse.py": {
-    "mtime": 1784877644486.5813,
-    "hash": "6455c358a929a318dbda3c5a8cdbba9b"
+    "mtime": 1784879800492.3804,
+    "hash": "2266fc4b51d7df90190ad71f33681761"
   },
   "tests/test_domain_events.py": {
     "mtime": 1784877408147.9392,
@@ -3474,5 +3474,9 @@
   "tests/test_staged_http_load.py": {
     "mtime": 1784878362380.1433,
     "hash": "e8436ba5b2fcd4349c33d6db08028242"
+  },
+  "tests/test_analytics_task_schedule.py": {
+    "mtime": 1784879548111.342,
+    "hash": "dbe9a73240411ad60d9cc09c753ecbfb"
   }
 }

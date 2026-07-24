@@ -156,12 +156,17 @@ keeps multiple tabs coherent without crossing hotel scopes.
 ### ClickHouse derived warehouse
 
 `app.services.analytics_warehouse` owns the provider boundary. It creates only
-PII-free `ReplacingMergeTree` facts partitioned by `(hotel_id, month)` and
-ordered by tenant/date/entity. PostgreSQL `FactReservationDaily` remains the
-source of truth. The Celery projector is replayable and reports a hard
-reconciliation result for each hotel/date window; a mismatch is retried and
-must block a release gate. Provider connectivity and 10k/20k scale evidence
-remain deployment prerequisites, not local claims.
+PII-free dimensions (`dim_hotel`, `dim_date`, `dim_room`,
+`dim_room_category`) and `ReplacingMergeTree` facts for reservations, payments,
+cash movements and stock movements. Facts are partitioned by `(hotel_id,
+month)` and ordered by tenant/date/entity. PostgreSQL remains the source of
+truth for all transactional data. The Celery projector is replayable and
+reports hard count-plus-amount reconciliation for each hotel/date window; a
+mismatch is retried, logged as an alert signal, and must block publication.
+The five-minute bounded replay and nightly full-window job are recovery and
+verification paths, not a claim that ClickPipes CDC has been provisioned.
+Provider connectivity, measured CDC lag and 10k/20k scale evidence remain
+deployment prerequisites, not local claims.
 
 ### Distributed lock pattern (allocation solver)
 
