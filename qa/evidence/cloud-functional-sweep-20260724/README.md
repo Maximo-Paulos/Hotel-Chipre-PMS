@@ -136,3 +136,23 @@ y mantuvo hotel ID 4. `/reportes` terminó, después de 10 segundos, en
 analytics.`. La sesión siguió autenticada durante ambas lecturas. El SHA
 desplegado continúa sin exposición (`needs-verification`), por lo que no se
 atribuye todavía el fallo al commit local `60845ed`.
+
+## Revalidación owner — disponibilidad y cotización, continuación
+
+- Fecha: 2026-07-24.
+- Persona: owner QA autenticado en hotel ID 4.
+- Dispositivo: navegador interno con viewport por defecto; no se ejecutaron
+  side effects externos.
+- Código local revisado: `fb4be2d`; SHA efectivamente desplegado:
+  `needs-verification`.
+
+| Superficie | Resultado observado | Evaluación |
+| --- | --- | --- |
+| Consulta de disponibilidad | Se seleccionó `Standard QA (#5)`, se ingresaron 2026-08-15 a 2026-08-17 y se ejecutó `Consultar`; la UI devolvió `Disponibles: 3` e IDs 6, 7 y 11. | Disponibilidad responde, pero las fechas no quedan preservadas |
+| Fechas después de consultar | Después de la respuesta, los campos volvieron a mostrar 2026-07-24 a 2026-07-25. Se reprodujo tanto con `fill` directo como con blur natural mediante Tab. | P1: la acción visible no conserva el rango consultado |
+| Reserva rápida | En el formulario se seleccionó `Standard QA (#5)` y se ingresaron 2026-08-15 a 2026-08-17; el formulario permaneció en `Noches 0`, `Total final $ 0` y el mensaje inicial de cotización. | P1 reproducible; no se confirmó la reserva |
+| Reportes y Analytics | Reportes y Analytics/Operación permanecieron en estados de carga durante este recorrido; no hubo logs visibles del navegador. | P1; falta traza autenticada del provider |
+
+El formulario de reserva se cerró con `Cancelar` y no se crearon huéspedes,
+reservas, pagos, comprobantes, links, emails, webhooks, invitaciones ni cambios
+de configuración durante esta continuación.
