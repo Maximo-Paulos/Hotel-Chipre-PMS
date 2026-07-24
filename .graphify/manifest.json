@@ -1100,8 +1100,8 @@
     "hash": "70ea4197fe8494bac4fc09ce0bd4dfb2"
   },
   "frontend/playwright.config.ts": {
-    "mtime": 1784910598623.9902,
-    "hash": "6808000ed0e6ffa6405cf3045a69f5d1"
+    "mtime": 1784912914182.44,
+    "hash": "db86207197ef18d4a9a62b2e0436b799"
   },
   "frontend/src/App.tsx": {
     "mtime": 1784862144901.0059,
@@ -3360,8 +3360,8 @@
     "hash": "0417fd101669a65cc4d6657a983ba143"
   },
   "docs/qa/2026-07-24-pms-e2e-status.md": {
-    "mtime": 1784910449797.7266,
-    "hash": "fd2a8901830004a842cb443246a499f9"
+    "mtime": 1784912872019.9802,
+    "hash": "6cb5512bcd5ead9a193fc3dc67241bb5"
   },
   "frontend/e2e/business-journey.spec.ts": {
     "mtime": 1784904324073.8352,
@@ -3508,8 +3508,8 @@
     "hash": "9cb4abce74c620496562e8813f25b0e9"
   },
   "frontend/e2e/role-journey.spec.ts": {
-    "mtime": 1784894835029.7754,
-    "hash": "af1537bbdfd5c568f76cfdc4c99169f9"
+    "mtime": 1784913088500.0403,
+    "hash": "f3cf00f341a49e8c46e75ce6f00aaf35"
   },
   "frontend/e2e/auth-onboarding-journey.spec.ts": {
     "mtime": 1784896137961.9326,

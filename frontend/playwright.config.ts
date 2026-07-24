@@ -94,6 +94,7 @@ export default defineConfig({
               "**/reservation-lifecycle.spec.ts",
               "**/analytics-success.spec.ts",
               "**/auth-onboarding-journey.spec.ts",
+              "**/role-journey.spec.ts",
               "**/guest-companion-journey.spec.ts",
               "**/reservation-charge-journey.spec.ts",
               "**/zz-cash-control-journey.spec.ts"

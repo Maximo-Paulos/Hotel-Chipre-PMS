@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 type Persona = {
   label: string;
@@ -48,15 +48,28 @@ async function login(page: Page, persona: Persona) {
   );
 }
 
+async function operationalNavigation(page: Page): Promise<Locator> {
+  const mobileNavigation = page.locator('nav[aria-label="Navegación móvil"]');
+
+  if (await mobileNavigation.isVisible()) {
+    return mobileNavigation;
+  }
+
+  return page.locator("aside nav");
+}
+
 for (const persona of personas) {
   test(`${persona.label} sees only its operational surface`, async ({ page }) => {
     await login(page, persona);
+    const navigation = await operationalNavigation(page);
 
     for (const path of persona.forbiddenNavPaths) {
-      await expect(page.locator(`aside nav a[href="${path}"]`)).toHaveCount(0);
+      await expect(navigation.locator(`a[href="${path}"]`)).toHaveCount(0);
     }
 
-    await page.locator(`aside nav a[href="${persona.allowedPath}"]`).click();
+    const allowedLink = navigation.locator(`a[href="${persona.allowedPath}"]`);
+    await expect(allowedLink).toBeVisible();
+    await allowedLink.click();
     await expect(page).toHaveURL(new RegExp(`${persona.allowedPath.replaceAll("/", "\\/")}$`));
     await expect(page.getByRole("heading", { name: persona.allowedHeading })).toBeVisible();
   });
