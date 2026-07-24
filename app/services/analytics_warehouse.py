@@ -123,7 +123,9 @@ class ClickHouseHTTPClient:
 
 def get_clickhouse_client() -> ClickHouseHTTPClient | None:
     settings = _settings()
-    if not settings.CLICKHOUSE_ENABLED or not settings.CLICKHOUSE_URL.strip():
+    if not settings.CLICKHOUSE_ENABLED:
+        return None
+    if not settings.CLICKHOUSE_URL.strip():
         _unavailable("ClickHouse warehouse is not configured")
         return None
     return ClickHouseHTTPClient(

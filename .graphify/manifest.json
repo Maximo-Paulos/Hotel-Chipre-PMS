@@ -1128,8 +1128,8 @@
     "hash": "295cb406ea26fb1ee80d8ffac736b24c"
   },
   "frontend/src/api/client.ts": {
-    "mtime": 1784877498226.5671,
-    "hash": "2bea02f5387f016943558c306f2272a6"
+    "mtime": 1784878234102.467,
+    "hash": "5a9734f62d0598cb8a198528bd1417c9"
   },
   "frontend/src/api/companies.ts": {
     "mtime": 1784862144901.4314,
@@ -3448,16 +3448,16 @@
     "hash": "0b17a8c19b150e4ea67c5c4598c2b51f"
   },
   "app/services/analytics_warehouse.py": {
-    "mtime": 1784877709899.9292,
-    "hash": "2b35f628496d79b6ea9d9865693cc85e"
+    "mtime": 1784878300092.4873,
+    "hash": "b203901825b97377ebcd3815d7e0efe8"
   },
   "app/services/domain_events.py": {
     "mtime": 1784878179742.478,
     "hash": "8917939140a4e99dcb68966f319baea9"
   },
   "frontend/src/sync/crossTabSync.ts": {
-    "mtime": 1784877518032.5364,
-    "hash": "54ffc392b6c3514f4e8f19a3619ee59d"
+    "mtime": 1784878234102.8464,
+    "hash": "8a20b782aa4a0b24319b3b614cd8d1f5"
   },
   "tests/test_analytics_warehouse.py": {
     "mtime": 1784877644486.5813,
