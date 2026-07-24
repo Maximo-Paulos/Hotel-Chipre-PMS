@@ -1,9 +1,16 @@
+from concurrent.futures import ThreadPoolExecutor
+
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
 from app.models.security_audit_log import SecurityAuditLog
 from app.models.hotel_config import HotelConfiguration
-from app.models.permission import RolePermissionDefault
+from app.models.permission import Permission, RolePermissionDefault
 from app.services.permission_service import (
+    DEFAULT_MATRIX,
     PERMISSION_CHECKIN_PERFORM,
     PERMISSION_GUEST_EDIT,
+    PERMISSION_DEFINITIONS,
     PERMISSION_RESERVATION_CREATE,
     get_matrix,
     resolve,
@@ -75,3 +82,34 @@ def test_get_matrix_includes_hotel_overrides(db):
 
     assert matrix["receptionist"][PERMISSION_GUEST_EDIT]["allowed"] is True
     assert matrix["receptionist"][PERMISSION_GUEST_EDIT]["source"] == "override"
+
+
+def test_permission_seed_is_safe_when_two_requests_initialize_it_concurrently(tmp_path):
+    database_url = f"sqlite:///{(tmp_path / 'permission-seed.sqlite').as_posix()}"
+    engine = create_engine(
+        database_url,
+        connect_args={"check_same_thread": False, "timeout": 30},
+    )
+    from app.database import Base
+
+    Base.metadata.create_all(bind=engine)
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+    def seed_in_request() -> None:
+        with SessionLocal() as session:
+            seed_default_permissions(session)
+            session.commit()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [executor.submit(seed_in_request) for _ in range(2)]
+        for future in futures:
+            future.result()
+
+    with SessionLocal() as session:
+        assert session.query(Permission).count() == len(PERMISSION_DEFINITIONS)
+        assert session.query(RolePermissionDefault).count() == sum(
+            len(permissions) for permissions in DEFAULT_MATRIX.values()
+        )
+
+    Base.metadata.drop_all(bind=engine)
+    engine.dispose()

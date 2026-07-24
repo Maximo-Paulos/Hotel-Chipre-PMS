@@ -6,6 +6,8 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 
+from sqlalchemy.dialects.postgresql import insert as postgresql_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
 from app.models.security_audit_log import SecurityAuditLog
@@ -19,6 +21,34 @@ ROLE_RECEPTIONIST = "receptionist"
 ROLE_HOUSEKEEPING = "housekeeping"
 
 ROLE_CODES = (ROLE_OWNER, ROLE_CO_OWNER, ROLE_MANAGER, ROLE_RECEPTIONIST, ROLE_HOUSEKEEPING)
+
+
+def _insert_if_missing(
+    db: Session,
+    table,
+    values: dict[str, object] | list[dict[str, object]],
+    conflict_columns: list[str],
+) -> None:
+    """Insert a seed row atomically across the supported SQLite/PostgreSQL backends.
+
+    Permission resolution runs during authentication, so two concurrent first requests
+    can initialize the matrix at the same time.  A read-then-insert sequence is not
+    safe under that load; the unique constraint must arbitrate the race in the DB.
+    """
+
+    dialect_name = db.get_bind().dialect.name
+    if dialect_name == "sqlite":
+        statement = sqlite_insert(table).values(values).on_conflict_do_nothing(
+            index_elements=conflict_columns
+        )
+    elif dialect_name == "postgresql":
+        statement = postgresql_insert(table).values(values).on_conflict_do_nothing(
+            index_elements=conflict_columns
+        )
+    else:
+        raise RuntimeError(f"Unsupported database dialect for permission seeding: {dialect_name}")
+
+    db.execute(statement)
 
 PERMISSION_CONFIG_MANAGE = "config:manage"
 PERMISSION_PERMISSION_MANAGE = "permissions:manage"
@@ -118,35 +148,44 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
 def seed_default_permissions(db: Session) -> None:
     """Create or repair the built-in role permission matrix."""
 
+    _insert_if_missing(
+        db,
+        Permission.__table__,
+        [{"code": code, "description": description} for code, description in PERMISSION_DEFINITIONS.items()],
+        ["code"],
+    )
+    permissions_by_code = {
+        permission.code: permission
+        for permission in db.query(Permission)
+        .filter(Permission.code.in_(PERMISSION_DEFINITIONS))
+        .all()
+    }
     for code, description in PERMISSION_DEFINITIONS.items():
-        permission = db.query(Permission).filter(Permission.code == code).one_or_none()
-        if permission is None:
-            db.add(Permission(code=code, description=description))
-        elif permission.description != description:
+        permission = permissions_by_code[code]
+        if permission.description != description:
             permission.description = description
 
     db.flush()
 
+    default_rows = [
+        {"role": role, "permission_code": permission_code, "allowed": allowed}
+        for role, permissions in DEFAULT_MATRIX.items()
+        for permission_code, allowed in permissions.items()
+    ]
+    _insert_if_missing(
+        db,
+        RolePermissionDefault.__table__,
+        default_rows,
+        ["role", "permission_code"],
+    )
+    defaults_by_key = {
+        (default.role, default.permission_code): default
+        for default in db.query(RolePermissionDefault).all()
+    }
     for role, permissions in DEFAULT_MATRIX.items():
         for permission_code, allowed in permissions.items():
-            default = (
-                db.query(RolePermissionDefault)
-                .filter(
-                    RolePermissionDefault.role == role,
-                    RolePermissionDefault.permission_code == permission_code,
-                )
-                .one_or_none()
-            )
-            if default is None:
-                db.add(
-                    RolePermissionDefault(
-                        role=role,
-                        permission_code=permission_code,
-                        allowed=allowed,
-                    )
-                )
-            else:
-                default.allowed = allowed
+            default = defaults_by_key[(role, permission_code)]
+            default.allowed = allowed
     db.flush()
 
 

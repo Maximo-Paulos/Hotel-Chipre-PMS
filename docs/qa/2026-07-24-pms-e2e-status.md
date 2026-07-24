@@ -15,12 +15,12 @@ repositorio.
 | Área | Resultado |
 | --- | --- |
 | Frontend lint/typecheck/build | Pasan. Vite informa un bundle principal de ~768 kB minificado; queda como deuda de performance. |
-| E2E desktop | 20/20 pasan en Chromium, incluyendo login, logout, admin, calendario de tarifas, configuración del hotel, el journey de negocio y páginas V72. |
-| E2E mobile | 2/2 pasan con viewport iPhone 13 sobre Chromium: sin overflow horizontal y navegación móvil a Reservas. |
-| Backend completo | 1181 pasan, 17 se omiten, 12 quedan xfail y 1 xpass en Python 3.12 limpio. El `.venv` legado no puede importar el código por usar un Python anterior. |
-| Migración virgen | `alembic upgrade head` pasa sobre SQLite temporal hasta `20260724_cash_handoff_rotation`, incluyendo rotación y custodia. |
+| E2E desktop | 20/20 pasan en Chromium, incluyendo login, logout, admin, calendario de tarifas, configuración del hotel, el journey de negocio y páginas V72. La ejecución fresh completa queda en 22/22 al sumar móvil. |
+| E2E mobile | 2/2 pasan con Chromium emulando iPhone y verificando 375×812, 390×844 y 430×932: sin overflow horizontal y navegación móvil a Reservas. |
+| Backend completo | 1182 pasan, 17 se omiten, 12 quedan xfail y 1 xpass en Python 3.12 limpio. El `.venv` legado no puede importar el código por usar un Python anterior. |
+| Migración virgen | `alembic upgrade head` pasa sobre SQLite temporal hasta `20260724_payment_proof_blobs`, incluyendo blobs privados, rotación y custodia. |
 | Backend focalizado | 56/56 pasan: motor de asignación, operaciones de reservas, check-in, check-out y seguridad del flujo. |
-| Graphify | `portable-check` y `check-update` pasan después de actualizar el grafo. |
+| Graphify | `portable-check` pasa después de actualizar y normalizar el grafo; `check-update` reporta pendiente semántico porque no se generaron descripciones/labels LLM en este run. |
 
 ## Hallazgos y correcciones
 
@@ -37,6 +37,11 @@ corrigió el frontend para:
 
 La corrección está validada localmente, pero el entorno web de QA debe recibir
 un despliegue antes de repetir la medición allí.
+
+En la medición de sólo lectura del cloud compartido, el dashboard sigue
+reportando `scrollWidth=461` con viewport de 390 px. Es evidencia del build
+desplegado allí, no del código local de esta rama; queda pendiente verificar el
+fix después de un preview/provider-bound o un despliegue autorizado.
 
 ### Stock / egresos
 
@@ -95,13 +100,21 @@ El contrato de tokens de cotización también rechaza codificaciones Base64URL n
 canónicas: cambiar bits sobrantes del último carácter ya no puede reutilizar la
 misma firma decodificada.
 
+### Inicialización concurrente de permisos
+
+El E2E fresh expuso una carrera real: dos requests podían sembrar la matriz de
+permisos a la vez y chocar contra `permissions.code`. Se agregó una regresión
+con dos sesiones SQLite y el seed ahora usa inserciones atómicas con conflicto
+ignorado para SQLite/PostgreSQL, conservando la reparación de descripciones y
+valores por defecto. El caso y la suite completa quedan verdes.
+
 ### Journey de negocio local
 
 Se agregó un E2E aislado que crea una categoría y una habitación, crea un huésped
 rápido con documento, registra una reserva con seña manual, cobra un parcial en
 efectivo, envía un comprobante de transferencia, lo aprueba y cobra el saldo
 restante en efectivo antes de completar check-in/check-out. El flujo pasa en 1/1
-y forma parte de la suite desktop 20/20. El fixture de imagen se genera con un
+y forma parte de la suite completa 22/22. El fixture de imagen se genera con un
 contenido único por ejecución para no falsear la protección anti-duplicados.
 
 Durante ese recorrido se detectó que la migración de asignación guardaba los
@@ -131,6 +144,9 @@ workers.
 
 - La prueba móvil automatizada emula el viewport de iPhone en Chromium; no es
   una prueba de Safari/WebKit ni de un dispositivo físico.
+- En el cloud compartido, la lectura actual del dashboard mostró overflow
+  horizontal (`461 px` de contenido contra `390 px` de viewport). No se
+  modificó ese entorno ni se usa como sustituto de un preview aislado.
 - El navegador interno no pudo capturar screenshot del dashboard durante esta
   sesión por timeout de captura; la evidencia de layout se obtuvo mediante DOM
   y métricas de viewport.
@@ -140,8 +156,8 @@ workers.
 - El journey central de onboarding operativo, habitaciones, categoría, reserva,
   pagos mixtos (efectivo + comprobante de transferencia aprobado), check-in/out
   ya pasa localmente; siguen pendientes en el preview aislado el Mercado Pago simulado,
-  reportes, OTA, lavandería, permisos, carga y la repetición cloud de todo el
-  ciclo.
+  reportes, OTA, lavandería, carga y la repetición cloud de todo el ciclo. El
+  contrato local de permisos pasa y su seed ya está protegido contra carreras.
 
 ## Próximo gate
 

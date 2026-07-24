@@ -18,15 +18,20 @@ test.describe("Responsive mobile smoke", () => {
     await expect(page.getByTestId("dashboard-mobile-reservations")).toBeVisible();
     await expect(page.locator('nav[aria-label="Navegación móvil"] a[href="/reservas"]')).toBeVisible();
 
-    const layout = await page.evaluate(() => ({
-      viewportWidth: window.innerWidth,
-      documentScrollWidth: document.documentElement.scrollWidth,
-      bodyScrollWidth: document.body.scrollWidth
-    }));
+    for (const [width, height] of [[375, 812], [390, 844], [430, 932]]) {
+      await test.step(`viewport ${width}x${height}`, async () => {
+        await page.setViewportSize({ width, height });
+        const layout = await page.evaluate(() => ({
+          viewportWidth: window.innerWidth,
+          documentScrollWidth: document.documentElement.scrollWidth,
+          bodyScrollWidth: document.body.scrollWidth
+        }));
 
-    expect(layout.viewportWidth).toBeLessThanOrEqual(430);
-    expect(layout.documentScrollWidth).toBeLessThanOrEqual(layout.viewportWidth);
-    expect(layout.bodyScrollWidth).toBeLessThanOrEqual(layout.viewportWidth);
+        expect(layout.viewportWidth).toBe(width);
+        expect(layout.documentScrollWidth).toBeLessThanOrEqual(layout.viewportWidth);
+        expect(layout.bodyScrollWidth).toBeLessThanOrEqual(layout.viewportWidth);
+      });
+    }
   });
 
   test("mobile navigation reaches reservations", async ({ page }) => {
