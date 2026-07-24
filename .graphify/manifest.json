@@ -1100,8 +1100,8 @@
     "hash": "70ea4197fe8494bac4fc09ce0bd4dfb2"
   },
   "frontend/playwright.config.ts": {
-    "mtime": 1784894835029.9983,
-    "hash": "ffe8beec202eb322a9028ac8920a656b"
+    "mtime": 1784896058840.627,
+    "hash": "4d2f0c2bd555d099f18b8b8ccda7fe75"
   },
   "frontend/src/App.tsx": {
     "mtime": 1784862144901.0059,
@@ -1420,8 +1420,8 @@
     "hash": "aa4ff3906df63302c958ba06bf1f7c7d"
   },
   "frontend/src/views/onboarding/OnboardingWizard.tsx": {
-    "mtime": 1784862144905.6624,
-    "hash": "6532ef23a56e208278ae3104895d5f07"
+    "mtime": 1784895852829.7551,
+    "hash": "8b8a75a93b9dcdb98ad6ad91aa0a4e80"
   },
   "frontend/src/views/protected/CashRegisterPage.tsx": {
     "mtime": 1784872192111.624,
@@ -1540,16 +1540,16 @@
     "hash": "762892f155d4501f723fb40b9c4b1d77"
   },
   "frontend/src/views/public/RegisterOwnerPage.tsx": {
-    "mtime": 1784862144907.779,
-    "hash": "19bc87ee85c19cd551bdde9446d3de42"
+    "mtime": 1784895598999.1465,
+    "hash": "64e5b70baa1773ade1e697ba0dbb5f23"
   },
   "frontend/src/views/public/SoftwareParaHotelesPage.tsx": {
     "mtime": 1784862144907.8962,
     "hash": "136eb4a41e6ee606f97e373286ceebff"
   },
   "frontend/src/views/public/VerifyEmailPage.tsx": {
-    "mtime": 1784862144907.9563,
-    "hash": "6782ee34b3b269970d358802e2d8ff4b"
+    "mtime": 1784896191882.2534,
+    "hash": "4411043e7f85453f69f87b87ae03a153"
   },
   "frontend/vite.config.mjs": {
     "mtime": 1784862144908.1711,
@@ -3264,8 +3264,8 @@
     "hash": "8e2277e0fc399686b86f61f02ef68f93"
   },
   ".graphify/GRAPH_REPORT.md": {
-    "mtime": 1784894956768.176,
-    "hash": "344e48cf16f810e7f52242d4d3ef1674"
+    "mtime": 1784895008216.1667,
+    "hash": "f4e153bcc13853d20229f1faa8caeb6b"
   },
   "scripts/agent_ops/manage_qa_baseline_lease.py": {
     "mtime": 1784862144921.6997,
@@ -3360,8 +3360,8 @@
     "hash": "cc3b4c09ac92a7d389d9ad275a799aa0"
   },
   "docs/qa/2026-07-24-pms-e2e-status.md": {
-    "mtime": 1784894258153.494,
-    "hash": "3ce9ef596fad8df6cdca8da7ecda25ed"
+    "mtime": 1784896451093.3577,
+    "hash": "4e6fcaa6757e7544c93f28c4ef2a5684"
   },
   "frontend/e2e/business-journey.spec.ts": {
     "mtime": 1784886738938.8657,
@@ -3510,5 +3510,13 @@
   "frontend/e2e/role-journey.spec.ts": {
     "mtime": 1784894835029.7754,
     "hash": "af1537bbdfd5c568f76cfdc4c99169f9"
+  },
+  "frontend/e2e/auth-onboarding-journey.spec.ts": {
+    "mtime": 1784896137961.9326,
+    "hash": "487a37b27ca8ad300a3453453f396fd5"
+  },
+  "frontend/src/state/pendingOwner.ts": {
+    "mtime": 1784895598996.4717,
+    "hash": "e9292d1b4a294b78e389bff4f25294b6"
   }
 }
