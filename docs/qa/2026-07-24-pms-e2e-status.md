@@ -144,6 +144,14 @@ la matriz fresh de 40/40.
 La corrección está validada localmente, pero el entorno web de QA debe recibir
 un despliegue antes de repetir la medición allí.
 
+El caso de fallo ahora tiene regresión E2E en
+`frontend/e2e/reservation-quote-error.spec.ts` (503 del endpoint de tarifas):
+la UI muestra `Total no disponible`, explica que deben revisarse fechas y
+tarifas, ofrece `Reintentar` y mantiene `Crear` deshabilitado. El cambio está
+en `9021c5c` y el refresh AST correspondiente en `b052ed0`. Esto mejora la
+seguridad funcional del código local, pero no sustituye la repetición cloud
+posterior al despliegue.
+
 La medición cloud actual confirma que el build publicado todavía no contiene
 esa experiencia de cotización: el selector de categoría y las fechas aceptan
 la interacción, pero el total no se actualiza. El próximo preview debe exponer
