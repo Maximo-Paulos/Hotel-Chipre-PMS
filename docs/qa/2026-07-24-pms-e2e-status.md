@@ -14,9 +14,9 @@ repositorio.
 
 | Área | Resultado |
 | --- | --- |
-| Frontend lint/typecheck/build | Pasan. Vite informa un bundle principal de 787.32 kB minificado (190.67 kB gzip); queda como deuda de performance. |
-| E2E desktop | Pasan los journeys de Chromium de login, logout, admin, calendario de tarifas, configuración del hotel, negocio, operaciones diarias, páginas V72 y estado de error de Analytics. La ejecución fresh completa queda en 40/40 al sumar móvil Chromium y los tres perfiles WebKit. |
-| E2E mobile | 3/3 pasan con Chromium emulando iPhone y verificando 375×812, 390×844 y 430×932; 9/9 pasan con Playwright WebKit en perfiles iPhone SE, iPhone 15 y iPhone 15 Pro Max. La regresión de selector con nombre largo y touch targets críticos queda cubierta; la suite completa pasa 40/40. Esto no sustituye Safari nativo del simulador Xcode, que no está disponible en este host. |
+| Frontend lint/typecheck/build | Pasan. Vite informa un bundle principal de 788.60 kB minificado (190.98 kB gzip); queda como deuda de performance. |
+| E2E desktop | Pasan los journeys de Chromium de login, logout, admin, calendario de tarifas, configuración del hotel, negocio, operaciones diarias, páginas V72, estados accionables de Analytics y Reportes, y error de cotización. La ejecución serial fresh completa queda en 42/42 al sumar móvil Chromium y los tres perfiles WebKit. |
+| E2E mobile | 3/3 pasan con Chromium emulando iPhone y verificando 375×812, 390×844 y 430×932; 9/9 pasan con Playwright WebKit en perfiles iPhone SE, iPhone 15 y iPhone 15 Pro Max. La regresión de selector con nombre largo, touch targets críticos y el journey de Reportes quedan cubiertos; la suite completa pasa 42/42. Esto no sustituye Safari nativo del simulador Xcode, que no está disponible en este host. |
 | Backend completo | 1220 pasan, 17 se omiten, 12 quedan xfail y 1 xpass en Python 3.12 limpio. El runner E2E rechaza explícitamente Python menor a 3.10. |
 | Forward-tests de arquitectura de datos | 2/2 pasan: una entidad de otro hotel no puede leerse ni adjuntarse, y una cotización queda invalidada antes de persistir la reserva cuando cambia la tarifa. |
 | Migración virgen | `alembic upgrade head` pasa sobre SQLite temporal hasta `20260724_room_move_enum_values`, incluyendo blobs privados, rotación, custodia, claves tenant restantes y el contrato de movimientos de habitación. |
@@ -109,7 +109,7 @@ repitió desde cero con:
 
 `E2E_PYTHON=/tmp/hpms-scale-venv-312/bin/python npm run e2e`
 
-y terminó `40 passed (1.2m)`. Esto confirma el baseline local, pero no cierra
+y terminó `42 passed (1.4m)`. Esto confirma el baseline local, pero no cierra
 el fallo cloud, los cinco roles reales, el preview aislado ni Safari nativo.
 
 El catálogo conserva gaps funcionales pendientes: onboarding/recuperación,
@@ -139,7 +139,7 @@ cotización como `isFetching`, por lo que no se enviaba la reserva aunque ya se
 mostrara un total. Se corrigió bloqueando el submit hasta disponer de un
 `quote_token` vigente y mostrando `Actualizando...`; el journey ahora espera
 explícitamente el estado habilitado. La ejecución posterior quedó integrada en
-la matriz fresh de 40/40.
+la matriz fresh de 42/42.
 
 La corrección está validada localmente, pero el entorno web de QA debe recibir
 un despliegue antes de repetir la medición allí.
@@ -157,6 +157,20 @@ esa experiencia de cotización: el selector de categoría y las fechas aceptan
 la interacción, pero el total no se actualiza. El próximo preview debe exponer
 el SHA desplegado y permitir repetir el journey con una respuesta autenticada
 del endpoint de cotización.
+
+### Reportes: error accionable y estado vacío
+
+Se agregó una regresión E2E en `frontend/e2e/reports-error-state.spec.ts` que
+simula indisponibilidad de los endpoints de reporte y alertas. La pantalla ahora
+expone un `role=alert` con un mensaje comprensible, ofrece `Reintentar` y evita
+mostrar `No hay datos para mostrar.` cuando la carga falló. El cambio está en
+`eb6f03a`; lint, typecheck, build, el test dirigido y la suite serial 42/42
+quedaron aprobados.
+
+El entorno cloud todavía muestra el mensaje anterior `No se pudo cargar el
+reporte: Failed to fetch`, porque la rama actual aún no fue desplegada allí.
+La repetición provider-bound sigue siendo necesaria para separar despliegue,
+proxy y backend antes de cerrar el P1.
 
 La ejecución del journey central en WebKit iPhone 15 primero detectó que el
 helper E2E sólo buscaba el menú lateral desktop, que está oculto en viewports
@@ -210,7 +224,7 @@ salto de línea del banner y la espera determinista del fixture. Además, en
 viewport móvil los controles operativos de Reservas, Caja, Stock y el banner
 reciben un área mínima de 44 px; los `select` nativos requieren `height`
 explícito en WebKit. La regresión móvil pasó 12/12 y la suite fresh completa
-pasó 40/40 en Chromium, Chromium móvil y los tres perfiles WebKit. El cambio
+pasó 42/42 en Chromium, Chromium móvil y los tres perfiles WebKit. El cambio
 todavía no está desplegado en el cloud canónico, por lo que debe repetirse allí
 contra un preview autorizado.
 
@@ -344,7 +358,7 @@ rápido con documento, registra una reserva con seña manual, cobra un parcial e
 efectivo, envía un comprobante de transferencia, lo aprueba y cobra el saldo
 restante en efectivo antes de completar check-in/check-out y cerrar la caja con
 rotación de custodia. El flujo pasa en 1/1 por Chromium y 1/1 por WebKit iPhone
-15, y forma parte de la suite completa 40/40. El fixture de imagen se genera con un
+15, y forma parte de la suite completa 42/42. El fixture de imagen se genera con un
 contenido único por ejecución para no falsear la protección anti-duplicados.
 
 ### Registro, verificación, recuperación y onboarding
@@ -358,7 +372,7 @@ pago podía sobrescribir un click humano. El perfil pendiente sólo conserva
 nombre, email, teléfono y rol en `sessionStorage`; nunca contraseña, token ni
 cookie.
 
-La regresión pasa en Chromium y la suite completa queda en 40/40 usando un
+La regresión pasa en Chromium y la suite completa queda en 42/42 usando un
 worker global sobre la SQLite aislada. La corrida con cinco workers reprodujo
 un `database is locked` durante un cobro concurrente; por eso no se considera
 evidencia funcional y las mutaciones locales se ejecutan serializadas.
@@ -448,7 +462,7 @@ emails, webhooks ni cambios de configuración.
   proveedor: esas mediciones siguen pendientes en un preview aislado.
 - Las pruebas que mutan la SQLite local deben ejecutarse serializadas. La
   corrida paralela de cinco proyectos reprodujo `database is locked` durante
-  un cobro; una corrida secuencial con `--workers=1` pasa 40/40. Una corrida
+  un cobro; una corrida secuencial con `--workers=1` pasa 42/42. Una corrida
   paralela que arranque dos servidores E2E sobre el mismo archivo también puede
   fallar durante el reset con `table users already exists`; no es evidencia de
   un fallo funcional del PMS, pero sí una limitación del arnés local.
