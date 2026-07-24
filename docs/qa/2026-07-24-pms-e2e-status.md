@@ -24,6 +24,7 @@ repositorio.
 | Aislamiento/cache/concurrencia | 56/56 pasan en aislamiento multi-hotel, cache con fallback PG y locks Redis/Valkey; caja y allocation quedaron protegidos. |
 | Health de infraestructura | `/health/datastores` diferencia cache Redis de locks distribuidos y reporta si el lock es requerido. |
 | Realtime multi-tab/warehouse | Contrato local de revisiones Redis, SSE autenticado, `BroadcastChannel` tenant-scoped y adaptador ClickHouse PII-free con reconciliación. |
+| Load runner | `scripts/scale/staged_http_load.py` validado por tests y help; no ejecutado contra provider por falta de preview aislado. |
 | Graphify | `portable-check` pasa después de actualizar y normalizar el grafo; `check-update` reporta pendiente semántico porque no se generaron descripciones/labels LLM en este run. |
 
 ## Hallazgos y correcciones

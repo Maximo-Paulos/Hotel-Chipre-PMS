@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-24T07:32:11.427Z",
+  "generatedAt": "2026-07-24T07:34:15.956Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -270,6 +270,42 @@
       "fileCount": 1,
       "files": [
         "scripts/agent_ops/verify_preview_bundle.py"
+      ],
+      "criticality": 0.43,
+      "warnings": []
+    },
+    {
+      "id": "flow:scale_staged_http_load_main",
+      "name": "main",
+      "entryPoint": "scale_staged_http_load_main",
+      "entryPointId": "scale_staged_http_load_main",
+      "path": [
+        "scale_staged_http_load_main",
+        "scale_staged_http_load_run",
+        "scale_staged_http_load_loadconfig",
+        "scale_staged_http_load_parse_paths",
+        "scale_staged_http_load_phasemetrics_as_payload",
+        "scale_staged_http_load_run_phase",
+        "scale_staged_http_load_percentile",
+        "scale_staged_http_load_phasemetrics",
+        "scale_staged_http_load_safe_headers"
+      ],
+      "qualifiedPath": [
+        "scale_staged_http_load_main",
+        "scale_staged_http_load_run",
+        "scale_staged_http_load_loadconfig",
+        "scale_staged_http_load_parse_paths",
+        "scale_staged_http_load_phasemetrics_as_payload",
+        "scale_staged_http_load_run_phase",
+        "scale_staged_http_load_percentile",
+        "scale_staged_http_load_phasemetrics",
+        "scale_staged_http_load_safe_headers"
+      ],
+      "depth": 3,
+      "nodeCount": 9,
+      "fileCount": 1,
+      "files": [
+        "scripts/scale/staged_http_load.py"
       ],
       "criticality": 0.43,
       "warnings": []

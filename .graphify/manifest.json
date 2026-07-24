@@ -3360,8 +3360,8 @@
     "hash": "cc3b4c09ac92a7d389d9ad275a799aa0"
   },
   "docs/qa/2026-07-24-pms-e2e-status.md": {
-    "mtime": 1784878127907.8396,
-    "hash": "6a2fe55a51c81482f622148acf361369"
+    "mtime": 1784878420099.1611,
+    "hash": "99e7b7fe3f372f31eec27c0dadecd956"
   },
   "frontend/e2e/business-journey.spec.ts": {
     "mtime": 1784872135925.51,
@@ -3440,8 +3440,8 @@
     "hash": "138e6fb88e635dbdd0c740969612b8a2"
   },
   "docs/data-foundations/scale-readiness.md": {
-    "mtime": 1784877874585.941,
-    "hash": "f6b45c5d7c04ecf2ddb97d6c58291f98"
+    "mtime": 1784878420098.8513,
+    "hash": "7484839bdc4c843ab90e2f1be6c43e0c"
   },
   "app/api/events.py": {
     "mtime": 1784877373270.604,
@@ -3466,5 +3466,13 @@
   "tests/test_domain_events.py": {
     "mtime": 1784877408147.9392,
     "hash": "11695cfb061c7061ec0e1cab30ed8eae"
+  },
+  "scripts/scale/staged_http_load.py": {
+    "mtime": 1784878428948.78,
+    "hash": "994f60cff58ef5e3b5ca6c6c82f8bcff"
+  },
+  "tests/test_staged_http_load.py": {
+    "mtime": 1784878362380.1433,
+    "hash": "e8436ba5b2fcd4349c33d6db08028242"
   }
 }

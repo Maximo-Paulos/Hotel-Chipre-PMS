@@ -20,6 +20,7 @@ provider-bound evidence.
 | Health visibility | `/health/datastores` reports PostgreSQL and Redis roles separately, including distributed locks | ✅ contract-covered |
 | Realtime invalidation | Tenant-scoped Redis revisions, authenticated SSE, `BroadcastChannel`/storage fallback, query invalidation guarded by `hotel_id` | ✅ contract-covered |
 | Derived warehouse boundary | PII-free ClickHouse HTTP adapter, `ReplacingMergeTree` schema, replayable projector task, PG↔warehouse count reconciliation | ✅ contract-covered; provider unverified |
+| Load runner | `scripts/scale/staged_http_load.py` emits aggregate steady/burst p50/p95/p99, status counts and transport errors without response bodies | ✅ executable; not run against provider |
 | iPhone-sized web layout | Fresh Chromium E2E at 375×812, 390×844, and 430×932 | ✅ local evidence |
 
 ## Provider-bound evidence still required
@@ -34,7 +35,8 @@ provider-bound evidence.
    PostgreSQL facts. The local boundary is replayable and PII-free, but the
    provider must prove CDC/outbox delivery, measured lag, idempotent replay and
    PG↔warehouse reconciliation before any dashboard is labeled warehouse-backed.
-4. Run staged load tests at 10k steady concurrency and 20k burst, with
+4. Run `scripts/scale/staged_http_load.py` at 10k steady concurrency and 20k
+   burst, with
    per-tenant error rate, p95/p99 latency, connection-pool saturation, Redis
    contention, queue lag, and database CPU/IO captured as artifacts.
 5. Verify rollback, alerting, autoscaling, backup/PITR, and tenant-isolation
