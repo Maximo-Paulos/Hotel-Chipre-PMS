@@ -69,6 +69,39 @@ podía terminar en `RecursionError`. La API ahora convierte el huésped y sus
 etiquetas a `GuestRead`/`GuestTagRead` JSON antes de responder, y una prueba de
 regresión cubre un huésped con una estadía existente.
 
+### Revalidación del goal funcional-first
+
+La sesión autenticada del navegador interno se revalidó el 2026-07-24 con
+lectura visible y sin mutaciones. `/dashboard`, `/reservas`,
+`/operacion/tarifas` y `/analytics/operations` renderizan su shell; `/reportes`
+falla de forma reproducible después de dos cargas y muestra:
+
+`No se pudo cargar el reporte: Failed to fetch`
+
+La carga fallida ocurre tanto para la fecha actual como después de una nueva
+carga de la ruta. No hubo errores en la consola del navegador. El bundle
+publicado contiene `https://api.hotels-pms.com/api` como base de API (no
+localhost), `/health` respondió HTTP 200 desde el host de verificación y el
+preflight CORS para `https://app.hotels-pms.com` respondió HTTP 200 con los
+headers de autorización esperados. La causa raíz del request autenticado sigue
+`needs-verification`: falta una traza del provider o evidencia de la respuesta
+real de `/api/reports/operational/daily` y `/api/reports/operational/alerts`.
+
+El intento de viewport explícito de 390×844 en la sesión cloud quedó en 655 px
+efectivos, por lo que no se usa como certificación móvil. La suite local se
+repitió desde cero con:
+
+`E2E_PYTHON=/tmp/hpms-scale-venv-312/bin/python npm run e2e`
+
+y terminó `31 passed (44.2s)`. Esto confirma el baseline local, pero no cierra
+el fallo cloud, los cinco roles reales, el preview aislado ni Safari nativo.
+
+El catálogo conserva gaps funcionales pendientes: onboarding/recuperación,
+roles manager/reception/housekeeping con sesiones reales, caminos negativos de
+reservas/caja/stock/reportes, tarifas contra backend real, analytics UI,
+Mercado Pago simulado y evidencia provider-bound. No se declara aprobada la
+puerta funcional mientras el reporte cloud permanezca sin diagnóstico.
+
 ## Hallazgos y correcciones
 
 ### Dashboard responsive
