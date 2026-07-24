@@ -55,18 +55,20 @@ Pro Max.
 
 ### Comprobantes de transferencia: rechazo y reintento
 
-En el commit `a04728c` se amplió el journey financiero de
+En los commits `a04728c` y `275058e` se amplió el journey financiero de
 `frontend/e2e/business-journey.spec.ts`: después de un cobro parcial en
-efectivo, se carga un comprobante sintético de transferencia, se lo rechaza
-con motivo visible, se reenvía una imagen con hash distinto y se aprueba antes
-de completar el saldo en efectivo. El camino pasó 4/4 en Chromium y 4/4 en el
-proyecto WebKit iPhone 15 de negocio (`E2E_WEBKIT_BUSINESS=true`). Esto prueba
-desde la UI que un rechazo no descuenta saldo, que el reintento no reutiliza el
-comprobante previo y que la aprobación queda lista para el cobro mixto.
+efectivo, el intento de sobrepago se rechaza, se carga un comprobante
+sintético de transferencia, se lo rechaza con motivo visible, se reenvía una
+imagen con hash distinto y se aprueba, y finalmente se registra una devolución
+parcial en efectivo con confirmación antes de completar el saldo. El camino
+pasó 4/4 en Chromium y 4/4 en el proyecto WebKit iPhone 15 de negocio
+(`E2E_WEBKIT_BUSINESS=true`). Esto prueba desde la UI que las validaciones no
+mutan el ledger, un rechazo no descuenta saldo, el reintento no reutiliza el
+comprobante previo y la devolución reabre sólo el saldo devuelto.
 
 La cobertura local todavía no reemplaza el preview provider-bound ni verifica
-en la UI el reembolso, el link de Mercado Pago simulado y la repetición de
-webhooks; esos puntos siguen pendientes junto con la conciliación cloud.
+en la UI el link de Mercado Pago simulado y la repetición de webhooks; esos
+puntos siguen pendientes junto con la conciliación cloud.
 
 ### Smoke de la skill de navegador interno
 
