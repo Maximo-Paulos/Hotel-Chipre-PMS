@@ -19,7 +19,7 @@ import {
   type AllocationRunResponse,
   type RoomMovementGroup
 } from "../../api/allocationRuns";
-import { hasValidSession } from "../../api/client";
+import { ApiError, hasValidSession } from "../../api/client";
 import { type Guest, type GuestPayload } from "../../api/guests";
 import { checkRoomAvailability, type RoomAvailabilityResponse } from "../../api/rooms";
 import { type PaymentMethod } from "../../api/payments";
@@ -1969,13 +1969,17 @@ export function ReservationsPage() {
                       <p className="font-semibold">
                         {quoteQuery.isFetching
                           ? "Actualizando..."
+                          : quoteQuery.isError
+                            ? "Total no disponible"
                           : formatMoney(reservationQuote?.total ?? 0, reservationQuote?.currencyCode ?? "ARS")}
                       </p>
                     </div>
                     <div className="rounded-lg border border-blue-100 bg-white/80 px-3 py-2 text-sm text-slate-800">
                       <p className="text-xs text-slate-500">Seña</p>
                       <p className="font-semibold">
-                        {depositPreview !== null
+                        {quoteQuery.isError
+                          ? "No disponible"
+                          : depositPreview !== null
                           ? formatMoney(depositPreview, reservationQuote?.currencyCode ?? "ARS")
                           : "Por configurar"}
                       </p>
@@ -1990,7 +1994,23 @@ export function ReservationsPage() {
                     </div>
                   </div>
 
-                  {reservationQuote?.rows.length ? (
+                  {quoteQuery.isError ? (
+                    <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800" role="alert">
+                      <p>
+                        {quoteQuery.error instanceof ApiError && quoteQuery.error.status === 404
+                          ? "No hay una tarifa disponible para la categoría y las fechas elegidas."
+                          : "No se pudo calcular la cotización. Revisá las fechas y las tarifas antes de confirmar."}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => void quoteQuery.refetch()}
+                        disabled={quoteQuery.isFetching}
+                        className="mt-2 rounded-lg border border-rose-300 bg-white px-3 py-2 font-semibold text-rose-800 hover:bg-rose-100 disabled:opacity-60"
+                      >
+                        Reintentar
+                      </button>
+                    </div>
+                  ) : reservationQuote?.rows.length ? (
                     <div className="mt-3 overflow-x-auto rounded-lg border border-blue-100 bg-white/70">
                       <table className="min-w-full text-left text-xs">
                         <thead className="bg-white text-slate-500">
@@ -2020,7 +2040,9 @@ export function ReservationsPage() {
                     </div>
                   ) : (
                     <p className="mt-2 text-xs text-slate-600">
-                      Elegí categoría y fechas para calcular el precio desde Tarifas.
+                      {quoteNights > 0
+                        ? "Calculando la cotización vigente desde Tarifas..."
+                        : "Elegí categoría y fechas para calcular el precio desde Tarifas."}
                     </p>
                   )}
                 </div>
