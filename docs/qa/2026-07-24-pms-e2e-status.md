@@ -723,3 +723,22 @@ regresión total posterior aprobó **17/17 por dispositivo (51/51)**, con lint,
 typecheck y build en verde. No se usaron proveedores, email, Stripe ni acciones
 de plataforma externas. La E2E base completa de Chromium y smoke móvil también
 se reejecutó y aprobó **52/52**.
+
+### Revalidación cloud visible — P1 aún presente
+
+Con la sesión QA ya abierta en el navegador interno se volvió a comprobar la
+instancia publicada, sin crear reservas ni ejecutar pagos, emails, webhooks,
+OTA o invitaciones. Analytics/Operación terminó en **“No se pudo cargar
+analytics.”** y Reportes terminó en **“No se pudo cargar el reporte: Failed to
+fetch”** junto con el estado vacío. En Reservas, la consulta de disponibilidad
+para la categoría de prueba y el rango 2026-08-15 a 2026-08-17 devolvió tres
+habitaciones, pero los campos se restablecieron a 2026-07-24/25; por lo tanto
+el resultado no corresponde al rango solicitado y no permite confiar en una
+cotización posterior.
+
+También se comprobó el layout de Reservas a 390x844: el documento midió 392px
+de ancho y se detectaron objetivos interactivos por debajo de 44px. Esta
+observación refuerza el P1 móvil de la instancia publicada. No se asigna al
+commit local actual porque el despliegue no expone un `code_sha`
+provider-bound; debe corregirse y verificarse en un preview aislado antes de
+cerrar la puerta funcional.
