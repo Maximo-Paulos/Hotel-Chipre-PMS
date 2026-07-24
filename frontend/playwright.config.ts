@@ -89,7 +89,12 @@ export default defineConfig({
       ? [
           {
             name: "webkit-iphone-15-business",
-            testMatch: ["**/business-journey.spec.ts", "**/reservation-lifecycle.spec.ts", "**/analytics-success.spec.ts"],
+            testMatch: [
+              "**/business-journey.spec.ts",
+              "**/reservation-lifecycle.spec.ts",
+              "**/analytics-success.spec.ts",
+              "**/guest-companion-journey.spec.ts"
+            ],
             use: { ...devices["iPhone 15"], browserName: "webkit" },
             workers: 1
           }
