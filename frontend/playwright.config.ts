@@ -93,6 +93,7 @@ export default defineConfig({
               "**/business-journey.spec.ts",
               "**/reservation-lifecycle.spec.ts",
               "**/analytics-success.spec.ts",
+              "**/auth-onboarding-journey.spec.ts",
               "**/guest-companion-journey.spec.ts",
               "**/reservation-charge-journey.spec.ts",
               "**/zz-cash-control-journey.spec.ts"
