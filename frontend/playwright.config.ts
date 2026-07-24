@@ -40,6 +40,16 @@ const jwtSecret =
   process.env.E2E_JWT_SECRET || "e2e-local-jwt-secret-change-me-32chars";
 const emailOutboxPath =
   path.join(os.tmpdir(), "hotel-chipre-e2e-email-outbox.jsonl");
+const businessWebKitTestMatch = [
+  "**/business-journey.spec.ts",
+  "**/reservation-lifecycle.spec.ts",
+  "**/analytics-success.spec.ts",
+  "**/auth-onboarding-journey.spec.ts",
+  "**/role-journey.spec.ts",
+  "**/guest-companion-journey.spec.ts",
+  "**/reservation-charge-journey.spec.ts",
+  "**/zz-cash-control-journey.spec.ts"
+];
 process.env.E2E_EMAIL_OUTBOX_PATH = emailOutboxPath;
 
 export default defineConfig({
@@ -89,17 +99,20 @@ export default defineConfig({
       ? [
           {
             name: "webkit-iphone-15-business",
-            testMatch: [
-              "**/business-journey.spec.ts",
-              "**/reservation-lifecycle.spec.ts",
-              "**/analytics-success.spec.ts",
-              "**/auth-onboarding-journey.spec.ts",
-              "**/role-journey.spec.ts",
-              "**/guest-companion-journey.spec.ts",
-              "**/reservation-charge-journey.spec.ts",
-              "**/zz-cash-control-journey.spec.ts"
-            ],
+            testMatch: businessWebKitTestMatch,
             use: { ...devices["iPhone 15"], browserName: "webkit" },
+            workers: 1
+          },
+          {
+            name: "webkit-iphone-se-business",
+            testMatch: businessWebKitTestMatch,
+            use: { ...devices["iPhone SE"], browserName: "webkit" },
+            workers: 1
+          },
+          {
+            name: "webkit-iphone-15-pro-max-business",
+            testMatch: businessWebKitTestMatch,
+            use: { ...devices["iPhone 15 Pro Max"], browserName: "webkit" },
             workers: 1
           }
         ]
