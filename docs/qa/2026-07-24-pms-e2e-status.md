@@ -92,6 +92,17 @@ del request autenticado sigue `needs-verification`: falta una traza del
 provider o evidencia de la respuesta real de `/api/reports/operational/daily`
 y `/api/reports/operational/alerts`.
 
+En `/reservas` se ejecutó una mutación controlada con datos sintéticos: el
+huésped rápido se creó y la interfaz asignó automáticamente el ID `13`. Sin
+embargo, al seleccionar `Compartida QA Codex (#7)` y las fechas
+`2026-07-20` → `2026-07-21`, el formulario publicado siguió mostrando
+`Noches 0`, `Total final $ 0` y `Elegí categoría y fechas para calcular el
+precio desde Tarifas.` después de más de 10 segundos. No se confirmó la
+reserva ni se ejecutó ningún cobro porque el precio previo a confirmar no era
+confiable. Esto es P1 del build cloud y debe repetirse después de desplegar la
+rama actual; no se atribuye todavía al código local, cuya suite E2E cubre la
+cotización con token vigente.
+
 El intento de viewport explícito de 390×844 en la sesión cloud quedó en 655 px
 efectivos, por lo que no se usa como certificación móvil. La suite local se
 repitió desde cero con:
@@ -132,6 +143,12 @@ la matriz fresh de 40/40.
 
 La corrección está validada localmente, pero el entorno web de QA debe recibir
 un despliegue antes de repetir la medición allí.
+
+La medición cloud actual confirma que el build publicado todavía no contiene
+esa experiencia de cotización: el selector de categoría y las fechas aceptan
+la interacción, pero el total no se actualiza. El próximo preview debe exponer
+el SHA desplegado y permitir repetir el journey con una respuesta autenticada
+del endpoint de cotización.
 
 La ejecución del journey central en WebKit iPhone 15 primero detectó que el
 helper E2E sólo buscaba el menú lateral desktop, que está oculto en viewports
