@@ -123,7 +123,6 @@ class Settings(BaseSettings):
     GEMMA_RATE_LIMIT_MAX_MESSAGES: int = 20
     # Relative to the process working dir (repo root); override with an absolute path in prod.
     ANALYTICS_EXPORTS_DIR: str = "./var/exports/analytics"
-    PAYMENT_PROOFS_DIR: str = "./var/payment-proofs"
 
     # Auth
     JWT_SECRET: str = "change-me"

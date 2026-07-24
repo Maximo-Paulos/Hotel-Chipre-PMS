@@ -11,7 +11,9 @@ from app.models.payment_proof import PaymentProofStatusEnum
 class PaymentProofCreate(BaseModel):
     reservation_id: int
     amount: Decimal = Field(..., gt=Decimal("0.00"))
-    image_base64: str = Field(..., min_length=16, max_length=11_200_000)
+    # 5 MiB binary payload encoded as Base64URL/Base64 plus a small data-URL
+    # prefix. The service applies the authoritative decoded-byte limit.
+    image_base64: str = Field(..., min_length=16, max_length=7_000_100)
     original_filename: str | None = Field(default=None, max_length=255)
 
 

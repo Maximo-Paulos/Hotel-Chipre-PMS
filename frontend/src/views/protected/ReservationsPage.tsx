@@ -36,6 +36,7 @@ import { usePaymentSurcharges } from "../../hooks/usePaymentSurcharges";
 import { grossWithSurcharge } from "../../api/paymentSurcharges";
 import { usePaymentLinks, usePaymentLinkCreate } from "../../hooks/usePaymentLinks";
 import { usePaymentProofMutations, usePaymentProofs } from "../../hooks/usePaymentProofs";
+import { fetchPaymentProofImage } from "../../api/paymentProofs";
 import { useHotelConfig } from "../../hooks/useHotelConfig";
 import { type HotelConfig } from "../../api/config";
 import { useRooms } from "../../hooks/useRooms";
@@ -188,6 +189,10 @@ export function ReservationsPage() {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
   const [paymentAmountInput, setPaymentAmountInput] = useState("");
   const [paymentProofFile, setPaymentProofFile] = useState<File | null>(null);
+  const [paymentProofPreview, setPaymentProofPreview] = useState<{ proofId: number; url: string } | null>(null);
+  const [viewingPaymentProofId, setViewingPaymentProofId] = useState<number | null>(null);
+  const [rejectingPaymentProofId, setRejectingPaymentProofId] = useState<number | null>(null);
+  const [paymentProofRejectReason, setPaymentProofRejectReason] = useState("");
   const [pricingPaymentMethod, setPricingPaymentMethod] = useState<PricingPaymentMethod>("base");
   const [depositAmountInput, setDepositAmountInput] = useState("");
   const [availabilityForm, setAvailabilityForm] = useState<{
@@ -856,6 +861,43 @@ export function ReservationsPage() {
     } catch (err) {
       showToast("error", err instanceof Error ? err.message : "No se pudo enviar el comprobante");
     }
+  };
+
+  const handleViewPaymentProof = async (proofId: number) => {
+    setViewingPaymentProofId(proofId);
+    try {
+      const blob = await fetchPaymentProofImage(proofId, session);
+      if (paymentProofPreview) URL.revokeObjectURL(paymentProofPreview.url);
+      setPaymentProofPreview({ proofId, url: URL.createObjectURL(blob) });
+    } catch (err) {
+      showToast("error", err instanceof Error ? err.message : "No se pudo abrir el comprobante");
+    } finally {
+      setViewingPaymentProofId(null);
+    }
+  };
+
+  const closePaymentProofPreview = () => {
+    if (paymentProofPreview) URL.revokeObjectURL(paymentProofPreview.url);
+    setPaymentProofPreview(null);
+  };
+
+  const handleRejectPaymentProof = (proofId: number) => {
+    const reason = paymentProofRejectReason.trim();
+    if (!reason) {
+      showToast("error", "Escribí el motivo del rechazo.");
+      return;
+    }
+    paymentProofMutations.rejectMutation.mutate(
+      { proofId, reason },
+      {
+        onSuccess: () => {
+          setRejectingPaymentProofId(null);
+          setPaymentProofRejectReason("");
+          showToast("success", "Comprobante rechazado");
+        },
+        onError: (err: unknown) => showToast("error", err instanceof Error ? err.message : "No se pudo rechazar el comprobante")
+      }
+    );
   };
 
   const handleGenerateDepositLink = () => {
@@ -2080,19 +2122,72 @@ export function ReservationsPage() {
                         <ul className="space-y-2 border-t border-amber-200 pt-2">
                           {(paymentProofsQuery.data ?? []).map((proof) => (
                             <li key={proof.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white px-2 py-2">
-                              <span>
+                              <span className="min-w-0">
                                 {formatMoney(proof.amount, proof.currency)} · {proof.status}
                                 {proof.rejection_reason ? ` · ${proof.rejection_reason}` : ""}
                               </span>
-                              {canApprovePaymentProof && proof.status === "pending" && (
+                              <div className="flex flex-wrap items-center gap-2">
                                 <button
                                   type="button"
-                                  onClick={() => paymentProofMutations.approveMutation.mutate(proof.id)}
-                                  disabled={paymentProofMutations.approveMutation.isPending}
-                                  className="rounded-lg border border-emerald-200 px-2 py-1 font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-60"
+                                  onClick={() => void handleViewPaymentProof(proof.id)}
+                                  disabled={viewingPaymentProofId === proof.id}
+                                  className="rounded-lg border border-slate-200 px-2 py-1 font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
                                 >
-                                  Aprobar
+                                  {viewingPaymentProofId === proof.id ? "Abriendo..." : "Ver imagen"}
                                 </button>
+                                {canApprovePaymentProof && proof.status === "pending" && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => paymentProofMutations.approveMutation.mutate(proof.id)}
+                                      disabled={paymentProofMutations.approveMutation.isPending}
+                                      className="rounded-lg border border-emerald-200 px-2 py-1 font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-60"
+                                    >
+                                      Aprobar
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setRejectingPaymentProofId(rejectingPaymentProofId === proof.id ? null : proof.id)}
+                                      disabled={paymentProofMutations.rejectMutation.isPending}
+                                      className="rounded-lg border border-rose-200 px-2 py-1 font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-60"
+                                    >
+                                      Rechazar
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                              {canApprovePaymentProof && rejectingPaymentProofId === proof.id && proof.status === "pending" && (
+                                <div className="flex w-full flex-wrap items-center gap-2">
+                                  <label className="sr-only" htmlFor={`payment-proof-reason-${proof.id}`}>
+                                    Motivo del rechazo
+                                  </label>
+                                  <input
+                                    id={`payment-proof-reason-${proof.id}`}
+                                    value={paymentProofRejectReason}
+                                    onChange={(event) => setPaymentProofRejectReason(event.target.value)}
+                                    placeholder="Motivo del rechazo"
+                                    className="min-w-[12rem] flex-1 rounded-lg border border-rose-200 px-2 py-1 text-xs"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRejectPaymentProof(proof.id)}
+                                    disabled={paymentProofMutations.rejectMutation.isPending}
+                                    className="rounded-lg bg-rose-600 px-2 py-1 text-xs font-semibold text-white disabled:opacity-60"
+                                  >
+                                    Confirmar rechazo
+                                  </button>
+                                </div>
+                              )}
+                              {paymentProofPreview?.proofId === proof.id && (
+                                <div className="w-full rounded-lg border border-slate-200 bg-slate-50 p-2">
+                                  <div className="mb-2 flex items-center justify-between gap-2 text-xs font-semibold text-slate-700">
+                                    <span>Vista privada del comprobante</span>
+                                    <button type="button" onClick={closePaymentProofPreview} className="underline">
+                                      Cerrar
+                                    </button>
+                                  </div>
+                                  <img src={paymentProofPreview.url} alt={proof.original_filename || "Comprobante de transferencia"} className="max-h-64 w-full rounded object-contain" />
+                                </div>
                               )}
                             </li>
                           ))}

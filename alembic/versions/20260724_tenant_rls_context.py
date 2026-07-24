@@ -63,6 +63,7 @@ TENANT_TABLES: tuple[str, ...] = (
     # table is created.  Keeping it in the reviewed inventory makes the
     # metadata contract complete for databases upgraded from older revisions.
     "cash_custody_handoffs",
+    "payment_proof_blobs",
     "daily_rates",
     "guest_tags",
     "llm_policy_suggestions",

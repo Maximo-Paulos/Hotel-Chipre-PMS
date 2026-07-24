@@ -12,6 +12,7 @@ from sqlalchemy import (
     ForeignKeyConstraint,
     Index,
     Integer,
+    LargeBinary,
     Numeric,
     String,
     Text,
@@ -53,6 +54,13 @@ class PaymentProof(Base):
     reviewed_at = Column(DateTime, nullable=True)
 
     transaction = relationship("Transaction", foreign_keys=[transaction_id], lazy="joined")
+    blob = relationship(
+        "PaymentProofBlob",
+        back_populates="proof",
+        uselist=False,
+        cascade="all, delete-orphan",
+        lazy="select",
+    )
 
     __table_args__ = (
         CheckConstraint("amount > 0", name="ck_payment_proofs_amount_positive"),
@@ -64,6 +72,35 @@ class PaymentProof(Base):
             name="fk_payment_proofs_hotel_reservation",
             ondelete="CASCADE",
         ),
+        UniqueConstraint("transaction_id"),
         UniqueConstraint("hotel_id", "sha256_hex", name="uq_payment_proofs_hotel_sha256"),
         Index("ix_payment_proofs_hotel_reservation_status", "hotel_id", "reservation_id", "status"),
+    )
+
+
+class PaymentProofBlob(Base):
+    """Private binary payload kept separately from queryable proof metadata."""
+
+    __tablename__ = "payment_proof_blobs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    hotel_id = Column(Integer, ForeignKey("hotel_configuration.id", ondelete="CASCADE"), nullable=False, index=True)
+    proof_id = Column(
+        Integer,
+        ForeignKey("payment_proofs.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+    content = Column(LargeBinary, nullable=False)
+    content_type = Column(String(80), nullable=False)
+    sha256_hex = Column(String(64), nullable=False)
+    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+
+    proof = relationship("PaymentProof", back_populates="blob", uselist=False)
+
+    __table_args__ = (
+        CheckConstraint("length(content) > 0", name="ck_payment_proof_blobs_content_nonempty"),
+        CheckConstraint("length(sha256_hex) = 64", name="ck_payment_proof_blobs_sha256_length"),
+        Index("ix_payment_proof_blobs_hotel_proof", "hotel_id", "proof_id"),
     )

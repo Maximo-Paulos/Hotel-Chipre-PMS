@@ -1,4 +1,4 @@
-import { apiFetch, type SessionLike } from "./client";
+import { apiFetch, buildAuthHeaders, buildUrl, type SessionLike } from "./client";
 
 export type PaymentProofStatus = "pending" | "approved" | "rejected";
 
@@ -41,3 +41,13 @@ export const rejectPaymentProof = (proofId: number, reason: string, session?: Se
     data: { reason },
     session
   });
+
+export const fetchPaymentProofImage = async (proofId: number, session?: SessionLike): Promise<Blob> => {
+  const response = await fetch(buildUrl(`/api/payment-proofs/${proofId}/image`), {
+    headers: buildAuthHeaders(session)
+  });
+  if (!response.ok) {
+    throw new Error(response.statusText || "No se pudo abrir el comprobante");
+  }
+  return response.blob();
+};

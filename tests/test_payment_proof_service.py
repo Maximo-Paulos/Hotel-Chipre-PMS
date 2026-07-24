@@ -9,8 +9,9 @@ import pytest
 from PIL import Image
 
 from app.models.guest import Guest
+from app.models.audit_log import AuditLog
 from app.models.hotel_config import HotelConfiguration
-from app.models.payment_proof import PaymentProof, PaymentProofStatusEnum
+from app.models.payment_proof import PaymentProof, PaymentProofBlob, PaymentProofStatusEnum
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.room import RoomCategory
 from app.models.transaction import PaymentMethodEnum, TransactionStatusEnum
@@ -18,7 +19,7 @@ from app.models.user import User
 from app.services.payment_proof_service import (
     PaymentProofError,
     approve_transfer_proof,
-    proof_file_path,
+    get_transfer_proof_bytes,
     reject_transfer_proof,
     submit_transfer_proof,
 )
@@ -27,6 +28,15 @@ from app.services.payment_proof_service import (
 def _image_base64() -> str:
     output = BytesIO()
     Image.new("RGB", (4, 4), color=(20, 80, 120)).save(output, format="PNG")
+    return base64.b64encode(output.getvalue()).decode("ascii")
+
+
+def _jpeg_with_exif_base64() -> str:
+    output = BytesIO()
+    image = Image.new("RGB", (4, 4), color=(120, 80, 20))
+    exif = image.getexif()
+    exif[0x010E] = "private-transfer-note"
+    image.save(output, format="JPEG", exif=exif.tobytes())
     return base64.b64encode(output.getvalue()).decode("ascii")
 
 
@@ -70,11 +80,7 @@ def _reservation(db, hotel_id: int, code: str) -> Reservation:
     return reservation
 
 
-def test_submit_transfer_proof_validates_image_and_stores_metadata(db, monkeypatch, tmp_path):
-    monkeypatch.setattr(
-        "app.services.payment_proof_service.get_settings",
-        lambda: type("Settings", (), {"PAYMENT_PROOFS_DIR": str(tmp_path)})(),
-    )
+def test_submit_transfer_proof_validates_image_and_stores_metadata(db):
     reservation = _reservation(db, 1, "PROOF-1")
 
     proof = submit_transfer_proof(
@@ -90,7 +96,17 @@ def test_submit_transfer_proof_validates_image_and_stores_metadata(db, monkeypat
     assert proof.status == PaymentProofStatusEnum.PENDING.value
     assert proof.content_type == "image/png"
     assert proof.original_filename == "comprobante_transferencia.png"
-    assert proof_file_path(proof).is_file()
+    blob = db.query(PaymentProofBlob).filter(PaymentProofBlob.proof_id == proof.id).one()
+    assert blob.hotel_id == 1
+    assert blob.content
+    assert blob.sha256_hex == proof.sha256_hex
+    content, content_type, filename = get_transfer_proof_bytes(db, hotel_id=1, proof_id=proof.id)
+    assert content == blob.content
+    assert content_type == "image/png"
+    assert filename == "comprobante_transferencia.png"
+    audit = db.query(AuditLog).filter(AuditLog.table_name == "payment_proofs", AuditLog.record_id == proof.id).one()
+    assert audit.actor_user_id == 10
+    assert audit.payload_after and "pending" in audit.payload_after
 
     with pytest.raises(PaymentProofError, match="ya fue presentado"):
         submit_transfer_proof(
@@ -104,11 +120,47 @@ def test_submit_transfer_proof_validates_image_and_stores_metadata(db, monkeypat
         )
 
 
-def test_approval_creates_completed_transfer_transaction_and_updates_balance(db, monkeypatch, tmp_path):
-    monkeypatch.setattr(
-        "app.services.payment_proof_service.get_settings",
-        lambda: type("Settings", (), {"PAYMENT_PROOFS_DIR": str(tmp_path)})(),
+def test_submit_transfer_proof_reencodes_and_removes_exif(db):
+    reservation = _reservation(db, 1, "PROOF-EXIF")
+
+    proof = submit_transfer_proof(
+        db,
+        hotel_id=1,
+        reservation_id=reservation.id,
+        amount=Decimal("30.00"),
+        image_base64=_jpeg_with_exif_base64(),
+        original_filename="../transfer.jpg",
+        submitted_by_user_id=10,
     )
+
+    content, content_type, filename = get_transfer_proof_bytes(db, hotel_id=1, proof_id=proof.id)
+    with Image.open(BytesIO(content)) as image:
+        assert image.format == "JPEG"
+        assert not image.getexif()
+    assert content_type == "image/jpeg"
+    assert filename == ".._transfer.jpg"
+    assert proof.file_size_bytes == len(content)
+    assert proof.sha256_hex
+    assert db.query(PaymentProofBlob).filter(PaymentProofBlob.proof_id == proof.id).count() == 1
+
+
+def test_proof_bytes_are_tenant_scoped(db):
+    reservation = _reservation(db, 1, "PROOF-TENANT")
+    proof = submit_transfer_proof(
+        db,
+        hotel_id=1,
+        reservation_id=reservation.id,
+        amount=Decimal("30.00"),
+        image_base64=_image_base64(),
+        original_filename="transfer.png",
+        submitted_by_user_id=10,
+    )
+
+    with pytest.raises(PaymentProofError, match="no encontrado"):
+        get_transfer_proof_bytes(db, hotel_id=2, proof_id=proof.id)
+
+
+def test_approval_creates_completed_transfer_transaction_and_updates_balance(db):
     reservation = _reservation(db, 1, "PROOF-2")
     proof = submit_transfer_proof(
         db,
@@ -138,11 +190,7 @@ def test_approval_creates_completed_transfer_transaction_and_updates_balance(db,
     assert db.query(PaymentProof).count() == 1
 
 
-def test_rejected_proof_requires_reason_and_cannot_be_approved(db, monkeypatch, tmp_path):
-    monkeypatch.setattr(
-        "app.services.payment_proof_service.get_settings",
-        lambda: type("Settings", (), {"PAYMENT_PROOFS_DIR": str(tmp_path)})(),
-    )
+def test_rejected_proof_requires_reason_and_cannot_be_approved(db):
     reservation = _reservation(db, 1, "PROOF-3")
     proof = submit_transfer_proof(
         db,

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -10,9 +10,8 @@ from app.schemas.payment_proof import PaymentProofCreate, PaymentProofRead, Paym
 from app.services.payment_proof_service import (
     PaymentProofError,
     approve_transfer_proof,
-    get_transfer_proof,
+    get_transfer_proof_bytes,
     list_transfer_proofs,
-    proof_file_path,
     reject_transfer_proof,
     submit_transfer_proof,
 )
@@ -63,8 +62,15 @@ def get_proof_image(
     context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "receptionist")),
 ):
     try:
-        proof = get_transfer_proof(db, hotel_id=context.hotel_id, proof_id=proof_id)
-        return FileResponse(proof_file_path(proof), media_type=proof.content_type, filename=proof.original_filename)
+        content, content_type, filename = get_transfer_proof_bytes(
+            db,
+            hotel_id=context.hotel_id,
+            proof_id=proof_id,
+        )
+        headers = {}
+        if filename:
+            headers["Content-Disposition"] = f'inline; filename="{filename}"'
+        return Response(content=content, media_type=content_type, headers=headers)
     except PaymentProofError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
