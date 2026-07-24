@@ -92,7 +92,7 @@ evidencia visual, por lo que esta revalidación no cierra la puerta funcional.
 | Dashboard | Renderiza la operación, pero deja una bandeja de acciones pendiente durante el smoke corto. | Smoke cloud; requiere repetir con SHA provider-bound |
 | Reservas | Renderiza 13 reservas, disponibilidad `3 habitaciones` para Standard QA del 2026-08-15 al 2026-08-17 y el formulario de reserva. | Disponibilidad aprobada; ciclo de reserva bloqueado por cotización |
 | Huésped rápido | Creó el huésped sintético `ID 14` y lo asignó al formulario. | Mutación controlada, sin email ni reserva |
-| Cotización | Con categoría Standard QA y fechas seleccionadas permanece en `Noches 0`, `Total final $ 0` y `Elegí categoría y fechas para calcular el precio desde Tarifas.` | P1 reproducible |
+| Cotización | Con categoría Standard QA y fechas seleccionadas permanece en `Noches 0`, `Total final $ 0` y `Elegí categoría y fechas para calcular el precio desde Tarifas.`; se repitió con el huésped ID 14 y blur natural mediante Tab en ambos campos de fecha. | P1 reproducible |
 | Reportes | Después de más de 20 segundos permanece en `Cargando reporte...`. | P1 reproducible |
 | Analytics/Operación | Después de 10 segundos permanece en `Cargando analytics...`; no hubo logs de error visibles. | P1 reproducible; falta traza autenticada |
 | Usuarios y roles | La pantalla muestra únicamente al owner y el formulario de invitación. | Roles cloud reales pendientes |

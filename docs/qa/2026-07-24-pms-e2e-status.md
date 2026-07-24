@@ -449,7 +449,8 @@ La sesión owner QA del navegador interno se reconectó y quedó autenticada en
 hotel ID 4. Con viewport explícito `390×844`, la disponibilidad de Standard QA
 para 2026-08-15/17 respondió `3 habitaciones`. El formulario rápido creó el
 huésped sintético ID 14, pero al seleccionar la categoría y las fechas quedó
-en `0 noches / $0`; no se confirmó la reserva.
+en `0 noches / $0`. La misma prueba se repitió provocando blur natural con Tab
+en ambos campos de fecha, sin cambiar el resultado; no se confirmó la reserva.
 
 La medición responsive del build cloud devolvió `557–558px` para Dashboard,
 `392px` para Reservas, Stock, Reportes y Lavandería, y `390px` para Caja. En una
