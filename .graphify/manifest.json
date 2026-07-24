@@ -3264,8 +3264,8 @@
     "hash": "8e2277e0fc399686b86f61f02ef68f93"
   },
   ".graphify/GRAPH_REPORT.md": {
-    "mtime": 1784881876614.2358,
-    "hash": "b15e87251c7541d3af37a1a4f3fd479b"
+    "mtime": 1784881921765.8867,
+    "hash": "513912347db2621e910e0e3573db728f"
   },
   "scripts/agent_ops/manage_qa_baseline_lease.py": {
     "mtime": 1784862144921.6997,
@@ -3482,5 +3482,9 @@
   "alembic/versions/20260724_core_tenant_composite_fks.py": {
     "mtime": 1784880686889.9075,
     "hash": "7e9d00af228292221911ca6d66450b15"
+  },
+  "alembic/versions/20260724_extended_tenant_composite_fks.py": {
+    "mtime": 1784881793417.157,
+    "hash": "3e73b306b85da4edd297e37aa6bf1cf4"
   }
 }
