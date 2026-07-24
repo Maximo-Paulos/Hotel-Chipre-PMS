@@ -15,11 +15,11 @@ repositorio.
 | Área | Resultado |
 | --- | --- |
 | Frontend lint/typecheck/build | Pasan. Vite informa un bundle principal de 788.60 kB minificado (190.98 kB gzip); queda como deuda de performance. |
-| E2E desktop | Pasan los journeys de Chromium de login, logout, admin, calendario de tarifas, configuración del hotel, negocio, operaciones diarias, páginas V72, estados accionables de Analytics y Reportes, error de cotización y ciclo de vida de reserva. La ejecución serial fresh completa queda en 47/47 al sumar móvil Chromium y los tres perfiles WebKit. |
-| E2E mobile | 4/4 pasan con Chromium emulando iPhone y verificando 375×812, 390×844 y 430×932; 12/12 pasan con Playwright WebKit en perfiles iPhone SE, iPhone 15 y iPhone 15 Pro Max. La regresión de selector con nombre largo, touch targets críticos, overflow de páginas operativas, el journey de Reportes y el ciclo de vida de reserva en WebKit quedan cubiertos; la suite completa pasa 47/47. Esto no sustituye Safari nativo del simulador Xcode, que no está disponible en este host. |
+| E2E desktop | Pasan los journeys de Chromium de login, logout, admin, calendario de tarifas, configuración del hotel, negocio, operaciones diarias, consumos, páginas V72, estados accionables de Analytics y Reportes, error de cotización y ciclo de vida de reserva. La ejecución serial fresh completa queda en 52/52 al sumar móvil Chromium y los tres perfiles WebKit. |
+| E2E mobile | 4/4 pasan con Chromium emulando iPhone y verificando 375×812, 390×844 y 430×932; 12/12 pasan con Playwright WebKit en perfiles iPhone SE, iPhone 15 y iPhone 15 Pro Max. La regresión de selector con nombre largo, touch targets críticos, overflow de páginas operativas, el journey de Reportes, consumos y el ciclo de vida de reserva en WebKit quedan cubiertos; la suite completa pasa 52/52. Esto no sustituye Safari nativo del simulador Xcode, que no está disponible en este host. |
 | Backend completo | 1220 pasan, 17 se omiten, 12 quedan xfail y 1 xpass en Python 3.12 limpio. El runner E2E rechaza explícitamente Python menor a 3.10. |
 | Forward-tests de arquitectura de datos | 2/2 pasan: una entidad de otro hotel no puede leerse ni adjuntarse, y una cotización queda invalidada antes de persistir la reserva cuando cambia la tarifa. |
-| Migración virgen | `alembic upgrade head` pasa sobre SQLite temporal hasta `20260724_room_move_enum_values`, incluyendo blobs privados, rotación, custodia, claves tenant restantes y el contrato de movimientos de habitación. |
+| Migración virgen | `alembic upgrade head` pasa sobre SQLite temporal hasta `20260724_billing_adjustment_enum_values`, incluyendo blobs privados, rotación, custodia, claves tenant restantes, movimientos de habitación y el contrato de cargos operativos. |
 | Backend focalizado | 56/56 pasan: motor de asignación, operaciones de reservas, check-in, check-out y seguridad del flujo. |
 | Analítica y trazabilidad | 27/27 pasan en contratos/API; cada envelope expone `data_as_of`, `source_lag_seconds` y `data_source`, y la UI lo muestra. |
 | Aislamiento/cache/concurrencia | 56/56 pasan en aislamiento multi-hotel, cache con fallback PG y locks Redis/Valkey; caja y allocation quedaron protegidos. |
@@ -579,3 +579,21 @@ También se agregó el journey zz-cash-control-journey.spec.ts para cubrir
 ingreso y egreso manual, cierre con diferencia, aprobación, custodia automática
 del owner y caja sucesora. Pasó en Chromium y en WebKit iPhone 15; la suite
 completa volvió a pasar 51/51 sobre el commit b5d1a6d.
+
+### Revalidación local posterior — Consumos y cargos adicionales
+
+Se agregó `frontend/e2e/reservation-charge-journey.spec.ts` para cubrir el
+faltante funcional de cargar minibar, desayuno u otros extras desde la Ficha de
+la estadía. El backend persiste el cargo como `BillingAdjustment`, actualiza el
+saldo operativo derivado del ledger, audita el actor y restringe la acción a
+reservas activas con permiso `reservation:charge`. La pantalla usa descripción e
+importe comprensibles, muestra el saldo actualizado y conserva el cargo al
+cerrar y reabrir la Ficha.
+
+La primera corrida E2E detectó que la migración original almacenaba los nombres
+de miembros (`CHARGE`) mientras el modelo persistía los valores (`charge`). Se
+agregó `20260724_billing_adjustment_enum_values` para reparar SQLite y PostgreSQL
+sin quitar la restricción. La prueba focalizada pasó 1/1 en Chromium y 1/1 en
+WebKit iPhone 15; las pruebas backend relacionadas pasaron 13/13 y la regresión
+local serial fresh pasó 52/52 sobre el commit `9aa8dad`. No se ejecutaron pagos,
+emails, webhooks, OTA ni integraciones externas.

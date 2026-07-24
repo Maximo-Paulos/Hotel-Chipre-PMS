@@ -344,8 +344,8 @@
     "hash": "de09f11139cc84b783d8719f34bb7cdb"
   },
   "app/api/reservations.py": {
-    "mtime": 1784868928949.9487,
-    "hash": "4d6ee0aecf3737a4008be7d9b4c24ae7"
+    "mtime": 1784908426624.4023,
+    "hash": "c8bd7ecc7b44f427fcbca5231de56da3"
   },
   "app/api/room_blocks.py": {
     "mtime": 1784862144875.9834,
@@ -736,8 +736,8 @@
     "hash": "f3f112757ae3676ee43734231e6fa98c"
   },
   "app/schemas/reservation_operations.py": {
-    "mtime": 1784862144881.6912,
-    "hash": "5c982f16ef4982d62cac926be05cd5a2"
+    "mtime": 1784908223262.128,
+    "hash": "61e2e3b9c05da1bb5a03df36f872800a"
   },
   "app/schemas/room.py": {
     "mtime": 1784862144881.7388,
@@ -992,8 +992,8 @@
     "hash": "0a3e8ba84ec2d5f30f11515cf6490f09"
   },
   "app/services/permission_service.py": {
-    "mtime": 1784884142680.0117,
-    "hash": "13bc2eb285d86c94f7bb9edc98125f12"
+    "mtime": 1784908214775.416,
+    "hash": "22dcfef5723185c26a75245b516d2f23"
   },
   "app/services/pricing_policy_service.py": {
     "mtime": 1784862144886.0344,
@@ -1016,8 +1016,8 @@
     "hash": "9d7772a03023da9e00a60d163e9f5a48"
   },
   "app/services/reservation_operations_service.py": {
-    "mtime": 1784862144886.3618,
-    "hash": "37fa73ea61141c37f6402995c9e0b313"
+    "mtime": 1784908766051.4937,
+    "hash": "7db20865cd52e39c5c595866c782cb3c"
   },
   "app/services/reservation_service.py": {
     "mtime": 1784889349964.9397,
@@ -1100,8 +1100,8 @@
     "hash": "70ea4197fe8494bac4fc09ce0bd4dfb2"
   },
   "frontend/playwright.config.ts": {
-    "mtime": 1784907291233.539,
-    "hash": "31c620718e822dcdd8a2fc21a4ba0100"
+    "mtime": 1784908399109.3079,
+    "hash": "19b6cdb398f34d802868f036365454a4"
   },
   "frontend/src/App.tsx": {
     "mtime": 1784862144901.0059,
@@ -1192,8 +1192,8 @@
     "hash": "ef6f8c58b53e1909c0844e94c1659942"
   },
   "frontend/src/api/reservations.ts": {
-    "mtime": 1784885231122.6711,
-    "hash": "04c768786aa98a9171f9c25a1caf1e74"
+    "mtime": 1784908264653.234,
+    "hash": "127dd135bdd5dab238852aebdcae5697"
   },
   "frontend/src/api/roomBlocks.ts": {
     "mtime": 1784862144902.3428,
@@ -1452,8 +1452,8 @@
     "hash": "2d960effb79d50cb5debf39038a49702"
   },
   "frontend/src/views/protected/ReservationsPage.tsx": {
-    "mtime": 1784904324073.5122,
-    "hash": "6110b3c9f152d9c1387e895107f24a1f"
+    "mtime": 1784908325046.7131,
+    "hash": "0a2c89300a55ac00f43ed1787fb7facb"
   },
   "frontend/src/views/protected/RoomsPage.tsx": {
     "mtime": 1784862144906.3872,
@@ -3264,8 +3264,8 @@
     "hash": "8e2277e0fc399686b86f61f02ef68f93"
   },
   ".graphify/GRAPH_REPORT.md": {
-    "mtime": 1784907207911.939,
-    "hash": "c549c94b3565e59dd3c2fd5af0bd998f"
+    "mtime": 1784907839444.4333,
+    "hash": "ec8bc5e2699e46cc1a7dba5f0a4697cc"
   },
   "scripts/agent_ops/manage_qa_baseline_lease.py": {
     "mtime": 1784862144921.6997,
@@ -3360,8 +3360,8 @@
     "hash": "0417fd101669a65cc4d6657a983ba143"
   },
   "docs/qa/2026-07-24-pms-e2e-status.md": {
-    "mtime": 1784907726527.3914,
-    "hash": "ac05563ea8c95a065501cf220eca1f49"
+    "mtime": 1784908820534.6978,
+    "hash": "dc77abd13b329be5bab1be437347010e"
   },
   "frontend/e2e/business-journey.spec.ts": {
     "mtime": 1784904324073.8352,
@@ -3550,5 +3550,17 @@
   "frontend/e2e/zz-cash-control-journey.spec.ts": {
     "mtime": 1784907574571.593,
     "hash": "9b930342c62b4eac64feab93874e59a6"
+  },
+  "alembic/versions/20260724_billing_adjustment_enum_values.py": {
+    "mtime": 1784908575694.974,
+    "hash": "8a98a018b26bd37f00ede059b31b84bd"
+  },
+  "frontend/e2e/reservation-charge-journey.spec.ts": {
+    "mtime": 1784908395495.985,
+    "hash": "e44a2bb09b289318e96adc4338e94ef8"
+  },
+  "tests/test_reservation_charges.py": {
+    "mtime": 1784908182250.0127,
+    "hash": "daba3c644fdb1f18f7a767a40deb96e3"
   }
 }

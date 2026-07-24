@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-24T15:44:00.280Z",
+  "generatedAt": "2026-07-24T16:00:53.436Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -3069,6 +3069,30 @@
       "warnings": []
     },
     {
+      "id": "flow:services_reservation_operations_service_add_reservation_charge",
+      "name": "add_reservation_charge",
+      "entryPoint": "services_reservation_operations_service_add_reservation_charge",
+      "entryPointId": "services_reservation_operations_service_add_reservation_charge",
+      "path": [
+        "services_reservation_operations_service_add_reservation_charge",
+        "services_reservation_operations_service_invalidate_availability_cache",
+        "services_reservation_operations_service_reservationoperationserror"
+      ],
+      "qualifiedPath": [
+        "services_reservation_operations_service_add_reservation_charge",
+        "services_reservation_operations_service_invalidate_availability_cache",
+        "services_reservation_operations_service_reservationoperationserror"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/services/reservation_operations_service.py"
+      ],
+      "criticality": 0.2433,
+      "warnings": []
+    },
+    {
       "id": "flow:versions_20260724_allocation_enum_values_downgrade",
       "name": "downgrade",
       "entryPoint": "versions_20260724_allocation_enum_values_downgrade",
@@ -3327,6 +3351,32 @@
       "warnings": []
     },
     {
+      "id": "flow:versions_20260724_billing_adjustment_enum_values_downgrade",
+      "name": "downgrade",
+      "entryPoint": "versions_20260724_billing_adjustment_enum_values_downgrade",
+      "entryPointId": "versions_20260724_billing_adjustment_enum_values_downgrade",
+      "path": [
+        "versions_20260724_billing_adjustment_enum_values_downgrade",
+        "versions_20260724_billing_adjustment_enum_values_rename_postgres_values",
+        "versions_20260724_billing_adjustment_enum_values_repair_sqlite",
+        "versions_20260724_billing_adjustment_enum_values_constraint"
+      ],
+      "qualifiedPath": [
+        "versions_20260724_billing_adjustment_enum_values_downgrade",
+        "versions_20260724_billing_adjustment_enum_values_rename_postgres_values",
+        "versions_20260724_billing_adjustment_enum_values_repair_sqlite",
+        "versions_20260724_billing_adjustment_enum_values_constraint"
+      ],
+      "depth": 2,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20260724_billing_adjustment_enum_values.py"
+      ],
+      "criticality": 0.2325,
+      "warnings": []
+    },
+    {
       "id": "flow:versions_20260724_room_move_enum_values_downgrade",
       "name": "downgrade",
       "entryPoint": "versions_20260724_room_move_enum_values_downgrade",
@@ -3426,6 +3476,32 @@
       "fileCount": 1,
       "files": [
         "app/services/room_block_service.py"
+      ],
+      "criticality": 0.2325,
+      "warnings": []
+    },
+    {
+      "id": "flow:versions_20260724_billing_adjustment_enum_values_upgrade",
+      "name": "upgrade",
+      "entryPoint": "versions_20260724_billing_adjustment_enum_values_upgrade",
+      "entryPointId": "versions_20260724_billing_adjustment_enum_values_upgrade",
+      "path": [
+        "versions_20260724_billing_adjustment_enum_values_upgrade",
+        "versions_20260724_billing_adjustment_enum_values_rename_postgres_values",
+        "versions_20260724_billing_adjustment_enum_values_repair_sqlite",
+        "versions_20260724_billing_adjustment_enum_values_constraint"
+      ],
+      "qualifiedPath": [
+        "versions_20260724_billing_adjustment_enum_values_upgrade",
+        "versions_20260724_billing_adjustment_enum_values_rename_postgres_values",
+        "versions_20260724_billing_adjustment_enum_values_repair_sqlite",
+        "versions_20260724_billing_adjustment_enum_values_constraint"
+      ],
+      "depth": 2,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20260724_billing_adjustment_enum_values.py"
       ],
       "criticality": 0.2325,
       "warnings": []
