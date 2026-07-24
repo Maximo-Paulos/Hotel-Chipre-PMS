@@ -53,7 +53,7 @@ test.describe("Responsive mobile smoke", () => {
     await login(page);
     await page.setViewportSize({ width: 375, height: 812 });
 
-    for (const path of ["/reservas", "/caja", "/operacion/stock"]) {
+    for (const path of ["/reservas", "/caja", "/operacion/stock", "/reportes", "/operacion/lavanderia"]) {
       await page.goto(path);
       const targets = await page.evaluate(() => {
         const nodes = Array.from(
@@ -77,6 +77,23 @@ test.describe("Responsive mobile smoke", () => {
       });
 
       expect(targets.filter((target) => target.height < 44), `${path} has undersized touch targets`).toEqual([]);
+    }
+  });
+
+  test("critical operational pages have no horizontal overflow", async ({ page }) => {
+    await login(page);
+    await page.setViewportSize({ width: 390, height: 844 });
+
+    for (const path of ["/reservas", "/caja", "/operacion/stock", "/reportes", "/operacion/lavanderia"]) {
+      await page.goto(path);
+      const layout = await page.evaluate(() => ({
+        viewportWidth: window.innerWidth,
+        documentScrollWidth: document.documentElement.scrollWidth,
+        bodyScrollWidth: document.body.scrollWidth
+      }));
+
+      expect(layout.documentScrollWidth, `${path} has document horizontal overflow`).toBeLessThanOrEqual(layout.viewportWidth);
+      expect(layout.bodyScrollWidth, `${path} has body horizontal overflow`).toBeLessThanOrEqual(layout.viewportWidth);
     }
   });
 });
