@@ -4,11 +4,11 @@ Supports both PostgreSQL (production) and SQLite (testing).
 """
 import logging
 
-from sqlalchemy import create_engine, event, inspect
+from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.orm import sessionmaker, DeclarativeBase, Session
 from typing import Generator
 
-from app.config import get_settings
+from app.config import get_settings, is_preview_qa_mode, is_production_mode
 
 LOGGER = logging.getLogger(__name__)
 
@@ -234,10 +234,40 @@ def _sync_missing_columns(engine) -> None:
 
 
 def init_db(database_url: str | None = None):
-    """Initialize the database engine and create all tables."""
+    """Initialize the database engine.
+
+    Local development and tests may bootstrap SQLite with ``create_all``. In
+    production and isolated preview/QA environments, schema ownership belongs
+    exclusively to Alembic and the process must fail closed when migrations
+    were not applied before startup.
+    """
     global _engine, _SessionLocal
     _engine = get_engine(database_url)
     _SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_engine)
+
+    settings = get_settings()
+    managed_schema_runtime = is_production_mode(settings) or is_preview_qa_mode(settings)
+    if managed_schema_runtime:
+        if _engine.dialect.name != "postgresql":
+            raise RuntimeError(
+                "Managed environments require PostgreSQL with Alembic migrations; "
+                "automatic schema creation is disabled"
+            )
+        inspector = inspect(_engine)
+        if not inspector.has_table("alembic_version"):
+            raise RuntimeError(
+                "Database schema is not migrated: alembic_version is missing"
+            )
+        with _engine.connect() as connection:
+            revision = connection.execute(
+                text("SELECT version_num FROM alembic_version LIMIT 1")
+            ).scalar_one_or_none()
+        if not revision:
+            raise RuntimeError(
+                "Database schema is not migrated: alembic_version has no revision"
+            )
+        return _engine
+
     # Import models so Base.metadata is fully populated (e.g., CategoryPricing)
     import app.models  # noqa: F401
     # Self-heal: on an existing PostgreSQL DB, create_all() never ALTERs the

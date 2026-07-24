@@ -29,6 +29,14 @@ Each data class has exactly ONE source of truth. No dual writes to two authorita
 
 ## PostgreSQL — primary OLTP store
 
+### Schema ownership and startup safety
+
+Alembic is the only schema owner in production, preview, QA, and staging. The
+application refuses to start in those environments unless it is connected to
+PostgreSQL with a populated `alembic_version` table. `Base.metadata.create_all`
+and additive self-healing remain available only for local development/test
+harnesses; they must never silently repair production drift during boot.
+
 ### Why PostgreSQL, not NoSQL
 
 - v72 requires reproducible arqueo, idempotent payments, and append-only audit. These require ACID transactions with row-level locking.

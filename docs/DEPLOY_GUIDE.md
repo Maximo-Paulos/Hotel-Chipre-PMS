@@ -38,6 +38,12 @@ Config del servicio:
 - Start command: `python -m alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}`
 - Healthcheck: `/health`
 
+Regla de esquema:
+- Producción, preview, QA y staging deben ejecutar Alembic antes de iniciar la aplicación.
+- El backend falla cerrado si PostgreSQL no tiene `alembic_version` con una revisión aplicada.
+- `create_all()` queda reservado para desarrollo/tests locales; no se usa para reparar drift en un deploy.
+- Cuando el proveedor permita un release/pre-deploy job separado, ejecutar allí `alembic upgrade head` y dejar el proceso web sólo con Uvicorn.
+
 Variables de entorno:
 - `APP_ENV=production`
 - `DATABASE_URL=postgresql+psycopg2://...` (Supabase)
