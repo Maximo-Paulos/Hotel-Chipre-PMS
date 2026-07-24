@@ -611,3 +611,24 @@ matrices en dos procesos separados:
 Esta evidencia confirma el estado local de la rama actual, pero no cambia el
 gate cloud: el artefacto publicado sigue sin un `code_sha` provider-bound y la
 matriz visible de cinco personas todavía no puede cerrarse.
+
+### Revalidación local — contratos de pagos e integraciones sin side effects
+
+Se ejecutó con Python 3.12.13 la regresión focalizada de links de pago,
+comprobantes, idempotencia, webhooks Mercado Pago, booking público, WhatsApp y
+email saliente usando fixtures y adaptadores mock:
+
+```text
+40 passed in 3.42s
+```
+
+La suite comprobó creación/listado/cancelación de links, tolerancia a fallas del
+gateway, entrega mock, firma e idempotencia de webhooks, aislamiento por hotel,
+flujo de comprobante rechazado/reintentado/aprobado, sobrepago e idempotencia de
+pagos, además de los contratos público y WhatsApp. La regresión visual/operativa
+relacionada pasó en Chromium y WebKit iPhone 15. No se usaron credenciales,
+Mercado Pago, Gmail, webhooks, WhatsApp ni dinero reales.
+
+El resultado no cierra el gate cloud: el artefacto publicado sigue sin SHA
+provider-bound y los P1 de disponibilidad, cotización, Reportes y Analytics
+siguen pendientes de repetición contra un preview aislado.
