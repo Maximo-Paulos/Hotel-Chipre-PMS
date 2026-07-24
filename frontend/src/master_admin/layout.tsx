@@ -98,19 +98,32 @@ export function MasterAdminProtectedShell() {
           </div>
         </aside>
 
-        <main className="flex-1">
-          <div className="mb-4 flex items-center justify-between rounded-3xl border border-white/10 bg-slate-950/70 px-4 py-3 shadow-2xl shadow-black/20 backdrop-blur md:hidden">
-            <div>
-              <p className="text-xs uppercase tracking-[0.25em] text-amber-300/80">Owner Master Panel</p>
-              <p className="text-sm text-slate-300">{user?.email}</p>
+        <main className="min-w-0 flex-1">
+          <div className="mb-4 space-y-3 md:hidden">
+            <div className="flex items-center justify-between gap-3 rounded-3xl border border-white/10 bg-slate-950/70 px-4 py-3 shadow-2xl shadow-black/20 backdrop-blur">
+              <div className="min-w-0">
+                <p className="text-xs uppercase tracking-[0.25em] text-amber-300/80">Owner Master Panel</p>
+                <p className="truncate text-sm text-slate-300">{user?.email}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => void logout()}
+                className="min-h-11 shrink-0 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-100"
+              >
+                Salir
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={() => void logout()}
-              className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-100"
-            >
-              Salir
-            </button>
+            <nav aria-label="Navegación master móvil" className="flex gap-2 overflow-x-auto pb-1">
+              {navItems.map((item) => (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  className="flex min-h-11 shrink-0 items-center rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-slate-100"
+                >
+                  {item.label}
+                </Link>
+              ))}
+            </nav>
           </div>
           <Outlet />
         </main>

@@ -4,6 +4,16 @@ const email = process.env.E2E_MASTER_EMAIL || "master-admin@e2e.com";
 const password = process.env.E2E_MASTER_PASSWORD || "E2eMasterPass1234!";
 const pin = process.env.E2E_MASTER_PIN || "123456";
 
+async function primaryNavigation(page: import("@playwright/test").Page) {
+  const mobileNavigation = page.getByRole("navigation", { name: "Navegación master móvil" });
+
+  if (await mobileNavigation.isVisible()) {
+    return mobileNavigation;
+  }
+
+  return page.locator("aside nav");
+}
+
 test.describe.serial("Master admin smoke", () => {
   test("login and open dashboard", async ({ page }) => {
     await page.goto("/adminpmsmaster/login");
@@ -15,6 +25,13 @@ test.describe.serial("Master admin smoke", () => {
     await page.waitForURL("**/adminpmsmaster/dashboard", { timeout: 15_000 });
     await expect(page.getByText("Operación de plataforma")).toBeVisible();
     await expect(page.getByText("Policy actual")).toBeVisible();
+
+    const viewportWidth = await page.evaluate(() => window.innerWidth);
+    if (viewportWidth < 768) {
+      await expect(page.getByRole("navigation", { name: "Navegación master móvil" })).toBeVisible();
+      const pageWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+      expect(pageWidth).toBeLessThanOrEqual(viewportWidth);
+    }
   });
 
   test("navigate to billing and audit sections", async ({ page }) => {
@@ -25,10 +42,11 @@ test.describe.serial("Master admin smoke", () => {
     await page.getByRole("button", { name: "Entrar al panel" }).click();
     await page.waitForURL("**/adminpmsmaster/dashboard", { timeout: 15_000 });
 
-    await page.getByRole("link", { name: "Billing Policy" }).click();
+    const navigation = await primaryNavigation(page);
+    await navigation.getByRole("link", { name: "Billing Policy" }).click();
     await expect(page.getByText("Paywall central")).toBeVisible();
 
-    await page.getByRole("link", { name: "Audit Log" }).click();
+    await navigation.getByRole("link", { name: "Audit Log" }).click();
     await expect(page.getByText("Trazabilidad")).toBeVisible();
   });
 });

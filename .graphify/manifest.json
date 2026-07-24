@@ -1084,8 +1084,8 @@
     "hash": "ef0887f379ade63b2caf8c59033a9f0b"
   },
   "frontend/e2e/master_admin.spec.ts": {
-    "mtime": 1784862144897.6887,
-    "hash": "a443176220eb1d4f6b9fa8fbe23f3d8b"
+    "mtime": 1784913758218.257,
+    "hash": "943d171579f4a4fe0c36a72355ebeafd"
   },
   "frontend/e2e/rate-calendar.spec.ts": {
     "mtime": 1784862144897.7493,
@@ -1100,8 +1100,8 @@
     "hash": "70ea4197fe8494bac4fc09ce0bd4dfb2"
   },
   "frontend/playwright.config.ts": {
-    "mtime": 1784913418232.0417,
-    "hash": "1b7c5374f5d4e80c2bb4f70e6441c210"
+    "mtime": 1784913630593.293,
+    "hash": "334856a30a70212564598d5470b48ad4"
   },
   "frontend/src/App.tsx": {
     "mtime": 1784862144901.0059,
@@ -1364,8 +1364,8 @@
     "hash": "ffa689506725be9d4dd8c5cd2c829f41"
   },
   "frontend/src/master_admin/layout.tsx": {
-    "mtime": 1784862144904.7075,
-    "hash": "59aed8acad8a913f6455ff8c96e45018"
+    "mtime": 1784913737331.1243,
+    "hash": "261b6227a9778fa267aa73f23b828d63"
   },
   "frontend/src/master_admin/pages/AuditPage.tsx": {
     "mtime": 1784862144904.7727,
@@ -3360,8 +3360,8 @@
     "hash": "0417fd101669a65cc4d6657a983ba143"
   },
   "docs/qa/2026-07-24-pms-e2e-status.md": {
-    "mtime": 1784913380158.7358,
-    "hash": "eca1f0d587d5c833eeb63129ad5b9192"
+    "mtime": 1784913608798.002,
+    "hash": "52bf3eb83aec1874a9cf0ced8669d607"
   },
   "frontend/e2e/business-journey.spec.ts": {
     "mtime": 1784904324073.8352,

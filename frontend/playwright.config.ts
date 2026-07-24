@@ -45,6 +45,7 @@ const businessWebKitTestMatch = [
   "**/reservation-lifecycle.spec.ts",
   "**/analytics-success.spec.ts",
   "**/rate-calendar.spec.ts",
+  "**/master_admin.spec.ts",
   "**/auth-onboarding-journey.spec.ts",
   "**/role-journey.spec.ts",
   "**/guest-companion-journey.spec.ts",
