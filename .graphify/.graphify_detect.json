@@ -894,9 +894,9 @@
     "video": []
   },
   "total_files": 884,
-  "total_words": 528961,
+  "total_words": 529465,
   "needs_graph": true,
-  "warning": "Large corpus: 884 files · ~528,961 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
+  "warning": "Large corpus: 884 files · ~529,465 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
   "skipped_sensitive": [
     "alembic/versions/20260408_security_tokens.py",
     "app/adapters/memory_tokens.py",
@@ -910,7 +910,7 @@
   "graphifyignore_patterns": 60,
   "git": {
     "source_owner": "git",
-    "source_hash": "eb6f03a48878ca3ff44b4547f2fd4e3ffe1cafbc",
+    "source_hash": "2e14d9a02fa58e343d425cd6fa75cbf4eaaab883",
     "branches": [
       "codex/feature/agent-ops-knowledge",
       "codex/feature/pms-e2e-scale-hardening",
@@ -927,11 +927,11 @@
     "source": "default-auto",
     "root": ".",
     "git_root": ".",
-    "head": "eb6f03a48878ca3ff44b4547f2fd4e3ffe1cafbc",
+    "head": "2e14d9a02fa58e343d425cd6fa75cbf4eaaab883",
     "candidate_count": 977,
     "included_count": 884,
-    "excluded_untracked_count": 0,
-    "excluded_ignored_count": 30669,
+    "excluded_untracked_count": 1,
+    "excluded_ignored_count": 30671,
     "excluded_sensitive_count": 8,
     "missing_committed_count": 0,
     "warnings": [],
