@@ -742,3 +742,43 @@ observación refuerza el P1 móvil de la instancia publicada. No se asigna al
 commit local actual porque el despliegue no expone un `code_sha`
 provider-bound; debe corregirse y verificarse en un preview aislado antes de
 cerrar la puerta funcional.
+
+### Continuación cloud sobre el Preview existente — Reportes, Analytics, Caja y Stock
+
+El Preview de `codex/feature/pms-e2e-scale-hardening` quedó ligado al commit
+`3a6ebda`. Se usaron exclusivamente el proyecto Vercel, API y base de datos
+existentes; no se creó un proyecto Supabase, Render ni proveedor de pagos
+adicional. La migración ya versionada que agrega `pre_check_in` al enum de
+reservas se aplicó de forma aditiva al entorno existente, corrigiendo el error
+de Reportes. La pantalla volvió a cargar sus secciones operativas con datos.
+
+También se corrigió un crash P1 de Analytics/Operación: el backend existente
+podía omitir `data_source` y la UI invocaba `trim()` sobre `undefined`. El
+frontend acepta ahora metadata heredada, usa PostgreSQL como fallback visible y
+la regresión específica aprobó 2/2. La revalidación cloud del Preview mostró
+Analytics/Operación con métricas y el estado `Datos PostgreSQL, al día`, sin
+errores de consola.
+
+Como recorrido funcional real se abrió una caja QA con saldo inicial cero,
+se registró un ingreso manual sintético y un egreso equivalente, y se cerró con
+saldo contado y esperado en cero. No se asociaron reservas, no se ejecutaron
+pagos, links, emails, webhooks ni OTAs. En Stock, el flujo ofrece acciones de
+ingreso/egreso/ajuste, búsqueda de reserva por huésped o código, resultado
+previsto y bloqueo visible de egresos que dejarían stock negativo. Los saldos
+negativos visibles corresponden a datos QA históricos; el servicio y la UI
+actuales bloquean nuevos egresos negativos.
+
+La automatización del navegador interno no confirma el evento nativo de los
+campos `date`, por lo que reinyecta el valor controlado al solicitar
+disponibilidad. No se atribuyó ese efecto a producto: el escenario de
+preservación de rango aprobó 2/2 en Chromium y 2/2 en WebKit iPhone 15. El
+smoke responsivo vigente aprobó 12/12 entre iPhone SE, iPhone 15 e iPhone 15
+Pro Max. La certificación final en Safari nativo o dispositivo físico sigue
+pendiente, al igual que los pagos reales; ambos quedan fuera de esta ejecución
+para evitar efectos externos.
+
+Validación posterior al cambio: `analytics-success` Chromium 2/2,
+`reservation-lifecycle` Chromium 2/2 y WebKit iPhone 15 2/2, servicio de
+Stock 4/4, regresión E2E Chromium 37/37 y smoke Apple WebKit 12/12. Persisten
+warnings de cache/lock degradado del arnés local y warnings de serialización de
+Decimal; no hubo fallos funcionales en esas corridas.
