@@ -263,6 +263,12 @@ export type ReservationRoomMovePayload = {
   notes?: string | null;
 };
 
+export type ReservationChargePayload = {
+  amount: number;
+  currency_code?: string;
+  description: string;
+};
+
 const buildQueryString = (filters: ReservationFilters = {}) => {
   const params = new URLSearchParams();
   if (filters.status && filters.status !== "all") {
@@ -311,6 +317,13 @@ export const markReservationNoShow = (id: number, payload: ReservationNoShowPayl
 
 export const moveReservationRoom = (id: number, payload: ReservationRoomMovePayload, session?: SessionLike) =>
   apiFetch<Reservation>(`/api/reservations/${id}/room-move`, { method: "POST", data: payload, session });
+
+export const addReservationCharge = (id: number, payload: ReservationChargePayload, session?: SessionLike) =>
+  apiFetch<ReservationBillingAdjustmentSummary>(`/api/reservations/${id}/charges`, {
+    method: "POST",
+    data: payload,
+    session
+  });
 
 export const checkInReservation = (id: number, session?: SessionLike) =>
   apiFetch<Reservation>(`/api/checkin/${id}`, { method: "POST", session });

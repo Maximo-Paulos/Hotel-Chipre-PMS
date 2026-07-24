@@ -31,6 +31,8 @@ from app.schemas.reservation_operations import (
     OTARebookToDirectResponse,
     ReservationActionResolveRequest,
     ReservationExternalResolutionResponse,
+    ReservationBillingAdjustmentSummaryRead,
+    ReservationChargeCreate,
     ReservationManualReviewResponse,
     ReservationOperationsSummaryRead,
     ReservationPendingActionRead,
@@ -51,6 +53,7 @@ from app.services.reservation_operations_service import (
     ReservationOperationsError,
     change_reservation_dates,
     extend_reservation_stay,
+    add_reservation_charge,
     move_reservation_room,
     preview_ota_rebook_as_direct,
     rebook_ota_reservation_as_direct,
@@ -70,7 +73,11 @@ from app.services.ota_manual_service import (
 from app.services.payment_service import PaymentError
 from app.services.allocation_runtime_service import run_persisted_allocation
 from app.dependencies.auth import get_auth_context, AuthContext, require_roles, require_permission
-from app.services.permission_service import PERMISSION_RESERVATION_CREATE, PERMISSION_RESERVATION_ROOM_MOVE
+from app.services.permission_service import (
+    PERMISSION_RESERVATION_CHARGE,
+    PERMISSION_RESERVATION_CREATE,
+    PERMISSION_RESERVATION_ROOM_MOVE,
+)
 from app.services import audit_log_service
 from app.services.graph_projection import (
     project_company_link,
@@ -485,6 +492,47 @@ def cancel_reservation(
         return _to_read(r)
     except ReservationError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post(
+    "/{reservation_id}/charges",
+    response_model=ReservationBillingAdjustmentSummaryRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_reservation_charge(
+    reservation_id: int,
+    payload: ReservationChargeCreate,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_CHARGE)),
+):
+    """Record a human-readable consumption or extra charge for an active stay."""
+    reservation = get_reservation_by_id(db, reservation_id, context.hotel_id)
+    if not reservation:
+        raise HTTPException(status_code=404, detail="Reservation not found")
+    try:
+        charge = add_reservation_charge(
+            db,
+            reservation=reservation,
+            hotel_id=context.hotel_id,
+            amount=payload.amount,
+            currency_code=payload.currency_code,
+            description=payload.description,
+            actor_user_id=context.user_id,
+        )
+        db.commit()
+        db.refresh(charge)
+        return ReservationBillingAdjustmentSummaryRead(
+            id=charge.id,
+            type=charge.adjustment_type.value,
+            amount=charge.amount,
+            tax_amount=charge.tax_amount,
+            total_amount=charge.total_amount,
+            currency_code=charge.currency_code,
+            notes=charge.notes,
+        )
+    except ReservationOperationsError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 @router.post("/{reservation_id}/release-no-guarantee", response_model=ReservationRead)

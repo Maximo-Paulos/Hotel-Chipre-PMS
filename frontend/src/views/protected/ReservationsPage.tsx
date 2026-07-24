@@ -3,9 +3,11 @@ import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
+  addReservationCharge,
   markReservationNoShow,
   moveReservationRoom,
   type Reservation,
+  type ReservationChargePayload,
   type ReservationNoShowPayload,
   type ReservationPendingAction,
   type ReservationRoomMovePayload,
@@ -216,6 +218,7 @@ export function ReservationsPage() {
   const [calendarRange, setCalendarRange] = useState<"week" | "month">("week");
   const [detailsReservationId, setDetailsReservationId] = useState<number | null>(null);
   const [roomMoveForm, setRoomMoveForm] = useState({ to_room_id: "", reason_code: "", notes: "" });
+  const [chargeForm, setChargeForm] = useState({ description: "", amount: "" });
   const [noShowNotes, setNoShowNotes] = useState("");
   const [guestIdOpen, setGuestIdOpen] = useState<number | null>(null);
   const [allocationForm, setAllocationForm] = useState({
@@ -301,6 +304,18 @@ export function ReservationsPage() {
       invalidateAllocationState();
       setNoShowNotes("");
       showToast("success", "No-show registrado.");
+    }
+  });
+
+  const chargeMutation = useMutation<unknown, unknown, { reservationId: number; payload: ReservationChargePayload }>({
+    mutationFn: ({ reservationId, payload }) => addReservationCharge(reservationId, payload, session),
+    onSuccess: () => {
+      invalidateAllocationState();
+      setChargeForm({ description: "", amount: "" });
+      showToast("success", "Consumo cargado a la reserva.");
+    },
+    onError: (err: unknown) => {
+      showToast("error", err instanceof Error ? err.message : "No se pudo cargar el consumo.");
     }
   });
 
@@ -629,6 +644,7 @@ export function ReservationsPage() {
   const canCheckOut = (status: ReservationStatus) => status === "checked_in";
   const canNoShow = (status: ReservationStatus) => ["pending", "deposit_paid", "fully_paid"].includes(status);
   const canMoveRoom = (status: ReservationStatus) => !["cancelled", "checked_out", "no_show"].includes(status);
+  const canAddCharge = (status: ReservationStatus) => !["cancelled", "checked_out", "no_show"].includes(status);
 
   const handleCancel = (id: number) =>
     cancelMutation.mutate(id, {
@@ -1003,16 +1019,23 @@ export function ReservationsPage() {
     );
   };
 
-  const openDetails = (reservation: Reservation) => setDetailsReservationId(reservation.id);
+  const openDetails = (reservation: Reservation) => {
+    setDetailsReservationId(reservation.id);
+    setRoomMoveForm({ to_room_id: "", reason_code: "", notes: "" });
+    setNoShowNotes("");
+    setChargeForm({ description: "", amount: "" });
+  };
   const openDetailsById = (reservationId: number) => {
     setDetailsReservationId(reservationId);
     setRoomMoveForm({ to_room_id: "", reason_code: "", notes: "" });
     setNoShowNotes("");
+    setChargeForm({ description: "", amount: "" });
   };
   const closeDetails = () => {
     setDetailsReservationId(null);
     setRoomMoveForm({ to_room_id: "", reason_code: "", notes: "" });
     setNoShowNotes("");
+    setChargeForm({ description: "", amount: "" });
   };
   const openGuest = (guestId: number) => setGuestIdOpen(guestId);
   const closeGuest = () => setGuestIdOpen(null);
@@ -2755,6 +2778,97 @@ export function ReservationsPage() {
                   ) : null}
                 </div>
               </div>
+            </section>
+
+            <section
+              role="region"
+              aria-labelledby="reservation-charges-title"
+              className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3"
+            >
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Cuenta del huésped</p>
+                  <h4 id="reservation-charges-title" className="text-sm font-semibold text-slate-900">
+                    Consumos y cargos
+                  </h4>
+                  <p className="text-xs text-slate-600">
+                    Cargá minibar, desayuno u otros extras sin editar el precio original de la reserva.
+                  </p>
+                </div>
+                {detailsOperations?.financial_summary ? (
+                  <span className="text-xs font-semibold text-slate-700">
+                    Saldo operativo: {formatMoney(detailsOperations.financial_summary.operational_balance_due ?? 0, detailsOperations.financial_summary.currency_code)}
+                  </span>
+                ) : null}
+              </div>
+
+              {detailsOperations?.financial_summary?.billing_adjustments?.length ? (
+                <ul className="mt-3 space-y-2" aria-label="Consumos registrados">
+                  {detailsOperations.financial_summary.billing_adjustments.map((charge) => (
+                    <li key={charge.id} className="flex items-start justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
+                      <div>
+                        <p className="font-semibold text-slate-900">{charge.notes || "Cargo adicional"}</p>
+                        <p className="text-xs text-slate-500">{charge.type === "charge" ? "Consumo" : charge.type}</p>
+                      </div>
+                      <span className="font-semibold text-slate-900">{formatMoney(charge.total_amount, charge.currency_code)}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-3 text-sm text-slate-600">Todavía no hay consumos cargados.</p>
+              )}
+
+              <form
+                className="mt-3 grid gap-3 rounded-lg border border-slate-200 bg-white p-3 md:grid-cols-[minmax(0,1fr)_10rem_auto] md:items-end"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  const amount = Number(chargeForm.amount);
+                  if (!chargeForm.description.trim() || !Number.isFinite(amount) || amount <= 0) {
+                    showToast("error", "Ingresá un detalle y un importe positivo para el consumo.");
+                    return;
+                  }
+                  chargeMutation.mutate({
+                    reservationId: detailsReservation.id,
+                    payload: { description: chargeForm.description, amount, currency_code: detailsReservation.currency_code || "ARS" }
+                  });
+                }}
+              >
+                <label className="space-y-1 text-sm">
+                  <span className="text-slate-600">Detalle del consumo</span>
+                  <input
+                    value={chargeForm.description}
+                    onChange={(event) => setChargeForm((current) => ({ ...current, description: event.target.value }))}
+                    placeholder="Minibar, desayuno, late checkout..."
+                    disabled={!canAddCharge(detailsReservation.status) || chargeMutation.isPending}
+                    required
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                  />
+                </label>
+                <label className="space-y-1 text-sm">
+                  <span className="text-slate-600">Importe</span>
+                  <input
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    value={chargeForm.amount}
+                    onChange={(event) => setChargeForm((current) => ({ ...current, amount: event.target.value }))}
+                    placeholder="0,00"
+                    disabled={!canAddCharge(detailsReservation.status) || chargeMutation.isPending}
+                    required
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                  />
+                </label>
+                <button
+                  type="submit"
+                  disabled={!canAddCharge(detailsReservation.status) || chargeMutation.isPending}
+                  className="rounded-lg border border-brand-200 bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {chargeMutation.isPending ? "Cargando..." : "Cargar consumo"}
+                </button>
+              </form>
+              {!canAddCharge(detailsReservation.status) ? (
+                <p className="mt-2 text-xs text-slate-500">La reserva ya no admite consumos porque la estadía terminó.</p>
+              ) : null}
             </section>
 
             {detailsOperations?.open_adjustments?.length ? (

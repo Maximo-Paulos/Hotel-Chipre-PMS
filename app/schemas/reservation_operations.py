@@ -4,6 +4,7 @@ Schemas for operational reservation actions.
 from __future__ import annotations
 
 from datetime import date
+from decimal import Decimal
 from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator
@@ -20,6 +21,30 @@ class RoomMoveRequest(BaseModel):
         value = value.strip()
         if not value:
             raise ValueError("reason_code is required")
+        return value
+
+
+class ReservationChargeCreate(BaseModel):
+    """Operator-created consumption or extra charge for an active stay."""
+
+    amount: Decimal = Field(..., gt=0, max_digits=12, decimal_places=2)
+    currency_code: str = Field(default="ARS", min_length=3, max_length=3)
+    description: str = Field(..., min_length=1, max_length=240)
+
+    @field_validator("currency_code")
+    @classmethod
+    def normalize_currency_code(cls, value: str) -> str:
+        normalized = value.strip().upper()
+        if len(normalized) != 3 or not normalized.isalpha():
+            raise ValueError("currency_code must be a three-letter currency code")
+        return normalized
+
+    @field_validator("description")
+    @classmethod
+    def description_must_not_be_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("description is required")
         return value
 
 

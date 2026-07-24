@@ -118,6 +118,65 @@ class ReservationExtensionResult:
     conflicts: list[dict] | None = None
 
 
+def add_reservation_charge(
+    db: Session,
+    *,
+    reservation: Reservation,
+    hotel_id: int,
+    amount: Decimal,
+    currency_code: str,
+    description: str,
+    actor_user_id: int | None = None,
+) -> BillingAdjustment:
+    """Add a hotel-created consumption or extra charge to an active reservation.
+
+    Charges are stored as billing adjustments, so the financial ledger remains the
+    source of truth and the existing checkout-balance guard sees the new amount.
+    """
+    if reservation.hotel_id != hotel_id:
+        raise ReservationOperationsError("La reserva no pertenece al hotel activo")
+    if reservation.status in (
+        ReservationStatusEnum.CHECKED_OUT,
+        ReservationStatusEnum.CANCELLED,
+        ReservationStatusEnum.NO_SHOW,
+    ):
+        raise ReservationOperationsError("Solo se pueden cargar consumos durante una estadia activa")
+
+    normalized_description = description.strip()
+    if not normalized_description:
+        raise ReservationOperationsError("El detalle del consumo es obligatorio")
+    normalized_amount = Decimal(str(amount)).quantize(Decimal("0.01"))
+    if normalized_amount <= Decimal("0.00"):
+        raise ReservationOperationsError("El importe del consumo debe ser positivo")
+    normalized_currency = (currency_code or reservation.currency_code or "ARS").strip().upper()
+    if len(normalized_currency) != 3 or not normalized_currency.isalpha():
+        raise ReservationOperationsError("La moneda del consumo debe tener tres letras")
+
+    charge = BillingAdjustment(
+        hotel_id=hotel_id,
+        reservation_id=reservation.id,
+        adjustment_type=BillingAdjustmentTypeEnum.CHARGE,
+        amount=normalized_amount,
+        currency_code=normalized_currency,
+        total_amount=normalized_amount,
+        notes=normalized_description,
+        created_by_user_id=actor_user_id,
+    )
+    db.add(charge)
+    db.flush()
+    audit_log_service.safe_create_audit_log(
+        db,
+        hotel_id=hotel_id,
+        table_name="billing_adjustments",
+        record_id=charge.id,
+        action=AuditActionEnum.CREATE,
+        actor_user_id=actor_user_id,
+        payload_after=audit_log_service.model_snapshot(charge),
+    )
+    _invalidate_availability_cache(hotel_id)
+    return charge
+
+
 def _has_transactions(db: Session, *, hotel_id: int, reservation_id: int) -> bool:
     return (
         db.query(Transaction.id)
