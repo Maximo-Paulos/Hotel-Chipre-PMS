@@ -144,7 +144,7 @@ def upsert_seed_data() -> None:
         if hotel is None:
             hotel = HotelConfiguration(id=1)
             db.add(hotel)
-        hotel.hotel_name = "Hotel Chipre E2E"
+        hotel.hotel_name = "Hotel Chipre E2E con un nombre operacionalmente largo"
         hotel.owner_email = owner_email
         hotel.subscription_active = True
         hotel.default_currency = "ARS"

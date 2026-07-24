@@ -148,10 +148,10 @@ export function AppShell() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <Seo title="Hotel Chipre PMS | App" description="Acceso al sistema operativo de Hotel Chipre PMS." noindex />
-      <div className="border-b bg-slate-900 px-6 py-2 text-xs text-white">
+      <div className="flex flex-wrap gap-x-3 gap-y-1 border-b bg-slate-900 px-4 py-2 text-xs text-white sm:px-6">
         <span className="font-semibold">Hotel Chipre PMS</span>
-        <span className="ml-3 text-slate-200">Hotel ID {session.hotelId ?? "-"}</span>
-        <span className="ml-3 text-slate-200">Usuario {session.email || session.userId || "Sin sesion"}</span>
+        <span className="text-slate-200">Hotel ID {session.hotelId ?? "-"}</span>
+        <span className="min-w-0 break-all text-slate-200">Usuario {session.email || session.userId || "Sin sesion"}</span>
       </div>
 
       {(writeBlocked || inactiveSubscription) && (

@@ -17,6 +17,12 @@ test.describe("Responsive mobile smoke", () => {
 
     await expect(page.getByTestId("dashboard-mobile-reservations")).toBeVisible();
     await expect(page.locator('nav[aria-label="Navegación móvil"] a[href="/reservas"]')).toBeVisible();
+    await expect(
+      page.getByRole("option", {
+        name: "Hotel Chipre E2E con un nombre operacionalmente largo (ID 1)",
+        exact: true
+      })
+    ).toBeAttached();
 
     for (const [width, height] of [[375, 812], [390, 844], [430, 932]]) {
       await test.step(`viewport ${width}x${height}`, async () => {
