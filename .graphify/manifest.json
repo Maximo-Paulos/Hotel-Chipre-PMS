@@ -208,8 +208,8 @@
     "hash": "880af4bd1fb81e8fc003a7d70d981a72"
   },
   "app/api/analytics.py": {
-    "mtime": 1784862144874.0945,
-    "hash": "075e03b9c8e21ccc24c223d72ac50944"
+    "mtime": 1784863268798.654,
+    "hash": "5d9f138043e69775cc5acacd0ed7a467"
   },
   "app/api/auth.py": {
     "mtime": 1784862144874.1748,
@@ -344,8 +344,8 @@
     "hash": "de09f11139cc84b783d8719f34bb7cdb"
   },
   "app/api/reservations.py": {
-    "mtime": 1784862144875.927,
-    "hash": "2796aa3b19356298cf7ee5cb5686b466"
+    "mtime": 1784863268797.9465,
+    "hash": "d472bfc94ad445c8b8ed3ab2e48b675f"
   },
   "app/api/room_blocks.py": {
     "mtime": 1784862144875.9834,
@@ -420,12 +420,12 @@
     "hash": "a0bc950f2eca575237195594fbdc5bbf"
   },
   "app/dependencies/api_key_auth.py": {
-    "mtime": 1784862144877.1946,
-    "hash": "640cd770a9154f9046feb0aee5e6d543"
+    "mtime": 1784863159408.43,
+    "hash": "9867c13acb8e023f3324a880754e1981"
   },
   "app/dependencies/auth.py": {
-    "mtime": 1784862144877.2537,
-    "hash": "e472c9ed107fd4cc61872d1f5dd8f8c6"
+    "mtime": 1784863159408.1382,
+    "hash": "bd135b0246c882e54594198526aa0cd9"
   },
   "app/main.py": {
     "mtime": 1784862144877.3276,
@@ -468,8 +468,8 @@
     "hash": "bcc6f886cf7341fb8c128858e69ade5e"
   },
   "app/middleware/subscription.py": {
-    "mtime": 1784862144878.2515,
-    "hash": "ef64f966f9b9d2c6fdd073132502032f"
+    "mtime": 1784863268798.165,
+    "hash": "62ef3eaf849f09518abe70f4b804b84a"
   },
   "app/models/__init__.py": {
     "mtime": 1784862144878.3323,
@@ -808,8 +808,8 @@
     "hash": "6e085359e81bdfc1d1c33ec6a555cfa0"
   },
   "app/services/analytics_exports.py": {
-    "mtime": 1784862144882.8018,
-    "hash": "889def18d227666f3349ba4dda5624ab"
+    "mtime": 1784863268798.4104,
+    "hash": "d6f02fdd2dbfba08f54d7af51c3a79a7"
   },
   "app/services/analytics_facts.py": {
     "mtime": 1784862144882.8743,
@@ -1068,20 +1068,20 @@
     "hash": "0aabafc5fd6e89b75b99709816e443df"
   },
   "app/tasks/analytics_tasks.py": {
-    "mtime": 1784862144887.12,
-    "hash": "5a00b37789b265e167c99545d6754b11"
+    "mtime": 1784863268797.0361,
+    "hash": "80cd671c05df5ae19be723e1679bca7f"
   },
   "app/tasks/celery_app.py": {
     "mtime": 1784862144887.1638,
     "hash": "3ffdd241059dde51fddfbbea58deee08"
   },
   "app/tasks/ota_tasks.py": {
-    "mtime": 1784862144887.2588,
-    "hash": "133ac7431647bce3d71f98c0d17858d5"
+    "mtime": 1784863268797.5598,
+    "hash": "f8837defe41e2fd9e455737018ca2297"
   },
   "app/tasks/report_tasks.py": {
-    "mtime": 1784862144887.3076,
-    "hash": "7a3b9410a3f2826001bb35bd2bd3818a"
+    "mtime": 1784863268797.3284,
+    "hash": "ef0887f379ade63b2caf8c59033a9f0b"
   },
   "frontend/e2e/master_admin.spec.ts": {
     "mtime": 1784862144897.6887,
@@ -2304,8 +2304,8 @@
     "hash": "c751470c4516e1aba14cff2bc3bca10e"
   },
   "docs/data-foundations/architecture-hybrid.md": {
-    "mtime": 1784862699797.8975,
-    "hash": "ea2ab05120d6d2c3f99661132b87a055"
+    "mtime": 1784863194825.3572,
+    "hash": "aa706f25b301572d61ab34c59962d6b0"
   },
   "docs/data-foundations/der-conceptual-model.md": {
     "mtime": 1784862144888.967,
@@ -2316,8 +2316,8 @@
     "hash": "5fa02e73aab2b1b31a38bfe676172e5f"
   },
   "docs/data-foundations/security-audit.md": {
-    "mtime": 1784862144889.0806,
-    "hash": "7ef4902eb2fc8d226adc18cb4b22b394"
+    "mtime": 1784863194825.6755,
+    "hash": "12b5a95d064b24f28f1c9ec29499b513"
   },
   "docs/data-foundations/transactions-vs-payments.md": {
     "mtime": 1784862144889.1355,
@@ -3318,5 +3318,17 @@
   "tests/test_database_schema_bootstrap.py": {
     "mtime": 1784862666078.3015,
     "hash": "7fd53040cf6e74dc7c3ebe34d6b61f42"
+  },
+  "alembic/versions/20260724_tenant_rls_context.py": {
+    "mtime": 1784863159407.7815,
+    "hash": "a88e28f207455cc111e97327eee6e5df"
+  },
+  "app/services/tenant_context.py": {
+    "mtime": 1784863159407.4492,
+    "hash": "7a3d9d4bbd4b7876bdc3d15a5879d175"
+  },
+  "tests/test_tenant_rls_contract.py": {
+    "mtime": 1784863194825.019,
+    "hash": "e5a1018e3270756853362d169a7ddc7c"
   }
 }
