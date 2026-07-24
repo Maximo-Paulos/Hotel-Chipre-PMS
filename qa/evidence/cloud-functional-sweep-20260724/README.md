@@ -126,3 +126,13 @@ La vista quedó pendiente de handoff en `/reportes`. No se guardaron screenshots
 credenciales, cookies, tokens ni PII adicional; el backend de captura de
 screenshots volvió a expirar, por lo que la evidencia visual persistible sigue
 pendiente.
+
+## Revalidación final del estado de errores cloud
+
+La pestaña owner se reconectó nuevamente en el navegador interno el 2026-07-24
+y mantuvo hotel ID 4. `/reportes` terminó, después de 10 segundos, en
+`No se pudo cargar el reporte` junto con `No hay datos para mostrar`; luego
+`/analytics/operations` terminó, después de 10 segundos, en `No se pudo cargar
+analytics.`. La sesión siguió autenticada durante ambas lecturas. El SHA
+desplegado continúa sin exposición (`needs-verification`), por lo que no se
+atribuye todavía el fallo al commit local `60845ed`.

@@ -483,6 +483,11 @@ La evidencia detallada quedó en
 `cloud-owner-apple-recheck-20260724` del catálogo. El SHA desplegado continúa
 `needs-verification`.
 
+La revalidación inmediata posterior confirmó el estado final de errores: después
+de 10 segundos Reportes muestra `No se pudo cargar el reporte` y `No hay datos
+para mostrar`; Analytics/Operación muestra `No se pudo cargar analytics.`. La
+sesión siguió autenticada como owner durante ambas lecturas.
+
 ## Limitaciones actuales
 
 - La prueba móvil automatizada emula viewports de iPhone en Chromium y WebKit;
