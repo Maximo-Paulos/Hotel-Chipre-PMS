@@ -93,7 +93,8 @@ export default defineConfig({
               "**/business-journey.spec.ts",
               "**/reservation-lifecycle.spec.ts",
               "**/analytics-success.spec.ts",
-              "**/guest-companion-journey.spec.ts"
+              "**/guest-companion-journey.spec.ts",
+              "**/zz-cash-control-journey.spec.ts"
             ],
             use: { ...devices["iPhone 15"], browserName: "webkit" },
             workers: 1
