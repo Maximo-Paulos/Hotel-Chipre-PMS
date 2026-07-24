@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-24T13:33:30.095Z",
+  "generatedAt": "2026-07-24T13:41:46.062Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -10153,16 +10153,18 @@
         "protected_reportspage_reportspage",
         "protected_reportspage_cashstatuslabel",
         "protected_reportspage_money",
+        "protected_reportspage_reportserrormessage",
         "protected_reportspage_today"
       ],
       "qualifiedPath": [
         "protected_reportspage_reportspage",
         "protected_reportspage_cashstatuslabel",
         "protected_reportspage_money",
+        "protected_reportspage_reportserrormessage",
         "protected_reportspage_today"
       ],
       "depth": 1,
-      "nodeCount": 4,
+      "nodeCount": 5,
       "fileCount": 1,
       "files": [
         "frontend/src/views/protected/ReportsPage.tsx"

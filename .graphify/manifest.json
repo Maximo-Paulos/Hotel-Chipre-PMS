@@ -1448,8 +1448,8 @@
     "hash": "ef08a518a44be131766b0c44eada6534"
   },
   "frontend/src/views/protected/ReportsPage.tsx": {
-    "mtime": 1784862144906.1975,
-    "hash": "9e1820f423d1457b5a99108212112757"
+    "mtime": 1784900343395.599,
+    "hash": "2d960effb79d50cb5debf39038a49702"
   },
   "frontend/src/views/protected/ReservationsPage.tsx": {
     "mtime": 1784899797685.3245,
@@ -3264,8 +3264,8 @@
     "hash": "8e2277e0fc399686b86f61f02ef68f93"
   },
   ".graphify/GRAPH_REPORT.md": {
-    "mtime": 1784899978464.2703,
-    "hash": "1a8b0e3ab0a05c6b65bf8b2f2bcaf435"
+    "mtime": 1784900009258.337,
+    "hash": "2beb7c440824d5ede49a5276b064fd69"
   },
   "scripts/agent_ops/manage_qa_baseline_lease.py": {
     "mtime": 1784862144921.6997,
@@ -3360,8 +3360,8 @@
     "hash": "42d2cb64809a0a747906da0728428675"
   },
   "docs/qa/2026-07-24-pms-e2e-status.md": {
-    "mtime": 1784899471446.776,
-    "hash": "239911f37b3f0dcd6462b88c0f605c88"
+    "mtime": 1784900086937.1003,
+    "hash": "fe20b208a3a9e54ae00818c298405ae9"
   },
   "frontend/e2e/business-journey.spec.ts": {
     "mtime": 1784886738938.8657,
@@ -3530,5 +3530,9 @@
   "qa/evidence/cloud-functional-sweep-20260724/README.md": {
     "mtime": 1784899487323.7417,
     "hash": "25478dc3a84389feb48f76d9805ae9bc"
+  },
+  "frontend/e2e/reports-error-state.spec.ts": {
+    "mtime": 1784900287804.3904,
+    "hash": "3428f9dd99f8869bc07ed1d7e2e2f5e3"
   }
 }
