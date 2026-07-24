@@ -331,6 +331,22 @@ token pertenece al worker actual; la base mantiene los locks de fila como
 segunda barrera. En producción la configuración falla al iniciar si los locks
 distribuidos no están habilitados y requeridos.
 
+### Revalidación cloud posterior con navegador interno
+
+Con la sesión autenticada existente del navegador interno, hotel QA ID 4 y rol
+Dueño, `/reportes` se abrió en una pestaña controlada nueva. En una carga fría
+mostró `Failed to fetch`; en una repetición posterior permaneció en `Cargando
+reporte...` durante más de 11 segundos. `/analytics/operations` también
+permaneció en `Cargando analytics...` después de 13 segundos. No hubo errores ni
+warnings visibles en la consola del navegador. La salud pública del API y el
+preflight CORS responden, pero no existe todavía una respuesta autenticada ni
+traza del proveedor para aislar si el problema es backend, proxy o consulta.
+Esto mantiene ambos recorridos como bloqueadores funcionales P1 y requiere
+evidencia del preview/proveedor antes de corregir a ciegas.
+
+La ejecución fue de solo lectura: no se crearon reservas, pagos, comprobantes,
+emails, webhooks ni cambios de configuración.
+
 ## Limitaciones actuales
 
 - La prueba móvil automatizada emula viewports de iPhone en Chromium y WebKit;
