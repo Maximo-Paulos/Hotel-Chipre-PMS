@@ -1,24 +1,24 @@
 # Graph Report - .  (2026-07-24)
 
 ## Corpus Check
-- Large corpus: 885 files · ~531,128 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.
+- Large corpus: 885 files · ~531,601 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.
 
 ## Summary
-- 7044 nodes · 23284 edges · 319 communities detected
+- 7047 nodes · 23291 edges · 319 communities detected
 - Extraction: 64% EXTRACTED · 36% INFERRED · 0% AMBIGUOUS · INFERRED: 8431 edges (avg confidence: 0.5)
 - Token cost: 0 input · 0 output
-- Edge kinds: uses: 8431 · contains: 4408 · calls: 3358 · MODIFIES: 1866 · ON_BRANCH: 1320 · rationale_for: 1132 · imports: 744 · imports_from: 585 · method: 577 · inherits: 533 · PARENT_OF: 330
+- Edge kinds: uses: 8431 · contains: 4408 · calls: 3358 · MODIFIES: 1867 · ON_BRANCH: 1323 · rationale_for: 1132 · imports: 744 · imports_from: 585 · method: 577 · inherits: 533 · PARENT_OF: 333
 
 
 ## Input Scope
 - Requested: auto
 - Resolved: committed (source: default-auto)
 - Included files: 885 · Candidates: 978
-- Excluded: 0 untracked · 30674 ignored · 8 sensitive · 0 missing committed
+- Excluded: 0 untracked · 30675 ignored · 8 sensitive · 0 missing committed
 - Recommendation: Use --scope all or graphify.yaml inputs.corpus for a knowledge-base folder.
 
 ## Graph Freshness
-- Built from Git commit: `b194b5e`
+- Built from Git commit: `977fe58`
 - Compare this hash to `git rev-parse HEAD` before trusting freshness-sensitive graph output.
 ## God Nodes (most connected - your core abstractions)
 1. `ReservationStatusEnum` - 552 edges
@@ -108,11 +108,11 @@ Nodes (86): FastAPI routes for Reports & Night Audit. Daily summaries, occupancy
 
 ### Community 15 - "Community 15"
 Cohesion: 0.03
-Nodes (29): Public WhatsApp bot hooks authenticated only by hotel API key., _backfill_not_null_nulls(), _column_fill_value(), get_db(), get_engine(), get_session_factory(), init_db(), Database engine and session management. Supports both PostgreSQL (production) an (+21 more)
+Nodes (65): _clickhouse_healthcheck(), datastores_healthcheck(), _postgres_healthcheck(), _redis_healthcheck(), 05d296d Fix cash freshness after reservation payments, 0b2de37 Refresh Graphify for current tenant hardening, 0c6029d Improve responsive dashboard and stock movement UX, 1030f87 Refresh Graphify after serialized WebKit coverage (+57 more)
 
 ### Community 16 - "Community 16"
 Cohesion: 0.03
-Nodes (62): _clickhouse_healthcheck(), datastores_healthcheck(), _postgres_healthcheck(), _redis_healthcheck(), 05d296d Fix cash freshness after reservation payments, 0b2de37 Refresh Graphify for current tenant hardening, 0c6029d Improve responsive dashboard and stock movement UX, 1030f87 Refresh Graphify after serialized WebKit coverage (+54 more)
+Nodes (29): Public WhatsApp bot hooks authenticated only by hotel API key., _backfill_not_null_nulls(), _column_fill_value(), get_db(), get_engine(), get_session_factory(), init_db(), Database engine and session management. Supports both PostgreSQL (production) an (+21 more)
 
 ### Community 17 - "Community 17"
 Cohesion: 0.07
@@ -1431,7 +1431,7 @@ Nodes (2): MERCADOPAGO_WEBHOOK_SECRET is required only when MP_ACCESS_TOKEN is s
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `Base` connect `Community 5` to `Community 15`, `Community 240`, `Community 206`, `Community 0`, `Community 33`, `Community 29`, `Community 118`, `Community 34`, `Community 9`, `Community 72`, `Community 8`, `Community 7`, `Community 25`, `Community 17`, `Community 93`, `Community 62`, `Community 61`, `Community 141`, `Community 1`, `Community 2`, `Community 3`, `Community 14`, `Community 28`, `Community 119`, `Community 12`, `Community 49`, `Community 30`, `Community 319`, `Community 78`, `Community 11`, `Community 51`, `Community 59`, `Community 38`, `Community 216`, `Community 83`, `Community 193`, `Community 194`?**
+- **Why does `Base` connect `Community 5` to `Community 16`, `Community 240`, `Community 206`, `Community 0`, `Community 33`, `Community 29`, `Community 118`, `Community 34`, `Community 9`, `Community 72`, `Community 8`, `Community 7`, `Community 25`, `Community 17`, `Community 93`, `Community 62`, `Community 61`, `Community 141`, `Community 1`, `Community 2`, `Community 3`, `Community 14`, `Community 28`, `Community 119`, `Community 12`, `Community 49`, `Community 30`, `Community 319`, `Community 78`, `Community 11`, `Community 51`, `Community 59`, `Community 38`, `Community 216`, `Community 83`, `Community 193`, `Community 194`?**
   _High betweenness centrality (0.125) - this node is a cross-community bridge._
 - **Why does `HotelConfiguration` connect `Community 14` to `Community 0`, `Community 29`, `Community 5`, `Community 4`, `Community 33`, `Community 8`, `Community 18`, `Community 31`, `Community 3`, `Community 108`, `Community 165`, `Community 1`, `Community 320`, `Community 9`, `Community 72`, `Community 2`, `Community 246`, `Community 38`, `Community 247`, `Community 85`, `Community 49`, `Community 28`, `Community 12`, `Community 7`, `Community 61`, `Community 11`, `Community 59`, `Community 83`, `Community 30`, `Community 154`, `Community 44`, `Community 203`?**
   _High betweenness centrality (0.052) - this node is a cross-community bridge._
