@@ -176,3 +176,25 @@ de configuración durante esta continuación.
 La sesión continuó autenticada como owner. No se guardaron contraseñas,
 cookies, tokens, emails de invitación, screenshots privados ni valores de
 variables de proveedor.
+
+## Revalidación de contrato cloud y drift de despliegue
+
+- Fecha: 2026-07-24.
+- La lectura pública de `https://api.hotels-pms.com/openapi.json` devolvió HTTP
+  200, 278 paths y declaró las rutas actuales de reportes operativos, analytics,
+  cotización y disponibilidad.
+- Las probes sin sesión de `/api/reports/operational/daily`,
+  `/api/reports/operational/alerts`, `/api/analytics/home`,
+  `/api/analytics/operations` y `/api/reservations/quote` devolvieron HTTP 401
+  con `Autenticacion requerida`; no se usaron tokens para esta comprobación.
+- La página pública de la app referencia el bundle
+  `/assets/index-DkFkQnkh.js`; el build local validado de esta rama produce
+  `frontend/dist/assets/index-Bzcjn1pR.js`. La diferencia demuestra drift de
+  artefacto, pero no permite atribuir por sí sola el fallo a un commit concreto.
+- Con la sesión owner QA visible, `/reportes` terminó después de 15 segundos en
+  `No se pudo cargar el reporte: Failed to fetch` y `No hay datos para mostrar`;
+  `/analytics/operations` terminó después de 15 segundos en `No se pudo cargar
+  analytics.`.
+
+La conclusión sigue siendo `needs-verification`: falta un preview aislado o un
+SHA provider-bound que permita repetir el recorrido contra el artefacto exacto.
