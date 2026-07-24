@@ -1404,12 +1404,12 @@
     "hash": "080f58a661cb1eb1b0f8ae7c84334f59"
   },
   "frontend/src/ui/AppShell.tsx": {
-    "mtime": 1784877498228.7458,
-    "hash": "c17f85b9fa6bb120a6bf5e2c0cbd5799"
+    "mtime": 1784897227540.3755,
+    "hash": "433753665e4d2e9a00e3c98b7e1b072e"
   },
   "frontend/src/ui/HotelSelector.tsx": {
-    "mtime": 1784862144905.4285,
-    "hash": "ba21bd369ee1404acb30c4dc5c724b24"
+    "mtime": 1784897873586.3042,
+    "hash": "de48c6e1a48932ed4a87ad0154c3431e"
   },
   "frontend/src/ui/UserBadge.tsx": {
     "mtime": 1784862144905.4778,
@@ -1508,8 +1508,8 @@
     "hash": "e14e293688410e14212d44329660c984"
   },
   "frontend/src/views/protected/analytics/AnalyticsPages.tsx": {
-    "mtime": 1784877498229.2646,
-    "hash": "b91df9e6884c6e8226961734c1fd7a94"
+    "mtime": 1784897437520.196,
+    "hash": "c219341b98e903564893676ed97e33f9"
   },
   "frontend/src/views/public/AcceptInvitationPage.tsx": {
     "mtime": 1784862144907.3208,
@@ -1560,8 +1560,8 @@
     "hash": "898e2282ec17bf808e708770ada7811a"
   },
   "scripts/seed_e2e_backend.py": {
-    "mtime": 1784894835029.5215,
-    "hash": "5e9cf30336173cd5808ddcd7ff9bbb68"
+    "mtime": 1784897157330.203,
+    "hash": "4ef47b7a1961fd54e128b289f7805d7d"
   },
   "scripts/serve_e2e_backend.py": {
     "mtime": 1784888009402.0476,
@@ -3264,8 +3264,8 @@
     "hash": "8e2277e0fc399686b86f61f02ef68f93"
   },
   ".graphify/GRAPH_REPORT.md": {
-    "mtime": 1784895008216.1667,
-    "hash": "f4e153bcc13853d20229f1faa8caeb6b"
+    "mtime": 1784897901523.2087,
+    "hash": "912564dc0dfb1bafacc149467bad8950"
   },
   "scripts/agent_ops/manage_qa_baseline_lease.py": {
     "mtime": 1784862144921.6997,
@@ -3356,12 +3356,12 @@
     "hash": "11bf9583c0a905deb7f7e760df835718"
   },
   "frontend/e2e/responsive-smoke.spec.ts": {
-    "mtime": 1784874364070.913,
-    "hash": "cc3b4c09ac92a7d389d9ad275a799aa0"
+    "mtime": 1784897370225.8625,
+    "hash": "d47dc7e6e0a861a3b848d9ae903f7e94"
   },
   "docs/qa/2026-07-24-pms-e2e-status.md": {
-    "mtime": 1784896451093.3577,
-    "hash": "4e6fcaa6757e7544c93f28c4ef2a5684"
+    "mtime": 1784897845197.738,
+    "hash": "6dec336fd90ceb20dd9c03a33c29e862"
   },
   "frontend/e2e/business-journey.spec.ts": {
     "mtime": 1784886738938.8657,
@@ -3518,5 +3518,9 @@
   "frontend/src/state/pendingOwner.ts": {
     "mtime": 1784895598996.4717,
     "hash": "e9292d1b4a294b78e389bff4f25294b6"
+  },
+  "frontend/e2e/analytics-error-state.spec.ts": {
+    "mtime": 1784897454225.2747,
+    "hash": "a4f2e89b6559f35a1a90b7001558bd00"
   }
 }

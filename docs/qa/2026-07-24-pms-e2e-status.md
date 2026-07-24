@@ -15,8 +15,8 @@ repositorio.
 | Área | Resultado |
 | --- | --- |
 | Frontend lint/typecheck/build | Pasan. Vite informa un bundle principal de 785.37 kB minificado (190.07 kB gzip); queda como deuda de performance. |
-| E2E desktop | 23/23 pasan en Chromium, incluyendo login, logout, admin, calendario de tarifas, configuración del hotel, los journeys de negocio, la jornada de operaciones diarias y páginas V72. La ejecución fresh completa queda en 31/31 al sumar móvil Chromium y los tres perfiles WebKit. |
-| E2E mobile | 2/2 pasan con Chromium emulando iPhone y verificando 375×812, 390×844 y 430×932; 6/6 pasan con Playwright WebKit en perfiles iPhone SE, iPhone 15 y iPhone 15 Pro Max; los journeys mutantes de reserva/pagos/check-in/out, inventario, cambio de habitación/no-show y operaciones diarias pasan 4/4 en WebKit iPhone 15. Esto no sustituye Safari nativo del simulador Xcode, que no está disponible en este host. |
+| E2E desktop | Pasan los journeys de Chromium de login, logout, admin, calendario de tarifas, configuración del hotel, negocio, operaciones diarias, páginas V72 y estado de error de Analytics. La ejecución fresh completa queda en 36/36 al sumar móvil Chromium y los tres perfiles WebKit. |
+| E2E mobile | 2/2 pasan con Chromium emulando iPhone y verificando 375×812, 390×844 y 430×932; 6/6 pasan con Playwright WebKit en perfiles iPhone SE, iPhone 15 y iPhone 15 Pro Max. La regresión de selector con nombre largo queda cubierta y la suite completa pasa 36/36. Esto no sustituye Safari nativo del simulador Xcode, que no está disponible en este host. |
 | Backend completo | 1220 pasan, 17 se omiten, 12 quedan xfail y 1 xpass en Python 3.12 limpio. El runner E2E rechaza explícitamente Python menor a 3.10. |
 | Forward-tests de arquitectura de datos | 2/2 pasan: una entidad de otro hotel no puede leerse ni adjuntarse, y una cotización queda invalidada antes de persistir la reserva cuando cambia la tarifa. |
 | Migración virgen | `alembic upgrade head` pasa sobre SQLite temporal hasta `20260724_room_move_enum_values`, incluyendo blobs privados, rotación, custodia, claves tenant restantes y el contrato de movimientos de habitación. |
@@ -72,9 +72,12 @@ regresión cubre un huésped con una estadía existente.
 ### Revalidación del goal funcional-first
 
 La sesión autenticada del navegador interno se revalidó el 2026-07-24 con
-lectura visible y sin mutaciones. `/dashboard`, `/reservas`,
-`/operacion/tarifas` y `/analytics/operations` renderizan su shell; `/reportes`
-falla de forma reproducible después de dos cargas y muestra:
+lectura visible y sin mutaciones. `/dashboard`, `/reservas` y
+`/operacion/tarifas` renderizan su shell. `/analytics/operations` terminó
+después de aproximadamente 12 segundos mostrando `No se pudo cargar
+analytics.`; `/settings/subscription` mostró un plan Pro activo con 6/40
+habitaciones, por lo que no se atribuye el fallo a un plan Starter. `/reportes`
+falló de forma reproducible después de aproximadamente 15 segundos y muestra:
 
 `No se pudo cargar el reporte: Failed to fetch`
 
@@ -83,9 +86,11 @@ carga de la ruta. No hubo errores en la consola del navegador. El bundle
 publicado contiene `https://api.hotels-pms.com/api` como base de API (no
 localhost), `/health` respondió HTTP 200 desde el host de verificación y el
 preflight CORS para `https://app.hotels-pms.com` respondió HTTP 200 con los
-headers de autorización esperados. La causa raíz del request autenticado sigue
-`needs-verification`: falta una traza del provider o evidencia de la respuesta
-real de `/api/reports/operational/daily` y `/api/reports/operational/alerts`.
+headers de autorización esperados. `/health/datastores` mostró PostgreSQL
+conectado y Redis configurado pero rechazando la conexión local. La causa raíz
+del request autenticado sigue `needs-verification`: falta una traza del
+provider o evidencia de la respuesta real de `/api/reports/operational/daily`
+y `/api/reports/operational/alerts`.
 
 El intento de viewport explícito de 390×844 en la sesión cloud quedó en 655 px
 efectivos, por lo que no se usa como certificación móvil. La suite local se
@@ -93,7 +98,7 @@ repitió desde cero con:
 
 `E2E_PYTHON=/tmp/hpms-scale-venv-312/bin/python npm run e2e`
 
-y terminó `31 passed (44.2s)`. Esto confirma el baseline local, pero no cierra
+y terminó `36 passed (1.1m)`. Esto confirma el baseline local, pero no cierra
 el fallo cloud, los cinco roles reales, el preview aislado ni Safari nativo.
 
 El catálogo conserva gaps funcionales pendientes: onboarding/recuperación,
@@ -123,7 +128,7 @@ cotización como `isFetching`, por lo que no se enviaba la reserva aunque ya se
 mostrara un total. Se corrigió bloqueando el submit hasta disponer de un
 `quote_token` vigente y mostrando `Actualizando...`; el journey ahora espera
 explícitamente el estado habilitado. La ejecución posterior quedó integrada en
-la matriz fresh de 31/31.
+la matriz fresh de 36/36.
 
 La corrección está validada localmente, pero el entorno web de QA debe recibir
 un despliegue antes de repetir la medición allí.
@@ -166,6 +171,26 @@ que un egreso superior al disponible quede bloqueado antes de enviar.
 La prueba creó datos identificables con prefijo `QA móvil` en el hotel de
 prueba. Quedan pendientes de limpieza o de una política explícita de fixtures
 reutilizables antes de repetir pruebas mutantes en el mismo hotel.
+
+### Selector de hotel y errores accionables en móvil/Analytics
+
+Al cargar el fixture con un nombre de hotel operacionalmente largo, el smoke
+WebKit reprodujo overflow horizontal en iPhone: el documento llegó a 451 px
+en un viewport de 375 px y a 563 px en un viewport de 390 px. La causa era el
+ancho intrínseco del selector y del banner superior, que se propagaba al
+documento aunque la navegación horizontal interna fuera intencional.
+
+Se corrigieron las restricciones `min-w-0`/`max-w-full`/`overflow-hidden`, el
+salto de línea del banner y la espera determinista del fixture. La regresión
+WebKit pasó 8/8 y la suite fresh completa pasó 36/36 en Chromium, Chromium
+móvil y los tres perfiles WebKit. El cambio todavía no está desplegado en el
+cloud canónico, por lo que debe repetirse allí contra un preview autorizado.
+
+También se agregó una regresión de UI para un `402` de Analytics: la pantalla
+ahora explica que el reporte requiere el plan correspondiente, ofrece
+`Reintentar` y enlaza a suscripción. El test aislado pasa 1/1. Esto mejora el
+diagnóstico del frontend, pero no determina por sí solo la causa del `Failed
+to fetch` observado en el cloud.
 
 ### Cambio de habitación y no-show
 
@@ -291,7 +316,7 @@ rápido con documento, registra una reserva con seña manual, cobra un parcial e
 efectivo, envía un comprobante de transferencia, lo aprueba y cobra el saldo
 restante en efectivo antes de completar check-in/check-out y cerrar la caja con
 rotación de custodia. El flujo pasa en 1/1 por Chromium y 1/1 por WebKit iPhone
-15, y forma parte de la suite completa 31/31. El fixture de imagen se genera con un
+15, y forma parte de la suite completa 36/36. El fixture de imagen se genera con un
 contenido único por ejecución para no falsear la protección anti-duplicados.
 
 ### Registro, verificación, recuperación y onboarding
@@ -305,7 +330,7 @@ pago podía sobrescribir un click humano. El perfil pendiente sólo conserva
 nombre, email, teléfono y rol en `sessionStorage`; nunca contraseña, token ni
 cookie.
 
-La regresión pasa en Chromium y la suite completa queda en 35/35 usando un
+La regresión pasa en Chromium y la suite completa queda en 36/36 usando un
 worker global sobre la SQLite aislada. La corrida con cinco workers reprodujo
 un `database is locked` durante un cobro concurrente; por eso no se considera
 evidencia funcional y las mutaciones locales se ejecutan serializadas.
@@ -350,14 +375,13 @@ distribuidos no están habilitados y requeridos.
 ### Revalidación cloud posterior con navegador interno
 
 Con la sesión autenticada existente del navegador interno, hotel QA ID 4 y rol
-Dueño, `/reportes` se abrió en una pestaña controlada nueva. En una carga fría
-mostró `Failed to fetch`; en una repetición posterior permaneció en `Cargando
-reporte...` durante más de 11 segundos. `/analytics/operations` también
-permaneció en `Cargando analytics...` después de 13 segundos. No hubo errores ni
-warnings visibles en la consola del navegador. La salud pública del API y el
-preflight CORS responden, pero no existe todavía una respuesta autenticada ni
-traza del proveedor para aislar si el problema es backend, proxy o consulta.
-Esto mantiene ambos recorridos como bloqueadores funcionales P1 y requiere
+Dueño, `/reportes` se abrió en la pestaña controlada. La carga terminó en
+`No se pudo cargar el reporte: Failed to fetch`; `/analytics/operations`
+terminó en `No se pudo cargar analytics.`. No hubo errores ni warnings visibles
+en la consola del navegador. La salud pública del API y el preflight CORS
+responden, pero no existe todavía una respuesta autenticada ni traza del
+proveedor para aislar si el problema es backend, proxy o consulta. Esto
+mantiene ambos recorridos como bloqueadores funcionales P1 y requiere
 evidencia del preview/proveedor antes de corregir a ciegas.
 
 La ejecución fue de solo lectura: no se crearon reservas, pagos, comprobantes,
@@ -387,14 +411,15 @@ emails, webhooks ni cambios de configuración.
   Redis/Valkey administrado, ClickHouse real con CDC/reconciliación, carga
   instrumentada, autoscaling y métricas p95/p99. El ledger está en
   [`docs/data-foundations/scale-readiness.md`](../data-foundations/scale-readiness.md).
-- La UI de analítica fue validada por build y contratos API, pero todavía no se
-  repitió el journey completo contra un preview provider-bound.
+- La UI de analítica fue validada por build, contrato de error y contratos API,
+  pero todavía no se repitió el journey completo contra un preview
+  provider-bound.
 - El warehouse local incluye replay acotado cada cinco minutos y reconciliación
   nocturna sobre PostgreSQL. Esto no prueba ClickPipes CDC ni el lag del
   proveedor: esas mediciones siguen pendientes en un preview aislado.
 - Las pruebas que mutan la SQLite local deben ejecutarse serializadas. La
   corrida paralela de cinco proyectos reprodujo `database is locked` durante
-  un cobro; una corrida secuencial con `--workers=1` pasa 35/35. Una corrida
+  un cobro; una corrida secuencial con `--workers=1` pasa 36/36. Una corrida
   paralela que arranque dos servidores E2E sobre el mismo archivo también puede
   fallar durante el reset con `table users already exists`; no es evidencia de
   un fallo funcional del PMS, pero sí una limitación del arnés local.
