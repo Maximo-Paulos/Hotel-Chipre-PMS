@@ -3252,7 +3252,7 @@
     "hash": "f88f2e0fc4b94cb53ef8d5ac709de4d6"
   },
   ".claude/skills/validate-all/SKILL.md": {
-    "mtime": 1784878785153.7834,
+    "mtime": 1784878785153.4985,
     "hash": "c8507d2cd81357c23d6bd2f3014c5c99"
   },
   ".github/workflows/preview-qa.yml": {
@@ -3264,8 +3264,8 @@
     "hash": "8e2277e0fc399686b86f61f02ef68f93"
   },
   ".graphify/GRAPH_REPORT.md": {
-    "mtime": 1784884825776.9746,
-    "hash": "94423b5c102cd201ef7a3144215f8465"
+    "mtime": 1784885971813.6472,
+    "hash": "3208e7e999de5418602825e33ec38e0f"
   },
   "scripts/agent_ops/manage_qa_baseline_lease.py": {
     "mtime": 1784862144921.6997,
@@ -3360,8 +3360,8 @@
     "hash": "cc3b4c09ac92a7d389d9ad275a799aa0"
   },
   "docs/qa/2026-07-24-pms-e2e-status.md": {
-    "mtime": 1784885940015.5146,
-    "hash": "5c6b0f6c002bb89297dc62f163a58f59"
+    "mtime": 1784886334538.751,
+    "hash": "470d24afa7b5542082fc0a96750ba89b"
   },
   "frontend/e2e/business-journey.spec.ts": {
     "mtime": 1784885437324.2969,
@@ -3396,8 +3396,8 @@
     "hash": "bf275db7014b163aedec99ef9a0a2bc3"
   },
   ".agents/skills/scale-data-architecture/SKILL.md": {
-    "mtime": 1784862342037.7534,
-    "hash": "00e038b9adac4080f01f42031840631e"
+    "mtime": 1784886346518.5845,
+    "hash": "89b2edce0efaa2ea6c280c5d3e92da37"
   },
   ".agents/skills/scale-data-architecture/agents/openai.yaml": {
     "mtime": 1784862176244.681,
@@ -3408,8 +3408,8 @@
     "hash": "c7a5b78381b8855ce88b853b56376705"
   },
   ".claude/skills/scale-data-architecture/SKILL.md": {
-    "mtime": 1784862342037.7534,
-    "hash": "00e038b9adac4080f01f42031840631e"
+    "mtime": 1784886346518.5845,
+    "hash": "89b2edce0efaa2ea6c280c5d3e92da37"
   },
   ".claude/skills/scale-data-architecture/agents/openai.yaml": {
     "mtime": 1784862176244.681,
@@ -3440,8 +3440,8 @@
     "hash": "138e6fb88e635dbdd0c740969612b8a2"
   },
   "docs/data-foundations/scale-readiness.md": {
-    "mtime": 1784881834491.6895,
-    "hash": "0f01805be5ebd35989149a06cd63a39c"
+    "mtime": 1784886204256.971,
+    "hash": "b35a6da8a5fe71a317ef80678f260abf"
   },
   "app/api/events.py": {
     "mtime": 1784877373270.604,
@@ -3490,5 +3490,9 @@
   "alembic/versions/20260724_room_move_enum_values.py": {
     "mtime": 1784885525027.0632,
     "hash": "ea8cb77b056696cce51fac2fa613ce06"
+  },
+  "tests/test_scale_data_architecture_forward.py": {
+    "mtime": 1784886170094.4036,
+    "hash": "c5eef6f7f59ab147d9deecb03b248d29"
   }
 }
