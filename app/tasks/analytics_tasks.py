@@ -16,7 +16,8 @@ from app.models.cash_register import CashMovement
 from app.models.hotel_config import HotelConfiguration
 from app.models.room import Room, RoomCategory
 from app.models.stock import StockMovement
-from app.models.transaction import Transaction
+from app.models.transaction import Transaction, TransactionStatusEnum
+from app.services.financial_ledger import signed_transaction_amount
 from app.services.analytics_warehouse import (
     DIM_DATE_TABLE,
     DIM_HOTEL_TABLE,
@@ -26,6 +27,7 @@ from app.services.analytics_warehouse import (
     build_hotel_dimension_row,
     build_room_category_dimension_row,
     build_room_dimension_row,
+    canonical_payment_amount,
     ensure_schema,
     get_clickhouse_client,
     project_operational_fact_rows,
@@ -138,6 +140,7 @@ def _project_operational_window(
         db.query(Transaction)
         .filter(
             Transaction.hotel_id == hotel_id,
+            Transaction.status == TransactionStatusEnum.COMPLETED,
             Transaction.created_at >= start_at,
             Transaction.created_at < end_at,
         )
@@ -172,7 +175,13 @@ def _project_operational_window(
                 "transaction_id": row.id,
                 "reservation_id": row.reservation_id,
                 "transaction_date": row.created_at,
-                "amount": row.amount,
+                "amount": canonical_payment_amount(
+                    {
+                        "amount": row.amount,
+                        "transaction_type": row.transaction_type,
+                        "status": row.status,
+                    }
+                ),
                 "currency": row.currency,
                 "payment_method": row.payment_method,
                 "transaction_type": row.transaction_type,
@@ -207,7 +216,10 @@ def _project_operational_window(
         ],
     }
     amounts = {
-        "payment": _decimal_total(transactions, "amount"),
+        "payment": sum(
+            (signed_transaction_amount(row) for row in transactions),
+            Decimal("0"),
+        ),
         "cash_movement": _decimal_total(cash_movements, "amount"),
         "stock_movement": _decimal_total(stock_movements, "quantity"),
     }

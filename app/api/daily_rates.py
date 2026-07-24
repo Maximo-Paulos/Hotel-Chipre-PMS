@@ -215,6 +215,7 @@ def get_category_rates(
     category_id: int,
     from_date: date = Query(...),
     to_date: date = Query(...),
+    payment_method: Optional[str] = Query(default=None),
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_roles(*_READ_ROLES)),
 ):
@@ -227,7 +228,14 @@ def get_category_rates(
 
     # Batched resolution: a fixed number of queries for the whole range instead of
     # ~6 queries per date (previously up to ~2000 queries for a one-year calendar).
-    resolved = resolve_rate_calendar(db, context.hotel_id, category_id, from_date, to_date)
+    resolved = resolve_rate_calendar(
+        db,
+        context.hotel_id,
+        category_id,
+        from_date,
+        to_date,
+        payment_method=payment_method,
+    )
     return [DailyRateFallbackOut(**row) for row in resolved]
 
 

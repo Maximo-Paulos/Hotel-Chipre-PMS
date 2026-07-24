@@ -129,6 +129,7 @@ def resolve_rate_calendar(
     category_id: int,
     from_date: date,
     to_date: date,
+    payment_method: Optional[str] = None,
 ) -> list[dict]:
     """Resolve the effective rate for every date in ``[from_date, to_date]`` using
     a fixed number of queries (no per-date round-trips).
@@ -138,8 +139,10 @@ def resolve_rate_calendar(
     won: ``daily_rate`` | ``price_period`` | ``category_pricing`` | ``category_base``
     | ``none``. ``daily_rate_id`` is set only when an explicit DailyRate row exists.
 
-    This is the single batched source of truth for the rate calendar grid and any
-    multi-night pricing; it mirrors :func:`get_price_for_date`'s priority order.
+    If ``payment_method`` is supplied, ``price`` is the effective price for that
+    method and follows exactly the same override/fallback contract as
+    :func:`get_price_for_date`. The per-method columns remain in the response so
+    the calendar can render all configured prices at once.
     """
     # Load everything once.
     daily_rows: dict[date, DailyRate] = {
@@ -183,8 +186,11 @@ def resolve_rate_calendar(
 
     cat_pricing_value: Optional[float] = None
     if cat_pricing is not None:
-        for col in ("price_cash", "price_transfer", "price_mercadopago",
-                    "price_paypal", "price_credit_card"):
+        method_column = _METHOD_COLS.get(payment_method) if payment_method else None
+        columns = ((method_column,) if method_column else ()) + (
+            "price_cash", "price_transfer", "price_mercadopago", "price_paypal", "price_credit_card"
+        )
+        for col in columns:
             val = getattr(cat_pricing, col, None)
             if val is not None:
                 cat_pricing_value = float(val)
@@ -202,9 +208,15 @@ def resolve_rate_calendar(
     while current <= to_date:
         row = daily_rows.get(current)
         if row is not None:
+            price = float(row.price)
+            if payment_method:
+                column = _METHOD_COLS.get(payment_method)
+                override = getattr(row, column, None) if column else None
+                if override is not None:
+                    price = float(override)
             result.append({
                 "date": current,
-                "price": float(row.price),
+                "price": price,
                 "price_cash": row.price_cash,
                 "price_transfer": row.price_transfer,
                 "price_mercadopago": row.price_mercadopago,

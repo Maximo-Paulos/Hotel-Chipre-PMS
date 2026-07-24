@@ -98,7 +98,16 @@ def test_checkout_succeeds_when_operational_balance_is_fully_paid(
         date(2026, 10, 3),
     )
     _add_billing_charge(db, reservation, hotel_config.id, Decimal("25.00"))
-    reservation.amount_paid = Decimal(str(reservation.total_amount or 0)) + Decimal("25.00")
+    process_payment(
+        db,
+        PaymentRequest(
+            reservation_id=reservation.id,
+            amount=25.0,
+            payment_method=PaymentMethodEnum.CASH,
+            transaction_type=TransactionTypeEnum.BALANCE_PAYMENT,
+        ),
+        hotel_id=hotel_config.id,
+    )
     db.flush()
 
     result = perform_checkout(db, reservation.id, hotel_id=hotel_config.id)

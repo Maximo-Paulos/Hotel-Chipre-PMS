@@ -23,6 +23,11 @@ from app.models.transaction import (
 from app.models.hotel_config import HotelConfiguration
 from app.schemas.transaction import PaymentRequest, PaymentGatewayResponse
 from app.services.reservation_service import transition_reservation_status, ReservationError
+from app.services.financial_ledger import (
+    completed_paid_amount,
+    operational_balance_due,
+    paid_amount_with_legacy_fallback,
+)
 
 
 class PaymentError(Exception):
@@ -259,15 +264,22 @@ def process_payment(
     surcharge_amount = Decimal("0.00") if is_refund else surcharge_info["surcharge_amount"]
     gross_amount = (Decimal(str(request.amount)) + surcharge_amount).quantize(Decimal("0.01"))
 
-    # 3. Validate base amount; surcharge is charged on top and does not reduce balance due.
+    # 3. Validate against the confirmed transaction ledger; amount_paid is only
+    #    a materialized compatibility cache and must not authorize overpayment.
     _TOLERANCE = Decimal("0.01")
+    ledger_paid = paid_amount_with_legacy_fallback(db, resolved_hotel_id, reservation)
     if is_refund:
-        if Decimal(str(request.amount)) > reservation.amount_paid + _TOLERANCE:
+        if Decimal(str(request.amount)) > ledger_paid + _TOLERANCE:
             raise PaymentError(
-                f"Refund amount ${request.amount:.2f} exceeds paid amount ${reservation.amount_paid:.2f}"
+                f"Refund amount ${request.amount:.2f} exceeds paid amount ${ledger_paid:.2f}"
             )
     else:
-        balance = reservation.balance_due
+        balance = operational_balance_due(
+            db,
+            hotel_id=resolved_hotel_id,
+            reservation=reservation,
+            paid_amount=ledger_paid,
+        )
         if Decimal(str(request.amount)) > Decimal(str(balance)) + _TOLERANCE:
             raise PaymentError(
                 f"Payment amount ${request.amount:.2f} exceeds balance due ${balance:.2f}"
@@ -384,7 +396,9 @@ def get_payment_link_with_surcharge(
     if reservation.hotel_id and reservation.hotel_id != hotel_id:
         raise PaymentError(f"Reservation {reservation_id} does not belong to hotel {hotel_id}")
 
-    base_amount = Decimal(str(amount if amount is not None else reservation.balance_due)).quantize(Decimal("0.01"))
+    if amount is None:
+        amount = operational_balance_due(db, hotel_id=hotel_id, reservation=reservation)
+    base_amount = Decimal(str(amount)).quantize(Decimal("0.01"))
     if base_amount <= 0:
         raise PaymentError("Payment amount must be greater than zero")
 
@@ -417,17 +431,14 @@ def _update_reservation_financials(
     hotel_id: int,
 ) -> None:
     """
-    Update reservation.amount_paid and transition status based on payment.
+    Refresh the materialized amount_paid cache from the confirmed ledger and
+    transition status based on that canonical value.
 
     State machine:
     - If deposit paid (amount >= deposit_amount) and status is PENDING → deposit_paid
     - If fully paid (balance_due == 0) → fully_paid
     """
-    d_amount = Decimal(str(amount))
-    signed_amount = -d_amount if tx_type == TransactionTypeEnum.REFUND else d_amount
-    current_paid = Decimal(str(reservation.amount_paid or 0))
-    new_paid = current_paid + signed_amount
-    reservation.amount_paid = max(Decimal("0"), new_paid).quantize(Decimal("0.01"))
+    reservation.amount_paid = completed_paid_amount(db, hotel_id, reservation.id)
     _sync_reservation_financial_status(db, reservation, hotel_id=hotel_id, reason_code=tx_type.value)
     db.flush()
 
@@ -452,6 +463,12 @@ def _sync_reservation_financial_status(
         target_status = ReservationStatusEnum.DEPOSIT_PAID
     else:
         target_status = ReservationStatusEnum.PENDING
+
+    # Payment settlement must not move an in-house guest backwards in the
+    # operational lifecycle. Check-in/out state is independent from billing
+    # state once the guest is physically in the room.
+    if reservation.status == ReservationStatusEnum.CHECKED_IN and target_status == ReservationStatusEnum.FULLY_PAID:
+        return
 
     if reservation.status == target_status:
         return
@@ -526,10 +543,11 @@ def get_reservation_financial_summary(db: Session, hotel_id: Optional[int], rese
         2,
     )))
     d_total = Decimal(str(reservation.total_amount or 0))
-    d_paid = Decimal(str(reservation.amount_paid or 0))
+    materialized_paid = Decimal(str(reservation.amount_paid or 0))
+    d_paid = paid_amount_with_legacy_fallback(db, resolved_hotel_id, reservation)
     operational_total = d_total + billing_adjustment_total
     operational_balance_due = max(Decimal("0"), operational_total - d_paid)
-    reconciliation_gap = d_paid - completed_payment_total
+    reconciliation_gap = materialized_paid - completed_payment_total
 
     return {
         "reservation_id": reservation.id,
@@ -538,8 +556,8 @@ def get_reservation_financial_summary(db: Session, hotel_id: Optional[int], rese
         "currency_code": reservation.currency_code or "ARS",
         "total_amount": reservation.total_amount,
         "deposit_required": reservation.deposit_amount,
-        "amount_paid": reservation.amount_paid,
-        "balance_due": reservation.balance_due,
+        "amount_paid": d_paid,
+        "balance_due": max(Decimal("0"), d_total - d_paid),
         "operational_total_amount": operational_total,
         "operational_balance_due": operational_balance_due,
         "billing_adjustment_total": billing_adjustment_total,

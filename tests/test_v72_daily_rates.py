@@ -489,6 +489,35 @@ class TestPricePeriodModel:
 # ---------------------------------------------------------------------------
 
 class TestResolveRateCalendar:
+    def test_batched_resolver_uses_selected_payment_method(self, db, sample_categories):
+        from app.models.pricing import CategoryPricing
+        from app.services.pricing_service import get_price_for_date, resolve_rate_calendar
+
+        category = sample_categories[0]
+        db.add(
+            CategoryPricing(
+                category_id=category.id,
+                price_cash=100.0,
+                price_transfer=150.0,
+                price_mercadopago=165.0,
+            )
+        )
+        db.flush()
+
+        rows = resolve_rate_calendar(
+            db,
+            1,
+            category.id,
+            date(2026, 9, 1),
+            date(2026, 9, 1),
+            payment_method="transfer",
+        )
+
+        assert rows[0]["price"] == 150.0
+        assert rows[0]["price"] == get_price_for_date(
+            db, 1, category.id, date(2026, 9, 1), payment_method="transfer"
+        )
+
     def test_batched_matches_per_date_and_reports_sources(self, db, sample_categories):
         from datetime import timedelta
         from app.models.pricing import CategoryPricing

@@ -403,6 +403,17 @@ def build_payment_fact_row(source: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def canonical_payment_amount(source: Mapping[str, Any]) -> Decimal:
+    """Return the signed amount allowed into confirmed financial facts."""
+    status = _enum_value(source.get("status"))
+    if status != "completed":
+        raise ValueError("only completed transactions may enter financial facts")
+    amount = Decimal(str(source["amount"]))
+    if _enum_value(source.get("transaction_type")) == "refund":
+        return -amount
+    return amount
+
+
 def build_cash_movement_fact_row(source: Mapping[str, Any]) -> dict[str, Any]:
     return {
         "hotel_id": _positive_id(source["hotel_id"], "hotel_id"),

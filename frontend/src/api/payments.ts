@@ -39,5 +39,19 @@ export type PaymentSummary = {
 export const getPaymentSummary = (reservationId: number, session?: SessionLike) =>
   apiFetch<PaymentSummary>(`/api/payments/summary/${reservationId}`, { session });
 
+const newPaymentIdempotencyKey = (reservationId: number) => {
+  const requestId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `ui-payment-${reservationId}-${requestId}`;
+};
+
 export const makePayment = (payload: PaymentRequest, session?: SessionLike) =>
-  apiFetch(`/api/payments`, { method: "POST", data: payload, session });
+  apiFetch(`/api/payments`, {
+    method: "POST",
+    data: payload,
+    session,
+    headers: {
+      // The backend deduplicates this key at the transaction boundary. A new
+      // key represents a new operator action.
+      "Idempotency-Key": newPaymentIdempotencyKey(payload.reservation_id)
+    }
+  });

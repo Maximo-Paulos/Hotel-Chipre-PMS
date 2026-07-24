@@ -25,6 +25,7 @@ from app.schemas.reports import (
     OperationalReservationGroup,
     OperationalReservationSummary,
 )
+from app.services.financial_ledger import completed_paid_amounts_by_reservation
 
 
 logger = logging.getLogger(__name__)
@@ -53,8 +54,12 @@ def _guest_name(reservation: Reservation) -> str | None:
     return guest.full_name
 
 
-def _reservation_summary(reservation: Reservation) -> OperationalReservationSummary:
+def _reservation_summary(
+    reservation: Reservation,
+    paid_amount: Decimal | None = None,
+) -> OperationalReservationSummary:
     room = reservation.room
+    paid = paid_amount if paid_amount is not None else Decimal(reservation.amount_paid or 0)
     return OperationalReservationSummary(
         reservation_id=reservation.id,
         confirmation_code=reservation.confirmation_code,
@@ -66,13 +71,20 @@ def _reservation_summary(reservation: Reservation) -> OperationalReservationSumm
         check_in_date=reservation.check_in_date,
         check_out_date=reservation.check_out_date,
         total_amount=Decimal(reservation.total_amount or 0),
-        amount_paid=Decimal(reservation.amount_paid or 0),
-        balance_due=reservation.balance_due,
+        amount_paid=paid,
+        balance_due=max(Decimal("0"), Decimal(reservation.total_amount or 0) - paid),
     )
 
 
-def _group(reservations: Iterable[Reservation]) -> OperationalReservationGroup:
-    items = [_reservation_summary(reservation) for reservation in reservations]
+def _group(
+    reservations: Iterable[Reservation],
+    paid_by_reservation: dict[int, Decimal] | None = None,
+) -> OperationalReservationGroup:
+    paid_by_reservation = paid_by_reservation or {}
+    items = [
+        _reservation_summary(reservation, paid_by_reservation.get(reservation.id))
+        for reservation in reservations
+    ]
     return OperationalReservationGroup(count=len(items), reservations=items)
 
 
@@ -235,7 +247,6 @@ def daily_report(db: Session, hotel_id: int, report_date: date) -> DailyOperatio
         .order_by(Reservation.check_in_date.asc(), Reservation.id.asc())
         .all()
     )
-    pending_payments = [reservation for reservation in balance_candidates if reservation.balance_due > 0]
     late_arrivals = (
         reservation_scope.filter(
             Reservation.check_in_date < report_date,
@@ -245,9 +256,29 @@ def daily_report(db: Session, hotel_id: int, report_date: date) -> DailyOperatio
         .order_by(Reservation.check_in_date.asc(), Reservation.id.asc())
         .all()
     )
+    candidate_ids = {
+        reservation.id
+        for reservation in (*arrivals, *departures, *balance_candidates, *late_arrivals)
+    }
+    paid_by_reservation = completed_paid_amounts_by_reservation(db, hotel_id, candidate_ids)
+    # Legacy/imported reservations may predate the transaction ledger. Keep the
+    # materialized value only for those rows; once a ledger row exists, it wins.
+    for reservation in (*arrivals, *departures, *balance_candidates, *late_arrivals):
+        paid_by_reservation.setdefault(
+            reservation.id,
+            Decimal(reservation.amount_paid or 0),
+        )
+    pending_payments = [
+        reservation
+        for reservation in balance_candidates
+        if Decimal(reservation.total_amount or 0) - paid_by_reservation.get(reservation.id, Decimal("0")) > 0
+    ]
 
-    pending_group = _group(pending_payments)
-    late_items = [_reservation_summary(reservation) for reservation in late_arrivals]
+    pending_group = _group(pending_payments, paid_by_reservation)
+    late_items = [
+        _reservation_summary(reservation, paid_by_reservation.get(reservation.id))
+        for reservation in late_arrivals
+    ]
     review_items = _available_with_review(db, hotel_id, report_date)
     block_items = _active_room_blocks(db, hotel_id, report_date)
     cash_session = _cash_session(db, hotel_id)
@@ -256,8 +287,8 @@ def daily_report(db: Session, hotel_id: int, report_date: date) -> DailyOperatio
         hotel_id=hotel_id,
         report_date=report_date,
         generated_at=datetime.now(timezone.utc),
-        arrivals=_group(arrivals),
-        departures=_group(departures),
+        arrivals=_group(arrivals, paid_by_reservation),
+        departures=_group(departures, paid_by_reservation),
         pending_payments=pending_group,
         late_arrivals=late_items,
         available_with_review=review_items,

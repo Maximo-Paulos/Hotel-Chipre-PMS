@@ -12,7 +12,7 @@
 - **Source of truth for: amount_paid, balance_due, arqueo**
 - One row per payment event in the financial sense
 - Written by `payment_service.py` after any money movement
-- Used in `reservation.balance_due`, `CashCloseReport.expected_balance`, all financial reports
+- Used by the financial ledger read helpers, `CashCloseReport.expected_balance`, and new financial reports
 - `amount`, `payment_method`, `status`, `type` are the core columns
 - Always `Numeric(12, 2)` — never `Float`
 
@@ -38,7 +38,7 @@ Bank transfer is deliberately two-phase:
 2. An owner, co-owner or manager explicitly approves or rejects it. Approval
    calls the same canonical `process_payment` ledger path with an idempotency
    key (`transfer-proof:{proof_id}`), creates a completed `Transaction`, and
-   updates `reservation.amount_paid`. Rejection never changes the balance.
+   refreshes the materialized `reservation.amount_paid` cache. Rejection never changes the balance.
 
 The image is served only through an authenticated endpoint. It is never put in
 the public static bundle, logs, transaction description, or an analytics store.
@@ -55,14 +55,14 @@ Guest pays via MercadoPago/PayPal/Stripe
     → Webhook received → payment_webhook_events (raw log)
     → Payment updated (status=completed, external_payment_id set)
     → Transaction inserted (type=payment, status=confirmed)
-    → reservation.amount_paid updated (via Transaction aggregate)
+    → reservation.amount_paid refreshed (via Transaction aggregate)
 
 Hotel staff records cash payment directly
     → Transaction inserted directly (type=payment, payment_method=cash)
     → active CashSession is reused, or a zero-opening session is created automatically
     → CashMovement linked to the Transaction (income/refund expense)
     → NO Payment or PaymentLink needed
-    → reservation.amount_paid updated
+    → reservation.amount_paid refreshed
 ```
 
 ---
@@ -94,7 +94,7 @@ Hotel staff records cash payment directly
 ## Balance calculation — always from `transactions`
 
 ```python
-# CORRECT:
+# CORRECT for new reads:
 balance_due = reservation.total_amount - sum(t.amount for t in transactions 
                                               if t.status == 'confirmed' and t.type == 'payment')
 
@@ -104,6 +104,12 @@ balance_due = reservation.total_amount - sum(p.amount for p in payments
 ```
 
 The `payments` table may have pending/failed records that inflate the apparent total. Only confirmed `transactions` count toward balance.
+
+`Reservation.amount_paid` is retained as a materialized compatibility value for
+legacy/imported rows. Once a reservation has transaction rows, application
+financial reads and validations use the confirmed transaction aggregate and can
+surface a reconciliation gap when the cache differs. Rows that have no ledger
+history still need an explicit migration/backfill before provider certification.
 
 ---
 

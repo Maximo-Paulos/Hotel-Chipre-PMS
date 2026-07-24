@@ -1,7 +1,7 @@
 """
 FastAPI routes for Payments.
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -21,12 +21,17 @@ router = APIRouter(prefix="/api/payments", tags=["Payments"])
 @router.post("/", response_model=TransactionRead, status_code=status.HTTP_201_CREATED)
 def make_payment(
     data: PaymentRequest,
+    idempotency_key: str = Header(..., alias="Idempotency-Key", min_length=8, max_length=100),
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
 ):
     try:
         transaction = process_payment(
-            db, data, hotel_id=context.hotel_id, actor_user_id=context.user_id
+            db,
+            data,
+            hotel_id=context.hotel_id,
+            actor_user_id=context.user_id,
+            idempotency_key=idempotency_key,
         )
         db.commit()
         db.refresh(transaction)

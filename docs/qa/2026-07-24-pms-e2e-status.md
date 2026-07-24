@@ -17,7 +17,7 @@ repositorio.
 | Frontend lint/typecheck/build | Pasan. Vite informa un bundle principal de 785.37 kB minificado (190.07 kB gzip); queda como deuda de performance. |
 | E2E desktop | 23/23 pasan en Chromium, incluyendo login, logout, admin, calendario de tarifas, configuración del hotel, los journeys de negocio, la jornada de operaciones diarias y páginas V72. La ejecución fresh completa queda en 31/31 al sumar móvil Chromium y los tres perfiles WebKit. |
 | E2E mobile | 2/2 pasan con Chromium emulando iPhone y verificando 375×812, 390×844 y 430×932; 6/6 pasan con Playwright WebKit en perfiles iPhone SE, iPhone 15 y iPhone 15 Pro Max; los journeys mutantes de reserva/pagos/check-in/out, inventario, cambio de habitación/no-show y operaciones diarias pasan 4/4 en WebKit iPhone 15. Esto no sustituye Safari nativo del simulador Xcode, que no está disponible en este host. |
-| Backend completo | 1215 pasan, 17 se omiten, 12 quedan xfail y 1 xpass en Python 3.12 limpio. El runner E2E rechaza explícitamente Python menor a 3.10. |
+| Backend completo | 1220 pasan, 17 se omiten, 12 quedan xfail y 1 xpass en Python 3.12 limpio. El runner E2E rechaza explícitamente Python menor a 3.10. |
 | Forward-tests de arquitectura de datos | 2/2 pasan: una entidad de otro hotel no puede leerse ni adjuntarse, y una cotización queda invalidada antes de persistir la reserva cuando cambia la tarifa. |
 | Migración virgen | `alembic upgrade head` pasa sobre SQLite temporal hasta `20260724_room_move_enum_values`, incluyendo blobs privados, rotación, custodia, claves tenant restantes y el contrato de movimientos de habitación. |
 | Backend focalizado | 56/56 pasan: motor de asignación, operaciones de reservas, check-in, check-out y seguridad del flujo. |
@@ -28,6 +28,7 @@ repositorio.
 | Runtime IaC | `render.yaml` declara autoscaling 3–50 (CPU 60%, memoria 70%), Valkey persistente privado, worker/beat separados y migración Alembic pre-deploy; provider sync/telemetría no verificados. |
 | Load runner | `scripts/scale/staged_http_load.py` validado por tests y help; no ejecutado contra provider por falta de preview aislado. |
 | Graphify | `portable-check` pasa después de actualizar y normalizar el grafo; `check-update` reporta pendiente semántico porque no se generaron descripciones/labels LLM en este run. |
+| Integridad financiera y warehouse | El ledger de transacciones gobierna validaciones/resumen de cobro, el endpoint directo exige `Idempotency-Key`, la tarifa batched acepta medio de pago y los hechos financieros proyectan solo transacciones confirmadas con reembolsos firmados. Contratos focalizados y regresiones pasan. |
 
 ### Smoke de la skill de navegador interno
 
@@ -88,7 +89,8 @@ el botón `Crear` podía aceptar un click mientras React Query todavía marcaba 
 cotización como `isFetching`, por lo que no se enviaba la reserva aunque ya se
 mostrara un total. Se corrigió bloqueando el submit hasta disponer de un
 `quote_token` vigente y mostrando `Actualizando...`; el journey ahora espera
-explícitamente el estado habilitado. La ejecución posterior quedó en 29/29.
+explícitamente el estado habilitado. La ejecución posterior quedó integrada en
+la matriz fresh de 31/31.
 
 La corrección está validada localmente, pero el entorno web de QA debe recibir
 un despliegue antes de repetir la medición allí.
@@ -223,6 +225,24 @@ El contrato de tokens de cotización también rechaza codificaciones Base64URL n
 canónicas: cambiar bits sobrantes del último carácter ya no puede reutilizar la
 misma firma decodificada.
 
+### Consistencia financiera y de tarifas
+
+La auditoría de arquitectura encontró dos divergencias locales que ya quedaron
+cerradas con pruebas de regresión. `resolve_rate_calendar` ahora recibe el medio
+de pago opcional y calcula `price` con el mismo override que
+`get_price_for_date`; esto evita que el calendario batched elija arbitrariamente
+el primer precio configurado. El endpoint directo `/api/payments` exige
+`Idempotency-Key` y reentrega la misma transacción ante un reintento.
+
+Las lecturas nuevas de resumen, validación de sobrepago/reembolso, links de pago,
+check-in, checkout, reportes operativos y el proyector de hechos consultan
+transacciones `completed`; los reembolsos se representan con signo negativo.
+`Reservation.amount_paid` se conserva como caché materializada para compatibilidad
+con reservas históricas, pero una reserva con movimientos en el ledger no usa ese
+campo como autoridad. Los datos históricos sin transacciones todavía usan la
+caché como fallback explícito y deben migrarse antes de exigir consistencia
+financiera estricta.
+
 ### Inicialización concurrente de permisos
 
 El E2E fresh expuso una carrera real: dos requests podían sembrar la matriz de
@@ -238,7 +258,7 @@ rápido con documento, registra una reserva con seña manual, cobra un parcial e
 efectivo, envía un comprobante de transferencia, lo aprueba y cobra el saldo
 restante en efectivo antes de completar check-in/check-out y cerrar la caja con
 rotación de custodia. El flujo pasa en 1/1 por Chromium y 1/1 por WebKit iPhone
-15, y forma parte de la suite completa 29/29. El fixture de imagen se genera con un
+15, y forma parte de la suite completa 31/31. El fixture de imagen se genera con un
 contenido único por ejecución para no falsear la protección anti-duplicados.
 
 Durante ese recorrido se detectó que la migración de asignación guardaba los

@@ -350,17 +350,6 @@ def refresh_link_collection(db: Session, link: PaymentLink) -> PaymentLink:
 
 def balance_due_from_transactions(db: Session, hotel_id: int, reservation_id: int) -> Decimal:
     reservation = _get_reservation_for_hotel(db, hotel_id, reservation_id)
-    transactions = (
-        db.query(Transaction)
-        .filter(
-            Transaction.hotel_id == hotel_id,
-            Transaction.reservation_id == reservation_id,
-            Transaction.status == TransactionStatusEnum.COMPLETED,
-        )
-        .all()
-    )
-    paid = Decimal("0.00")
-    for transaction in transactions:
-        amount = _money(transaction.amount)
-        paid += -amount if transaction.transaction_type == TransactionTypeEnum.REFUND else amount
-    return max(Decimal("0.00"), _money(reservation.total_amount) - paid)
+    from app.services.financial_ledger import operational_balance_due
+
+    return operational_balance_due(db, hotel_id=hotel_id, reservation=reservation)

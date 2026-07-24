@@ -26,7 +26,7 @@ def test_payment_overpay_is_blocked_smoke(client, engine):
             "transaction_type": "full_payment",
             "currency": "ARS",
         },
-        headers=headers,
+            headers={**headers, "Idempotency-Key": "smoke-overpay-001"},
     )
     assert response.status_code == 400, response.text
     assert "exceeds balance due" in response.json()["detail"]
@@ -57,7 +57,7 @@ def test_payment_disabled_method_is_blocked_smoke(client, engine):
             "transaction_type": "partial_payment",
             "currency": "ARS",
         },
-        headers=headers,
+            headers={**headers, "Idempotency-Key": "smoke-disabled-001"},
     )
     assert response.status_code == 400, response.text
     assert "currently disabled" in response.json()["detail"]

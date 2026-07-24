@@ -195,6 +195,19 @@ def test_operational_fact_builders_drop_pii_and_preserve_tenant_scope():
     assert "gateway_response" not in payment
 
 
+def test_canonical_payment_amount_requires_completed_and_signs_refunds():
+    assert analytics_warehouse.canonical_payment_amount(
+        {"amount": "100.00", "transaction_type": "partial_payment", "status": "completed"}
+    ) == Decimal("100.00")
+    assert analytics_warehouse.canonical_payment_amount(
+        {"amount": "25.00", "transaction_type": "refund", "status": "completed"}
+    ) == Decimal("-25.00")
+    with pytest.raises(ValueError, match="only completed"):
+        analytics_warehouse.canonical_payment_amount(
+            {"amount": "100.00", "transaction_type": "partial_payment", "status": "pending"}
+        )
+
+
 def test_reconcile_derived_fact_checks_count_and_amount():
     class OperationalFake(FakeWarehouseClient):
         def execute(self, query: str, params: dict | None = None):

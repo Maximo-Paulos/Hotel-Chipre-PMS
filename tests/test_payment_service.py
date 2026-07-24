@@ -248,6 +248,36 @@ class TestBalancePaymentAtCheckin:
         assert "mercado_pago" in tx_methods
         assert "cash" in tx_methods
 
+    def test_financial_summary_ignores_corrupted_amount_paid_cache(
+        self, db, sample_guest, sample_rooms, sample_categories, hotel_config
+    ):
+        data = ReservationCreate(
+            guest_id=sample_guest.id,
+            category_id=sample_categories[0].id,
+            check_in_date=date(2026, 8, 30),
+            check_out_date=date(2026, 9, 2),
+        )
+        reservation = create_reservation(db, data, hotel_id=1)
+        db.flush()
+
+        process_payment(
+            db,
+            PaymentRequest(
+                reservation_id=reservation.id,
+                amount=100.0,
+                payment_method=PaymentMethodEnum.CASH,
+                transaction_type=TransactionTypeEnum.PARTIAL_PAYMENT,
+            ),
+            hotel_id=DEFAULT_HOTEL_ID,
+        )
+        reservation.amount_paid = 9999.0
+        db.flush()
+
+        summary = get_reservation_financial_summary(db, DEFAULT_HOTEL_ID, reservation.id)
+        assert summary["amount_paid"] == 100.0
+        assert summary["balance_due"] == 200.0
+        assert summary["has_financial_reconciliation_gap"] is True
+
 
 class TestHotelIsolation:
     """Multi-hotel safety: scope payments and methods by hotel_id."""

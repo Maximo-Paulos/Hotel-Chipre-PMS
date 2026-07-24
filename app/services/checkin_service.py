@@ -24,6 +24,7 @@ from app.services.jurisdiction_profile import compute_missing_guest_fields
 from app.models.room import Room, RoomStatusEnum
 from app.services.guest_profile import get_guest_profile, validate_primary_guest_record
 from app.models.security_audit_log import SecurityAuditLog
+from app.services.financial_ledger import paid_amount_with_legacy_fallback
 
 
 class CheckInError(Exception):
@@ -96,13 +97,15 @@ def perform_checkin(
     if hotel_id is None:
         raise CheckInError("hotel_id is required for check-in")
     reservation.hotel_id = hotel_id
+    ledger_paid = paid_amount_with_legacy_fallback(db, hotel_id, reservation)
+    ledger_balance = max(Decimal("0"), Decimal(str(reservation.total_amount or 0)) - ledger_paid)
 
     # Must be fully_paid or pre_check_in to check in
     allowed_pre_checkin = {ReservationStatusEnum.FULLY_PAID, ReservationStatusEnum.PRE_CHECK_IN}
     if reservation.status not in allowed_pre_checkin:
         raise CheckInError(
             f"Cannot check in: reservation status is '{reservation.status.value}'. "
-            f"Must be 'fully_paid' or 'pre_check_in'. Outstanding balance: ${reservation.balance_due:.2f}"
+            f"Must be 'fully_paid' or 'pre_check_in'. Outstanding balance: ${ledger_balance:.2f}"
         )
 
     # Load guest
@@ -217,7 +220,7 @@ def perform_checkout(
     )
     billing_adjustment_total = Decimal(str(round(sum(adj.total_amount for adj in billing_adjustments), 2)))
     d_total = Decimal(str(reservation.total_amount or 0))
-    d_paid = Decimal(str(reservation.amount_paid or 0))
+    d_paid = paid_amount_with_legacy_fallback(db, hotel_id, reservation)
     operational_total = d_total + billing_adjustment_total
     operational_balance_due = max(Decimal("0"), operational_total - d_paid)
     if operational_balance_due > Decimal("0.01") and not force:
