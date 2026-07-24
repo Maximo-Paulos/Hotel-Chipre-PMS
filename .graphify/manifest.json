@@ -364,8 +364,8 @@
     "hash": "aae4e845c792d6bc8669c01055196ce0"
   },
   "app/api/stock.py": {
-    "mtime": 1784862144876.194,
-    "hash": "6aeaa9d21f06c87a0be0ec94dbf7f908"
+    "mtime": 1784884168641.9695,
+    "hash": "72fa96f0cb5f7603641baf290a588877"
   },
   "app/api/subscription.py": {
     "mtime": 1784862144876.255,
@@ -992,8 +992,8 @@
     "hash": "0a3e8ba84ec2d5f30f11515cf6490f09"
   },
   "app/services/permission_service.py": {
-    "mtime": 1784874582943.71,
-    "hash": "f496d042b8df753be83d5e8565401a39"
+    "mtime": 1784884142680.0117,
+    "hash": "13bc2eb285d86c94f7bb9edc98125f12"
   },
   "app/services/pricing_policy_service.py": {
     "mtime": 1784862144886.0344,
@@ -1476,8 +1476,8 @@
     "hash": "7687a4c31686fd1e495491075c754f05"
   },
   "frontend/src/views/protected/SettingsPermissionsPage.tsx": {
-    "mtime": 1784862144906.7031,
-    "hash": "41e6e3a9fdf1101fc44de93d59430c7f"
+    "mtime": 1784884168644.6104,
+    "hash": "57671b62631fa3dfe18b5cfc29640fcb"
   },
   "frontend/src/views/protected/SettingsSecurityPage.tsx": {
     "mtime": 1784862144906.7446,
@@ -1500,8 +1500,8 @@
     "hash": "353d169ade8bfb8b38ab0e5f059b68ca"
   },
   "frontend/src/views/protected/StockPage.tsx": {
-    "mtime": 1784864829662.6055,
-    "hash": "01228b25634d33127be92f35b3f63e70"
+    "mtime": 1784884458002.5247,
+    "hash": "7927d255abf034a64d4bf4148666c0e6"
   },
   "frontend/src/views/protected/WaitlistPage.tsx": {
     "mtime": 1784862144907.1262,
@@ -1920,12 +1920,12 @@
     "hash": "5ed090f3055954edf14e44f82b16139c"
   },
   "tests/test_permission_service.py": {
-    "mtime": 1784874567922.1484,
-    "hash": "78c6bdf6f2aa619a6c10447a551e5f2e"
+    "mtime": 1784884142684.5586,
+    "hash": "6aeb4f419411d94ab42a349be82f953a"
   },
   "tests/test_permissions_api.py": {
-    "mtime": 1784862144934.4773,
-    "hash": "def707ff4f801e425305295deb70dda5"
+    "mtime": 1784884279750.2603,
+    "hash": "d740c610419c0067a63c922528211c98"
   },
   "tests/test_postgres_validation.py": {
     "mtime": 1784862144934.7532,
@@ -3264,8 +3264,8 @@
     "hash": "8e2277e0fc399686b86f61f02ef68f93"
   },
   ".graphify/GRAPH_REPORT.md": {
-    "mtime": 1784883178694.8704,
-    "hash": "623ab7b706eac9f1052d42d4cbfb4c0a"
+    "mtime": 1784883883972.6963,
+    "hash": "25a747bf535914eac4e6bbbfe70eca5d"
   },
   "scripts/agent_ops/manage_qa_baseline_lease.py": {
     "mtime": 1784862144921.6997,
@@ -3360,12 +3360,12 @@
     "hash": "cc3b4c09ac92a7d389d9ad275a799aa0"
   },
   "docs/qa/2026-07-24-pms-e2e-status.md": {
-    "mtime": 1784883836852.373,
-    "hash": "b8273e507b3adb6e566c8d8a7618e64e"
+    "mtime": 1784884776522.463,
+    "hash": "8a5a1c05904c4e98f6d5407cea1f407b"
   },
   "frontend/e2e/business-journey.spec.ts": {
-    "mtime": 1784883390069.7017,
-    "hash": "c35fc047b06396647c82dab225762425"
+    "mtime": 1784884480602.5894,
+    "hash": "8dbcf29d1876fefad7c93b726e203b3d"
   },
   "alembic/versions/20260724_allocation_enum_values.py": {
     "mtime": 1784868257342.7349,
