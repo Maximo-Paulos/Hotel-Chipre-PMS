@@ -612,6 +612,23 @@ Esta evidencia confirma el estado local de la rama actual, pero no cambia el
 gate cloud: el artefacto publicado sigue sin un `code_sha` provider-bound y la
 matriz visible de cinco personas todavía no puede cerrarse.
 
+### Revalidación local — registro y onboarding en Apple WebKit
+
+El proyecto `webkit-iphone-15-business` excluía por configuración el journey
+de registro y onboarding, por lo que el intento inicial no descubría pruebas.
+Se agregó `auth-onboarding-journey.spec.ts` a ese proyecto y el recorrido pasó
+1/1 en WebKit iPhone 15: registro de owner sintético, verificación mediante el
+outbox local, hotel/categoría/habitación, política y pagos, alta de staff,
+cierre de sesión, recuperación de contraseña e inicio de sesión final.
+
+La matriz WebKit serial completa pasó posteriormente 11/11. Durante una primera
+corrida ampliada la aserción E2E de stock agotó su espera tras registrar un
+ingreso; el snapshot final mostraba correctamente `10 unidad`. La reproducción
+acotada onboarding+negocio (5/5) y la repetición completa (11/11) no repitieron
+el evento, por lo que queda como observación P3 del arnés/caché local y no como
+defecto funcional confirmado. No se usaron credenciales, correo, pagos,
+webhooks ni OTA externos.
+
 ### Revalidación local — contratos de pagos e integraciones sin side effects
 
 Se ejecutó con Python 3.12.13 la regresión focalizada de links de pago,
