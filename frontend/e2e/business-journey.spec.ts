@@ -130,6 +130,9 @@ test("owner completes the core reservation journey through the UI", async ({ pag
   await expect(editForm.getByText("Resumen financiero y acciones rápidas.", { exact: true })).toBeVisible();
   const partialAmount = editForm.getByLabel("Monto a cobrar");
   await expect(partialAmount).toBeVisible();
+  await partialAmount.fill("70000");
+  await editForm.getByRole("button", { name: "Cobro parcial", exact: true }).click();
+  await expect(page.getByText("Ingresá un importe positivo que no supere el saldo pendiente.", { exact: true })).toBeVisible();
   await partialAmount.fill("500");
   await editForm.getByRole("button", { name: "Cobro parcial", exact: true }).click();
   await expect(page.getByText("Cobro parcial registrado", { exact: true })).toBeVisible();
@@ -164,6 +167,10 @@ test("owner completes the core reservation journey through the UI", async ({ pag
   await editForm.getByRole("button", { name: "Aprobar", exact: true }).click();
   await expect(editForm.getByText(/approved$/)).toBeVisible();
   await editForm.getByLabel("Medio de pago").selectOption("cash");
+  await partialAmount.fill("100");
+  page.once("dialog", (dialog) => dialog.accept());
+  await editForm.getByRole("button", { name: "Registrar devolución", exact: true }).click();
+  await expect(page.getByText("Devolución registrada", { exact: true })).toBeVisible();
   await editForm.getByRole("button", { name: "Pago total", exact: true }).click();
   await expect(page.getByText("Pago completo registrado", { exact: true })).toBeVisible();
   await editModal.getByRole("button", { name: "Cerrar", exact: true }).click();

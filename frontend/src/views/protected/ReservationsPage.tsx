@@ -878,6 +878,38 @@ export function ReservationsPage() {
     );
   };
 
+  const handleRefund = () => {
+    if (!editing || !paymentSummary) return;
+    if (paymentMethod !== "cash") {
+      showToast("info", "La devolución manual se registra en efectivo desde la caja abierta.");
+      return;
+    }
+    const amount = Number(paymentAmountInput);
+    const amountPaid = Number(paymentSummary.amount_paid ?? 0);
+    if (!Number.isFinite(amount) || amount <= 0 || amount > amountPaid + 0.01) {
+      showToast("error", "Ingresá un importe positivo que no supere el total pagado.");
+      return;
+    }
+    if (!window.confirm(`¿Confirmar devolución en efectivo de ${formatMoney(amount, editingCurrencyCode)}?`)) return;
+    paymentMutation.mutate(
+      {
+        reservation_id: editing.id,
+        amount: Number(amount.toFixed(2)),
+        payment_method: paymentMethod,
+        transaction_type: "refund",
+        currency: editingCurrencyCode,
+        description: "Devolución manual en efectivo"
+      },
+      {
+        onSuccess: () => {
+          setPaymentAmountInput("");
+          showToast("success", "Devolución registrada");
+        },
+        onError: (err: unknown) => showToast("error", err instanceof Error ? err.message : "No se pudo registrar la devolución")
+      }
+    );
+  };
+
   const handleSubmitTransferProof = async () => {
     if (!editing || !paymentSummary) return;
     if (!paymentProofFile) {
@@ -2180,6 +2212,14 @@ export function ReservationsPage() {
                       className="rounded-lg border border-emerald-200 bg-emerald-100 px-3 py-2 text-sm font-semibold text-emerald-800 hover:border-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       Pago total
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleRefund}
+                      disabled={paymentMutation.isPending || paymentSummaryQuery.isLoading || paymentMethod !== "cash"}
+                      className="rounded-lg border border-violet-200 bg-violet-100 px-3 py-2 text-sm font-semibold text-violet-800 hover:border-violet-300 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Registrar devolución
                     </button>
                     {paymentMutation.isError && (
                       <p className="text-xs text-rose-600">Error al registrar pago.</p>
