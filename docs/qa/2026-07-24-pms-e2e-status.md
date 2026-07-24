@@ -779,6 +779,7 @@ para evitar efectos externos.
 
 Validación posterior al cambio: `analytics-success` Chromium 2/2,
 `reservation-lifecycle` Chromium 2/2 y WebKit iPhone 15 2/2, servicio de
-Stock 4/4, regresión E2E Chromium 37/37 y smoke Apple WebKit 12/12. Persisten
-warnings de cache/lock degradado del arnés local y warnings de serialización de
-Decimal; no hubo fallos funcionales en esas corridas.
+Stock 4/4, regresión E2E Chromium 37/37, journey de negocio WebKit iPhone 15
+18/18 y smoke Apple WebKit 12/12. Persisten warnings de cache/lock degradado
+del arnés local y warnings de serialización de Decimal; no hubo fallos
+funcionales en esas corridas.
