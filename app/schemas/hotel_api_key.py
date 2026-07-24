@@ -67,6 +67,11 @@ class PublicRateQuote(BaseModel):
     nightly_rate: float
     total_amount: float
     deposit_amount: float
+    currency_code: str = "ARS"
+    pricing_revision: str
+    expires_at: datetime
+    quote_token: str
+    breakdown: list[dict] = Field(default_factory=list)
 
 
 class PublicReservationCreate(BaseModel):
@@ -80,6 +85,7 @@ class PublicReservationCreate(BaseModel):
     notes: Optional[str] = None
     external_id: Optional[str] = None
     source: ReservationSourceEnum = ReservationSourceEnum.DIRECT
+    quote_token: Optional[str] = Field(default=None, min_length=20, max_length=24000)
 
 
 class PublicPaymentLinkCreate(BaseModel):

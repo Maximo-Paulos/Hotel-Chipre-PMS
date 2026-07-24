@@ -30,6 +30,10 @@ class WhatsAppPriceQuote(BaseModel):
     total_amount: float
     deposit_amount: float
     currency: str = "ARS"
+    pricing_revision: str
+    expires_at: datetime
+    quote_token: str
+    breakdown: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class WhatsAppOption(BaseModel):
@@ -43,6 +47,9 @@ class WhatsAppOption(BaseModel):
     total_amount: float
     deposit_amount: float
     currency: str = "ARS"
+    pricing_revision: str
+    expires_at: datetime
+    quote_token: str
 
 
 class WhatsAppOptionsResponse(BaseModel):
@@ -62,6 +69,7 @@ class WhatsAppReservationCreate(BaseModel):
     num_children: int = Field(default=0, ge=0)
     notes: Optional[str] = None
     external_id: Optional[str] = None
+    quote_token: Optional[str] = Field(default=None, min_length=20, max_length=24000)
 
 
 class WhatsAppPaymentLinkCreate(BaseModel):

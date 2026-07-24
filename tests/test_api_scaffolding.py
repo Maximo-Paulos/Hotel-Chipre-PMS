@@ -192,6 +192,18 @@ def test_bookings_basic_flow(api_client):
     assert avail.status_code == 200
     assert avail.json()["status"] == "placeholder"
 
+    quote = client.get(
+        "/api/bookings/price-quote",
+        params={
+            "category_id": cat.id,
+            "check_in_date": today.isoformat(),
+            "check_out_date": checkout.isoformat(),
+            "occupancy": 2,
+        },
+    )
+    assert quote.status_code == 200, quote.text
+    payload["quote_token"] = quote.json()["quote_token"]
+
     create = client.post("/api/bookings/", json=payload)
     assert create.status_code == 201, create.text
     booking_id = create.json()["id"]
@@ -270,6 +282,17 @@ def test_booking_status_and_overlap(api_client):
         "check_out_date": end.isoformat(),
         "num_adults": 2,
     }
+    quote_token = client.get(
+        "/api/bookings/price-quote",
+        params={
+            "category_id": cat_id,
+            "check_in_date": start.isoformat(),
+            "check_out_date": end.isoformat(),
+            "occupancy": 2,
+        },
+    )
+    assert quote_token.status_code == 200, quote_token.text
+    base_payload["quote_token"] = quote_token.json()["quote_token"]
     create1 = client.post("/api/bookings/", json=base_payload | {"room_id": room1_id})
     assert create1.status_code == 201
     booking1_id = create1.json()["id"]

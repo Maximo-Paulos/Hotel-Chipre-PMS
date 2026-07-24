@@ -17,7 +17,7 @@ repositorio.
 | Frontend lint/typecheck/build | Pasan. Vite informa un bundle principal de ~760 kB minificado; queda como deuda de performance. |
 | E2E desktop | 20/20 pasan en Chromium, incluyendo login, logout, admin, calendario de tarifas, configuración del hotel, el journey de negocio y páginas V72. |
 | E2E mobile | 2/2 pasan con viewport iPhone 13 sobre Chromium: sin overflow horizontal y navegación móvil a Reservas. |
-| Backend completo | 1171 pasan, 17 se omiten, 12 quedan xfail y 1 xpass en Python 3.12 limpio. El `.venv` legado no puede importar el código por usar un Python anterior. |
+| Backend completo | 1174 pasan, 17 se omiten, 12 quedan xfail y 1 xpass en Python 3.12 limpio. El `.venv` legado no puede importar el código por usar un Python anterior. |
 | Migración virgen | `alembic upgrade head` pasa sobre SQLite temporal hasta `20260724_allocation_enum_values`. |
 | Backend focalizado | 56/56 pasan: motor de asignación, operaciones de reservas, check-in, check-out y seguridad del flujo. |
 | Graphify | `portable-check` y `check-update` pasan después de actualizar el grafo. |
@@ -92,6 +92,22 @@ minúscula. La migración `20260724_allocation_enum_values` alinea SQLite y
 PostgreSQL con el contrato del modelo y fue validada desde una base virgen.
 También se incorporaron tipo y número de documento al huésped rápido para que
 el check-in respete la configuración legal del hotel.
+
+### Cotización única y consistencia de tarifas
+
+La rama agrega una cotización backend única para reservas internas, booking
+público y WhatsApp. Devuelve desglose, moneda, seña, total, revisión de precio,
+vencimiento y un token HMAC de corta duración sin PII. La creación recomputa el
+precio contra PostgreSQL, compara la revisión y rechaza tokens manipulados,
+vencidos o emitidos antes de un cambio de tarifa. El snapshot de la reserva
+conserva la revisión usada; la UI dejó de sumar tarifas en el navegador y envía
+el token firmado.
+
+El contrato tiene cobertura backend/API 25/25, incluyendo la prueba negativa de
+cambio de tarifa y la superficie pública. La suite Chromium quedó serializada
+porque el fixture E2E usa una única SQLite aislada y ahora contiene un journey
+mutante; así el resultado 20/20 es reproducible y no depende de carreras entre
+workers.
 
 ## Limitaciones actuales
 

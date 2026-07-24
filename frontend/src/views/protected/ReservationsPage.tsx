@@ -21,10 +21,10 @@ import { checkRoomAvailability, type RoomAvailabilityResponse } from "../../api/
 import { type PaymentMethod } from "../../api/payments";
 import { useCategories } from "../../hooks/useCategories";
 import { useGuest, useGuestCreate } from "../../hooks/useGuests";
-import { addDaysIso, useCategoryDailyRates } from "../../hooks/useRateCalendar";
 import {
   usePendingReservationActions,
   useReservation,
+  useReservationQuote,
   useReservationActionMutations,
   useReservationMutations,
   useReservationOperationsSummary,
@@ -163,27 +163,6 @@ const diffNights = (checkIn: string, checkOut: string) => {
   const end = new Date(`${checkOut}T00:00:00`);
   const diff = end.getTime() - start.getTime();
   return diff > 0 ? Math.round(diff / 86_400_000) : 0;
-};
-
-const rateForPaymentMethod = (
-  row: {
-    price: number;
-    price_cash?: number | null;
-    price_transfer?: number | null;
-    price_mercadopago?: number | null;
-    price_paypal?: number | null;
-    price_credit_card?: number | null;
-  },
-  method: PricingPaymentMethod,
-  categoryBasePrice: number
-) => {
-  const base = row.price > 0 ? row.price : categoryBasePrice;
-  if (method === "cash") return row.price_cash ?? base;
-  if (method === "transfer") return row.price_transfer ?? base;
-  if (method === "mercadopago") return row.price_mercadopago ?? base;
-  if (method === "credit_card") return row.price_credit_card ?? base;
-  if (method === "paypal") return row.price_paypal ?? base;
-  return base;
 };
 
 export function ReservationsPage() {
@@ -333,44 +312,35 @@ export function ReservationsPage() {
   const quoteNights = diffNights(formValues.check_in_date, formValues.check_out_date);
   const quoteCategoryId =
     !editing && selectedFormCategory && quoteNights > 0 ? Number(selectedFormCategory.id) : null;
-  const quoteLastNight =
-    quoteNights > 0 && formValues.check_out_date ? addDaysIso(formValues.check_out_date, -1) : formValues.check_in_date || today;
-  const quoteRatesQuery = useCategoryDailyRates(
-    quoteCategoryId,
-    formValues.check_in_date || today,
-    quoteLastNight
+  const quoteQuery = useReservationQuote(
+    quoteCategoryId && formValues.check_in_date && formValues.check_out_date
+      ? {
+          category_id: quoteCategoryId,
+          check_in_date: formValues.check_in_date,
+          check_out_date: formValues.check_out_date,
+          pricing_payment_method: pricingPaymentMethod === "base" ? null : pricingPaymentMethod,
+          occupancy: (Number(formValues.num_adults) || 1) + (Number(formValues.num_children) || 0)
+        }
+      : null
   );
   const reservationQuote = useMemo(() => {
-    if (!selectedFormCategory || quoteNights <= 0) {
+    if (!quoteQuery.data || !selectedFormCategory || quoteNights <= 0) {
       return null;
     }
-    const categoryBasePrice = Number(selectedFormCategory.base_price_per_night ?? 0);
-    const rows = (quoteRatesQuery.data ?? []).filter(
-      (row) => row.date >= formValues.check_in_date && row.date < formValues.check_out_date
-    );
-    if (rows.length === 0) {
-      return {
-        nights: quoteNights,
-        total: 0,
-        rows: [] as Array<{ date: string; amount: number; source: string }>
-      };
-    }
-    const pricedRows = rows.map((row) => ({
-      date: row.date,
-      amount: rateForPaymentMethod(row, pricingPaymentMethod, categoryBasePrice),
-      source: row.source
-    }));
     return {
-      nights: quoteNights,
-      total: pricedRows.reduce((sum, row) => sum + row.amount, 0),
-      rows: pricedRows
+      nights: quoteQuery.data.nights,
+      total: quoteQuery.data.total_amount,
+      currencyCode: quoteQuery.data.currency_code,
+      quoteToken: quoteQuery.data.quote_token,
+      rows: quoteQuery.data.breakdown.map((row) => ({
+        date: row.date,
+        amount: row.price,
+        source: row.source ?? "backend_quote"
+      }))
     };
   }, [
-    formValues.check_in_date,
-    formValues.check_out_date,
-    pricingPaymentMethod,
+    quoteQuery.data,
     quoteNights,
-    quoteRatesQuery.data,
     selectedFormCategory
   ]);
   const parsedDepositAmount = depositAmountInput.trim() === "" ? null : Number(depositAmountInput);
@@ -566,12 +536,17 @@ export function ReservationsPage() {
         }
       );
     } else {
+      if (!reservationQuote?.quoteToken || quoteQuery.isFetching) {
+        setFormError("Esperá a que se actualice la cotización vigente antes de crear la reserva.");
+        return;
+      }
       const createPayload = {
         ...commonPayload,
         guest_id: guestIdNum,
         source: formValues.source,
         pricing_payment_method: pricingPaymentMethod === "base" ? null : pricingPaymentMethod,
-        deposit_amount: parsedDepositAmount
+        deposit_amount: parsedDepositAmount,
+        quote_token: reservationQuote.quoteToken
       };
       createMutation.mutate(createPayload, {
         onSuccess: () => {
@@ -1764,19 +1739,25 @@ export function ReservationsPage() {
                     <div className="rounded-lg border border-blue-100 bg-white/80 px-3 py-2 text-sm text-slate-800">
                       <p className="text-xs text-slate-500">Total final</p>
                       <p className="font-semibold">
-                        {quoteRatesQuery.isFetching ? "Actualizando..." : formatMoney(reservationQuote?.total ?? 0, "ARS")}
+                        {quoteQuery.isFetching
+                          ? "Actualizando..."
+                          : formatMoney(reservationQuote?.total ?? 0, reservationQuote?.currencyCode ?? "ARS")}
                       </p>
                     </div>
                     <div className="rounded-lg border border-blue-100 bg-white/80 px-3 py-2 text-sm text-slate-800">
                       <p className="text-xs text-slate-500">Seña</p>
                       <p className="font-semibold">
-                        {depositPreview !== null ? formatMoney(depositPreview, "ARS") : "Por configurar"}
+                        {depositPreview !== null
+                          ? formatMoney(depositPreview, reservationQuote?.currencyCode ?? "ARS")
+                          : "Por configurar"}
                       </p>
                     </div>
                     <div className="rounded-lg border border-blue-100 bg-white/80 px-3 py-2 text-sm text-slate-800">
                       <p className="text-xs text-slate-500">Saldo estimado</p>
                       <p className="font-semibold">
-                        {quoteBalancePreview !== null ? formatMoney(quoteBalancePreview, "ARS") : "-"}
+                        {quoteBalancePreview !== null
+                          ? formatMoney(quoteBalancePreview, reservationQuote?.currencyCode ?? "ARS")
+                          : "-"}
                       </p>
                     </div>
                   </div>
@@ -1797,7 +1778,7 @@ export function ReservationsPage() {
                               <td className="px-3 py-2 text-slate-700">{row.date}</td>
                               <td className="px-3 py-2 text-slate-500">{row.source}</td>
                               <td className="px-3 py-2 text-right font-semibold text-slate-800">
-                                {formatMoney(row.amount, "ARS")}
+                                {formatMoney(row.amount, reservationQuote.currencyCode)}
                               </td>
                             </tr>
                           ))}
@@ -2364,4 +2345,3 @@ export function ReservationsPage() {
     </div>
   );
 }
-

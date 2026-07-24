@@ -90,6 +90,18 @@ def test_create_reservation_persists_mobility_restriction(reservation_api_client
     monkeypatch.setattr("app.api.reservations._trigger_reoptimization_bg", lambda **kwargs: calls.append(kwargs))
     guest, category, room, _ = _seed_reservation_prerequisites(db)
 
+    quote_response = client.get(
+        "/api/bookings/price-quote",
+        params={
+            "category_id": category.id,
+            "check_in_date": "2027-04-01",
+            "check_out_date": "2027-04-03",
+            "num_adults": 1,
+            "num_children": 0,
+        },
+    )
+    assert quote_response.status_code == 200, quote_response.text
+
     response = client.post(
         "/api/reservations/",
         json={
@@ -100,6 +112,7 @@ def test_create_reservation_persists_mobility_restriction(reservation_api_client
             "check_out_date": "2027-04-03",
             "num_adults": 1,
             "mobility_restriction": True,
+            "quote_token": quote_response.json()["quote_token"],
         },
     )
 

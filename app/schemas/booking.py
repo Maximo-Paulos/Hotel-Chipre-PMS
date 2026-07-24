@@ -3,6 +3,7 @@ Pydantic schemas for Booking (lightweight wrapper around Reservation).
 """
 from datetime import date, datetime
 from typing import Optional
+from decimal import Decimal
 
 from pydantic import BaseModel, Field
 
@@ -23,6 +24,16 @@ class BookingCreate(BaseModel):
     notes: Optional[str] = None
     source: ReservationSourceEnum = ReservationSourceEnum.DIRECT
     external_id: Optional[str] = None
+    sellable_product_id: Optional[int] = None
+    rate_plan_id: Optional[int] = None
+    tax_policy_id: Optional[int] = None
+    pricing_channel_code: Optional[str] = Field(default=None, max_length=50)
+    pricing_payment_method: Optional[str] = Field(default=None, max_length=30)
+    guest_scope: str = Field(default="all", max_length=30)
+    target_currency: Optional[str] = Field(default=None, min_length=3, max_length=3)
+    total_amount: Optional[Decimal] = Field(default=None, ge=0)
+    deposit_amount: Optional[Decimal] = Field(default=None, ge=0)
+    quote_token: str = Field(..., min_length=20, max_length=24000)
 
 
 class BookingUpdate(BaseModel):

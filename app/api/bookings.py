@@ -5,7 +5,7 @@ Provides basic CRUD plus a simple availability placeholder.
 from datetime import date, datetime, timedelta, timezone
 import os
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -24,6 +24,7 @@ from app.services.reservation_service import (
     transition_reservation_status,
     compute_reservation_pricing,
 )
+from app.services.reservation_quote_service import build_reservation_quote
 from app.services.checkin_service import perform_checkin, perform_checkout, CheckInError
 from app.services.graph_projection import project_company_link, project_reservation_assignment
 from app.services import audit_log_service
@@ -106,6 +107,14 @@ def price_quote(
     category_id: int,
     check_in_date: date,
     check_out_date: date,
+    sellable_product_id: int | None = None,
+    rate_plan_id: int | None = None,
+    tax_policy_id: int | None = None,
+    pricing_channel_code: str | None = None,
+    pricing_payment_method: str | None = None,
+    guest_scope: str = "all",
+    target_currency: str | None = None,
+    occupancy: int = Query(1, gt=0),
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping")),
 ):
@@ -114,17 +123,22 @@ def price_quote(
     Uses CategoryPricing (cash) when present, otherwise the base category price.
     """
     try:
-        nights, nightly_rate, total_amount, deposit_amount = compute_reservation_pricing(
-            db, category_id, check_in_date, check_out_date, hotel_id=context.hotel_id
+        return build_reservation_quote(
+            db,
+            hotel_id=context.hotel_id,
+            category_id=category_id,
+            check_in_date=check_in_date,
+            check_out_date=check_out_date,
+            sellable_product_id=sellable_product_id,
+            rate_plan_id=rate_plan_id,
+            tax_policy_id=tax_policy_id,
+            pricing_channel_code=pricing_channel_code,
+            pricing_payment_method=pricing_payment_method,
+            guest_scope=guest_scope,
+            target_currency=target_currency,
+            occupancy=occupancy,
         )
-        return {
-            "status": "ok",
-            "nights": nights,
-            "nightly_rate": nightly_rate,
-            "total_amount": total_amount,
-            "deposit_amount": deposit_amount,
-        }
-    except ReservationError as e:
+    except (ReservationError, ValueError) as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 

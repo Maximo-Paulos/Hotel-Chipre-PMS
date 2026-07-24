@@ -143,6 +143,17 @@ def test_public_reservation_is_scoped_to_key_hotel(public_client_with_db):
         "check_out_date": "2026-09-02",
         "num_adults": 1,
     }
+    quote = client.get(
+        "/api/public/booking/rates",
+        params={
+            "category_id": category_a.id,
+            "check_in_date": payload["check_in_date"],
+            "check_out_date": payload["check_out_date"],
+        },
+        headers=_headers(secret),
+    )
+    assert quote.status_code == 200, quote.text
+    payload["quote_token"] = quote.json()["quote_token"]
     created = client.post("/api/public/booking/reservations", json=payload, headers=_headers(secret))
     assert created.status_code == 201, created.text
     body = created.json()

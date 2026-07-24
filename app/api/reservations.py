@@ -147,6 +147,11 @@ def create_new_reservation(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_CREATE)),
 ):
+    if not data.quote_token:
+        raise HTTPException(
+            status_code=400,
+            detail="Se requiere una cotización vigente para crear la reserva.",
+        )
     config = db.get(HotelConfiguration, context.hotel_id)
     if config and not config.subscription_active:
         raise HTTPException(

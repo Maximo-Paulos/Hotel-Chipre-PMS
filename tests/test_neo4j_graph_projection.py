@@ -118,6 +118,18 @@ def test_neo4j_off_create_and_move_reservation_still_write_postgres(graph_api_cl
         room_one_id = room_one.id
         room_two_id = room_two.id
 
+    quote_response = client.get(
+        "/api/bookings/price-quote",
+        params={
+            "category_id": category_id,
+            "check_in_date": "2026-10-01",
+            "check_out_date": "2026-10-03",
+            "num_adults": 1,
+            "num_children": 0,
+        },
+    )
+    assert quote_response.status_code == 200, quote_response.text
+
     create_response = client.post(
         "/api/reservations/",
         json={
@@ -127,6 +139,7 @@ def test_neo4j_off_create_and_move_reservation_still_write_postgres(graph_api_cl
             "check_in_date": "2026-10-01",
             "check_out_date": "2026-10-03",
             "num_adults": 1,
+            "quote_token": quote_response.json()["quote_token"],
         },
     )
     assert create_response.status_code == 201, create_response.text

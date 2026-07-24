@@ -220,8 +220,8 @@
     "hash": "660ca2da4fcce4999873e52155de30ce"
   },
   "app/api/bookings.py": {
-    "mtime": 1784862144874.307,
-    "hash": "f963a2b69fe32ac1c5dfe5ab3dbb341b"
+    "mtime": 1784869651449.342,
+    "hash": "90071ff09cdc9176db8b05d8c89387da"
   },
   "app/api/cash_register.py": {
     "mtime": 1784862144874.358,
@@ -328,8 +328,8 @@
     "hash": "2b41c219ff4a9dae978b385c59fb222f"
   },
   "app/api/public_booking.py": {
-    "mtime": 1784862144875.6887,
-    "hash": "452b75a09c396b19b4288ef12f68c802"
+    "mtime": 1784869147633.084,
+    "hash": "1a6eba8b5cf55202eef0360f835975ee"
   },
   "app/api/rate_calendar.py": {
     "mtime": 1784862144875.751,
@@ -344,8 +344,8 @@
     "hash": "de09f11139cc84b783d8719f34bb7cdb"
   },
   "app/api/reservations.py": {
-    "mtime": 1784863268797.9465,
-    "hash": "d472bfc94ad445c8b8ed3ab2e48b675f"
+    "mtime": 1784868928949.9487,
+    "hash": "4d6ee0aecf3737a4008be7d9b4c24ae7"
   },
   "app/api/room_blocks.py": {
     "mtime": 1784862144875.9834,
@@ -380,8 +380,8 @@
     "hash": "0a0a6be54eaa839c93ab4ac6ccf734a6"
   },
   "app/api/whatsapp_hooks.py": {
-    "mtime": 1784862144876.4365,
-    "hash": "4f13cde57e21a16d8c3fe94e5638641b"
+    "mtime": 1784869213710.627,
+    "hash": "b4351ec65d80e5a95ebc50aabd89d0a0"
   },
   "app/config.py": {
     "mtime": 1784863698873.32,
@@ -660,8 +660,8 @@
     "hash": "1d2eeeb39c6bfbe45755fc5f0b234375"
   },
   "app/schemas/booking.py": {
-    "mtime": 1784862144880.6965,
-    "hash": "6a1aa6df01bead07b5f1c8e0ee2b5ed1"
+    "mtime": 1784868907696.006,
+    "hash": "cbecf4fa25d8d40c20400422eaee6ae3"
   },
   "app/schemas/cash_register.py": {
     "mtime": 1784862144880.7395,
@@ -692,8 +692,8 @@
     "hash": "2e25f8c614607e99b0022d27a549235f"
   },
   "app/schemas/hotel_api_key.py": {
-    "mtime": 1784862144881.1086,
-    "hash": "a743faa242100de1ba1f93b21e52d5ed"
+    "mtime": 1784869012534.1506,
+    "hash": "ef20fe263d182b24fb8c81a55c2787d3"
   },
   "app/schemas/hotel_config.py": {
     "mtime": 1784862144881.1611,
@@ -732,8 +732,8 @@
     "hash": "5d112ff9cb87d3e5aa76ac40643f2a66"
   },
   "app/schemas/reservation.py": {
-    "mtime": 1784862144881.626,
-    "hash": "e3a490b95aee043425ea69726383235b"
+    "mtime": 1784868898957.9507,
+    "hash": "f3f112757ae3676ee43734231e6fa98c"
   },
   "app/schemas/reservation_operations.py": {
     "mtime": 1784862144881.6912,
@@ -760,8 +760,8 @@
     "hash": "48d97f835b4369271279359e7229ff16"
   },
   "app/schemas/whatsapp_hooks.py": {
-    "mtime": 1784862144881.9834,
-    "hash": "1b50d2ebdf02af56d7ecada16a0bbe52"
+    "mtime": 1784869197711.969,
+    "hash": "417c8f732571d7f524d685fd830f8d45"
   },
   "app/scripts/__init__.py": {
     "mtime": 1784862144882.0605,
@@ -1000,8 +1000,8 @@
     "hash": "b96e7bca59e773e1084720993f8573bb"
   },
   "app/services/pricing_service.py": {
-    "mtime": 1784862144886.0916,
-    "hash": "6adf8f531ce695a476a4ad215896a174"
+    "mtime": 1784869271027.5283,
+    "hash": "ceb496a15ee073fc139860ef8365ddd5"
   },
   "app/services/rate_calendar_service.py": {
     "mtime": 1784862144886.1543,
@@ -1020,8 +1020,8 @@
     "hash": "37fa73ea61141c37f6402995c9e0b313"
   },
   "app/services/reservation_service.py": {
-    "mtime": 1784862144886.4434,
-    "hash": "2dc300127cf64bc59534f99df4582719"
+    "mtime": 1784868893915.0425,
+    "hash": "7eeffb7211a076a2a67caf5b68ab4c04"
   },
   "app/services/room_block_service.py": {
     "mtime": 1784862144886.5032,
@@ -1060,8 +1060,8 @@
     "hash": "43c5986666273a59a1692e21567733e3"
   },
   "app/services/whatsapp_booking_service.py": {
-    "mtime": 1784862144887.0059,
-    "hash": "13ab45b82ce4dd5dfbe298599959c5ea"
+    "mtime": 1784869208455.0479,
+    "hash": "b6cb572bfa30703c7b5bdb129f8cfaa4"
   },
   "app/tasks/__init__.py": {
     "mtime": 1784862144887.0674,
@@ -1100,8 +1100,8 @@
     "hash": "70ea4197fe8494bac4fc09ce0bd4dfb2"
   },
   "frontend/playwright.config.ts": {
-    "mtime": 1784864498096.6167,
-    "hash": "cbf540632938bdfcdcaf290cdbeb4301"
+    "mtime": 1784869323936.2585,
+    "hash": "a23a7524f71e0a97e77504ac3aa522a4"
   },
   "frontend/src/App.tsx": {
     "mtime": 1784862144901.0059,
@@ -1192,8 +1192,8 @@
     "hash": "ef6f8c58b53e1909c0844e94c1659942"
   },
   "frontend/src/api/reservations.ts": {
-    "mtime": 1784862144902.2947,
-    "hash": "e5482ff5d570e85db34a7010b8cc1a29"
+    "mtime": 1784868942930.1494,
+    "hash": "44b7aac7fc7c59feb13a1e9dba07e40a"
   },
   "frontend/src/api/roomBlocks.ts": {
     "mtime": 1784862144902.3428,
@@ -1336,8 +1336,8 @@
     "hash": "b9fc3178cad7e0fc8e1c321d2fe82c46"
   },
   "frontend/src/hooks/useReservations.ts": {
-    "mtime": 1784862144904.3555,
-    "hash": "536d0fa7f0af0c48cb6052b354ffb679"
+    "mtime": 1784868950215.603,
+    "hash": "b864bfa483400ab2571e978edd7c10d8"
   },
   "frontend/src/hooks/useRoomBlocks.ts": {
     "mtime": 1784862144904.3977,
@@ -1452,8 +1452,8 @@
     "hash": "9e1820f423d1457b5a99108212112757"
   },
   "frontend/src/views/protected/ReservationsPage.tsx": {
-    "mtime": 1784867952970.6704,
-    "hash": "678012d30a7a7d53a5d5a6ec81fcb2f0"
+    "mtime": 1784869394130.1543,
+    "hash": "2a426c8947da7621f9d299311b7b47af"
   },
   "frontend/src/views/protected/RoomsPage.tsx": {
     "mtime": 1784862144906.3872,
@@ -1676,8 +1676,8 @@
     "hash": "f3ab6343a6eca47b40c1f0874eddb40a"
   },
   "tests/test_api_scaffolding.py": {
-    "mtime": 1784862144929.66,
-    "hash": "7075c8bdd7de02b55c8fc7805caab9bc"
+    "mtime": 1784869059196.1162,
+    "hash": "38209d1449b320455a8cddafbd07d2b3"
   },
   "tests/test_audit_coverage.py": {
     "mtime": 1784862144929.7212,
@@ -1852,8 +1852,8 @@
     "hash": "e0bbfe9f06c5602e8d0498cf269ee861"
   },
   "tests/test_neo4j_graph_projection.py": {
-    "mtime": 1784862144933.4546,
-    "hash": "06716f940abfec99ed47f9e17fb18b58"
+    "mtime": 1784869619103.5137,
+    "hash": "4f444e79e93461e1fb66e9d6d809db28"
   },
   "tests/test_onboarding_flow.py": {
     "mtime": 1784862144933.5251,
@@ -1936,8 +1936,8 @@
     "hash": "77835f34bf07d0d16215c7283a8c4746"
   },
   "tests/test_public_booking_api.py": {
-    "mtime": 1784862144935.9165,
-    "hash": "00444dc2dc4e020a49d1bf9e37ac50d6"
+    "mtime": 1784869065116.7288,
+    "hash": "0ce8357151eb7ad24d29a0646e18fe3c"
   },
   "tests/test_rate_calendar_api.py": {
     "mtime": 1784862144936.1965,
@@ -2012,8 +2012,8 @@
     "hash": "8efd40b48d383f0bbb753b80c6f64bd4"
   },
   "tests/test_soft_delete.py": {
-    "mtime": 1784862144937.5566,
-    "hash": "e12215a3515988ea295ac5b3c890839a"
+    "mtime": 1784869072586.7563,
+    "hash": "73734b2628ff5c937b1166e9b5745bd6"
   },
   "tests/test_stock_service.py": {
     "mtime": 1784862144937.5986,
@@ -2072,8 +2072,8 @@
     "hash": "51e1cf1e3d2da9cd830da614f9ef2189"
   },
   "tests/test_v72_mobility.py": {
-    "mtime": 1784862144938.528,
-    "hash": "b13fe1927a542315ed78600e5a026295"
+    "mtime": 1784869619103.7773,
+    "hash": "0458a234a5928ad03931b5d67633594c"
   },
   "tests/test_v72_movement_groups.py": {
     "mtime": 1784862144938.5684,
@@ -2104,8 +2104,8 @@
     "hash": "a38d1ac2be452bc9d8fe342290f889dd"
   },
   "tests/test_whatsapp_hooks_api.py": {
-    "mtime": 1784862144938.9707,
-    "hash": "a7cfa4273aaf35e4442251d4bd5f5ebc"
+    "mtime": 1784869619103.9976,
+    "hash": "13c075762304f5bf61c5183f56910cf4"
   },
   ".claude/agents/architecture-reviewer.md": {
     "mtime": 1784398283648.0996,
@@ -3360,8 +3360,8 @@
     "hash": "c9ccb071243fec306b1f66559b803713"
   },
   "docs/qa/2026-07-24-pms-e2e-status.md": {
-    "mtime": 1784868205042.5703,
-    "hash": "e6c4c0653a2c9b73b0c1d54040272c27"
+    "mtime": 1784869424226.6846,
+    "hash": "0aae9b7d5a21367a7ca976540be53ec8"
   },
   "frontend/e2e/business-journey.spec.ts": {
     "mtime": 1784867875583.1873,
@@ -3370,5 +3370,13 @@
   "alembic/versions/20260724_allocation_enum_values.py": {
     "mtime": 1784868257342.7349,
     "hash": "44d14b473cc4f7267c08edb2deaa0522"
+  },
+  "app/services/reservation_quote_service.py": {
+    "mtime": 1784869121199.273,
+    "hash": "7da4125dda68573a0951eee0ade48e7b"
+  },
+  "tests/test_reservation_quote_contract.py": {
+    "mtime": 1784869103926.6758,
+    "hash": "2817f36b1c0833c4451cfb60e428482e"
   }
 }

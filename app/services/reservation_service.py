@@ -32,7 +32,8 @@ from app.models.pricing import CategoryPricing
 from app.models.operations import ReservationStatusHistory
 from app.schemas.reservation import ReservationCreate, ReservationUpdate
 from app.services.pricing_policy_service import PricingPolicyError, StayPricingQuote, quote_rate_plan_stay
-from app.services.pricing_service import get_price_for_date
+from app.services.pricing_service import build_pricing_revision, get_price_for_date
+from app.services.quote_token_service import QuoteTokenError, verify_quote_token
 from app.services.read_model_cache import invalidate_hotel_operational_caches
 from app.services.room_block_service import room_has_active_block
 
@@ -220,7 +221,7 @@ def calculate_reservation_pricing(
     nights = (check_out - check_in).days
     if nights <= 0:
         raise ReservationError("Check-out date must be after check-in date")
-    pricing_payment_method = _normalize_pricing_payment_method(pricing_payment_method)
+    pricing_payment_method = normalize_pricing_payment_method(pricing_payment_method)
 
     sellable_product, rate_plan, tax_policy = _resolve_reservation_commercial_context(
         db,
@@ -252,6 +253,7 @@ def calculate_reservation_pricing(
             db,
             hotel_id=hotel_id,
             nights=nights,
+            check_in=check_in,
             quote=quote,
             sellable_product=sellable_product,
             rate_plan=rate_plan,
@@ -360,7 +362,7 @@ def _reservation_channel_indicator(value) -> str | None:
     return normalized or None
 
 
-def _normalize_pricing_payment_method(value: str | None) -> str | None:
+def normalize_pricing_payment_method(value: str | None) -> str | None:
     if value is None:
         return None
     normalized = str(value).strip().lower().replace("-", "_").replace(" ", "_")
@@ -699,6 +701,29 @@ def create_reservation(db: Session, data: ReservationCreate, hotel_id: Optional[
     if company is not None:
         pricing = _apply_corporate_pricing(db, hotel_id=hotel_id, pricing=pricing, company=company, explicit_total=data.total_amount)
     pricing = _apply_custom_deposit_amount(pricing, data.deposit_amount)
+    pricing_revision = build_pricing_revision(
+        db,
+        hotel_id=hotel_id,
+        category_id=data.category_id,
+        check_in=data.check_in_date,
+        check_out=data.check_out_date,
+        sellable_product_id=data.sellable_product_id,
+        rate_plan_id=data.rate_plan_id,
+        tax_policy_id=data.tax_policy_id,
+        pricing_channel_code=data.pricing_channel_code,
+        pricing_payment_method=normalize_pricing_payment_method(data.pricing_payment_method),
+        guest_scope=data.guest_scope,
+        target_currency=data.target_currency,
+        occupancy=data.num_adults + data.num_children,
+    )
+    _validate_quote_token_for_reservation(
+        db,
+        data=data,
+        hotel_id=hotel_id,
+        pricing=pricing,
+        revision=pricing_revision,
+    )
+    pricing.pricing_snapshot = _with_pricing_revision(pricing.pricing_snapshot, pricing_revision)
 
     # Waitlist / overbooking (v72 §9): a wait-listed reservation is created with
     # room_id=None and the denormalized flag set, so availability queries never
@@ -1188,6 +1213,7 @@ def _pricing_result_from_quote(
     *,
     hotel_id: int,
     nights: int,
+    check_in: date,
     quote: StayPricingQuote,
     sellable_product: SellableProduct | None,
     rate_plan: RatePlan,
@@ -1205,6 +1231,13 @@ def _pricing_result_from_quote(
         "pricing_channel_code": pricing_channel_code,
         "guest_scope": guest_scope,
         "tax_breakdown": quote.tax_breakdown,
+        "breakdown": [
+            {
+                "date": (check_in + timedelta(days=offset)).isoformat(),
+                "price": quote.nightly_amount,
+            }
+            for offset in range(nights)
+        ],
     }
     return ReservationPricingResult(
         nights=nights,
@@ -1252,3 +1285,59 @@ def _compute_deposit_amount(db: Session, *, hotel_id: int, gross_total) -> float
     config = db.query(HotelConfiguration).filter(HotelConfiguration.id == hotel_id).first()
     deposit_pct = config.deposit_percentage if config else 30.0
     return round(float(gross_total) * (deposit_pct / 100.0), 2)
+
+
+def _with_pricing_revision(snapshot: str | None, revision: str) -> str:
+    try:
+        decoded = json.loads(snapshot or "{}")
+        if not isinstance(decoded, dict):
+            decoded = {}
+    except json.JSONDecodeError:
+        decoded = {}
+    decoded["pricing_revision"] = revision
+    return json.dumps(decoded, ensure_ascii=True, sort_keys=True, default=str)
+
+
+def _validate_quote_token_for_reservation(
+    db: Session,
+    *,
+    data: ReservationCreate,
+    hotel_id: int,
+    pricing: ReservationPricingResult,
+    revision: str,
+) -> None:
+    if not data.quote_token:
+        return
+    try:
+        payload = verify_quote_token(data.quote_token)
+    except QuoteTokenError as exc:
+        raise ReservationError(str(exc)) from exc
+
+    expected = {
+        "hotel_id": hotel_id,
+        "category_id": data.category_id,
+        "check_in_date": data.check_in_date.isoformat(),
+        "check_out_date": data.check_out_date.isoformat(),
+        "sellable_product_id": data.sellable_product_id,
+        "rate_plan_id": data.rate_plan_id,
+        "tax_policy_id": data.tax_policy_id,
+        "pricing_channel_code": data.pricing_channel_code,
+        "pricing_payment_method": normalize_pricing_payment_method(data.pricing_payment_method),
+        "guest_scope": data.guest_scope,
+        "target_currency": data.target_currency,
+        "occupancy": data.num_adults + data.num_children,
+    }
+    for key, value in expected.items():
+        if payload.get(key) != value:
+            raise ReservationError("La cotización no coincide con los datos de la reserva")
+    if payload.get("pricing_revision") != revision:
+        raise ReservationError("La cotización venció porque cambió la tarifa; recotizá antes de reservar")
+
+    try:
+        quoted_total = Decimal(str(payload.get("total_amount")))
+        quoted_currency = str(payload.get("currency_code") or "").upper()
+        calculated_total = Decimal(str(pricing.total_amount))
+    except (ArithmeticError, TypeError, ValueError) as exc:
+        raise ReservationError("La cotización contiene importes inválidos") from exc
+    if quoted_currency != str(pricing.currency_code or "").upper() or abs(quoted_total - calculated_total) > Decimal("0.01"):
+        raise ReservationError("La cotización no coincide con el total actual")

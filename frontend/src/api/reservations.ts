@@ -213,6 +213,37 @@ export type ReservationPayload = {
   external_id?: string | null;
   pricing_payment_method?: string | null;
   deposit_amount?: number | null;
+  quote_token?: string | null;
+};
+
+export type ReservationQuote = {
+  status: "ok";
+  category_id: number;
+  check_in_date: string;
+  check_out_date: string;
+  nights: number;
+  nightly_rate: number;
+  subtotal_amount: number;
+  tax_amount: number;
+  fee_amount: number;
+  commission_amount: number;
+  net_amount: number;
+  total_amount: number;
+  deposit_amount: number;
+  currency_code: string;
+  pricing_payment_method?: string | null;
+  pricing_revision: string;
+  breakdown: Array<{ date: string; price: number; source?: string }>;
+  quote_token: string;
+  expires_at: string;
+};
+
+export type ReservationQuoteParams = {
+  category_id: number;
+  check_in_date: string;
+  check_out_date: string;
+  pricing_payment_method?: string | null;
+  occupancy?: number;
 };
 
 export type ReservationUpdatePayload = Partial<ReservationPayload> & {
@@ -244,6 +275,17 @@ export const listPendingReservationActions = (limit = 100, session?: SessionLike
 
 export const createReservation = (payload: ReservationPayload, session?: SessionLike) =>
   apiFetch<Reservation>("/api/reservations/", { method: "POST", data: payload, session });
+
+export const getReservationQuote = (params: ReservationQuoteParams, session?: SessionLike) => {
+  const query = new URLSearchParams({
+    category_id: String(params.category_id),
+    check_in_date: params.check_in_date,
+    check_out_date: params.check_out_date
+  });
+  if (params.pricing_payment_method) query.set("pricing_payment_method", params.pricing_payment_method);
+  if (params.occupancy && params.occupancy > 0) query.set("occupancy", String(params.occupancy));
+  return apiFetch<ReservationQuote>(`/api/bookings/price-quote?${query.toString()}`, { session });
+};
 
 export const updateReservation = (id: number, payload: ReservationUpdatePayload, session?: SessionLike) =>
   apiFetch<Reservation>(`/api/reservations/${id}`, { method: "PATCH", data: payload, session });

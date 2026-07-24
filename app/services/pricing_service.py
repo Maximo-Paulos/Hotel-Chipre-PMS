@@ -11,12 +11,17 @@ For per-method prices on a DailyRate row:
 """
 from __future__ import annotations
 
+import hashlib
+import json
 from datetime import date, timedelta
 from typing import Optional
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.models.daily_rate import DailyRate, PricePeriod
+from app.models.hotel_config import HotelConfiguration
+from app.models.commercial import RatePlan, RatePlanPrice, TaxPolicy, TaxRule
 from app.models.pricing import CategoryPricing
 from app.models.room import RoomCategory
 
@@ -336,3 +341,187 @@ def apply_price_period(
 
     db.flush()
     return count
+
+
+def build_pricing_revision(
+    db: Session,
+    *,
+    hotel_id: int,
+    category_id: int,
+    check_in: date,
+    check_out: date,
+    sellable_product_id: int | None = None,
+    rate_plan_id: int | None = None,
+    tax_policy_id: int | None = None,
+    pricing_channel_code: str | None = None,
+    pricing_payment_method: str | None = None,
+    guest_scope: str = "all",
+    target_currency: str | None = None,
+    occupancy: int | None = None,
+) -> str:
+    """Return a deterministic revision for every input that affects a quote.
+
+    This is deliberately derived from PostgreSQL-owned pricing rows instead of
+    a frontend timestamp.  A quote can therefore be rejected after a rate,
+    tax policy, deposit policy, or relevant product rule changes.
+    """
+
+    category = (
+        db.query(RoomCategory)
+        .filter(RoomCategory.id == category_id, RoomCategory.hotel_id == hotel_id)
+        .first()
+    )
+    if category is None:
+        raise ValueError("Category not found for hotel")
+    config = db.query(HotelConfiguration).filter(HotelConfiguration.id == hotel_id).first()
+
+    def _stamp(value):
+        if value is None:
+            return None
+        if hasattr(value, "isoformat"):
+            return value.isoformat()
+        return value
+
+    source: dict[str, object] = {
+        "inputs": {
+            "hotel_id": hotel_id,
+            "category_id": category_id,
+            "check_in": check_in.isoformat(),
+            "check_out": check_out.isoformat(),
+            "sellable_product_id": sellable_product_id,
+            "rate_plan_id": rate_plan_id,
+            "tax_policy_id": tax_policy_id,
+            "pricing_channel_code": pricing_channel_code,
+            "pricing_payment_method": pricing_payment_method,
+            "guest_scope": guest_scope,
+            "target_currency": target_currency,
+            "occupancy": occupancy,
+        },
+        "hotel_policy": {
+            "updated_at": _stamp(getattr(config, "updated_at", None)),
+            "deposit_percentage": getattr(config, "deposit_percentage", None),
+            "default_currency": getattr(config, "default_currency", None),
+        },
+        "category": {
+            "id": category.id,
+            "base_price_per_night": category.base_price_per_night,
+            "max_occupancy": category.max_occupancy,
+            "name": category.name,
+            "code": category.code,
+        },
+    }
+
+    daily_rows = (
+        db.query(DailyRate)
+        .filter(
+            DailyRate.hotel_id == hotel_id,
+            DailyRate.category_id == category_id,
+            DailyRate.date >= check_in,
+            DailyRate.date < check_out,
+        )
+        .order_by(DailyRate.date.asc(), DailyRate.id.asc())
+        .all()
+    )
+    source["daily_rates"] = [
+        {
+            "id": row.id,
+            "date": _stamp(row.date),
+            "price": row.price,
+            "price_cash": row.price_cash,
+            "price_transfer": row.price_transfer,
+            "price_mercadopago": row.price_mercadopago,
+            "price_paypal": row.price_paypal,
+            "price_credit_card": row.price_credit_card,
+            "updated_at": _stamp(row.updated_at),
+        }
+        for row in daily_rows
+    ]
+
+    periods = (
+        db.query(PricePeriod)
+        .filter(
+            PricePeriod.hotel_id == hotel_id,
+            PricePeriod.category_id == category_id,
+            PricePeriod.deleted_at.is_(None),
+            PricePeriod.is_active.is_(True),
+            PricePeriod.start_date < check_out,
+            PricePeriod.end_date >= check_in,
+        )
+        .order_by(PricePeriod.priority.desc(), PricePeriod.id.desc())
+        .all()
+    )
+    source["price_periods"] = [
+        {
+            "id": row.id,
+            "name": row.name,
+            "start_date": _stamp(row.start_date),
+            "end_date": _stamp(row.end_date),
+            "price_per_night": row.price_per_night,
+            "priority": row.priority,
+            "is_active": row.is_active,
+            "updated_at": _stamp(row.created_at),
+        }
+        for row in periods
+    ]
+
+    category_pricing = (
+        db.query(CategoryPricing)
+        .join(RoomCategory, RoomCategory.id == CategoryPricing.category_id)
+        .filter(CategoryPricing.category_id == category_id, RoomCategory.hotel_id == hotel_id)
+        .first()
+    )
+    source["category_pricing"] = {
+        column.name: getattr(category_pricing, column.name)
+        for column in CategoryPricing.__table__.columns
+    } if category_pricing is not None else None
+
+    if rate_plan_id is not None:
+        rate_plan = (
+            db.query(RatePlan)
+            .filter(RatePlan.id == rate_plan_id, RatePlan.hotel_id == hotel_id)
+            .first()
+        )
+        source["rate_plan"] = {
+            column.name: getattr(rate_plan, column.name)
+            for column in RatePlan.__table__.columns
+        } if rate_plan is not None else None
+        rate_plan_prices = (
+            db.query(RatePlanPrice)
+            .filter(
+                RatePlanPrice.hotel_id == hotel_id,
+                RatePlanPrice.rate_plan_id == rate_plan_id,
+                RatePlanPrice.is_active.is_(True),
+                or_(RatePlanPrice.valid_from.is_(None), RatePlanPrice.valid_from < check_out),
+                or_(RatePlanPrice.valid_to.is_(None), RatePlanPrice.valid_to >= check_in),
+            )
+            .order_by(RatePlanPrice.id.asc())
+            .all()
+        )
+        source["rate_plan_prices"] = [
+            {column.name: getattr(row, column.name) for column in RatePlanPrice.__table__.columns}
+            for row in rate_plan_prices
+        ]
+
+    if tax_policy_id is not None:
+        tax_policy = (
+            db.query(TaxPolicy)
+            .filter(TaxPolicy.id == tax_policy_id, TaxPolicy.hotel_id == hotel_id)
+            .first()
+        )
+        source["tax_policy"] = {
+            column.name: getattr(tax_policy, column.name)
+            for column in TaxPolicy.__table__.columns
+        } if tax_policy is not None else None
+        tax_rules = (
+            db.query(TaxRule)
+            .filter(TaxRule.hotel_id == hotel_id, TaxRule.tax_policy_id == tax_policy_id)
+            .order_by(TaxRule.id.asc())
+            .all()
+        )
+        source["tax_rules"] = [
+            {column.name: getattr(row, column.name) for column in TaxRule.__table__.columns}
+            for row in tax_rules
+        ]
+
+    serialized = json.dumps(source, default=str, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()[:32]

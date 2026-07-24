@@ -32,6 +32,9 @@ export default defineConfig({
     {
       name: "chromium",
       testIgnore: "**/responsive-smoke.spec.ts",
+      // The isolated E2E backend uses one SQLite database. Keep mutating
+      // journeys deterministic while read-only page smoke tests run beside it.
+      workers: 1,
       use: { ...devices["Desktop Chrome"] }
     },
     {

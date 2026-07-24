@@ -39,6 +39,7 @@ class ReservationCreate(BaseModel):
     target_currency: Optional[str] = Field(default=None, min_length=3, max_length=3)
     total_amount: Optional[Decimal] = Field(default=None, ge=0)
     deposit_amount: Optional[Decimal] = Field(default=None, ge=0)
+    quote_token: Optional[str] = Field(default=None, min_length=20, max_length=24000)
     mobility_restriction: bool = False
     # Waitlist / overbooking (v72 §9)
     is_wait_listed: bool = False

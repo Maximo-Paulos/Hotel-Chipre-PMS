@@ -7,6 +7,7 @@ import {
   checkOutReservation,
   createReservation,
   getReservation,
+  getReservationQuote,
   getReservationOperationsSummary,
   listReservations,
   listPendingReservationActions,
@@ -15,6 +16,8 @@ import {
   type ReservationActionResolvePayload,
   type ReservationExternalResolutionResponse,
   type Reservation,
+  type ReservationQuote,
+  type ReservationQuoteParams,
   type ReservationFilters,
   type ReservationManualReviewResponse,
   type ReservationOperationsSummary,
@@ -60,6 +63,26 @@ export function useReservation(reservationId?: number) {
     queryFn: () => getReservation(reservationId!, session),
     enabled: Boolean(reservationId) && hasValidSession(session),
     staleTime: 1000 * 15
+  });
+}
+
+export function useReservationQuote(params: ReservationQuoteParams | null) {
+  const { session } = useSession();
+  return useQuery<ReservationQuote>({
+    queryKey: [
+      "reservation-quote",
+      session.hotelId ?? null,
+      params?.category_id ?? null,
+      params?.check_in_date ?? null,
+      params?.check_out_date ?? null,
+      params?.pricing_payment_method ?? null,
+      params?.occupancy ?? null
+    ],
+    queryFn: () => getReservationQuote(params!, session),
+    enabled: Boolean(params) && hasValidSession(session),
+    staleTime: 0,
+    gcTime: 1000 * 60 * 10,
+    retry: 1
   });
 }
 

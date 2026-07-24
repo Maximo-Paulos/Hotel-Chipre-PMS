@@ -118,6 +118,18 @@ def test_reservation_delete_soft_deletes_hides_and_audits(soft_delete_client):
             "num_adults": 1,
         }
 
+    quote = client.get(
+        "/api/bookings/price-quote",
+        params={
+            "category_id": category.id,
+            "check_in_date": payload["check_in_date"],
+            "check_out_date": payload["check_out_date"],
+            "occupancy": 1,
+        },
+    )
+    assert quote.status_code == 200, quote.text
+    payload["quote_token"] = quote.json()["quote_token"]
+
     created = client.post("/api/bookings/", json=payload)
     assert created.status_code == 201, created.text
     reservation_id = created.json()["id"]

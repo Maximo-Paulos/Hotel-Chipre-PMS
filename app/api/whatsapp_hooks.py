@@ -93,6 +93,8 @@ def whatsapp_create_reservation(
     db: Session = Depends(get_db),
     context: PublicAPIContext = Depends(get_public_api_context),
 ):
+    if not payload.quote_token:
+        raise HTTPException(status_code=400, detail="Se requiere una cotización vigente para crear la reserva.")
     try:
         reservation = create_reservation(db, hotel_id=context.hotel_id, payload=payload)
         db.commit()

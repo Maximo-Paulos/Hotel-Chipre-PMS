@@ -101,6 +101,20 @@ def _headers(secret: str) -> dict[str, str]:
     return {"X-API-Key": secret}
 
 
+def _whatsapp_quote(client, *, category_id: int, secret: str) -> dict:
+    response = client.get(
+        "/api/public/whatsapp/prices",
+        params={
+            "category_id": category_id,
+            "check_in_date": "2026-09-01",
+            "check_out_date": "2026-09-02",
+        },
+        headers=_headers(secret),
+    )
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
 def test_whatsapp_availability_uses_api_key_hotel_scope(whatsapp_client_with_db):
     client, db = whatsapp_client_with_db
     category_a, _room_a, _guest_a = _seed_hotel(db, 1)
@@ -131,6 +145,7 @@ def test_whatsapp_create_reservation_sets_channel_code_whatsapp(whatsapp_client_
     client, db = whatsapp_client_with_db
     category, room, guest = _seed_hotel(db, 1)
     secret = _issue_key(db, 1)
+    quote = _whatsapp_quote(client, category_id=category.id, secret=secret)
 
     response = client.post(
         "/api/public/whatsapp/reservations",
@@ -141,6 +156,7 @@ def test_whatsapp_create_reservation_sets_channel_code_whatsapp(whatsapp_client_
             "check_in_date": "2026-09-01",
             "check_out_date": "2026-09-02",
             "num_adults": 1,
+            "quote_token": quote["quote_token"],
         },
         headers=_headers(secret),
     )
@@ -155,6 +171,7 @@ def test_whatsapp_generate_payment_link_sets_sent_via_whatsapp(whatsapp_client_w
     client, db = whatsapp_client_with_db
     category, room, guest = _seed_hotel(db, 1)
     secret = _issue_key(db, 1)
+    quote = _whatsapp_quote(client, category_id=category.id, secret=secret)
     created = client.post(
         "/api/public/whatsapp/reservations",
         json={
@@ -164,6 +181,7 @@ def test_whatsapp_generate_payment_link_sets_sent_via_whatsapp(whatsapp_client_w
             "check_in_date": "2026-09-01",
             "check_out_date": "2026-09-02",
             "num_adults": 1,
+            "quote_token": quote["quote_token"],
         },
         headers=_headers(secret),
     )

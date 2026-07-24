@@ -16,6 +16,7 @@ from app.schemas.whatsapp_hooks import (
 )
 from app.services.payment_link_service import PaymentLinkError, create_link
 from app.services.payment_webhook_service import PaymentWebhookError, ingest_webhook
+from app.services.reservation_quote_service import build_reservation_quote
 from app.services.reservation_service import (
     ReservationError,
     compute_reservation_pricing,
@@ -65,27 +66,18 @@ def price_quote(
     check_out_date: date,
 ) -> dict[str, Any]:
     try:
-        nights, nightly_rate, total_amount, deposit_amount = compute_reservation_pricing(
+        quote = build_reservation_quote(
             db,
-            category_id,
-            check_in_date,
-            check_out_date,
             hotel_id=hotel_id,
+            category_id=category_id,
+            check_in_date=check_in_date,
+            check_out_date=check_out_date,
             pricing_channel_code="whatsapp",
+            occupancy=1,
         )
-    except ReservationError as exc:
+    except (ReservationError, ValueError) as exc:
         raise WhatsAppBookingError(str(exc)) from exc
-    return {
-        "status": "ok",
-        "category_id": category_id,
-        "check_in_date": check_in_date,
-        "check_out_date": check_out_date,
-        "nights": nights,
-        "nightly_rate": nightly_rate,
-        "total_amount": total_amount,
-        "deposit_amount": deposit_amount,
-        "currency": "ARS",
-    }
+    return {**quote, "currency": quote["currency_code"]}
 
 
 def options_with_prices(
@@ -134,6 +126,9 @@ def options_with_prices(
                 "total_amount": quote["total_amount"],
                 "deposit_amount": quote["deposit_amount"],
                 "currency": quote["currency"],
+                "pricing_revision": quote["pricing_revision"],
+                "expires_at": quote["expires_at"],
+                "quote_token": quote["quote_token"],
             }
         )
     return {

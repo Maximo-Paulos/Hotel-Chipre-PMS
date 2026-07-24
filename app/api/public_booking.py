@@ -30,6 +30,7 @@ from app.services.reservation_service import (
     create_reservation,
     find_available_rooms,
 )
+from app.services.reservation_quote_service import build_reservation_quote
 
 
 router = APIRouter(prefix="/api/public/booking", tags=["Public Booking"])
@@ -83,29 +84,21 @@ def public_rate_quote(
     category_id: int = Query(...),
     check_in_date: date = Query(...),
     check_out_date: date = Query(...),
+    occupancy: int = Query(1, gt=0),
     db: Session = Depends(get_db),
     context: PublicAPIContext = Depends(get_public_api_context),
 ):
     try:
-        nights, nightly_rate, total_amount, deposit_amount = compute_reservation_pricing(
+        return build_reservation_quote(
             db,
-            category_id,
-            check_in_date,
-            check_out_date,
             hotel_id=context.hotel_id,
+            category_id=category_id,
+            check_in_date=check_in_date,
+            check_out_date=check_out_date,
             pricing_channel_code="website_direct",
+            occupancy=occupancy,
         )
-        return {
-            "status": "ok",
-            "category_id": category_id,
-            "check_in_date": check_in_date,
-            "check_out_date": check_out_date,
-            "nights": nights,
-            "nightly_rate": nightly_rate,
-            "total_amount": total_amount,
-            "deposit_amount": deposit_amount,
-        }
-    except ReservationError as exc:
+    except (ReservationError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
@@ -115,8 +108,11 @@ def public_create_reservation(
     db: Session = Depends(get_db),
     context: PublicAPIContext = Depends(get_public_api_context),
 ):
+    if not payload.quote_token:
+        raise HTTPException(status_code=400, detail="Se requiere una cotización vigente para crear la reserva.")
     data = payload.model_dump()
     data["source"] = ReservationSourceEnum.DIRECT
+    data["pricing_channel_code"] = "website_direct"
     reservation_payload = ReservationCreate(**data)
     try:
         reservation = create_reservation(db, reservation_payload, hotel_id=context.hotel_id)
