@@ -1100,8 +1100,8 @@
     "hash": "70ea4197fe8494bac4fc09ce0bd4dfb2"
   },
   "frontend/playwright.config.ts": {
-    "mtime": 1784901717972.8909,
-    "hash": "6e27032df76bf33e9ccc0aa42073ab39"
+    "mtime": 1784905987092.9556,
+    "hash": "64785021203df3e7d78dc6e86b0a01b3"
   },
   "frontend/src/App.tsx": {
     "mtime": 1784862144901.0059,
@@ -3264,8 +3264,8 @@
     "hash": "8e2277e0fc399686b86f61f02ef68f93"
   },
   ".graphify/GRAPH_REPORT.md": {
-    "mtime": 1784905223778.1438,
-    "hash": "c494991b4517ea403af5c5e28726dc37"
+    "mtime": 1784905449277.105,
+    "hash": "8e81ab4390970dc9345c30aee5828b8f"
   },
   "scripts/agent_ops/manage_qa_baseline_lease.py": {
     "mtime": 1784862144921.6997,
@@ -3538,5 +3538,9 @@
   "frontend/e2e/reservation-lifecycle.spec.ts": {
     "mtime": 1784905067944.294,
     "hash": "2bf0ac0f6a25bcf01b274e739ef3812f"
+  },
+  "frontend/e2e/analytics-success.spec.ts": {
+    "mtime": 1784905959850.3464,
+    "hash": "7a2b372bb8462662cb848825578ab686"
   }
 }

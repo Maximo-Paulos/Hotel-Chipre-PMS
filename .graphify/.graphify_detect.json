@@ -294,6 +294,7 @@
       "app/tasks/ota_tasks.py",
       "app/tasks/report_tasks.py",
       "frontend/e2e/analytics-error-state.spec.ts",
+      "frontend/e2e/analytics-success.spec.ts",
       "frontend/e2e/auth-onboarding-journey.spec.ts",
       "frontend/e2e/business-journey.spec.ts",
       "frontend/e2e/master_admin.spec.ts",
@@ -894,10 +895,10 @@
     ],
     "video": []
   },
-  "total_files": 885,
-  "total_words": 531708,
+  "total_files": 886,
+  "total_words": 531760,
   "needs_graph": true,
-  "warning": "Large corpus: 885 files · ~531,708 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
+  "warning": "Large corpus: 886 files · ~531,760 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
   "skipped_sensitive": [
     "alembic/versions/20260408_security_tokens.py",
     "app/adapters/memory_tokens.py",
@@ -911,7 +912,7 @@
   "graphifyignore_patterns": 60,
   "git": {
     "source_owner": "git",
-    "source_hash": "03f4d7071fcf9f6449ab11bf97d0f98ec8b995f2",
+    "source_hash": "f66e22cdbac7ef64e31249e195fd825a10a9649a",
     "branches": [
       "codex/feature/agent-ops-knowledge",
       "codex/feature/pms-e2e-scale-hardening",
@@ -928,9 +929,9 @@
     "source": "default-auto",
     "root": ".",
     "git_root": ".",
-    "head": "03f4d7071fcf9f6449ab11bf97d0f98ec8b995f2",
-    "candidate_count": 978,
-    "included_count": 885,
+    "head": "f66e22cdbac7ef64e31249e195fd825a10a9649a",
+    "candidate_count": 979,
+    "included_count": 886,
     "excluded_untracked_count": 0,
     "excluded_ignored_count": 30678,
     "excluded_sensitive_count": 8,

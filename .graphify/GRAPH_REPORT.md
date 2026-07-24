@@ -1,24 +1,24 @@
 # Graph Report - .  (2026-07-24)
 
 ## Corpus Check
-- Large corpus: 885 files · ~531,708 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.
+- Large corpus: 886 files · ~531,760 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.
 
 ## Summary
-- 7052 nodes · 23304 edges · 311 communities detected
+- 7056 nodes · 23311 edges · 311 communities detected
 - Extraction: 64% EXTRACTED · 36% INFERRED · 0% AMBIGUOUS · INFERRED: 8431 edges (avg confidence: 0.5)
 - Token cost: 0 input · 0 output
-- Edge kinds: uses: 8431 · contains: 4408 · calls: 3358 · MODIFIES: 1870 · ON_BRANCH: 1328 · rationale_for: 1132 · imports: 744 · imports_from: 585 · method: 577 · inherits: 533 · PARENT_OF: 338
+- Edge kinds: uses: 8431 · contains: 4409 · calls: 3358 · MODIFIES: 1872 · ON_BRANCH: 1330 · rationale_for: 1132 · imports: 744 · imports_from: 585 · method: 577 · inherits: 533 · PARENT_OF: 340
 
 
 ## Input Scope
 - Requested: auto
 - Resolved: committed (source: default-auto)
-- Included files: 885 · Candidates: 978
+- Included files: 886 · Candidates: 979
 - Excluded: 0 untracked · 30678 ignored · 8 sensitive · 0 missing committed
 - Recommendation: Use --scope all or graphify.yaml inputs.corpus for a knowledge-base folder.
 
 ## Graph Freshness
-- Built from Git commit: `03f4d70`
+- Built from Git commit: `f66e22c`
 - Compare this hash to `git rev-parse HEAD` before trusting freshness-sensitive graph output.
 ## God Nodes (most connected - your core abstractions)
 1. `ReservationStatusEnum` - 552 edges
@@ -128,19 +128,19 @@ Nodes (47): acceptInvitation(), AuthResponse, AuthUser, _build_auth_response(), 
 
 ### Community 20 - "Community 20"
 Cohesion: 0.04
-Nodes (20): 307e650 Add replayable operational warehouse projections, 7e2edb6 Merge Analytics R1.0, b5bc141 Harden core tenant composite relationships, df173d1 Implement Analytics R1.0 dashboard, chat IA, and support, AnalyticsComparisonStateRead, AnalyticsComparisonWindowRead, AnalyticsMetricCardRead, AnalyticsResponseEnvelopeRead (+12 more)
+Nodes (48): 03f4d70 Document cloud date and quote regressions, 05d296d Fix cash freshness after reservation payments, 0b2de37 Refresh Graphify for current tenant hardening, 1030f87 Refresh Graphify after serialized WebKit coverage, 168f4c7 Add serialized WebKit business journey, 1bfff5d Make inventory movements guided and permissioned, 275058e Add guarded cash refund flow, 34baf8f Refresh Graphify after quote submission hardening (+40 more)
 
 ### Community 21 - "Community 21"
+Cohesion: 0.04
+Nodes (20): 307e650 Add replayable operational warehouse projections, 7e2edb6 Merge Analytics R1.0, b5bc141 Harden core tenant composite relationships, df173d1 Implement Analytics R1.0 dashboard, chat IA, and support, AnalyticsComparisonStateRead, AnalyticsComparisonWindowRead, AnalyticsMetricCardRead, AnalyticsResponseEnvelopeRead (+12 more)
+
+### Community 22 - "Community 22"
 Cohesion: 0.07
 Nodes (45): _load_manifest(), main(), ManifestContinuityError, _provider_subject(), Safe error that never prints provider values., Allow only a newer observation timestamp between provider snapshots., _timestamp(), verify_manifest_continuity() (+37 more)
 
-### Community 22 - "Community 22"
+### Community 23 - "Community 23"
 Cohesion: 0.09
 Nodes (36): changed_blob_paths(), finalize_gate(), full_sha(), GitHubClient, main(), positive_integer(), prepare_gate(), PreparedEvidence (+28 more)
-
-### Community 23 - "Community 23"
-Cohesion: 0.04
-Nodes (46): 03f4d70 Document cloud date and quote regressions, 05d296d Fix cash freshness after reservation payments, 0b2de37 Refresh Graphify for current tenant hardening, 1030f87 Refresh Graphify after serialized WebKit coverage, 168f4c7 Add serialized WebKit business journey, 1bfff5d Make inventory movements guided and permissioned, 275058e Add guarded cash refund flow, 34baf8f Refresh Graphify after quote submission hardening (+38 more)
 
 ### Community 24 - "Community 24"
 Cohesion: 0.10
