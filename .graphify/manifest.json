@@ -272,8 +272,8 @@
     "hash": "291e4af2ecf4067e9343f30fdeb1840a"
   },
   "app/api/guests.py": {
-    "mtime": 1784862144874.9875,
-    "hash": "758293259d84c29dfdca922f105ac207"
+    "mtime": 1784888108493.0024,
+    "hash": "8f0d62a9ded11b080940a205f4d81fb2"
   },
   "app/api/health.py": {
     "mtime": 1784877814015.8738,
@@ -428,8 +428,8 @@
     "hash": "bd135b0246c882e54594198526aa0cd9"
   },
   "app/main.py": {
-    "mtime": 1784877373271.0874,
-    "hash": "fbbab969029611b4b9e700f71f6cf952"
+    "mtime": 1784888530821.8923,
+    "hash": "dc97bdf9975eecf7fc68da8b08241620"
   },
   "app/master_admin/__init__.py": {
     "mtime": 1784862144877.3862,
@@ -1564,7 +1564,7 @@
     "hash": "3557b53c12e730d5b02d07e2fde1f38f"
   },
   "scripts/serve_e2e_backend.py": {
-    "mtime": 1784862144926.8066,
+    "mtime": 1784888009402.0476,
     "hash": "4820fe44041a3a042fe5ba10047f2757"
   },
   "tests/__init__.py": {
@@ -1676,8 +1676,8 @@
     "hash": "f3ab6343a6eca47b40c1f0874eddb40a"
   },
   "tests/test_api_scaffolding.py": {
-    "mtime": 1784869059196.1162,
-    "hash": "38209d1449b320455a8cddafbd07d2b3"
+    "mtime": 1784888257117.986,
+    "hash": "07a4bcff100d4fd091aaad16d32ace5e"
   },
   "tests/test_audit_coverage.py": {
     "mtime": 1784862144929.7212,
@@ -3264,8 +3264,8 @@
     "hash": "8e2277e0fc399686b86f61f02ef68f93"
   },
   ".graphify/GRAPH_REPORT.md": {
-    "mtime": 1784886390281.2432,
-    "hash": "6dc7405bf0d1b6ddde08e682489b2737"
+    "mtime": 1784886988072.651,
+    "hash": "480875aee41331cc88927285098b19b8"
   },
   "scripts/agent_ops/manage_qa_baseline_lease.py": {
     "mtime": 1784862144921.6997,
@@ -3360,8 +3360,8 @@
     "hash": "cc3b4c09ac92a7d389d9ad275a799aa0"
   },
   "docs/qa/2026-07-24-pms-e2e-status.md": {
-    "mtime": 1784886928638.1917,
-    "hash": "29de89c3eeead606ed54fa2390d306a0"
+    "mtime": 1784888333702.5913,
+    "hash": "0c9adea4f6e877387a08f7d9a231c904"
   },
   "frontend/e2e/business-journey.spec.ts": {
     "mtime": 1784886738938.8657,
