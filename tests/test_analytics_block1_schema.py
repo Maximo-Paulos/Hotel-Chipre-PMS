@@ -200,7 +200,7 @@ def test_companies_schema():
         constraint.name
         for constraint in table.constraints
         if isinstance(constraint, UniqueConstraint)
-    } == {"uq_companies_hotel_display_name"}
+    } == {"uq_companies_hotel_display_name", "uq_companies_hotel_id_id"}
     assert {idx.name for idx in table.indexes} == {
         "ix_companies_hotel_id",
         "ix_companies_hotel_active",

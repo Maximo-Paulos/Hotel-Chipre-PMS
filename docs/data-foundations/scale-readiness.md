@@ -13,7 +13,7 @@ provider-bound evidence.
 
 | Area | Local evidence | Status |
 | --- | --- | --- |
-| Tenant isolation | Hotel-scoped service queries, RLS migration, multi-hotel regression tests | ✅ contract-covered |
+| Tenant isolation | Hotel-scoped service queries, RLS migration, tenant-leading `(hotel_id, id)` keys/FKs for core reservation/payment/cash/stock/analytics paths, multi-hotel regression tests | ✅ contract-covered; provider migration unverified |
 | Read cache | Hotel-prefixed availability/analytics keys, invalidation tests, PostgreSQL fallback | ✅ contract-covered |
 | Critical concurrency | Redis/Valkey lease for cash close and persisted allocation, PostgreSQL row locks, production fail-closed config | ✅ contract-covered |
 | Analytics provenance | All analytics envelopes expose `data_as_of`, `source_lag_seconds`, and `data_source`; UI renders them | ✅ contract-covered |

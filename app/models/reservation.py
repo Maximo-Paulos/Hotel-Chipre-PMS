@@ -7,7 +7,7 @@ Also supports: cancelled (from any pre-checkin state)
 import enum
 from sqlalchemy import (
     Column, Integer, Float, Numeric, String, ForeignKey, Enum, Text, DateTime, Date, Boolean,
-    CheckConstraint, UniqueConstraint, Index, Table
+    CheckConstraint, ForeignKeyConstraint, UniqueConstraint, Index, Table
 )
 from sqlalchemy.orm import relationship, validates
 from datetime import datetime, timezone
@@ -182,13 +182,13 @@ class Reservation(Base):
     hotel_id = Column(Integer, ForeignKey("hotel_configuration.id"), nullable=False)
 
     # Guest and Room linkage
-    guest_id = Column(Integer, ForeignKey("guests.id"), nullable=False)
-    room_id = Column(Integer, ForeignKey("rooms.id"), nullable=True)  # Nullable until assigned
-    category_id = Column(Integer, ForeignKey("room_categories.id"), nullable=False)
-    company_id = Column(Integer, ForeignKey("companies.id"), nullable=True)
-    sellable_product_id = Column(Integer, ForeignKey("sellable_products.id"), nullable=True)
-    rate_plan_id = Column(Integer, ForeignKey("rate_plans.id"), nullable=True)
-    tax_policy_id = Column(Integer, ForeignKey("tax_policies.id"), nullable=True)
+    guest_id = Column(Integer, nullable=False)
+    room_id = Column(Integer, nullable=True)  # Nullable until assigned
+    category_id = Column(Integer, nullable=False)
+    company_id = Column(Integer, nullable=True)
+    sellable_product_id = Column(Integer, nullable=True)
+    rate_plan_id = Column(Integer, nullable=True)
+    tax_policy_id = Column(Integer, nullable=True)
 
     # Dates
     check_in_date = Column(Date, nullable=False)
@@ -365,6 +365,34 @@ class Reservation(Base):
         ),
         # Composite FK target for payments/payment_links (hotel_id, reservation_id)
         UniqueConstraint("hotel_id", "id", name="uq_reservation_hotel_id_id"),
+        ForeignKeyConstraint(
+            ["hotel_id", "guest_id"], ["guests.hotel_id", "guests.id"],
+            name="fk_reservations_hotel_guest",
+        ),
+        ForeignKeyConstraint(
+            ["hotel_id", "room_id"], ["rooms.hotel_id", "rooms.id"],
+            name="fk_reservations_hotel_room",
+        ),
+        ForeignKeyConstraint(
+            ["hotel_id", "category_id"], ["room_categories.hotel_id", "room_categories.id"],
+            name="fk_reservations_hotel_category",
+        ),
+        ForeignKeyConstraint(
+            ["hotel_id", "company_id"], ["companies.hotel_id", "companies.id"],
+            name="fk_reservations_hotel_company",
+        ),
+        ForeignKeyConstraint(
+            ["hotel_id", "sellable_product_id"], ["sellable_products.hotel_id", "sellable_products.id"],
+            name="fk_reservations_hotel_sellable_product",
+        ),
+        ForeignKeyConstraint(
+            ["hotel_id", "rate_plan_id"], ["rate_plans.hotel_id", "rate_plans.id"],
+            name="fk_reservations_hotel_rate_plan",
+        ),
+        ForeignKeyConstraint(
+            ["hotel_id", "tax_policy_id"], ["tax_policies.hotel_id", "tax_policies.id"],
+            name="fk_reservations_hotel_tax_policy",
+        ),
     )
 
     @property

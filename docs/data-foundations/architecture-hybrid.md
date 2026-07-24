@@ -258,6 +258,14 @@ This ensures emails/webhooks are never lost even if the app crashes after the DB
 
 All domain tables have `hotel_id NOT NULL` FK to `hotel_configuration.id`.
 
+Core cross-entity links also use tenant-leading composite keys such as
+`(hotel_id, reservation_id) -> (hotel_id, id)`. The migration
+`20260724_core_tenant_composite_fks` covers reservations, guests, rooms,
+commercial pricing, payments, cash, stock, and derived facts. This prevents a
+valid global row id from being reused across hotels as a relationship; the
+migration is PostgreSQL-only and must be validated against the isolated
+Supabase preview before release.
+
 Isolation is enforced in two layers:
 
 1. **Application scoping:** every authenticated request resolves an active

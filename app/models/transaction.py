@@ -5,7 +5,7 @@ Supports: Efectivo (Cash), MercadoPago, PayPal, Credit/Debit Card.
 import enum
 from sqlalchemy import (
     Column, Integer, Float, Numeric, String, ForeignKey, Enum, Text, DateTime,
-    CheckConstraint, Index
+    CheckConstraint, ForeignKeyConstraint, Index, UniqueConstraint
 )
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
@@ -52,7 +52,7 @@ class Transaction(Base):
         nullable=False,
         index=True,
     )
-    reservation_id = Column(Integer, ForeignKey("reservations.id", ondelete="CASCADE"), nullable=False)
+    reservation_id = Column(Integer, nullable=False)
 
     # Financial details
     amount = Column(Numeric(12, 2), nullable=False)
@@ -126,6 +126,13 @@ class Transaction(Base):
             unique=True,
             sqlite_where=idempotency_key.isnot(None),
             postgresql_where=idempotency_key.isnot(None),
+        ),
+        UniqueConstraint("hotel_id", "id", name="uq_transaction_hotel_id_id"),
+        ForeignKeyConstraint(
+            ["hotel_id", "reservation_id"],
+            ["reservations.hotel_id", "reservations.id"],
+            name="fk_transactions_hotel_reservation",
+            ondelete="CASCADE",
         ),
     )
 

@@ -37,7 +37,7 @@ class PaymentProof(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     hotel_id = Column(Integer, ForeignKey("hotel_configuration.id", ondelete="CASCADE"), nullable=False, index=True)
     reservation_id = Column(Integer, nullable=False, index=True)
-    transaction_id = Column(Integer, ForeignKey("transactions.id", ondelete="SET NULL"), nullable=True)
+    transaction_id = Column(Integer, nullable=True)
     amount = Column(Numeric(12, 2), nullable=False)
     currency = Column(String(3), nullable=False, default="ARS")
     payment_method = Column(String(30), nullable=False, default="bank_transfer")
@@ -73,6 +73,12 @@ class PaymentProof(Base):
             ondelete="CASCADE",
         ),
         UniqueConstraint("transaction_id"),
+        UniqueConstraint("hotel_id", "id", name="uq_payment_proofs_hotel_id_id"),
+        ForeignKeyConstraint(
+            ["hotel_id", "transaction_id"],
+            ["transactions.hotel_id", "transactions.id"],
+            name="fk_payment_proofs_hotel_transaction",
+        ),
         UniqueConstraint("hotel_id", "sha256_hex", name="uq_payment_proofs_hotel_sha256"),
         Index("ix_payment_proofs_hotel_reservation_status", "hotel_id", "reservation_id", "status"),
     )
@@ -85,13 +91,7 @@ class PaymentProofBlob(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     hotel_id = Column(Integer, ForeignKey("hotel_configuration.id", ondelete="CASCADE"), nullable=False, index=True)
-    proof_id = Column(
-        Integer,
-        ForeignKey("payment_proofs.id", ondelete="CASCADE"),
-        nullable=False,
-        unique=True,
-        index=True,
-    )
+    proof_id = Column(Integer, nullable=False, unique=True, index=True)
     content = Column(LargeBinary, nullable=False)
     content_type = Column(String(80), nullable=False)
     sha256_hex = Column(String(64), nullable=False)
@@ -102,5 +102,12 @@ class PaymentProofBlob(Base):
     __table_args__ = (
         CheckConstraint("length(content) > 0", name="ck_payment_proof_blobs_content_nonempty"),
         CheckConstraint("length(sha256_hex) = 64", name="ck_payment_proof_blobs_sha256_length"),
+        UniqueConstraint("hotel_id", "id", name="uq_payment_proof_blobs_hotel_id_id"),
+        ForeignKeyConstraint(
+            ["hotel_id", "proof_id"],
+            ["payment_proofs.hotel_id", "payment_proofs.id"],
+            name="fk_payment_proof_blobs_hotel_proof",
+            ondelete="CASCADE",
+        ),
         Index("ix_payment_proof_blobs_hotel_proof", "hotel_id", "proof_id"),
     )

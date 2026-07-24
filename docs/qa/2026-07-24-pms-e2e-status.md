@@ -17,13 +17,13 @@ repositorio.
 | Frontend lint/typecheck/build | Pasan. Vite informa un bundle principal de ~778 kB minificado; queda como deuda de performance. |
 | E2E desktop | 20/20 pasan en Chromium, incluyendo login, logout, admin, calendario de tarifas, configuración del hotel, el journey de negocio y páginas V72. La ejecución fresh completa queda en 22/22 al sumar móvil. |
 | E2E mobile | 2/2 pasan con Chromium emulando iPhone y verificando 375×812, 390×844 y 430×932: sin overflow horizontal y navegación móvil a Reservas. |
-| Backend completo | 1206 pasan, 17 se omiten, 12 quedan xfail y 1 xpass en Python 3.12 limpio. El runner E2E rechaza explícitamente Python menor a 3.10. |
+| Backend completo | 1209 pasan, 17 se omiten, 12 quedan xfail y 1 xpass en Python 3.12 limpio. El runner E2E rechaza explícitamente Python menor a 3.10. |
 | Migración virgen | `alembic upgrade head` pasa sobre SQLite temporal hasta `20260724_payment_proof_blobs`, incluyendo blobs privados, rotación y custodia. |
 | Backend focalizado | 56/56 pasan: motor de asignación, operaciones de reservas, check-in, check-out y seguridad del flujo. |
 | Analítica y trazabilidad | 27/27 pasan en contratos/API; cada envelope expone `data_as_of`, `source_lag_seconds` y `data_source`, y la UI lo muestra. |
 | Aislamiento/cache/concurrencia | 56/56 pasan en aislamiento multi-hotel, cache con fallback PG y locks Redis/Valkey; caja y allocation quedaron protegidos. |
 | Health de infraestructura | `/health/datastores` diferencia cache Redis de locks distribuidos y reporta si el lock es requerido. |
-| Realtime multi-tab/warehouse | Contrato local de revisiones Redis, SSE autenticado, `BroadcastChannel` tenant-scoped, dimensiones y hechos ClickHouse PII-free de reservas/pagos/caja/stock, read model materializado idempotente y reconciliación de conteo+importe. |
+| Realtime multi-tab/warehouse/tenant keys | Contrato local de revisiones Redis, SSE autenticado, `BroadcastChannel` tenant-scoped, dimensiones y hechos ClickHouse PII-free de reservas/pagos/caja/stock, read model materializado idempotente, reconciliación de conteo+importe y FKs compuestas `(hotel_id, id)` en los vínculos core. |
 | Runtime IaC | `render.yaml` declara autoscaling 3–50 (CPU 60%, memoria 70%), Valkey persistente privado, worker/beat separados y migración Alembic pre-deploy; provider sync/telemetría no verificados. |
 | Load runner | `scripts/scale/staged_http_load.py` validado por tests y help; no ejecutado contra provider por falta de preview aislado. |
 | Graphify | `portable-check` pasa después de actualizar y normalizar el grafo; `check-update` reporta pendiente semántico porque no se generaron descripciones/labels LLM en este run. |

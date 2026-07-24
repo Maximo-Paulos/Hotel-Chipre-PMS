@@ -9,6 +9,7 @@ from sqlalchemy import (
     Column,
     DateTime,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     Numeric,
@@ -38,6 +39,7 @@ class StockItem(Base):
 
     __table_args__ = (
         UniqueConstraint("hotel_id", "name", name="uq_stock_items_hotel_name"),
+        UniqueConstraint("hotel_id", "id", name="uq_stock_items_hotel_id_id"),
         Index("ix_stock_items_hotel_id", "hotel_id"),
     )
 
@@ -55,6 +57,7 @@ class StockLocation(Base):
 
     __table_args__ = (
         UniqueConstraint("hotel_id", "name", name="uq_stock_locations_hotel_name"),
+        UniqueConstraint("hotel_id", "id", name="uq_stock_locations_hotel_id_id"),
         Index("ix_stock_locations_hotel_id", "hotel_id"),
     )
 
@@ -64,12 +67,12 @@ class StockMovement(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     hotel_id = Column(Integer, ForeignKey("hotel_configuration.id", name="fk_stock_movements_hotel_id"), nullable=False)
-    item_id = Column(Integer, ForeignKey("stock_items.id", ondelete="CASCADE", name="fk_stock_movements_item_id"), nullable=False)
-    location_id = Column(Integer, ForeignKey("stock_locations.id", ondelete="SET NULL", name="fk_stock_movements_location_id"), nullable=True)
+    item_id = Column(Integer, nullable=False)
+    location_id = Column(Integer, nullable=True)
     movement_type = Column(String(20), nullable=False)
     quantity = Column(Numeric(12, 2), nullable=False)
     reason = Column(Text, nullable=True)
-    reservation_id = Column(Integer, ForeignKey("reservations.id", ondelete="SET NULL", name="fk_stock_movements_reservation_id"), nullable=True)
+    reservation_id = Column(Integer, nullable=True)
     created_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL", name="fk_stock_movements_created_by_user_id"), nullable=True)
     created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
 
@@ -79,5 +82,17 @@ class StockMovement(Base):
     __table_args__ = (
         CheckConstraint("movement_type IN ('in', 'out', 'adjustment')", name="ck_stock_movements_type_valid"),
         CheckConstraint("quantity > 0", name="ck_stock_movements_quantity_positive"),
+        ForeignKeyConstraint(
+            ["hotel_id", "item_id"], ["stock_items.hotel_id", "stock_items.id"],
+            name="fk_stock_movements_hotel_item", ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["hotel_id", "location_id"], ["stock_locations.hotel_id", "stock_locations.id"],
+            name="fk_stock_movements_hotel_location",
+        ),
+        ForeignKeyConstraint(
+            ["hotel_id", "reservation_id"], ["reservations.hotel_id", "reservations.id"],
+            name="fk_stock_movements_hotel_reservation",
+        ),
         Index("ix_stock_movements_hotel_id", "hotel_id"),
     )

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-24T07:57:29.617Z",
+  "generatedAt": "2026-07-24T08:18:49.536Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -14404,6 +14404,30 @@
       "fileCount": 1,
       "files": [
         "alembic/versions/20260724_cash_handoff_rotation.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:versions_20260724_core_tenant_composite_fks_upgrade",
+      "name": "upgrade",
+      "entryPoint": "versions_20260724_core_tenant_composite_fks_upgrade",
+      "entryPointId": "versions_20260724_core_tenant_composite_fks_upgrade",
+      "path": [
+        "versions_20260724_core_tenant_composite_fks_upgrade",
+        "versions_20260724_core_tenant_composite_fks_has_fk",
+        "versions_20260724_core_tenant_composite_fks_has_unique"
+      ],
+      "qualifiedPath": [
+        "versions_20260724_core_tenant_composite_fks_upgrade",
+        "versions_20260724_core_tenant_composite_fks_has_fk",
+        "versions_20260724_core_tenant_composite_fks_has_unique"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20260724_core_tenant_composite_fks.py"
       ],
       "criticality": 0.16,
       "warnings": []

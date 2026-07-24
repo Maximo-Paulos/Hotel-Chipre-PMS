@@ -3,7 +3,7 @@ from __future__ import annotations
 import enum
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, CHAR, Column, Date, DateTime, Enum, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, CHAR, Column, Date, DateTime, Enum, ForeignKey, ForeignKeyConstraint, Index, Integer, Numeric, String, Text, UniqueConstraint
 
 from app.database import Base
 from app.models.reservation import (
@@ -218,11 +218,11 @@ class FactReservationDaily(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     hotel_id = Column(Integer, ForeignKey("hotel_configuration.id"), nullable=False)
-    reservation_id = Column(Integer, ForeignKey("reservations.id"), nullable=False)
+    reservation_id = Column(Integer, nullable=False)
     stay_date = Column(Date, nullable=False)
-    room_id = Column(Integer, ForeignKey("rooms.id"), nullable=True)
-    category_id = Column(Integer, ForeignKey("room_categories.id"), nullable=False)
-    company_id = Column(Integer, ForeignKey("companies.id"), nullable=True)
+    room_id = Column(Integer, nullable=True)
+    category_id = Column(Integer, nullable=False)
+    company_id = Column(Integer, nullable=True)
     channel_code = Column(
         Enum(
             ReservationChannelCodeEnum,
@@ -291,6 +291,22 @@ class FactReservationDaily(Base):
 
     __table_args__ = (
         UniqueConstraint("hotel_id", "reservation_id", "stay_date", name="uq_fact_reservation_daily_hotel_reservation_date"),
+        ForeignKeyConstraint(
+            ["hotel_id", "reservation_id"], ["reservations.hotel_id", "reservations.id"],
+            name="fk_fact_reservation_daily_hotel_reservation",
+        ),
+        ForeignKeyConstraint(
+            ["hotel_id", "room_id"], ["rooms.hotel_id", "rooms.id"],
+            name="fk_fact_reservation_daily_hotel_room",
+        ),
+        ForeignKeyConstraint(
+            ["hotel_id", "category_id"], ["room_categories.hotel_id", "room_categories.id"],
+            name="fk_fact_reservation_daily_hotel_category",
+        ),
+        ForeignKeyConstraint(
+            ["hotel_id", "company_id"], ["companies.hotel_id", "companies.id"],
+            name="fk_fact_reservation_daily_hotel_company",
+        ),
         Index("ix_fact_reservation_daily_hotel_date", "hotel_id", "stay_date"),
         Index("ix_fact_reservation_daily_hotel_reservation", "hotel_id", "reservation_id"),
         Index("ix_fact_reservation_daily_hotel_category_date", "hotel_id", "category_id", "stay_date"),
@@ -307,9 +323,9 @@ class FactRoomOccupancyDaily(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     hotel_id = Column(Integer, ForeignKey("hotel_configuration.id"), nullable=False)
-    room_id = Column(Integer, ForeignKey("rooms.id"), nullable=False)
+    room_id = Column(Integer, nullable=False)
     stay_date = Column(Date, nullable=False)
-    category_id = Column(Integer, ForeignKey("room_categories.id"), nullable=False)
+    category_id = Column(Integer, nullable=False)
     status_at_night = Column(
         Enum(
             FactRoomOccupancyStatusAtNightEnum,
@@ -321,7 +337,7 @@ class FactRoomOccupancyDaily(Base):
     )
     is_sellable_night = Column(Boolean, nullable=False)
     is_occupied = Column(Boolean, nullable=False)
-    reservation_id = Column(Integer, ForeignKey("reservations.id"), nullable=True)
+    reservation_id = Column(Integer, nullable=True)
     revenue_net_ars = Column(Numeric(12, 2), nullable=False)
     revenue_net_usd = Column(Numeric(12, 2), nullable=False)
     margin_operating_ars = Column(Numeric(12, 2), nullable=False)
@@ -331,6 +347,18 @@ class FactRoomOccupancyDaily(Base):
 
     __table_args__ = (
         UniqueConstraint("hotel_id", "room_id", "stay_date", name="uq_fact_room_occupancy_daily_hotel_room_date"),
+        ForeignKeyConstraint(
+            ["hotel_id", "room_id"], ["rooms.hotel_id", "rooms.id"],
+            name="fk_fact_room_occupancy_daily_hotel_room",
+        ),
+        ForeignKeyConstraint(
+            ["hotel_id", "category_id"], ["room_categories.hotel_id", "room_categories.id"],
+            name="fk_fact_room_occupancy_daily_hotel_category",
+        ),
+        ForeignKeyConstraint(
+            ["hotel_id", "reservation_id"], ["reservations.hotel_id", "reservations.id"],
+            name="fk_fact_room_occupancy_daily_hotel_reservation",
+        ),
         Index("ix_fact_room_occupancy_daily_hotel_date", "hotel_id", "stay_date"),
         Index("ix_fact_room_occupancy_daily_hotel_room_date", "hotel_id", "room_id", "stay_date"),
         Index("ix_fact_room_occupancy_daily_hotel_category_date", "hotel_id", "category_id", "stay_date"),

@@ -42,6 +42,7 @@ class Company(Base):
 
     __table_args__ = (
         UniqueConstraint("hotel_id", "display_name", name="uq_companies_hotel_display_name"),
+        UniqueConstraint("hotel_id", "id", name="uq_companies_hotel_id_id"),
         Index("ix_companies_hotel_id", "hotel_id"),
         Index("ix_companies_hotel_active", "hotel_id", "is_active"),
         Index(

@@ -129,9 +129,7 @@ class Payment(Base):
 
     external_payment_id = Column(String(200), nullable=True, index=True)
     external_status = Column(String(100), nullable=True)
-    payment_link_id = Column(
-        Integer, ForeignKey("payment_links.id", ondelete="SET NULL"), nullable=True
-    )
+    payment_link_id = Column(Integer, nullable=True)
 
     description = Column(Text, nullable=True)
     notes = Column(Text, nullable=True)
@@ -159,6 +157,11 @@ class Payment(Base):
             ondelete="CASCADE",
         ),
         UniqueConstraint("hotel_id", "id", name="uq_payment_hotel_id_id"),
+        ForeignKeyConstraint(
+            ["hotel_id", "payment_link_id"],
+            ["payment_links.hotel_id", "payment_links.id"],
+            name="fk_payments_hotel_payment_link",
+        ),
         UniqueConstraint(
             "hotel_id", "provider", "external_payment_id",
             name="uq_payment_external_per_hotel_provider",

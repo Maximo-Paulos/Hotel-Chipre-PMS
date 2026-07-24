@@ -24,6 +24,7 @@ from sqlalchemy import (
     DateTime,
     Enum,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     Numeric,
@@ -108,6 +109,7 @@ class CashSession(Base):
 
     __table_args__ = (
         CheckConstraint("opening_balance >= 0", name="ck_cash_sessions_opening_nonneg"),
+        UniqueConstraint("hotel_id", "id", name="uq_cash_sessions_hotel_id_id"),
         Index("ix_cash_sessions_hotel_status", "hotel_id", "status"),
     )
 
@@ -128,21 +130,9 @@ class CashMovement(Base):
         ForeignKey("hotel_configuration.id", ondelete="CASCADE"),
         nullable=False,
     )
-    session_id = Column(
-        Integer,
-        ForeignKey("cash_sessions.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-    reservation_id = Column(
-        Integer,
-        ForeignKey("reservations.id", ondelete="SET NULL"),
-        nullable=True,
-    )
-    transaction_id = Column(
-        Integer,
-        ForeignKey("transactions.id", ondelete="SET NULL"),
-        nullable=True,
-    )
+    session_id = Column(Integer, nullable=False)
+    reservation_id = Column(Integer, nullable=True)
+    transaction_id = Column(Integer, nullable=True)
     recorded_by_user_id = Column(
         Integer,
         ForeignKey("users.id", ondelete="SET NULL"),
@@ -167,6 +157,18 @@ class CashMovement(Base):
 
     __table_args__ = (
         CheckConstraint("amount > 0", name="ck_cash_movements_amount_positive"),
+        ForeignKeyConstraint(
+            ["hotel_id", "session_id"], ["cash_sessions.hotel_id", "cash_sessions.id"],
+            name="fk_cash_movements_hotel_session", ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["hotel_id", "reservation_id"], ["reservations.hotel_id", "reservations.id"],
+            name="fk_cash_movements_hotel_reservation",
+        ),
+        ForeignKeyConstraint(
+            ["hotel_id", "transaction_id"], ["transactions.hotel_id", "transactions.id"],
+            name="fk_cash_movements_hotel_transaction",
+        ),
         Index("ix_cash_movements_session_id", "session_id"),
         Index("ix_cash_movements_hotel_id", "hotel_id"),
     )
@@ -188,12 +190,7 @@ class CashCloseReport(Base):
         ForeignKey("hotel_configuration.id", ondelete="CASCADE"),
         nullable=False,
     )
-    session_id = Column(
-        Integer,
-        ForeignKey("cash_sessions.id", ondelete="CASCADE"),
-        nullable=False,
-        unique=True,
-    )
+    session_id = Column(Integer, nullable=False, unique=True)
     closed_by_user_id = Column(
         Integer,
         ForeignKey("users.id", ondelete="SET NULL"),
@@ -213,12 +210,7 @@ class CashCloseReport(Base):
     notes = Column(Text, nullable=True)
     closed_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
 
-    successor_session_id = Column(
-        Integer,
-        ForeignKey("cash_sessions.id", ondelete="SET NULL"),
-        nullable=True,
-        unique=True,
-    )
+    successor_session_id = Column(Integer, nullable=True, unique=True)
 
     session = relationship("CashSession", back_populates="close_report", foreign_keys=[session_id])
     successor_session = relationship("CashSession", foreign_keys=[successor_session_id], uselist=False)
@@ -230,6 +222,15 @@ class CashCloseReport(Base):
     )
 
     __table_args__ = (
+        UniqueConstraint("hotel_id", "id", name="uq_cash_close_reports_hotel_id_id"),
+        ForeignKeyConstraint(
+            ["hotel_id", "session_id"], ["cash_sessions.hotel_id", "cash_sessions.id"],
+            name="fk_cash_close_reports_hotel_session", ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["hotel_id", "successor_session_id"], ["cash_sessions.hotel_id", "cash_sessions.id"],
+            name="fk_cash_close_reports_hotel_successor_session",
+        ),
         Index("ix_cash_close_reports_hotel_id", "hotel_id"),
     )
 
@@ -252,12 +253,7 @@ class CashCustodyHandoff(Base):
         ForeignKey("hotel_configuration.id", ondelete="CASCADE"),
         nullable=False,
     )
-    close_report_id = Column(
-        Integer,
-        ForeignKey("cash_close_reports.id", ondelete="CASCADE"),
-        nullable=False,
-        unique=True,
-    )
+    close_report_id = Column(Integer, nullable=False, unique=True)
     delivered_by_user_id = Column(
         Integer,
         ForeignKey("users.id", ondelete="SET NULL"),
@@ -287,5 +283,11 @@ class CashCustodyHandoff(Base):
 
     __table_args__ = (
         CheckConstraint("delivered_amount >= 0", name="ck_cash_custody_delivered_nonneg"),
+        ForeignKeyConstraint(
+            ["hotel_id", "close_report_id"],
+            ["cash_close_reports.hotel_id", "cash_close_reports.id"],
+            name="fk_cash_custody_handoffs_hotel_close_report",
+            ondelete="CASCADE",
+        ),
         Index("ix_cash_custody_handoffs_hotel_status", "hotel_id", "status"),
     )

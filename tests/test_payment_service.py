@@ -11,9 +11,11 @@ import pytest
 from datetime import date
 
 from app.models.hotel_config import HotelConfiguration
+from app.models.guest import Guest
 from app.models.operations import BillingAdjustment, BillingAdjustmentTypeEnum
 from app.models.pricing import CategoryPricing
 from app.models.reservation import Reservation, ReservationStatusEnum
+from app.models.room import Room, RoomCategory
 from app.models.transaction import Transaction, PaymentMethodEnum, TransactionStatusEnum, TransactionTypeEnum
 from app.schemas.reservation import ReservationCreate
 from app.schemas.transaction import PaymentRequest, PaymentGatewayResponse
@@ -276,15 +278,28 @@ class TestHotelIsolation:
         db.add(config_h2)
         db.flush()
 
+        alt_guest = Guest(hotel_id=ALT_HOTEL_ID, first_name="Alt", last_name="Guest")
+        alt_category = RoomCategory(
+            hotel_id=ALT_HOTEL_ID,
+            name="Alt Standard",
+            code="ALT_STD",
+            base_price_per_night=100,
+            variable_cost_per_night=0,
+            max_occupancy=2,
+        )
+        db.add_all([alt_guest, alt_category])
+        db.flush()
+        db.add(Room(hotel_id=ALT_HOTEL_ID, room_number="201", category_id=alt_category.id))
+        db.flush()
+
         data = ReservationCreate(
-            guest_id=sample_guest.id,
-            category_id=sample_categories[0].id,
+            guest_id=alt_guest.id,
+            category_id=alt_category.id,
             check_in_date=date(2026, 10, 1),
             check_out_date=date(2026, 10, 4),
         )
-        res = create_reservation(db, data, hotel_id=1)
+        res = create_reservation(db, data, hotel_id=ALT_HOTEL_ID)
         db.flush()
-        _assign_hotel(res, ALT_HOTEL_ID, db)
 
         payment = PaymentRequest(
             reservation_id=res.id,
@@ -293,7 +308,7 @@ class TestHotelIsolation:
             transaction_type=TransactionTypeEnum.FULL_PAYMENT,
         )
 
-        tx = process_payment(db, payment, hotel_id=2)
+        tx = process_payment(db, payment, hotel_id=ALT_HOTEL_ID)
         assert tx.payment_method == PaymentMethodEnum.BANK_TRANSFER
 
 

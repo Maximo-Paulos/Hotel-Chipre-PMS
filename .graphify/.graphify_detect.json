@@ -39,6 +39,7 @@
       "alembic/versions/20260626_repair_reservation_unique_constraint.py",
       "alembic/versions/20260724_allocation_enum_values.py",
       "alembic/versions/20260724_cash_handoff_rotation.py",
+      "alembic/versions/20260724_core_tenant_composite_fks.py",
       "alembic/versions/20260724_payment_proof_blobs.py",
       "alembic/versions/20260724_payment_proofs.py",
       "alembic/versions/20260724_tenant_rls_context.py",
@@ -752,10 +753,10 @@
     ],
     "video": []
   },
-  "total_files": 743,
-  "total_words": 489409,
+  "total_files": 744,
+  "total_words": 490767,
   "needs_graph": true,
-  "warning": "Large corpus: 743 files · ~489,409 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
+  "warning": "Large corpus: 744 files · ~490,767 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
   "skipped_sensitive": [
     "alembic/versions/20260408_security_tokens.py",
     "app/adapters/memory_tokens.py",
@@ -769,7 +770,7 @@
   "graphifyignore_patterns": 60,
   "git": {
     "source_owner": "git",
-    "source_hash": "381fbb1992a0c188169f6a1340afe8afe9c2a3b9",
+    "source_hash": "307e650ca7df916db72fc647f554bf9efcdd9dd0",
     "branches": [
       "codex/feature/agent-ops-knowledge",
       "codex/feature/pms-e2e-scale-hardening",
@@ -786,9 +787,9 @@
     "source": "cli",
     "root": ".",
     "git_root": ".",
-    "head": "381fbb1992a0c188169f6a1340afe8afe9c2a3b9",
+    "head": "307e650ca7df916db72fc647f554bf9efcdd9dd0",
     "candidate_count": null,
-    "included_count": 743,
+    "included_count": 744,
     "excluded_untracked_count": 0,
     "excluded_ignored_count": 0,
     "excluded_sensitive_count": 8,

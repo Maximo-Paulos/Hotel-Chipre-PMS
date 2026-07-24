@@ -5,7 +5,7 @@ Exhaustive fields for check-in panel: identity documents, nationality, contact, 
 import enum
 from sqlalchemy import (
     Column, Integer, String, Boolean, ForeignKey, Text, DateTime, Date, Enum,
-    UniqueConstraint, Index,
+    UniqueConstraint, Index, ForeignKeyConstraint,
 )
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone, timedelta
@@ -103,6 +103,7 @@ class Guest(Base):
             "hotel_id", "document_type", "document_number",
             name="uq_guest_document_per_hotel",
         ),
+        UniqueConstraint("hotel_id", "id", name="uq_guest_hotel_id_id"),
         Index("ix_guest_hotel_id", "hotel_id"),
         # Search indexes (v72 §2.4 — must search fast by name, phone, email, document)
         Index("ix_guest_hotel_last_name", "hotel_id", "last_name"),
@@ -187,7 +188,7 @@ class GuestTag(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     hotel_id = Column(Integer, ForeignKey("hotel_configuration.id", ondelete="CASCADE"), nullable=False)
-    guest_id = Column(Integer, ForeignKey("guests.id", ondelete="CASCADE"), nullable=False)
+    guest_id = Column(Integer, nullable=False)
 
     tag_type = Column(
         Enum(
@@ -206,6 +207,12 @@ class GuestTag(Base):
     guest = relationship("Guest", back_populates="tags")
 
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["hotel_id", "guest_id"],
+            ["guests.hotel_id", "guests.id"],
+            name="fk_guest_tags_hotel_guest",
+            ondelete="CASCADE",
+        ),
         Index("ix_guest_tags_hotel_guest", "hotel_id", "guest_id"),
     )
 

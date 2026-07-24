@@ -5,11 +5,50 @@ from pathlib import Path
 
 import app.models  # noqa: F401
 import pytest
-from sqlalchemy import create_engine
+from sqlalchemy import UniqueConstraint, create_engine
 from sqlalchemy.orm import Session
 
 from app.database import Base
 from app.services.tenant_context import set_tenant_context, set_tenant_hotel_context
+
+
+CORE_COMPOSITE_FK_REQUIREMENTS = (
+    ("rooms", ("hotel_id", "category_id"), "room_categories", ("hotel_id", "id")),
+    ("sellable_products", ("hotel_id", "primary_room_category_id"), "room_categories", ("hotel_id", "id")),
+    ("product_room_compatibility", ("hotel_id", "sellable_product_id"), "sellable_products", ("hotel_id", "id")),
+    ("product_room_compatibility", ("hotel_id", "room_category_id"), "room_categories", ("hotel_id", "id")),
+    ("rate_plans", ("hotel_id", "sellable_product_id"), "sellable_products", ("hotel_id", "id")),
+    ("rate_plan_prices", ("hotel_id", "rate_plan_id"), "rate_plans", ("hotel_id", "id")),
+    ("tax_rules", ("hotel_id", "tax_policy_id"), "tax_policies", ("hotel_id", "id")),
+    ("reservations", ("hotel_id", "guest_id"), "guests", ("hotel_id", "id")),
+    ("reservations", ("hotel_id", "room_id"), "rooms", ("hotel_id", "id")),
+    ("reservations", ("hotel_id", "category_id"), "room_categories", ("hotel_id", "id")),
+    ("reservations", ("hotel_id", "company_id"), "companies", ("hotel_id", "id")),
+    ("reservations", ("hotel_id", "sellable_product_id"), "sellable_products", ("hotel_id", "id")),
+    ("reservations", ("hotel_id", "rate_plan_id"), "rate_plans", ("hotel_id", "id")),
+    ("reservations", ("hotel_id", "tax_policy_id"), "tax_policies", ("hotel_id", "id")),
+    ("transactions", ("hotel_id", "reservation_id"), "reservations", ("hotel_id", "id")),
+    ("payments", ("hotel_id", "payment_link_id"), "payment_links", ("hotel_id", "id")),
+    ("payment_proofs", ("hotel_id", "transaction_id"), "transactions", ("hotel_id", "id")),
+    ("payment_proof_blobs", ("hotel_id", "proof_id"), "payment_proofs", ("hotel_id", "id")),
+    ("cash_movements", ("hotel_id", "session_id"), "cash_sessions", ("hotel_id", "id")),
+    ("cash_movements", ("hotel_id", "reservation_id"), "reservations", ("hotel_id", "id")),
+    ("cash_movements", ("hotel_id", "transaction_id"), "transactions", ("hotel_id", "id")),
+    ("cash_close_reports", ("hotel_id", "session_id"), "cash_sessions", ("hotel_id", "id")),
+    ("cash_close_reports", ("hotel_id", "successor_session_id"), "cash_sessions", ("hotel_id", "id")),
+    ("cash_custody_handoffs", ("hotel_id", "close_report_id"), "cash_close_reports", ("hotel_id", "id")),
+    ("stock_movements", ("hotel_id", "item_id"), "stock_items", ("hotel_id", "id")),
+    ("stock_movements", ("hotel_id", "location_id"), "stock_locations", ("hotel_id", "id")),
+    ("stock_movements", ("hotel_id", "reservation_id"), "reservations", ("hotel_id", "id")),
+    ("guest_tags", ("hotel_id", "guest_id"), "guests", ("hotel_id", "id")),
+    ("fact_reservation_daily", ("hotel_id", "reservation_id"), "reservations", ("hotel_id", "id")),
+    ("fact_reservation_daily", ("hotel_id", "room_id"), "rooms", ("hotel_id", "id")),
+    ("fact_reservation_daily", ("hotel_id", "category_id"), "room_categories", ("hotel_id", "id")),
+    ("fact_reservation_daily", ("hotel_id", "company_id"), "companies", ("hotel_id", "id")),
+    ("fact_room_occupancy_daily", ("hotel_id", "room_id"), "rooms", ("hotel_id", "id")),
+    ("fact_room_occupancy_daily", ("hotel_id", "category_id"), "room_categories", ("hotel_id", "id")),
+    ("fact_room_occupancy_daily", ("hotel_id", "reservation_id"), "reservations", ("hotel_id", "id")),
+)
 
 
 def _load_rls_migration():
@@ -19,6 +58,61 @@ def _load_rls_migration():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def _load_composite_fk_migration():
+    path = Path(__file__).parents[1] / "alembic" / "versions" / "20260724_core_tenant_composite_fks.py"
+    spec = importlib.util.spec_from_file_location("core_tenant_composite_fks_migration", path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_core_hotel_scoped_relationships_use_composite_foreign_keys():
+    actual = {
+        (
+            constraint.table.name,
+            tuple(element.parent.name for element in constraint.elements),
+            constraint.elements[0].target_fullname.rsplit(".", 1)[0],
+            tuple(element.column.name for element in constraint.elements),
+        )
+        for table in Base.metadata.tables.values()
+        for constraint in table.foreign_key_constraints
+        if len(constraint.column_keys) > 1
+    }
+    missing = [requirement for requirement in CORE_COMPOSITE_FK_REQUIREMENTS if requirement not in actual]
+    assert not missing, f"Core tenant composite FKs missing: {missing}"
+
+
+def test_core_composite_fk_migration_covers_the_metadata_contract():
+    migration = _load_composite_fk_migration()
+    migrated = {
+        (table, columns, referred_table, referred_columns)
+        for table, _name, columns, referred_table, referred_columns, _ondelete in migration.COMPOSITE_FKS
+    }
+    assert set(CORE_COMPOSITE_FK_REQUIREMENTS) <= migrated
+
+
+def test_core_parents_have_tenant_scoped_unique_targets():
+    required_tables = {
+        "room_categories", "rooms", "guests", "companies", "sellable_products", "rate_plans",
+        "tax_policies", "reservations", "transactions", "cash_sessions", "cash_close_reports",
+        "stock_items", "stock_locations", "payment_links", "payment", "payment_proofs",
+    }
+    # Payment is plural in SQL; keep this assertion close to the relationship contract.
+    required_tables.discard("payment")
+    required_tables.add("payments")
+    missing = []
+    for table_name in required_tables:
+        table = Base.metadata.tables[table_name]
+        if not any(
+            isinstance(constraint, UniqueConstraint)
+            and tuple(column.name for column in constraint.columns) == ("hotel_id", "id")
+            for constraint in table.constraints
+        ):
+            missing.append(table_name)
+    assert not missing, f"Tenant-scoped FK targets missing unique (hotel_id, id): {missing}"
 
 
 def test_rls_migration_covers_every_hotel_scoped_model_table():

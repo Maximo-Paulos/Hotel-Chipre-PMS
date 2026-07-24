@@ -17,6 +17,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     String,
@@ -33,7 +34,7 @@ class SellableProduct(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     hotel_id = Column(Integer, ForeignKey("hotel_configuration.id", ondelete="CASCADE"), nullable=False)
-    primary_room_category_id = Column(Integer, ForeignKey("room_categories.id"), nullable=True)
+    primary_room_category_id = Column(Integer, nullable=True)
     code = Column(String(50), nullable=False)
     name = Column(String(150), nullable=False)
     description = Column(Text, nullable=True)
@@ -68,6 +69,12 @@ class SellableProduct(Base):
         CheckConstraint("max_occupancy >= min_occupancy", name="ck_sellable_product_occupancy_range"),
         UniqueConstraint("hotel_id", "code", name="uq_sellable_product_code_hotel"),
         UniqueConstraint("hotel_id", "name", name="uq_sellable_product_name_hotel"),
+        UniqueConstraint("hotel_id", "id", name="uq_sellable_product_hotel_id_id"),
+        ForeignKeyConstraint(
+            ["hotel_id", "primary_room_category_id"],
+            ["room_categories.hotel_id", "room_categories.id"],
+            name="fk_sellable_products_hotel_primary_category",
+        ),
         Index("ix_sellable_products_hotel_id", "hotel_id"),
     )
 
@@ -77,8 +84,8 @@ class ProductRoomCompatibility(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     hotel_id = Column(Integer, ForeignKey("hotel_configuration.id", ondelete="CASCADE"), nullable=False)
-    sellable_product_id = Column(Integer, ForeignKey("sellable_products.id", ondelete="CASCADE"), nullable=False)
-    room_category_id = Column(Integer, ForeignKey("room_categories.id", ondelete="CASCADE"), nullable=False)
+    sellable_product_id = Column(Integer, nullable=False)
+    room_category_id = Column(Integer, nullable=False)
     compatibility_kind = Column(String(30), nullable=False, default="exact")
     priority = Column(Integer, nullable=False, default=100)
     allows_auto_assignment = Column(Boolean, nullable=False, default=True)
@@ -103,6 +110,18 @@ class ProductRoomCompatibility(Base):
             "room_category_id",
             name="uq_product_room_compatibility_hotel",
         ),
+        ForeignKeyConstraint(
+            ["hotel_id", "sellable_product_id"],
+            ["sellable_products.hotel_id", "sellable_products.id"],
+            name="fk_product_room_compatibility_hotel_product",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["hotel_id", "room_category_id"],
+            ["room_categories.hotel_id", "room_categories.id"],
+            name="fk_product_room_compatibility_hotel_category",
+            ondelete="CASCADE",
+        ),
         Index("ix_product_room_compatibility_hotel_id", "hotel_id"),
         Index("ix_product_room_compatibility_sellable_product_id", "sellable_product_id"),
     )
@@ -113,7 +132,7 @@ class RatePlan(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     hotel_id = Column(Integer, ForeignKey("hotel_configuration.id", ondelete="CASCADE"), nullable=False)
-    sellable_product_id = Column(Integer, ForeignKey("sellable_products.id", ondelete="CASCADE"), nullable=False)
+    sellable_product_id = Column(Integer, nullable=False)
     code = Column(String(50), nullable=False)
     name = Column(String(150), nullable=False)
     pricing_model = Column(String(50), nullable=False, default="fixed_per_night")
@@ -147,6 +166,13 @@ class RatePlan(Base):
             name="ck_rate_plan_max_nights_range",
         ),
         UniqueConstraint("hotel_id", "code", name="uq_rate_plan_code_hotel"),
+        UniqueConstraint("hotel_id", "id", name="uq_rate_plan_hotel_id_id"),
+        ForeignKeyConstraint(
+            ["hotel_id", "sellable_product_id"],
+            ["sellable_products.hotel_id", "sellable_products.id"],
+            name="fk_rate_plans_hotel_sellable_product",
+            ondelete="CASCADE",
+        ),
         Index("ix_rate_plans_hotel_id", "hotel_id"),
         Index("ix_rate_plans_sellable_product_id", "sellable_product_id"),
     )
@@ -157,7 +183,7 @@ class RatePlanPrice(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     hotel_id = Column(Integer, ForeignKey("hotel_configuration.id", ondelete="CASCADE"), nullable=False)
-    rate_plan_id = Column(Integer, ForeignKey("rate_plans.id", ondelete="CASCADE"), nullable=False)
+    rate_plan_id = Column(Integer, nullable=False)
     sales_channel_code = Column(String(50), nullable=True)
     occupancy = Column(Integer, nullable=True)
     currency_code = Column(String(3), nullable=False, default="ARS")
@@ -182,6 +208,12 @@ class RatePlanPrice(Base):
         CheckConstraint(
             "valid_to IS NULL OR valid_from IS NULL OR valid_to >= valid_from",
             name="ck_rate_plan_prices_valid_range",
+        ),
+        ForeignKeyConstraint(
+            ["hotel_id", "rate_plan_id"],
+            ["rate_plans.hotel_id", "rate_plans.id"],
+            name="fk_rate_plan_prices_hotel_rate_plan",
+            ondelete="CASCADE",
         ),
         Index("ix_rate_plan_prices_hotel_id", "hotel_id"),
         Index("ix_rate_plan_prices_rate_plan_id", "rate_plan_id"),
@@ -213,6 +245,7 @@ class TaxPolicy(Base):
 
     __table_args__ = (
         UniqueConstraint("hotel_id", "code", name="uq_tax_policy_code_hotel"),
+        UniqueConstraint("hotel_id", "id", name="uq_tax_policy_hotel_id_id"),
         Index("ix_tax_policies_hotel_id", "hotel_id"),
     )
 
@@ -222,7 +255,7 @@ class TaxRule(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     hotel_id = Column(Integer, ForeignKey("hotel_configuration.id", ondelete="CASCADE"), nullable=False)
-    tax_policy_id = Column(Integer, ForeignKey("tax_policies.id", ondelete="CASCADE"), nullable=False)
+    tax_policy_id = Column(Integer, nullable=False)
     channel_code = Column(String(50), nullable=True)
     guest_scope = Column(String(30), nullable=False, default="all")
     tax_code = Column(String(50), nullable=False)
@@ -245,6 +278,12 @@ class TaxRule(Base):
 
     __table_args__ = (
         UniqueConstraint("hotel_id", "tax_policy_id", "tax_code", name="uq_tax_rule_code_hotel_policy"),
+        ForeignKeyConstraint(
+            ["hotel_id", "tax_policy_id"],
+            ["tax_policies.hotel_id", "tax_policies.id"],
+            name="fk_tax_rules_hotel_tax_policy",
+            ondelete="CASCADE",
+        ),
         Index("ix_tax_rules_hotel_id", "hotel_id"),
         Index("ix_tax_rules_tax_policy_id", "tax_policy_id"),
     )

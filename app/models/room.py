@@ -15,6 +15,7 @@ from sqlalchemy import (
     Enum,
     Text,
     CheckConstraint,
+    ForeignKeyConstraint,
     UniqueConstraint,
     Index,
 )
@@ -54,6 +55,7 @@ class RoomCategory(Base):
         CheckConstraint("max_occupancy > 0", name="ck_category_max_occ_positive"),
         UniqueConstraint("hotel_id", "code", name="uq_room_category_code_hotel"),
         UniqueConstraint("hotel_id", "name", name="uq_room_category_name_hotel"),
+        UniqueConstraint("hotel_id", "id", name="uq_room_category_hotel_id_id"),
         Index("ix_room_category_hotel_id", "hotel_id"),
     )
 
@@ -70,7 +72,7 @@ class Room(Base):
     hotel_id = Column(Integer, ForeignKey("hotel_configuration.id"), nullable=False)
     room_number = Column(String(10), nullable=False)  # "101", "PH-1"
     floor = Column(Integer, nullable=False, default=1)
-    category_id = Column(Integer, ForeignKey("room_categories.id"), nullable=False)
+    category_id = Column(Integer, nullable=False)
     status = Column(
         Enum(
             RoomStatusEnum,
@@ -97,6 +99,12 @@ class Room(Base):
         CheckConstraint("floor >= 0", name="ck_room_floor_positive"),
         CheckConstraint("score IS NULL OR (score >= 1 AND score <= 10)", name="ck_room_score_range"),
         UniqueConstraint("hotel_id", "room_number", name="uq_room_number_hotel"),
+        UniqueConstraint("hotel_id", "id", name="uq_room_hotel_id_id"),
+        ForeignKeyConstraint(
+            ["hotel_id", "category_id"],
+            ["room_categories.hotel_id", "room_categories.id"],
+            name="fk_rooms_hotel_category",
+        ),
         Index("ix_room_hotel_id", "hotel_id"),
     )
 
