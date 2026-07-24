@@ -384,8 +384,8 @@
     "hash": "4f13cde57e21a16d8c3fe94e5638641b"
   },
   "app/config.py": {
-    "mtime": 1784862144876.7112,
-    "hash": "5423a6a9524c930f377ab626d3a8a128"
+    "mtime": 1784863698873.32,
+    "hash": "c2a817d9a2d1992dcb1916ca26df0389"
   },
   "app/database.py": {
     "mtime": 1784862641428.6223,
@@ -428,8 +428,8 @@
     "hash": "bd135b0246c882e54594198526aa0cd9"
   },
   "app/main.py": {
-    "mtime": 1784862144877.3276,
-    "hash": "d458dcb96cbaad50766cb09acd6813f2"
+    "mtime": 1784863772659.4094,
+    "hash": "7f93695f42dc787b922e0ee4967e06dc"
   },
   "app/master_admin/__init__.py": {
     "mtime": 1784862144877.3862,
@@ -472,8 +472,8 @@
     "hash": "62ef3eaf849f09518abe70f4b804b84a"
   },
   "app/models/__init__.py": {
-    "mtime": 1784862144878.3323,
-    "hash": "3cfa1d847cfb13e1f5c2b71a301ac08d"
+    "mtime": 1784863698872.9946,
+    "hash": "81b56c58ed8039508b8e185916fe69cf"
   },
   "app/models/ai_assistant.py": {
     "mtime": 1784862144878.3958,
@@ -832,8 +832,8 @@
     "hash": "5e3af465990d6c0a94771b659df54cc8"
   },
   "app/services/cash_register_service.py": {
-    "mtime": 1784862144883.221,
-    "hash": "49f5cbeb7777cb75b096263741e3d026"
+    "mtime": 1784863480473.5784,
+    "hash": "fba503226c02554ff87686562cd2a378"
   },
   "app/services/checkin_service.py": {
     "mtime": 1784862144883.2861,
@@ -984,8 +984,8 @@
     "hash": "75bc4e1186c1622d04ed0a4dbd1bf831"
   },
   "app/services/payment_service.py": {
-    "mtime": 1784862144885.8376,
-    "hash": "901cdafd6ae28ec07975bdd6652a2387"
+    "mtime": 1784863698873.6282,
+    "hash": "77860400514a11883cf4a3db585db1d2"
   },
   "app/services/payment_webhook_service.py": {
     "mtime": 1784862144885.9111,
@@ -1712,8 +1712,8 @@
     "hash": "9fdd2e0b637a7c47643d2f6ded534666"
   },
   "tests/test_cash_register_service.py": {
-    "mtime": 1784862144930.414,
-    "hash": "47d601ce28339748751394bdefa33c11"
+    "mtime": 1784863480473.8813,
+    "hash": "81409562af0720e4df2eba1e1cfd4536"
   },
   "tests/test_cassandra_timeseries.py": {
     "mtime": 1784862144930.471,
@@ -2268,8 +2268,8 @@
     "hash": "d44cfe18dec64c8aae68668e41619cff"
   },
   "docs/DEPLOY_GUIDE.md": {
-    "mtime": 1784862699797.6323,
-    "hash": "c820616aa485bd789794263fde2e2ca0"
+    "mtime": 1784863975873.4832,
+    "hash": "62b55a4abac4b90e03716984b92760e7"
   },
   "docs/INCIDENT_PLAYBOOK.md": {
     "mtime": 1784862144888.0237,
@@ -2316,12 +2316,12 @@
     "hash": "5fa02e73aab2b1b31a38bfe676172e5f"
   },
   "docs/data-foundations/security-audit.md": {
-    "mtime": 1784863194825.6755,
-    "hash": "12b5a95d064b24f28f1c9ec29499b513"
+    "mtime": 1784863975874.1746,
+    "hash": "c3d02e1ab09ae996fc563ff1ef3ebcc6"
   },
   "docs/data-foundations/transactions-vs-payments.md": {
-    "mtime": 1784862144889.1355,
-    "hash": "4dae5bd99fd4de0ccd115b78eb78a5b4"
+    "mtime": 1784863975873.913,
+    "hash": "d5552c0beacd96ab1a25d3bded2481d5"
   },
   "docs/data-foundations/v72-traceability-matrix.md": {
     "mtime": 1784862144889.201,
@@ -3328,7 +3328,31 @@
     "hash": "7a3d9d4bbd4b7876bdc3d15a5879d175"
   },
   "tests/test_tenant_rls_contract.py": {
-    "mtime": 1784863194825.019,
-    "hash": "e5a1018e3270756853362d169a7ddc7c"
+    "mtime": 1784863843674.733,
+    "hash": "847063c6a47399c3ade3d5ff5a1506ef"
+  },
+  "alembic/versions/20260724_payment_proofs.py": {
+    "mtime": 1784863830364.9287,
+    "hash": "5d6434bd5c7f74ec3105019fcd336da1"
+  },
+  "app/api/payment_proofs.py": {
+    "mtime": 1784863803742.443,
+    "hash": "401bf583c9f2171ebce6ba39c14c1969"
+  },
+  "app/models/payment_proof.py": {
+    "mtime": 1784863843674.2747,
+    "hash": "76c6ea4564abbf0c6c036c2f61a755ed"
+  },
+  "app/schemas/payment_proof.py": {
+    "mtime": 1784863749070.4521,
+    "hash": "5e373ddde5240aae3e559296e4e98235"
+  },
+  "app/services/payment_proof_service.py": {
+    "mtime": 1784863992272.3167,
+    "hash": "5e3de9d004a0eb94480fbda94aba3174"
+  },
+  "tests/test_payment_proof_service.py": {
+    "mtime": 1784863917218.2273,
+    "hash": "dc59e443172429eb8b69bfd49ecd61d7"
   }
 }
