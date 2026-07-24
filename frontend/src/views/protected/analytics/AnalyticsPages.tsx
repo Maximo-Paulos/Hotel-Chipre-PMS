@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { apiFetch } from "../../../api/client";
+import { ApiError, apiFetch } from "../../../api/client";
 import { useSubscriptionStatus } from "../../../hooks/useSubscription";
 import { formatMoney } from "../../../utils/currency";
 import { StatCard } from "../../../components/StatCard";
@@ -477,6 +477,7 @@ function ReportScreen({
   );
   const query = useAnalyticsQuery<AnalyticsEnvelope>(path, queryParams);
   const report = query.data;
+  const errorMessage = analyticsErrorMessage(query.error);
   return (
     <PageShell
       eyebrow="Analytics"
@@ -495,7 +496,25 @@ function ReportScreen({
     >
       <AnalyticsFilterBar filters={filters} onChange={setFilters} />
       {query.isLoading && <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-500">Cargando analytics...</div>}
-      {query.isError && <div className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-sm text-rose-800">No se pudo cargar analytics.</div>}
+      {query.isError && (
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-sm text-rose-800" role="alert">
+          <p>{errorMessage}</p>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              className="rounded-lg border border-rose-300 bg-white px-3 py-2 font-semibold text-rose-800 hover:bg-rose-100"
+              onClick={() => void query.refetch()}
+            >
+              Reintentar
+            </button>
+            {query.error instanceof ApiError && query.error.status === 402 ? (
+              <Link to="/settings/subscription" className="font-semibold underline">
+                Revisar suscripción
+              </Link>
+            ) : null}
+          </div>
+        </div>
+      )}
       {report && (
         <div className="space-y-4">
           <AnalyticsFreshness
@@ -511,6 +530,17 @@ function ReportScreen({
       )}
     </PageShell>
   );
+}
+
+function analyticsErrorMessage(error: unknown): string {
+  if (error instanceof ApiError) {
+    if (error.status === 402) return "Tu plan actual no incluye este reporte de Analytics.";
+    if (error.status === 403) return "No tenés permisos para consultar este reporte.";
+    if (error.status >= 500) return "Analytics no está disponible en este momento. Reintentá en unos minutos.";
+    return error.message || "No se pudo cargar analytics.";
+  }
+  if (error instanceof Error && error.message) return error.message;
+  return "No se pudo cargar analytics.";
 }
 
 function StarterLandingScreen() {
