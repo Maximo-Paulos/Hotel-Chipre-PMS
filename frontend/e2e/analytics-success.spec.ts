@@ -20,3 +20,28 @@ test("owner opens the analytics summary with reconciled freshness metadata", asy
   await expect(page.getByText("Cargando analytics...", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("alert")).toHaveCount(0);
 });
+
+test("operations keeps rendering when a legacy analytics response omits data_source", async ({ page }) => {
+  await page.route("**/api/analytics/operations**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        hotel_id: 1,
+        date_from: "2026-07-01",
+        date_to: "2026-07-24",
+        generated_at: "2026-07-24T12:00:00Z",
+        data_as_of: "2026-07-24T12:00:00Z",
+        source_lag_seconds: 0,
+        data: { cards: [] }
+      })
+    });
+  });
+
+  await login(page);
+  await page.goto("/analytics/operations");
+
+  await expect(page.getByRole("heading", { name: "Operaciones", exact: true })).toBeVisible();
+  await expect(page.getByRole("status", { name: /Datos PostgreSQL/ })).toBeVisible();
+  await expect(page.getByText("Unexpected Application Error!", { exact: true })).toHaveCount(0);
+});

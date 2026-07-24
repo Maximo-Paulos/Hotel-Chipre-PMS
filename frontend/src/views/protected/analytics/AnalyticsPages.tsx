@@ -16,7 +16,7 @@ type AnalyticsEnvelope = {
   generated_at: string;
   data_as_of: string;
   source_lag_seconds: number;
-  data_source: string;
+  data_source?: string | null;
   comparison?: Record<string, unknown>;
   data: Record<string, unknown>;
 };
@@ -29,7 +29,7 @@ type AnalyticsStarterSummary = {
   generated_at: string;
   data_as_of: string;
   source_lag_seconds: number;
-  data_source: string;
+  data_source?: string | null;
 };
 
 type Company = {
@@ -348,14 +348,14 @@ function AnalyticsFreshness({
 }: {
   dataAsOf: string;
   sourceLagSeconds: number;
-  dataSource: string;
+  dataSource?: string | null;
 }) {
   const asOf = new Date(dataAsOf);
   const asOfLabel = Number.isNaN(asOf.getTime())
     ? "fecha no disponible"
     : new Intl.DateTimeFormat("es-AR", { dateStyle: "short", timeStyle: "short" }).format(asOf);
-  const normalizedSource = dataSource.trim().toLowerCase();
-  const sourceLabel = normalizedSource === "clickhouse" ? "ClickHouse" : normalizedSource === "postgresql" ? "PostgreSQL" : dataSource;
+  const normalizedSource = typeof dataSource === "string" ? dataSource.trim().toLowerCase() : "";
+  const sourceLabel = normalizedSource === "clickhouse" ? "ClickHouse" : normalizedSource === "postgresql" ? "PostgreSQL" : normalizedSource || "PostgreSQL";
   const isDelayed = Number.isFinite(sourceLagSeconds) && sourceLagSeconds > 0;
   return (
     <div
