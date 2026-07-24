@@ -217,3 +217,20 @@ SHA provider-bound que permita repetir el recorrido contra el artefacto exacto.
 
 Esta continuación confirma el bloqueo en el artefacto cloud visible, pero no lo
 atribuye al commit local porque el despliegue no expone un SHA verificable.
+
+## Revalidación visible owner — continuación del goal
+
+- Fecha: 2026-07-24.
+- Persona: owner QA autenticado; sesión visible en el navegador interno.
+- Tipo de recorrido: sólo lectura, con consulta de disponibilidad y apertura/cancelación del formulario de reserva; no se confirmó ninguna reserva.
+- SHA cloud desplegado: `needs-verification`.
+
+| Superficie | Resultado observado | Evaluación |
+| --- | --- | --- |
+| Disponibilidad | `Standard QA (#5)` para 2026-08-15 a 2026-08-17 devolvió `Disponibles: 3`; al terminar la consulta los campos de disponibilidad volvieron a 2026-07-24/25. | P1: la respuesta existe, pero la UI pierde el rango que el operador acaba de consultar |
+| Cotización previa | En Reserva se seleccionó `Standard QA (#5)` y se ingresaron 2026-08-15 a 2026-08-17; después de 3 segundos los campos conservaron esas fechas, pero mostraron `Noches 0`, `Total final $ 0` y el texto para elegir categoría/fechas. | P1: el precio no es confiable antes de habilitar la confirmación |
+| Reportes | Después de 5 segundos `/reportes` seguía en `Cargando reporte...`. | P1: no llega a datos ni error accionable |
+| Analytics | Después de 5 segundos `/analytics/operations` seguía en `Cargando analytics...`. | P1: no llega a datos ni error accionable |
+
+El formulario se canceló sin crear huésped, reserva, pago, comprobante, link,
+email, webhook, invitación ni cambio de configuración.
