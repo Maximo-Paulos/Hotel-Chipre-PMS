@@ -1100,8 +1100,8 @@
     "hash": "0e6e7064b2d424b4f790b251f121211e"
   },
   "frontend/playwright.config.ts": {
-    "mtime": 1784862144898.648,
-    "hash": "3a802569996f7f57f76a16208951641d"
+    "mtime": 1784864498096.6167,
+    "hash": "cbf540632938bdfcdcaf290cdbeb4301"
   },
   "frontend/src/App.tsx": {
     "mtime": 1784862144901.0059,
@@ -1404,8 +1404,8 @@
     "hash": "080f58a661cb1eb1b0f8ae7c84334f59"
   },
   "frontend/src/ui/AppShell.tsx": {
-    "mtime": 1784862144905.3777,
-    "hash": "db92537672401c13257bfb134d5f1704"
+    "mtime": 1784864400122.1997,
+    "hash": "b9afca671bdf7cccfe6e6db5dae15ff0"
   },
   "frontend/src/ui/HotelSelector.tsx": {
     "mtime": 1784862144905.4285,
@@ -1432,8 +1432,8 @@
     "hash": "38679b49521cf22a610b4cc9b5f9c624"
   },
   "frontend/src/views/protected/DashboardPage.tsx": {
-    "mtime": 1784862144905.9717,
-    "hash": "f85baa3f9ad2e273848914cde6f559e0"
+    "mtime": 1784864400121.8455,
+    "hash": "b9bcdad98753dc86c36b586a44d26843"
   },
   "frontend/src/views/protected/GuestsPage.tsx": {
     "mtime": 1784862144906.0164,
@@ -1500,8 +1500,8 @@
     "hash": "353d169ade8bfb8b38ab0e5f059b68ca"
   },
   "frontend/src/views/protected/StockPage.tsx": {
-    "mtime": 1784862144907.0552,
-    "hash": "254cbb036fa425c171826994a0418663"
+    "mtime": 1784864829662.6055,
+    "hash": "01228b25634d33127be92f35b3f63e70"
   },
   "frontend/src/views/protected/WaitlistPage.tsx": {
     "mtime": 1784862144907.1262,
@@ -3354,5 +3354,9 @@
   "tests/test_payment_proof_service.py": {
     "mtime": 1784863917218.2273,
     "hash": "dc59e443172429eb8b69bfd49ecd61d7"
+  },
+  "frontend/e2e/responsive-smoke.spec.ts": {
+    "mtime": 1784864566560.9211,
+    "hash": "c9ccb071243fec306b1f66559b803713"
   }
 }

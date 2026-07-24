@@ -31,7 +31,13 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
+      testIgnore: "**/responsive-smoke.spec.ts",
       use: { ...devices["Desktop Chrome"] }
+    },
+    {
+      name: "mobile-chromium",
+      testMatch: "**/responsive-smoke.spec.ts",
+      use: { ...devices["iPhone 13"], browserName: "chromium" }
     }
   ],
   webServer: [

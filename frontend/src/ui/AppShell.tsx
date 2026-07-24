@@ -237,8 +237,8 @@ export function AppShell() {
                   />
                   <span className="leading-tight">Hotel Chipre PMS</span>
                 </Link>
-                <nav className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto md:hidden">
-                  {visibleNavSections.find((section) => section.title === "Analytics")?.items.map((item) => (
+                <nav aria-label="Navegación móvil" className="flex min-w-0 max-w-full flex-1 items-center gap-2 overflow-x-auto overscroll-x-contain md:hidden">
+                  {visibleNavSections.flatMap((section) => section.items).map((item) => (
                     <NavLink
                       key={item.to}
                       to={item.to}

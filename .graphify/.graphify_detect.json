@@ -281,6 +281,7 @@
       "app/tasks/report_tasks.py",
       "frontend/e2e/master_admin.spec.ts",
       "frontend/e2e/rate-calendar.spec.ts",
+      "frontend/e2e/responsive-smoke.spec.ts",
       "frontend/e2e/smoke.spec.ts",
       "frontend/e2e/v72-pages.spec.ts",
       "frontend/playwright.config.ts",
@@ -728,10 +729,10 @@
     ],
     "video": []
   },
-  "total_files": 719,
-  "total_words": 471637,
+  "total_files": 720,
+  "total_words": 472051,
   "needs_graph": true,
-  "warning": "Large corpus: 719 files · ~471,637 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
+  "warning": "Large corpus: 720 files · ~472,051 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
   "skipped_sensitive": [
     "alembic/versions/20260408_security_tokens.py",
     "app/adapters/memory_tokens.py",
@@ -744,7 +745,7 @@
   "graphifyignore_patterns": 60,
   "git": {
     "source_owner": "git",
-    "source_hash": "eed124ab53206125fffe03773ff8f1db624bf9dd",
+    "source_hash": "a733848547a54d2df4161eb754451a0f51e842eb",
     "branches": [
       "codex/feature/agent-ops-knowledge",
       "codex/feature/pms-e2e-scale-hardening",
@@ -761,9 +762,9 @@
     "source": "cli",
     "root": ".",
     "git_root": ".",
-    "head": "eed124ab53206125fffe03773ff8f1db624bf9dd",
+    "head": "a733848547a54d2df4161eb754451a0f51e842eb",
     "candidate_count": null,
-    "included_count": 719,
+    "included_count": 720,
     "excluded_untracked_count": 0,
     "excluded_ignored_count": 0,
     "excluded_sensitive_count": 7,

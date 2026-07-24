@@ -92,6 +92,20 @@ export function StockPage() {
     return map;
   }, [items, stockQueries]);
 
+  const selectedItem = useMemo(
+    () => items.find((item) => String(item.id) === movementForm.item_id),
+    [items, movementForm.item_id]
+  );
+  const selectedCurrentStock = selectedItem ? currentByItemId.get(selectedItem.id) : null;
+  const requestedQuantity = Number(movementForm.quantity);
+  const currentQuantity = selectedCurrentStock ? Number(selectedCurrentStock) : null;
+  const willGoNegative =
+    movementForm.movement_type === "out" &&
+    currentQuantity !== null &&
+    Number.isFinite(currentQuantity) &&
+    Number.isFinite(requestedQuantity) &&
+    requestedQuantity > currentQuantity;
+
   const invalidateStock = () => {
     queryClient.invalidateQueries({ queryKey: ["stock-items", session.hotelId] });
     queryClient.invalidateQueries({ queryKey: ["stock-locations", session.hotelId] });
@@ -207,9 +221,9 @@ export function StockPage() {
               return (
                 <div key={item.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                   <div className="flex items-start justify-between gap-3">
-                    <div>
+                    <div className="min-w-0">
                       <p className="text-xs uppercase tracking-wide text-slate-500">{item.sku || `Item #${item.id}`}</p>
-                      <h3 className="text-base font-semibold text-slate-900">{item.name}</h3>
+                      <h3 className="break-words text-base font-semibold text-slate-900">{item.name}</h3>
                       <p className="text-xs text-slate-500">
                         Minimo {item.min_quantity ?? "sin minimo"} {item.unit}
                       </p>
@@ -224,6 +238,23 @@ export function StockPage() {
                       {current} <span className="text-sm font-normal text-slate-500">{item.unit}</span>
                     </p>
                   </div>
+                  <div className="mt-3 flex gap-2">
+                    <button
+                      type="button"
+                      className="flex-1 rounded-lg border border-brand-200 px-3 py-2 text-xs font-semibold text-brand-700 hover:bg-brand-50"
+                      onClick={() => setMovementForm((currentForm) => ({ ...currentForm, item_id: String(item.id), movement_type: "in" }))}
+                    >
+                      Registrar ingreso
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Registrar egreso de ${item.name}`}
+                      className="flex-1 rounded-lg border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50"
+                      onClick={() => setMovementForm((currentForm) => ({ ...currentForm, item_id: String(item.id), movement_type: "out" }))}
+                    >
+                      Registrar egreso
+                    </button>
+                  </div>
                 </div>
               );
             })}
@@ -236,10 +267,11 @@ export function StockPage() {
         </section>
 
         <aside className="space-y-4">
-          <form className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm" onSubmit={handleCreateMovement}>
+          <form id="stock-movement-form" className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm" onSubmit={handleCreateMovement}>
             <div>
               <p className="text-xs uppercase tracking-wide text-slate-500">Movimiento</p>
               <h2 className="text-lg font-semibold text-slate-900">Registrar movimiento</h2>
+              <p className="mt-1 text-xs text-slate-500">Ingresá una cantidad positiva; los egresos se descuentan automáticamente.</p>
             </div>
             <label className="space-y-1 text-sm">
               <span className="text-slate-600">Item</span>
@@ -257,6 +289,19 @@ export function StockPage() {
                 ))}
               </select>
             </label>
+            {selectedItem && (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
+                <span className="text-slate-500">Stock actual: </span>
+                <span className="font-semibold text-slate-900">
+                  {selectedCurrentStock ?? "..."} {selectedItem.unit}
+                </span>
+                {willGoNegative && (
+                  <p className="mt-1 text-xs font-medium text-rose-700" role="alert">
+                    Este egreso dejará el stock en negativo. Verificá la cantidad antes de confirmar.
+                  </p>
+                )}
+              </div>
+            )}
             <label className="space-y-1 text-sm">
               <span className="text-slate-600">Ubicacion</span>
               <select
@@ -306,6 +351,7 @@ export function StockPage() {
                 value={movementForm.reason}
                 onChange={(event) => setMovementForm((current) => ({ ...current, reason: event.target.value }))}
                 placeholder="Compra, consumo, ajuste mensual"
+                required={movementForm.movement_type !== "in"}
                 className="w-full rounded-lg border border-slate-300 px-3 py-2"
               />
             </label>
