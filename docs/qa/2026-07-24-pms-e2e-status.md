@@ -15,8 +15,8 @@ repositorio.
 | Área | Resultado |
 | --- | --- |
 | Frontend lint/typecheck/build | Pasan. Vite informa un bundle principal de 788.60 kB minificado (190.98 kB gzip); queda como deuda de performance. |
-| E2E desktop | Pasan los journeys de Chromium de login, logout, admin, calendario de tarifas, configuración del hotel, negocio, operaciones diarias, páginas V72, estados accionables de Analytics y Reportes, error de cotización y ciclo de vida de reserva. La ejecución serial fresh completa queda en 43/43 al sumar móvil Chromium y los tres perfiles WebKit. |
-| E2E mobile | 3/3 pasan con Chromium emulando iPhone y verificando 375×812, 390×844 y 430×932; 9/9 pasan con Playwright WebKit en perfiles iPhone SE, iPhone 15 y iPhone 15 Pro Max. La regresión de selector con nombre largo, touch targets críticos, el journey de Reportes y el ciclo de vida de reserva en WebKit quedan cubiertos; la suite completa pasa 43/43. Esto no sustituye Safari nativo del simulador Xcode, que no está disponible en este host. |
+| E2E desktop | Pasan los journeys de Chromium de login, logout, admin, calendario de tarifas, configuración del hotel, negocio, operaciones diarias, páginas V72, estados accionables de Analytics y Reportes, error de cotización y ciclo de vida de reserva. La ejecución serial fresh completa queda en 47/47 al sumar móvil Chromium y los tres perfiles WebKit. |
+| E2E mobile | 4/4 pasan con Chromium emulando iPhone y verificando 375×812, 390×844 y 430×932; 12/12 pasan con Playwright WebKit en perfiles iPhone SE, iPhone 15 y iPhone 15 Pro Max. La regresión de selector con nombre largo, touch targets críticos, overflow de páginas operativas, el journey de Reportes y el ciclo de vida de reserva en WebKit quedan cubiertos; la suite completa pasa 47/47. Esto no sustituye Safari nativo del simulador Xcode, que no está disponible en este host. |
 | Backend completo | 1220 pasan, 17 se omiten, 12 quedan xfail y 1 xpass en Python 3.12 limpio. El runner E2E rechaza explícitamente Python menor a 3.10. |
 | Forward-tests de arquitectura de datos | 2/2 pasan: una entidad de otro hotel no puede leerse ni adjuntarse, y una cotización queda invalidada antes de persistir la reserva cuando cambia la tarifa. |
 | Migración virgen | `alembic upgrade head` pasa sobre SQLite temporal hasta `20260724_room_move_enum_values`, incluyendo blobs privados, rotación, custodia, claves tenant restantes y el contrato de movimientos de habitación. |
@@ -37,11 +37,21 @@ La prueba crea datos sintéticos en la base E2E aislada, crea una reserva desde
 la UI, edita y extiende el check-out, intenta una reserva superpuesta sobre la
 misma habitación y verifica el rechazo visible, y finalmente cancela la
 reserva. Pasó 1/1 en Chromium y 1/1 en WebKit iPhone 15. La suite serial fresh
-completa posterior terminó `43 passed (1.4m)`.
+completa posterior terminó `47 passed (1.5m)`.
 
 No hubo cobros, comprobantes, emails, webhooks, OTA ni cambios en el entorno
 cloud. La cobertura valida el recorrido local y no reemplaza la repetición en
 un preview provider-bound aislado.
+
+### Regresión móvil de superficies críticas
+
+En el commit `60845ed` se amplió
+`frontend/e2e/responsive-smoke.spec.ts` para cubrir explícitamente Reportes y
+Lavandería, además de Reservas, Caja y Stock. La nueva aserción exige que el
+ancho del documento y del body no supere el viewport de 390×844; la aserción
+de controles táctiles exige una altura mínima de 44 px. La ejecución fresh
+serial pasó 47/47 en Chromium móvil y WebKit iPhone SE, iPhone 15 y iPhone 15
+Pro Max.
 
 ### Smoke de la skill de navegador interno
 
@@ -122,7 +132,7 @@ repitió desde cero con:
 
 `E2E_PYTHON=/tmp/hpms-scale-venv-312/bin/python npm run e2e`
 
-y terminó `43 passed (1.4m)`. Esto confirma el baseline local, pero no cierra
+y terminó `47 passed (1.5m)`. Esto confirma el baseline local, pero no cierra
 el fallo cloud, los cinco roles reales, el preview aislado ni Safari nativo.
 
 El catálogo conserva gaps funcionales pendientes: onboarding/recuperación,
@@ -458,7 +468,7 @@ lectura acotada de Lavandería hubo 18 controles menores a 44px entre 47
 elementos visibles, incluyendo controles de cabecera de 16–29px y controles
 operativos de 37–38px. Esto mantiene un P1 cloud de Dashboard y P2 cloud en
 las demás superficies móviles hasta repetir el resultado contra un SHA
-provider-bound; la suite local 43/43 no reproduce ese estado con el código de
+provider-bound; la suite local 47/47 no reproduce ese estado con el código de
 la rama.
 
 Reportes siguió en `Cargando reporte...` después de más de 20 segundos y
