@@ -11,6 +11,8 @@ import {
 import { hasValidSession } from "../api/client";
 import { useSession } from "../state/session";
 
+import { invalidateCashRegisterQueries } from "./useCashRegister";
+
 const proofsKey = (hotelId: number | null, reservationId?: number) => ["payment-proofs", hotelId, reservationId];
 
 export function usePaymentProofs(reservationId?: number) {
@@ -38,7 +40,10 @@ export function usePaymentProofMutations(reservationId?: number) {
   });
   const approveMutation = useMutation({
     mutationFn: (proofId: number) => approvePaymentProof(proofId, session),
-    onSuccess: invalidate
+    onSuccess: () => {
+      invalidate();
+      invalidateCashRegisterQueries(queryClient, session.hotelId);
+    }
   });
   const rejectMutation = useMutation({
     mutationFn: ({ proofId, reason }: { proofId: number; reason: string }) => rejectPaymentProof(proofId, reason, session),

@@ -122,6 +122,13 @@ crea automáticamente con saldo inicial `$0` incluso si el arqueo queda con
 diferencia pendiente. La aprobación de la diferencia y la recepción de
 custodia quedan separadas y la recepción sólo puede confirmarla el dueño.
 
+El journey mutante detectó además un problema de frescura en la UI: los pagos
+de una reserva actualizaban el ledger y la caja en backend, pero la pantalla
+de Caja podía conservar el resumen anterior en React Query. Los hooks centrales
+de cobros manuales y aprobación de comprobantes ahora invalidan las consultas
+de sesiones, movimientos, resumen y último cierre del hotel. La regresión pasa
+en Chromium y en WebKit iPhone 15 con saldo esperado positivo antes del cierre.
+
 El contrato de tokens de cotización también rechaza codificaciones Base64URL no
 canónicas: cambiar bits sobrantes del último carácter ya no puede reutilizar la
 misma firma decodificada.
@@ -139,8 +146,9 @@ valores por defecto. El caso y la suite completa quedan verdes.
 Se agregó un E2E aislado que crea una categoría y una habitación, crea un huésped
 rápido con documento, registra una reserva con seña manual, cobra un parcial en
 efectivo, envía un comprobante de transferencia, lo aprueba y cobra el saldo
-restante en efectivo antes de completar check-in/check-out. El flujo pasa en 1/1
-y forma parte de la suite completa 22/22. El fixture de imagen se genera con un
+restante en efectivo antes de completar check-in/check-out y cerrar la caja con
+rotación de custodia. El flujo pasa en 1/1 por Chromium y 1/1 por WebKit iPhone
+15, y forma parte de la suite completa 28/28. El fixture de imagen se genera con un
 contenido único por ejecución para no falsear la protección anti-duplicados.
 
 Durante ese recorrido se detectó que la migración de asignación guardaba los
@@ -182,8 +190,8 @@ distribuidos no están habilitados y requeridos.
 
 ## Limitaciones actuales
 
-- La prueba móvil automatizada emula el viewport de iPhone en Chromium; no es
-  una prueba de Safari/WebKit ni de un dispositivo físico.
+- La prueba móvil automatizada emula viewports de iPhone en Chromium y WebKit;
+  no es una prueba de Safari nativo ni de un dispositivo físico.
 - En el cloud compartido, la lectura actual del dashboard mostró overflow
   horizontal (`461 px` de contenido contra `390 px` de viewport). No se
   modificó ese entorno ni se usa como sustituto de un preview aislado.

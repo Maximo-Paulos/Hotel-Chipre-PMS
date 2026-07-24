@@ -46,6 +46,9 @@ It resets and seeds `../_e2e.db`, starts `uvicorn app.main:app --port 8040`,
 then starts Vite with `VITE_PUBLIC_APP_HOSTNAME=127.0.0.1`. The business
 journey mutates this isolated database, and the managed runner resets it on
 each invocation so an old open cash session cannot contaminate a fresh run.
+For reliable isolation, existing servers are not reused by default. Set
+`E2E_REUSE_SERVER=true` only when intentionally connecting to already-running
+servers; in that mode the runner does not reset or own their database state.
 
 ## Manual boot
 

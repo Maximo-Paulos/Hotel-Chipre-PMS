@@ -154,4 +154,17 @@ test("owner completes the core reservation journey through the UI", async ({ pag
   const checkedInRow = reservationTable.locator("tbody tr").filter({ hasText: guestLastName });
   await checkedInRow.getByRole("button", { name: "Check-out", exact: true }).click();
   await expect(page.getByText("Check-out registrado", { exact: true })).toBeVisible();
+
+  await navigateFromShell(page, "/caja");
+  const closeCashForm = page.locator("form").filter({ hasText: "Cerrar caja" });
+  const expectedBalanceLabel = closeCashForm.getByText(/Saldo esperado:/);
+  await expect(expectedBalanceLabel).not.toContainText("$ 0,00");
+  const expectedBalanceText = await expectedBalanceLabel.innerText();
+  const expectedBalance = Number(expectedBalanceText.replace(/[^0-9,.-]/g, "").replace(/\./g, "").replace(",", "."));
+  expect(expectedBalance).toBeGreaterThan(0);
+  await closeCashForm.locator('input[type="number"]').fill(String(expectedBalance));
+  await closeCashForm.getByRole("button", { name: "Cerrar caja", exact: true }).click();
+  await expect(page.getByText("Caja cerrada.", { exact: true })).toBeVisible();
+  await expect(page.getByText(/Caja sucesora: .* abierta con saldo \$0/)).toBeVisible();
+  await expect(page.getByText(/Custodia: recepción confirmada\./)).toBeVisible();
 });

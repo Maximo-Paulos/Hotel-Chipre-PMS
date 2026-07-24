@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 
 import {
   addCashMovement,
@@ -25,6 +25,18 @@ const cashSessionsKey = (hotelId: number | null) => ["cash-sessions", hotelId];
 const cashMovementsKey = (hotelId: number | null, sessionId: number) => ["cash-movements", hotelId, sessionId];
 
 const latestCloseReportKey = (hotelId: number | null) => ["cash-latest-close-report", hotelId];
+
+/**
+ * Payments created outside the cash screen still change the current cash
+ * session. Keep the register views coherent when a reservation mutation is
+ * the source of that movement.
+ */
+export function invalidateCashRegisterQueries(queryClient: QueryClient, hotelId: number | null) {
+  queryClient.invalidateQueries({ queryKey: cashSessionsKey(hotelId) });
+  queryClient.invalidateQueries({ queryKey: ["cash-movements", hotelId] });
+  queryClient.invalidateQueries({ queryKey: ["cash-summary", hotelId] });
+  queryClient.invalidateQueries({ queryKey: latestCloseReportKey(hotelId) });
+}
 
 export function useCashSessions() {
   const { session } = useSession();

@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 
 const baseURL = process.env.E2E_BASE_URL || "http://127.0.0.1:5173";
 const backendURL = process.env.E2E_BACKEND_URL || "http://127.0.0.1:8040";
+const reuseExistingServer = process.env.E2E_REUSE_SERVER === "true";
 const frontendDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(frontendDir, "..");
 const pythonRelativePath = process.platform === "win32" ? "Scripts/python.exe" : "bin/python";
@@ -96,7 +97,7 @@ export default defineConfig({
       command: `${pythonExecutable} scripts/serve_e2e_backend.py`,
       cwd: repoRoot,
       url: `${backendURL}/health`,
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer,
       timeout: 120_000,
       env: {
         APP_ENV: "test",
@@ -115,7 +116,7 @@ export default defineConfig({
     {
       command: "npm run dev -- --host 127.0.0.1",
       url: baseURL,
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer,
       timeout: 120_000,
       env: {
         VITE_PUBLIC_APP_HOSTNAME: "127.0.0.1",

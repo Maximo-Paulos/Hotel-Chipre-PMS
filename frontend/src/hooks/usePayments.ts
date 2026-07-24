@@ -4,6 +4,8 @@ import { getPaymentSummary, makePayment, type PaymentRequest, type PaymentSummar
 import { hasValidSession } from "../api/client";
 import { useSession } from "../state/session";
 
+import { invalidateCashRegisterQueries } from "./useCashRegister";
+
 const summaryKey = (hotelId: number | null, reservationId: number) => ["payment-summary", hotelId, reservationId];
 
 export function usePaymentSummary(reservationId?: number) {
@@ -29,6 +31,7 @@ export function usePaymentMutation(reservationId?: number) {
         queryClient.invalidateQueries({ queryKey: summaryKey(session.hotelId, reservationId) });
       }
       queryClient.invalidateQueries({ queryKey: ["reservations"] });
+      invalidateCashRegisterQueries(queryClient, session.hotelId);
     }
   });
 }
