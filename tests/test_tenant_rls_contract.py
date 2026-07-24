@@ -28,9 +28,17 @@ def test_rls_migration_covers_every_hotel_scoped_model_table():
         for table in Base.metadata.sorted_tables
         if "hotel_id" in table.c
     }
-    expected = model_tables - {"hotel_api_keys", "hotel_memberships"}
+    expected = model_tables - {"hotel_api_keys", "hotel_memberships", "payment_proofs"}
     assert set(migration.TENANT_TABLES) == expected
     assert "hotel_memberships" not in migration.TENANT_TABLES
+
+
+def test_new_tenant_table_enables_its_own_rls_policy():
+    path = Path(__file__).parents[1] / "alembic" / "versions" / "20260724_payment_proofs.py"
+    source = path.read_text(encoding="utf-8")
+    assert '"payment_proofs"' in source
+    assert "tenant_isolation_payment_proofs" in source
+    assert "FORCE ROW LEVEL SECURITY" in source
 
 
 def test_rls_migration_keeps_api_key_bootstrap_exception_explicit():

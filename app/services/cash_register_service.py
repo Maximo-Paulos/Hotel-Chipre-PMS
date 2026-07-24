@@ -144,13 +144,13 @@ def record_cash_payment_movement(
     transaction: Transaction,
     recorded_by_user_id: int | None = None,
 ) -> CashMovement | None:
-    """Post a completed CASH transaction into the hotel's open cash session.
+    """Post a completed CASH transaction into the hotel's active cash session.
 
     A real payment of physical cash must land in the caja so the arqueo matches.
     A deposit/full payment becomes an INCOME movement; a cash refund becomes an
-    EXPENSE movement. Non-cash methods (gateway/card) never touch the physical
-    caja. Returns the created movement, or ``None`` when no session is open
-    (the payment itself still succeeds; the cash simply isn't tracked yet).
+    EXPENSE movement. If the operator has not opened today's session yet, the
+    service creates a zero-opening session atomically before posting the
+    movement. Non-cash methods (gateway/card) never touch the physical caja.
     """
     if transaction.payment_method != PaymentMethodEnum.CASH:
         return None
@@ -159,7 +159,23 @@ def record_cash_payment_movement(
 
     session = get_open_session(db, transaction.hotel_id)
     if session is None:
-        return None
+        # A completed cash transaction must never become an untracked physical
+        # movement.  ``open_session`` and the PostgreSQL partial unique index
+        # make this safe under concurrent first-cash requests.  A legacy
+        # database without the index is still protected by the service check.
+        try:
+            session = open_session(
+                db,
+                hotel_id=transaction.hotel_id,
+                opened_by_user_id=recorded_by_user_id,
+                opening_balance=Decimal("0.00"),
+                currency_code=transaction.currency or "ARS",
+                notes="Sesión abierta automáticamente por cobro en efectivo",
+            )
+        except CashRegisterError:
+            session = get_open_session(db, transaction.hotel_id)
+            if session is None:
+                raise
 
     from app.models.transaction import TransactionTypeEnum
 

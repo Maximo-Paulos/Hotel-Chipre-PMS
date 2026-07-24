@@ -291,12 +291,12 @@ def test_cash_payment_posts_income_movement_to_open_session(db):
     assert movement.reservation_id == reservation.id
 
 
-def test_cash_payment_without_open_session_still_succeeds(db):
-    """With no open caja the cash payment still records the transaction; it just
-    is not posted to a session (best-effort, never blocks the sale)."""
+def test_cash_payment_without_open_session_opens_zero_balance_session(db):
+    """A cash payment must be visible in caja even when the shift was not
+    opened manually first."""
     from app.schemas.transaction import PaymentRequest
     from app.services.payment_service import process_payment
-    from app.models.cash_register import CashMovement
+    from app.models.cash_register import CashMovement, CashSession, CashSessionStatusEnum
 
     _hotel(db, 1)
     _user(db, 10)
@@ -316,7 +316,12 @@ def test_cash_payment_without_open_session_still_succeeds(db):
     db.flush()
 
     assert tx.status == TransactionStatusEnum.COMPLETED
-    assert db.query(CashMovement).filter(CashMovement.hotel_id == 1).count() == 0
+    session = db.query(CashSession).filter(CashSession.hotel_id == 1).one()
+    assert session.status == CashSessionStatusEnum.OPEN
+    assert session.opening_balance == Decimal("0.00")
+    movement = db.query(CashMovement).filter(CashMovement.hotel_id == 1).one()
+    assert movement.transaction_id == tx.id
+    assert movement.amount == Decimal("30.00")
 
 
 def test_session_summary_expected_balance_matches_arqueo(db):

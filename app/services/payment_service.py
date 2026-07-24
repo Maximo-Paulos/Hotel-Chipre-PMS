@@ -194,6 +194,7 @@ def process_payment(
     gateway_response: Optional[PaymentGatewayResponse] = None,
     idempotency_key: Optional[str] = None,
     actor_user_id: Optional[int] = None,
+    manual_confirmation: bool = False,
 ) -> Transaction:
     """
     Process a payment for a reservation.
@@ -279,8 +280,9 @@ def process_payment(
     raw_response = None
     processed_at = None
 
-    # For cash, mark completed immediately
-    if request.payment_method == PaymentMethodEnum.CASH:
+    # Cash and an explicitly approved manual proof are completed immediately.
+    # Bank transfers submitted without proof intentionally remain pending.
+    if request.payment_method == PaymentMethodEnum.CASH or manual_confirmation:
         tx_status = TransactionStatusEnum.COMPLETED
         processed_at = datetime.now(timezone.utc)
 

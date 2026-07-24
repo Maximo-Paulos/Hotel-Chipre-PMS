@@ -58,6 +58,7 @@ Variables de entorno:
 - `SYSTEM_EMAIL_FROM="Hotel Chipre PMS <noreply@auth.hotels-pms.com>"`
 - `SYSTEM_EMAIL_REPLY_TO=hotelxpms@gmail.com`
 - `ANALYTICS_EXPORTS_DIR=/var/exports/analytics`
+- `PAYMENT_PROOFS_DIR=/var/payment-proofs` (private persistent storage; never expose this directory as static files)
 - `AI_ENABLED=false` until the hotel-specific IA provider is configured
 - `GEMMA_ENABLED=false`
 

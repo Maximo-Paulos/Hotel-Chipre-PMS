@@ -78,7 +78,7 @@ gate. Every new hotel-scoped model must be added to the explicit migration list.
 | Payment idempotency keys | ⚠️ PARTIAL | `pending_operational_actions` used; dedicated idempotency key table pending |
 | Decimal arithmetic in service layer | ✅ | `Decimal(str(value))` pattern throughout |
 | Balance due reproducible from stored columns | ✅ | `balance_due` property: `total_amount - amount_paid` |
-| Arqueo reproducible from stored movements | ✅ | `expected_balance = opening + income - expense` |
+| Arqueo reproducible from stored movements | ✅ | `expected_balance = opening + income - expense`; cash payments auto-open zero-balance session when needed |
 
 ---
 
@@ -129,6 +129,8 @@ gate. Every new hotel-scoped model must be added to the explicit migration list.
 | API rate limiting by hotel/key | ✅ | `rate_limit_events` table + middleware |
 | Per-IP rate limiting | ⚠️ PARTIAL | Middleware exists; Redis counter pattern documented |
 | Payment link expiry | ⚠️ PENDING | Link expiry not yet enforced at DB level |
+| Manual transfer proof approval | ✅ | `payment_proofs` pending/approved/rejected state; only approval writes canonical transaction |
+| Payment proof file privacy | ✅ | Generated private storage key + authenticated `FileResponse`; no public static exposure |
 
 ---
 

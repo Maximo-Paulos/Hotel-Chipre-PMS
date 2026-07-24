@@ -28,6 +28,21 @@
 - Sent to guest before payment; may collect multiple partial payments
 - When a PaymentLink receives a webhook: creates/updates a `Payment`, which then creates a `Transaction`
 
+### Manual bank-transfer proof
+
+Bank transfer is deliberately two-phase:
+
+1. Reception uploads a JPEG, PNG or WEBP proof. The image is validated, hashed
+   and stored under a generated private key; only metadata is persisted in
+   `payment_proofs` with status `pending`.
+2. An owner, co-owner or manager explicitly approves or rejects it. Approval
+   calls the same canonical `process_payment` ledger path with an idempotency
+   key (`transfer-proof:{proof_id}`), creates a completed `Transaction`, and
+   updates `reservation.amount_paid`. Rejection never changes the balance.
+
+The image is served only through an authenticated endpoint. It is never put in
+the public static bundle, logs, transaction description, or an analytics store.
+
 ---
 
 ## Data flow
@@ -44,6 +59,8 @@ Guest pays via MercadoPago/PayPal/Stripe
 
 Hotel staff records cash payment directly
     → Transaction inserted directly (type=payment, payment_method=cash)
+    → active CashSession is reused, or a zero-opening session is created automatically
+    → CashMovement linked to the Transaction (income/refund expense)
     → NO Payment or PaymentLink needed
     → reservation.amount_paid updated
 ```
@@ -54,9 +71,10 @@ Hotel staff records cash payment directly
 
 | Operation | Table(s) written |
 |-----------|-----------------|
-| Cash payment recorded at front desk | `transactions` only |
+| Cash payment recorded at front desk | `transactions` + `cash_movements` + active `cash_sessions` |
 | Credit/debit card via POS (no gateway) | `transactions` only |
-| Bank transfer confirmed | `transactions` only |
+| Bank transfer submitted | `payment_proofs` metadata + private evidence file; no balance change |
+| Bank transfer confirmed | `payment_proofs` + `transactions` + reservation financial state |
 | MercadoPago link created | `payment_links` + (later) `payments` + `transactions` |
 | PayPal/Stripe checkout created | `payment_links` + (later) `payments` + `transactions` |
 | Payment gateway webhook received | `payment_webhook_events` → `payments` → `transactions` |
