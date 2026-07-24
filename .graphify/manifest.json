@@ -3264,8 +3264,8 @@
     "hash": "8e2277e0fc399686b86f61f02ef68f93"
   },
   ".graphify/GRAPH_REPORT.md": {
-    "mtime": 1784900505222.6865,
-    "hash": "149fd2a7b9529e110f63c94d17d1e8f5"
+    "mtime": 1784902051259.5444,
+    "hash": "eb22bea14026b8b6d8f57186d356ad74"
   },
   "scripts/agent_ops/manage_qa_baseline_lease.py": {
     "mtime": 1784862144921.6997,
@@ -3356,12 +3356,12 @@
     "hash": "11bf9583c0a905deb7f7e760df835718"
   },
   "frontend/e2e/responsive-smoke.spec.ts": {
-    "mtime": 1784898577697.1946,
-    "hash": "42d2cb64809a0a747906da0728428675"
+    "mtime": 1784903318864.6018,
+    "hash": "0417fd101669a65cc4d6657a983ba143"
   },
   "docs/qa/2026-07-24-pms-e2e-status.md": {
-    "mtime": 1784900704721.859,
-    "hash": "b071561abc01ae6aa15b5c3f0bd16f5e"
+    "mtime": 1784903119527.2808,
+    "hash": "bcd8b0c2b88fcbf4c7b65bd8d9915adf"
   },
   "frontend/e2e/business-journey.spec.ts": {
     "mtime": 1784886738938.8657,
@@ -3528,11 +3528,15 @@
     "hash": "c5141d702efc75c9040ca9f8718698bb"
   },
   "qa/evidence/cloud-functional-sweep-20260724/README.md": {
-    "mtime": 1784901278840.9675,
-    "hash": "714dacc753f085f882f24444106633d2"
+    "mtime": 1784903103982.703,
+    "hash": "b9495d27624ca6005464ff1ad937b118"
   },
   "frontend/e2e/reports-error-state.spec.ts": {
     "mtime": 1784900287804.3904,
     "hash": "3428f9dd99f8869bc07ed1d7e2e2f5e3"
+  },
+  "frontend/e2e/reservation-lifecycle.spec.ts": {
+    "mtime": 1784901682603.8726,
+    "hash": "e2deaaf638c2c996949c6f67585c10ac"
   }
 }
