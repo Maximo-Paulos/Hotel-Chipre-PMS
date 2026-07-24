@@ -16,7 +16,7 @@ import {
   type RoomMovementGroup
 } from "../../api/allocationRuns";
 import { hasValidSession } from "../../api/client";
-import { type Guest } from "../../api/guests";
+import { type Guest, type GuestPayload } from "../../api/guests";
 import { checkRoomAvailability, type RoomAvailabilityResponse } from "../../api/rooms";
 import { type PaymentMethod } from "../../api/payments";
 import { useCategories } from "../../hooks/useCategories";
@@ -121,6 +121,24 @@ const defaultFormState = (): FormState => ({
   status: "pending"
 });
 
+type QuickGuestForm = {
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone: string;
+  document_type: NonNullable<GuestPayload["document_type"]>;
+  document_number: string;
+};
+
+const emptyQuickGuest = (): QuickGuestForm => ({
+  first_name: "",
+  last_name: "",
+  email: "",
+  phone: "",
+  document_type: "DNI",
+  document_number: ""
+});
+
 const todayIso = () => new Date().toISOString().slice(0, 10);
 const reservationGuestLabel = (reservation: {
   guest?: { first_name: string; last_name: string } | null;
@@ -178,7 +196,7 @@ export function ReservationsPage() {
   const [editing, setEditing] = useState<Reservation | null>(null);
   const [formValues, setFormValues] = useState<FormState>(defaultFormState);
   const [formError, setFormError] = useState<string | null>(null);
-  const [guestForm, setGuestForm] = useState({ first_name: "", last_name: "", email: "", phone: "" });
+  const [guestForm, setGuestForm] = useState(emptyQuickGuest);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
   const [pricingPaymentMethod, setPricingPaymentMethod] = useState<PricingPaymentMethod>("base");
   const [depositAmountInput, setDepositAmountInput] = useState("");
@@ -468,7 +486,8 @@ export function ReservationsPage() {
         guestForm.first_name.trim() !== "" ||
         guestForm.last_name.trim() !== "" ||
         guestForm.email.trim() !== "" ||
-        guestForm.phone.trim() !== "";
+        guestForm.phone.trim() !== "" ||
+        guestForm.document_number.trim() !== "";
 
       if (!hasGuestData) {
         setFormError("Ingresá el ID del huésped o completá los datos para crearlo automáticamente.");
@@ -481,11 +500,13 @@ export function ReservationsPage() {
           last_name: guestForm.last_name.trim() || "Sin apellido",
           email: guestForm.email.trim() || undefined,
           phone: guestForm.phone.trim() || undefined,
+          document_type: guestForm.document_type,
+          document_number: guestForm.document_number.trim() || undefined,
           terms_accepted: true
         });
         guestIdNum = newGuest.id;
         setFormValues((prev) => ({ ...prev, guest_id: String(newGuest.id) }));
-        setGuestForm({ first_name: "", last_name: "", email: "", phone: "" });
+        setGuestForm(emptyQuickGuest());
         showToast("success", "Huésped creado y asignado automáticamente");
       } catch (err) {
         const msg = err instanceof Error ? err.message : "No se pudo crear el huésped";
@@ -663,14 +684,21 @@ export function ReservationsPage() {
   };
 
   const handleCreateGuest = () => {
-    guestMutation.mutate(guestForm, {
+    guestMutation.mutate(
+      {
+        ...guestForm,
+        document_number: guestForm.document_number.trim() || undefined,
+        terms_accepted: true
+      },
+      {
       onSuccess: (guest: Guest) => {
         setFormValues((prev) => ({ ...prev, guest_id: String(guest.id) }));
-        setGuestForm({ first_name: "", last_name: "", email: "", phone: "" });
+        setGuestForm(emptyQuickGuest());
         showToast("success", "Huésped creado y asignado");
       },
       onError: (err: unknown) => showToast("error", err instanceof Error ? err.message : "No se pudo crear el Huésped")
-    });
+      }
+    );
   };
 
   const paymentSummary = paymentSummaryQuery.data;
@@ -1581,7 +1609,7 @@ export function ReservationsPage() {
                   </div>
                   {guestMutation.isPending && <span className="text-xs text-slate-500">Guardando...</span>}
                 </div>
-                <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
                   <input
                     placeholder="Nombre"
                     value={guestForm.first_name}
@@ -1604,6 +1632,30 @@ export function ReservationsPage() {
                     placeholder="Teléfono"
                     value={guestForm.phone}
                     onChange={(e) => setGuestForm((prev) => ({ ...prev, phone: e.target.value }))}
+                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
+                  />
+                  <label className="text-xs font-semibold text-slate-600">
+                    Tipo de documento
+                    <select
+                      aria-label="Tipo de documento"
+                      value={guestForm.document_type ?? "DNI"}
+                      onChange={(e) =>
+                        setGuestForm((prev) => ({
+                          ...prev,
+                          document_type: e.target.value as NonNullable<GuestPayload["document_type"]>
+                        }))
+                      }
+                      className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
+                    >
+                      <option value="DNI">DNI</option>
+                      <option value="PASSPORT">Pasaporte</option>
+                      <option value="CEDULA">Cédula</option>
+                    </select>
+                  </label>
+                  <input
+                    placeholder="Documento"
+                    value={guestForm.document_number ?? ""}
+                    onChange={(e) => setGuestForm((prev) => ({ ...prev, document_number: e.target.value }))}
                     className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
                   />
                 </div>
@@ -2312,7 +2364,4 @@ export function ReservationsPage() {
     </div>
   );
 }
-
-
-
 

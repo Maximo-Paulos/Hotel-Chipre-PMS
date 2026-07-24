@@ -15,11 +15,11 @@ repositorio.
 | Área | Resultado |
 | --- | --- |
 | Frontend lint/typecheck/build | Pasan. Vite informa un bundle principal de ~760 kB minificado; queda como deuda de performance. |
-| E2E desktop | 19/19 pasan en Chromium, incluyendo login, logout, admin, calendario de tarifas, configuración del hotel y páginas V72. |
+| E2E desktop | 20/20 pasan en Chromium, incluyendo login, logout, admin, calendario de tarifas, configuración del hotel, el journey de negocio y páginas V72. |
 | E2E mobile | 2/2 pasan con viewport iPhone 13 sobre Chromium: sin overflow horizontal y navegación móvil a Reservas. |
 | Backend completo | 1171 pasan, 17 se omiten, 12 quedan xfail y 1 xpass en Python 3.12 limpio. El `.venv` legado no puede importar el código por usar un Python anterior. |
-| Migración virgen | `alembic upgrade head` pasa sobre SQLite temporal hasta `20260724_payment_proofs`. |
-| Backend focalizado | 14/14 pasan: stock, RLS de tenants y comprobantes de transferencia. |
+| Migración virgen | `alembic upgrade head` pasa sobre SQLite temporal hasta `20260724_allocation_enum_values`. |
+| Backend focalizado | 56/56 pasan: motor de asignación, operaciones de reservas, check-in, check-out y seguridad del flujo. |
 | Graphify | `portable-check` y `check-update` pasan después de actualizar el grafo. |
 
 ## Hallazgos y correcciones
@@ -79,6 +79,20 @@ Transferencia, por lo que el editor de reserva ofrecía solo Efectivo y Débito.
 La configuración local ahora incorpora toggles de medios de pago para el dueño;
 Transferencia queda documentada como flujo con comprobante y aprobación.
 
+### Journey de negocio local
+
+Se agregó un E2E aislado que crea una categoría y una habitación, crea un huésped
+rápido con documento, registra una reserva con seña manual, cobra el saldo en
+efectivo y completa check-in/check-out. El flujo pasa en 1/1 y forma parte de la
+suite desktop 20/20.
+
+Durante ese recorrido se detectó que la migración de asignación guardaba los
+estados con nombres de enum en mayúsculas mientras los modelos usaban valores en
+minúscula. La migración `20260724_allocation_enum_values` alinea SQLite y
+PostgreSQL con el contrato del modelo y fue validada desde una base virgen.
+También se incorporaron tipo y número de documento al huésped rápido para que
+el check-in respete la configuración legal del hotel.
+
 ## Limitaciones actuales
 
 - La prueba móvil automatizada emula el viewport de iPhone en Chromium; no es
@@ -89,9 +103,11 @@ Transferencia queda documentada como flujo con comprobante y aprobación.
 - El validador del manifiesto de ejemplo pasa, pero no existe un manifiesto
   provider-bound aislado para este SHA; el despliegue de la rama y la repetición
   de QA contra el preview/cloud aún no están realizados.
-- Sigue pendiente el recorrido completo de onboarding, habitaciones,
-  categorías/tarifas, reservas, check-in/out, caja, pagos mixtos, comprobantes,
-  Mercado Pago simulado, reportes, OTA, lavandería, permisos y carga.
+- El journey central de onboarding operativo, habitaciones, categoría, reserva,
+  cobro efectivo, check-in/out ya pasa localmente; siguen pendientes en el
+  preview aislado los pagos mixtos, comprobantes, Mercado Pago simulado,
+  reportes, OTA, lavandería, permisos, carga y la repetición cloud de todo el
+  ciclo.
 
 ## Próximo gate
 

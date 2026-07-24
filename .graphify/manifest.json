@@ -1452,8 +1452,8 @@
     "hash": "9e1820f423d1457b5a99108212112757"
   },
   "frontend/src/views/protected/ReservationsPage.tsx": {
-    "mtime": 1784866419639.3467,
-    "hash": "3750da703a82d6fff6139a2142fdcfd1"
+    "mtime": 1784867952970.6704,
+    "hash": "678012d30a7a7d53a5d5a6ec81fcb2f0"
   },
   "frontend/src/views/protected/RoomsPage.tsx": {
     "mtime": 1784862144906.3872,
@@ -3360,7 +3360,15 @@
     "hash": "c9ccb071243fec306b1f66559b803713"
   },
   "docs/qa/2026-07-24-pms-e2e-status.md": {
-    "mtime": 1784866102252.1948,
-    "hash": "1b8d6482e7e311e942b26f4709d4d4fc"
+    "mtime": 1784868205042.5703,
+    "hash": "e6c4c0653a2c9b73b0c1d54040272c27"
+  },
+  "frontend/e2e/business-journey.spec.ts": {
+    "mtime": 1784867875583.1873,
+    "hash": "fe2ca3b3bc96b34db945b507c70728b4"
+  },
+  "alembic/versions/20260724_allocation_enum_values.py": {
+    "mtime": 1784868257342.7349,
+    "hash": "44d14b473cc4f7267c08edb2deaa0522"
   }
 }
