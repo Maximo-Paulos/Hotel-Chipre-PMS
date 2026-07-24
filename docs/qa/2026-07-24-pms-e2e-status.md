@@ -294,6 +294,22 @@ rotación de custodia. El flujo pasa en 1/1 por Chromium y 1/1 por WebKit iPhone
 15, y forma parte de la suite completa 31/31. El fixture de imagen se genera con un
 contenido único por ejecución para no falsear la protección anti-duplicados.
 
+### Registro, verificación, recuperación y onboarding
+
+El recorrido E2E ahora también crea un owner desde `/register-owner`, obtiene
+los códigos mediante el outbox local no-op, verifica el email, completa los
+nueve pasos del onboarding, cierra sesión, recupera la contraseña y vuelve a
+iniciar sesión. Se corrigió un P1 donde el frontend intentaba guardar el owner
+antes de verificar el email, y otro donde la hidratación asíncrona de métodos de
+pago podía sobrescribir un click humano. El perfil pendiente sólo conserva
+nombre, email, teléfono y rol en `sessionStorage`; nunca contraseña, token ni
+cookie.
+
+La regresión pasa en Chromium y la suite completa queda en 35/35 usando un
+worker global sobre la SQLite aislada. La corrida con cinco workers reprodujo
+un `database is locked` durante un cobro concurrente; por eso no se considera
+evidencia funcional y las mutaciones locales se ejecutan serializadas.
+
 Durante ese recorrido se detectó que la migración de asignación guardaba los
 estados con nombres de enum en mayúsculas mientras los modelos usaban valores en
 minúscula. La migración `20260724_allocation_enum_values` alinea SQLite y
@@ -376,8 +392,10 @@ emails, webhooks ni cambios de configuración.
 - El warehouse local incluye replay acotado cada cinco minutos y reconciliación
   nocturna sobre PostgreSQL. Esto no prueba ClickPipes CDC ni el lag del
   proveedor: esas mediciones siguen pendientes en un preview aislado.
-- Las pruebas que mutan la SQLite local deben ejecutarse serializadas. Una
-  corrida paralela que arranque dos servidores E2E sobre el mismo archivo puede
+- Las pruebas que mutan la SQLite local deben ejecutarse serializadas. La
+  corrida paralela de cinco proyectos reprodujo `database is locked` durante
+  un cobro; una corrida secuencial con `--workers=1` pasa 35/35. Una corrida
+  paralela que arranque dos servidores E2E sobre el mismo archivo también puede
   fallar durante el reset con `table users already exists`; no es evidencia de
   un fallo funcional del PMS, pero sí una limitación del arnés local.
 
