@@ -768,7 +768,7 @@
   "graphifyignore_patterns": 60,
   "git": {
     "source_owner": "git",
-    "source_hash": "b933ce7f0e3e2ca59dfb4d5da414bee18a338dff",
+    "source_hash": "2935fa8a82de3f0d9ed76af7bcf2deaa371fedd9",
     "branches": [
       "codex/feature/agent-ops-knowledge",
       "codex/feature/pms-e2e-scale-hardening",
@@ -785,7 +785,7 @@
     "source": "cli",
     "root": ".",
     "git_root": ".",
-    "head": "b933ce7f0e3e2ca59dfb4d5da414bee18a338dff",
+    "head": "2935fa8a82de3f0d9ed76af7bcf2deaa371fedd9",
     "candidate_count": null,
     "included_count": 742,
     "excluded_untracked_count": 0,
