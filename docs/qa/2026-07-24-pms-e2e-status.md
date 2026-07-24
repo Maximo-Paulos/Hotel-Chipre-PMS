@@ -443,6 +443,35 @@ ciegas.
 La ejecución fue de solo lectura: no se crearon reservas, pagos, comprobantes,
 emails, webhooks ni cambios de configuración.
 
+### Revalidación cloud adicional con navegador interno y viewport Apple
+
+La sesión owner QA del navegador interno se reconectó y quedó autenticada en
+hotel ID 4. Con viewport explícito `390×844`, la disponibilidad de Standard QA
+para 2026-08-15/17 respondió `3 habitaciones`. El formulario rápido creó el
+huésped sintético ID 14, pero al seleccionar la categoría y las fechas quedó
+en `0 noches / $0`; no se confirmó la reserva.
+
+La medición responsive del build cloud devolvió `557–558px` para Dashboard,
+`392px` para Reservas, Stock, Reportes y Lavandería, y `390px` para Caja. En una
+lectura acotada de Lavandería hubo 18 controles menores a 44px entre 47
+elementos visibles, incluyendo controles de cabecera de 16–29px y controles
+operativos de 37–38px. Esto mantiene un P1 cloud de Dashboard y P2 cloud en
+las demás superficies móviles hasta repetir el resultado contra un SHA
+provider-bound; la suite local 43/43 no reproduce ese estado con el código de
+la rama.
+
+Reportes siguió en `Cargando reporte...` después de más de 20 segundos y
+Analytics/Operación en `Cargando analytics...` después de 10 segundos. Usuarios
+mostró únicamente el owner; Mercado Pago no conectado y WhatsApp revocado. No
+se crearon pagos, links, comprobantes, emails, webhooks, OTA, invitaciones ni
+se modificó configuración. El screenshot no pudo persistirse porque el backend
+de captura expiró.
+
+La evidencia detallada quedó en
+`qa/evidence/cloud-functional-sweep-20260724/README.md` y en el caso
+`cloud-owner-apple-recheck-20260724` del catálogo. El SHA desplegado continúa
+`needs-verification`.
+
 ## Limitaciones actuales
 
 - La prueba móvil automatizada emula viewports de iPhone en Chromium y WebKit;

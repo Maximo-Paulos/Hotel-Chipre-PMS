@@ -77,6 +77,52 @@ La pestaña del navegador fue dejada en el flujo cloud de QA para handoff. No se
 guardaron screenshots persistibles; el backend de captura sigue sin producir
 evidencia visual, por lo que esta revalidación no cierra la puerta funcional.
 
-No se crearon huéspedes nuevos, reservas, pagos, comprobantes, links, emails,
-webhooks, acciones OTA, invitaciones ni cambios de configuración durante esta
-continuación.
+## Revalidación owner — navegador interno conectado y vista Apple
+
+- Fecha: 2026-07-24.
+- Persona: owner QA autenticado en hotel ID 4; no se usó el selector de rol como
+  sustituto de sesiones manager, recepción o housekeeping.
+- Código local revisado: `9fcbba6`; SHA efectivamente desplegado: `needs-verification`.
+- Dispositivo: navegador interno con viewport explícito `390×844`.
+- Tipo de recorrido: barrido visible, consulta de disponibilidad y un huésped
+  sintético creado desde el formulario; la reserva no se confirmó.
+
+| Superficie | Resultado observado | Evaluación |
+| --- | --- | --- |
+| Dashboard | Renderiza la operación, pero deja una bandeja de acciones pendiente durante el smoke corto. | Smoke cloud; requiere repetir con SHA provider-bound |
+| Reservas | Renderiza 13 reservas, disponibilidad `3 habitaciones` para Standard QA del 2026-08-15 al 2026-08-17 y el formulario de reserva. | Disponibilidad aprobada; ciclo de reserva bloqueado por cotización |
+| Huésped rápido | Creó el huésped sintético `ID 14` y lo asignó al formulario. | Mutación controlada, sin email ni reserva |
+| Cotización | Con categoría Standard QA y fechas seleccionadas permanece en `Noches 0`, `Total final $ 0` y `Elegí categoría y fechas para calcular el precio desde Tarifas.` | P1 reproducible |
+| Reportes | Después de más de 20 segundos permanece en `Cargando reporte...`. | P1 reproducible |
+| Analytics/Operación | Después de 10 segundos permanece en `Cargando analytics...`; no hubo logs de error visibles. | P1 reproducible; falta traza autenticada |
+| Usuarios y roles | La pantalla muestra únicamente al owner y el formulario de invitación. | Roles cloud reales pendientes |
+| Conexiones y pruebas | Mercado Pago no conectado, WhatsApp revocado; el formulario de pruebas se inspeccionó sin crear links ni enviar Gmail. | Pendiente provider-bound |
+
+### Medición responsive cloud
+
+Con viewport real del navegador `390×844`, la lectura de overflow devolvió:
+
+| Ruta | Ancho de viewport | Ancho de documento | Resultado |
+| --- | ---: | ---: | --- |
+| `/dashboard` | 390 | 557–558 | Overflow P1 cloud |
+| `/reservas` | 390 | 392 | Overflow P2 cloud |
+| `/caja` | 390 | 390 | Sin overflow observado |
+| `/operacion/stock` | 390 | 392 | Overflow P2 cloud |
+| `/reportes` | 390 | 392 | Overflow P2 cloud |
+| `/operacion/lavanderia` | 390 | 392 | Overflow P2 cloud |
+
+En una lectura acotada de Lavandería se encontraron 18 controles visibles con
+ancho o alto menor a 44 px sobre 47 elementos inspeccionados; incluye controles
+de cabecera de 16–29 px y campos/botones operativos de 37–38 px. Es evidencia
+cloud del build publicado, no atribución definitiva al código local hasta
+desplegar el SHA actual.
+
+El huésped ID 14 es sintético y quedó sin reserva asociada; la UI no expone en
+este recorrido una eliminación rápida que permita limpiar el registro desde la
+misma pantalla. No se crearon reservas, pagos, comprobantes, links, emails,
+webhooks, acciones OTA, invitaciones ni cambios de configuración.
+
+La vista quedó pendiente de handoff en `/reportes`. No se guardaron screenshots,
+credenciales, cookies, tokens ni PII adicional; el backend de captura de
+screenshots volvió a expirar, por lo que la evidencia visual persistible sigue
+pendiente.
