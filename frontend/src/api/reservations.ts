@@ -6,7 +6,8 @@ export type ReservationStatus =
   | "fully_paid"
   | "checked_in"
   | "checked_out"
-  | "cancelled";
+  | "cancelled"
+  | "no_show";
 
 export type ReservationSource = "direct" | "booking" | "expedia" | "other_ota";
 
@@ -51,6 +52,7 @@ export type Reservation = {
   notes?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
+  version?: number;
   balance_due?: number;
   nights?: number;
   additional_guests?: Array<{
@@ -250,6 +252,17 @@ export type ReservationUpdatePayload = Partial<ReservationPayload> & {
   status?: ReservationStatus;
 };
 
+export type ReservationNoShowPayload = {
+  client_version: number;
+  notes?: string | null;
+};
+
+export type ReservationRoomMovePayload = {
+  to_room_id: number;
+  reason_code: string;
+  notes?: string | null;
+};
+
 const buildQueryString = (filters: ReservationFilters = {}) => {
   const params = new URLSearchParams();
   if (filters.status && filters.status !== "all") {
@@ -292,6 +305,12 @@ export const updateReservation = (id: number, payload: ReservationUpdatePayload,
 
 export const cancelReservation = (id: number, session?: SessionLike) =>
   apiFetch<Reservation>(`/api/reservations/${id}/cancel`, { method: "POST", session });
+
+export const markReservationNoShow = (id: number, payload: ReservationNoShowPayload, session?: SessionLike) =>
+  apiFetch<Reservation>(`/api/reservations/${id}/noshow`, { method: "POST", data: payload, session });
+
+export const moveReservationRoom = (id: number, payload: ReservationRoomMovePayload, session?: SessionLike) =>
+  apiFetch<Reservation>(`/api/reservations/${id}/room-move`, { method: "POST", data: payload, session });
 
 export const checkInReservation = (id: number, session?: SessionLike) =>
   apiFetch<Reservation>(`/api/checkin/${id}`, { method: "POST", session });

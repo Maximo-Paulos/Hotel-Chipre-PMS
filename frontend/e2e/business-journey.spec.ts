@@ -221,3 +221,96 @@ test("owner completes guided stock movements through the UI", async ({ page }) =
   await expect(movementForm.getByRole("alert")).toContainText("stock en negativo");
   await expect(movementForm.getByRole("button", { name: "Registrar Egreso", exact: true })).toBeDisabled();
 });
+
+test("owner manages a room move and no-show from the reservation ficha", async ({ page }) => {
+  const suffix = Date.now().toString();
+  const categoryName = `Operación ${suffix}`;
+  const categoryCode = `O${suffix.slice(-6)}`;
+  const firstRoomNumber = `O${suffix.slice(-5)}A`;
+  const secondRoomNumber = `O${suffix.slice(-5)}B`;
+  const guestLastName = `Operación ${suffix}`;
+
+  await login(page);
+
+  await navigateFromShell(page, "/settings/hotel");
+  await page.getByPlaceholder("Nombre").fill(categoryName);
+  await page.getByPlaceholder("Código").fill(categoryCode);
+  await page.getByPlaceholder("Precio base").fill("72000");
+  await page.getByPlaceholder("Ocupación máx").fill("2");
+  await page.getByPlaceholder("Amenidades").fill("wifi");
+  await page.getByPlaceholder("Descripción").fill("Categoría de operaciones E2E");
+  await page.getByRole("button", { name: "Agregar categoría", exact: true }).click();
+  await expect(page.getByText(`${categoryName} (${categoryCode})`, { exact: true })).toBeVisible();
+
+  const roomCategorySelect = page.locator("select").filter({ hasText: categoryName });
+  await roomCategorySelect.selectOption({ label: categoryName });
+  await page.getByPlaceholder("Número").fill(firstRoomNumber);
+  await page.getByPlaceholder("Piso").fill("3");
+  await page.getByPlaceholder("Notas").fill("Habitación origen de operaciones E2E");
+  await page.getByRole("button", { name: "Agregar habitación", exact: true }).click();
+  await expect(page.getByText(`Hab ${firstRoomNumber}`, { exact: false })).toBeVisible();
+
+  await roomCategorySelect.selectOption({ label: categoryName });
+  await page.getByPlaceholder("Número").fill(secondRoomNumber);
+  await page.getByPlaceholder("Piso").fill("3");
+  await page.getByPlaceholder("Notas").fill("Habitación destino de operaciones E2E");
+  await page.getByRole("button", { name: "Agregar habitación", exact: true }).click();
+  await expect(page.getByText(`Hab ${secondRoomNumber}`, { exact: false })).toBeVisible();
+
+  await navigateFromShell(page, "/reservas");
+  await page.getByRole("button", { name: "Crear reserva", exact: true }).click();
+  const reservationForm = page.locator("form").filter({ hasText: "Datos de la reserva" });
+  await reservationForm.getByPlaceholder("Nombre").fill("Huésped");
+  await reservationForm.getByPlaceholder("Apellido").fill(guestLastName);
+  await reservationForm.getByPlaceholder("Email").fill(`operations.${suffix}@example.test`);
+  await reservationForm.getByPlaceholder("Teléfono").fill("1112345678");
+  await reservationForm.getByLabel("Tipo de documento").selectOption("DNI");
+  await reservationForm.getByPlaceholder("Documento").fill(`OPS-${suffix}`);
+  await reservationForm.getByRole("button", { name: "Crear Huésped y asignar ID", exact: true }).click();
+  await expect(page.getByText("Huésped creado y asignado", { exact: true })).toBeVisible();
+
+  const categorySelect = reservationForm.locator("label").filter({ hasText: "Categoría" }).locator("select");
+  const categoryOption = categorySelect.locator("option").filter({ hasText: categoryName });
+  await expect(categoryOption).toHaveCount(1);
+  const categoryValue = await categoryOption.getAttribute("value");
+  expect(categoryValue).toBeTruthy();
+  await categorySelect.selectOption(categoryValue!);
+  const roomSelect = reservationForm.locator("label").filter({ hasText: "Habitación (opcional)" }).locator("select");
+  const roomOption = roomSelect.locator("option").filter({ hasText: firstRoomNumber });
+  await expect(roomOption).toHaveCount(1);
+  const roomValue = await roomOption.getAttribute("value");
+  expect(roomValue).toBeTruthy();
+  await roomSelect.selectOption(roomValue!);
+  await reservationForm.locator("label").filter({ hasText: "Check-in" }).locator('input[type="date"]').fill(localIsoDate(2));
+  await reservationForm.locator("label").filter({ hasText: "Check-out" }).locator('input[type="date"]').fill(localIsoDate(4));
+  await expect(reservationForm.getByRole("button", { name: "Crear", exact: true })).toBeEnabled();
+  await reservationForm.getByRole("button", { name: "Crear", exact: true }).click();
+  await expect(page.getByText("Reserva creada", { exact: true })).toBeVisible();
+
+  const reservationTable = page.locator("table").filter({ hasText: "Código" });
+  const reservationRow = reservationTable.locator("tbody tr").filter({ hasText: guestLastName });
+  await expect(reservationRow).toHaveCount(1);
+  await reservationRow.getByRole("button", { name: "Ficha", exact: true }).click();
+
+  const detailsModal = page.locator("div.fixed").filter({ hasText: "Ficha" });
+  await expect(detailsModal.getByRole("heading", { name: /Reserva/ })).toBeVisible();
+  const stayOperations = detailsModal.getByRole("region", { name: "Operaciones de estadía" });
+  await expect(stayOperations).toBeVisible();
+  const destinationSelect = stayOperations.getByLabel("Habitación destino");
+  const destinationOption = destinationSelect.locator("option").filter({ hasText: secondRoomNumber });
+  await expect(destinationOption).toHaveCount(1);
+  const destinationValue = await destinationOption.getAttribute("value");
+  expect(destinationValue).toBeTruthy();
+  await destinationSelect.selectOption(destinationValue!);
+  await stayOperations.getByLabel("Motivo del cambio").fill("Cambio operativo");
+  await stayOperations.getByLabel("Notas del cambio").fill("Mantenimiento preventivo de la habitación origen");
+  await stayOperations.getByRole("button", { name: "Mover habitación", exact: true }).click();
+  await expect(page.getByText("Habitación cambiada.", { exact: true })).toBeVisible();
+  await expect(detailsModal).toContainText(`Hab ${secondRoomNumber}`);
+
+  await stayOperations.getByLabel("Notas del no-show").fill("No se presentó al horario límite");
+  page.once("dialog", (dialog) => dialog.accept());
+  await stayOperations.getByRole("button", { name: "Marcar no-show", exact: true }).click();
+  await expect(page.getByText("No-show registrado.", { exact: true })).toBeVisible();
+  await expect(detailsModal).toContainText("No-show");
+});

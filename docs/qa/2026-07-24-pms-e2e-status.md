@@ -15,10 +15,10 @@ repositorio.
 | Área | Resultado |
 | --- | --- |
 | Frontend lint/typecheck/build | Pasan. Vite informa un bundle principal de ~778 kB minificado; queda como deuda de performance. |
-| E2E desktop | 21/21 pasan en Chromium, incluyendo login, logout, admin, calendario de tarifas, configuración del hotel, los journeys de negocio y páginas V72. La ejecución fresh completa queda en 29/29 al sumar móvil Chromium y los tres perfiles WebKit. |
-| E2E mobile | 2/2 pasan con Chromium emulando iPhone y verificando 375×812, 390×844 y 430×932; 6/6 pasan con Playwright WebKit en perfiles iPhone SE, iPhone 15 y iPhone 15 Pro Max; los journeys mutantes de reserva/pagos/check-in/out e inventario pasan 2/2 en WebKit iPhone 15. Esto no sustituye Safari nativo del simulador Xcode, que no está disponible en este host. |
+| E2E desktop | 22/22 pasan en Chromium, incluyendo login, logout, admin, calendario de tarifas, configuración del hotel, los journeys de negocio y páginas V72. La ejecución fresh completa queda en 30/30 al sumar móvil Chromium y los tres perfiles WebKit. |
+| E2E mobile | 2/2 pasan con Chromium emulando iPhone y verificando 375×812, 390×844 y 430×932; 6/6 pasan con Playwright WebKit en perfiles iPhone SE, iPhone 15 y iPhone 15 Pro Max; los journeys mutantes de reserva/pagos/check-in/out, inventario y cambio de habitación/no-show pasan 3/3 en WebKit iPhone 15. Esto no sustituye Safari nativo del simulador Xcode, que no está disponible en este host. |
 | Backend completo | 1212 pasan, 17 se omiten, 12 quedan xfail y 1 xpass en Python 3.12 limpio. El runner E2E rechaza explícitamente Python menor a 3.10. |
-| Migración virgen | `alembic upgrade head` pasa sobre SQLite temporal hasta `20260724_extended_tenant_composite_fks`, incluyendo blobs privados, rotación, custodia y el cierre de claves tenant restantes. |
+| Migración virgen | `alembic upgrade head` pasa sobre SQLite temporal hasta `20260724_room_move_enum_values`, incluyendo blobs privados, rotación, custodia, claves tenant restantes y el contrato de movimientos de habitación. |
 | Backend focalizado | 56/56 pasan: motor de asignación, operaciones de reservas, check-in, check-out y seguridad del flujo. |
 | Analítica y trazabilidad | 27/27 pasan en contratos/API; cada envelope expone `data_as_of`, `source_lag_seconds` y `data_source`, y la UI lo muestra. |
 | Aislamiento/cache/concurrencia | 56/56 pasan en aislamiento multi-hotel, cache con fallback PG y locks Redis/Valkey; caja y allocation quedaron protegidos. |
@@ -91,6 +91,31 @@ que un egreso superior al disponible quede bloqueado antes de enviar.
 La prueba creó datos identificables con prefijo `QA móvil` en el hotel de
 prueba. Quedan pendientes de limpieza o de una política explícita de fixtures
 reutilizables antes de repetir pruebas mutantes en el mismo hotel.
+
+### Cambio de habitación y no-show
+
+La ficha de reserva ahora expone un bloque guiado de `Operaciones de estadía`.
+El operador puede elegir una habitación destino activa de la misma categoría,
+informar motivo y notas, y ejecutar el cambio desde la ficha. La API conserva
+la transición auditada y la UI muestra el número visible de la habitación, no
+el identificador interno.
+
+La misma ficha permite registrar un no-show para reservas pendientes o pagadas,
+con notas y confirmación explícita. El estado queda representado como
+`No-show` y no genera un cobro automático. El contrato frontend incluye la
+versión optimista de la reserva para que el backend pueda rechazar cambios
+obsoletos.
+
+El journey crea dos habitaciones, crea una reserva asignada, mueve la reserva
+con motivo/notas y luego registra el no-show. Pasa 1/1 en Chromium y 1/1 en
+WebKit iPhone 15.
+
+El primer intento reveló un defecto real en una base virgen: la migración de
+movimientos había creado el constraint SQLite/enum PostgreSQL con nombres de
+miembro en mayúscula, mientras el servicio persistía los valores en minúscula.
+La nueva migración `20260724_room_move_enum_values` repara datos existentes y
+alinea ambos motores con el contrato runtime; la prueba fresh vuelve a ejecutar
+toda la cadena hasta `head`.
 
 ### Pagos y caja
 
@@ -210,7 +235,8 @@ distribuidos no están habilitados y requeridos.
   de QA contra el preview/cloud aún no están realizados.
 - El journey central de onboarding operativo, habitaciones, categoría, reserva,
   pagos mixtos (efectivo + comprobante de transferencia aprobado), check-in/out,
-  cierre de caja e inventario guiado ya pasa localmente; siguen pendientes en el
+  cierre de caja, inventario guiado y operaciones de estadía ya pasan localmente;
+  siguen pendientes en el
   preview aislado el Mercado Pago simulado,
   reportes, OTA, lavandería, carga y la repetición cloud de todo el ciclo. El
   contrato local de permisos pasa y su seed ya está protegido contra carreras.
@@ -224,6 +250,10 @@ distribuidos no están habilitados y requeridos.
 - El warehouse local incluye replay acotado cada cinco minutos y reconciliación
   nocturna sobre PostgreSQL. Esto no prueba ClickPipes CDC ni el lag del
   proveedor: esas mediciones siguen pendientes en un preview aislado.
+- Las pruebas que mutan la SQLite local deben ejecutarse serializadas. Una
+  corrida paralela que arranque dos servidores E2E sobre el mismo archivo puede
+  fallar durante el reset con `table users already exists`; no es evidencia de
+  un fallo funcional del PMS, pero sí una limitación del arnés local.
 
 ## Próximo gate
 

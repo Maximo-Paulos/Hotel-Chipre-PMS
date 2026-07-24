@@ -3,8 +3,12 @@ import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
+  markReservationNoShow,
+  moveReservationRoom,
   type Reservation,
+  type ReservationNoShowPayload,
   type ReservationPendingAction,
+  type ReservationRoomMovePayload,
   type ReservationSource,
   type ReservationStatus
 } from "../../api/reservations";
@@ -100,7 +104,8 @@ const statusConfig: Record<ReservationStatus, { label: string; className: string
   fully_paid: { label: "Pago completo", className: "bg-emerald-100 text-emerald-800" },
   checked_in: { label: "Check-in", className: "bg-emerald-200 text-emerald-900" },
   checked_out: { label: "Check-out", className: "bg-sky-100 text-sky-800" },
-  cancelled: { label: "Cancelada", className: "bg-rose-100 text-rose-800" }
+  cancelled: { label: "Cancelada", className: "bg-rose-100 text-rose-800" },
+  no_show: { label: "No-show", className: "bg-violet-100 text-violet-800" }
 };
 
 const priorityConfig: Record<ReservationPendingAction["priority"], { label: string; className: string }> = {
@@ -210,6 +215,8 @@ export function ReservationsPage() {
   });
   const [calendarRange, setCalendarRange] = useState<"week" | "month">("week");
   const [detailsReservationId, setDetailsReservationId] = useState<number | null>(null);
+  const [roomMoveForm, setRoomMoveForm] = useState({ to_room_id: "", reason_code: "", notes: "" });
+  const [noShowNotes, setNoShowNotes] = useState("");
   const [guestIdOpen, setGuestIdOpen] = useState<number | null>(null);
   const [allocationForm, setAllocationForm] = useState({
     apply: true,
@@ -251,6 +258,10 @@ export function ReservationsPage() {
   const detailsReservationQuery = useReservation(detailsReservationId ?? undefined);
   const detailsReservation =
     detailsReservationQuery.data ?? reservations.find((item) => item.id === detailsReservationId) ?? null;
+  const detailsRoom = useMemo(
+    () => (roomsQuery.data ?? []).find((room) => room.id === detailsReservation?.room_id) ?? null,
+    [detailsReservation?.room_id, roomsQuery.data]
+  );
   const detailsSummaryQuery = usePaymentSummary(detailsReservationId || undefined);
   const detailsOperationsQuery = useReservationOperationsSummary(detailsReservationId || undefined);
   const paymentMutation = usePaymentMutation(editing?.id || undefined);
@@ -274,6 +285,24 @@ export function ReservationsPage() {
     queryClient.invalidateQueries({ queryKey: ["room-movement-groups", session.hotelId] });
     queryClient.invalidateQueries({ queryKey: ["payment-summary", session.hotelId] });
   };
+
+  const roomMoveMutation = useMutation<Reservation, unknown, { reservationId: number; payload: ReservationRoomMovePayload }>({
+    mutationFn: ({ reservationId, payload }) => moveReservationRoom(reservationId, payload, session),
+    onSuccess: () => {
+      invalidateAllocationState();
+      setRoomMoveForm({ to_room_id: "", reason_code: "", notes: "" });
+      showToast("success", "Habitación cambiada.");
+    }
+  });
+
+  const noShowMutation = useMutation<Reservation, unknown, { reservationId: number; payload: ReservationNoShowPayload }>({
+    mutationFn: ({ reservationId, payload }) => markReservationNoShow(reservationId, payload, session),
+    onSuccess: () => {
+      invalidateAllocationState();
+      setNoShowNotes("");
+      showToast("success", "No-show registrado.");
+    }
+  });
 
   const allocationRunMutation = useMutation<AllocationRunResponse, unknown, typeof allocationForm>({
     mutationFn: (payload) =>
@@ -303,6 +332,17 @@ export function ReservationsPage() {
 
   const today = todayIso();
   const totalRooms = roomsQuery.data?.length ?? 0;
+  const moveRoomOptions = useMemo(() => {
+    if (!detailsReservation) return [];
+    return (roomsQuery.data ?? []).filter(
+      (room) =>
+        room.is_active &&
+        room.category_id === detailsReservation.category_id &&
+        room.id !== detailsReservation.room_id &&
+        room.status !== "maintenance" &&
+        room.status !== "blocked"
+    );
+  }, [detailsReservation, roomsQuery.data]);
 
   const categoryOptions = useMemo(
     () => categoriesData.map((cat) => ({ value: String(cat.id), label: `${cat.name} (#${cat.id})` })),
@@ -587,6 +627,8 @@ export function ReservationsPage() {
   const canCancel = (status: ReservationStatus) => status !== "cancelled" && status !== "checked_out" && status !== "checked_in";
   const canCheckIn = (status: ReservationStatus) => ["pending", "deposit_paid", "fully_paid"].includes(status);
   const canCheckOut = (status: ReservationStatus) => status === "checked_in";
+  const canNoShow = (status: ReservationStatus) => ["pending", "deposit_paid", "fully_paid"].includes(status);
+  const canMoveRoom = (status: ReservationStatus) => !["cancelled", "checked_out", "no_show"].includes(status);
 
   const handleCancel = (id: number) =>
     cancelMutation.mutate(id, {
@@ -930,8 +972,16 @@ export function ReservationsPage() {
   };
 
   const openDetails = (reservation: Reservation) => setDetailsReservationId(reservation.id);
-  const openDetailsById = (reservationId: number) => setDetailsReservationId(reservationId);
-  const closeDetails = () => setDetailsReservationId(null);
+  const openDetailsById = (reservationId: number) => {
+    setDetailsReservationId(reservationId);
+    setRoomMoveForm({ to_room_id: "", reason_code: "", notes: "" });
+    setNoShowNotes("");
+  };
+  const closeDetails = () => {
+    setDetailsReservationId(null);
+    setRoomMoveForm({ to_room_id: "", reason_code: "", notes: "" });
+    setNoShowNotes("");
+  };
   const openGuest = (guestId: number) => setGuestIdOpen(guestId);
   const closeGuest = () => setGuestIdOpen(null);
 
@@ -954,6 +1004,42 @@ export function ReservationsPage() {
           showToast("error", err instanceof Error ? err.message : "No se pudo cerrar la revisión manual")
       }
     );
+
+  const handleRoomMove = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!detailsReservation || !roomMoveForm.to_room_id || !roomMoveForm.reason_code.trim()) {
+      showToast("error", "Elegí una habitación destino e indicá el motivo del cambio.");
+      return;
+    }
+    roomMoveMutation.mutate(
+      {
+        reservationId: detailsReservation.id,
+        payload: {
+          to_room_id: Number(roomMoveForm.to_room_id),
+          reason_code: roomMoveForm.reason_code.trim(),
+          notes: roomMoveForm.notes.trim() || null
+        }
+      },
+      {
+        onError: (err: unknown) =>
+          showToast("error", err instanceof Error ? err.message : "No se pudo cambiar la habitación")
+      }
+    );
+  };
+
+  const handleNoShow = () => {
+    if (!detailsReservation || !canNoShow(detailsReservation.status)) return;
+    if (!window.confirm("¿Marcar esta reserva como no-show? No genera un cargo automático.")) return;
+    noShowMutation.mutate(
+      {
+        reservationId: detailsReservation.id,
+        payload: { client_version: detailsReservation.version ?? 0, notes: noShowNotes.trim() || null }
+      },
+      {
+        onError: (err: unknown) => showToast("error", err instanceof Error ? err.message : "No se pudo registrar el no-show")
+      }
+    );
+  };
 
   const exportVoucher = () => {
     if (!detailsReservation) return;
@@ -2307,7 +2393,7 @@ export function ReservationsPage() {
                 <h3 className="text-lg font-semibold text-slate-900">Reserva {detailsReservation.confirmation_code}</h3>
                 <p className="text-xs text-slate-500">
                   {reservationGuestLabel(detailsReservation)} - Cat {detailsReservation.category_id} -{" "}
-                  {detailsReservation.room_id ? `Hab ${detailsReservation.room_id}` : "Sin asignar"}
+                  {detailsRoom ? `Hab ${detailsRoom.room_number}` : detailsReservation.room_id ? `Hab #${detailsReservation.room_id}` : "Sin asignar"}
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -2506,6 +2592,108 @@ export function ReservationsPage() {
                 )}
               </div>
             </div>
+
+            <section
+              role="region"
+              aria-labelledby="stay-operations-title"
+              className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3"
+            >
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Operación</p>
+                  <h4 id="stay-operations-title" className="text-sm font-semibold text-slate-900">
+                    Operaciones de estadía
+                  </h4>
+                  <p className="text-xs text-slate-600">
+                    Los cambios quedan auditados. El no-show no genera un cargo automático.
+                  </p>
+                </div>
+                {detailsReservation.version !== undefined ? (
+                  <span className="text-xs text-slate-500">Versión {detailsReservation.version}</span>
+                ) : null}
+              </div>
+
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                <form className="space-y-3 rounded-lg border border-slate-200 bg-white p-3" onSubmit={handleRoomMove}>
+                  <p className="text-sm font-semibold text-slate-800">Cambiar habitación</p>
+                  <label className="space-y-1 text-sm">
+                    <span className="text-slate-600">Habitación destino</span>
+                    <select
+                      value={roomMoveForm.to_room_id}
+                      onChange={(event) => setRoomMoveForm((current) => ({ ...current, to_room_id: event.target.value }))}
+                      disabled={!canMoveRoom(detailsReservation.status) || roomMoveMutation.isPending}
+                      required
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                    >
+                      <option value="">Seleccionar habitación</option>
+                      {moveRoomOptions.map((room) => (
+                        <option key={room.id} value={room.id}>
+                          Hab {room.room_number} · Piso {room.floor}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="space-y-1 text-sm">
+                    <span className="text-slate-600">Motivo del cambio</span>
+                    <input
+                      value={roomMoveForm.reason_code}
+                      onChange={(event) => setRoomMoveForm((current) => ({ ...current, reason_code: event.target.value }))}
+                      disabled={!canMoveRoom(detailsReservation.status) || roomMoveMutation.isPending}
+                      placeholder="Mantenimiento, upgrade, pedido del huésped"
+                      required
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                    />
+                  </label>
+                  <label className="space-y-1 text-sm">
+                    <span className="text-slate-600">Notas del cambio</span>
+                    <textarea
+                      value={roomMoveForm.notes}
+                      onChange={(event) => setRoomMoveForm((current) => ({ ...current, notes: event.target.value }))}
+                      disabled={!canMoveRoom(detailsReservation.status) || roomMoveMutation.isPending}
+                      rows={2}
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                    />
+                  </label>
+                  <button
+                    type="submit"
+                    disabled={!canMoveRoom(detailsReservation.status) || roomMoveMutation.isPending || moveRoomOptions.length === 0}
+                    className="w-full rounded-lg border border-brand-200 bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {roomMoveMutation.isPending ? "Moviendo..." : "Mover habitación"}
+                  </button>
+                  {moveRoomOptions.length === 0 && canMoveRoom(detailsReservation.status) ? (
+                    <p className="text-xs text-amber-700">No hay otra habitación activa disponible en esta categoría.</p>
+                  ) : null}
+                </form>
+
+                <div className="space-y-3 rounded-lg border border-slate-200 bg-white p-3">
+                  <p className="text-sm font-semibold text-slate-800">Registrar no-show</p>
+                  <label className="space-y-1 text-sm">
+                    <span className="text-slate-600">Notas del no-show</span>
+                    <textarea
+                      aria-label="Notas del no-show"
+                      value={noShowNotes}
+                      onChange={(event) => setNoShowNotes(event.target.value)}
+                      disabled={!canNoShow(detailsReservation.status) || noShowMutation.isPending}
+                      rows={4}
+                      placeholder="Motivo o contacto realizado"
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleNoShow}
+                    disabled={!canNoShow(detailsReservation.status) || noShowMutation.isPending}
+                    className="w-full rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-sm font-semibold text-violet-800 hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {noShowMutation.isPending ? "Registrando..." : "Marcar no-show"}
+                  </button>
+                  {!canNoShow(detailsReservation.status) ? (
+                    <p className="text-xs text-slate-500">Esta reserva ya no admite marcar no-show desde su estado actual.</p>
+                  ) : null}
+                </div>
+              </div>
+            </section>
 
             {detailsOperations?.open_adjustments?.length ? (
               <div className="mt-4 rounded-lg border border-slate-200 bg-white">
