@@ -1100,8 +1100,8 @@
     "hash": "70ea4197fe8494bac4fc09ce0bd4dfb2"
   },
   "frontend/playwright.config.ts": {
-    "mtime": 1784883430804.386,
-    "hash": "b0bd64e122da9fa6aa4f91e7ab84a72d"
+    "mtime": 1784894835029.9983,
+    "hash": "ffe8beec202eb322a9028ac8920a656b"
   },
   "frontend/src/App.tsx": {
     "mtime": 1784862144901.0059,
@@ -1560,8 +1560,8 @@
     "hash": "898e2282ec17bf808e708770ada7811a"
   },
   "scripts/seed_e2e_backend.py": {
-    "mtime": 1784876503486.5935,
-    "hash": "3557b53c12e730d5b02d07e2fde1f38f"
+    "mtime": 1784894835029.5215,
+    "hash": "5e9cf30336173cd5808ddcd7ff9bbb68"
   },
   "scripts/serve_e2e_backend.py": {
     "mtime": 1784888009402.0476,
@@ -3264,8 +3264,8 @@
     "hash": "8e2277e0fc399686b86f61f02ef68f93"
   },
   ".graphify/GRAPH_REPORT.md": {
-    "mtime": 1784890705880.8303,
-    "hash": "abd3559b1e936c4ecafbc0089915b8e9"
+    "mtime": 1784894956768.176,
+    "hash": "344e48cf16f810e7f52242d4d3ef1674"
   },
   "scripts/agent_ops/manage_qa_baseline_lease.py": {
     "mtime": 1784862144921.6997,
@@ -3360,8 +3360,8 @@
     "hash": "cc3b4c09ac92a7d389d9ad275a799aa0"
   },
   "docs/qa/2026-07-24-pms-e2e-status.md": {
-    "mtime": 1784890723885.5227,
-    "hash": "16e1fe3ef1ec9f11e5d5e860c6eb3406"
+    "mtime": 1784894258153.494,
+    "hash": "3ce9ef596fad8df6cdca8da7ecda25ed"
   },
   "frontend/e2e/business-journey.spec.ts": {
     "mtime": 1784886738938.8657,
@@ -3498,5 +3498,17 @@
   "docs/data-foundations/slo-catalog.md": {
     "mtime": 1784889236772.2346,
     "hash": "3c07eda86f2ac85bd88913db814e1aa3"
+  },
+  "app/services/financial_ledger.py": {
+    "mtime": 1784890346636.0361,
+    "hash": "cc662d08b4977fa9deef0c644f39f339"
+  },
+  "tests/test_payment_api_idempotency.py": {
+    "mtime": 1784890091762.8228,
+    "hash": "9cb4abce74c620496562e8813f25b0e9"
+  },
+  "frontend/e2e/role-journey.spec.ts": {
+    "mtime": 1784894835029.7754,
+    "hash": "af1537bbdfd5c568f76cfdc4c99169f9"
   }
 }
