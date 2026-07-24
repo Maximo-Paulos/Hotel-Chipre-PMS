@@ -572,5 +572,10 @@ Se agregó el journey guest-companion-journey.spec.ts para cubrir desde la
 interfaz la creación rápida de un huésped, su búsqueda por apellido y el alta de
 un acompañante con documento y relación. Pasó en Chromium y en WebKit iPhone 15.
 La prueba usa datos sintéticos con sufijo temporal y no ejecuta pagos, emails,
-webhooks ni integraciones externas. La regresión E2E completa quedó en 50/50
-sobre el commit 0510fa0.
+webhooks ni integraciones externas. La regresión E2E quedó en 50/50 sobre el
+commit 0510fa0.
+
+También se agregó el journey zz-cash-control-journey.spec.ts para cubrir
+ingreso y egreso manual, cierre con diferencia, aprobación, custodia automática
+del owner y caja sucesora. Pasó en Chromium y en WebKit iPhone 15; la suite
+completa volvió a pasar 51/51 sobre el commit b5d1a6d.

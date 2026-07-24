@@ -1100,8 +1100,8 @@
     "hash": "70ea4197fe8494bac4fc09ce0bd4dfb2"
   },
   "frontend/playwright.config.ts": {
-    "mtime": 1784906883995.5637,
-    "hash": "a6e9fda59e750a44d14d6f9bf8dedf9d"
+    "mtime": 1784907291233.539,
+    "hash": "31c620718e822dcdd8a2fc21a4ba0100"
   },
   "frontend/src/App.tsx": {
     "mtime": 1784862144901.0059,
@@ -3264,8 +3264,8 @@
     "hash": "8e2277e0fc399686b86f61f02ef68f93"
   },
   ".graphify/GRAPH_REPORT.md": {
-    "mtime": 1784907148683.0447,
-    "hash": "7a34284f34289efd960a24fa8c731af1"
+    "mtime": 1784907207911.939,
+    "hash": "c549c94b3565e59dd3c2fd5af0bd998f"
   },
   "scripts/agent_ops/manage_qa_baseline_lease.py": {
     "mtime": 1784862144921.6997,
@@ -3360,8 +3360,8 @@
     "hash": "0417fd101669a65cc4d6657a983ba143"
   },
   "docs/qa/2026-07-24-pms-e2e-status.md": {
-    "mtime": 1784907182493.572,
-    "hash": "833d5a8050576c40972bfd0f0f3fe881"
+    "mtime": 1784907726527.3914,
+    "hash": "ac05563ea8c95a065501cf220eca1f49"
   },
   "frontend/e2e/business-journey.spec.ts": {
     "mtime": 1784904324073.8352,
@@ -3546,5 +3546,9 @@
   "frontend/e2e/guest-companion-journey.spec.ts": {
     "mtime": 1784906901080.6172,
     "hash": "76330f364d90aa0bfa88aee681ca4e76"
+  },
+  "frontend/e2e/zz-cash-control-journey.spec.ts": {
+    "mtime": 1784907574571.593,
+    "hash": "9b930342c62b4eac64feab93874e59a6"
   }
 }
