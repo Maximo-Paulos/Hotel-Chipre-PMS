@@ -63,6 +63,38 @@ async function openReservationForm(
   return form;
 }
 
+test("owner preserves availability dates after querying a category", async ({ page }) => {
+  const checkIn = localIsoDate(30);
+  const checkOut = localIsoDate(32);
+
+  await login(page);
+  await page.goto("/reservas");
+
+  const categorySelect = page.getByRole("combobox", { name: "Categoría", exact: true });
+  await expect(categorySelect).toHaveCount(1);
+  const categoryOption = categorySelect.locator("option").filter({ hasText: "Standard E2E" });
+  await expect(categoryOption).toHaveCount(1);
+  const categoryValue = await categoryOption.getAttribute("value");
+  expect(categoryValue).toBeTruthy();
+  await categorySelect.selectOption(categoryValue!);
+
+  const checkInField = page.getByRole("textbox", { name: "Check-in", exact: true });
+  const checkOutField = page.getByRole("textbox", { name: "Check-out", exact: true });
+  await expect(checkInField).toHaveCount(1);
+  await expect(checkOutField).toHaveCount(1);
+  await checkInField.fill(checkIn);
+  await checkInField.press("Tab");
+  await checkOutField.fill(checkOut);
+  await checkOutField.press("Tab");
+
+  const availabilityButton = page.getByRole("button", { name: "Consultar", exact: true });
+  await expect(availabilityButton).toHaveCount(1);
+  await availabilityButton.click();
+  await expect(page.getByText(/Disponibles: \d+ habitaciones/, { exact: false })).toBeVisible();
+  await expect(checkInField).toHaveValue(checkIn);
+  await expect(checkOutField).toHaveValue(checkOut);
+});
+
 test("owner edits, extends, rejects an overlap and cancels a reservation", async ({ page }) => {
   const suffix = `${Date.now()}`;
   const guestLastName = `Lifecycle ${suffix}`;
