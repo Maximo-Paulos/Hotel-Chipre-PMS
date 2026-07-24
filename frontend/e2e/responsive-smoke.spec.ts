@@ -48,4 +48,35 @@ test.describe("Responsive mobile smoke", () => {
     await expect(page).toHaveURL(/\/reservas$/);
     await expect(page.locator("main").getByRole("heading", { name: "Reservas", exact: true })).toBeVisible();
   });
+
+  test("critical mobile controls provide 44px touch targets", async ({ page }) => {
+    await login(page);
+    await page.setViewportSize({ width: 375, height: 812 });
+
+    for (const path of ["/reservas", "/caja", "/operacion/stock"]) {
+      await page.goto(path);
+      const targets = await page.evaluate(() => {
+        const nodes = Array.from(
+          document.querySelectorAll(
+            "main button, main input:not([type='checkbox']):not([type='radio']), main select, main textarea, [role='banner'] button, [role='banner'] select"
+          )
+        );
+        return nodes
+          .map((node) => {
+            const element = node as HTMLElement;
+            const rect = element.getBoundingClientRect();
+            const style = window.getComputedStyle(element);
+            return {
+              tag: element.tagName,
+              label: element.getAttribute("aria-label") || element.textContent?.trim().slice(0, 50) || "",
+              height: Math.round(rect.height),
+              visible: rect.width > 0 && rect.height > 0 && style.visibility !== "hidden" && style.display !== "none"
+            };
+          })
+          .filter((target) => target.visible);
+      });
+
+      expect(targets.filter((target) => target.height < 44), `${path} has undersized touch targets`).toEqual([]);
+    }
+  });
 });

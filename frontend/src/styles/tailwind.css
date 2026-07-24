@@ -7,3 +7,19 @@
   color: #0f172a;
   background-color: #f8fafc;
 }
+
+@media (max-width: 639px) {
+  main button,
+  main input:not([type="checkbox"]):not([type="radio"]),
+  main select,
+  main textarea,
+  [role="banner"] button,
+  [role="banner"] select {
+    min-height: 44px;
+  }
+
+  main select,
+  [role="banner"] select {
+    height: 44px;
+  }
+}
