@@ -53,6 +53,21 @@ de controles táctiles exige una altura mínima de 44 px. La ejecución fresh
 serial pasó 47/47 en Chromium móvil y WebKit iPhone SE, iPhone 15 y iPhone 15
 Pro Max.
 
+### Comprobantes de transferencia: rechazo y reintento
+
+En el commit `a04728c` se amplió el journey financiero de
+`frontend/e2e/business-journey.spec.ts`: después de un cobro parcial en
+efectivo, se carga un comprobante sintético de transferencia, se lo rechaza
+con motivo visible, se reenvía una imagen con hash distinto y se aprueba antes
+de completar el saldo en efectivo. El camino pasó 4/4 en Chromium y 4/4 en el
+proyecto WebKit iPhone 15 de negocio (`E2E_WEBKIT_BUSINESS=true`). Esto prueba
+desde la UI que un rechazo no descuenta saldo, que el reintento no reutiliza el
+comprobante previo y que la aprobación queda lista para el cobro mixto.
+
+La cobertura local todavía no reemplaza el preview provider-bound ni verifica
+en la UI el reembolso, el link de Mercado Pago simulado y la repetición de
+webhooks; esos puntos siguen pendientes junto con la conciliación cloud.
+
 ### Smoke de la skill de navegador interno
 
 La skill `browser:control-in-app-browser` quedó verificada con la pestaña QA
