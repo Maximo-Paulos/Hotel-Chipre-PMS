@@ -1452,8 +1452,8 @@
     "hash": "9e1820f423d1457b5a99108212112757"
   },
   "frontend/src/views/protected/ReservationsPage.tsx": {
-    "mtime": 1784885567786.9138,
-    "hash": "b9c7197d664d00b74a3d8c7d5945c6c0"
+    "mtime": 1784899797685.3245,
+    "hash": "42b97ad6649aa93c9c41fc6134e6eee8"
   },
   "frontend/src/views/protected/RoomsPage.tsx": {
     "mtime": 1784862144906.3872,
@@ -3264,8 +3264,8 @@
     "hash": "8e2277e0fc399686b86f61f02ef68f93"
   },
   ".graphify/GRAPH_REPORT.md": {
-    "mtime": 1784897945374.9744,
-    "hash": "9dc71571ac6ac987dd319195065202f2"
+    "mtime": 1784899978464.2703,
+    "hash": "1a8b0e3ab0a05c6b65bf8b2f2bcaf435"
   },
   "scripts/agent_ops/manage_qa_baseline_lease.py": {
     "mtime": 1784862144921.6997,
@@ -3360,8 +3360,8 @@
     "hash": "42d2cb64809a0a747906da0728428675"
   },
   "docs/qa/2026-07-24-pms-e2e-status.md": {
-    "mtime": 1784898001908.164,
-    "hash": "d48b14cfac96f9c21bf1004d6721ad72"
+    "mtime": 1784899471446.776,
+    "hash": "239911f37b3f0dcd6462b88c0f605c88"
   },
   "frontend/e2e/business-journey.spec.ts": {
     "mtime": 1784886738938.8657,
@@ -3522,5 +3522,13 @@
   "frontend/e2e/analytics-error-state.spec.ts": {
     "mtime": 1784897454225.2747,
     "hash": "a4f2e89b6559f35a1a90b7001558bd00"
+  },
+  "frontend/e2e/reservation-quote-error.spec.ts": {
+    "mtime": 1784899733271.752,
+    "hash": "c5141d702efc75c9040ca9f8718698bb"
+  },
+  "qa/evidence/cloud-functional-sweep-20260724/README.md": {
+    "mtime": 1784899487323.7417,
+    "hash": "25478dc3a84389feb48f76d9805ae9bc"
   }
 }

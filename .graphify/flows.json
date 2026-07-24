@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-24T08:24:49.124Z",
+  "generatedAt": "2026-07-24T13:33:30.095Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -1539,6 +1539,30 @@
       "warnings": []
     },
     {
+      "id": "flow:hooks_usecashregister_invalidatecashregisterqueries",
+      "name": "invalidateCashRegisterQueries",
+      "entryPoint": "hooks_usecashregister_invalidatecashregisterqueries",
+      "entryPointId": "hooks_usecashregister_invalidatecashregisterqueries",
+      "path": [
+        "hooks_usecashregister_invalidatecashregisterqueries",
+        "hooks_usecashregister_cashsessionskey",
+        "hooks_usecashregister_latestclosereportkey"
+      ],
+      "qualifiedPath": [
+        "hooks_usecashregister_invalidatecashregisterqueries",
+        "hooks_usecashregister_cashsessionskey",
+        "hooks_usecashregister_latestclosereportkey"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/hooks/useCashRegister.ts"
+      ],
+      "criticality": 0.3267,
+      "warnings": []
+    },
+    {
       "id": "flow:services_payment_link_test_service_validate_mercadopago_webhook_signature",
       "name": "validate_mercadopago_webhook_signature",
       "entryPoint": "services_payment_link_test_service_validate_mercadopago_webhook_signature",
@@ -1964,6 +1988,28 @@
       "fileCount": 1,
       "files": [
         "app/adapters/paypal_adapter.py"
+      ],
+      "criticality": 0.285,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_stock_create_movement",
+      "name": "create_movement",
+      "entryPoint": "api_stock_create_movement",
+      "entryPointId": "api_stock_create_movement",
+      "path": [
+        "api_stock_create_movement",
+        "api_stock_ensure_adjustment_permission"
+      ],
+      "qualifiedPath": [
+        "api_stock_create_movement",
+        "api_stock_ensure_adjustment_permission"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/stock.py"
       ],
       "criticality": 0.285,
       "warnings": []
@@ -2853,6 +2899,42 @@
       "warnings": []
     },
     {
+      "id": "flow:scripts_seed_e2e_backend_main",
+      "name": "main",
+      "entryPoint": "scripts_seed_e2e_backend_main",
+      "entryPointId": "scripts_seed_e2e_backend_main",
+      "path": [
+        "scripts_seed_e2e_backend_main",
+        "scripts_seed_e2e_backend_prepare_e2e_environment",
+        "scripts_seed_e2e_backend_reset_e2e_database",
+        "scripts_seed_e2e_backend_run_migrations",
+        "scripts_seed_e2e_backend_upsert_seed_data",
+        "scripts_seed_e2e_backend_e2esafetyerror",
+        "scripts_seed_e2e_backend_normalize_sqlite_url",
+        "scripts_seed_e2e_backend_credentials",
+        "scripts_seed_e2e_backend_role_credentials"
+      ],
+      "qualifiedPath": [
+        "scripts_seed_e2e_backend_main",
+        "scripts_seed_e2e_backend_prepare_e2e_environment",
+        "scripts_seed_e2e_backend_reset_e2e_database",
+        "scripts_seed_e2e_backend_run_migrations",
+        "scripts_seed_e2e_backend_upsert_seed_data",
+        "scripts_seed_e2e_backend_e2esafetyerror",
+        "scripts_seed_e2e_backend_normalize_sqlite_url",
+        "scripts_seed_e2e_backend_credentials",
+        "scripts_seed_e2e_backend_role_credentials"
+      ],
+      "depth": 2,
+      "nodeCount": 9,
+      "fileCount": 1,
+      "files": [
+        "scripts/seed_e2e_backend.py"
+      ],
+      "criticality": 0.2533,
+      "warnings": []
+    },
+    {
       "id": "flow:services_email_service_send_reset_password_email",
       "name": "send_reset_password_email",
       "entryPoint": "services_email_service_send_reset_password_email",
@@ -2950,30 +3032,6 @@
       ],
       "qualifiedPath": [
         "analytics_analyticspages_analyticsaichatpage",
-        "analytics_analyticspages_useanalyticsquery",
-        "analytics_analyticspages_usepersistedanalyticsfilters"
-      ],
-      "depth": 1,
-      "nodeCount": 3,
-      "fileCount": 1,
-      "files": [
-        "frontend/src/views/protected/analytics/AnalyticsPages.tsx"
-      ],
-      "criticality": 0.2433,
-      "warnings": []
-    },
-    {
-      "id": "flow:analytics_analyticspages_reportscreen",
-      "name": "ReportScreen",
-      "entryPoint": "analytics_analyticspages_reportscreen",
-      "entryPointId": "analytics_analyticspages_reportscreen",
-      "path": [
-        "analytics_analyticspages_reportscreen",
-        "analytics_analyticspages_useanalyticsquery",
-        "analytics_analyticspages_usepersistedanalyticsfilters"
-      ],
-      "qualifiedPath": [
-        "analytics_analyticspages_reportscreen",
         "analytics_analyticspages_useanalyticsquery",
         "analytics_analyticspages_usepersistedanalyticsfilters"
       ],
@@ -3163,6 +3221,34 @@
       "warnings": []
     },
     {
+      "id": "flow:services_financial_ledger_operational_balance_due",
+      "name": "operational_balance_due",
+      "entryPoint": "services_financial_ledger_operational_balance_due",
+      "entryPointId": "services_financial_ledger_operational_balance_due",
+      "path": [
+        "services_financial_ledger_operational_balance_due",
+        "services_financial_ledger_paid_amount_with_legacy_fallback",
+        "services_financial_ledger_completed_paid_amount",
+        "services_financial_ledger_completed_paid_amounts_by_reservation",
+        "services_financial_ledger_signed_transaction_amount"
+      ],
+      "qualifiedPath": [
+        "services_financial_ledger_operational_balance_due",
+        "services_financial_ledger_paid_amount_with_legacy_fallback",
+        "services_financial_ledger_completed_paid_amount",
+        "services_financial_ledger_completed_paid_amounts_by_reservation",
+        "services_financial_ledger_signed_transaction_amount"
+      ],
+      "depth": 4,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "app/services/financial_ledger.py"
+      ],
+      "criticality": 0.24,
+      "warnings": []
+    },
+    {
       "id": "flow:services_gemma_service_gemmaservice_suggest_policy_from_questionnaire",
       "name": ".suggest_policy_from_questionnaire",
       "entryPoint": "services_gemma_service_gemmaservice_suggest_policy_from_questionnaire",
@@ -3241,6 +3327,32 @@
       "warnings": []
     },
     {
+      "id": "flow:versions_20260724_room_move_enum_values_downgrade",
+      "name": "downgrade",
+      "entryPoint": "versions_20260724_room_move_enum_values_downgrade",
+      "entryPointId": "versions_20260724_room_move_enum_values_downgrade",
+      "path": [
+        "versions_20260724_room_move_enum_values_downgrade",
+        "versions_20260724_room_move_enum_values_rename_postgres_values",
+        "versions_20260724_room_move_enum_values_repair_sqlite",
+        "versions_20260724_room_move_enum_values_constraint"
+      ],
+      "qualifiedPath": [
+        "versions_20260724_room_move_enum_values_downgrade",
+        "versions_20260724_room_move_enum_values_rename_postgres_values",
+        "versions_20260724_room_move_enum_values_repair_sqlite",
+        "versions_20260724_room_move_enum_values_constraint"
+      ],
+      "depth": 2,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20260724_room_move_enum_values.py"
+      ],
+      "criticality": 0.2325,
+      "warnings": []
+    },
+    {
       "id": "flow:services_domain_events_iter_event_stream",
       "name": "iter_event_stream",
       "entryPoint": "services_domain_events_iter_event_stream",
@@ -3262,40 +3374,6 @@
       "fileCount": 1,
       "files": [
         "app/services/domain_events.py"
-      ],
-      "criticality": 0.2325,
-      "warnings": []
-    },
-    {
-      "id": "flow:scripts_seed_e2e_backend_main",
-      "name": "main",
-      "entryPoint": "scripts_seed_e2e_backend_main",
-      "entryPointId": "scripts_seed_e2e_backend_main",
-      "path": [
-        "scripts_seed_e2e_backend_main",
-        "scripts_seed_e2e_backend_prepare_e2e_environment",
-        "scripts_seed_e2e_backend_reset_e2e_database",
-        "scripts_seed_e2e_backend_run_migrations",
-        "scripts_seed_e2e_backend_upsert_seed_data",
-        "scripts_seed_e2e_backend_e2esafetyerror",
-        "scripts_seed_e2e_backend_normalize_sqlite_url",
-        "scripts_seed_e2e_backend_credentials"
-      ],
-      "qualifiedPath": [
-        "scripts_seed_e2e_backend_main",
-        "scripts_seed_e2e_backend_prepare_e2e_environment",
-        "scripts_seed_e2e_backend_reset_e2e_database",
-        "scripts_seed_e2e_backend_run_migrations",
-        "scripts_seed_e2e_backend_upsert_seed_data",
-        "scripts_seed_e2e_backend_e2esafetyerror",
-        "scripts_seed_e2e_backend_normalize_sqlite_url",
-        "scripts_seed_e2e_backend_credentials"
-      ],
-      "depth": 2,
-      "nodeCount": 8,
-      "fileCount": 1,
-      "files": [
-        "scripts/seed_e2e_backend.py"
       ],
       "criticality": 0.2325,
       "warnings": []
@@ -3348,6 +3426,32 @@
       "fileCount": 1,
       "files": [
         "app/services/room_block_service.py"
+      ],
+      "criticality": 0.2325,
+      "warnings": []
+    },
+    {
+      "id": "flow:versions_20260724_room_move_enum_values_upgrade",
+      "name": "upgrade",
+      "entryPoint": "versions_20260724_room_move_enum_values_upgrade",
+      "entryPointId": "versions_20260724_room_move_enum_values_upgrade",
+      "path": [
+        "versions_20260724_room_move_enum_values_upgrade",
+        "versions_20260724_room_move_enum_values_rename_postgres_values",
+        "versions_20260724_room_move_enum_values_repair_sqlite",
+        "versions_20260724_room_move_enum_values_constraint"
+      ],
+      "qualifiedPath": [
+        "versions_20260724_room_move_enum_values_upgrade",
+        "versions_20260724_room_move_enum_values_rename_postgres_values",
+        "versions_20260724_room_move_enum_values_repair_sqlite",
+        "versions_20260724_room_move_enum_values_constraint"
+      ],
+      "depth": 2,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20260724_room_move_enum_values.py"
       ],
       "criticality": 0.2325,
       "warnings": []
@@ -3756,6 +3860,32 @@
         "app/services/gemma_orchestrator.py"
       ],
       "criticality": 0.2235,
+      "warnings": []
+    },
+    {
+      "id": "flow:analytics_analyticspages_reportscreen",
+      "name": "ReportScreen",
+      "entryPoint": "analytics_analyticspages_reportscreen",
+      "entryPointId": "analytics_analyticspages_reportscreen",
+      "path": [
+        "analytics_analyticspages_reportscreen",
+        "analytics_analyticspages_analyticserrormessage",
+        "analytics_analyticspages_useanalyticsquery",
+        "analytics_analyticspages_usepersistedanalyticsfilters"
+      ],
+      "qualifiedPath": [
+        "analytics_analyticspages_reportscreen",
+        "analytics_analyticspages_analyticserrormessage",
+        "analytics_analyticspages_useanalyticsquery",
+        "analytics_analyticspages_usepersistedanalyticsfilters"
+      ],
+      "depth": 1,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/views/protected/analytics/AnalyticsPages.tsx"
+      ],
+      "criticality": 0.2225,
       "warnings": []
     },
     {
@@ -10961,6 +11091,28 @@
       "warnings": []
     },
     {
+      "id": "flow:services_analytics_warehouse_canonical_payment_amount",
+      "name": "canonical_payment_amount",
+      "entryPoint": "services_analytics_warehouse_canonical_payment_amount",
+      "entryPointId": "services_analytics_warehouse_canonical_payment_amount",
+      "path": [
+        "services_analytics_warehouse_canonical_payment_amount",
+        "services_analytics_warehouse_enum_value"
+      ],
+      "qualifiedPath": [
+        "services_analytics_warehouse_canonical_payment_amount",
+        "services_analytics_warehouse_enum_value"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/services/analytics_warehouse.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:api_reservations_change_dates",
       "name": "change_dates",
       "entryPoint": "api_reservations_change_dates",
@@ -12969,6 +13121,28 @@
       "warnings": []
     },
     {
+      "id": "flow:api_payments_makepayment",
+      "name": "makePayment",
+      "entryPoint": "api_payments_makepayment",
+      "entryPointId": "api_payments_makepayment",
+      "path": [
+        "api_payments_makepayment",
+        "api_payments_newpaymentidempotencykey"
+      ],
+      "qualifiedPath": [
+        "api_payments_makepayment",
+        "api_payments_newpaymentidempotencykey"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/api/payments.ts"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:api_reservations_mark_no_show",
       "name": "mark_no_show",
       "entryPoint": "api_reservations_mark_no_show",
@@ -14428,6 +14602,30 @@
       "fileCount": 1,
       "files": [
         "alembic/versions/20260724_core_tenant_composite_fks.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:versions_20260724_extended_tenant_composite_fks_upgrade",
+      "name": "upgrade",
+      "entryPoint": "versions_20260724_extended_tenant_composite_fks_upgrade",
+      "entryPointId": "versions_20260724_extended_tenant_composite_fks_upgrade",
+      "path": [
+        "versions_20260724_extended_tenant_composite_fks_upgrade",
+        "versions_20260724_extended_tenant_composite_fks_has_fk",
+        "versions_20260724_extended_tenant_composite_fks_has_unique"
+      ],
+      "qualifiedPath": [
+        "versions_20260724_extended_tenant_composite_fks_upgrade",
+        "versions_20260724_extended_tenant_composite_fks_has_fk",
+        "versions_20260724_extended_tenant_composite_fks_has_unique"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20260724_extended_tenant_composite_fks.py"
       ],
       "criticality": 0.16,
       "warnings": []
