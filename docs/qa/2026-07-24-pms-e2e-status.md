@@ -14,7 +14,7 @@ repositorio.
 
 | Área | Resultado |
 | --- | --- |
-| Frontend lint/typecheck/build | Pasan. Vite informa un bundle principal de ~778 kB minificado; queda como deuda de performance. |
+| Frontend lint/typecheck/build | Pasan. Vite informa un bundle principal de 785.37 kB minificado (190.07 kB gzip); queda como deuda de performance. |
 | E2E desktop | 22/22 pasan en Chromium, incluyendo login, logout, admin, calendario de tarifas, configuración del hotel, los journeys de negocio y páginas V72. La ejecución fresh completa queda en 30/30 al sumar móvil Chromium y los tres perfiles WebKit. |
 | E2E mobile | 2/2 pasan con Chromium emulando iPhone y verificando 375×812, 390×844 y 430×932; 6/6 pasan con Playwright WebKit en perfiles iPhone SE, iPhone 15 y iPhone 15 Pro Max; los journeys mutantes de reserva/pagos/check-in/out, inventario y cambio de habitación/no-show pasan 3/3 en WebKit iPhone 15. Esto no sustituye Safari nativo del simulador Xcode, que no está disponible en este host. |
 | Backend completo | 1212 pasan, 17 se omiten, 12 quedan xfail y 1 xpass en Python 3.12 limpio. El runner E2E rechaza explícitamente Python menor a 3.10. |
