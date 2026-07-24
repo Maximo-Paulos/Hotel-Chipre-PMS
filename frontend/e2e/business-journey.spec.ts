@@ -31,6 +31,19 @@ async function navigateFromShell(page: Page, path: string) {
   await expect(page).toHaveURL(new RegExp(`${path.replaceAll("/", "\\/")}$`));
 }
 
+async function syntheticProofBuffer(page: Page, seed: number) {
+  return Buffer.from(await page.evaluate((hue) => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1;
+    canvas.height = 1;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Canvas no disponible para el fixture del comprobante");
+    context.fillStyle = `hsl(${hue % 360} 70% 50%)`;
+    context.fillRect(0, 0, 1, 1);
+    return canvas.toDataURL("image/png").split(",")[1];
+  }, seed), "base64");
+}
+
 test("owner completes the core reservation journey through the UI", async ({ page }) => {
   const suffix = Date.now().toString();
   const categoryName = `Journey ${suffix}`;
@@ -126,20 +139,28 @@ test("owner completes the core reservation journey through the UI", async ({ pag
   await editForm.getByLabel("Imagen del comprobante").setInputFiles({
     name: "transfer-proof.png",
     mimeType: "image/png",
-    buffer: Buffer.from(await page.evaluate((seed) => {
-      const canvas = document.createElement("canvas");
-      canvas.width = 1;
-      canvas.height = 1;
-      const context = canvas.getContext("2d");
-      if (!context) throw new Error("Canvas no disponible para el fixture del comprobante");
-      context.fillStyle = `hsl(${seed % 360} 70% 50%)`;
-      context.fillRect(0, 0, 1, 1);
-      return canvas.toDataURL("image/png").split(",")[1];
-    }, Number(suffix.slice(-6))), "base64")
+    buffer: await syntheticProofBuffer(page, Number(suffix.slice(-6)))
   });
   await editForm.getByRole("button", { name: "Enviar comprobante", exact: true }).click();
   await expect(page.getByText("Comprobante enviado para aprobación", { exact: true })).toBeVisible();
   await expect(editForm.getByText(/pending$/)).toBeVisible();
+
+  await editForm.getByRole("button", { name: "Rechazar", exact: true }).click();
+  await editForm.getByPlaceholder("Motivo del rechazo").fill("Comprobante ilegible");
+  await editForm.getByRole("button", { name: "Confirmar rechazo", exact: true }).click();
+  await expect(page.getByText("Comprobante rechazado", { exact: true })).toBeVisible();
+  const rejectedProof = editForm.locator("li").filter({ hasText: "rejected" });
+  await expect(rejectedProof).toContainText("Comprobante ilegible");
+
+  await partialAmount.fill("500");
+  await editForm.getByLabel("Imagen del comprobante").setInputFiles({
+    name: "transfer-proof-retry.png",
+    mimeType: "image/png",
+    buffer: await syntheticProofBuffer(page, Number(suffix.slice(-6)) + 1)
+  });
+  await editForm.getByRole("button", { name: "Enviar comprobante", exact: true }).click();
+  await expect(page.getByText("Comprobante enviado para aprobación", { exact: true })).toBeVisible();
+  await expect(editForm.locator("li").filter({ hasText: "pending" })).toHaveCount(1);
   await editForm.getByRole("button", { name: "Aprobar", exact: true }).click();
   await expect(editForm.getByText(/approved$/)).toBeVisible();
   await editForm.getByLabel("Medio de pago").selectOption("cash");
