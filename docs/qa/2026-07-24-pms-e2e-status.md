@@ -598,3 +598,16 @@ WebKit iPhone 15; las pruebas backend relacionadas pasaron 13/13 y la regresión
 local serial fresh pasó 52/52 sobre el commit `9aa8dad`. La regresión backend
 completa posterior pasó 1222/1222 (con 17 skips, 12 xfails y 1 xpass). No se ejecutaron pagos,
 emails, webhooks, OTA ni integraciones externas.
+
+### Revalidación serial del estado actual — commit `c8e1034`
+
+Para evitar la carrera conocida de la SQLite compartida, se ejecutaron las
+matrices en dos procesos separados:
+
+- `E2E_PYTHON=/tmp/hpms-scale-venv-312/bin/python E2E_WEBKIT_BUSINESS=false npm run e2e`: **52/52** aprobados en Chromium, mobile Chromium, WebKit iPhone SE, iPhone 15 e iPhone 15 Pro Max.
+- `E2E_PYTHON=/tmp/hpms-scale-venv-312/bin/python E2E_WEBKIT_BUSINESS=true npm run e2e -- --project=webkit-iphone-15-business --workers=1`: **10/10** aprobados, incluyendo reservas, inventario, estadía, lavandería, reportes, comprobantes, cargos y caja.
+- La tentativa de activar ambos grupos en una sola corrida terminó 59/62: tres tests quedaron bloqueados por dos proyectos mutando/reseteando `_e2e.db` al mismo tiempo. El fallo se reproduce sólo con esa combinación concurrente y no reaparece en las dos corridas seriales; queda como limitación del arnés, no como aprobación de una ejecución paralela.
+
+Esta evidencia confirma el estado local de la rama actual, pero no cambia el
+gate cloud: el artefacto publicado sigue sin un `code_sha` provider-bound y la
+matriz visible de cinco personas todavía no puede cerrarse.
