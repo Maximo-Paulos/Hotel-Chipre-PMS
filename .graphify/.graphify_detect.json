@@ -470,6 +470,7 @@
       "tests/test_compare_preview_manifests.py",
       "tests/test_config_permissions.py",
       "tests/test_connections.py",
+      "tests/test_database_schema_bootstrap.py",
       "tests/test_datastores_health.py",
       "tests/test_demo_mode.py",
       "tests/test_docs_baseline.py",
@@ -718,10 +719,10 @@
     ],
     "video": []
   },
-  "total_files": 709,
-  "total_words": 468043,
+  "total_files": 710,
+  "total_words": 468343,
   "needs_graph": true,
-  "warning": "Large corpus: 709 files · ~468,043 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
+  "warning": "Large corpus: 710 files · ~468,343 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
   "skipped_sensitive": [
     "alembic/versions/20260408_security_tokens.py",
     "app/adapters/memory_tokens.py",
@@ -734,7 +735,7 @@
   "graphifyignore_patterns": 60,
   "git": {
     "source_owner": "git",
-    "source_hash": "f0ff717329c4ec450fe27069ff4de4d4aa79baef",
+    "source_hash": "14c34531caac9b8f4a687f797ad2e6507d02eeea",
     "branches": [
       "codex/feature/agent-ops-knowledge",
       "codex/feature/pms-e2e-scale-hardening",
@@ -751,9 +752,9 @@
     "source": "cli",
     "root": ".",
     "git_root": ".",
-    "head": "f0ff717329c4ec450fe27069ff4de4d4aa79baef",
+    "head": "14c34531caac9b8f4a687f797ad2e6507d02eeea",
     "candidate_count": null,
-    "included_count": 709,
+    "included_count": 710,
     "excluded_untracked_count": 0,
     "excluded_ignored_count": 0,
     "excluded_sensitive_count": 7,

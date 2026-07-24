@@ -388,8 +388,8 @@
     "hash": "5423a6a9524c930f377ab626d3a8a128"
   },
   "app/database.py": {
-    "mtime": 1784862144876.7893,
-    "hash": "a7f2bea2e0cfeeac397dc1fbe39431a2"
+    "mtime": 1784862641428.6223,
+    "hash": "68a187f31df04c16d101dee7d8eb800d"
   },
   "app/db/__init__.py": {
     "mtime": 1784862144876.852,
@@ -2268,8 +2268,8 @@
     "hash": "d44cfe18dec64c8aae68668e41619cff"
   },
   "docs/DEPLOY_GUIDE.md": {
-    "mtime": 1784862144887.9802,
-    "hash": "6ef036c6c3e5bd111237d1904a11f4dd"
+    "mtime": 1784862699797.6323,
+    "hash": "c820616aa485bd789794263fde2e2ca0"
   },
   "docs/INCIDENT_PLAYBOOK.md": {
     "mtime": 1784862144888.0237,
@@ -2304,8 +2304,8 @@
     "hash": "c751470c4516e1aba14cff2bc3bca10e"
   },
   "docs/data-foundations/architecture-hybrid.md": {
-    "mtime": 1784862144888.9053,
-    "hash": "307ab71db83a3b1bfb292d0d2318dbba"
+    "mtime": 1784862699797.8975,
+    "hash": "ea2ab05120d6d2c3f99661132b87a055"
   },
   "docs/data-foundations/der-conceptual-model.md": {
     "mtime": 1784862144888.967,
@@ -3314,5 +3314,9 @@
   "knowledge/00-control/START-HERE.md": {
     "mtime": 1784862144909.3384,
     "hash": "03af2737f29e44f71cc3e2cbac0b82f3"
+  },
+  "tests/test_database_schema_bootstrap.py": {
+    "mtime": 1784862666078.3015,
+    "hash": "7fd53040cf6e74dc7c3ebe34d6b61f42"
   }
 }
