@@ -149,7 +149,16 @@ def register_movement(
         raise StockError("Invalid stock movement type")
     if quantity <= 0:
         raise StockError("Stock movement quantity must be positive")
-    item = _get_item(db, hotel_id=hotel_id, item_id=item_id)
+    item = (
+        db.query(StockItem)
+        .filter(StockItem.id == item_id, StockItem.hotel_id == hotel_id, StockItem.deleted_at.is_(None))
+        .with_for_update()
+        .one_or_none()
+    )
+    if item is None:
+        raise StockError("Stock item not found")
+    if movement_type == "out" and quantity > current_stock(db, hotel_id=hotel_id, item_id=item.id):
+        raise StockError("Stock movement would make stock negative")
     if location_id is not None:
         _get_location(db, hotel_id=hotel_id, location_id=location_id)
     movement = StockMovement(

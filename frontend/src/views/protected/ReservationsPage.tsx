@@ -35,6 +35,7 @@ import { useCashSessions } from "../../hooks/useCashRegister";
 import { usePaymentSurcharges } from "../../hooks/usePaymentSurcharges";
 import { grossWithSurcharge } from "../../api/paymentSurcharges";
 import { usePaymentLinks, usePaymentLinkCreate } from "../../hooks/usePaymentLinks";
+import { usePaymentProofMutations, usePaymentProofs } from "../../hooks/usePaymentProofs";
 import { useHotelConfig } from "../../hooks/useHotelConfig";
 import { type HotelConfig } from "../../api/config";
 import { useRooms } from "../../hooks/useRooms";
@@ -165,6 +166,14 @@ const diffNights = (checkIn: string, checkOut: string) => {
   return diff > 0 ? Math.round(diff / 86_400_000) : 0;
 };
 
+const readFileAsDataUrl = (file: File) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error || new Error("No se pudo leer el comprobante."));
+    reader.readAsDataURL(file);
+  });
+
 export function ReservationsPage() {
   const { session } = useSession();
   const queryClient = useQueryClient();
@@ -177,6 +186,8 @@ export function ReservationsPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [guestForm, setGuestForm] = useState(emptyQuickGuest);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
+  const [paymentAmountInput, setPaymentAmountInput] = useState("");
+  const [paymentProofFile, setPaymentProofFile] = useState<File | null>(null);
   const [pricingPaymentMethod, setPricingPaymentMethod] = useState<PricingPaymentMethod>("base");
   const [depositAmountInput, setDepositAmountInput] = useState("");
   const [availabilityForm, setAvailabilityForm] = useState<{
@@ -411,6 +422,8 @@ export function ReservationsPage() {
     setFormError(null);
     setPricingPaymentMethod("base");
     setDepositAmountInput("");
+    setPaymentAmountInput("");
+    setPaymentProofFile(null);
     setFormOpen(true);
   };
 
@@ -431,6 +444,8 @@ export function ReservationsPage() {
     setFormError(null);
     setPricingPaymentMethod("base");
     setDepositAmountInput("");
+    setPaymentAmountInput("");
+    setPaymentProofFile(null);
     setFormOpen(true);
   };
 
@@ -439,6 +454,8 @@ export function ReservationsPage() {
     setEditing(null);
     setFormError(null);
     setDepositAmountInput("");
+    setPaymentAmountInput("");
+    setPaymentProofFile(null);
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -703,11 +720,14 @@ export function ReservationsPage() {
   const editingGuest = useGuest(editing?.guest_id || undefined).data;
   const paymentLinksQuery = usePaymentLinks(editing?.id || undefined);
   const paymentLinkCreate = usePaymentLinkCreate(editing?.id || undefined);
+  const paymentProofsQuery = usePaymentProofs(editing?.id || undefined);
+  const paymentProofMutations = usePaymentProofMutations(editing?.id || undefined);
   const detailsSummary = detailsSummaryQuery.data;
   const detailsOperations = detailsOperationsQuery.data;
   const detailsFinancialsLoading = detailsSummaryQuery.isLoading;
   const detailsGuest = useGuest(detailsReservation?.guest_id || undefined).data;
   const editingCurrencyCode = normalizeCurrencyCode(paymentSummary?.currency_code ?? editing?.currency_code);
+  const canApprovePaymentProof = ["owner", "co_owner", "manager"].includes(session.baseRole ?? "");
   const detailsCurrencyCode = normalizeCurrencyCode(
     detailsSummary?.currency_code ??
       detailsOperations?.financial_summary.currency_code ??
@@ -716,6 +736,15 @@ export function ReservationsPage() {
 
   const handlePayDeposit = () => {
     if (!editing || !paymentSummary) return;
+    if (paymentMethod !== "cash") {
+      showToast(
+        "info",
+        paymentMethod === "bank_transfer"
+          ? "Para transferencia cargá el comprobante y esperá la aprobación."
+          : "Para este medio generá un link o confirmá el pago desde su integración."
+      );
+      return;
+    }
     const due = Math.max(paymentSummary.deposit_required - paymentSummary.amount_paid, 0);
     if (due <= 0.01) {
       showToast("info", "La Seña ya está cubierta.");
@@ -738,6 +767,15 @@ export function ReservationsPage() {
 
   const handlePayFull = () => {
     if (!editing || !paymentSummary) return;
+    if (paymentMethod !== "cash") {
+      showToast(
+        "info",
+        paymentMethod === "bank_transfer"
+          ? "Para transferencia cargá el comprobante y esperá la aprobación."
+          : "Para este medio generá un link o confirmá el pago desde su integración."
+      );
+      return;
+    }
     const due = paymentSummary.balance_due ?? 0;
     if (due <= 0.01) {
       showToast("info", "No hay saldo pendiente.");
@@ -756,6 +794,68 @@ export function ReservationsPage() {
         onError: (err: unknown) => showToast("error", err instanceof Error ? err.message : "No se pudo registrar el pago")
       }
     );
+  };
+
+  const handlePayPartial = () => {
+    if (!editing || !paymentSummary) return;
+    if (paymentMethod !== "cash") {
+      showToast(
+        "info",
+        paymentMethod === "bank_transfer"
+          ? "Para transferencia cargá el comprobante y esperá la aprobación."
+          : "Para este medio generá un link o confirmá el pago desde su integración."
+      );
+      return;
+    }
+    const amount = Number(paymentAmountInput);
+    const balance = Number(paymentSummary.balance_due ?? 0);
+    if (!Number.isFinite(amount) || amount <= 0 || amount > balance + 0.01) {
+      showToast("error", "Ingresá un importe positivo que no supere el saldo pendiente.");
+      return;
+    }
+    paymentMutation.mutate(
+      {
+        reservation_id: editing.id,
+        amount: Number(amount.toFixed(2)),
+        payment_method: paymentMethod,
+        transaction_type: "partial_payment",
+        currency: editingCurrencyCode
+      },
+      {
+        onSuccess: () => {
+          setPaymentAmountInput("");
+          showToast("success", "Cobro parcial registrado");
+        },
+        onError: (err: unknown) => showToast("error", err instanceof Error ? err.message : "No se pudo registrar el pago")
+      }
+    );
+  };
+
+  const handleSubmitTransferProof = async () => {
+    if (!editing || !paymentSummary) return;
+    if (!paymentProofFile) {
+      showToast("error", "Adjuntá una imagen del comprobante.");
+      return;
+    }
+    const amount = Number(paymentAmountInput);
+    const balance = Number(paymentSummary.balance_due ?? 0);
+    if (!Number.isFinite(amount) || amount <= 0 || amount > balance + 0.01) {
+      showToast("error", "Ingresá un importe positivo que no supere el saldo pendiente.");
+      return;
+    }
+    try {
+      await paymentProofMutations.submitMutation.mutateAsync({
+        reservation_id: editing.id,
+        amount: Number(amount.toFixed(2)),
+        image_base64: await readFileAsDataUrl(paymentProofFile),
+        original_filename: paymentProofFile.name
+      });
+      setPaymentAmountInput("");
+      setPaymentProofFile(null);
+      showToast("success", "Comprobante enviado para aprobación");
+    } catch (err) {
+      showToast("error", err instanceof Error ? err.message : "No se pudo enviar el comprobante");
+    }
   };
 
   const handleGenerateDepositLink = () => {
@@ -1879,7 +1979,7 @@ export function ReservationsPage() {
                     <p className="mt-2 text-sm text-slate-600">Cargando resumen...</p>
                   )}
 
-                  <div className="mt-3 grid gap-2 sm:grid-cols-5 sm:items-end">
+                  <div className="mt-3 grid gap-2 sm:grid-cols-6 sm:items-end">
                     <label className="text-xs font-semibold text-slate-600 sm:col-span-2">
                       Medio de pago
                       <select
@@ -1894,10 +1994,31 @@ export function ReservationsPage() {
                         ))}
                       </select>
                     </label>
+                    <label className="text-xs font-semibold text-slate-600">
+                      Monto a cobrar
+                      <input
+                        aria-label="Monto a cobrar"
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        value={paymentAmountInput}
+                        onChange={(event) => setPaymentAmountInput(event.target.value)}
+                        placeholder="Importe parcial"
+                        className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-normal text-slate-800 shadow-sm"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handlePayPartial}
+                      disabled={paymentMutation.isPending || paymentSummaryQuery.isLoading || paymentMethod !== "cash"}
+                      className="rounded-lg border border-sky-200 bg-sky-100 px-3 py-2 text-sm font-semibold text-sky-800 hover:border-sky-300 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Cobro parcial
+                    </button>
                     <button
                       type="button"
                       onClick={handlePayDeposit}
-                      disabled={paymentMutation.isPending || paymentSummaryQuery.isLoading}
+                      disabled={paymentMutation.isPending || paymentSummaryQuery.isLoading || paymentMethod !== "cash"}
                       className="rounded-lg border border-amber-200 bg-amber-100 px-3 py-2 text-sm font-semibold text-amber-800 hover:border-amber-300 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       Registrar Seña
@@ -1905,7 +2026,7 @@ export function ReservationsPage() {
                     <button
                       type="button"
                       onClick={handlePayFull}
-                      disabled={paymentMutation.isPending || paymentSummaryQuery.isLoading}
+                      disabled={paymentMutation.isPending || paymentSummaryQuery.isLoading || paymentMethod !== "cash"}
                       className="rounded-lg border border-emerald-200 bg-emerald-100 px-3 py-2 text-sm font-semibold text-emerald-800 hover:border-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       Pago total
@@ -1922,13 +2043,62 @@ export function ReservationsPage() {
                       </p>
                     ) : (
                       <p className="mt-2 text-xs text-amber-700">
-                        No hay caja abierta: el cobro en efectivo no quedará registrado en la caja.{" "}
+                        Si no hay caja abierta, el primer cobro en efectivo abrirá automáticamente una caja con saldo inicial $0.{" "}
                         <Link to="/caja" className="font-semibold underline">
                           Abrir caja
                         </Link>
                         .
                       </p>
                     )
+                  )}
+
+                  {paymentMethod === "bank_transfer" && (
+                    <div className="mt-3 space-y-3 rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-3 text-xs text-slate-700">
+                      <div>
+                        <p className="font-semibold text-slate-800">Comprobante de transferencia</p>
+                        <p className="mt-1 text-slate-600">La transferencia no descuenta saldo hasta que un responsable la aprueba.</p>
+                      </div>
+                      <label className="block text-xs font-semibold text-slate-700">
+                        Imagen del comprobante
+                        <input
+                          aria-label="Imagen del comprobante"
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp"
+                          onChange={(event) => setPaymentProofFile(event.target.files?.[0] ?? null)}
+                          className="mt-1 block w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs font-normal"
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={handleSubmitTransferProof}
+                        disabled={paymentProofMutations.submitMutation.isPending || paymentSummaryQuery.isLoading}
+                        className="rounded-lg border border-amber-300 bg-amber-100 px-3 py-2 text-xs font-semibold text-amber-900 hover:border-amber-400 disabled:opacity-60"
+                      >
+                        {paymentProofMutations.submitMutation.isPending ? "Enviando..." : "Enviar comprobante"}
+                      </button>
+                      {(paymentProofsQuery.data ?? []).length > 0 && (
+                        <ul className="space-y-2 border-t border-amber-200 pt-2">
+                          {(paymentProofsQuery.data ?? []).map((proof) => (
+                            <li key={proof.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white px-2 py-2">
+                              <span>
+                                {formatMoney(proof.amount, proof.currency)} · {proof.status}
+                                {proof.rejection_reason ? ` · ${proof.rejection_reason}` : ""}
+                              </span>
+                              {canApprovePaymentProof && proof.status === "pending" && (
+                                <button
+                                  type="button"
+                                  onClick={() => paymentProofMutations.approveMutation.mutate(proof.id)}
+                                  disabled={paymentProofMutations.approveMutation.isPending}
+                                  className="rounded-lg border border-emerald-200 px-2 py-1 font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-60"
+                                >
+                                  Aprobar
+                                </button>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
                   )}
 
                   {activeSurcharge && paymentSummary && (paymentSummary.balance_due ?? 0) > 0 && (

@@ -106,6 +106,34 @@ test("owner completes the core reservation journey through the UI", async ({ pag
   const editModal = page.locator("div.fixed").filter({ hasText: "Pagos y balance" });
   const editForm = editModal.locator("form").filter({ hasText: "Pagos y balance" });
   await expect(editForm.getByText("Resumen financiero y acciones rápidas.", { exact: true })).toBeVisible();
+  const partialAmount = editForm.getByLabel("Monto a cobrar");
+  await expect(partialAmount).toBeVisible();
+  await partialAmount.fill("500");
+  await editForm.getByRole("button", { name: "Cobro parcial", exact: true }).click();
+  await expect(page.getByText("Cobro parcial registrado", { exact: true })).toBeVisible();
+  await editForm.getByLabel("Medio de pago").selectOption("bank_transfer");
+  await expect(editForm.getByLabel("Imagen del comprobante")).toBeVisible();
+  await partialAmount.fill("500");
+  await editForm.getByLabel("Imagen del comprobante").setInputFiles({
+    name: "transfer-proof.png",
+    mimeType: "image/png",
+    buffer: Buffer.from(await page.evaluate((seed) => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 1;
+      canvas.height = 1;
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Canvas no disponible para el fixture del comprobante");
+      context.fillStyle = `hsl(${seed % 360} 70% 50%)`;
+      context.fillRect(0, 0, 1, 1);
+      return canvas.toDataURL("image/png").split(",")[1];
+    }, Number(suffix.slice(-6))), "base64")
+  });
+  await editForm.getByRole("button", { name: "Enviar comprobante", exact: true }).click();
+  await expect(page.getByText("Comprobante enviado para aprobación", { exact: true })).toBeVisible();
+  await expect(editForm.getByText(/pending$/)).toBeVisible();
+  await editForm.getByRole("button", { name: "Aprobar", exact: true }).click();
+  await expect(editForm.getByText(/approved$/)).toBeVisible();
+  await editForm.getByLabel("Medio de pago").selectOption("cash");
   await editForm.getByRole("button", { name: "Pago total", exact: true }).click();
   await expect(page.getByText("Pago completo registrado", { exact: true })).toBeVisible();
   await editModal.getByRole("button", { name: "Cerrar", exact: true }).click();

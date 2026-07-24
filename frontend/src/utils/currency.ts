@@ -31,9 +31,10 @@ function getFormatter(locale: string, currencyCode?: string | null): Intl.Number
   return formatter;
 }
 
-export function formatMoney(amount: number | null | undefined, currencyCode?: string | null, locale = "es-AR"): string {
-  const numericAmount = typeof amount === "number" && Number.isFinite(amount) ? amount : 0;
-  return getFormatter(locale, currencyCode).format(numericAmount);
+export function formatMoney(amount: number | string | null | undefined, currencyCode?: string | null, locale = "es-AR"): string {
+  const numericAmount = Number(amount);
+  const safeAmount = Number.isFinite(numericAmount) ? numericAmount : 0;
+  return getFormatter(locale, currencyCode).format(safeAmount);
 }
 
 export function resolveSingleCurrencyCode(

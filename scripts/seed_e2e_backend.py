@@ -117,6 +117,7 @@ def upsert_seed_data() -> None:
         hotel.subscription_active = True
         hotel.default_currency = "ARS"
         hotel.hotel_timezone = "America/Argentina/Buenos_Aires"
+        hotel.enable_bank_transfer = True
         hotel.updated_at = now
 
         subscription = db.query(Subscription).filter(Subscription.hotel_id == 1).first()

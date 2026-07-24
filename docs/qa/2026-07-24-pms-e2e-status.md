@@ -14,10 +14,10 @@ repositorio.
 
 | Área | Resultado |
 | --- | --- |
-| Frontend lint/typecheck/build | Pasan. Vite informa un bundle principal de ~760 kB minificado; queda como deuda de performance. |
+| Frontend lint/typecheck/build | Pasan. Vite informa un bundle principal de ~767 kB minificado; queda como deuda de performance. |
 | E2E desktop | 20/20 pasan en Chromium, incluyendo login, logout, admin, calendario de tarifas, configuración del hotel, el journey de negocio y páginas V72. |
 | E2E mobile | 2/2 pasan con viewport iPhone 13 sobre Chromium: sin overflow horizontal y navegación móvil a Reservas. |
-| Backend completo | 1174 pasan, 17 se omiten, 12 quedan xfail y 1 xpass en Python 3.12 limpio. El `.venv` legado no puede importar el código por usar un Python anterior. |
+| Backend completo | 1175 pasan, 17 se omiten, 12 quedan xfail y 1 xpass en Python 3.12 limpio. El `.venv` legado no puede importar el código por usar un Python anterior. |
 | Migración virgen | `alembic upgrade head` pasa sobre SQLite temporal hasta `20260724_allocation_enum_values`. |
 | Backend focalizado | 56/56 pasan: motor de asignación, operaciones de reservas, check-in, check-out y seguridad del flujo. |
 | Graphify | `portable-check` y `check-update` pasan después de actualizar el grafo. |
@@ -45,11 +45,10 @@ item y el registro de un egreso. El flujo funciona, pero la UX era poco clara:
 el egreso se iniciaba en un formulario separado, no mostraba stock actual y
 permitía terminar en stock negativo sin advertencia.
 
-La UI ahora agrega acciones rápidas por item, muestra el stock seleccionado,
-obliga el motivo para egresos/ajustes y advierte cuando el movimiento dejará
-stock negativo. El backend todavía permite stock negativo; bloquearlo o
-permitirlo según configuración del hotel requiere una decisión contable antes
-de cambiar el dominio.
+La UI ahora agrega acciones rápidas por item, muestra el stock seleccionado y
+obliga el motivo para egresos/ajustes. El backend rechaza egresos que dejarían
+stock negativo y bloquea el item durante la comprobación para evitar que dos
+operadores descuenten la misma existencia en paralelo.
 
 La prueba creó datos identificables con prefijo `QA móvil` en el hotel de
 prueba. Quedan pendientes de limpieza o de una política explícita de fixtures
@@ -82,9 +81,11 @@ Transferencia queda documentada como flujo con comprobante y aprobación.
 ### Journey de negocio local
 
 Se agregó un E2E aislado que crea una categoría y una habitación, crea un huésped
-rápido con documento, registra una reserva con seña manual, cobra el saldo en
-efectivo y completa check-in/check-out. El flujo pasa en 1/1 y forma parte de la
-suite desktop 20/20.
+rápido con documento, registra una reserva con seña manual, cobra un parcial en
+efectivo, envía un comprobante de transferencia, lo aprueba y cobra el saldo
+restante en efectivo antes de completar check-in/check-out. El flujo pasa en 1/1
+y forma parte de la suite desktop 20/20. El fixture de imagen se genera con un
+contenido único por ejecución para no falsear la protección anti-duplicados.
 
 Durante ese recorrido se detectó que la migración de asignación guardaba los
 estados con nombres de enum en mayúsculas mientras los modelos usaban valores en
@@ -120,8 +121,8 @@ workers.
   provider-bound aislado para este SHA; el despliegue de la rama y la repetición
   de QA contra el preview/cloud aún no están realizados.
 - El journey central de onboarding operativo, habitaciones, categoría, reserva,
-  cobro efectivo, check-in/out ya pasa localmente; siguen pendientes en el
-  preview aislado los pagos mixtos, comprobantes, Mercado Pago simulado,
+  pagos mixtos (efectivo + comprobante de transferencia aprobado), check-in/out
+  ya pasa localmente; siguen pendientes en el preview aislado el Mercado Pago simulado,
   reportes, OTA, lavandería, permisos, carga y la repetición cloud de todo el
   ciclo.
 
