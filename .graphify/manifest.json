@@ -1100,8 +1100,8 @@
     "hash": "70ea4197fe8494bac4fc09ce0bd4dfb2"
   },
   "frontend/playwright.config.ts": {
-    "mtime": 1784913241621.6697,
-    "hash": "7fdb3f7a951d86b95921f5e5c82c85b1"
+    "mtime": 1784913418232.0417,
+    "hash": "1b7c5374f5d4e80c2bb4f70e6441c210"
   },
   "frontend/src/App.tsx": {
     "mtime": 1784862144901.0059,
@@ -3360,8 +3360,8 @@
     "hash": "0417fd101669a65cc4d6657a983ba143"
   },
   "docs/qa/2026-07-24-pms-e2e-status.md": {
-    "mtime": 1784913204419.2837,
-    "hash": "f3ceb44e2c4b49d2cb18db727d4788ce"
+    "mtime": 1784913380158.7358,
+    "hash": "eca1f0d587d5c833eeb63129ad5b9192"
   },
   "frontend/e2e/business-journey.spec.ts": {
     "mtime": 1784904324073.8352,
