@@ -69,6 +69,33 @@ def _load_composite_fk_migration():
     return module
 
 
+def _load_extended_composite_fk_migration():
+    path = Path(__file__).parents[1] / "alembic" / "versions" / "20260724_extended_tenant_composite_fks.py"
+    spec = importlib.util.spec_from_file_location("extended_tenant_composite_fks_migration", path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _remaining_scoped_scalar_fks():
+    """Return model relationships not covered by the core composite contract."""
+    rows = set()
+    for table in Base.metadata.sorted_tables:
+        if "hotel_id" not in table.c:
+            continue
+        for constraint in table.foreign_key_constraints:
+            parent = constraint.referred_table
+            if "hotel_id" not in parent.c or "id" not in parent.c or "id" not in table.c:
+                continue
+            local = tuple(element.parent.name for element in constraint.elements)
+            remote = tuple(element.column.name for element in constraint.elements)
+            if len(local) == 1 and local[0] != "hotel_id":
+                rows.add((table.name, ("hotel_id", local[0]), parent.name, ("hotel_id", remote[0])))
+    core = set(CORE_COMPOSITE_FK_REQUIREMENTS)
+    return rows - core
+
+
 def test_core_hotel_scoped_relationships_use_composite_foreign_keys():
     actual = {
         (
@@ -92,6 +119,30 @@ def test_core_composite_fk_migration_covers_the_metadata_contract():
         for table, _name, columns, referred_table, referred_columns, _ondelete in migration.COMPOSITE_FKS
     }
     assert set(CORE_COMPOSITE_FK_REQUIREMENTS) <= migrated
+
+
+def test_extended_composite_fk_migration_covers_every_remaining_scoped_fk():
+    migration = _load_extended_composite_fk_migration()
+    migrated = {
+        (table, columns, referred_table, referred_columns)
+        for table, _name, columns, referred_table, referred_columns, _ondelete in migration.COMPOSITE_FKS
+    }
+    missing = sorted(_remaining_scoped_scalar_fks() - migrated)
+    assert not missing, f"Extended tenant composite FKs missing: {missing}"
+    assert len(migration.COMPOSITE_FKS) == len(migrated)
+
+
+def test_extended_composite_fk_migration_has_unique_target_for_every_parent():
+    migration = _load_extended_composite_fk_migration()
+    core_migration = _load_composite_fk_migration()
+    targets = {
+        table for table, _name in (*core_migration.UNIQUE_TARGETS, *migration.UNIQUE_TARGETS)
+    }
+    expected = {
+        referred_table
+        for _table, _columns, referred_table, _referred_columns in _remaining_scoped_scalar_fks()
+    }
+    assert expected <= targets
 
 
 def test_core_parents_have_tenant_scoped_unique_targets():
