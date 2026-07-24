@@ -98,6 +98,7 @@ def upsert_seed_data() -> None:
         RoomCategory,
         StockItem,
         StockLocation,
+        Subscription,
         User,
     )
     from app.services.security import hash_password
@@ -117,6 +118,17 @@ def upsert_seed_data() -> None:
         hotel.default_currency = "ARS"
         hotel.hotel_timezone = "America/Argentina/Buenos_Aires"
         hotel.updated_at = now
+
+        subscription = db.query(Subscription).filter(Subscription.hotel_id == 1).first()
+        if subscription is None:
+            subscription = Subscription(hotel_id=1)
+            db.add(subscription)
+        subscription.plan = "pro"
+        subscription.status = "active"
+        subscription.room_limit = 40
+        subscription.staff_limit = 8
+        subscription.can_write_cache = True
+        subscription.updated_at = now
 
         owner = db.query(User).filter(User.email.ilike(owner_email)).first()
         if owner is None:

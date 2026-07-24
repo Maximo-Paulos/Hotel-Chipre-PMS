@@ -1096,8 +1096,8 @@
     "hash": "d34d02bfc8084c072837ed4a9a20fe8a"
   },
   "frontend/e2e/v72-pages.spec.ts": {
-    "mtime": 1784865929782.72,
-    "hash": "309ae8769ff2fc4ac6c1dbc820dc7ff2"
+    "mtime": 1784866834505.0403,
+    "hash": "70ea4197fe8494bac4fc09ce0bd4dfb2"
   },
   "frontend/playwright.config.ts": {
     "mtime": 1784864498096.6167,
@@ -1452,8 +1452,8 @@
     "hash": "9e1820f423d1457b5a99108212112757"
   },
   "frontend/src/views/protected/ReservationsPage.tsx": {
-    "mtime": 1784862144906.3281,
-    "hash": "2dbdde9a74e1ca9af8428a7a7c69831d"
+    "mtime": 1784866419639.3467,
+    "hash": "3750da703a82d6fff6139a2142fdcfd1"
   },
   "frontend/src/views/protected/RoomsPage.tsx": {
     "mtime": 1784862144906.3872,
@@ -1560,8 +1560,8 @@
     "hash": "898e2282ec17bf808e708770ada7811a"
   },
   "scripts/seed_e2e_backend.py": {
-    "mtime": 1784862144926.581,
-    "hash": "22206d881f63052918abfd47f97b0cb9"
+    "mtime": 1784866924071.8057,
+    "hash": "8a348e3f20d34fc7c8424f2e723a0cdf"
   },
   "scripts/serve_e2e_backend.py": {
     "mtime": 1784862144926.8066,
@@ -3360,7 +3360,7 @@
     "hash": "c9ccb071243fec306b1f66559b803713"
   },
   "docs/qa/2026-07-24-pms-e2e-status.md": {
-    "mtime": 1784865900669.8652,
-    "hash": "65223802357b27a35ab178ff55ca2050"
+    "mtime": 1784866102252.1948,
+    "hash": "1b8d6482e7e311e942b26f4709d4d4fc"
   }
 }

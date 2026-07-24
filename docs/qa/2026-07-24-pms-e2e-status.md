@@ -14,10 +14,11 @@ repositorio.
 
 | Área | Resultado |
 | --- | --- |
-| Frontend build | Pasa. Vite informa un bundle principal de ~758 kB minificado; queda como deuda de performance. |
-| Frontend lint | Pasa sin warnings. |
+| Frontend lint/typecheck/build | Pasan. Vite informa un bundle principal de ~760 kB minificado; queda como deuda de performance. |
 | E2E desktop | 19/19 pasan en Chromium, incluyendo login, logout, admin, calendario de tarifas, configuración del hotel y páginas V72. |
 | E2E mobile | 2/2 pasan con viewport iPhone 13 sobre Chromium: sin overflow horizontal y navegación móvil a Reservas. |
+| Backend completo | 1171 pasan, 17 se omiten, 12 quedan xfail y 1 xpass en Python 3.12 limpio. El `.venv` legado no puede importar el código por usar un Python anterior. |
+| Migración virgen | `alembic upgrade head` pasa sobre SQLite temporal hasta `20260724_payment_proofs`. |
 | Backend focalizado | 14/14 pasan: stock, RLS de tenants y comprobantes de transferencia. |
 | Graphify | `portable-check` y `check-update` pasan después de actualizar el grafo. |
 
@@ -64,8 +65,14 @@ el cobro no queda registrado; la rama agrega apertura automática para cerrar
 ese hueco.
 
 Durante la carga inicial de la ficha una consulta incompleta llegó a mostrar un
-saldo fallback incorrecto antes de reemplazarlo por el valor real. Debe
-mostrarse un estado de carga en lugar de un cero provisional.
+saldo fallback incorrecto antes de reemplazarlo por el valor real. La rama ahora
+muestra “Cargando resumen financiero…” en la ficha, evita exportar el voucher
+antes de tener el resumen y deshabilita acciones de cobro mientras el resumen
+está pendiente.
+
+La navegación del smoke E2E dejó de usar `pushState` artificial: recorre links
+visibles del shell autenticado. El seed aislado declara plan Pro para que el
+owner pueda recorrer también las rutas sujetas a ese entitlement.
 
 El hotel de QA no exponía controles para habilitar Mercado Pago ni
 Transferencia, por lo que el editor de reserva ofrecía solo Efectivo y Débito.
@@ -79,8 +86,9 @@ Transferencia queda documentada como flujo con comprobante y aprobación.
 - El navegador interno no pudo capturar screenshot del dashboard durante esta
   sesión por timeout de captura; la evidencia de layout se obtuvo mediante DOM
   y métricas de viewport.
-- El despliegue de la rama y la repetición de QA contra el preview/cloud aún
-  no están realizados.
+- El validador del manifiesto de ejemplo pasa, pero no existe un manifiesto
+  provider-bound aislado para este SHA; el despliegue de la rama y la repetición
+  de QA contra el preview/cloud aún no están realizados.
 - Sigue pendiente el recorrido completo de onboarding, habitaciones,
   categorías/tarifas, reservas, check-in/out, caja, pagos mixtos, comprobantes,
   Mercado Pago simulado, reportes, OTA, lavandería, permisos y carga.

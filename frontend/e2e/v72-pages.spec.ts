@@ -6,9 +6,9 @@ const credentials = {
   password: process.env.E2E_OWNER_PASSWORD || "E2ePass1234!"
 };
 
-// Each V72 page: client-side route (the app clears session on full reload, so we
-// must NOT page.goto), a screenshot, and a unique on-page text marker proving the
-// authenticated page rendered wired to its endpoint.
+// Each V72 page: navigate through the visible app shell link, keep the real
+// authenticated session, and use a unique on-page text marker proving the page
+// rendered wired to its endpoint.
 const PAGES: Array<{ path: string; shot: string; marker: RegExp }> = [
   { path: "/caja", shot: "caja", marker: /cierre de arqueo/i },
   { path: "/settings/companies", shot: "empresas", marker: /empresas/i },
@@ -30,15 +30,21 @@ async function login(page: Page) {
   // Labels lack htmlFor association, so select inputs by type.
   await page.locator('input[type="email"]').fill(credentials.email);
   await page.locator('input[type="password"]').fill(credentials.password);
+  const onboardingResponse = page
+    .waitForResponse((response) => response.url().includes("/api/onboarding/status"), { timeout: 15_000 })
+    .catch(() => null);
   await page.getByTestId("login-submit").click();
   await page.waitForURL("**/dashboard", { timeout: 20_000 });
+  await onboardingResponse;
+  await page.waitForTimeout(250);
 }
 
 async function clientNavigate(page: Page, path: string) {
-  await page.evaluate((p) => {
-    window.history.pushState({}, "", p);
-    window.dispatchEvent(new PopStateEvent("popstate"));
-  }, path);
+  const link = page.locator(`aside nav a[href="${path}"]`);
+  await expect(link).toHaveCount(1);
+  await expect(link).toBeVisible();
+  await link.click();
+  await expect(page).toHaveURL(new RegExp(`${path.replaceAll("/", "\\/")}$`));
   await page.waitForLoadState("networkidle").catch(() => {});
   await page.waitForTimeout(600);
 }

@@ -702,6 +702,7 @@ export function ReservationsPage() {
   const paymentLinkCreate = usePaymentLinkCreate(editing?.id || undefined);
   const detailsSummary = detailsSummaryQuery.data;
   const detailsOperations = detailsOperationsQuery.data;
+  const detailsFinancialsLoading = detailsSummaryQuery.isLoading;
   const detailsGuest = useGuest(detailsReservation?.guest_id || undefined).data;
   const editingCurrencyCode = normalizeCurrencyCode(paymentSummary?.currency_code ?? editing?.currency_code);
   const detailsCurrencyCode = normalizeCurrencyCode(
@@ -811,6 +812,10 @@ export function ReservationsPage() {
 
   const exportVoucher = () => {
     if (!detailsReservation) return;
+    if (detailsFinancialsLoading) {
+      showToast("info", "Esperá a que cargue el resumen financiero antes de exportar el voucher.");
+      return;
+    }
     const summary = detailsSummary;
     const guest = detailsGuest;
     const win = window.open("", "_blank");
@@ -1859,7 +1864,7 @@ export function ReservationsPage() {
                     <button
                       type="button"
                       onClick={handlePayDeposit}
-                      disabled={paymentMutation.isPending}
+                      disabled={paymentMutation.isPending || paymentSummaryQuery.isLoading}
                       className="rounded-lg border border-amber-200 bg-amber-100 px-3 py-2 text-sm font-semibold text-amber-800 hover:border-amber-300 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       Registrar Seña
@@ -1867,7 +1872,7 @@ export function ReservationsPage() {
                     <button
                       type="button"
                       onClick={handlePayFull}
-                      disabled={paymentMutation.isPending}
+                      disabled={paymentMutation.isPending || paymentSummaryQuery.isLoading}
                       className="rounded-lg border border-emerald-200 bg-emerald-100 px-3 py-2 text-sm font-semibold text-emerald-800 hover:border-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       Pago total
@@ -1910,7 +1915,7 @@ export function ReservationsPage() {
                       <button
                         type="button"
                         onClick={handleGenerateDepositLink}
-                        disabled={paymentLinkCreate.isPending}
+                        disabled={paymentLinkCreate.isPending || paymentSummaryQuery.isLoading}
                         className="rounded-lg border border-sky-200 bg-white px-3 py-1 text-xs font-semibold text-sky-700 hover:border-sky-300 disabled:opacity-60"
                       >
                         {paymentLinkCreate.isPending ? "Generando..." : "Generar link"}
@@ -2040,24 +2045,34 @@ export function ReservationsPage() {
 
               <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
                 <p className="text-xs uppercase tracking-wide text-slate-500">Finanzas</p>
-                <div className="grid grid-cols-2 gap-2 text-sm text-slate-800">
-                  <div>
-                    <p className="text-xs text-slate-500">Total</p>
-                    <p className="font-semibold">{formatMoney(detailsSummary?.total_amount ?? detailsReservation.total_amount ?? 0, detailsCurrencyCode)}</p>
+                {detailsFinancialsLoading ? (
+                  <p className="rounded-lg border border-slate-200 bg-white/70 px-3 py-2 text-sm text-slate-600">
+                    Cargando resumen financiero…
+                  </p>
+                ) : detailsSummary ? (
+                  <div className="grid grid-cols-2 gap-2 text-sm text-slate-800">
+                    <div>
+                      <p className="text-xs text-slate-500">Total</p>
+                      <p className="font-semibold">{formatMoney(detailsSummary.total_amount, detailsCurrencyCode)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Pagado</p>
+                      <p className="font-semibold">{formatMoney(detailsSummary.amount_paid, detailsCurrencyCode)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Depósito</p>
+                      <p className="font-semibold">{formatMoney(detailsSummary.deposit_required, detailsCurrencyCode)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Saldo</p>
+                      <p className="font-semibold">{formatMoney(detailsSummary.balance_due, detailsCurrencyCode)}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-xs text-slate-500">Pagado</p>
-                    <p className="font-semibold">{formatMoney(detailsSummary?.amount_paid ?? detailsReservation.amount_paid ?? 0, detailsCurrencyCode)}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-500">Depósito</p>
-                    <p className="font-semibold">{formatMoney(detailsSummary?.deposit_required ?? detailsReservation.deposit_amount ?? 0, detailsCurrencyCode)}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-500">Saldo</p>
-                    <p className="font-semibold">{formatMoney(detailsSummary?.balance_due ?? detailsReservation.balance_due ?? 0, detailsCurrencyCode)}</p>
-                  </div>
-                </div>
+                ) : (
+                  <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                    No se pudo cargar el resumen financiero. Reintentá abrir la ficha.
+                  </p>
+                )}
                 {detailsOperations?.financial_summary ? (
                   <div className="rounded-lg border border-slate-200 bg-white/70 p-3 text-xs text-slate-700">
                     <div className="grid grid-cols-2 gap-2">
@@ -2297,7 +2312,6 @@ export function ReservationsPage() {
     </div>
   );
 }
-
 
 
 
