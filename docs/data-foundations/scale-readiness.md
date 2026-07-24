@@ -9,6 +9,11 @@ hotels, 10,000 concurrent users, and a 20,000-user burst without cross-tenant
 leakage or financial inconsistency. No target is marked achieved without
 provider-bound evidence.
 
+Performance acceptance is defined once in the
+[canonical SLO catalog](slo-catalog.md): user-visible p95 targets, stricter
+server-side query budgets, error rate and CDC freshness. This ledger records
+whether those targets have evidence; it does not redefine them.
+
 ## Evidence available in this worktree
 
 | Area | Local evidence | Status |
@@ -16,6 +21,7 @@ provider-bound evidence.
 | Tenant isolation | Hotel-scoped service queries, RLS migration, tenant-leading `(hotel_id, id)` keys/FKs across the full hotel-scoped relationship graph, multi-hotel regression tests | ✅ contract-covered; provider migration unverified |
 | Data-architecture forward tests | Independent forward contracts for foreign-entity read/write rejection and stale-tariff quote rejection before reservation persistence | ✅ 2/2 local; provider PostgreSQL/RLS replay unverified |
 | Read cache | Hotel-prefixed availability/analytics keys, invalidation tests, PostgreSQL fallback | ✅ contract-covered |
+| Availability query shape | Set-based room/block/reservation lookup with bounded-query regression (20-room fixture: 85 → 7 statements) | ✅ local regression; PostgreSQL plan/p95 unverified |
 | Critical concurrency | Redis/Valkey lease for cash close and persisted allocation, PostgreSQL row locks, production fail-closed config | ✅ contract-covered |
 | Analytics provenance | All analytics envelopes expose `data_as_of`, `source_lag_seconds`, and `data_source`; UI renders them | ✅ contract-covered |
 | Health visibility | `/health/datastores` reports PostgreSQL and Redis roles separately, including distributed locks | ✅ contract-covered |

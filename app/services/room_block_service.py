@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Collection
 from datetime import date, datetime, timezone
 
 from sqlalchemy import or_
@@ -59,12 +60,18 @@ def room_block_overlap_filter(start_date: date, end_date: date):
     )
 
 
-def blocked_room_ids_for_range(db: Session, *, hotel_id: int, start_date: date, end_date: date) -> set[int]:
-    rows = (
-        db.query(RoomBlock.room_id)
-        .filter(RoomBlock.hotel_id == hotel_id, *room_block_overlap_filter(start_date, end_date))
-        .all()
-    )
+def blocked_room_ids_for_range(
+    db: Session,
+    *,
+    hotel_id: int,
+    start_date: date,
+    end_date: date,
+    room_ids: Collection[int] | None = None,
+) -> set[int]:
+    filters = [RoomBlock.hotel_id == hotel_id, *room_block_overlap_filter(start_date, end_date)]
+    if room_ids:
+        filters.append(RoomBlock.room_id.in_(room_ids))
+    rows = db.query(RoomBlock.room_id).filter(*filters).all()
     return {row[0] for row in rows}
 
 

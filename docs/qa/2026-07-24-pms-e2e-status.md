@@ -17,7 +17,7 @@ repositorio.
 | Frontend lint/typecheck/build | Pasan. Vite informa un bundle principal de 785.37 kB minificado (190.07 kB gzip); queda como deuda de performance. |
 | E2E desktop | 23/23 pasan en Chromium, incluyendo login, logout, admin, calendario de tarifas, configuración del hotel, los journeys de negocio, la jornada de operaciones diarias y páginas V72. La ejecución fresh completa queda en 31/31 al sumar móvil Chromium y los tres perfiles WebKit. |
 | E2E mobile | 2/2 pasan con Chromium emulando iPhone y verificando 375×812, 390×844 y 430×932; 6/6 pasan con Playwright WebKit en perfiles iPhone SE, iPhone 15 y iPhone 15 Pro Max; los journeys mutantes de reserva/pagos/check-in/out, inventario, cambio de habitación/no-show y operaciones diarias pasan 4/4 en WebKit iPhone 15. Esto no sustituye Safari nativo del simulador Xcode, que no está disponible en este host. |
-| Backend completo | 1214 pasan, 17 se omiten, 12 quedan xfail y 1 xpass en Python 3.12 limpio. El runner E2E rechaza explícitamente Python menor a 3.10. |
+| Backend completo | 1215 pasan, 17 se omiten, 12 quedan xfail y 1 xpass en Python 3.12 limpio. El runner E2E rechaza explícitamente Python menor a 3.10. |
 | Forward-tests de arquitectura de datos | 2/2 pasan: una entidad de otro hotel no puede leerse ni adjuntarse, y una cotización queda invalidada antes de persistir la reserva cuando cambia la tarifa. |
 | Migración virgen | `alembic upgrade head` pasa sobre SQLite temporal hasta `20260724_room_move_enum_values`, incluyendo blobs privados, rotación, custodia, claves tenant restantes y el contrato de movimientos de habitación. |
 | Backend focalizado | 56/56 pasan: motor de asignación, operaciones de reservas, check-in, check-out y seguridad del flujo. |
@@ -28,6 +28,36 @@ repositorio.
 | Runtime IaC | `render.yaml` declara autoscaling 3–50 (CPU 60%, memoria 70%), Valkey persistente privado, worker/beat separados y migración Alembic pre-deploy; provider sync/telemetría no verificados. |
 | Load runner | `scripts/scale/staged_http_load.py` validado por tests y help; no ejecutado contra provider por falta de preview aislado. |
 | Graphify | `portable-check` pasa después de actualizar y normalizar el grafo; `check-update` reporta pendiente semántico porque no se generaron descripciones/labels LLM en este run. |
+
+### Smoke de la skill de navegador interno
+
+La skill `browser:control-in-app-browser` quedó verificada con la pestaña QA
+existente: reconoció la sesión autenticada sin volver a solicitar credenciales,
+leyó el dashboard y navegó de forma read-only a `/reservas` y
+`/operacion/tarifas`. Se observaron los controles de listado, filtros,
+disponibilidad, calendario de tarifas y navegación operativa. No se crearon ni
+modificaron reservas, pagos, tarifas o configuración durante este smoke. Como
+interacción segura, se activó la vista `Mes`, se seleccionó el filtro
+`Cancelada` y se restauró con `Limpiar`; el estado `[active]` y la opción
+seleccionada quedaron visibles en el DOM después de cada acción.
+
+El intento de aplicar un viewport explícito de 390×844 no produjo ese tamaño en
+la sesión cloud (el navegador reportó su viewport efectivo), por lo que no se
+usa como evidencia móvil. La evidencia móvil local sigue siendo Playwright
+Chromium/WebKit con perfiles iPhone; Safari nativo requiere un host con
+`xcrun simctl`.
+
+Como smoke adicional del runner, el backend E2E local aislado respondió 6.322
+requests `200` en steady (4 workers, p95 1,46 ms) y 2.840 requests `200` en
+burst (8 workers, p95 4,91 ms), sin errores de transporte. Es una prueba de
+funcionamiento del arnés sobre SQLite local, no evidencia de capacidad,
+conexiones, SLO o autoscaling de provider.
+
+La revisión de rendimiento local también encontró y corrigió un N+1 en la
+consulta de habitaciones disponibles: una categoría con 20 habitaciones pasó
+de 85 a 7 sentencias SQL en el fixture de regresión, manteniendo filtros de
+hotel, bloqueos, reservas activas y `exclude_reservation_id`. El benchmark
+PostgreSQL co-localizado y sus planes `EXPLAIN` siguen pendientes.
 
 La combinación que recorre la jornada diaria y las páginas autenticadas quedó
 en 14/14 en Chromium serial después de corregir la serialización del perfil
@@ -252,12 +282,12 @@ distribuidos no están habilitados y requeridos.
 
 - La prueba móvil automatizada emula viewports de iPhone en Chromium y WebKit;
   no es una prueba de Safari nativo ni de un dispositivo físico.
-- En el cloud compartido, la lectura actual del dashboard mostró overflow
-  horizontal (`461 px` de contenido contra `390 px` de viewport). No se
-  modificó ese entorno ni se usa como sustituto de un preview aislado.
-- El navegador interno no pudo capturar screenshot del dashboard durante esta
-  sesión por timeout de captura; la evidencia de layout se obtuvo mediante DOM
-  y métricas de viewport.
+- En una lectura cloud anterior del dashboard se observó overflow horizontal
+  (`461 px` de contenido contra `390 px` de viewport). El smoke actual no pudo
+  aplicar de forma confiable ese viewport explícito; no se modificó ese entorno
+  ni se usa como sustituto de un preview aislado.
+- No se guardó screenshot del dashboard cloud en el repositorio; la evidencia
+  del smoke se obtuvo mediante DOM visible y URL, sin persistir PII ni sesión.
 - El validador del manifiesto de ejemplo pasa, pero no existe un manifiesto
   provider-bound aislado para este SHA; el despliegue de la rama y la repetición
   de QA contra el preview/cloud aún no están realizados.

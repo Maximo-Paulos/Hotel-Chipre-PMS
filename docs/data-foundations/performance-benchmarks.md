@@ -24,17 +24,28 @@ Seed scope:
 
 The seed is cleanup-safe: benchmark-owned rows for `hotel_id=90001` are deleted at the start of each run.
 
-## SLO Targets
+## SLO targets
+
+The [canonical SLO catalog](slo-catalog.md) owns the targets. This benchmark
+uses its server-side query budgets:
 
 | Critical query/service | Target p95 |
 | --- | ---: |
 | `reservation_service.check_room_availability` | < 50 ms |
 | `reservation_service.find_available_rooms` | < 100 ms |
-| `allocation_engine.build_slots_from_db` | < 300 ms |
-| `payment_link_service.balance_due_from_transactions` | < 50 ms |
+| `allocation_engine.build_slots_from_db` | < 150 ms |
+| `payment_link_service.balance_due_from_transactions` | < 30 ms |
 | `operational_report_service.daily_report` | < 300 ms |
-| `guest_service.search_guests` by document | < 30 ms |
-| `guest_service.search_guests` by last name | < 50 ms |
+| `guest_service.search_guests` | < 30 ms |
+
+## Query-shape regression evidence
+
+`find_available_rooms` now loads candidate rooms, active blocks and overlapping
+reservations in bounded set-based queries instead of calling
+`check_room_availability` once per room. The SQLite regression fixture with 20
+rooms emitted 85 SQL statements before the change and 7 after it; the test
+requires no more than 8. This is query-shape evidence only: PostgreSQL
+`EXPLAIN (ANALYZE, BUFFERS)` and provider-bound p95 remain pending.
 
 ## Measured Results
 
@@ -133,18 +144,9 @@ against a CO-LOCATED PostgreSQL (the Render/production deploy where app and DB s
 The network-independent metric is server-side `EXPLAIN (ANALYZE)` execution time + index
 usage (`tests/perf/explain_probe.py`), which should be captured in the co-located environment.
 
-**Status:** SLO targets defined (below); trgm optimization integrated + migration-validated;
+**Status:** canonical SLO targets are defined in `slo-catalog.md`; trgm optimization is integrated + migration-validated;
 representative latency measurement = DEPLOY-TIME step on co-located PG. Measured numbers: PENDING
 (co-located). No fabricated numbers.
-
-### SLO targets (server-side execution time, p95)
-| Query | SLO p95 |
-|-------|---------|
-| Guest search (document/last_name/email) | < 30 ms |
-| Room availability (date range) | < 50 ms |
-| Allocation candidate build | < 150 ms |
-| Daily operational report | < 300 ms |
-| Balance from transactions | < 30 ms |
 
 ### MEASURED — guest-search hot path (server-side EXPLAIN ANALYZE, real PostgreSQL)
 

@@ -35,7 +35,7 @@ from app.services.pricing_policy_service import PricingPolicyError, StayPricingQ
 from app.services.pricing_service import build_pricing_revision, get_price_for_date
 from app.services.quote_token_service import QuoteTokenError, verify_quote_token
 from app.services.read_model_cache import invalidate_hotel_operational_caches
-from app.services.room_block_service import room_has_active_block
+from app.services.room_block_service import blocked_room_ids_for_range, room_has_active_block
 
 
 logger = logging.getLogger(__name__)
@@ -628,19 +628,37 @@ def find_available_rooms(
         Room.status.in_([RoomStatusEnum.AVAILABLE, RoomStatusEnum.OCCUPIED, RoomStatusEnum.CLEANING]),
     ).all()
 
-    available = []
-    for room in candidate_rooms:
-        if check_room_availability(
-            db,
-            room.id,
-            check_in,
-            check_out,
-            hotel_id=hotel_id,
-            exclude_reservation_id=exclude_reservation_id,
-        ):
-            available.append(room)
+    if not candidate_rooms:
+        return []
 
-    return available
+    candidate_room_ids = [room.id for room in candidate_rooms]
+    blocked_room_ids = blocked_room_ids_for_range(
+        db,
+        hotel_id=hotel_id,
+        start_date=check_in,
+        end_date=check_out,
+        room_ids=candidate_room_ids,
+    )
+    occupied_query = db.query(Reservation.room_id).filter(
+        Reservation.hotel_id == hotel_id,
+        Reservation.room_id.in_(candidate_room_ids),
+        Reservation.deleted_at.is_(None),
+        Reservation.status.notin_([
+            ReservationStatusEnum.CANCELLED,
+            ReservationStatusEnum.CHECKED_OUT,
+        ]),
+        Reservation.check_in_date < check_out,
+        Reservation.check_out_date > check_in,
+    )
+    if exclude_reservation_id:
+        occupied_query = occupied_query.filter(Reservation.id != exclude_reservation_id)
+    occupied_room_ids = {room_id for (room_id,) in occupied_query.all() if room_id is not None}
+
+    return [
+        room
+        for room in candidate_rooms
+        if room.id not in blocked_room_ids and room.id not in occupied_room_ids
+    ]
 
 
 def create_reservation(db: Session, data: ReservationCreate, hotel_id: Optional[int] = None) -> Reservation:

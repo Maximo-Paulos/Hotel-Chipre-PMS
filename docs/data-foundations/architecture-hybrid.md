@@ -208,30 +208,24 @@ This ensures emails/webhooks are never lost even if the app crashes after the DB
 
 - Fields: first_name, last_name, document_number, email, phone
 - Strategy: PostgreSQL `pg_trgm` GIN indexes for name fuzzy search; B-tree indexes for document/email/phone exact lookup
-- SLO: < 100ms for up to 100K guests per hotel
+- Query budget: < 30ms p95; the user-visible operation SLO is defined in the
+  [canonical SLO catalog](slo-catalog.md)
 - Threshold for external engine: > 500K guests per hotel or > 500ms p95 response (monitor before migrating)
 
 ### Reservation/calendar search
 
 - Fields: confirmation_code (exact), date ranges, status, guest name (join)
 - Strategy: composite B-tree indexes + date range overlap queries
-- SLO: < 200ms for calendar view (60-day window, any hotel size)
+- User-visible SLO: < 200ms p95 for the calendar view; see the
+  [canonical SLO catalog](slo-catalog.md)
 
 ---
 
 ## SLO definitions
 
-| Operation | Target p50 | Target p95 | Target p99 |
-|-----------|-----------|-----------|-----------|
-| Guest search (name/doc/phone) | 30ms | 100ms | 250ms |
-| Reservation list (calendar view, 60 days) | 50ms | 200ms | 500ms |
-| Reservation create (with availability check) | 80ms | 300ms | 800ms |
-| Payment record (transaction insert) | 50ms | 200ms | 500ms |
-| Check-in flow (all validations) | 100ms | 400ms | 1000ms |
-| Cash close report (arqueo) | 100ms | 500ms | 1500ms |
-| Allocation solver (single hotel, 50 rooms) | 200ms | 1000ms | 3000ms |
-| API key validation (cache hit) | 1ms | 5ms | 20ms |
-| API key validation (cache miss → DB) | 20ms | 80ms | 200ms |
+The [canonical SLO catalog](slo-catalog.md) owns the p95 targets for
+user-visible operations and their internal query budgets. This document keeps
+the data-flow design; it must not define a competing latency table.
 
 ---
 

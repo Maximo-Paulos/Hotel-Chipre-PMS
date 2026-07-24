@@ -3,6 +3,7 @@ Tests for Reservation Service — booking creation, availability checks, state t
 """
 import pytest
 from datetime import date
+from sqlalchemy import event
 
 from app.models.daily_rate import DailyRate
 from app.models.guest import DocumentTypeEnum, Guest
@@ -97,6 +98,30 @@ class TestAvailability:
             db, cat_std.id, date(2026, 4, 1), date(2026, 4, 5)
         )
         assert len(available) == total_std_rooms - 1
+
+    def test_find_available_rooms_uses_bounded_query_count(
+        self, db, sample_rooms, sample_categories, hotel_config
+    ):
+        """Availability lookup must not issue one reservation query per room."""
+        statements: list[str] = []
+        engine = db.get_bind()
+
+        def capture_statement(conn, cursor, statement, parameters, context, executemany):
+            statements.append(statement)
+
+        event.listen(engine, "before_cursor_execute", capture_statement)
+        try:
+            available = find_available_rooms(
+                db,
+                sample_categories[0].id,
+                date(2026, 4, 1),
+                date(2026, 4, 5),
+            )
+        finally:
+            event.remove(engine, "before_cursor_execute", capture_statement)
+
+        assert len(available) == 20
+        assert len(statements) <= 8
 
 
 class TestReservationCreation:
