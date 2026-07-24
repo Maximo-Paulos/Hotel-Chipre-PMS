@@ -16,7 +16,7 @@ repositorio.
 | --- | --- |
 | Frontend lint/typecheck/build | Pasan. Vite informa un bundle principal de ~778 kB minificado; queda como deuda de performance. |
 | E2E desktop | 20/20 pasan en Chromium, incluyendo login, logout, admin, calendario de tarifas, configuración del hotel, el journey de negocio y páginas V72. La ejecución fresh completa queda en 28/28 al sumar móvil Chromium y los tres perfiles WebKit. |
-| E2E mobile | 2/2 pasan con Chromium emulando iPhone y verificando 375×812, 390×844 y 430×932; adicionalmente 6/6 pasan con Playwright WebKit en perfiles iPhone SE, iPhone 15 y iPhone 15 Pro Max: sin overflow horizontal y navegación móvil a Reservas. Esto no sustituye Safari nativo del simulador Xcode, que no está disponible en este host. |
+| E2E mobile | 2/2 pasan con Chromium emulando iPhone y verificando 375×812, 390×844 y 430×932; 6/6 pasan con Playwright WebKit en perfiles iPhone SE, iPhone 15 y iPhone 15 Pro Max; el journey mutante completo de reserva/pagos/check-in/out pasa 1/1 en WebKit iPhone 15. Esto no sustituye Safari nativo del simulador Xcode, que no está disponible en este host. |
 | Backend completo | 1209 pasan, 17 se omiten, 12 quedan xfail y 1 xpass en Python 3.12 limpio. El runner E2E rechaza explícitamente Python menor a 3.10. |
 | Migración virgen | `alembic upgrade head` pasa sobre SQLite temporal hasta `20260724_extended_tenant_composite_fks`, incluyendo blobs privados, rotación, custodia y el cierre de claves tenant restantes. |
 | Backend focalizado | 56/56 pasan: motor de asignación, operaciones de reservas, check-in, check-out y seguridad del flujo. |
@@ -52,6 +52,17 @@ explícitamente el estado habilitado. La ejecución posterior quedó en 28/28.
 
 La corrección está validada localmente, pero el entorno web de QA debe recibir
 un despliegue antes de repetir la medición allí.
+
+La ejecución del journey central en WebKit iPhone 15 primero detectó que el
+helper E2E sólo buscaba el menú lateral desktop, que está oculto en viewports
+móviles. El test fue adaptado para usar la navegación móvil visible; el
+journey completo pasó 1/1 después de la corrección.
+
+El primer intento de incluir ambos journeys mutantes en la misma corrida
+reveló una colisión del arnés: Chromium y WebKit reseteaban la misma SQLite
+aislada en paralelo. El proyecto WebKit quedó opt-in y documentado para
+ejecutarse como una segunda corrida serial, preservando la reproducibilidad de
+la suite por defecto.
 
 En la medición de sólo lectura del cloud compartido, el dashboard sigue
 reportando `scrollWidth=461` con viewport de 390 px. Es evidencia del build

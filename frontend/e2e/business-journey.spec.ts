@@ -22,7 +22,9 @@ async function login(page: Page) {
 }
 
 async function navigateFromShell(page: Page, path: string) {
-  const link = page.locator(`aside nav a[href="${path}"]`);
+  const desktopLink = page.locator(`aside nav a[href="${path}"]`);
+  const mobileLink = page.locator(`nav[aria-label="Navegación móvil"] a[href="${path}"]`);
+  const link = (await desktopLink.isVisible().catch(() => false)) ? desktopLink : mobileLink;
   await expect(link).toHaveCount(1);
   await expect(link).toBeVisible();
   await link.click();

@@ -22,7 +22,17 @@ E2E_PYTHON=/absolute/path/to/python3.12 npx playwright test \
   --project=webkit-iphone-se \
   --project=webkit-iphone-15 \
   --project=webkit-iphone-15-pro-max
+
+# Critical business journey in an iPhone-sized WebKit context
+E2E_WEBKIT_BUSINESS=true E2E_PYTHON=/absolute/path/to/python3.12 npx playwright test \
+  e2e/business-journey.spec.ts \
+  --project=webkit-iphone-15-business
 ```
+
+The WebKit business project is opt-in because the Chromium and WebKit
+journeys both mutate the same isolated SQLite database. Run it as a separate
+command after the default suite, never concurrently with another mutating
+project.
 
 `playwright.config.ts` requires Python 3.10+ and selects `.venv312`, then
 `.venv`, then a supported interpreter on `PATH`. If the repository has a

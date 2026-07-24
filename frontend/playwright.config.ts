@@ -79,7 +79,17 @@ export default defineConfig({
       name: "webkit-iphone-15-pro-max",
       testMatch: "**/responsive-smoke.spec.ts",
       use: { ...devices["iPhone 15 Pro Max"], browserName: "webkit" }
-    }
+    },
+    ...(process.env.E2E_WEBKIT_BUSINESS === "true"
+      ? [
+          {
+            name: "webkit-iphone-15-business",
+            testMatch: "**/business-journey.spec.ts",
+            use: { ...devices["iPhone 15"], browserName: "webkit" },
+            workers: 1
+          }
+        ]
+      : [])
   ],
   webServer: [
     {
