@@ -6,14 +6,29 @@ description: Run the full local validation gate for Hotel Chipre PMS before push
 # validate-all — puerta de validación pre-push
 
 Corré esto **en este orden** y no declares "verde" sin ver el resultado de cada comando.
-Este proyecto usa un venv propio (Python 3.12) y Node 20 fuera del PATH por defecto.
+Este proyecto usa un entorno Python >=3.10 y Node 20 fuera del PATH por defecto.
+No confíes en el nombre del directorio: el `.venv` histórico puede contener
+Python 3.9 y debe rechazarse antes de importar la aplicación.
 
 ## 1. Backend — tests
 ```sh
 cd "$(git rev-parse --show-toplevel)"
-.venv/bin/python -m pytest -q
+PYTHON_BIN="${E2E_PYTHON:-}"
+if [ -z "$PYTHON_BIN" ]; then
+  for candidate in .venv/bin/python .venv312/bin/python python3.12 python3; do
+    if [ -x "$candidate" ] && "$candidate" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)' 2>/dev/null; then
+      PYTHON_BIN="$candidate"
+      break
+    fi
+  done
+fi
+if [ -z "$PYTHON_BIN" ]; then
+  echo "Python >=3.10 is required; set E2E_PYTHON to the clean interpreter." >&2
+  exit 1
+fi
+"$PYTHON_BIN" -m pytest -q
 ```
-Esperado: `~749 passed` (0 failed). Si algo falla, diagnosticá antes de seguir.
+Esperado: 0 failed. Si algo falla, diagnosticá antes de seguir.
 
 ## 2. Frontend — lint + typecheck + build
 ```sh
@@ -28,7 +43,20 @@ Los tres deben pasar sin errores (el warning de chunk >500 kB es deuda conocida,
 ## 3. Migraciones — dry-run sobre SQLite virgen (nunca la DB de dev)
 ```sh
 cd "$(git rev-parse --show-toplevel)"
-DATABASE_URL="sqlite:///$(mktemp -d)/mig.db" .venv/bin/python -m alembic upgrade head
+MIGRATION_PYTHON="${E2E_PYTHON:-${PYTHON_BIN:-}}"
+if [ -z "$MIGRATION_PYTHON" ]; then
+  for candidate in .venv/bin/python .venv312/bin/python python3.12 python3; do
+    if [ -x "$candidate" ] && "$candidate" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)' 2>/dev/null; then
+      MIGRATION_PYTHON="$candidate"
+      break
+    fi
+  done
+fi
+if [ -z "$MIGRATION_PYTHON" ]; then
+  echo "Python >=3.10 is required for migrations." >&2
+  exit 1
+fi
+DATABASE_URL="sqlite:///$(mktemp -d)/mig.db" "$MIGRATION_PYTHON" -m alembic upgrade head
 ```
 Debe llegar a `head` sin error.
 
