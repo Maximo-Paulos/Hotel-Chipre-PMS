@@ -13,6 +13,7 @@ from app.models.user import User
 from app.services.cash_register_service import (
     CashRegisterError,
     add_movement,
+    approve_close_difference,
     close_session,
     open_session,
 )
@@ -231,6 +232,32 @@ def test_close_with_difference_requires_approval(db):
     assert report.difference == Decimal("-5.00")
     assert report.difference_approved is False
     assert session.status == CashSessionStatusEnum.PENDING_APPROVAL
+
+
+def test_successor_cash_session_requires_difference_approval(db):
+    _hotel(db, 1)
+    _user(db, 10)
+    session = open_session(db, hotel_id=1, opened_by_user_id=10, opening_balance=Decimal("100.00"))
+    report = close_session(
+        db,
+        hotel_id=1,
+        session_id=session.id,
+        closed_by_user_id=10,
+        counted_balance=Decimal("95.00"),
+    )
+
+    with pytest.raises(CashRegisterError, match="approval"):
+        open_session(db, hotel_id=1, opened_by_user_id=10, opening_balance=report.declared_balance)
+
+    approve_close_difference(db, hotel_id=1, report_id=report.id, approved_by_user_id=10)
+    successor = open_session(
+        db,
+        hotel_id=1,
+        opened_by_user_id=10,
+        opening_balance=report.declared_balance,
+    )
+
+    assert successor.opening_balance == Decimal("95.00")
 
 
 def test_cross_hotel_isolation(db):

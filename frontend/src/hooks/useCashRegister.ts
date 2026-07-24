@@ -4,6 +4,7 @@ import {
   addCashMovement,
   approveCashCloseDifference,
   closeCashSession,
+  getLatestCashCloseReport,
   getCashSessionSummary,
   listCashMovements,
   listCashSessions,
@@ -22,11 +23,23 @@ import { useSession } from "../state/session";
 const cashSessionsKey = (hotelId: number | null) => ["cash-sessions", hotelId];
 const cashMovementsKey = (hotelId: number | null, sessionId: number) => ["cash-movements", hotelId, sessionId];
 
+const latestCloseReportKey = (hotelId: number | null) => ["cash-latest-close-report", hotelId];
+
 export function useCashSessions() {
   const { session } = useSession();
   return useQuery<CashSession[]>({
     queryKey: cashSessionsKey(session.hotelId),
     queryFn: () => listCashSessions(session),
+    enabled: hasValidSession(session),
+    staleTime: 15 * 1000
+  });
+}
+
+export function useLatestCashCloseReport() {
+  const { session } = useSession();
+  return useQuery<CashCloseReport | null>({
+    queryKey: latestCloseReportKey(session.hotelId),
+    queryFn: () => getLatestCashCloseReport(session),
     enabled: hasValidSession(session),
     staleTime: 15 * 1000
   });
@@ -56,7 +69,10 @@ export function useCashRegisterMutations(sessionId?: number) {
   const queryClient = useQueryClient();
   const { session } = useSession();
 
-  const invalidateSessions = () => queryClient.invalidateQueries({ queryKey: cashSessionsKey(session.hotelId) });
+  const invalidateSessions = () => {
+    queryClient.invalidateQueries({ queryKey: cashSessionsKey(session.hotelId) });
+    queryClient.invalidateQueries({ queryKey: latestCloseReportKey(session.hotelId) });
+  };
   const invalidateMovements = () => {
     if (sessionId) {
       queryClient.invalidateQueries({ queryKey: cashMovementsKey(session.hotelId, sessionId) });

@@ -733,19 +733,14 @@
       "frontend/public/marketing/screenshots/conexiones.png",
       "frontend/public/marketing/screenshots/dashboard.png",
       "frontend/public/marketing/screenshots/reservas.png",
-      "var/payment-proofs/1/6ahRJQaup1_2C0Qh_GL6L3kxIcOG_zZY.png",
-      "var/payment-proofs/1/H0f5FSTREDHIxO43qKQqTM5I-Q8G5vs7.png",
-      "var/payment-proofs/1/JsCfkdJlOQgvrtQK-aNiz3p3QYtYamdt.png",
-      "var/payment-proofs/1/JzXY6ABepqANRRBAlY1hZSMWWpBaY7iz.png",
-      "var/payment-proofs/1/M7eYlNpMAAFD7MRfDGZcLFYECskV0eTk.png",
-      "var/payment-proofs/1/brjURGsZ9SnHiE4UP8PFHIRnJ7pcj5Oz.png"
+      "var/payment-proofs/1/J5tlKd4Tt724orup_06uxKAsd4HqfgZ7.png"
     ],
     "video": []
   },
-  "total_files": 733,
-  "total_words": 477142,
+  "total_files": 728,
+  "total_words": 477542,
   "needs_graph": true,
-  "warning": "Large corpus: 733 files · ~477,142 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
+  "warning": "Large corpus: 728 files · ~477,542 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
   "skipped_sensitive": [
     "alembic/versions/20260408_security_tokens.py",
     "app/adapters/memory_tokens.py",
@@ -759,7 +754,7 @@
   "graphifyignore_patterns": 60,
   "git": {
     "source_owner": "git",
-    "source_hash": "805b47a73f7b348c2e2bc4fd17bec753533ed575",
+    "source_hash": "1896a68ecd3de9d98a04f3d5d8a46be090b23366",
     "branches": [
       "codex/feature/agent-ops-knowledge",
       "codex/feature/pms-e2e-scale-hardening",
@@ -776,9 +771,9 @@
     "source": "cli",
     "root": ".",
     "git_root": ".",
-    "head": "805b47a73f7b348c2e2bc4fd17bec753533ed575",
+    "head": "1896a68ecd3de9d98a04f3d5d8a46be090b23366",
     "candidate_count": null,
-    "included_count": 733,
+    "included_count": 728,
     "excluded_untracked_count": 0,
     "excluded_ignored_count": 0,
     "excluded_sensitive_count": 8,

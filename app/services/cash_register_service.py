@@ -67,6 +67,10 @@ def open_session(
     if existing is not None:
         raise CashRegisterError("Hotel already has an open cash session")
 
+    latest_report = get_latest_close_report(db, hotel_id=hotel_id)
+    if latest_report is not None and latest_report.difference != Decimal("0.00") and not latest_report.difference_approved:
+        raise CashRegisterError("Previous cash close difference requires approval before opening a successor session")
+
     session = CashSession(
         hotel_id=hotel_id,
         opened_by_user_id=opened_by_user_id,
@@ -80,6 +84,15 @@ def open_session(
     except IntegrityError as exc:
         raise CashRegisterError("Hotel already has an open cash session") from exc
     return session
+
+
+def get_latest_close_report(db: Session, *, hotel_id: int) -> CashCloseReport | None:
+    return (
+        db.query(CashCloseReport)
+        .filter(CashCloseReport.hotel_id == hotel_id)
+        .order_by(CashCloseReport.closed_at.desc(), CashCloseReport.id.desc())
+        .first()
+    )
 
 
 def add_movement(

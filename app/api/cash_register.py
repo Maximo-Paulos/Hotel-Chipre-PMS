@@ -17,6 +17,7 @@ from app.services.cash_register_service import (
     add_movement,
     approve_close_difference,
     close_session,
+    get_latest_close_report,
     get_session_summary,
     list_movements,
     list_sessions,
@@ -59,6 +60,15 @@ def list_cash_sessions(
     context: AuthContext = Depends(require_permission(PERMISSION_CASH_OPERATE)),
 ):
     return list_sessions(db, hotel_id=context.hotel_id)
+
+
+@router.get("/api/cash-register/close-reports/latest", response_model=CashCloseReportRead | None)
+@router.get("/cash-register/close-reports/latest", response_model=CashCloseReportRead | None)
+def latest_cash_close_report(
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_CASH_OPERATE)),
+):
+    return get_latest_close_report(db, hotel_id=context.hotel_id)
 
 
 @router.post(

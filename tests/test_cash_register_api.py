@@ -102,6 +102,24 @@ def test_cash_register_api_open_add_close_and_list(client_with_db):
     assert db.get(CashSession, session_id).status == CashSessionStatusEnum.CLOSED
 
 
+def test_cash_register_api_returns_latest_close_report_for_successor_opening(client_with_db):
+    client, _db, _ctx = client_with_db
+
+    opened = client.post("/api/cash-register/sessions", json={"opening_balance": "100.00"})
+    session_id = opened.json()["id"]
+    closed = client.post(
+        f"/api/cash-register/sessions/{session_id}/close",
+        json={"counted_balance": "95.00"},
+    )
+    assert closed.status_code == 200
+
+    latest = client.get("/api/cash-register/close-reports/latest")
+    assert latest.status_code == 200
+    assert latest.json()["session_id"] == session_id
+    assert latest.json()["declared_balance"] == "95.00"
+    assert latest.json()["difference_approved"] is False
+
+
 def test_cash_register_api_only_one_open_session_per_hotel(client_with_db):
     client, _db, _ctx = client_with_db
 

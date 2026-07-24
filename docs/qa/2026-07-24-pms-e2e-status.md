@@ -14,10 +14,10 @@ repositorio.
 
 | Área | Resultado |
 | --- | --- |
-| Frontend lint/typecheck/build | Pasan. Vite informa un bundle principal de ~767 kB minificado; queda como deuda de performance. |
+| Frontend lint/typecheck/build | Pasan. Vite informa un bundle principal de ~768 kB minificado; queda como deuda de performance. |
 | E2E desktop | 20/20 pasan en Chromium, incluyendo login, logout, admin, calendario de tarifas, configuración del hotel, el journey de negocio y páginas V72. |
 | E2E mobile | 2/2 pasan con viewport iPhone 13 sobre Chromium: sin overflow horizontal y navegación móvil a Reservas. |
-| Backend completo | 1175 pasan, 17 se omiten, 12 quedan xfail y 1 xpass en Python 3.12 limpio. El `.venv` legado no puede importar el código por usar un Python anterior. |
+| Backend completo | 1177 pasan, 17 se omiten, 12 quedan xfail y 1 xpass en Python 3.12 limpio. El `.venv` legado no puede importar el código por usar un Python anterior. |
 | Migración virgen | `alembic upgrade head` pasa sobre SQLite temporal hasta `20260724_allocation_enum_values`. |
 | Backend focalizado | 56/56 pasan: motor de asignación, operaciones de reservas, check-in, check-out y seguridad del flujo. |
 | Graphify | `portable-check` y `check-update` pasan después de actualizar el grafo. |
@@ -77,6 +77,11 @@ El hotel de QA no exponía controles para habilitar Mercado Pago ni
 Transferencia, por lo que el editor de reserva ofrecía solo Efectivo y Débito.
 La configuración local ahora incorpora toggles de medios de pago para el dueño;
 Transferencia queda documentada como flujo con comprobante y aprobación.
+
+La caja ahora expone el último arqueo para preparar la apertura sucesora: el
+saldo declarado se propone como saldo inicial cuando el cierre fue aprobado o
+no tuvo diferencia. Si queda una diferencia pendiente, el backend bloquea la
+nueva apertura y la UI muestra el control de aprobación para un rol autorizado.
 
 ### Journey de negocio local
 

@@ -4,11 +4,13 @@ import { type CashCloseReport, type CashMovementPayload } from "../../api/cashRe
 import {
   cashMovementTypeLabel,
   cashSessionStatusLabel,
+  useLatestCashCloseReport,
   useCashMovements,
   useCashRegisterMutations,
   useCashSessions,
   useCashSessionSummary
 } from "../../hooks/useCashRegister";
+import { useSession } from "../../state/session";
 
 const emptyMovementForm: CashMovementPayload = {
   movement_type: "income",
@@ -22,8 +24,9 @@ const money = (value?: number | string | null, currency = "ARS") =>
   Number(value ?? 0).toLocaleString("es-AR", { style: "currency", currency });
 
 export function CashRegisterPage() {
+  const { session } = useSession();
   const [selectedSessionId, setSelectedSessionId] = useState<number | null>(null);
-  const [openingBalance, setOpeningBalance] = useState(0);
+  const [openingBalance, setOpeningBalance] = useState<number | null>(null);
   const [openingNotes, setOpeningNotes] = useState("");
   const [movementForm, setMovementForm] = useState<CashMovementPayload>(emptyMovementForm);
   const [countedBalance, setCountedBalance] = useState(0);
@@ -33,6 +36,7 @@ export function CashRegisterPage() {
   const [closeReport, setCloseReport] = useState<CashCloseReport | null>(null);
 
   const sessionsQuery = useCashSessions();
+  const latestCloseReportQuery = useLatestCashCloseReport();
   const sessions = useMemo(() => sessionsQuery.data ?? [], [sessionsQuery.data]);
   const openSession = useMemo(() => sessions.find((session) => session.status === "open") ?? null, [sessions]);
   const selectedSession = useMemo(
@@ -43,6 +47,15 @@ export function CashRegisterPage() {
   const summaryQuery = useCashSessionSummary(selectedSession?.id);
   const mutations = useCashRegisterMutations(selectedSession?.id);
   const movements = useMemo(() => movementsQuery.data ?? [], [movementsQuery.data]);
+  const latestCloseReport = latestCloseReportQuery.data;
+  const successorNeedsApproval = Boolean(
+    !openSession && latestCloseReport && Number(latestCloseReport.difference) !== 0 && !latestCloseReport.difference_approved
+  );
+  const successorOpeningBalance =
+    latestCloseReport && (!Number(latestCloseReport.difference) || latestCloseReport.difference_approved)
+      ? Number(latestCloseReport.declared_balance)
+      : 0;
+  const canApproveDifference = ["owner", "co_owner", "manager"].includes(session.baseRole ?? "");
 
   // Authoritative figures come from the backend summary (same logic as the
   // arqueo), so the displayed "Esperado" always matches what the close computes.
@@ -70,12 +83,12 @@ export function CashRegisterPage() {
     setCloseReport(null);
     try {
       const session = await mutations.openSessionMutation.mutateAsync({
-        opening_balance: Number(openingBalance),
+        opening_balance: Number(openingBalance ?? successorOpeningBalance),
         currency_code: "ARS",
         notes: openingNotes.trim() || null
       });
       setSelectedSessionId(session.id);
-      setOpeningBalance(0);
+      setOpeningBalance(null);
       setOpeningNotes("");
       setMessage("Caja abierta.");
     } catch (error) {
@@ -122,10 +135,11 @@ export function CashRegisterPage() {
   };
 
   const handleApproveDifference = async () => {
-    if (!closeReport) return;
+    const reportToApprove = closeReport ?? latestCloseReport;
+    if (!reportToApprove) return;
     setMessage(null);
     try {
-      const approved = await mutations.approveDifferenceMutation.mutateAsync(closeReport.id);
+      const approved = await mutations.approveDifferenceMutation.mutateAsync(reportToApprove.id);
       setCloseReport(approved);
       setMessage("Diferencia aprobada.");
     } catch (error) {
@@ -145,6 +159,25 @@ export function CashRegisterPage() {
       </header>
 
       {message ? <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">{message}</div> : null}
+
+      {successorNeedsApproval ? (
+        <div className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 sm:flex-row sm:items-center sm:justify-between">
+          <p>
+            La caja anterior tiene una diferencia de {money(latestCloseReport?.difference, currency)}.
+            Aprobala antes de abrir la caja sucesora.
+          </p>
+          {canApproveDifference ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={handleApproveDifference}
+              className="rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-60"
+            >
+              Aprobar diferencia
+            </button>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="grid gap-4 sm:grid-cols-4">
         <Metric label="Saldo inicial" value={money(selectedSession?.opening_balance, currency)} />
@@ -197,6 +230,11 @@ export function CashRegisterPage() {
             <div>
               <p className="text-xs uppercase tracking-wide text-slate-500">Apertura</p>
               <h2 className="text-lg font-semibold text-slate-900">Abrir caja</h2>
+              {!openSession && latestCloseReport && !successorNeedsApproval ? (
+                <p className="mt-1 text-xs text-emerald-700">
+                  Saldo sucesor sugerido por el último arqueo: {money(successorOpeningBalance, currency)}
+                </p>
+              ) : null}
             </div>
             <label className="space-y-1 text-sm">
               <span className="text-slate-600">Saldo inicial</span>
@@ -204,7 +242,7 @@ export function CashRegisterPage() {
                 type="number"
                 min={0}
                 step="0.01"
-                value={openingBalance}
+                value={openingBalance ?? successorOpeningBalance}
                 onChange={(event) => setOpeningBalance(Number(event.target.value))}
                 className="w-full rounded-lg border border-slate-300 px-3 py-2"
               />
@@ -220,7 +258,7 @@ export function CashRegisterPage() {
             </label>
             <button
               type="submit"
-              disabled={busy || Boolean(openSession)}
+              disabled={busy || Boolean(openSession) || successorNeedsApproval}
               className="w-full rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
             >
               {openSession ? "Ya hay una caja abierta" : "Abrir caja"}

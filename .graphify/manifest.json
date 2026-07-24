@@ -224,8 +224,8 @@
     "hash": "90071ff09cdc9176db8b05d8c89387da"
   },
   "app/api/cash_register.py": {
-    "mtime": 1784862144874.358,
-    "hash": "bdd3d2a24883b3de6fa4608630f05680"
+    "mtime": 1784871270596.458,
+    "hash": "d55d71de6012e02f3e7c3dfb8367c6f1"
   },
   "app/api/checkin.py": {
     "mtime": 1784862144874.4036,
@@ -832,8 +832,8 @@
     "hash": "5e3af465990d6c0a94771b659df54cc8"
   },
   "app/services/cash_register_service.py": {
-    "mtime": 1784863480473.5784,
-    "hash": "fba503226c02554ff87686562cd2a378"
+    "mtime": 1784871263862.8362,
+    "hash": "299ffc994117752de5dc3147a1ac4b83"
   },
   "app/services/checkin_service.py": {
     "mtime": 1784862144883.2861,
@@ -1120,8 +1120,8 @@
     "hash": "6249ca75d203e215fb991f4f59dc14b1"
   },
   "frontend/src/api/cashRegister.ts": {
-    "mtime": 1784862144901.25,
-    "hash": "4cae8cf12c7090eddbcf64eda0f62803"
+    "mtime": 1784871275427.6433,
+    "hash": "65e59a8389486f4536a9cf7bb4536f48"
   },
   "frontend/src/api/categories.ts": {
     "mtime": 1784862144901.3027,
@@ -1280,8 +1280,8 @@
     "hash": "61cf34416d974ca23a4862fae03c4114"
   },
   "frontend/src/hooks/useCashRegister.ts": {
-    "mtime": 1784862144903.727,
-    "hash": "2ce24b8ad995a78736e38b22327b9433"
+    "mtime": 1784871283610.4778,
+    "hash": "85e4c688d0f7606a73986bb765c4d8a1"
   },
   "frontend/src/hooks/useCategories.ts": {
     "mtime": 1784862144903.7695,
@@ -1424,8 +1424,8 @@
     "hash": "6532ef23a56e208278ae3104895d5f07"
   },
   "frontend/src/views/protected/CashRegisterPage.tsx": {
-    "mtime": 1784862144905.7441,
-    "hash": "ec6c3287b04960d87586169555c7c937"
+    "mtime": 1784871325814.6648,
+    "hash": "d331a8a9216e16da64bf08e531ad4e17"
   },
   "frontend/src/views/protected/CompaniesPage.tsx": {
     "mtime": 1784862144905.8489,
@@ -1708,12 +1708,12 @@
     "hash": "fc2ad8ff5a8d34f6108d22cc31011504"
   },
   "tests/test_cash_register_api.py": {
-    "mtime": 1784862144930.3652,
-    "hash": "9fdd2e0b637a7c47643d2f6ded534666"
+    "mtime": 1784871354344.4395,
+    "hash": "0f8280e07bdf65d67a69a0367589b384"
   },
   "tests/test_cash_register_service.py": {
-    "mtime": 1784863480473.8813,
-    "hash": "81409562af0720e4df2eba1e1cfd4536"
+    "mtime": 1784871341829.3867,
+    "hash": "4e4169a5ee91e764df08fa01c98c1022"
   },
   "tests/test_cassandra_timeseries.py": {
     "mtime": 1784862144930.471,
@@ -3360,8 +3360,8 @@
     "hash": "c9ccb071243fec306b1f66559b803713"
   },
   "docs/qa/2026-07-24-pms-e2e-status.md": {
-    "mtime": 1784871102360.4792,
-    "hash": "89e74b81a4e8f13616fcfea5209964a5"
+    "mtime": 1784871504052.3428,
+    "hash": "395819e41377ac8bc854a0520e147f41"
   },
   "frontend/e2e/business-journey.spec.ts": {
     "mtime": 1784870994745.125,
@@ -3387,28 +3387,8 @@
     "mtime": 1784870253323.518,
     "hash": "12bfa1b96f1c2b37d718a77ad212f538"
   },
-  "var/payment-proofs/1/6ahRJQaup1_2C0Qh_GL6L3kxIcOG_zZY.png": {
-    "mtime": 1784871009608.342,
-    "hash": "694e825f8ec4c8aedc351a83b9bd2cc9"
-  },
-  "var/payment-proofs/1/H0f5FSTREDHIxO43qKQqTM5I-Q8G5vs7.png": {
-    "mtime": 1784870449742.999,
-    "hash": "e44e7ecfec99356632c13cd3eaa3e250"
-  },
-  "var/payment-proofs/1/JsCfkdJlOQgvrtQK-aNiz3p3QYtYamdt.png": {
-    "mtime": 1784870347345.9106,
-    "hash": "e44e7ecfec99356632c13cd3eaa3e250"
-  },
-  "var/payment-proofs/1/JzXY6ABepqANRRBAlY1hZSMWWpBaY7iz.png": {
-    "mtime": 1784870411976.3926,
-    "hash": "e44e7ecfec99356632c13cd3eaa3e250"
-  },
-  "var/payment-proofs/1/M7eYlNpMAAFD7MRfDGZcLFYECskV0eTk.png": {
-    "mtime": 1784871024340.1646,
-    "hash": "184a38ce31ca4820b6add45ce2d651b3"
-  },
-  "var/payment-proofs/1/brjURGsZ9SnHiE4UP8PFHIRnJ7pcj5Oz.png": {
-    "mtime": 1784870639701.0093,
-    "hash": "e44e7ecfec99356632c13cd3eaa3e250"
+  "var/payment-proofs/1/J5tlKd4Tt724orup_06uxKAsd4HqfgZ7.png": {
+    "mtime": 1784871397491.3828,
+    "hash": "7df1c0e3731dcf9a92915bc9e10aa26c"
   }
 }

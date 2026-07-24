@@ -79,6 +79,9 @@ export type CashSessionClosePayload = {
 export const listCashSessions = (session?: SessionLike) =>
   apiFetch<CashSession[]>("/api/cash-register/sessions", { session });
 
+export const getLatestCashCloseReport = (session?: SessionLike) =>
+  apiFetch<CashCloseReport | null>("/api/cash-register/close-reports/latest", { session });
+
 export const openCashSession = (payload: CashSessionOpenPayload, session?: SessionLike) =>
   apiFetch<CashSession>("/api/cash-register/sessions", { method: "POST", data: payload, session });
 
