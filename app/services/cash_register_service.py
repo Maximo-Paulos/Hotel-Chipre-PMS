@@ -11,6 +11,8 @@ from sqlalchemy.orm import Session
 
 from app.models.cash_register import (
     CashCloseReport,
+    CashCustodyHandoff,
+    CashCustodyStatusEnum,
     CashMovement,
     CashMovementTypeEnum,
     CashSession,
@@ -66,10 +68,6 @@ def open_session(
     )
     if existing is not None:
         raise CashRegisterError("Hotel already has an open cash session")
-
-    latest_report = get_latest_close_report(db, hotel_id=hotel_id)
-    if latest_report is not None and latest_report.difference != Decimal("0.00") and not latest_report.difference_approved:
-        raise CashRegisterError("Previous cash close difference requires approval before opening a successor session")
 
     session = CashSession(
         hotel_id=hotel_id,
@@ -163,7 +161,8 @@ def record_cash_payment_movement(
     A deposit/full payment becomes an INCOME movement; a cash refund becomes an
     EXPENSE movement. If the operator has not opened today's session yet, the
     service creates a zero-opening session atomically before posting the
-    movement. Non-cash methods (gateway/card) never touch the physical caja.
+    movement. A completed cash transaction is rejected when no caja is open;
+    non-cash methods (gateway/card) never touch the physical caja.
     """
     if transaction.payment_method != PaymentMethodEnum.CASH:
         return None
@@ -172,23 +171,7 @@ def record_cash_payment_movement(
 
     session = get_open_session(db, transaction.hotel_id)
     if session is None:
-        # A completed cash transaction must never become an untracked physical
-        # movement.  ``open_session`` and the PostgreSQL partial unique index
-        # make this safe under concurrent first-cash requests.  A legacy
-        # database without the index is still protected by the service check.
-        try:
-            session = open_session(
-                db,
-                hotel_id=transaction.hotel_id,
-                opened_by_user_id=recorded_by_user_id,
-                opening_balance=Decimal("0.00"),
-                currency_code=transaction.currency or "ARS",
-                notes="Sesión abierta automáticamente por cobro en efectivo",
-            )
-        except CashRegisterError:
-            session = get_open_session(db, transaction.hotel_id)
-            if session is None:
-                raise
+        raise CashRegisterError("Cash payment requires an open cash session")
 
     from app.models.transaction import TransactionTypeEnum
 
@@ -306,6 +289,7 @@ def close_session(
     counted_balance: Decimal,
     notes: str | None = None,
     approved_by_user_id: int | None = None,
+    received_by_user_id: int | None = None,
 ) -> CashCloseReport:
     """
     Close a cash session and create its close report.
@@ -355,6 +339,60 @@ def close_session(
         closed_at=closed_at,
     )
     db.add(report)
+    db.flush()
+
+    successor = CashSession(
+        hotel_id=hotel_id,
+        opened_by_user_id=closed_by_user_id,
+        opening_balance=Decimal("0.00"),
+        currency_code=session.currency_code,
+        notes=f"Caja sucesora de #{session.id}",
+    )
+    db.add(successor)
+    db.flush()
+
+    handoff_time = closed_at if received_by_user_id is not None else None
+    handoff = CashCustodyHandoff(
+        hotel_id=hotel_id,
+        close_report_id=report.id,
+        delivered_by_user_id=closed_by_user_id,
+        received_by_user_id=received_by_user_id,
+        delivered_amount=declared_balance,
+        status=(
+            CashCustodyStatusEnum.CONFIRMED
+            if received_by_user_id is not None
+            else CashCustodyStatusEnum.PENDING
+        ),
+        delivered_at=closed_at,
+        received_at=handoff_time,
+    )
+    report.successor_session = successor
+    report.custody_handoff = handoff
+    db.add(handoff)
+    db.flush()
+    return report
+
+
+def confirm_cash_custody(
+    db: Session,
+    *,
+    hotel_id: int,
+    report_id: int,
+    received_by_user_id: int,
+) -> CashCloseReport:
+    report = (
+        db.query(CashCloseReport)
+        .filter(CashCloseReport.id == report_id, CashCloseReport.hotel_id == hotel_id)
+        .one_or_none()
+    )
+    if report is None or report.custody_handoff is None:
+        raise CashRegisterError("Cash custody handoff not found for this hotel")
+    handoff = report.custody_handoff
+    if handoff.status == CashCustodyStatusEnum.CONFIRMED:
+        return report
+    handoff.received_by_user_id = received_by_user_id
+    handoff.received_at = datetime.now(timezone.utc)
+    handoff.status = CashCustodyStatusEnum.CONFIRMED
     db.flush()
     return report
 

@@ -234,7 +234,7 @@ def test_close_with_difference_requires_approval(db):
     assert session.status == CashSessionStatusEnum.PENDING_APPROVAL
 
 
-def test_successor_cash_session_requires_difference_approval(db):
+def test_successor_cash_session_starts_even_with_pending_difference(db):
     _hotel(db, 1)
     _user(db, 10)
     session = open_session(db, hotel_id=1, opened_by_user_id=10, opening_balance=Decimal("100.00"))
@@ -246,18 +246,12 @@ def test_successor_cash_session_requires_difference_approval(db):
         counted_balance=Decimal("95.00"),
     )
 
-    with pytest.raises(CashRegisterError, match="approval"):
-        open_session(db, hotel_id=1, opened_by_user_id=10, opening_balance=report.declared_balance)
+    assert session.status == CashSessionStatusEnum.PENDING_APPROVAL
+    assert report.successor_session.status == CashSessionStatusEnum.OPEN
+    assert report.successor_session.opening_balance == Decimal("0.00")
 
     approve_close_difference(db, hotel_id=1, report_id=report.id, approved_by_user_id=10)
-    successor = open_session(
-        db,
-        hotel_id=1,
-        opened_by_user_id=10,
-        opening_balance=report.declared_balance,
-    )
-
-    assert successor.opening_balance == Decimal("95.00")
+    assert session.status == CashSessionStatusEnum.CLOSED
 
 
 def test_cross_hotel_isolation(db):
@@ -318,37 +312,49 @@ def test_cash_payment_posts_income_movement_to_open_session(db):
     assert movement.reservation_id == reservation.id
 
 
-def test_cash_payment_without_open_session_opens_zero_balance_session(db):
-    """A cash payment must be visible in caja even when the shift was not
-    opened manually first."""
+def test_cash_payment_without_open_session_is_rejected(db):
+    """A cash payment cannot be approved outside an explicitly opened caja."""
     from app.schemas.transaction import PaymentRequest
     from app.services.payment_service import process_payment
-    from app.models.cash_register import CashMovement, CashSession, CashSessionStatusEnum
 
     _hotel(db, 1)
     _user(db, 10)
     reservation = _reservation(db, 1, "CASH-PAY-2")
 
-    tx = process_payment(
-        db,
-        PaymentRequest(
-            reservation_id=reservation.id,
-            amount=30.0,
-            payment_method=PaymentMethodEnum.CASH,
-            transaction_type=TransactionTypeEnum.DEPOSIT,
-        ),
-        hotel_id=1,
-        actor_user_id=10,
-    )
-    db.flush()
+    with pytest.raises(CashRegisterError, match="open cash session"):
+        process_payment(
+            db,
+            PaymentRequest(
+                reservation_id=reservation.id,
+                amount=30.0,
+                payment_method=PaymentMethodEnum.CASH,
+                transaction_type=TransactionTypeEnum.DEPOSIT,
+            ),
+            hotel_id=1,
+            actor_user_id=10,
+        )
 
-    assert tx.status == TransactionStatusEnum.COMPLETED
-    session = db.query(CashSession).filter(CashSession.hotel_id == 1).one()
-    assert session.status == CashSessionStatusEnum.OPEN
-    assert session.opening_balance == Decimal("0.00")
-    movement = db.query(CashMovement).filter(CashMovement.hotel_id == 1).one()
-    assert movement.transaction_id == tx.id
-    assert movement.amount == Decimal("30.00")
+
+def test_close_creates_zero_balance_successor_and_custody_handoff(db):
+    _hotel(db, 1)
+    _user(db, 10)
+    session = open_session(db, hotel_id=1, opened_by_user_id=10, opening_balance=Decimal("100.00"))
+
+    report = close_session(
+        db,
+        hotel_id=1,
+        session_id=session.id,
+        closed_by_user_id=10,
+        counted_balance=Decimal("100.00"),
+        received_by_user_id=10,
+    )
+
+    assert report.successor_session_id is not None
+    assert report.successor_session.status == CashSessionStatusEnum.OPEN
+    assert report.successor_session.opening_balance == Decimal("0.00")
+    assert report.custody_handoff.delivered_by_user_id == 10
+    assert report.custody_handoff.received_by_user_id == 10
+    assert report.custody_handoff.received_at is not None
 
 
 def test_session_summary_expected_balance_matches_arqueo(db):

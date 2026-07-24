@@ -38,6 +38,7 @@
       "alembic/versions/20260625_soft_delete.py",
       "alembic/versions/20260626_repair_reservation_unique_constraint.py",
       "alembic/versions/20260724_allocation_enum_values.py",
+      "alembic/versions/20260724_cash_handoff_rotation.py",
       "alembic/versions/20260724_payment_proofs.py",
       "alembic/versions/20260724_tenant_rls_context.py",
       "alembic/versions/3eaf48a79290_sync_model_drift_missing_columns.py",
@@ -732,15 +733,14 @@
       "frontend/public/brand/logo-full.png",
       "frontend/public/marketing/screenshots/conexiones.png",
       "frontend/public/marketing/screenshots/dashboard.png",
-      "frontend/public/marketing/screenshots/reservas.png",
-      "var/payment-proofs/1/J5tlKd4Tt724orup_06uxKAsd4HqfgZ7.png"
+      "frontend/public/marketing/screenshots/reservas.png"
     ],
     "video": []
   },
   "total_files": 728,
-  "total_words": 477542,
+  "total_words": 478672,
   "needs_graph": true,
-  "warning": "Large corpus: 728 files · ~477,542 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
+  "warning": "Large corpus: 728 files · ~478,672 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
   "skipped_sensitive": [
     "alembic/versions/20260408_security_tokens.py",
     "app/adapters/memory_tokens.py",
@@ -754,7 +754,7 @@
   "graphifyignore_patterns": 60,
   "git": {
     "source_owner": "git",
-    "source_hash": "1896a68ecd3de9d98a04f3d5d8a46be090b23366",
+    "source_hash": "4f50de1113218edfe45fbef323240d1b7afadcd0",
     "branches": [
       "codex/feature/agent-ops-knowledge",
       "codex/feature/pms-e2e-scale-hardening",
@@ -771,7 +771,7 @@
     "source": "cli",
     "root": ".",
     "git_root": ".",
-    "head": "1896a68ecd3de9d98a04f3d5d8a46be090b23366",
+    "head": "4f50de1113218edfe45fbef323240d1b7afadcd0",
     "candidate_count": null,
     "included_count": 728,
     "excluded_untracked_count": 0,

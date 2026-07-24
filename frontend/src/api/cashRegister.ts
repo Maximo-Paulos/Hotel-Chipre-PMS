@@ -39,8 +39,23 @@ export type CashCloseReport = {
   difference: number;
   difference_approved: boolean;
   approved_by_user_id?: number | null;
+  successor_session_id?: number | null;
+  custody_handoff?: CashCustodyHandoff | null;
   notes?: string | null;
   closed_at: string;
+};
+
+export type CashCustodyHandoff = {
+  id: number;
+  hotel_id: number;
+  close_report_id: number;
+  delivered_by_user_id?: number | null;
+  received_by_user_id?: number | null;
+  delivered_amount: number | string;
+  status: "pending" | "confirmed";
+  delivered_at: string;
+  received_at?: string | null;
+  notes?: string | null;
 };
 
 export type CashSessionSummary = {
@@ -107,6 +122,12 @@ export const closeCashSession = (sessionId: number, payload: CashSessionClosePay
 
 export const approveCashCloseDifference = (reportId: number, session?: SessionLike) =>
   apiFetch<CashCloseReport>(`/api/cash-register/close-reports/${reportId}/approve`, {
+    method: "POST",
+    session
+  });
+
+export const confirmCashCustody = (reportId: number, session?: SessionLike) =>
+  apiFetch<CashCloseReport>(`/api/cash-register/close-reports/${reportId}/custody/confirm`, {
     method: "POST",
     session
   });

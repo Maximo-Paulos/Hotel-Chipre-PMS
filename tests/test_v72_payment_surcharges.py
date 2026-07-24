@@ -13,6 +13,7 @@ from app.schemas.payment_link import PaymentLinkCreate
 from app.schemas.transaction import PaymentGatewayResponse, PaymentRequest
 from app.services.payment_link_service import create_link
 from app.services.payment_service import process_payment
+from app.services.cash_register_service import get_open_session, open_session
 
 
 def _ensure_hotel(db: Session, hotel_id: int) -> HotelConfiguration:
@@ -22,6 +23,8 @@ def _ensure_hotel(db: Session, hotel_id: int) -> HotelConfiguration:
         hotel.enable_mercado_pago = True
         hotel.subscription_active = True
         db.flush()
+        if get_open_session(db, hotel_id) is None:
+            open_session(db, hotel_id=hotel_id, opened_by_user_id=None, opening_balance=0)
         return hotel
     hotel = HotelConfiguration(
         id=hotel_id,
@@ -32,6 +35,7 @@ def _ensure_hotel(db: Session, hotel_id: int) -> HotelConfiguration:
     )
     db.add(hotel)
     db.flush()
+    open_session(db, hotel_id=hotel_id, opened_by_user_id=None, opening_balance=0)
     return hotel
 
 

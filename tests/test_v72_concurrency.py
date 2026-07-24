@@ -21,12 +21,14 @@ from sqlalchemy.pool import StaticPool
 from app.database import Base
 from app.models.guest import DocumentTypeEnum, Guest
 from app.models.hotel_config import HotelConfiguration
+from app.models.cash_register import CashSession, CashSessionStatusEnum
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.transaction import PaymentMethodEnum, TransactionStatusEnum, TransactionTypeEnum
 from app.schemas.reservation import ReservationCreate
 from app.schemas.transaction import PaymentRequest
 from app.services.payment_service import PaymentError, process_payment
+from app.services.cash_register_service import open_session
 from app.services.reservation_service import (
     ReservationError,
     check_room_availability,
@@ -88,6 +90,12 @@ def _seed_hotel(db: Session) -> HotelConfiguration:
         )
         db.add(hotel)
         db.flush()
+        open_session(db, hotel_id=HOTEL_ID, opened_by_user_id=None, opening_balance=0)
+    elif not db.query(CashSession).filter(
+        CashSession.hotel_id == HOTEL_ID,
+        CashSession.status == CashSessionStatusEnum.OPEN,
+    ).first():
+        open_session(db, hotel_id=HOTEL_ID, opened_by_user_id=None, opening_balance=0)
     return hotel
 
 

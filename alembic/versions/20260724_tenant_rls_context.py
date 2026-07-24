@@ -7,6 +7,7 @@ Create Date: 2026-07-24
 from typing import Sequence, Union
 
 from alembic import op
+from sqlalchemy import inspect
 
 
 revision: str = "20260724_tenant_rls_context"
@@ -58,6 +59,10 @@ TENANT_TABLES: tuple[str, ...] = (
     "ai_assistant_messages",
     "allocation_policy_versions",
     "cash_close_reports",
+    # The dedicated cash-handoff migration also installs this policy when the
+    # table is created.  Keeping it in the reviewed inventory makes the
+    # metadata contract complete for databases upgraded from older revisions.
+    "cash_custody_handoffs",
     "daily_rates",
     "guest_tags",
     "llm_policy_suggestions",
@@ -126,7 +131,12 @@ def upgrade() -> None:
     if bind.dialect.name != "postgresql":
         return
 
+    existing_tables = set(inspect(bind).get_table_names())
     for table_name in TENANT_TABLES:
+        # Later feature migrations may create a tenant table after this
+        # baseline migration. Those migrations own their initial policy.
+        if table_name not in existing_tables:
+            continue
         table = _quoted_table(table_name)
         policy = _policy_name(table_name)
         op.execute(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY")
@@ -158,7 +168,10 @@ def downgrade() -> None:
     if bind.dialect.name != "postgresql":
         return
 
+    existing_tables = set(inspect(bind).get_table_names())
     for table_name in (*TENANT_TABLES, "hotel_memberships"):
+        if table_name not in existing_tables:
+            continue
         table = _quoted_table(table_name)
         policy = _policy_name(table_name)
         op.execute(f'DROP POLICY IF EXISTS "{policy}" ON {table}')

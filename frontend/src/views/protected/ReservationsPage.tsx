@@ -2043,7 +2043,7 @@ export function ReservationsPage() {
                       </p>
                     ) : (
                       <p className="mt-2 text-xs text-amber-700">
-                        Si no hay caja abierta, el primer cobro en efectivo abrirá automáticamente una caja con saldo inicial $0.{" "}
+                        No hay caja abierta: abrí caja antes de cobrar en efectivo.{" "}
                         <Link to="/caja" className="font-semibold underline">
                           Abrir caja
                         </Link>

@@ -155,6 +155,28 @@ def test_cash_register_api_difference_approval_requires_permission(client_with_d
     assert db.get(CashSession, session_id).status == CashSessionStatusEnum.CLOSED
 
 
+def test_cash_custody_receipt_is_owner_only(client_with_db):
+    client, _db, ctx = client_with_db
+
+    opened = client.post("/api/cash-register/sessions", json={"opening_balance": "100.00"})
+    session_id = opened.json()["id"]
+    closed = client.post(
+        f"/api/cash-register/sessions/{session_id}/close",
+        json={"counted_balance": "100.00"},
+    )
+    report_id = closed.json()["id"]
+
+    ctx["role"] = "manager"
+    receipt = client.post(f"/api/cash-register/close-reports/{report_id}/custody/confirm")
+
+    assert receipt.status_code == 403
+
+    ctx["role"] = "owner"
+    confirmed = client.post(f"/api/cash-register/close-reports/{report_id}/custody/confirm")
+    assert confirmed.status_code == 200, confirmed.text
+    assert confirmed.json()["custody_handoff"]["status"] == "confirmed"
+
+
 def test_cash_register_api_cross_hotel_isolation(client_with_db):
     client, _db, ctx = client_with_db
 

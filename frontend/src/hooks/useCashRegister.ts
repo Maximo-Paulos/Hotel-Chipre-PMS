@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   addCashMovement,
   approveCashCloseDifference,
+  confirmCashCustody,
   closeCashSession,
   getLatestCashCloseReport,
   getCashSessionSummary,
@@ -103,7 +104,12 @@ export function useCashRegisterMutations(sessionId?: number) {
     onSuccess: invalidateSessions
   });
 
-  return { openSessionMutation, addMovementMutation, closeSessionMutation, approveDifferenceMutation };
+  const confirmCustodyMutation = useMutation({
+    mutationFn: (reportId: number) => confirmCashCustody(reportId, session),
+    onSuccess: invalidateSessions
+  });
+
+  return { openSessionMutation, addMovementMutation, closeSessionMutation, approveDifferenceMutation, confirmCustodyMutation };
 }
 
 export const cashSessionStatusLabel: Record<string, string> = {

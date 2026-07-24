@@ -12,6 +12,13 @@ from app.services.payment_service import process_payment
 from app.services.checkin_service import perform_checkin, perform_checkout, validate_guest_for_checkin, CheckInError
 from app.schemas.transaction import PaymentRequest
 from app.models.transaction import PaymentMethodEnum, TransactionTypeEnum
+from app.services.cash_register_service import open_session
+
+
+@pytest.fixture(autouse=True)
+def opened_cash_register(db, hotel_config):
+    """Operational tests must prepare the caja before collecting cash."""
+    open_session(db, hotel_id=hotel_config.id, opened_by_user_id=None, opening_balance=0)
 
 
 class TestGuestValidation:

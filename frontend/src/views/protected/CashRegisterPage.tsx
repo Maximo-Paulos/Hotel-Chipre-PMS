@@ -56,6 +56,7 @@ export function CashRegisterPage() {
       ? Number(latestCloseReport.declared_balance)
       : 0;
   const canApproveDifference = ["owner", "co_owner", "manager"].includes(session.baseRole ?? "");
+  const canReceiveCustody = session.baseRole === "owner";
 
   // Authoritative figures come from the backend summary (same logic as the
   // arqueo), so the displayed "Esperado" always matches what the close computes.
@@ -75,7 +76,8 @@ export function CashRegisterPage() {
     mutations.openSessionMutation.isPending ||
     mutations.addMovementMutation.isPending ||
     mutations.closeSessionMutation.isPending ||
-    mutations.approveDifferenceMutation.isPending;
+    mutations.approveDifferenceMutation.isPending ||
+    mutations.confirmCustodyMutation.isPending;
 
   const handleOpenSession = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -144,6 +146,18 @@ export function CashRegisterPage() {
       setMessage("Diferencia aprobada.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "No se pudo aprobar la diferencia.");
+    }
+  };
+
+  const handleConfirmCustody = async () => {
+    if (!closeReport) return;
+    setMessage(null);
+    try {
+      const confirmed = await mutations.confirmCustodyMutation.mutateAsync(closeReport.id);
+      setCloseReport(confirmed);
+      setMessage("Recepción de custodia confirmada.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "No se pudo confirmar la custodia.");
     }
   };
 
@@ -429,7 +443,7 @@ export function CashRegisterPage() {
               </div>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-sm text-slate-600">
-                  Estado: {closeReport.difference_approved ? "diferencia aprobada" : "pendiente de aprobacion"}
+                  Estado: {Number(closeReport.difference) === 0 ? "sin diferencia" : closeReport.difference_approved ? "diferencia aprobada" : "pendiente de aprobacion"}
                 </p>
                 {!closeReport.difference_approved && Number(closeReport.difference) !== 0 ? (
                   <button
@@ -439,6 +453,24 @@ export function CashRegisterPage() {
                     className="rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
                   >
                     Aprobar diferencia
+                  </button>
+                ) : null}
+              </div>
+              <div className="border-t border-slate-200 pt-3 text-sm text-slate-600">
+                <p>
+                  Caja sucesora: {closeReport.successor_session_id ? `#${closeReport.successor_session_id} abierta con saldo $0` : "pendiente de creación"}.
+                </p>
+                <p className="mt-1">
+                  Custodia: {closeReport.custody_handoff?.status === "confirmed" ? "recepción confirmada" : "pendiente de recepción del dueño"}.
+                </p>
+                {canReceiveCustody && closeReport.custody_handoff?.status === "pending" ? (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={handleConfirmCustody}
+                    className="mt-3 rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
+                  >
+                    Confirmar recepción de custodia
                   </button>
                 ) : null}
               </div>

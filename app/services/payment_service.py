@@ -353,9 +353,9 @@ def process_payment(
             request.transaction_type,
             resolved_hotel_id,
         )
-        # 6. Physical cash must land in the caja so the arqueo reconciles.
-        #    Best-effort: posts to the open session if one exists, otherwise the
-        #    payment still succeeds (cash simply isn't tracked in caja yet).
+        # 6. Physical cash must land in an explicitly opened caja so the
+        #    arqueo reconciles. The cash-register service rejects the payment
+        #    if there is no open session.
         if request.payment_method == PaymentMethodEnum.CASH:
             from app.services import cash_register_service
 

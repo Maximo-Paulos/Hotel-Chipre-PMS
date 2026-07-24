@@ -17,6 +17,7 @@ from app.services.cash_register_service import (
     add_movement,
     approve_close_difference,
     close_session,
+    confirm_cash_custody,
     get_latest_close_report,
     get_session_summary,
     list_movements,
@@ -163,6 +164,47 @@ def close_cash_session(
             counted_balance=payload.counted_balance,
             notes=payload.notes,
             approved_by_user_id=context.user_id if payload.approve_difference else None,
+            received_by_user_id=context.user_id if context.user_role == "owner" else None,
+        )
+        db.commit()
+        db.refresh(report)
+        return report
+    except CashRegisterError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post(
+    "/api/cash-register/close-reports/{report_id}/custody/confirm",
+    response_model=CashCloseReportRead,
+)
+@router.post(
+    "/cash-register/close-reports/{report_id}/custody/confirm",
+    response_model=CashCloseReportRead,
+)
+def confirm_cash_custody_receipt(
+    report_id: int,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_CASH_APPROVE_DIFFERENCE)),
+):
+    if context.user_role != "owner":
+        from app.services.permission_service import audit_permission_denied
+
+        audit_permission_denied(
+            db,
+            hotel_id=context.hotel_id,
+            user_id=context.user_id,
+            role=context.user_role,
+            permission_code="cash.custody.receive.owner_only",
+        )
+        db.commit()
+        raise HTTPException(status_code=403, detail="Solo el dueño puede confirmar la recepción de custodia")
+    try:
+        report = confirm_cash_custody(
+            db,
+            hotel_id=context.hotel_id,
+            report_id=report_id,
+            received_by_user_id=context.user_id or 0,
         )
         db.commit()
         db.refresh(report)

@@ -11,6 +11,13 @@ from app.models.room import Room
 from app.models.transaction import PaymentMethodEnum, TransactionTypeEnum
 from app.schemas.transaction import PaymentRequest
 from app.services.reservation_operations_service import extend_reservation_stay
+from app.services.cash_register_service import open_session
+
+
+@pytest.fixture(autouse=True)
+def opened_cash_register(db, sample_guest):
+    """Immediate cash settlement scenarios require an operator-opened caja."""
+    open_session(db, hotel_id=sample_guest.hotel_id, opened_by_user_id=None, opening_balance=0)
 
 
 def _reservation(

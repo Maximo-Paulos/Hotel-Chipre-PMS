@@ -97,8 +97,10 @@ from app.models.cash_register import (
     CashSession,
     CashMovement,
     CashCloseReport,
+    CashCustodyHandoff,
     CashSessionStatusEnum,
     CashMovementTypeEnum,
+    CashCustodyStatusEnum,
 )
 from app.models.waitlist import WaitlistEntry, WaitlistStatusEnum
 from app.models.hotel_api_key import HotelAPIKey, APIKeyPurposeEnum
@@ -245,8 +247,10 @@ __all__ = [
     "CashSession",
     "CashMovement",
     "CashCloseReport",
+    "CashCustodyHandoff",
     "CashSessionStatusEnum",
     "CashMovementTypeEnum",
+    "CashCustodyStatusEnum",
     "WaitlistEntry",
     "WaitlistStatusEnum",
     "HotelAPIKey",

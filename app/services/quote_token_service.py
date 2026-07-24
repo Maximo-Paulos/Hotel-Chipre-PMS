@@ -43,8 +43,16 @@ def _encode(value: bytes) -> str:
 
 def _decode(value: str) -> bytes:
     try:
+        # Reject non-canonical Base64URL spellings. Without this round-trip
+        # check, changing unused trailing bits can decode to the same bytes and
+        # allow a tampered token to pass signature verification.
+        if "=" in value:
+            raise ValueError("padding is not allowed")
         padding = "=" * (-len(value) % 4)
-        return base64.urlsafe_b64decode((value + padding).encode("ascii"))
+        decoded = base64.urlsafe_b64decode((value + padding).encode("ascii"))
+        if _encode(decoded) != value:
+            raise ValueError("non-canonical encoding")
+        return decoded
     except (ValueError, UnicodeError) as exc:
         raise QuoteTokenError("Invalid quote token encoding") from exc
 
@@ -75,8 +83,8 @@ def verify_quote_token(token: str) -> dict[str, Any]:
     expected = hmac.new(_secret(), encoded_body.encode("ascii"), hashlib.sha256).digest()
     try:
         supplied = _decode(encoded_signature)
-    except QuoteTokenError:
-        raise
+    except QuoteTokenError as exc:
+        raise QuoteTokenError("Quote token signature is invalid") from exc
     if not hmac.compare_digest(expected, supplied):
         raise QuoteTokenError("Quote token signature is invalid")
 

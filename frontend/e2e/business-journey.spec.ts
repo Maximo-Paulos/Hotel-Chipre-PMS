@@ -38,6 +38,11 @@ test("owner completes the core reservation journey through the UI", async ({ pag
 
   await login(page);
 
+  await navigateFromShell(page, "/caja");
+  const openingForm = page.locator("form").filter({ hasText: "Saldo inicial" }).filter({ hasText: "Abrir caja" });
+  await openingForm.getByRole("button", { name: "Abrir caja", exact: true }).click();
+  await expect(page.getByText("Caja abierta.", { exact: true })).toBeVisible();
+
   await navigateFromShell(page, "/settings/hotel");
   await expect(page.getByRole("heading", { name: "Hotel", exact: true })).toBeVisible();
 

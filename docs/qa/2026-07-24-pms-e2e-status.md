@@ -17,8 +17,8 @@ repositorio.
 | Frontend lint/typecheck/build | Pasan. Vite informa un bundle principal de ~768 kB minificado; queda como deuda de performance. |
 | E2E desktop | 20/20 pasan en Chromium, incluyendo login, logout, admin, calendario de tarifas, configuración del hotel, el journey de negocio y páginas V72. |
 | E2E mobile | 2/2 pasan con viewport iPhone 13 sobre Chromium: sin overflow horizontal y navegación móvil a Reservas. |
-| Backend completo | 1177 pasan, 17 se omiten, 12 quedan xfail y 1 xpass en Python 3.12 limpio. El `.venv` legado no puede importar el código por usar un Python anterior. |
-| Migración virgen | `alembic upgrade head` pasa sobre SQLite temporal hasta `20260724_allocation_enum_values`. |
+| Backend completo | 1179 pasan, 17 se omiten, 12 quedan xfail y 1 xpass en Python 3.12 limpio. El `.venv` legado no puede importar el código por usar un Python anterior. |
+| Migración virgen | `alembic upgrade head` pasa sobre SQLite temporal hasta `20260724_cash_handoff_rotation`, incluyendo rotación y custodia. |
 | Backend focalizado | 56/56 pasan: motor de asignación, operaciones de reservas, check-in, check-out y seguridad del flujo. |
 | Graphify | `portable-check` y `check-update` pasan después de actualizar el grafo. |
 
@@ -59,9 +59,10 @@ reutilizables antes de repetir pruebas mutantes en el mismo hotel.
 Una reserva existente permitió comprobar el circuito de seña, pago total y
 balance: el saldo pasó de `$31.500` a `$0` y, con una caja abierta, el pago
 efectivo generó un ingreso de `$80.000` y un arqueo esperado de `$80.000`.
-Cuando no hay caja abierta, el entorno cloud todavía muestra el aviso de que
-el cobro no queda registrado; la rama agrega apertura automática para cerrar
-ese hueco.
+Cuando no hay caja abierta, el cobro efectivo ahora se rechaza para evitar
+aprobar dinero fuera del arqueo. El cierre crea una caja sucesora con saldo
+inicial `$0`, registra la entrega de custodia y permite que el dueño confirme
+la recepción.
 
 Durante la carga inicial de la ficha una consulta incompleta llegó a mostrar un
 saldo fallback incorrecto antes de reemplazarlo por el valor real. La rama ahora
@@ -78,10 +79,14 @@ Transferencia, por lo que el editor de reserva ofrecía solo Efectivo y Débito.
 La configuración local ahora incorpora toggles de medios de pago para el dueño;
 Transferencia queda documentada como flujo con comprobante y aprobación.
 
-La caja ahora expone el último arqueo para preparar la apertura sucesora: el
-saldo declarado se propone como saldo inicial cuando el cierre fue aprobado o
-no tuvo diferencia. Si queda una diferencia pendiente, el backend bloquea la
-nueva apertura y la UI muestra el control de aprobación para un rol autorizado.
+La caja ahora expone el último arqueo y el reporte de custodia; la sucesora se
+crea automáticamente con saldo inicial `$0` incluso si el arqueo queda con
+diferencia pendiente. La aprobación de la diferencia y la recepción de
+custodia quedan separadas y la recepción sólo puede confirmarla el dueño.
+
+El contrato de tokens de cotización también rechaza codificaciones Base64URL no
+canónicas: cambiar bits sobrantes del último carácter ya no puede reutilizar la
+misma firma decodificada.
 
 ### Journey de negocio local
 

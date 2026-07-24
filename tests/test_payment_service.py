@@ -23,6 +23,7 @@ from app.services.payment_service import (
     get_reservation_financial_summary,
     PaymentError,
 )
+from app.services.cash_register_service import open_session
 
 DEFAULT_HOTEL_ID = 1
 ALT_HOTEL_ID = 2
@@ -33,6 +34,12 @@ def ensure_category_pricing_table(db_engine):
     """Create CategoryPricing table for tests (not included in Base metadata)."""
     CategoryPricing.__table__.create(bind=db_engine, checkfirst=True)
     yield
+
+
+@pytest.fixture(autouse=True)
+def opened_cash_register(db, hotel_config):
+    """Payment lifecycle tests explicitly model an operator-opened caja."""
+    open_session(db, hotel_id=hotel_config.id, opened_by_user_id=None, opening_balance=0)
 
 
 def _assign_hotel(reservation: Reservation, hotel_id: int, db):
@@ -548,4 +555,3 @@ class TestPaymentEdgeCases:
         assert tx.currency == "USD"
         assert summary["currency_code"] == "USD"
         assert summary["transactions"][0]["currency"] == "USD"
-

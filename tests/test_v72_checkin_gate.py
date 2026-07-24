@@ -29,6 +29,13 @@ from app.services.checkin_service import (
 )
 from app.schemas.transaction import PaymentRequest, PaymentGatewayResponse
 from app.models.transaction import PaymentMethodEnum, TransactionTypeEnum
+from app.services.cash_register_service import open_session
+
+
+@pytest.fixture(autouse=True)
+def opened_cash_register(db, hotel_config):
+    """Payment-gate scenarios start with an explicitly opened caja."""
+    open_session(db, hotel_id=hotel_config.id, opened_by_user_id=None, opening_balance=0)
 
 
 # ---------------------------------------------------------------------------

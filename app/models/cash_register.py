@@ -48,6 +48,11 @@ class CashMovementTypeEnum(str, enum.Enum):
     ADJUSTMENT = "adjustment"  # corrección manual
 
 
+class CashCustodyStatusEnum(str, enum.Enum):
+    PENDING = "pending"
+    CONFIRMED = "confirmed"
+
+
 class CashSession(Base):
     """
     Single cash-register shift. Only one OPEN session per hotel at a time
@@ -97,6 +102,7 @@ class CashSession(Base):
     )
     close_report = relationship(
         "CashCloseReport", back_populates="session",
+        foreign_keys="CashCloseReport.session_id",
         uselist=False, lazy="select",
     )
 
@@ -207,7 +213,21 @@ class CashCloseReport(Base):
     notes = Column(Text, nullable=True)
     closed_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
 
-    session = relationship("CashSession", back_populates="close_report")
+    successor_session_id = Column(
+        Integer,
+        ForeignKey("cash_sessions.id", ondelete="SET NULL"),
+        nullable=True,
+        unique=True,
+    )
+
+    session = relationship("CashSession", back_populates="close_report", foreign_keys=[session_id])
+    successor_session = relationship("CashSession", foreign_keys=[successor_session_id], uselist=False)
+    custody_handoff = relationship(
+        "CashCustodyHandoff",
+        back_populates="close_report",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
 
     __table_args__ = (
         Index("ix_cash_close_reports_hotel_id", "hotel_id"),
@@ -219,3 +239,53 @@ class CashCloseReport(Base):
             f"expected={self.expected_balance}, declared={self.declared_balance}, "
             f"diff={self.difference})>"
         )
+
+
+class CashCustodyHandoff(Base):
+    """Custody record connecting a closed cash session to its successor."""
+
+    __tablename__ = "cash_custody_handoffs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    hotel_id = Column(
+        Integer,
+        ForeignKey("hotel_configuration.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    close_report_id = Column(
+        Integer,
+        ForeignKey("cash_close_reports.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+    delivered_by_user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    received_by_user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    delivered_amount = Column(Numeric(12, 2), nullable=False)
+    status = Column(
+        Enum(
+            CashCustodyStatusEnum,
+            name="cash_custody_status_enum",
+            create_constraint=True,
+            values_callable=lambda enum_cls: [e.value for e in enum_cls],
+        ),
+        nullable=False,
+        default=CashCustodyStatusEnum.PENDING,
+    )
+    delivered_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    received_at = Column(DateTime, nullable=True)
+    notes = Column(Text, nullable=True)
+
+    close_report = relationship("CashCloseReport", back_populates="custody_handoff")
+
+    __table_args__ = (
+        CheckConstraint("delivered_amount >= 0", name="ck_cash_custody_delivered_nonneg"),
+        Index("ix_cash_custody_handoffs_hotel_status", "hotel_id", "status"),
+    )

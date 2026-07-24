@@ -5,7 +5,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.models.cash_register import CashMovementTypeEnum, CashSessionStatusEnum
+from app.models.cash_register import CashCustodyStatusEnum, CashMovementTypeEnum, CashSessionStatusEnum
 
 
 class CashSessionOpen(BaseModel):
@@ -76,6 +76,21 @@ class CashSessionSummaryRead(BaseModel):
     movements_count: int
 
 
+class CashCustodyHandoffRead(BaseModel):
+    id: int
+    hotel_id: int
+    close_report_id: int
+    delivered_by_user_id: Optional[int] = None
+    received_by_user_id: Optional[int] = None
+    delivered_amount: Decimal
+    status: CashCustodyStatusEnum
+    delivered_at: datetime
+    received_at: Optional[datetime] = None
+    notes: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
 class CashCloseReportRead(BaseModel):
     id: int
     hotel_id: int
@@ -86,6 +101,8 @@ class CashCloseReportRead(BaseModel):
     difference: Decimal
     difference_approved: bool
     approved_by_user_id: Optional[int] = None
+    successor_session_id: Optional[int] = None
+    custody_handoff: Optional[CashCustodyHandoffRead] = None
     notes: Optional[str] = None
     closed_at: datetime
 

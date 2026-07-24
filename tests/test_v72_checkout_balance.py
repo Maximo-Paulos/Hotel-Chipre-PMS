@@ -13,6 +13,13 @@ from app.schemas.transaction import PaymentRequest
 from app.services.checkin_service import CheckInError, perform_checkin, perform_checkout
 from app.services.payment_service import process_payment
 from app.services.reservation_service import create_reservation
+from app.services.cash_register_service import open_session
+
+
+@pytest.fixture(autouse=True)
+def opened_cash_register(db, hotel_config):
+    """Checkout balance scenarios collect cash through an open caja."""
+    open_session(db, hotel_id=hotel_config.id, opened_by_user_id=None, opening_balance=0)
 
 
 def _create_checked_in_reservation(db, guest, categories, config, check_in_date, check_out_date):
