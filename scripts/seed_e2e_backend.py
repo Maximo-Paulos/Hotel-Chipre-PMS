@@ -82,6 +82,24 @@ def _credentials(env: MutableMapping[str, str] | None = None) -> tuple[str, str]
     )
 
 
+def _role_credentials(env: MutableMapping[str, str] | None = None) -> dict[str, tuple[str, str]]:
+    target = os.environ if env is None else env
+    return {
+        "manager": (
+            target.get("E2E_MANAGER_EMAIL", "manager@e2e.com"),
+            target.get("E2E_MANAGER_PASSWORD", "E2eManager1234!"),
+        ),
+        "receptionist": (
+            target.get("E2E_RECEPTIONIST_EMAIL", "receptionist@e2e.com"),
+            target.get("E2E_RECEPTIONIST_PASSWORD", "E2eReception1234!"),
+        ),
+        "housekeeping": (
+            target.get("E2E_HOUSEKEEPING_EMAIL", "housekeeping@e2e.com"),
+            target.get("E2E_HOUSEKEEPING_PASSWORD", "E2eHousekeeping1234!"),
+        ),
+    }
+
+
 def run_migrations() -> None:
     prepare_e2e_environment()
     print("Running local E2E database migrations", file=sys.stderr, flush=True)
@@ -97,6 +115,7 @@ def run_migrations() -> None:
 def upsert_seed_data() -> None:
     database_url = prepare_e2e_environment()
     owner_email, owner_password = _credentials()
+    role_credentials = _role_credentials()
 
     from app.database import get_session_factory, init_db
     from app.models import (
@@ -166,6 +185,30 @@ def upsert_seed_data() -> None:
         membership.role = "owner"
         membership.status = "active"
 
+        staff_members = [{"name": "Owner E2E", "email": owner_email, "role": "owner"}]
+        for role, (email, password) in role_credentials.items():
+            staff_user = db.query(User).filter(User.email.ilike(email)).first()
+            if staff_user is None:
+                staff_user = User(email=email)
+                db.add(staff_user)
+            staff_user.password_hash = hash_password(password)
+            staff_user.is_active = True
+            staff_user.is_verified = True
+            staff_user.role = role
+            db.flush()
+
+            staff_membership = (
+                db.query(HotelMembership)
+                .filter(HotelMembership.hotel_id == 1, HotelMembership.user_id == staff_user.id)
+                .first()
+            )
+            if staff_membership is None:
+                staff_membership = HotelMembership(hotel_id=1, user_id=staff_user.id)
+                db.add(staff_membership)
+            staff_membership.role = role
+            staff_membership.status = "active"
+            staff_members.append({"name": role.title(), "email": email, "role": role})
+
         onboarding = db.get(OnboardingState, 1)
         if onboarding is None:
             onboarding = OnboardingState(hotel_id=1)
@@ -186,9 +229,7 @@ def upsert_seed_data() -> None:
         onboarding.payment_methods_json = '{"cash": {"enabled": true}, "mercado_pago": {"enabled": false}}'
         onboarding.ota_channels_json = '{"booking": {"enabled": false}, "expedia": {"enabled": false}}'
         onboarding.subscription_choice_json = '{"plan": "pro"}'
-        onboarding.staff_json = json.dumps(
-            [{"name": "Owner E2E", "email": owner_email, "role": "owner"}]
-        )
+        onboarding.staff_json = json.dumps(staff_members)
         onboarding.updated_at = now
 
         category = (

@@ -110,7 +110,13 @@ export default defineConfig({
         MASTER_ADMIN_EMAIL: "master-admin@e2e.com",
         MASTER_ADMIN_PASSWORD: "E2eMasterPass1234!",
         MASTER_ADMIN_PIN: "123456",
-        MASTER_ADMIN_SESSION_SECRET: "e2e-master-session-secret-change-me-32chars"
+        MASTER_ADMIN_SESSION_SECRET: "e2e-master-session-secret-change-me-32chars",
+        E2E_MANAGER_EMAIL: process.env.E2E_MANAGER_EMAIL || "manager@e2e.com",
+        E2E_MANAGER_PASSWORD: process.env.E2E_MANAGER_PASSWORD || "E2eManager1234!",
+        E2E_RECEPTIONIST_EMAIL: process.env.E2E_RECEPTIONIST_EMAIL || "receptionist@e2e.com",
+        E2E_RECEPTIONIST_PASSWORD: process.env.E2E_RECEPTIONIST_PASSWORD || "E2eReception1234!",
+        E2E_HOUSEKEEPING_EMAIL: process.env.E2E_HOUSEKEEPING_EMAIL || "housekeeping@e2e.com",
+        E2E_HOUSEKEEPING_PASSWORD: process.env.E2E_HOUSEKEEPING_PASSWORD || "E2eHousekeeping1234!"
       }
     },
     {
