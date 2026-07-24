@@ -670,3 +670,23 @@ No se modificaron permisos de producto, se usaron las personas sintéticas
 seedadas y no se ejecutó correo, pago, webhook ni integración externa. Esta
 evidencia sigue siendo local: no sustituye las cinco sesiones reales ni el
 preview cloud aislado que el gate funcional exige.
+
+### Revalidación local — matriz funcional Apple WebKit completa
+
+La configuración dejaba el recorrido de negocio completo sólo en iPhone 15;
+iPhone SE e iPhone 15 Pro Max ejecutaban únicamente el smoke responsive. Se
+extrajo la lista de journeys críticos en una sola configuración y se añadieron
+dos proyectos WebKit de negocio adicionales, siempre con `--workers=1` para no
+compartir mutaciones sobre la SQLite E2E.
+
+Los tres tamaños Apple completaron el mismo recorrido, sin acciones externas:
+
+- iPhone SE: **14/14**.
+- iPhone 15: **14/14**.
+- iPhone 15 Pro Max: **14/14**.
+
+El total es **42/42**. Incluye registro/onboarding/recuperación, reserva,
+cotización y conflicto, comprobantes y pagos mixtos simulados, estadía,
+inventario, caja, reportes, analytics, y las rutas permitidas de manager,
+recepción y housekeeping. La emulación usa WebKit de Playwright; la
+certificación en Safari nativo o en un dispositivo físico sigue pendiente.
