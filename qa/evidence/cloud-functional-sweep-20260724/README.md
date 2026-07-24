@@ -156,3 +156,23 @@ atribuye todavía el fallo al commit local `60845ed`.
 El formulario de reserva se cerró con `Cancelar` y no se crearon huéspedes,
 reservas, pagos, comprobantes, links, emails, webhooks, invitaciones ni cambios
 de configuración durante esta continuación.
+
+## Revalidación owner — roles QA y disponibilidad del preview
+
+- Fecha: 2026-07-24.
+- Persona: owner QA autenticado en hotel ID 4.
+- Tipo de recorrido: sólo lectura; no se invitó a nadie, no se enviaron emails y
+  no se alteró configuración, reservas, pagos ni caja.
+- SHA cloud desplegado: `needs-verification`.
+
+| Superficie | Resultado observado | Evaluación |
+| --- | --- | --- |
+| Usuarios y roles | `/settings/users` muestra sólo el owner activo; el formulario de invitación existe pero quedó sin completar y sin enviar. | P1: faltan personas QA reales para manager, recepción y housekeeping |
+| Selector de vista | El owner puede seleccionar Manager, Housekeeping y Recepción y vuelve al dashboard. Es una vista de previsualización del owner, no una sesión, membresía ni autorización independiente. | No sustituye el journey cloud de cinco personas |
+| Preview QA local | `.env.qa.local` no está presente en el worktree y no se leyó ningún secreto. | No hay bootstrap local de sesión/provider para validar el preview |
+| Variables GitHub `preview-qa` | La lectura de nombres mostró sólo identificadores de producción; no aparecen `RENDER_QA_SERVICE_ID` ni `SUPABASE_QA_PROJECT_REF`. | P1: no existe par frontend/backend/base aislado verificable |
+| Workflow confiable | `Trusted preview QA cycle` está registrado, pero `gh run list` devolvió cero ejecuciones. | Falta evidencia provider-bound posterior al SHA funcional |
+
+La sesión continuó autenticada como owner. No se guardaron contraseñas,
+cookies, tokens, emails de invitación, screenshots privados ni valores de
+variables de proveedor.

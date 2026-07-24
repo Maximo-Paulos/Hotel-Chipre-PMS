@@ -505,6 +505,23 @@ de 10 segundos Reportes muestra `No se pudo cargar el reporte` y `No hay datos
 para mostrar`; Analytics/Operación muestra `No se pudo cargar analytics.`. La
 sesión siguió autenticada como owner durante ambas lecturas.
 
+### Revalidación local posterior — Analytics exitoso y backend completo
+
+Sobre el código funcional de `f66e22c` (con Graphify actualizado posteriormente):
+
+- Backend: `1220 passed, 17 skipped, 12 xfailed, 1 xpassed` con Python 3.12.13.
+- Frontend E2E serializado: `49 passed` en Chromium, mobile Chromium, WebKit
+  iPhone SE, iPhone 15 y iPhone 15 Pro Max.
+- La nueva prueba de resumen Analytics exitoso pasó en Chromium y en el
+  proyecto WebKit iPhone 15 de negocio; comprueba metadata de frescura y
+  ausencia de estado de error.
+- Frontend: lint, `npx tsc --noEmit -p tsconfig.json` y build pasaron. El build
+  mantiene sólo la advertencia no bloqueante del chunk JavaScript grande.
+
+El `pytest` invocado con `.venv/bin/python` no pudo importar el proyecto porque
+ese entorno local usa Python anterior a 3.10; la ejecución válida se repitió con
+el intérprete Python 3.12.13 que utiliza E2E y completó la suite sin fallas.
+
 ## Limitaciones actuales
 
 - La prueba móvil automatizada emula viewports de iPhone en Chromium y WebKit;
