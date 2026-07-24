@@ -40,6 +40,7 @@ from app.services.analytics_service import (
     unsnooze_alert,
     _analytics_window,
 )
+from app.services.analytics_freshness import annotate_analytics_payload
 from app.services.analytics_exports import (
     create_xlsx_export_job,
     expire_export_job_if_needed,
@@ -88,16 +89,18 @@ def starter_summary(
     context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
 ):
     require_analytics_plan(db, context.hotel_id, "starter")
-    return get_cached_starter_summary_payload(
-        hotel_id=context.hotel_id,
-        date_from=date_from,
-        date_to=date_to,
-        producer=lambda: build_starter_summary_payload(
-            db,
+    return annotate_analytics_payload(
+        get_cached_starter_summary_payload(
             hotel_id=context.hotel_id,
             date_from=date_from,
             date_to=date_to,
-        ),
+            producer=lambda: build_starter_summary_payload(
+                db,
+                hotel_id=context.hotel_id,
+                date_from=date_from,
+                date_to=date_to,
+            ),
+        )
     )
 
 
@@ -112,22 +115,24 @@ def analytics_home(
     context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
 ):
     require_analytics_plan(db, context.hotel_id, "pro")
-    return get_cached_home_payload(
-        hotel_id=context.hotel_id,
-        date_from=date_from,
-        date_to=date_to,
-        currency_display=currency_display,
-        compare_previous=compare_previous,
-        compare_yoy=compare_yoy,
-        producer=lambda: build_home_payload(
-            db,
+    return annotate_analytics_payload(
+        get_cached_home_payload(
             hotel_id=context.hotel_id,
             date_from=date_from,
             date_to=date_to,
+            currency_display=currency_display,
             compare_previous=compare_previous,
             compare_yoy=compare_yoy,
-            currency_display=currency_display,
-        ),
+            producer=lambda: build_home_payload(
+                db,
+                hotel_id=context.hotel_id,
+                date_from=date_from,
+                date_to=date_to,
+                compare_previous=compare_previous,
+                compare_yoy=compare_yoy,
+                currency_display=currency_display,
+            ),
+        )
     )
 
 
@@ -142,14 +147,16 @@ def analytics_rooms(
     context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
 ):
     require_analytics_plan(db, context.hotel_id, "pro")
-    return build_rooms_overview_payload(
-        db,
-        hotel_id=context.hotel_id,
-        date_from=date_from,
-        date_to=date_to,
-        compare_previous=compare_previous,
-        compare_yoy=compare_yoy,
-        currency_display=currency_display,
+    return annotate_analytics_payload(
+        build_rooms_overview_payload(
+            db,
+            hotel_id=context.hotel_id,
+            date_from=date_from,
+            date_to=date_to,
+            compare_previous=compare_previous,
+            compare_yoy=compare_yoy,
+            currency_display=currency_display,
+        )
     )
 
 
@@ -165,15 +172,17 @@ def analytics_room_detail(
     context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
 ):
     require_analytics_plan(db, context.hotel_id, "pro")
-    return build_room_detail_payload(
-        db,
-        hotel_id=context.hotel_id,
-        room_id=room_id,
-        date_from=date_from,
-        date_to=date_to,
-        compare_previous=compare_previous,
-        compare_yoy=compare_yoy,
-        currency_display=currency_display,
+    return annotate_analytics_payload(
+        build_room_detail_payload(
+            db,
+            hotel_id=context.hotel_id,
+            room_id=room_id,
+            date_from=date_from,
+            date_to=date_to,
+            compare_previous=compare_previous,
+            compare_yoy=compare_yoy,
+            currency_display=currency_display,
+        )
     )
 
 
@@ -189,15 +198,17 @@ def analytics_category_detail(
     context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
 ):
     require_analytics_plan(db, context.hotel_id, "pro")
-    return build_category_detail_payload(
-        db,
-        hotel_id=context.hotel_id,
-        category_id=category_id,
-        date_from=date_from,
-        date_to=date_to,
-        compare_previous=compare_previous,
-        compare_yoy=compare_yoy,
-        currency_display=currency_display,
+    return annotate_analytics_payload(
+        build_category_detail_payload(
+            db,
+            hotel_id=context.hotel_id,
+            category_id=category_id,
+            date_from=date_from,
+            date_to=date_to,
+            compare_previous=compare_previous,
+            compare_yoy=compare_yoy,
+            currency_display=currency_display,
+        )
     )
 
 
@@ -212,14 +223,16 @@ def analytics_segments(
     context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
 ):
     require_analytics_plan(db, context.hotel_id, "pro")
-    return build_segments_payload(
-        db,
-        hotel_id=context.hotel_id,
-        date_from=date_from,
-        date_to=date_to,
-        compare_previous=compare_previous,
-        compare_yoy=compare_yoy,
-        currency_display=currency_display,
+    return annotate_analytics_payload(
+        build_segments_payload(
+            db,
+            hotel_id=context.hotel_id,
+            date_from=date_from,
+            date_to=date_to,
+            compare_previous=compare_previous,
+            compare_yoy=compare_yoy,
+            currency_display=currency_display,
+        )
     )
 
 
@@ -250,15 +263,17 @@ def analytics_company_detail(
         date_from=window.date_from,
         date_to=window.date_to,
     )
-    return {
-        "hotel_id": context.hotel_id,
-        "date_from": window.date_from,
-        "date_to": window.date_to,
-        "currency_display": currency_display,
-        "comparison": window.comparison,
-        "data": payload,
-        "generated_at": datetime.now(timezone.utc),
-    }
+    return annotate_analytics_payload(
+        {
+            "hotel_id": context.hotel_id,
+            "date_from": window.date_from,
+            "date_to": window.date_to,
+            "currency_display": currency_display,
+            "comparison": window.comparison,
+            "data": payload,
+            "generated_at": datetime.now(timezone.utc),
+        }
+    )
 
 
 @router.get("/channels", response_model=AnalyticsResponseEnvelopeRead)
@@ -272,14 +287,16 @@ def analytics_channels(
     context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
 ):
     require_analytics_plan(db, context.hotel_id, "pro")
-    return build_channels_payload(
-        db,
-        hotel_id=context.hotel_id,
-        date_from=date_from,
-        date_to=date_to,
-        compare_previous=compare_previous,
-        compare_yoy=compare_yoy,
-        currency_display=currency_display,
+    return annotate_analytics_payload(
+        build_channels_payload(
+            db,
+            hotel_id=context.hotel_id,
+            date_from=date_from,
+            date_to=date_to,
+            compare_previous=compare_previous,
+            compare_yoy=compare_yoy,
+            currency_display=currency_display,
+        )
     )
 
 
@@ -294,14 +311,16 @@ def analytics_operations(
     context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
 ):
     require_analytics_plan(db, context.hotel_id, "pro")
-    return build_operations_payload(
-        db,
-        hotel_id=context.hotel_id,
-        date_from=date_from,
-        date_to=date_to,
-        compare_previous=compare_previous,
-        compare_yoy=compare_yoy,
-        currency_display=currency_display,
+    return annotate_analytics_payload(
+        build_operations_payload(
+            db,
+            hotel_id=context.hotel_id,
+            date_from=date_from,
+            date_to=date_to,
+            compare_previous=compare_previous,
+            compare_yoy=compare_yoy,
+            currency_display=currency_display,
+        )
     )
 
 

@@ -33,6 +33,7 @@ from app.services.subscription_service import ensure_room_within_limit
 from app.services.analytics_service import record_hotel_audit_event
 from app.services import audit_log_service
 from app.services.timeseries_projection import project_room_state_event
+from app.services.distributed_lock import DistributedLockBusy, DistributedLockUnavailable
 
 router = APIRouter(prefix="/api/rooms", tags=["Rooms"])
 
@@ -497,8 +498,15 @@ def trigger_reallocation(
         payload = _serialize_reallocation_result(result, include_message=True)
         payload["status"] = "ok" if result.solver_result.success else "manual_review"
         return payload
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except DistributedLockBusy:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Ya hay otra redistribución en curso")
+    except DistributedLockUnavailable:
+        db.rollback()
+        raise HTTPException(status_code=503, detail="El control de concurrencia no está disponible")
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="No se pudo completar la redistribución")
 
 
 @router.get("/housekeeping/summary")

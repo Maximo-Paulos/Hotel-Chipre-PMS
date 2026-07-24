@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     READ_MODEL_CACHE_ENABLED: bool = True
     READ_MODEL_AVAILABILITY_TTL_SECONDS: int = 15
     READ_MODEL_ANALYTICS_TTL_SECONDS: int = 60
+    DISTRIBUTED_LOCK_ENABLED: bool = True
+    DISTRIBUTED_LOCK_REQUIRED: bool = False
+    DISTRIBUTED_LOCK_DEFAULT_TTL_SECONDS: int = 60
 
     # NoSQL datastore foundations. Disabled by default; Postgres remains the
     # transactional source of truth.
@@ -203,6 +206,7 @@ def _validate_preview_qa_security(runtime_settings: Settings) -> None:
     """Fail closed when a cloud QA service could reach a live integration."""
 
     errors: list[str] = []
+
     exact_values = {
         "EMAIL_PROVIDER": (runtime_settings.EMAIL_PROVIDER, "null"),
         "PAYPAL_MODE": (runtime_settings.PAYPAL_MODE, "sandbox"),
@@ -322,6 +326,9 @@ def validate_runtime_security(settings: Settings | None = None) -> None:
         return
 
     errors: list[str] = []
+
+    if not runtime_settings.DISTRIBUTED_LOCK_ENABLED or not runtime_settings.DISTRIBUTED_LOCK_REQUIRED:
+        errors.append("DISTRIBUTED_LOCK_ENABLED and DISTRIBUTED_LOCK_REQUIRED must be true in production")
 
     if not runtime_settings.JWT_SECRET or runtime_settings.JWT_SECRET == "change-me" or len(runtime_settings.JWT_SECRET.strip()) < 32:
         errors.append("JWT_SECRET must be set to a strong production value")

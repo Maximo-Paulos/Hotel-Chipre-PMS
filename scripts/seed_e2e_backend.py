@@ -61,6 +61,19 @@ def prepare_e2e_environment(env: MutableMapping[str, str] | None = None) -> str:
     return E2E_DATABASE_URL
 
 
+def reset_e2e_database() -> None:
+    """Remove only the generated repository E2E database when explicitly requested."""
+
+    if os.environ.get("E2E_RESET_DATABASE", "").strip().lower() not in {"1", "true", "yes", "on"}:
+        return
+    if E2E_DATABASE_PATH.is_symlink():
+        raise E2ESafetyError("local E2E database path cannot be a symlink")
+    for suffix in ("", "-wal", "-shm"):
+        target = Path(f"{E2E_DATABASE_PATH}{suffix}")
+        if target.exists():
+            target.unlink()
+
+
 def _credentials(env: MutableMapping[str, str] | None = None) -> tuple[str, str]:
     target = os.environ if env is None else env
     return (
@@ -260,6 +273,7 @@ def upsert_seed_data() -> None:
 
 def main() -> None:
     prepare_e2e_environment()
+    reset_e2e_database()
     run_migrations()
     upsert_seed_data()
     print("Local E2E database ready; credentials loaded from E2E_* environment/local defaults")

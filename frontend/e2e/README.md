@@ -12,7 +12,18 @@ npx playwright install chromium
 npm run e2e -- e2e/v72-pages.spec.ts
 ```
 
-`playwright.config.ts` seeds `../_e2e.db`, starts `uvicorn app.main:app --port 8040`, then starts Vite with `VITE_PUBLIC_APP_HOSTNAME=127.0.0.1`.
+`playwright.config.ts` requires Python 3.10+ and selects `.venv312`, then
+`.venv`, then a supported interpreter on `PATH`. If the repository has a
+legacy Python 3.9 environment, pass the interpreter explicitly:
+
+```bash
+E2E_PYTHON=/absolute/path/to/python3.12 npm run e2e
+```
+
+It resets and seeds `../_e2e.db`, starts `uvicorn app.main:app --port 8040`,
+then starts Vite with `VITE_PUBLIC_APP_HOSTNAME=127.0.0.1`. The business
+journey mutates this isolated database, and the managed runner resets it on
+each invocation so an old open cash session cannot contaminate a fresh run.
 
 ## Manual boot
 

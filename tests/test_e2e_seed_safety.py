@@ -19,6 +19,19 @@ def test_seed_guard_accepts_only_explicit_test_and_repository_e2e_database():
     assert normalized == seed_e2e_backend.E2E_DATABASE_URL
 
 
+def test_reset_e2e_database_only_removes_the_explicit_generated_database(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    db_path = tmp_path / "_e2e.db"
+    db_path.write_bytes(b"isolated test data")
+    (tmp_path / "_e2e.db-wal").write_bytes(b"wal")
+    monkeypatch.setattr(seed_e2e_backend, "E2E_DATABASE_PATH", db_path)
+    monkeypatch.setenv("E2E_RESET_DATABASE", "true")
+
+    seed_e2e_backend.reset_e2e_database()
+
+    assert not db_path.exists()
+    assert not (tmp_path / "_e2e.db-wal").exists()
+
+
 @pytest.mark.parametrize(
     "env",
     [

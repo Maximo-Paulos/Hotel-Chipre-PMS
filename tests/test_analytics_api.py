@@ -34,6 +34,12 @@ from app.services.analytics_facts import refresh_fact_reservation_daily, refresh
 from app.services.security import create_access_token, hash_password
 
 
+def assert_freshness_metadata(payload: dict) -> None:
+    assert payload["data_source"] in {"postgresql", "clickhouse"}
+    assert payload["source_lag_seconds"] >= 0
+    assert payload["data_as_of"]
+
+
 @pytest.fixture
 def api_client(monkeypatch: pytest.MonkeyPatch):
     engine = create_engine(
@@ -274,6 +280,7 @@ def test_starter_summary_and_plan_gate(api_client):
     starter_payload = starter.json()
     assert starter_payload["hotel_id"] == 1
     assert len(starter_payload["data"]["cards"]) == 3
+    assert_freshness_metadata(starter_payload)
 
     blocked = client.get("/api/analytics/home", params={"date_from": "2026-04-01", "date_to": "2026-04-05"}, headers=headers)
     assert blocked.status_code == 402, blocked.text
@@ -286,6 +293,7 @@ def test_starter_summary_and_plan_gate(api_client):
     assert payload["comparison"]["previous"]["requested"] is True
     assert "cards" in payload["data"]
     assert len(payload["data"]["cards"]) >= 4
+    assert_freshness_metadata(payload)
 
 
 def test_company_crud_and_analytics_detail(api_client):
@@ -325,6 +333,7 @@ def test_company_crud_and_analytics_detail(api_client):
     detail_payload = analytic_detail.json()
     assert detail_payload["data"]["company"]["display_name"] == "Globex Travel"
     assert detail_payload["data"]["cards"][0]["card_code"] == "company_nights"
+    assert_freshness_metadata(detail_payload)
 
     deactivated = client.post(f"/api/companies/{company_id}/deactivate", headers=headers)
     assert deactivated.status_code == 200
@@ -388,6 +397,7 @@ def test_room_state_events_and_variable_cost_audit(api_client):
     room_payload = room_detail.json()
     assert room_payload["data"]["room"]["room_number"] == "101"
     assert len(room_payload["data"]["events"]) >= 2
+    assert_freshness_metadata(room_payload)
 
     with SessionLocal() as db:
         action_codes = [row.action_code for row in db.query(HotelAuditEvent).filter(HotelAuditEvent.hotel_id == 1).order_by(HotelAuditEvent.id.asc())]
@@ -440,14 +450,17 @@ def test_alert_settings_ai_config_and_breakdowns(api_client):
     segments = client.get("/api/analytics/segments", params={"date_from": "2026-04-01", "date_to": "2026-04-05"}, headers=headers)
     assert segments.status_code == 200
     assert "segments" in segments.json()["data"]
+    assert_freshness_metadata(segments.json())
 
     channels = client.get("/api/analytics/channels", params={"date_from": "2026-04-01", "date_to": "2026-04-05"}, headers=headers)
     assert channels.status_code == 200
     assert "channels" in channels.json()["data"]
+    assert_freshness_metadata(channels.json())
 
     operations = client.get("/api/analytics/operations", params={"date_from": "2026-04-01", "date_to": "2026-04-05"}, headers=headers)
     assert operations.status_code == 200
     assert "room_events" in operations.json()["data"]
+    assert_freshness_metadata(operations.json())
 
     with SessionLocal() as db:
         action_codes = [row.action_code for row in db.query(HotelAuditEvent).filter(HotelAuditEvent.hotel_id == 1).order_by(HotelAuditEvent.id.asc())]

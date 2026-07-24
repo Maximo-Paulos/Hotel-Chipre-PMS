@@ -1,7 +1,7 @@
 # Hotel Chipre PMS — Security Audit
 
-**Date:** 2026-06-12  
-**Status:** Sprint 1 baseline  
+**Date:** 2026-07-24
+**Status:** Sprint 2 baseline
 **Scope:** Data layer, authentication, multi-tenancy, PII, secrets
 
 ---
@@ -101,12 +101,13 @@ gate. Every new hotel-scoped model must be added to the explicit migration list.
 | Check | Status | Evidence |
 |-------|--------|---------|
 | Double-booking prevention | ⚠️ DB PARTIAL | UniqueConstraint patterns exist; `SELECT FOR UPDATE` pattern documented in architecture-hybrid.md; service implementation needed |
-| Concurrent cash close prevention | ⚠️ SERVICE PENDING | `lock:cash_close:{hotel_id}:{session_id}` Redis lock documented; not yet implemented |
-| Concurrent allocation solver prevention | ⚠️ SERVICE PENDING | `lock:allocation:{hotel_id}` Redis lock documented; not yet implemented |
-| Optimistic locking for reservation updates | ❌ NOT IMPLEMENTED | No `version` column; use `updated_at` comparison or add PG row version |
+| Concurrent cash close prevention | ✅ | Redis/Valkey lease `lock:cash_close:{hotel_id}:{session_id}` plus PostgreSQL row lock; production fails closed when the backend is unavailable |
+| Concurrent allocation solver prevention | ✅ | Redis/Valkey lease `lock:allocation:{hotel_id}` around the persisted solver; TTL provides worker-crash recovery |
+| Optimistic locking for reservation updates | ✅ | `reservations.version` and stale-version rejection in the reservation service |
 
-**Gap:** No optimistic locking (version column) on `reservations`. Risk: concurrent updates could silently overwrite each other.  
-**Recommendation:** Add `version = Column(Integer, default=0)` to `reservations`, increment on every update; reject if version mismatch.
+**Operational note:** Redis/Valkey is optional in local development, where PostgreSQL
+row locks remain the fallback. Production startup rejects configurations that do not
+enable and require the distributed lock backend.
 
 ---
 
@@ -142,7 +143,7 @@ gate. Every new hotel-scoped model must be added to the explicit migration list.
 | No optimistic locking on reservations | HIGH | Add `version` column + check in reservation service |
 | PII retention schedule not automated | MEDIUM | Scheduled job post-launch |
 | Worker context migration incomplete | HIGH | Instrument every background/maintenance session with `set_tenant_context` before managed rollout |
-| Redis distributed locks not wired to services | MEDIUM | Before high-concurrency deploy |
+| Redis distributed locks not wired to services | ✅ RESOLVED | `app.services.distributed_lock` is wired to cash close and persisted allocation; production configuration is fail-closed |
 | Payment idempotency key pattern incomplete | MEDIUM | Before Mercado Pago / PayPal go-live |
 | Digital signature storage in DB (should be external) | LOW | Move to Supabase Storage post-launch |
 | Pydantic `Expected float but got Decimal` warnings | LOW | Use `Annotated[float, PlainValidator(float)]` |

@@ -30,6 +30,7 @@ from app.services.allocation_engine import (
     build_slots_from_db,
     run_allocation,
 )
+from app.services.distributed_lock import with_distributed_lock
 
 
 class AllocationRuntimeError(Exception):
@@ -50,6 +51,7 @@ class AllocationRunDetails:
     assignments: list[AllocationAssignment]
 
 
+@with_distributed_lock("allocation", "hotel_id", ttl_seconds=30)
 def run_persisted_allocation(
     db: Session,
     *,

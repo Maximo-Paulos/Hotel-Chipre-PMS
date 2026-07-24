@@ -13,7 +13,10 @@ type AnalyticsEnvelope = {
   date_from?: string;
   date_to?: string;
   currency_display?: string;
-  generated_at?: string;
+  generated_at: string;
+  data_as_of: string;
+  source_lag_seconds: number;
+  data_source: string;
   comparison?: Record<string, unknown>;
   data: Record<string, unknown>;
 };
@@ -23,7 +26,10 @@ type AnalyticsStarterSummary = {
   date_from?: string;
   date_to?: string;
   data: { cards: Array<Record<string, unknown>> };
-  generated_at?: string;
+  generated_at: string;
+  data_as_of: string;
+  source_lag_seconds: number;
+  data_source: string;
 };
 
 type Company = {
@@ -327,6 +333,46 @@ function MetricGrid({ cards }: { cards: Array<Record<string, unknown>> }) {
   );
 }
 
+function formatFreshnessLag(seconds: number) {
+  if (!Number.isFinite(seconds) || seconds <= 0) return "al día";
+  if (seconds < 60) return `${Math.round(seconds)} s de atraso`;
+  if (seconds < 3600) return `${Math.round(seconds / 60)} min de atraso`;
+  return `${(seconds / 3600).toFixed(1)} h de atraso`;
+}
+
+function AnalyticsFreshness({
+  dataAsOf,
+  sourceLagSeconds,
+  dataSource
+}: {
+  dataAsOf: string;
+  sourceLagSeconds: number;
+  dataSource: string;
+}) {
+  const asOf = new Date(dataAsOf);
+  const asOfLabel = Number.isNaN(asOf.getTime())
+    ? "fecha no disponible"
+    : new Intl.DateTimeFormat("es-AR", { dateStyle: "short", timeStyle: "short" }).format(asOf);
+  const normalizedSource = dataSource.trim().toLowerCase();
+  const sourceLabel = normalizedSource === "clickhouse" ? "ClickHouse" : normalizedSource === "postgresql" ? "PostgreSQL" : dataSource;
+  const isDelayed = Number.isFinite(sourceLagSeconds) && sourceLagSeconds > 0;
+  return (
+    <div
+      className={`flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border px-3 py-2 text-xs ${
+        isDelayed ? "border-amber-200 bg-amber-50 text-amber-900" : "border-emerald-200 bg-emerald-50 text-emerald-900"
+      }`}
+      role="status"
+      aria-label={`Datos ${sourceLabel}, ${formatFreshnessLag(sourceLagSeconds)}`}
+    >
+      <span className="font-semibold">Fuente: {sourceLabel}</span>
+      <span aria-hidden="true">•</span>
+      <span>Datos al {asOfLabel}</span>
+      <span aria-hidden="true">•</span>
+      <span>{formatFreshnessLag(sourceLagSeconds)}</span>
+    </div>
+  );
+}
+
 function SectionTables({ data }: { data: Record<string, unknown> }) {
   const entries = Object.entries(data).filter(([key]) => key !== "cards");
   if (entries.length === 0) {
@@ -451,6 +497,11 @@ function ReportScreen({
       {query.isError && <div className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-sm text-rose-800">No se pudo cargar analytics.</div>}
       {report && (
         <div className="space-y-4">
+          <AnalyticsFreshness
+            dataAsOf={report.data_as_of}
+            sourceLagSeconds={report.source_lag_seconds}
+            dataSource={report.data_source}
+          />
           {"data" in report && Array.isArray((report.data as Record<string, unknown>).cards) && (
             <MetricGrid cards={(report.data as Record<string, unknown>).cards as Array<Record<string, unknown>>} />
           )}
@@ -480,6 +531,13 @@ function StarterLandingScreen() {
       }
     >
       <AnalyticsFilterBar filters={filters} onChange={setFilters} includeCurrency={false} includeComparators={false} />
+      {query.data && (
+        <AnalyticsFreshness
+          dataAsOf={query.data.data_as_of}
+          sourceLagSeconds={query.data.source_lag_seconds}
+          dataSource={query.data.data_source}
+        />
+      )}
       <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm">
           <p className="text-xs uppercase tracking-wide text-amber-700">Resumen Starter</p>

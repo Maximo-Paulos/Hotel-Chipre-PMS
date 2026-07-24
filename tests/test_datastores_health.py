@@ -20,6 +20,7 @@ from app.db.neo4j import get_neo4j_driver, neo4j_healthcheck
 @pytest.fixture(autouse=True)
 def datastores_disabled(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("READ_MODEL_CACHE_ENABLED", "false")
+    monkeypatch.setenv("DISTRIBUTED_LOCK_ENABLED", "false")
     monkeypatch.setenv("MONGO_ENABLED", "false")
     monkeypatch.setenv("CASSANDRA_ENABLED", "false")
     monkeypatch.setenv("NEO4J_ENABLED", "false")
@@ -79,6 +80,26 @@ def test_datastores_health_endpoint_reports_postgres_and_disabled_nosql(monkeypa
 
     Base.metadata.drop_all(bind=engine)
     engine.dispose()
+
+
+def test_redis_health_is_active_for_distributed_locks_when_cache_is_off(monkeypatch: pytest.MonkeyPatch):
+    import app.api.health as health_module
+
+    class FakeRedis:
+        def ping(self):
+            return True
+
+    monkeypatch.setenv("DISTRIBUTED_LOCK_ENABLED", "true")
+    monkeypatch.setattr("redis.Redis.from_url", lambda *args, **kwargs: FakeRedis())
+    get_settings.cache_clear()
+
+    payload = health_module._redis_healthcheck()
+
+    assert payload["status"] == "ok"
+    assert payload["enabled"] is True
+    assert payload["connected"] is True
+    assert payload["cache_enabled"] is False
+    assert payload["distributed_locks_enabled"] is True
 
 
 def test_import_app_main_succeeds_when_optional_drivers_are_missing():

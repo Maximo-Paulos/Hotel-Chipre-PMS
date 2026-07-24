@@ -25,6 +25,7 @@ from app.services.cash_register_service import (
     open_session,
 )
 from app.services.permission_service import PERMISSION_CASH_APPROVE_DIFFERENCE, PERMISSION_CASH_OPERATE
+from app.services.distributed_lock import DistributedLockBusy, DistributedLockUnavailable
 
 
 router = APIRouter(tags=["Cash Register"])
@@ -172,6 +173,12 @@ def close_cash_session(
     except CashRegisterError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(exc))
+    except DistributedLockBusy:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Ya hay otro arqueo de esta caja en curso")
+    except DistributedLockUnavailable:
+        db.rollback()
+        raise HTTPException(status_code=503, detail="El control de concurrencia no está disponible")
 
 
 @router.post(

@@ -1,5 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
-import { existsSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -7,8 +7,31 @@ const baseURL = process.env.E2E_BASE_URL || "http://127.0.0.1:5173";
 const backendURL = process.env.E2E_BACKEND_URL || "http://127.0.0.1:8040";
 const frontendDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(frontendDir, "..");
-const localPython = path.join(repoRoot, ".venv", process.platform === "win32" ? "Scripts/python.exe" : "bin/python");
-const pythonExecutable = process.env.E2E_PYTHON || (existsSync(localPython) ? JSON.stringify(localPython) : "python");
+const pythonRelativePath = process.platform === "win32" ? "Scripts/python.exe" : "bin/python";
+const pythonCandidates = [
+  process.env.E2E_PYTHON,
+  process.env.VIRTUAL_ENV ? path.join(process.env.VIRTUAL_ENV, pythonRelativePath) : undefined,
+  path.join(repoRoot, ".venv312", pythonRelativePath),
+  path.join(repoRoot, ".venv", pythonRelativePath),
+  "python3.12",
+  "python3",
+  "python"
+].filter((candidate): candidate is string => Boolean(candidate));
+const isSupportedPython = (candidate: string) => {
+  try {
+    execFileSync(candidate, ["-c", "import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)"], {
+      stdio: "ignore"
+    });
+    return true;
+  } catch {
+    return false;
+  }
+};
+const pythonExecutablePath = pythonCandidates.find(isSupportedPython);
+if (!pythonExecutablePath) {
+  throw new Error("Local E2E requires Python >= 3.10. Set E2E_PYTHON to a supported interpreter.");
+}
+const pythonExecutable = JSON.stringify(pythonExecutablePath);
 const e2eDbPath = path.join(repoRoot, "_e2e.db").replace(/\\/g, "/");
 const e2eDatabaseURL = process.env.E2E_DATABASE_URL || `sqlite:///${e2eDbPath}`;
 const jwtSecret =
@@ -53,6 +76,7 @@ export default defineConfig({
       env: {
         APP_ENV: "test",
         DATABASE_URL: e2eDatabaseURL,
+        E2E_RESET_DATABASE: "true",
         JWT_SECRET: jwtSecret,
         VITE_BACKEND_URL: backendURL,
         MASTER_ADMIN_EMAIL: "master-admin@e2e.com",

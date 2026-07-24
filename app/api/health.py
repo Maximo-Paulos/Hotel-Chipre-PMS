@@ -30,18 +30,44 @@ def _postgres_healthcheck() -> dict[str, Any]:
 
 def _redis_healthcheck() -> dict[str, Any]:
     settings = get_settings()
-    if not settings.READ_MODEL_CACHE_ENABLED:
-        return {"status": "disabled", "enabled": False, "connected": False, "error": None}
+    cache_enabled = bool(settings.READ_MODEL_CACHE_ENABLED)
+    locks_enabled = bool(settings.DISTRIBUTED_LOCK_ENABLED)
+    if not cache_enabled and not locks_enabled:
+        return {
+            "status": "disabled",
+            "enabled": False,
+            "connected": False,
+            "cache_enabled": False,
+            "distributed_locks_enabled": False,
+            "distributed_locks_required": bool(settings.DISTRIBUTED_LOCK_REQUIRED),
+            "error": None,
+        }
 
     try:
         import redis
 
         client = redis.Redis.from_url(settings.REDIS_URL, decode_responses=True, socket_connect_timeout=1, socket_timeout=1)
         client.ping()
-        return {"status": "ok", "enabled": True, "connected": True, "error": None}
+        return {
+            "status": "ok",
+            "enabled": True,
+            "connected": True,
+            "cache_enabled": cache_enabled,
+            "distributed_locks_enabled": locks_enabled,
+            "distributed_locks_required": bool(settings.DISTRIBUTED_LOCK_REQUIRED),
+            "error": None,
+        }
     except Exception as exc:  # pragma: no cover - defensive runtime fallback
         logger.warning("redis.healthcheck_failed", extra={"error": str(exc)})
-        return {"status": "error", "enabled": True, "connected": False, "error": str(exc)}
+        return {
+            "status": "error",
+            "enabled": True,
+            "connected": False,
+            "cache_enabled": cache_enabled,
+            "distributed_locks_enabled": locks_enabled,
+            "distributed_locks_required": bool(settings.DISTRIBUTED_LOCK_REQUIRED),
+            "error": str(exc),
+        }
 
 
 @router.get("/datastores")

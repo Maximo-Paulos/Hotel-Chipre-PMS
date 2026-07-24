@@ -17,9 +17,12 @@ repositorio.
 | Frontend lint/typecheck/build | Pasan. Vite informa un bundle principal de ~768 kB minificado; queda como deuda de performance. |
 | E2E desktop | 20/20 pasan en Chromium, incluyendo login, logout, admin, calendario de tarifas, configuración del hotel, el journey de negocio y páginas V72. La ejecución fresh completa queda en 22/22 al sumar móvil. |
 | E2E mobile | 2/2 pasan con Chromium emulando iPhone y verificando 375×812, 390×844 y 430×932: sin overflow horizontal y navegación móvil a Reservas. |
-| Backend completo | 1182 pasan, 17 se omiten, 12 quedan xfail y 1 xpass en Python 3.12 limpio. El `.venv` legado no puede importar el código por usar un Python anterior. |
+| Backend completo | 1190 pasan, 17 se omiten, 12 quedan xfail y 1 xpass en Python 3.12 limpio. El runner E2E rechaza explícitamente Python menor a 3.10. |
 | Migración virgen | `alembic upgrade head` pasa sobre SQLite temporal hasta `20260724_payment_proof_blobs`, incluyendo blobs privados, rotación y custodia. |
 | Backend focalizado | 56/56 pasan: motor de asignación, operaciones de reservas, check-in, check-out y seguridad del flujo. |
+| Analítica y trazabilidad | 27/27 pasan en contratos/API; cada envelope expone `data_as_of`, `source_lag_seconds` y `data_source`, y la UI lo muestra. |
+| Aislamiento/cache/concurrencia | 56/56 pasan en aislamiento multi-hotel, cache con fallback PG y locks Redis/Valkey; caja y allocation quedaron protegidos. |
+| Health de infraestructura | `/health/datastores` diferencia cache Redis de locks distribuidos y reporta si el lock es requerido. |
 | Graphify | `portable-check` pasa después de actualizar y normalizar el grafo; `check-update` reporta pendiente semántico porque no se generaron descripciones/labels LLM en este run. |
 
 ## Hallazgos y correcciones
@@ -140,6 +143,20 @@ porque el fixture E2E usa una única SQLite aislada y ahora contiene un journey
 mutante; así el resultado 20/20 es reproducible y no depende de carreras entre
 workers.
 
+### Frescura de analítica y concurrencia
+
+Los endpoints `/api/analytics/*` ahora normalizan respuestas cacheadas y de
+PostgreSQL con `data_as_of`, `source_lag_seconds` y `data_source`. La pantalla
+de cada reporte muestra la fuente y el atraso, sin presentar una lectura
+cacheada como tiempo real. El contrato conserva la posibilidad de informar
+ClickHouse cuando exista un read model de warehouse con metadata propia.
+
+Los cierres de caja usan el lock `lock:cash_close:{hotel_id}:{session_id}` y
+la redistribución usa `lock:allocation:{hotel_id}`. El lease libera solo si el
+token pertenece al worker actual; la base mantiene los locks de fila como
+segunda barrera. En producción la configuración falla al iniciar si los locks
+distribuidos no están habilitados y requeridos.
+
 ## Limitaciones actuales
 
 - La prueba móvil automatizada emula el viewport de iPhone en Chromium; no es
@@ -158,9 +175,17 @@ workers.
   ya pasa localmente; siguen pendientes en el preview aislado el Mercado Pago simulado,
   reportes, OTA, lavandería, carga y la repetición cloud de todo el ciclo. El
   contrato local de permisos pasa y su seed ya está protegido contra carreras.
+- No hay evidencia provider-bound para 10.000 hoteles, 10.000 usuarios
+  concurrentes ni burst de 20.000: falta preview aislado, PostgreSQL co-local,
+  Redis/Valkey administrado, carga instrumentada, autoscaling, CDC/ClickHouse y
+  métricas p95/p99. El ledger está en
+  [`docs/data-foundations/scale-readiness.md`](../data-foundations/scale-readiness.md).
+- La UI de analítica fue validada por build y contratos API, pero todavía no se
+  repitió el journey completo contra un preview provider-bound.
 
 ## Próximo gate
 
-Desplegar el preview con la rama aislada, repetir el smoke web/móvil contra ese
-preview y continuar el recorrido de negocio con datos de prueba aislados.
-Recién después ejecutar las pruebas de concurrencia y el gate de release.
+Provisionar el preview aislado con sus proveedores, repetir el smoke web/móvil
+y el recorrido de negocio con datos de prueba aislados. Recién después ejecutar
+las pruebas de carga/concurrencia y el gate de release; no usar el manifiesto de
+ejemplo como evidencia de despliegue.

@@ -9,12 +9,12 @@ Instalado fuera del sistema para no depender de admin:
 
 | Herramienta | Versión | Ubicación | Uso |
 | --- | --- | --- | --- |
-| Python | 3.12 (via `uv`) | `.venv/` | `.venv/bin/python -m pytest -q` |
+| Python | 3.12+ (via `uv`) | `.venv312/` or explicit `E2E_PYTHON` | `/path/to/python3.12 -m pytest -q` |
 | Node | 20.19.6 | `~/.local/node/bin` | `export PATH="$HOME/.local/node/bin:$PATH"` |
 | uv | 0.11.x | `~/.local/bin` | gestor de venvs/paquetes Python |
 | gh CLI | 2.63.2 | `~/.local/bin/gh` | autenticado como Maximo-Paulos |
 | Redis | 8.8.0 | `~/.local/bin` | `redis-server --daemonize yes` (opcional) |
-| Playwright | chromium | `~/Library/Caches/ms-playwright` | e2e (activar venv antes) |
+| Playwright | chromium | `~/Library/Caches/ms-playwright` | e2e (`E2E_PYTHON=/path/to/python3.12 npm run e2e`) |
 | Claude Code CLI | 2.1.x | `~/.local/node/bin/claude` | gestión de plugins/skills |
 | graphify | 0.17.x | `~/.local/node/bin/graphify` | `graphify update .` → `.graphify/` |
 | HTTPie | 3.2.4 | `.venv/bin/http` | pruebas de API |

@@ -65,7 +65,7 @@ Branch de trabajo: `chore/weekly-orchestrator-2026-07-03`.
 - **gh CLI** v2.63.2 en `~/.local/bin/gh` — **autenticado** como Maximo-Paulos; git usa gh como credential helper. Rama pusheada y **PR #20 abierto** (https://github.com/Maximo-Paulos/Hotel-Chipre-PMS/pull/20).
 - **HTTPie** en el venv (`.venv/bin/http`), prereq del README.
 - **Redis 8.8.0** compilado desde fuente e instalado en `~/.local/bin` (server + cli). Smoke-test OK. Levantar con `redis-server --daemonize yes`.
-- **Playwright chromium** instalado. Para e2e (`npm run e2e`) activar el venv primero (`source .venv/bin/activate`); el webServer usa `python scripts/serve_e2e_backend.py`.
+- **Playwright chromium** instalado. Para e2e usar Python 3.10+ (`E2E_PYTHON=/path/to/python3.12 npm run e2e` si el `.venv` local es legado); el webServer usa `scripts/serve_e2e_backend.py`.
 - **No instalable sin admin/sudo** (documentado, no bloqueante): Docker (deploy compose), servidores Mongo/Cassandra/Neo4j (opcionales, off por defecto; drivers Python presentes).
 
 ### Deuda técnica pendiente (priorizada)

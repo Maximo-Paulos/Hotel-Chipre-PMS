@@ -270,6 +270,9 @@ def test_comparison_contracts_and_schemas():
         date_to=date(2026, 4, 30),
         data=AnalyticsStarterSummaryDataRead(cards=[metric]),
         generated_at=datetime(2026, 4, 24, 12, 0, tzinfo=timezone.utc),
+        data_as_of=datetime(2026, 4, 24, 12, 0, tzinfo=timezone.utc),
+        source_lag_seconds=0,
+        data_source="postgresql",
     )
     response = AnalyticsResponseEnvelopeRead(
         hotel_id=1,
@@ -279,6 +282,13 @@ def test_comparison_contracts_and_schemas():
         comparison=comparison_state,
         data={"cards": [metric.model_dump()]},
         generated_at=datetime(2026, 4, 24, 12, 0, tzinfo=timezone.utc),
+        data_as_of=datetime(2026, 4, 24, 12, 0, tzinfo=timezone.utc),
+        source_lag_seconds=0,
+        data_source="postgresql",
     )
     assert starter.data.cards[0].value_ars == "455000.00"
+    assert starter.data_source == "postgresql"
+    assert starter.source_lag_seconds == 0
     assert response.comparison.previous.available is True
+    assert response.data_as_of == datetime(2026, 4, 24, 12, 0, tzinfo=timezone.utc)
+    assert response.data_source == "postgresql"

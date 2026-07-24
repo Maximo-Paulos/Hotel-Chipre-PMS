@@ -132,23 +132,21 @@ lock:cash_close:{hotel_id}:{session_id}                TTL=60s   (arqueo lock)
 
 - Availability cache invalidated on: reservation insert/update/cancel, room block create/resolve
 - Pattern: write-through invalidation (write PG first, then DEL Redis key)
-- On Redis unavailability: degrade gracefully — query PG directly (no availability cache miss causes incorrect data, only slower response)
+- On Redis unavailability: read caches degrade gracefully — query PG directly (no availability cache miss causes incorrect data, only slower response)
+- Cash close and allocation locks are different: local development may degrade to the PostgreSQL safeguards, but production must set `DISTRIBUTED_LOCK_ENABLED=true` and `DISTRIBUTED_LOCK_REQUIRED=true`.
 - Never serve stale availability as authoritative without re-checking PG
 
 ### Distributed lock pattern (allocation solver)
 
 ```python
-lock_key = f"lock:allocation:{hotel_id}"
-acquired = redis.set(lock_key, worker_id, nx=True, px=30000)  # 30s TTL
-if not acquired:
-    raise AlreadyRunningError("Solver already running for this hotel")
-try:
+with distributed_lock(f"lock:allocation:{hotel_id}", ttl_seconds=30):
     run_solver(hotel_id)
-finally:
-    # Only release if we own the lock
-    if redis.get(lock_key) == worker_id:
-        redis.delete(lock_key)
 ```
+
+`app.services.distributed_lock` uses a random lease token and an atomic Lua
+compare-and-delete on release, so a worker cannot delete a successor worker's
+lease after its own TTL has expired. `close_session` uses the equivalent
+`lock:cash_close:{hotel_id}:{session_id}` lease.
 
 ---
 

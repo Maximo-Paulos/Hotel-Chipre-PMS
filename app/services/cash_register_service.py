@@ -19,6 +19,7 @@ from app.models.cash_register import (
     CashSessionStatusEnum,
 )
 from app.models.transaction import PaymentMethodEnum, Transaction, TransactionStatusEnum
+from app.services.distributed_lock import with_distributed_lock
 
 
 class CashRegisterError(Exception):
@@ -280,6 +281,7 @@ def get_session_summary(db: Session, *, hotel_id: int, session_id: int) -> dict:
     }
 
 
+@with_distributed_lock("cash_close", "hotel_id", "session_id", ttl_seconds=60)
 def close_session(
     db: Session,
     *,

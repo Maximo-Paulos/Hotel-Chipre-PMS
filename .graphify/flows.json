@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-24T06:32:36.433Z",
+  "generatedAt": "2026-07-24T07:06:03.157Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -2891,38 +2891,6 @@
       "warnings": []
     },
     {
-      "id": "flow:scripts_seed_e2e_backend_main",
-      "name": "main",
-      "entryPoint": "scripts_seed_e2e_backend_main",
-      "entryPointId": "scripts_seed_e2e_backend_main",
-      "path": [
-        "scripts_seed_e2e_backend_main",
-        "scripts_seed_e2e_backend_prepare_e2e_environment",
-        "scripts_seed_e2e_backend_run_migrations",
-        "scripts_seed_e2e_backend_upsert_seed_data",
-        "scripts_seed_e2e_backend_e2esafetyerror",
-        "scripts_seed_e2e_backend_normalize_sqlite_url",
-        "scripts_seed_e2e_backend_credentials"
-      ],
-      "qualifiedPath": [
-        "scripts_seed_e2e_backend_main",
-        "scripts_seed_e2e_backend_prepare_e2e_environment",
-        "scripts_seed_e2e_backend_run_migrations",
-        "scripts_seed_e2e_backend_upsert_seed_data",
-        "scripts_seed_e2e_backend_e2esafetyerror",
-        "scripts_seed_e2e_backend_normalize_sqlite_url",
-        "scripts_seed_e2e_backend_credentials"
-      ],
-      "depth": 2,
-      "nodeCount": 7,
-      "fileCount": 1,
-      "files": [
-        "scripts/seed_e2e_backend.py"
-      ],
-      "criticality": 0.2414,
-      "warnings": []
-    },
-    {
       "id": "flow:services_gemma_service_gemmaservice_suggest_policy_from_feedback",
       "name": ".suggest_policy_from_feedback",
       "entryPoint": "services_gemma_service_gemmaservice_suggest_policy_from_feedback",
@@ -3078,6 +3046,40 @@
         "app/services/gemma_service.py"
       ],
       "criticality": 0.2333,
+      "warnings": []
+    },
+    {
+      "id": "flow:scripts_seed_e2e_backend_main",
+      "name": "main",
+      "entryPoint": "scripts_seed_e2e_backend_main",
+      "entryPointId": "scripts_seed_e2e_backend_main",
+      "path": [
+        "scripts_seed_e2e_backend_main",
+        "scripts_seed_e2e_backend_prepare_e2e_environment",
+        "scripts_seed_e2e_backend_reset_e2e_database",
+        "scripts_seed_e2e_backend_run_migrations",
+        "scripts_seed_e2e_backend_upsert_seed_data",
+        "scripts_seed_e2e_backend_e2esafetyerror",
+        "scripts_seed_e2e_backend_normalize_sqlite_url",
+        "scripts_seed_e2e_backend_credentials"
+      ],
+      "qualifiedPath": [
+        "scripts_seed_e2e_backend_main",
+        "scripts_seed_e2e_backend_prepare_e2e_environment",
+        "scripts_seed_e2e_backend_reset_e2e_database",
+        "scripts_seed_e2e_backend_run_migrations",
+        "scripts_seed_e2e_backend_upsert_seed_data",
+        "scripts_seed_e2e_backend_e2esafetyerror",
+        "scripts_seed_e2e_backend_normalize_sqlite_url",
+        "scripts_seed_e2e_backend_credentials"
+      ],
+      "depth": 2,
+      "nodeCount": 8,
+      "fileCount": 1,
+      "files": [
+        "scripts/seed_e2e_backend.py"
+      ],
+      "criticality": 0.2325,
       "warnings": []
     },
     {
@@ -9343,6 +9345,28 @@
       "warnings": []
     },
     {
+      "id": "flow:analytics_analyticspages_analyticsfreshness",
+      "name": "AnalyticsFreshness",
+      "entryPoint": "analytics_analyticspages_analyticsfreshness",
+      "entryPointId": "analytics_analyticspages_analyticsfreshness",
+      "path": [
+        "analytics_analyticspages_analyticsfreshness",
+        "analytics_analyticspages_formatfreshnesslag"
+      ],
+      "qualifiedPath": [
+        "analytics_analyticspages_analyticsfreshness",
+        "analytics_analyticspages_formatfreshnesslag"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/views/protected/analytics/AnalyticsPages.tsx"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:analytics_analyticspages_analyticshomepage",
       "name": "AnalyticsHomePage",
       "entryPoint": "analytics_analyticspages_analyticshomepage",
@@ -9786,6 +9810,28 @@
       "fileCount": 1,
       "files": [
         "app/services/waitlist_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_analytics_freshness_annotate_analytics_payload",
+      "name": "annotate_analytics_payload",
+      "entryPoint": "services_analytics_freshness_annotate_analytics_payload",
+      "entryPointId": "services_analytics_freshness_annotate_analytics_payload",
+      "path": [
+        "services_analytics_freshness_annotate_analytics_payload",
+        "services_analytics_freshness_as_utc_datetime"
+      ],
+      "qualifiedPath": [
+        "services_analytics_freshness_annotate_analytics_payload",
+        "services_analytics_freshness_as_utc_datetime"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/services/analytics_freshness.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -10970,6 +11016,36 @@
       "fileCount": 1,
       "files": [
         "app/tasks/analytics_tasks.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_distributed_lock_distributed_lock",
+      "name": "distributed_lock",
+      "entryPoint": "services_distributed_lock_distributed_lock",
+      "entryPointId": "services_distributed_lock_distributed_lock",
+      "path": [
+        "services_distributed_lock_distributed_lock",
+        "services_distributed_lock_distributedlockbusy",
+        "services_distributed_lock_distributedlockunavailable",
+        "services_distributed_lock_get_redis_client",
+        "services_distributed_lock_required",
+        "services_distributed_lock_settings"
+      ],
+      "qualifiedPath": [
+        "services_distributed_lock_distributed_lock",
+        "services_distributed_lock_distributedlockbusy",
+        "services_distributed_lock_distributedlockunavailable",
+        "services_distributed_lock_get_redis_client",
+        "services_distributed_lock_required",
+        "services_distributed_lock_settings"
+      ],
+      "depth": 1,
+      "nodeCount": 6,
+      "fileCount": 1,
+      "files": [
+        "app/services/distributed_lock.py"
       ],
       "criticality": 0.16,
       "warnings": []

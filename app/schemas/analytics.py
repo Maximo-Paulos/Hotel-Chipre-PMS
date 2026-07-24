@@ -44,6 +44,9 @@ class AnalyticsStarterSummaryRead(BaseModel):
     date_to: date
     data: AnalyticsStarterSummaryDataRead
     generated_at: datetime
+    data_as_of: datetime
+    source_lag_seconds: float = Field(ge=0)
+    data_source: str
 
     model_config = {"from_attributes": True}
 
@@ -56,6 +59,8 @@ class AnalyticsResponseEnvelopeRead(BaseModel):
     comparison: AnalyticsComparisonStateRead | None = None
     data: dict[str, Any] = Field(default_factory=dict)
     generated_at: datetime
+    data_as_of: datetime
+    source_lag_seconds: float = Field(ge=0)
+    data_source: str
 
     model_config = {"from_attributes": True}
-
