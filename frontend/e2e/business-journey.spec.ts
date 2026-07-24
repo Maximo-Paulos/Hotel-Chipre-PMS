@@ -314,3 +314,96 @@ test("owner manages a room move and no-show from the reservation ficha", async (
   await expect(page.getByText("No-show registrado.", { exact: true })).toBeVisible();
   await expect(detailsModal).toContainText("No-show");
 });
+
+test("owner operates waitlist, housekeeping, laundry and daily reports", async ({ page }) => {
+  const suffix = Date.now().toString();
+  const checkIn = localIsoDate(20);
+  const checkOut = localIsoDate(22);
+
+  await login(page);
+
+  await navigateFromShell(page, "/operacion/lista-espera");
+  const waitlistForm = page.locator("form").filter({ hasText: "Agregar espera" });
+  await expect(waitlistForm).toBeVisible();
+  const guestSelect = waitlistForm.getByLabel("Huesped");
+  const categorySelect = waitlistForm.getByLabel("Categoria");
+  await expect(guestSelect.locator("option").filter({ hasText: "Huesped E2E" })).toHaveCount(1);
+  await expect(categorySelect.locator("option").filter({ hasText: "Standard E2E" })).toHaveCount(1);
+  const guestValue = await guestSelect.locator("option").filter({ hasText: "Huesped E2E" }).getAttribute("value");
+  const categoryValue = await categorySelect.locator("option").filter({ hasText: "Standard E2E" }).getAttribute("value");
+  expect(guestValue).toBeTruthy();
+  expect(categoryValue).toBeTruthy();
+  await guestSelect.selectOption(guestValue!);
+  await categorySelect.selectOption(categoryValue!);
+  await waitlistForm.getByLabel("Check-in").fill(checkIn);
+  await waitlistForm.getByLabel("Check-out").fill(checkOut);
+  await waitlistForm.getByLabel("Notas").fill(`Disponibilidad solicitada ${suffix}`);
+  await waitlistForm.getByRole("button", { name: "Agregar a espera", exact: true }).click();
+  await expect(page.getByText("Entrada agregada a la lista de espera.", { exact: true })).toBeVisible();
+
+  const waitlistCard = page
+    .locator("div.rounded-xl.border.p-4")
+    .filter({ hasText: "Huesped E2E" })
+    .filter({ hasText: `Disponibilidad solicitada ${suffix}` });
+  await expect(waitlistCard).toHaveCount(1);
+  await waitlistCard.getByRole("button", { name: "Promover", exact: true }).click();
+
+  const promotionForm = page.locator("form").filter({ hasText: "Promocion" });
+  await expect(promotionForm.getByRole("button", { name: "Promover a reserva", exact: true })).toBeEnabled();
+  const promoteRoom = promotionForm.getByLabel("Habitacion");
+  const roomOption = promoteRoom.locator("option").filter({ hasText: "Hab. 101" });
+  await expect(roomOption).toHaveCount(1);
+  const roomValue = await roomOption.getAttribute("value");
+  expect(roomValue).toBeTruthy();
+  await promoteRoom.selectOption(roomValue!);
+  await promotionForm.getByLabel("Notas de reserva").fill("Promoción operativa E2E");
+  await promotionForm.getByRole("button", { name: "Promover a reserva", exact: true }).click();
+  await expect(page.getByText("Entrada promovida a reserva.", { exact: true })).toBeVisible();
+  await expect(waitlistCard).toContainText("Promovida");
+
+  await navigateFromShell(page, "/habitaciones");
+  const housekeepingCard = page.getByText("Hab. 102", { exact: true }).first().locator("..").locator("..").locator("..");
+  await expect(housekeepingCard).toBeVisible();
+  await housekeepingCard.locator("select").selectOption("cleaning");
+  await expect(housekeepingCard).toContainText("Limpieza");
+
+  await navigateFromShell(page, "/operacion/lavanderia");
+  const laundryBatchForm = page.locator("form").filter({ hasText: "Nuevo lote" });
+  await laundryBatchForm.getByLabel("Notas").fill(`Lote operativo ${suffix}`);
+  await laundryBatchForm.getByRole("button", { name: "Crear lote", exact: true }).click();
+  await expect(page.getByText("Lote de lavanderia creado.", { exact: true })).toBeVisible();
+
+  const laundryDetail = page.locator("section").filter({ hasText: "Detalle" }).last();
+  const laundryItemForm = laundryDetail.locator("form");
+  await expect(laundryItemForm.getByLabel("Tipo de item")).toBeVisible();
+  await laundryItemForm.getByLabel("Tipo de item").fill("Sábanas E2E");
+  await laundryItemForm.getByLabel("Cantidad").fill("4");
+  await laundryItemForm.getByLabel("Habitacion").selectOption({ label: "Hab. 102" });
+  await laundryItemForm.getByRole("button", { name: "Agregar item", exact: true }).click();
+  await expect(page.getByText("Item agregado al lote.", { exact: true })).toBeVisible();
+  await expect(laundryDetail).toContainText("Sábanas E2E");
+  const laundryCard = page.getByRole("button").filter({ hasText: `Lote operativo ${suffix}` });
+  await expect(laundryCard).toContainText("Recolectado");
+
+  for (const [nextLabel, confirmation] of [
+    ["Marcar Enviado", "Enviado"],
+    ["Marcar Recibido", "Recibido"],
+    ["Marcar Cerrado", "Cerrado"]
+  ] as const) {
+    await page.getByText(nextLabel, { exact: true }).click();
+    await expect(page.getByText("Estado de lavanderia actualizado.", { exact: true })).toBeVisible();
+    await expect(laundryCard).toContainText(confirmation);
+  }
+
+  await navigateFromShell(page, "/reportes");
+  await expect(page.getByRole("heading", { name: "Reportes", exact: true })).toBeVisible();
+  await expect(page.getByText("Llegadas del dia", { exact: true })).toBeVisible();
+  const reportDate = page.getByLabel("Fecha");
+  const reportResponse = page.waitForResponse(
+    (response) => response.url().includes("/api/reports/operational/daily") && response.status() === 200
+  );
+  await reportDate.fill(localIsoDate(21));
+  await reportResponse;
+  await expect(page.getByText("Estado operativo", { exact: true })).toBeVisible();
+  await expect(page.getByText("Riesgos operativos", { exact: true })).toBeVisible();
+});
