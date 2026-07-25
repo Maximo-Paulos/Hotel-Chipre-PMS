@@ -1452,8 +1452,8 @@
     "hash": "2d960effb79d50cb5debf39038a49702"
   },
   "frontend/src/views/protected/ReservationsPage.tsx": {
-    "mtime": 1784965931687.6746,
-    "hash": "0cca3ee19ec3d34397143c691690ee21"
+    "mtime": 1784974262900.4612,
+    "hash": "6d150e4982ce2572ddb369b0afef68d1"
   },
   "frontend/src/views/protected/RoomsPage.tsx": {
     "mtime": 1784965978800.4614,
@@ -2072,8 +2072,8 @@
     "hash": "51e1cf1e3d2da9cd830da614f9ef2189"
   },
   "tests/test_v72_mobility.py": {
-    "mtime": 1784869619103.7773,
-    "hash": "0458a234a5928ad03931b5d67633594c"
+    "mtime": 1784974166470.4937,
+    "hash": "625b0a0c6b78053a842a4277661bcc2f"
   },
   "tests/test_v72_movement_groups.py": {
     "mtime": 1784862144938.5684,
@@ -3536,8 +3536,8 @@
     "hash": "3428f9dd99f8869bc07ed1d7e2e2f5e3"
   },
   "frontend/e2e/reservation-lifecycle.spec.ts": {
-    "mtime": 1784905067944.294,
-    "hash": "2bf0ac0f6a25bcf01b274e739ef3812f"
+    "mtime": 1784974200350.0037,
+    "hash": "584d0c07a915085afe56ab16731ebaf7"
   },
   "frontend/e2e/analytics-success.spec.ts": {
     "mtime": 1784919774721.3276,
@@ -3650,5 +3650,9 @@
   "frontend/e2e/stock-inventory-journey.spec.ts": {
     "mtime": 1784972612969.0208,
     "hash": "34a1095a203683d118b0ba565ddf7fdd"
+  },
+  "frontend/e2e/reservation-deposit-preview.spec.ts": {
+    "mtime": 1784973896023.85,
+    "hash": "dcd7b6b5d4cb988fe8a2d94742c55fc9"
   }
 }
