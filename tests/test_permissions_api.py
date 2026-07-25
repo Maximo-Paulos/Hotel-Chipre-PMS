@@ -170,6 +170,49 @@ def test_stock_operator_cannot_adjust_without_explicit_adjust_permission():
         engine.dispose()
 
 
+def test_stock_operator_cannot_adjust_downward_without_explicit_adjust_permission():
+    client, db, engine = _client_with_db()
+    fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner", user_id=11)
+    try:
+        item_response = client.post(
+            "/api/stock/items",
+            json={"name": "Sabanas", "unit": "unidad", "min_quantity": 2},
+        )
+        assert item_response.status_code == 201
+        item_id = item_response.json()["id"]
+        seed = client.post(
+            "/api/stock/movements",
+            json={"item_id": item_id, "movement_type": "in", "quantity": "10", "reason": "Stock inicial"},
+        )
+        assert seed.status_code == 201
+
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "manager")
+        denied = client.post(
+            "/api/stock/movements",
+            json={"item_id": item_id, "movement_type": "adjustment_out", "quantity": "1", "reason": "Conteo"},
+        )
+        assert denied.status_code == 403
+        assert "stock:adjust" in (
+            db.query(SecurityAuditLog)
+            .filter(SecurityAuditLog.action == "permission.denied")
+            .order_by(SecurityAuditLog.id.desc())
+            .first()
+            .details
+            or ""
+        )
+
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner", user_id=11)
+        allowed = client.post(
+            "/api/stock/movements",
+            json={"item_id": item_id, "movement_type": "adjustment_out", "quantity": "1", "reason": "Conteo autorizado"},
+        )
+        assert allowed.status_code == 201
+    finally:
+        fastapi_app.dependency_overrides.clear()
+        db.close()
+        engine.dispose()
+
+
 def test_stock_history_api_is_hotel_scoped_and_limited():
     client, db, engine = _client_with_db()
     fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner", user_id=11)

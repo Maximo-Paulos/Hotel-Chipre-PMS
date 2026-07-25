@@ -217,6 +217,81 @@ def test_stock_movement_history_is_hotel_scoped_newest_first_and_limited(db):
     assert [movement.id for movement in list_stock_movements(db, hotel_id=1, item_id=None, limit=1)] == [latest.id]
 
 
+def test_stock_adjustment_can_correct_quantity_downward(db):
+    _seed_hotels(db)
+    item = create_stock_item(
+        db,
+        hotel_id=1,
+        name="Sabanas",
+        sku=None,
+        unit="unit",
+        min_quantity=None,
+        active=True,
+    )
+    register_movement(
+        db,
+        hotel_id=1,
+        item_id=item.id,
+        location_id=None,
+        movement_type="in",
+        quantity=Decimal("10.00"),
+        reason="opening balance",
+        reservation_id=None,
+        created_by_user_id=None,
+    )
+
+    register_movement(
+        db,
+        hotel_id=1,
+        item_id=item.id,
+        location_id=None,
+        movement_type="adjustment_out",
+        quantity=Decimal("3.00"),
+        reason="physical count found fewer units",
+        reservation_id=None,
+        created_by_user_id=None,
+    )
+
+    assert current_stock(db, hotel_id=1, item_id=item.id) == Decimal("7.00")
+
+
+def test_stock_adjustment_downward_cannot_make_quantity_negative(db):
+    _seed_hotels(db)
+    item = create_stock_item(
+        db,
+        hotel_id=1,
+        name="Frazadas",
+        sku=None,
+        unit="unit",
+        min_quantity=None,
+        active=True,
+    )
+    register_movement(
+        db,
+        hotel_id=1,
+        item_id=item.id,
+        location_id=None,
+        movement_type="in",
+        quantity=Decimal("2.00"),
+        reason="opening balance",
+        reservation_id=None,
+        created_by_user_id=None,
+    )
+
+    with pytest.raises(StockError, match="negative"):
+        register_movement(
+            db,
+            hotel_id=1,
+            item_id=item.id,
+            location_id=None,
+            movement_type="adjustment_out",
+            quantity=Decimal("5.00"),
+            reason="conteo",
+            reservation_id=None,
+            created_by_user_id=None,
+        )
+
+
 def test_low_stock_items_are_hotel_scoped(db):
     _seed_hotels(db)
     item = create_stock_item(

@@ -18,7 +18,11 @@ class StockError(ValueError):
     """Raised when a stock operation is invalid."""
 
 
-VALID_MOVEMENT_TYPES = {"in", "out", "adjustment"}
+# "adjustment" raises stock (physical count found more than expected);
+# "adjustment_out" lowers it (found less / breakage). Both require the
+# stock:adjust permission, unlike plain "in"/"out" (see app/api/stock.py).
+VALID_MOVEMENT_TYPES = {"in", "out", "adjustment", "adjustment_out"}
+_OUTBOUND_MOVEMENT_TYPES = {"out", "adjustment_out"}
 
 
 def list_stock_items(db: Session, *, hotel_id: int) -> list[StockItem]:
@@ -157,7 +161,9 @@ def register_movement(
     )
     if item is None:
         raise StockError("Stock item not found")
-    if movement_type == "out" and quantity > current_stock(db, hotel_id=hotel_id, item_id=item.id):
+    if movement_type in _OUTBOUND_MOVEMENT_TYPES and quantity > current_stock(
+        db, hotel_id=hotel_id, item_id=item.id
+    ):
         raise StockError("Stock movement would make stock negative")
     if location_id is not None:
         _get_location(db, hotel_id=hotel_id, location_id=location_id)
@@ -196,7 +202,7 @@ def list_stock_movements(
 def current_stock(db: Session, *, hotel_id: int, item_id: int) -> Decimal:
     _get_item(db, hotel_id=hotel_id, item_id=item_id)
     signed_quantity = case(
-        (StockMovement.movement_type == "out", -StockMovement.quantity),
+        (StockMovement.movement_type.in_(_OUTBOUND_MOVEMENT_TYPES), -StockMovement.quantity),
         else_=StockMovement.quantity,
     )
     total = (

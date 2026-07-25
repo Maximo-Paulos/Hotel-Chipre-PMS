@@ -80,7 +80,10 @@ class StockMovement(Base):
     location = relationship("StockLocation", back_populates="movements", lazy="joined")
 
     __table_args__ = (
-        CheckConstraint("movement_type IN ('in', 'out', 'adjustment')", name="ck_stock_movements_type_valid"),
+        CheckConstraint(
+            "movement_type IN ('in', 'out', 'adjustment', 'adjustment_out')",
+            name="ck_stock_movements_type_valid",
+        ),
         CheckConstraint("quantity > 0", name="ck_stock_movements_quantity_positive"),
         ForeignKeyConstraint(
             ["hotel_id", "item_id"], ["stock_items.hotel_id", "stock_items.id"],

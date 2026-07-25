@@ -264,7 +264,7 @@ def create_movement(
     context: AuthContext = Depends(require_permission(PERMISSION_STOCK_OPERATE)),
 ):
     try:
-        if data.movement_type == "adjustment":
+        if data.movement_type in ("adjustment", "adjustment_out"):
             _ensure_adjustment_permission(db, context)
         movement = register_movement(
             db,
