@@ -4,10 +4,10 @@
 - Large corpus: 788 files · ~532,455 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.
 
 ## Summary
-- 7495 nodes · 25691 edges · 310 communities detected
+- 7497 nodes · 25695 edges · 311 communities detected
 - Extraction: 62% EXTRACTED · 38% INFERRED · 0% AMBIGUOUS · INFERRED: 9692 edges (avg confidence: 0.5)
 - Token cost: 0 input · 0 output
-- Edge kinds: uses: 9692 · contains: 4566 · calls: 3462 · MODIFIES: 2077 · ON_BRANCH: 1703 · rationale_for: 1229 · imports: 758 · imports_from: 594 · method: 591 · inherits: 535 · PARENT_OF: 484
+- Edge kinds: uses: 9692 · contains: 4566 · calls: 3462 · MODIFIES: 2077 · ON_BRANCH: 1705 · rationale_for: 1229 · imports: 758 · imports_from: 594 · method: 591 · inherits: 535 · PARENT_OF: 486
 
 
 ## Input Scope
@@ -17,7 +17,7 @@
 - Excluded: 0 untracked · 0 ignored · 9 sensitive · 0 missing committed
 
 ## Graph Freshness
-- Built from Git commit: `59fcdc2`
+- Built from Git commit: `f74ffb6`
 - Compare this hash to `git rev-parse HEAD` before trusting freshness-sensitive graph output.
 ## God Nodes (most connected - your core abstractions)
 1. `Reservation` - 629 edges
@@ -51,7 +51,7 @@ Nodes (309): availability(), price_quote(), FastAPI routes for Booking managemen
 
 ### Community 1 - "Community 1"
 Cohesion: 0.02
-Nodes (159): requestVerification(), apiFetch(), buildAuthHeaders(), buildUrl(), formatErrorDetail(), handleUnauthorized(), hasValidSession(), isTokenExpired() (+151 more)
+Nodes (158): requestVerification(), apiFetch(), buildAuthHeaders(), buildUrl(), formatErrorDetail(), handleUnauthorized(), hasValidSession(), isTokenExpired() (+150 more)
 
 ### Community 2 - "Community 2"
 Cohesion: 0.02
@@ -59,7 +59,7 @@ Nodes (198): claude/feature/pms-roles-housekeeping-qa, 00bf891 Explain analytics
 
 ### Community 3 - "Community 3"
 Cohesion: 0.06
-Nodes (191): chore/weekly-orchestrator-2026-07-03, codex/feature/agent-ops-knowledge, codex/feature/pms-e2e-scale-hardening, codex/feature/trusted-qa-bootstrap, codex/fix-render-postgres-enum-values, main, 01498d0 Harden password reset flow (verified-only, dev code return), 0737a5a feat(frontend): V72 Wave A/B/C — companies, cash, reports, waitlist, laundry, stock, api-keys, permissions, whatsapp (+183 more)
+Nodes (190): chore/weekly-orchestrator-2026-07-03, codex/feature/agent-ops-knowledge, codex/feature/pms-e2e-scale-hardening, codex/feature/trusted-qa-bootstrap, codex/fix-render-postgres-enum-values, main, 01498d0 Harden password reset flow (verified-only, dev code return), 0737a5a feat(frontend): V72 Wave A/B/C — companies, cash, reports, waitlist, laundry, stock, api-keys, permissions, whatsapp (+182 more)
 
 ### Community 4 - "Community 4"
 Cohesion: 0.05
@@ -94,8 +94,8 @@ Cohesion: 0.03
 Nodes (66): createPaymentSurcharge(), deactivatePaymentSurcharge(), grossWithSurcharge(), listPaymentSurcharges(), PaymentSurcharge, PaymentSurchargeCreatePayload, PaymentSurchargeType, createRoomBlock() (+58 more)
 
 ### Community 12 - "Community 12"
-Cohesion: 0.11
-Nodes (75): CashCloseReport, CashCustodyHandoff, CashCustodyStatusEnum, CashMovement, CashMovementTypeEnum, CashSession, CashSessionStatusEnum, Individual money movement within an open cash session.     Linked optionally to (+67 more)
+Cohesion: 0.10
+Nodes (76): CashCloseReport, CashCustodyHandoff, CashCustodyStatusEnum, CashMovement, CashMovementTypeEnum, CashSession, CashSessionStatusEnum, Individual money movement within an open cash session.     Linked optionally to (+68 more)
 
 ### Community 13 - "Community 13"
 Cohesion: 0.03
@@ -1262,26 +1262,30 @@ Cohesion: 0.50
 Nodes (1): baseline  Revision ID: cb9001557529 Revises:  Create Date: 2026-03-31 19:04:53.7
 
 ### Community 313 - "Community 313"
-Cohesion: 1.00
-Nodes (2): get_mongo_db(), mongo_healthcheck()
+Cohesion: 0.67
+Nodes (3): 59fcdc2 fix(master-admin): stop bootstrap login from hijacking a colliding tenant account, 76892e2 chore(graphify): regenerate graph after auth-hardening session, f74ffb6 qa(catalog): record Fase 11 auth/session security findings
 
 ### Community 314 - "Community 314"
 Cohesion: 1.00
-Nodes (2): get_neo4j_driver(), neo4j_healthcheck()
+Nodes (2): get_mongo_db(), mongo_healthcheck()
 
 ### Community 315 - "Community 315"
+Cohesion: 1.00
+Nodes (2): get_neo4j_driver(), neo4j_healthcheck()
+
+### Community 316 - "Community 316"
 Cohesion: 0.67
 Nodes (1): Fast server-side EXPLAIN ANALYZE probe for hot queries on real PostgreSQL.  Rati
 
-### Community 317 - "Community 317"
+### Community 318 - "Community 318"
 Cohesion: 1.00
 Nodes (1): Defensive datastore clients for optional infrastructure.
 
-### Community 318 - "Community 318"
+### Community 319 - "Community 319"
 Cohesion: 1.00
 Nodes (1): Application decorators.
 
-### Community 319 - "Community 319"
+### Community 320 - "Community 320"
 Cohesion: 1.00
 Nodes (1): Dependency injection helpers (auth, etc.).
 
@@ -1366,17 +1370,17 @@ Nodes (1): Dependency injection helpers (auth, etc.).
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 - **Thin community `Community 312`** (1 nodes): `baseline  Revision ID: cb9001557529 Revises:  Create Date: 2026-03-31 19:04:53.7`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 313`** (2 nodes): `get_mongo_db()`, `mongo_healthcheck()`
+- **Thin community `Community 314`** (2 nodes): `get_mongo_db()`, `mongo_healthcheck()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 314`** (2 nodes): `get_neo4j_driver()`, `neo4j_healthcheck()`
+- **Thin community `Community 315`** (2 nodes): `get_neo4j_driver()`, `neo4j_healthcheck()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 315`** (1 nodes): `Fast server-side EXPLAIN ANALYZE probe for hot queries on real PostgreSQL.  Rati`
+- **Thin community `Community 316`** (1 nodes): `Fast server-side EXPLAIN ANALYZE probe for hot queries on real PostgreSQL.  Rati`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 317`** (1 nodes): `Defensive datastore clients for optional infrastructure.`
+- **Thin community `Community 318`** (1 nodes): `Defensive datastore clients for optional infrastructure.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 318`** (1 nodes): `Application decorators.`
+- **Thin community `Community 319`** (1 nodes): `Application decorators.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 319`** (1 nodes): `Dependency injection helpers (auth, etc.).`
+- **Thin community `Community 320`** (1 nodes): `Dependency injection helpers (auth, etc.).`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 
 ## Suggested Questions
@@ -1384,7 +1388,7 @@ _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `Base` connect `Community 9` to `Community 240`, `Community 208`, `Community 13`, `Community 1`, `Community 23`, `Community 121`, `Community 55`, `Community 5`, `Community 7`, `Community 12`, `Community 65`, `Community 14`, `Community 99`, `Community 63`, `Community 110`, `Community 144`, `Community 0`, `Community 31`, `Community 6`, `Community 15`, `Community 3`, `Community 57`, `Community 28`, `Community 122`, `Community 4`, `Community 35`, `Community 29`, `Community 44`, `Community 42`, `Community 86`, `Community 40`, `Community 50`, `Community 59`, `Community 66`, `Community 215`, `Community 85`, `Community 198`, `Community 199`, `Community 128`?**
   _High betweenness centrality (0.128) - this node is a cross-community bridge._
-- **Why does `HotelConfiguration` connect `Community 15` to `Community 1`, `Community 57`, `Community 7`, `Community 16`, `Community 27`, `Community 6`, `Community 5`, `Community 100`, `Community 3`, `Community 9`, `Community 65`, `Community 0`, `Community 315`, `Community 31`, `Community 40`, `Community 88`, `Community 35`, `Community 60`, `Community 28`, `Community 4`, `Community 86`, `Community 110`, `Community 59`, `Community 23`, `Community 12`, `Community 85`, `Community 93`, `Community 29`, `Community 43`, `Community 132`, `Community 42`?**
+- **Why does `HotelConfiguration` connect `Community 15` to `Community 1`, `Community 57`, `Community 7`, `Community 16`, `Community 27`, `Community 6`, `Community 5`, `Community 100`, `Community 3`, `Community 9`, `Community 65`, `Community 0`, `Community 316`, `Community 31`, `Community 40`, `Community 88`, `Community 35`, `Community 60`, `Community 28`, `Community 4`, `Community 86`, `Community 110`, `Community 59`, `Community 23`, `Community 12`, `Community 85`, `Community 93`, `Community 29`, `Community 43`, `Community 132`, `Community 42`?**
   _High betweenness centrality (0.051) - this node is a cross-community bridge._
 - **Why does `Reservation` connect `Community 0` to `Community 31`, `Community 5`, `Community 4`, `Community 7`, `Community 71`, `Community 3`, `Community 9`, `Community 65`, `Community 55`, `Community 14`, `Community 261`, `Community 40`, `Community 35`, `Community 60`, `Community 44`, `Community 42`, `Community 50`, `Community 12`, `Community 117`, `Community 93`, `Community 15`, `Community 118`, `Community 43`, `Community 23`, `Community 132`?**
   _High betweenness centrality (0.038) - this node is a cross-community bridge._
