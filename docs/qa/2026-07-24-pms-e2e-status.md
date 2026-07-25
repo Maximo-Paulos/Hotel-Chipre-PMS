@@ -875,3 +875,12 @@ journey operativo en WebKit iPhone 15. La primera autenticación completó, pero
 tardó aproximadamente un minuto: se clasifica como **P2 de performance** del
 arranque del backend y queda pendiente diagnosticarlo con telemetría del
 provider. No es evidencia de un fallo de credenciales ni de routing.
+
+El barrido read-only posterior cargó otras diez rutas de operación y
+configuración del owner sin error visible. Reportes y Analytics/Operación se
+verificaron por separado, esperando su carga asíncrona, y ambos terminaron sin
+error ni estado vacío. Para la superficie Apple, el smoke responsivo WebKit
+volvió a aprobar **12/12** entre iPhone SE, iPhone 15 e iPhone 15 Pro Max. El
+navegador interno no dispara de forma fiable los eventos nativos de los campos
+`date` controlados, por lo que no se usa para descalificar la cotización cloud:
+esa interacción sigue cubierta por las pruebas Chromium y WebKit ya aprobadas.
