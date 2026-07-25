@@ -246,7 +246,14 @@ export function ReservationsPage() {
   const filters = {
     status: statusFilter,
     fromDate: fromDate || undefined,
-    toDate: toDate || undefined
+    toDate: toDate || undefined,
+    // A2: the backend now defaults to limit=50/order=recent. This is the
+    // operational reservations list (receptionists filtering by date range
+    // / status), which used to return every match -- keep that shape by
+    // asking for the ordering it already assumed (check_in_date ASC) and the
+    // server's max page size, instead of silently truncating to 50.
+    order: "check_in" as const,
+    limit: 200
   };
 
   const { data: reservations = [], isLoading, isFetching, error } = useReservations(filters);

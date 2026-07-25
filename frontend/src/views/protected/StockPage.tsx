@@ -103,7 +103,10 @@ export function StockPage() {
   });
   const reservationsQuery = useQuery({
     queryKey: ["stock-reservations", session.hotelId],
-    queryFn: () => listReservations({ status: "all" }, session),
+    // A2: backend now defaults to limit=50 -- this stock/room mapping used
+    // to see every reservation, so ask for the server's max page size
+    // explicitly instead of silently losing rows past #50.
+    queryFn: () => listReservations({ status: "all", order: "check_in", limit: 200 }, session),
     enabled,
     staleTime: 15 * 1000
   });

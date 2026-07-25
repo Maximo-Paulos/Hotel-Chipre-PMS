@@ -21,11 +21,13 @@ async function login(page: Page) {
 test("owner opens the reservation drawer from the dashboard, global search, and a deep link", async ({ page }) => {
   const suffix = Date.now().toString();
   const guestLastName = `DrawerQA-${suffix}`;
-  // Dashboard's "Próximas reservas" sorts all reservations by check_in_date
-  // ascending with no filter/limit yet (A2 in the plan is separate work).
-  // A far-past date guarantees this reservation sorts first regardless of
-  // what other specs leave behind in the shared E2E database, so the
-  // "open from dashboard" step doesn't race other tests' fixture dates.
+  // Post-A2: dashboard's "Próximas reservas" widget is fed by the 10 most
+  // recently CREATED reservations (order=recent, limit=10), then sorted by
+  // check_in_date for display. A reservation created by this test is by
+  // definition the most recently created one, so it lands in that top-10
+  // window regardless of check_in_date -- the far-past date below no longer
+  // drives dashboard placement, it's just a value that's easy to keep out of
+  // the way of other specs' fixture dates.
   // Salted per run (not a fixed date) so re-running this spec doesn't
   // collide with room 101 already booked by a previous run's leftovers.
   const salt = Number(suffix.slice(-4));

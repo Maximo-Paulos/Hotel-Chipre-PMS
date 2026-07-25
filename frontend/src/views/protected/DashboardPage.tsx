@@ -27,6 +27,13 @@ const statusClass = (status: ReservationStatus) => {
 };
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
+const monthRangeIso = (base: Date) => {
+  const pad = (part: number) => String(part).padStart(2, "0");
+  const format = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const start = new Date(base.getFullYear(), base.getMonth(), 1);
+  const end = new Date(base.getFullYear(), base.getMonth() + 1, 0);
+  return { fromDate: format(start), toDate: format(end) };
+};
 const reservationGuestLabel = (reservation: {
   guest?: { first_name: string; last_name: string } | null;
   guest_id: number;
@@ -34,7 +41,16 @@ const reservationGuestLabel = (reservation: {
 
 export function DashboardPage() {
   const today = todayIso();
-  const { data: reservations = [] } = useReservations({});
+  // KPI cards (ADR/revenue/arrivals-departures today) and "today" activity
+  // need every reservation touching the current month, not just the most
+  // recently created ones -- scope by date range instead of by count so the
+  // A2 pagination fix doesn't silently corrupt these numbers. `today` always
+  // falls inside this range, so today's check-ins/check-outs are covered.
+  const { fromDate: monthFrom, toDate: monthTo } = useMemo(() => monthRangeIso(new Date()), []);
+  const { data: reservations = [] } = useReservations({ fromDate: monthFrom, toDate: monthTo, order: "check_in", limit: 200 });
+  // "Próximas reservas": the 10 most recently booked reservations, newest
+  // first -- what the user asked this widget to show.
+  const { data: recentReservations = [] } = useReservations({ limit: 10, order: "recent" });
   const pendingActionsQuery = usePendingReservationActions(8);
   const { openReservation } = useReservationDrawer();
   const { roomsQuery } = useRooms();
@@ -83,10 +99,10 @@ export function DashboardPage() {
 
   const arrivals = useMemo(
     () =>
-      [...reservations]
+      [...recentReservations]
         .sort((a, b) => a.check_in_date.localeCompare(b.check_in_date))
         .slice(0, 5),
-    [reservations]
+    [recentReservations]
   );
 
   const activities = useMemo(() => {

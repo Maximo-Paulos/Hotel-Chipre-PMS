@@ -197,11 +197,22 @@ export type ReservationManualReviewResponse = {
   reviewed_by_user_id?: number | null;
 };
 
+export type ReservationOrder = "recent" | "check_in";
+
 export type ReservationFilters = {
   status?: ReservationStatus | "all" | "";
   fromDate?: string;
   toDate?: string;
   search?: string;
+  skip?: number;
+  limit?: number;
+  /**
+   * "recent" (created_at DESC, newest first) is the backend default -- used
+   * for dashboards / "recent activity" views. "check_in" preserves the
+   * pre-A2 ordering (check_in_date ASC) for operational views that already
+   * assume arrivals are sorted by stay date.
+   */
+  order?: ReservationOrder;
 };
 
 export type ReservationPayload = {
@@ -279,6 +290,9 @@ const buildQueryString = (filters: ReservationFilters = {}) => {
   if (filters.fromDate) params.set("from_date", filters.fromDate);
   if (filters.toDate) params.set("to_date", filters.toDate);
   if (filters.search) params.set("search", filters.search);
+  if (typeof filters.skip === "number") params.set("skip", String(filters.skip));
+  if (typeof filters.limit === "number") params.set("limit", String(filters.limit));
+  if (filters.order) params.set("order", filters.order);
   const qs = params.toString();
   return qs ? `?${qs}` : "";
 };
