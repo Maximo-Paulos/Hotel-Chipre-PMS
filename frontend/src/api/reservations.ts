@@ -369,3 +369,49 @@ export const clearReservationManualReview = (
     data: payload,
     session
   });
+
+// ── B2: occupancy grid (planilla de ocupación) ──────────────────────────────
+
+export type OccupancyGridRoom = {
+  id: number;
+  room_number: string;
+  floor: number;
+  category_id: number;
+  category_name: string;
+  status: string;
+};
+
+export type OccupancyGridReservation = {
+  id: number;
+  room_id: number | null;
+  confirmation_code: string;
+  check_in_date: string;
+  check_out_date: string;
+  status: ReservationStatus;
+  guest_name: string;
+  num_adults: number;
+  num_children: number;
+  operational_balance_due: number;
+};
+
+export type OccupancyGridBlock = {
+  room_id: number;
+  starts_at: string;
+  ends_at: string | null;
+  reason_code: string;
+};
+
+export type OccupancyGridResponse = {
+  rooms: OccupancyGridRoom[];
+  reservations: OccupancyGridReservation[];
+  unassigned: OccupancyGridReservation[];
+  blocks: OccupancyGridBlock[];
+};
+
+export const getOccupancyGrid = (
+  params: { dateFrom: string; dateTo: string },
+  session?: SessionLike
+) => {
+  const query = new URLSearchParams({ date_from: params.dateFrom, date_to: params.dateTo });
+  return apiFetch<OccupancyGridResponse>(`/api/reservations/occupancy-grid?${query.toString()}`, { session });
+};

@@ -6,6 +6,7 @@ import {
   checkInReservation,
   checkOutReservation,
   createReservation,
+  getOccupancyGrid,
   getReservation,
   getReservationQuote,
   getReservationOperationsSummary,
@@ -13,6 +14,7 @@ import {
   listPendingReservationActions,
   resolveReservationExternal,
   updateReservation,
+  type OccupancyGridResponse,
   type ReservationActionResolvePayload,
   type ReservationExternalResolutionResponse,
   type Reservation,
@@ -26,6 +28,7 @@ import {
   type ReservationStatus,
   type ReservationUpdatePayload
 } from "../api/reservations";
+import type { SessionState } from "../state/session";
 import { hasValidSession } from "../api/client";
 import { useSession } from "../state/session";
 
@@ -42,6 +45,12 @@ const pendingReservationActionsKey = (hotelId: number | null, limit: number) => 
   "reservation-pending-actions",
   hotelId,
   limit
+];
+const occupancyGridKey = (hotelId: number | null, dateFrom: string, dateTo: string) => [
+  "occupancy-grid",
+  hotelId,
+  dateFrom,
+  dateTo
 ];
 
 export function useReservations(filters: ReservationFilters) {
@@ -206,6 +215,32 @@ export function useReservationActionMutations(filters?: ReservationFilters) {
   return {
     resolveExternalMutation,
     clearManualReviewMutation
+  };
+}
+
+// B2: occupancy grid (planilla). A shared query-options builder so the page
+// can both `useQuery` the current window and `prefetchQuery` the adjacent
+// ones with the exact same key/fn -- no separate prefetch plumbing needed.
+function occupancyGridQueryOptions(session: SessionState, dateFrom: string, dateTo: string) {
+  return {
+    queryKey: occupancyGridKey(session.hotelId, dateFrom, dateTo),
+    queryFn: () => getOccupancyGrid({ dateFrom, dateTo }, session),
+    enabled: hasValidSession(session),
+    staleTime: 30_000
+  };
+}
+
+export function useOccupancyGrid(dateFrom: string, dateTo: string) {
+  const { session } = useSession();
+  return useQuery<OccupancyGridResponse>(occupancyGridQueryOptions(session, dateFrom, dateTo));
+}
+
+export function usePrefetchOccupancyGrid() {
+  const { session } = useSession();
+  const queryClient = useQueryClient();
+  return (dateFrom: string, dateTo: string) => {
+    if (!hasValidSession(session)) return;
+    queryClient.prefetchQuery(occupancyGridQueryOptions(session, dateFrom, dateTo));
   };
 }
 
