@@ -3586,5 +3586,13 @@
   "tests/test_cash_handoff_schema_repair.py": {
     "mtime": 1784952419734.349,
     "hash": "a91b843e3f89243323f46ca525eece2f"
+  },
+  "app/scripts/repair_cash_handoff_schema.py": {
+    "mtime": 1784953352111.63,
+    "hash": "1b525545f1c7ccaabd58c8db92bbe1bb"
+  },
+  "tests/test_repair_cash_handoff_schema_script.py": {
+    "mtime": 1784953318690.8564,
+    "hash": "69120b1d279649b7519b58fd99a0a749"
   }
 }

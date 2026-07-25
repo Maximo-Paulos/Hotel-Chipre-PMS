@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-25T04:11:40.731Z",
+  "generatedAt": "2026-07-25T04:26:34.374Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -8086,6 +8086,30 @@
       "fileCount": 1,
       "files": [
         "app/api/blocks.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
+      "id": "flow:scripts_repair_cash_handoff_schema_main",
+      "name": "main",
+      "entryPoint": "scripts_repair_cash_handoff_schema_main",
+      "entryPointId": "scripts_repair_cash_handoff_schema_main",
+      "path": [
+        "scripts_repair_cash_handoff_schema_main",
+        "scripts_repair_cash_handoff_schema_repair_cash_handoff_schema",
+        "scripts_repair_cash_handoff_schema_cashhandoffschemarepairerror"
+      ],
+      "qualifiedPath": [
+        "scripts_repair_cash_handoff_schema_main",
+        "scripts_repair_cash_handoff_schema_repair_cash_handoff_schema",
+        "scripts_repair_cash_handoff_schema_cashhandoffschemarepairerror"
+      ],
+      "depth": 2,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/scripts/repair_cash_handoff_schema.py"
       ],
       "criticality": 0.17,
       "warnings": []
