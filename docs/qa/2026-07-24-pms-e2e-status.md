@@ -937,3 +937,31 @@ permisos. La prueba focal aprobó en Chromium móvil, WebKit iPhone SE, iPhone
 publicar la rama, el Preview a 390 px mostró los 28 enlaces y el acceso de
 inicio a 44 px o más, sin overflow horizontal ni errores visibles. No hubo
 mutaciones de negocio ni efectos externos.
+
+### P1 corregido — cierre de caja contra el entorno existente
+
+El recorrido owner del Preview existente abrió una caja QA equilibrada con un
+ingreso y un egreso sintéticos y encontró dos fallos reales al cerrarla. Sin
+Redis, el bloqueo distribuido obligatorio impedía cerrar la caja; el commit
+`8e0f9e5` añade el lock transaccional advisory de PostgreSQL como fallback. Al
+resolver ese bloqueo, el backend reveló que el entorno existente tenía el
+historial de Alembic atrasado respecto de tablas ya presentes: faltaban la
+referencia sucesora y la tabla de custodia de caja.
+
+Los commits `ace7f4c`, `b1e1bd0` y `15fdb88` agregan una reparación de
+arranque PostgreSQL-only, aditiva, idempotente y transaccional. Crea solamente
+la referencia de sucesión, las restricciones multi-tenant y, si no existe, la
+tabla de custodia con su enum, índice y RLS. No reejecuta el árbol completo de
+migraciones ni modifica movimientos de negocio. El intento de `alembic upgrade
+head` se mantuvo fuera del arranque porque intenta recrear tablas ya existentes
+en este entorno; reconciliar ese marcador de historial sigue siendo un riesgo
+P1 separado.
+
+Después de desplegar `15fdb88` en el Render existente y redeplegar el Preview
+de esta rama con `VITE_API_URL` apuntando a la API canónica existente, el cierre
+QA devolvió `Caja cerrada.` y creó automáticamente una caja sucesora abierta.
+No se usaron dinero real, links de pago, comprobantes, emails, webhooks ni
+OTAs. La regresión backend posterior aprobó **1239 passed, 17 skipped,
+12 xfailed, 1 xpassed**. Esta evidencia valida el flujo cloud de caja para el
+owner QA, pero no sustituye la auditoría completa de drift de Alembic ni la
+evidencia firmada de la puerta de release.
