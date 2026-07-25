@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-24T17:25:53.227Z",
+  "generatedAt": "2026-07-25T02:14:25.211Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -2129,6 +2129,28 @@
       "warnings": []
     },
     {
+      "id": "flow:services_audit_log_service_model_snapshot",
+      "name": "model_snapshot",
+      "entryPoint": "services_audit_log_service_model_snapshot",
+      "entryPointId": "services_audit_log_service_model_snapshot",
+      "path": [
+        "services_audit_log_service_model_snapshot",
+        "services_audit_log_service_sanitize_audit_payload"
+      ],
+      "qualifiedPath": [
+        "services_audit_log_service_model_snapshot",
+        "services_audit_log_service_sanitize_audit_payload"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/services/audit_log_service.py"
+      ],
+      "criticality": 0.285,
+      "warnings": []
+    },
+    {
       "id": "flow:tests_conftest_pg_engine",
       "name": "pg_engine",
       "entryPoint": "tests_conftest_pg_engine",
@@ -2935,6 +2957,30 @@
       "warnings": []
     },
     {
+      "id": "flow:services_audit_log_service_queue_audit_log",
+      "name": "queue_audit_log",
+      "entryPoint": "services_audit_log_service_queue_audit_log",
+      "entryPointId": "services_audit_log_service_queue_audit_log",
+      "path": [
+        "services_audit_log_service_queue_audit_log",
+        "services_audit_log_service_payload_json",
+        "services_audit_log_service_sanitize_audit_payload"
+      ],
+      "qualifiedPath": [
+        "services_audit_log_service_queue_audit_log",
+        "services_audit_log_service_payload_json",
+        "services_audit_log_service_sanitize_audit_payload"
+      ],
+      "depth": 2,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/services/audit_log_service.py"
+      ],
+      "criticality": 0.2533,
+      "warnings": []
+    },
+    {
       "id": "flow:services_email_service_send_reset_password_email",
       "name": "send_reset_password_email",
       "entryPoint": "services_email_service_send_reset_password_email",
@@ -3162,6 +3208,32 @@
         "app/services/graph_projection.py"
       ],
       "criticality": 0.2433,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_audit_log_service_safe_create_audit_log",
+      "name": "safe_create_audit_log",
+      "entryPoint": "services_audit_log_service_safe_create_audit_log",
+      "entryPointId": "services_audit_log_service_safe_create_audit_log",
+      "path": [
+        "services_audit_log_service_safe_create_audit_log",
+        "services_audit_log_service_create_audit_log",
+        "services_audit_log_service_payload_json",
+        "services_audit_log_service_sanitize_audit_payload"
+      ],
+      "qualifiedPath": [
+        "services_audit_log_service_safe_create_audit_log",
+        "services_audit_log_service_create_audit_log",
+        "services_audit_log_service_payload_json",
+        "services_audit_log_service_sanitize_audit_payload"
+      ],
+      "depth": 3,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/services/audit_log_service.py"
+      ],
+      "criticality": 0.2425,
       "warnings": []
     },
     {
@@ -8485,30 +8557,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_audit_log_service_safe_create_audit_log",
-      "name": "safe_create_audit_log",
-      "entryPoint": "services_audit_log_service_safe_create_audit_log",
-      "entryPointId": "services_audit_log_service_safe_create_audit_log",
-      "path": [
-        "services_audit_log_service_safe_create_audit_log",
-        "services_audit_log_service_create_audit_log",
-        "services_audit_log_service_payload_json"
-      ],
-      "qualifiedPath": [
-        "services_audit_log_service_safe_create_audit_log",
-        "services_audit_log_service_create_audit_log",
-        "services_audit_log_service_payload_json"
-      ],
-      "depth": 2,
-      "nodeCount": 3,
-      "fileCount": 1,
-      "files": [
-        "app/services/audit_log_service.py"
-      ],
-      "criticality": 0.17,
-      "warnings": []
-    },
-    {
       "id": "flow:services_hotel_outbound_email_service_send_hotel_email",
       "name": "send_hotel_email",
       "entryPoint": "services_hotel_outbound_email_service_send_hotel_email",
@@ -13123,6 +13171,28 @@
       "warnings": []
     },
     {
+      "id": "flow:agent_ops_normalize_graphify_portability_main",
+      "name": "main",
+      "entryPoint": "agent_ops_normalize_graphify_portability_main",
+      "entryPointId": "agent_ops_normalize_graphify_portability_main",
+      "path": [
+        "agent_ops_normalize_graphify_portability_main",
+        "agent_ops_normalize_graphify_portability_normalize_instruction_paths"
+      ],
+      "qualifiedPath": [
+        "agent_ops_normalize_graphify_portability_main",
+        "agent_ops_normalize_graphify_portability_normalize_instruction_paths"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "scripts/agent_ops/normalize_graphify_portability.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:agent_ops_sync_skills_main",
       "name": "main",
       "entryPoint": "agent_ops_sync_skills_main",
@@ -13536,28 +13606,6 @@
       "fileCount": 1,
       "files": [
         "app/tasks/ota_tasks.py"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_audit_log_service_queue_audit_log",
-      "name": "queue_audit_log",
-      "entryPoint": "services_audit_log_service_queue_audit_log",
-      "entryPointId": "services_audit_log_service_queue_audit_log",
-      "path": [
-        "services_audit_log_service_queue_audit_log",
-        "services_audit_log_service_payload_json"
-      ],
-      "qualifiedPath": [
-        "services_audit_log_service_queue_audit_log",
-        "services_audit_log_service_payload_json"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "app/services/audit_log_service.py"
       ],
       "criticality": 0.16,
       "warnings": []

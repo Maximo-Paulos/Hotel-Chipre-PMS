@@ -272,8 +272,8 @@
     "hash": "291e4af2ecf4067e9343f30fdeb1840a"
   },
   "app/api/guests.py": {
-    "mtime": 1784888108493.0024,
-    "hash": "8f0d62a9ded11b080940a205f4d81fb2"
+    "mtime": 1784945069708.762,
+    "hash": "f094f9906538f6e29384282d61bb46ee"
   },
   "app/api/health.py": {
     "mtime": 1784877814015.8738,
@@ -412,8 +412,8 @@
     "hash": "b1daa37a2a0567c2c7a6cd280e3a59b2"
   },
   "app/decorators/audit_hooks.py": {
-    "mtime": 1784862144877.0813,
-    "hash": "460f1e9f7bcce767e4bd27361f22c891"
+    "mtime": 1784945069709.3582,
+    "hash": "c78d47af90f4f0a514ed99b0a8c2116e"
   },
   "app/dependencies/__init__.py": {
     "mtime": 1784862144877.1465,
@@ -824,8 +824,8 @@
     "hash": "d7b9d59dd777aa1d207bb72b3df47e16"
   },
   "app/services/audit_log_service.py": {
-    "mtime": 1784862144883.0996,
-    "hash": "c94ced01965e1ce97b0a938d92e7ba3c"
+    "mtime": 1784945069709.0815,
+    "hash": "ed3834a7542d03b9f0cf9f50c90a5035"
   },
   "app/services/audit_projection.py": {
     "mtime": 1784862144883.148,
@@ -980,8 +980,8 @@
     "hash": "7d440d683bfed0c8b4b11aacdf55a93d"
   },
   "app/services/payment_link_test_service.py": {
-    "mtime": 1784862144885.774,
-    "hash": "75bc4e1186c1622d04ed0a4dbd1bf831"
+    "mtime": 1784943226109.269,
+    "hash": "25edc81baf3396843737e4debfb02910"
   },
   "app/services/payment_service.py": {
     "mtime": 1784890395103.1372,
@@ -992,8 +992,8 @@
     "hash": "0a3e8ba84ec2d5f30f11515cf6490f09"
   },
   "app/services/permission_service.py": {
-    "mtime": 1784908214775.416,
-    "hash": "22dcfef5723185c26a75245b516d2f23"
+    "mtime": 1784945069708.4604,
+    "hash": "188d6a0a91d33809b12dfd8d7948d26c"
   },
   "app/services/pricing_policy_service.py": {
     "mtime": 1784862144886.0344,
@@ -1408,12 +1408,12 @@
     "hash": "433753665e4d2e9a00e3c98b7e1b072e"
   },
   "frontend/src/ui/HotelSelector.tsx": {
-    "mtime": 1784897873586.3042,
-    "hash": "de48c6e1a48932ed4a87ad0154c3431e"
+    "mtime": 1784942811903.0242,
+    "hash": "e35a56dda76df0dd6f460d2bffa77ce5"
   },
   "frontend/src/ui/UserBadge.tsx": {
-    "mtime": 1784862144905.4778,
-    "hash": "8df9918cce38f156f88552d682153e0d"
+    "mtime": 1784942811903.2825,
+    "hash": "214473cbb8d76be840a8da1d39c66112"
   },
   "frontend/src/utils/currency.ts": {
     "mtime": 1784870397506.501,
@@ -1424,8 +1424,8 @@
     "hash": "8b8a75a93b9dcdb98ad6ad91aa0a4e80"
   },
   "frontend/src/views/protected/CashRegisterPage.tsx": {
-    "mtime": 1784872192111.624,
-    "hash": "9abe891202c281d79ed6f07c4a5a3a0c"
+    "mtime": 1784942475334.1797,
+    "hash": "c5ce9e4fef14c0eed34b0eada634e832"
   },
   "frontend/src/views/protected/CompaniesPage.tsx": {
     "mtime": 1784862144905.8489,
@@ -1508,8 +1508,8 @@
     "hash": "e14e293688410e14212d44329660c984"
   },
   "frontend/src/views/protected/analytics/AnalyticsPages.tsx": {
-    "mtime": 1784897437520.196,
-    "hash": "c219341b98e903564893676ed97e33f9"
+    "mtime": 1784919806517.6348,
+    "hash": "40877a394d240ebf2e13bba3d8569a97"
   },
   "frontend/src/views/public/AcceptInvitationPage.tsx": {
     "mtime": 1784862144907.3208,
@@ -1904,8 +1904,8 @@
     "hash": "dd15b44ac1742139f3cb54706f0d9b7e"
   },
   "tests/test_payment_link_service.py": {
-    "mtime": 1784862144934.2195,
-    "hash": "57ac13488ff5a2fd6086f701240d6eba"
+    "mtime": 1784943217891.8735,
+    "hash": "df99931af19835518e8d416c6b5ca2df"
   },
   "tests/test_payment_links_api.py": {
     "mtime": 1784862144934.262,
@@ -2828,8 +2828,8 @@
     "hash": "16edea12dd11a133dc0e220e02a28a35"
   },
   "scripts/agent_ops/normalize_graphify_portability.py": {
-    "mtime": 1784862144921.8542,
-    "hash": "b252ad5584d6cda38f466722b3975a3c"
+    "mtime": 1784944967431.5461,
+    "hash": "bc493a85c62fee8d3c0c02c44570226a"
   },
   "scripts/agent_ops/check_cloud_surface_config.py": {
     "mtime": 1784862144920.1113,
@@ -3264,8 +3264,8 @@
     "hash": "8e2277e0fc399686b86f61f02ef68f93"
   },
   ".graphify/GRAPH_REPORT.md": {
-    "mtime": 1784907839444.4333,
-    "hash": "ec8bc5e2699e46cc1a7dba5f0a4697cc"
+    "mtime": 1784942904017.6448,
+    "hash": "9bac07e7fc70f3e2239229d551bcb8a8"
   },
   "scripts/agent_ops/manage_qa_baseline_lease.py": {
     "mtime": 1784862144921.6997,
@@ -3356,12 +3356,12 @@
     "hash": "11bf9583c0a905deb7f7e760df835718"
   },
   "frontend/e2e/responsive-smoke.spec.ts": {
-    "mtime": 1784903318864.6018,
-    "hash": "0417fd101669a65cc4d6657a983ba143"
+    "mtime": 1784942750695.8025,
+    "hash": "c249391e5ad55f9d8b4f876690cc2d5d"
   },
   "docs/qa/2026-07-24-pms-e2e-status.md": {
-    "mtime": 1784913608798.002,
-    "hash": "52bf3eb83aec1874a9cf0ced8669d607"
+    "mtime": 1784944646167.6904,
+    "hash": "e9079d9e9f1305995d60dc9586181479"
   },
   "frontend/e2e/business-journey.spec.ts": {
     "mtime": 1784904324073.8352,
@@ -3540,16 +3540,16 @@
     "hash": "2bf0ac0f6a25bcf01b274e739ef3812f"
   },
   "frontend/e2e/analytics-success.spec.ts": {
-    "mtime": 1784905959850.3464,
-    "hash": "7a2b372bb8462662cb848825578ab686"
+    "mtime": 1784919774721.3276,
+    "hash": "3cbd1fc267c2817165b15bde8fad7137"
   },
   "frontend/e2e/guest-companion-journey.spec.ts": {
     "mtime": 1784906901080.6172,
     "hash": "76330f364d90aa0bfa88aee681ca4e76"
   },
   "frontend/e2e/zz-cash-control-journey.spec.ts": {
-    "mtime": 1784907574571.593,
-    "hash": "9b930342c62b4eac64feab93874e59a6"
+    "mtime": 1784942442130.4006,
+    "hash": "2ede3e220976fceb90baabd24e81757d"
   },
   "alembic/versions/20260724_billing_adjustment_enum_values.py": {
     "mtime": 1784908575694.974,
@@ -3562,5 +3562,17 @@
   "tests/test_reservation_charges.py": {
     "mtime": 1784908182250.0127,
     "hash": "daba3c644fdb1f18f7a767a40deb96e3"
+  },
+  "tests/test_guest_audit_pii.py": {
+    "mtime": 1784945118030.0215,
+    "hash": "0f1716f17c43890c40423f8c24064ca5"
+  },
+  "tests/test_guest_export_security.py": {
+    "mtime": 1784944970033.924,
+    "hash": "c3ad6097f4847631a7b629772c955fda"
+  },
+  "tests/test_normalize_graphify_portability.py": {
+    "mtime": 1784945238140.6448,
+    "hash": "f7ba2484b7a09c81069f711a33ec4b6e"
   }
 }
