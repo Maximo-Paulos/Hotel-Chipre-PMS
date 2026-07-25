@@ -1092,8 +1092,8 @@
     "hash": "efd8e6db82a493985c8df57c1cd3ef47"
   },
   "frontend/e2e/smoke.spec.ts": {
-    "mtime": 1784862144897.86,
-    "hash": "d34d02bfc8084c072837ed4a9a20fe8a"
+    "mtime": 1784948805923.044,
+    "hash": "013b7f24e73bfa1cec329176bdc11bf3"
   },
   "frontend/e2e/v72-pages.spec.ts": {
     "mtime": 1784866834505.0403,
@@ -1524,8 +1524,8 @@
     "hash": "240fcd9e7a64282b896ccc2cb204eec0"
   },
   "frontend/src/views/public/LoginPage.tsx": {
-    "mtime": 1784862144907.5435,
-    "hash": "ecc362ab878582d19776a4504ec207b4"
+    "mtime": 1784948838597.0334,
+    "hash": "e86edf9415e5a2ed8310ba8cb3a3bdf9"
   },
   "frontend/src/views/public/MarketingHomePage.tsx": {
     "mtime": 1784862144907.6074,
