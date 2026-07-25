@@ -41,6 +41,8 @@ test("owner controls manual cash movements, approves an arqueo difference and co
   }
 
   const movementForm = page.locator("form").filter({ hasText: "Registrar movimiento" });
+  await expect(movementForm.getByText("Reserva ID", { exact: true })).not.toBeVisible();
+  await expect(movementForm.getByText("Transaccion ID", { exact: true })).not.toBeVisible();
   await movementForm.getByText("Tipo", { exact: true }).locator("..").locator("select").selectOption("income");
   await movementForm.getByText("Importe", { exact: true }).locator("..").locator("input").fill("500");
   await movementForm.getByText("Descripcion", { exact: true }).locator("..").locator("input").fill("Venta de minibar");

@@ -15,9 +15,7 @@ import { useSession } from "../../state/session";
 const emptyMovementForm: CashMovementPayload = {
   movement_type: "income",
   amount: 0,
-  description: "",
-  reservation_id: null,
-  transaction_id: null
+  description: ""
 };
 
 const money = (value?: number | string | null, currency = "ARS") =>
@@ -106,9 +104,7 @@ export function CashRegisterPage() {
       await mutations.addMovementMutation.mutateAsync({
         ...movementForm,
         amount: Number(movementForm.amount),
-        description: movementForm.description?.trim() || null,
-        reservation_id: movementForm.reservation_id ? Number(movementForm.reservation_id) : null,
-        transaction_id: movementForm.transaction_id ? Number(movementForm.transaction_id) : null
+        description: movementForm.description?.trim() || null
       });
       setMovementForm(emptyMovementForm);
       setMessage("Movimiento registrado.");
@@ -318,26 +314,6 @@ export function CashRegisterPage() {
                   step="0.01"
                   value={movementForm.amount || ""}
                   onChange={(event) => setMovementForm((current) => ({ ...current, amount: Number(event.target.value) }))}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2"
-                />
-              </label>
-              <label className="space-y-1 text-sm">
-                <span className="text-slate-600">Reserva ID</span>
-                <input
-                  type="number"
-                  min={1}
-                  value={movementForm.reservation_id ?? ""}
-                  onChange={(event) => setMovementForm((current) => ({ ...current, reservation_id: event.target.value ? Number(event.target.value) : null }))}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2"
-                />
-              </label>
-              <label className="space-y-1 text-sm">
-                <span className="text-slate-600">Transaccion ID</span>
-                <input
-                  type="number"
-                  min={1}
-                  value={movementForm.transaction_id ?? ""}
-                  onChange={(event) => setMovementForm((current) => ({ ...current, transaction_id: event.target.value ? Number(event.target.value) : null }))}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2"
                 />
               </label>
