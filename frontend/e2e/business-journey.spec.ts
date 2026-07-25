@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page, type TestInfo } from "@playwright/test";
 
 const credentials = {
   email: process.env.E2E_OWNER_EMAIL || "owner@e2e.com",
@@ -10,6 +10,20 @@ const localIsoDate = (offsetDays: number) => {
   value.setDate(value.getDate() + offsetDays);
   const pad = (part: number) => String(part).padStart(2, "0");
   return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
+};
+
+// The 3 webkit-*-business Apple device projects share one SQLite database
+// and run this exact spec concurrently, promoting the same pre-seeded
+// "Huesped E2E" guest into room 101 for the same relative dates. A
+// per-project date salt gives each device project its own calendar days so
+// the room booking can never race and each project's own promoted
+// reservation stays uniquely identifiable for cleanup.
+const projectDateSalt = (testInfo: TestInfo) => {
+  const name = testInfo.project.name;
+  if (name.includes("pro-max")) return 300;
+  if (name.includes("iphone-se")) return 200;
+  if (name.includes("iphone-15")) return 100;
+  return 0;
 };
 
 async function login(page: Page) {
@@ -53,10 +67,30 @@ test("owner completes the core reservation journey through the UI", async ({ pag
 
   await login(page);
 
+  // Closing a cash session always opens a new successor session
+  // (see close_session() in app/services/cash_register_service.py), so a
+  // prior device project's/spec's run of this journey (or any other cash
+  // activity) against the shared E2E database can leave one already open.
+  // Reuse it instead of assuming "Abrir caja" is always the first move.
+  // The "Abrir caja" button starts enabled optimistically and only flips to
+  // "Ya hay una caja abierta" once GET /api/cash-register/sessions resolves
+  // (CashRegisterPage derives openSession from an initially-empty sessions
+  // array), so wait for that response before reading the button state --
+  // otherwise the decision (and the click right after) can race the real
+  // data and target a button that is about to disappear.
+  const sessionsResponse = page.waitForResponse(
+    (response) => response.url().includes("/api/cash-register/sessions") && response.request().method() === "GET"
+  );
   await navigateFromShell(page, "/caja");
+  await sessionsResponse;
   const openingForm = page.locator("form").filter({ hasText: "Saldo inicial" }).filter({ hasText: "Abrir caja" });
-  await openingForm.getByRole("button", { name: "Abrir caja", exact: true }).click();
-  await expect(page.getByText("Caja abierta.", { exact: true })).toBeVisible();
+  const openButton = openingForm.getByRole("button", { name: "Abrir caja", exact: true });
+  if (await openButton.isVisible().catch(() => false)) {
+    await openButton.click();
+    await expect(page.getByText("Caja abierta.", { exact: true })).toBeVisible();
+  } else {
+    await expect(page.getByRole("button", { name: "Ya hay una caja abierta", exact: true })).toBeVisible();
+  }
 
   await navigateFromShell(page, "/settings/hotel");
   await expect(page.getByRole("heading", { name: "Hotel", exact: true })).toBeVisible();
@@ -384,10 +418,14 @@ test("owner manages a room move and no-show from the reservation ficha", async (
   await expect(detailsModal).toContainText("No-show");
 });
 
-test("owner operates waitlist, housekeeping, laundry and daily reports", async ({ page }) => {
-  const suffix = Date.now().toString();
-  const checkIn = localIsoDate(20);
-  const checkOut = localIsoDate(22);
+test("owner operates waitlist, housekeeping, laundry and daily reports", async ({ page }, testInfo) => {
+  const salt = projectDateSalt(testInfo);
+  // WebKit clamps Date.now() precision, so concurrent device projects can
+  // get the exact same millisecond suffix. Append the (already per-project
+  // unique) date salt to keep the waitlist note text unique too.
+  const suffix = `${Date.now()}-${salt}`;
+  const checkIn = localIsoDate(20 + salt);
+  const checkOut = localIsoDate(22 + salt);
 
   await login(page);
 
@@ -475,4 +513,22 @@ test("owner operates waitlist, housekeeping, laundry and daily reports", async (
   await reportResponse;
   await expect(page.getByText("Estado operativo", { exact: true })).toBeVisible();
   await expect(page.getByText("Riesgos operativos", { exact: true })).toBeVisible();
+
+  // Cleanup: the waitlist promotion above pins room 101 for
+  // localIsoDate(20..22). The WebKit Apple business matrix reruns this exact
+  // spec once per device project against the shared database, so leaving
+  // this reservation pending would make the next device run fail room
+  // availability with a false "Room 101 is not available" negative.
+  await navigateFromShell(page, "/reservas");
+  const reservationsTable = page.locator("table").filter({ hasText: "Código" });
+  // Filter by check-in date too: the 3 concurrent device projects promote
+  // the same "Huesped E2E" guest, so the guest name alone is not unique
+  // while all 3 runs are in flight against the shared database.
+  const promotedRow = reservationsTable
+    .locator("tbody tr")
+    .filter({ hasText: "Huesped E2E" })
+    .filter({ hasText: checkIn });
+  await expect(promotedRow).toHaveCount(1);
+  await promotedRow.getByRole("button", { name: "Cancelar", exact: true }).click();
+  await expect(page.getByText("Reserva cancelada", { exact: true })).toBeVisible();
 });

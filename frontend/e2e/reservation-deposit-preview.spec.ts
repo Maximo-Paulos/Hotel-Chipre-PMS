@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page, type TestInfo } from "@playwright/test";
 
 // Fase 3 (reservas y tarifas): el precio y la seña que se muestran antes de
 // confirmar una reserva tienen que coincidir EXACTAMENTE con lo que termina
@@ -17,6 +17,19 @@ const localIsoDate = (offsetDays: number) => {
   return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
 };
 
+// The 3 webkit-*-business Apple device projects share one SQLite database
+// and run this exact spec concurrently, pinning the same room 101 for the
+// same relative dates. A per-project date salt gives each device project
+// its own calendar days so the room booking can never race, instead of
+// relying on timing between a create and a later cleanup cancel.
+const projectDateSalt = (testInfo: TestInfo) => {
+  const name = testInfo.project.name;
+  if (name.includes("pro-max")) return 300;
+  if (name.includes("iphone-se")) return 200;
+  if (name.includes("iphone-15")) return 100;
+  return 0;
+};
+
 async function login(page: Page) {
   await page.goto("/login");
   await page.locator('input[type="email"]').fill(credentials.email);
@@ -25,13 +38,18 @@ async function login(page: Page) {
   await page.waitForURL("**/dashboard", { timeout: 15_000 });
 }
 
-test("QA- default hotel deposit shown before confirming matches the deposit stored on the reservation", async ({
-  page
-}) => {
-  const suffix = Date.now().toString();
+test("QA- default hotel deposit shown before confirming matches the deposit stored on the reservation", async (
+  { page },
+  testInfo
+) => {
+  const salt = projectDateSalt(testInfo);
+  // WebKit clamps Date.now() precision, so concurrent device projects can
+  // get the exact same millisecond suffix. Append the (already per-project
+  // unique) date salt to keep guest names/document numbers unique too.
+  const suffix = `${Date.now()}-${salt}`;
   const guestLastName = `QA-Deposit ${suffix}`;
-  const checkIn = localIsoDate(90);
-  const checkOut = localIsoDate(92);
+  const checkIn = localIsoDate(90 + salt);
+  const checkOut = localIsoDate(92 + salt);
 
   await login(page);
   await page.goto("/reservas");
@@ -95,4 +113,14 @@ test("QA- default hotel deposit shown before confirming matches the deposit stor
   // El monto de seña mostrado ANTES de confirmar tiene que ser exactamente el
   // mismo que terminó grabado en la reserva (mismo formato, mismo valor).
   await expect(depositRequiredCell).toHaveText(previewedDepositText);
+
+  // Cleanup: this test pins room 101 for localIsoDate(90..92). The WebKit
+  // Apple business matrix reruns this exact spec once per device project
+  // against the shared database, so leaving this reservation pending would
+  // make the next device run fail room availability with a false "Room 101
+  // is not available for the requested dates" negative.
+  await editForm.getByRole("button", { name: "Cancelar", exact: true }).click();
+  await expect(editForm).toBeHidden();
+  await reservationRow.getByRole("button", { name: "Cancelar", exact: true }).click();
+  await expect(page.getByText("Reserva cancelada", { exact: true })).toBeVisible();
 });

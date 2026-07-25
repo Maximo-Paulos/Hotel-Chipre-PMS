@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page, type TestInfo } from "@playwright/test";
 
 const credentials = {
   email: process.env.E2E_OWNER_EMAIL || "owner@e2e.com",
@@ -10,6 +10,19 @@ const localIsoDate = (offsetDays: number) => {
   value.setDate(value.getDate() + offsetDays);
   const pad = (part: number) => String(part).padStart(2, "0");
   return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
+};
+
+// The 3 webkit-*-business Apple device projects share one SQLite database
+// and run this exact spec concurrently, pinning the same room 101 for the
+// same relative dates. A per-project date salt gives each device project
+// its own calendar days so the room booking can never race, instead of
+// relying on timing between a create and a later cleanup cancel.
+const projectDateSalt = (testInfo: TestInfo) => {
+  const name = testInfo.project.name;
+  if (name.includes("pro-max")) return 300;
+  if (name.includes("iphone-se")) return 200;
+  if (name.includes("iphone-15")) return 100;
+  return 0;
 };
 
 async function login(page: Page) {
@@ -95,13 +108,20 @@ test("owner preserves availability dates after querying a category", async ({ pa
   await expect(checkOutField).toHaveValue(checkOut);
 });
 
-test("owner edits, extends, rejects an overlap and cancels a reservation", async ({ page }) => {
-  const suffix = `${Date.now()}`;
+test("owner edits, extends, rejects an overlap and cancels a reservation", async ({ page }, testInfo) => {
+  const salt = projectDateSalt(testInfo);
+  // WebKit clamps Date.now() precision, so concurrent device projects can
+  // get the exact same millisecond suffix. Append the (already per-project
+  // unique) date salt to keep guest names unique too.
+  const suffix = `${Date.now()}-${salt}`;
   const guestLastName = `Lifecycle ${suffix}`;
   const conflictGuestLastName = `Conflict ${suffix}`;
-  const checkIn = localIsoDate(60);
-  const originalCheckOut = localIsoDate(62);
-  const extendedCheckOut = localIsoDate(64);
+  // Offset 150, not 60: payment-journey-full-matrix.spec.ts pins room-agnostic
+  // reservations across localIsoDate(60..70) and never cancels them, so that
+  // range is permanently occupied for the rest of a full chromium run.
+  const checkIn = localIsoDate(150 + salt);
+  const originalCheckOut = localIsoDate(152 + salt);
+  const extendedCheckOut = localIsoDate(154 + salt);
 
   await login(page);
   await openReservationForm(page, guestLastName, checkIn, originalCheckOut);
@@ -119,9 +139,13 @@ test("owner edits, extends, rejects an overlap and cancels a reservation", async
   await expect(page.getByText("Reserva actualizada", { exact: true })).toBeVisible();
   await expect(reservationTable.locator("tbody tr").filter({ hasText: guestLastName })).toContainText(extendedCheckOut);
 
-  const conflictForm = await openReservationForm(page, conflictGuestLastName, localIsoDate(61), localIsoDate(63), {
-    expectCreated: false
-  });
+  const conflictForm = await openReservationForm(
+    page,
+    conflictGuestLastName,
+    localIsoDate(151 + salt),
+    localIsoDate(153 + salt),
+    { expectCreated: false }
+  );
   const conflictModal = page.locator("div.fixed").filter({ hasText: "Datos de la reserva" });
   const conflictError = conflictModal.getByText(/Room 101 is not available for the requested dates/i);
   await expect(conflictError).toBeVisible();
@@ -135,17 +159,27 @@ test("owner edits, extends, rejects an overlap and cancels a reservation", async
   await expect(reservationTable.locator("tbody tr").filter({ hasText: guestLastName })).toContainText("Cancelada");
 });
 
-test("editing a reservation cannot silently no-op a category/status change through disabled fields", async ({ page }) => {
+test("editing a reservation cannot silently no-op a category/status change through disabled fields", async (
+  { page },
+  testInfo
+) => {
   // Bug real: PATCH /api/reservations/{id} no tiene campos category_id ni
   // status (ver ReservationUpdate en app/schemas/reservation.py), asi que el
   // backend los ignora en silencio y devuelve 200. El selector "Categoria" y
   // "Estado" del formulario de edicion tenian que estar deshabilitados para
   // no sugerir una accion que no hace nada; el cambio de huespedes (un campo
   // que si persiste) tiene que seguir funcionando en el mismo formulario.
-  const suffix = `${Date.now()}`;
+  const salt = projectDateSalt(testInfo);
+  // WebKit clamps Date.now() precision, so concurrent device projects can
+  // get the exact same millisecond suffix. Append the (already per-project
+  // unique) date salt to keep guest names unique too.
+  const suffix = `${Date.now()}-${salt}`;
   const guestLastName = `QA-EditLock ${suffix}`;
-  const checkIn = localIsoDate(70);
-  const checkOut = localIsoDate(72);
+  // Offset 160, not 70: payment-journey-full-matrix.spec.ts pins room-agnostic
+  // reservations across localIsoDate(60..70) and never cancels them, so that
+  // range is permanently occupied for the rest of a full chromium run.
+  const checkIn = localIsoDate(160 + salt);
+  const checkOut = localIsoDate(162 + salt);
 
   await login(page);
   await openReservationForm(page, guestLastName, checkIn, checkOut);
@@ -174,4 +208,12 @@ test("editing a reservation cannot silently no-op a category/status change throu
   // estado sigue siendo "Pendiente" (no quedo en un estado inconsistente por
   // un control que nunca debio ofrecerse como editable).
   await expect(reservationRow).toContainText("Pendiente");
+
+  // Cleanup: this test pins room 101 for localIsoDate(160..162). The WebKit
+  // Apple business matrix reruns this exact spec once per device project
+  // against the shared database, so leaving this reservation pending would
+  // make the next device run fail room availability with a false "Room 101
+  // is not available for the requested dates" negative.
+  await reservationRow.getByRole("button", { name: "Cancelar", exact: true }).click();
+  await expect(page.getByText("Reserva cancelada", { exact: true })).toBeVisible();
 });

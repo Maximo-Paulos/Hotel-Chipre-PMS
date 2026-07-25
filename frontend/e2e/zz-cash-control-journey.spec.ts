@@ -106,4 +106,8 @@ test("receptionist can close cash with a difference but cannot approve it", asyn
   await expect(page.getByText("Caja cerrada.", { exact: true })).toBeVisible();
   await expect(page.getByText(/Estado: pendiente de aprobacion/, { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Aprobar diferencia", exact: true })).toHaveCount(0);
+  // No cleanup needed: close_session() always opens a new successor session
+  // regardless of whether this difference gets approved (see
+  // app/services/cash_register_service.py), so leaving it pending here
+  // doesn't block the next test from opening/using cash.
 });
