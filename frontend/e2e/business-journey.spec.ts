@@ -256,6 +256,41 @@ test("owner completes guided stock movements through the UI", async ({ page }) =
   await expect(movementForm.getByRole("button", { name: "Registrar Egreso", exact: true })).toBeDisabled();
 });
 
+test("owner sees an actionable error when a housekeeping status change fails", async ({ page }) => {
+  await login(page);
+  await navigateFromShell(page, "/habitaciones");
+
+  const roomCard = page.getByText("Hab. 101", { exact: true }).first().locator("..").locator("..").locator("..");
+  const statusSelect = roomCard.locator("select");
+  await expect(statusSelect).toHaveValue("available");
+
+  await page.route("**/api/rooms/*/status", async (route) => {
+    await route.fulfill({
+      status: 503,
+      contentType: "application/json",
+      body: JSON.stringify({ detail: "Reasignación temporalmente no disponible" })
+    });
+  });
+
+  await statusSelect.selectOption("cleaning");
+  await expect(roomCard.getByRole("alert")).toContainText("Reasignación temporalmente no disponible");
+  await expect(statusSelect).toHaveValue("available");
+});
+
+test("owner can complete a housekeeping cleaning cycle", async ({ page }) => {
+  await login(page);
+  await navigateFromShell(page, "/habitaciones");
+
+  const roomCard = page.getByText("Hab. 101", { exact: true }).first().locator("..").locator("..").locator("..");
+  const statusSelect = roomCard.locator("select");
+  await expect(statusSelect).toHaveValue("available");
+
+  await statusSelect.selectOption("cleaning");
+  await expect(statusSelect).toHaveValue("cleaning");
+  await statusSelect.selectOption("available");
+  await expect(statusSelect).toHaveValue("available");
+});
+
 test("owner manages a room move and no-show from the reservation ficha", async ({ page }) => {
   const suffix = Date.now().toString();
   const categoryName = `Operación ${suffix}`;

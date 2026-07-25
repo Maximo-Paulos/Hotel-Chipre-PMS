@@ -44,6 +44,7 @@ export function RoomsPage() {
   const categories = useMemo(() => categoriesQuery.data || [], [categoriesQuery.data]);
   const activeBlocks = useMemo(() => blocksQuery.data || [], [blocksQuery.data]);
   const [pendingRoom, setPendingRoom] = useState<number | null>(null);
+  const [roomStatusError, setRoomStatusError] = useState<{ roomId: number; message: string } | null>(null);
   const [pendingBlockId, setPendingBlockId] = useState<number | null>(null);
   const [blockForm, setBlockForm] = useState<BlockFormValues>(() => emptyBlockForm());
   const [blockMessage, setBlockMessage] = useState<string | null>(null);
@@ -89,10 +90,15 @@ export function RoomsPage() {
 
   const handleStatusUpdate = (roomId: number, status: RoomStatus) => {
     if (actionsBlocked) return;
+    setRoomStatusError(null);
     setPendingRoom(roomId);
     updateStatusMutation.mutate(
       { roomId, status },
       {
+        onError: (error: unknown) => {
+          const detail = error instanceof Error ? error.message : "No se pudo actualizar el estado de la habitación.";
+          setRoomStatusError({ roomId, message: detail });
+        },
         onSettled: () => setPendingRoom(null)
       }
     );
@@ -227,6 +233,11 @@ export function RoomsPage() {
                   </select>
                   {pendingRoom === room.id && updateStatusMutation.isPending && (
                     <p className="mt-2 text-xs text-slate-500">Guardando...</p>
+                  )}
+                  {roomStatusError?.roomId === room.id && (
+                    <p role="alert" className="mt-2 text-xs text-rose-700">
+                      No se pudo actualizar el estado: {roomStatusError.message}
+                    </p>
                   )}
                 </div>
               </div>

@@ -1456,8 +1456,8 @@
     "hash": "0e6dd0506ed357ee14fb005691c2fdcc"
   },
   "frontend/src/views/protected/RoomsPage.tsx": {
-    "mtime": 1784862144906.3872,
-    "hash": "86ad862bd5904d7e996030c1c48dcbe3"
+    "mtime": 1784959964588.292,
+    "hash": "ebd072b4aeae15fd7e19048744937b66"
   },
   "frontend/src/views/protected/SettingsApiKeysPage.tsx": {
     "mtime": 1784862144906.4473,
@@ -2828,8 +2828,8 @@
     "hash": "16edea12dd11a133dc0e220e02a28a35"
   },
   "scripts/agent_ops/normalize_graphify_portability.py": {
-    "mtime": 1784944967431.5461,
-    "hash": "bc493a85c62fee8d3c0c02c44570226a"
+    "mtime": 1784959147715.807,
+    "hash": "867d97ffe7d057a99ced4476ea9a6625"
   },
   "scripts/agent_ops/check_cloud_surface_config.py": {
     "mtime": 1784862144920.1113,
@@ -3360,12 +3360,12 @@
     "hash": "62dbb2f1b3275714d02208beba14f74c"
   },
   "docs/qa/2026-07-24-pms-e2e-status.md": {
-    "mtime": 1784958620512.421,
-    "hash": "a2d0859ab2b2a089193fa7dc9a88acf7"
+    "mtime": 1784959383309.7952,
+    "hash": "6c6ac15ede5f33ded16c944491cd73d7"
   },
   "frontend/e2e/business-journey.spec.ts": {
-    "mtime": 1784958956319.2368,
-    "hash": "e39e2be0d1b49f3bad07b08d2e21d297"
+    "mtime": 1784960033350.3386,
+    "hash": "d194cec44c420f2cb654563c08e929bc"
   },
   "alembic/versions/20260724_allocation_enum_values.py": {
     "mtime": 1784868257342.7349,
