@@ -344,8 +344,8 @@
     "hash": "de09f11139cc84b783d8719f34bb7cdb"
   },
   "app/api/reservations.py": {
-    "mtime": 1785009944901.9758,
-    "hash": "f26af7daee9b8b233706698d0915bf34"
+    "mtime": 1785010729398.1606,
+    "hash": "18a0f5d061cef98fff07964170ac2612"
   },
   "app/api/room_blocks.py": {
     "mtime": 1784862144875.9834,
@@ -592,8 +592,8 @@
     "hash": "f7ea267c87b9f3f71f836948a2472136"
   },
   "app/models/reservation.py": {
-    "mtime": 1785009944902.1792,
-    "hash": "61f71cd26a47974902f73ad2c204faa3"
+    "mtime": 1785011043559.7183,
+    "hash": "28d44043e0e8de774a688fd382cb3527"
   },
   "app/models/room.py": {
     "mtime": 1784880440958.4983,
@@ -736,8 +736,8 @@
     "hash": "f3f112757ae3676ee43734231e6fa98c"
   },
   "app/schemas/reservation_operations.py": {
-    "mtime": 1784908223262.128,
-    "hash": "61e2e3b9c05da1bb5a03df36f872800a"
+    "mtime": 1785010666523.8796,
+    "hash": "9b5921cbdc024b4b95ed64944f92db82"
   },
   "app/schemas/room.py": {
     "mtime": 1784862144881.7388,
@@ -1020,8 +1020,8 @@
     "hash": "b40820b9c90889625c33322d978b8871"
   },
   "app/services/reservation_service.py": {
-    "mtime": 1785009944902.409,
-    "hash": "04fbf4664acaab1539e689fd347ababe"
+    "mtime": 1785010705126.0984,
+    "hash": "da272c2c5988d0d237311f971b2740e4"
   },
   "app/services/room_block_service.py": {
     "mtime": 1784889349962.5137,
@@ -1192,8 +1192,8 @@
     "hash": "ef6f8c58b53e1909c0844e94c1659942"
   },
   "frontend/src/api/reservations.ts": {
-    "mtime": 1785009944902.8406,
-    "hash": "2f96e6500456fa51d4d7828aeab0c52b"
+    "mtime": 1785011206122.5234,
+    "hash": "1e9e999cba9ecd1b059f3fbf6fb80fa0"
   },
   "frontend/src/api/roomBlocks.ts": {
     "mtime": 1784862144902.3428,
@@ -1336,8 +1336,8 @@
     "hash": "b9fc3178cad7e0fc8e1c321d2fe82c46"
   },
   "frontend/src/hooks/useReservations.ts": {
-    "mtime": 1785007496308.3813,
-    "hash": "eea810173a28a651c730488116944b2b"
+    "mtime": 1785011249600.3,
+    "hash": "1c2a3e20f371c72f461bb88ecd63c417"
   },
   "frontend/src/hooks/useRoomBlocks.ts": {
     "mtime": 1784862144904.3977,
@@ -1396,16 +1396,16 @@
     "hash": "08799d0a79606bc067b2b8eb3753ed53"
   },
   "frontend/src/router.tsx": {
-    "mtime": 1784862144905.16,
-    "hash": "453141f7b220f17c0b7bf56568a12a1f"
+    "mtime": 1785011355278.5725,
+    "hash": "e40d1eb8ce64e60ba807115c929e9ae5"
   },
   "frontend/src/state/session.tsx": {
     "mtime": 1784862144905.2417,
     "hash": "080f58a661cb1eb1b0f8ae7c84334f59"
   },
   "frontend/src/ui/AppShell.tsx": {
-    "mtime": 1785007629364.604,
-    "hash": "3300bd798f32a9c71889e9b1f122e1a6"
+    "mtime": 1785011364795.798,
+    "hash": "0b3888c1250767ffaa72dd20d181a91a"
   },
   "frontend/src/ui/HotelSelector.tsx": {
     "mtime": 1784942811903.0242,
@@ -3660,8 +3660,8 @@
     "hash": "caf5b610c17ce3aece6cad1706783e58"
   },
   "tests/test_cross_hotel_id_collision_api.py": {
-    "mtime": 1784996262937.751,
-    "hash": "df979ab07636646212c20886d26eab2e"
+    "mtime": 1785010790746.3872,
+    "hash": "99987fb4c5b9bfcd7c8fd3a211ddecaf"
   },
   "alembic/versions/20260725_transaction_created_by_user.py": {
     "mtime": 1784997731812.4312,
@@ -3706,5 +3706,25 @@
   "tests/test_reservation_listing.py": {
     "mtime": 1785009463896.1904,
     "hash": "9e9a961b6a2877ed39ad09af7d0391a6"
+  },
+  "alembic/versions/20260725_reservation_hotel_room_dates_index.py": {
+    "mtime": 1785011052114.7861,
+    "hash": "ffee891b2482c67032b2227dd264219e"
+  },
+  "frontend/e2e/occupancy-grid-journey.spec.ts": {
+    "mtime": 1785011605069.6592,
+    "hash": "9e0da9683c44551ae293c776d63defe0"
+  },
+  "frontend/src/components/OccupancyGrid.tsx": {
+    "mtime": 1785011317134.3577,
+    "hash": "ade574fc4cc83da95ce64dad3f0f220e"
+  },
+  "frontend/src/views/protected/OccupancyPlanningPage.tsx": {
+    "mtime": 1785011340412.3066,
+    "hash": "ed023e53b6df30a1b21f3885dbf6fad1"
+  },
+  "tests/test_occupancy_grid.py": {
+    "mtime": 1785010892113.4749,
+    "hash": "2656a433fc062a0ce1edfe6c09817e7c"
   }
 }

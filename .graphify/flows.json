@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-25T20:08:46.639Z",
+  "generatedAt": "2026-07-25T20:42:11.460Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -3034,6 +3034,30 @@
       "fileCount": 1,
       "files": [
         "app/services/email_service.py"
+      ],
+      "criticality": 0.2533,
+      "warnings": []
+    },
+    {
+      "id": "flow:hooks_usereservations_useoccupancygrid",
+      "name": "useOccupancyGrid",
+      "entryPoint": "hooks_usereservations_useoccupancygrid",
+      "entryPointId": "hooks_usereservations_useoccupancygrid",
+      "path": [
+        "hooks_usereservations_useoccupancygrid",
+        "hooks_usereservations_occupancygridqueryoptions",
+        "hooks_usereservations_occupancygridkey"
+      ],
+      "qualifiedPath": [
+        "hooks_usereservations_useoccupancygrid",
+        "hooks_usereservations_occupancygridqueryoptions",
+        "hooks_usereservations_occupancygridkey"
+      ],
+      "depth": 2,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/hooks/useReservations.ts"
       ],
       "criticality": 0.2533,
       "warnings": []

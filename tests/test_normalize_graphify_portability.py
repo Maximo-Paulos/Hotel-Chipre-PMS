@@ -25,6 +25,7 @@ def test_normalizes_generated_instruction_paths_without_touching_external_paths(
                 "nodes": [
                     {"label": "/api/reservations"},
                     {"label": "/opt/graphify/external.json"},
+                    {"message_summary": "feat: add page at /operacion/planilla"},
                 ]
             }
         ),
@@ -50,8 +51,12 @@ def test_normalizes_generated_instruction_paths_without_touching_external_paths(
 
     assert normalize_graphify_portability.main() == 0
 
-    labels = [node["label"] for node in json.loads(graph.read_text(encoding="utf-8"))["nodes"]]
-    assert labels == ["api/reservations", "/opt/graphify/external.json"]
+    nodes = json.loads(graph.read_text(encoding="utf-8"))["nodes"]
+    assert nodes[0]["label"] == "api/reservations"
+    assert nodes[1]["label"] == "/opt/graphify/external.json"
+    # Commit-message text ingested as message_summary also gets its known
+    # app-route prefix normalized, same as a code-derived label.
+    assert nodes[2]["message_summary"] == "feat: add page at operacion/planilla"
     assert json.loads(flows.read_text(encoding="utf-8"))["graphPath"] == ".graphify/graph.json"
     assert description.read_text(encoding="utf-8") == (
         "Write output to: .graphify/description-instructions/batch.json\n"
