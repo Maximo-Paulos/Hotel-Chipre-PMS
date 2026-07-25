@@ -44,7 +44,12 @@ const baseNav: NavSection[] = [
     title: "Operacion",
     items: [
       { label: "Dashboard", to: "/dashboard" },
+      // Planilla sits right after Reservas -- it's the daily-use ocupacion
+      // view a receptionist reaches for constantly. Tarifas (precios, not
+      // ocupacion) stays lower with the less-daily operational tools so the
+      // two aren't picked by accident.
       { label: "Reservas", to: "/reservas" },
+      { label: "Planilla", to: "/operacion/planilla", requiresRole: ["owner", "co_owner", "manager", "housekeeping", "receptionist"] },
       { label: "Huespedes", to: "/huespedes" },
       { label: "Habitaciones", to: "/habitaciones" },
       { label: "Caja", to: "/caja", requiresRole: ["owner", "co_owner", "manager", "receptionist"] },

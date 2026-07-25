@@ -22,6 +22,7 @@ import { CompaniesPage } from "./views/protected/CompaniesPage";
 import { DashboardPage } from "./views/protected/DashboardPage";
 import { GuestsPage } from "./views/protected/GuestsPage";
 import { LaundryPage } from "./views/protected/LaundryPage";
+import { OccupancyPlanningPage } from "./views/protected/OccupancyPlanningPage";
 import { RateCalendarPage } from "./views/protected/RateCalendarPage";
 import { ReservationsPage } from "./views/protected/ReservationsPage";
 import { ReportsPage } from "./views/protected/ReportsPage";
@@ -130,6 +131,7 @@ const appRoutes = APP_HOST
           { path: "dashboard", element: <DashboardPage /> },
           { path: "huespedes", element: <GuestsPage /> },
           { path: "reservas", element: <ReservationsPage /> },
+          { path: "operacion/planilla", element: <OccupancyPlanningPage /> },
           { path: "habitaciones", element: <RoomsPage /> },
           { path: "caja", element: <CashRegisterPage /> },
           { path: "reportes", element: <ReportsPage /> },
@@ -336,6 +338,14 @@ export const router = createBrowserRouter([
           element: (
             <AppHostOnly>
               <Navigate to="/operacion/tarifas" replace />
+            </AppHostOnly>
+          )
+        },
+        {
+          path: "/operacion/planilla",
+          element: (
+            <AppHostOnly>
+              <Navigate to="/operacion/planilla" replace />
             </AppHostOnly>
           )
         },
