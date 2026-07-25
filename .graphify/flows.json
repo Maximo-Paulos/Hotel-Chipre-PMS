@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-25T03:58:43.877Z",
+  "generatedAt": "2026-07-25T04:11:40.731Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -14778,6 +14778,30 @@
       "fileCount": 1,
       "files": [
         "alembic/versions/20260724_tenant_rls_context.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:versions_20260725_repair_cash_handoff_schema_upgrade",
+      "name": "upgrade",
+      "entryPoint": "versions_20260725_repair_cash_handoff_schema_upgrade",
+      "entryPointId": "versions_20260725_repair_cash_handoff_schema_upgrade",
+      "path": [
+        "versions_20260725_repair_cash_handoff_schema_upgrade",
+        "versions_20260725_repair_cash_handoff_schema_has_fk",
+        "versions_20260725_repair_cash_handoff_schema_has_unique"
+      ],
+      "qualifiedPath": [
+        "versions_20260725_repair_cash_handoff_schema_upgrade",
+        "versions_20260725_repair_cash_handoff_schema_has_fk",
+        "versions_20260725_repair_cash_handoff_schema_has_unique"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20260725_repair_cash_handoff_schema.py"
       ],
       "criticality": 0.16,
       "warnings": []

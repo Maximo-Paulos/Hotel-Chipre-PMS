@@ -3578,5 +3578,13 @@
   "frontend/e2e/preview-host-routing.spec.ts": {
     "mtime": 1784947898493.1187,
     "hash": "66ec530473609b229ecdc6fd4537f273"
+  },
+  "alembic/versions/20260725_repair_cash_handoff_schema.py": {
+    "mtime": 1784952451301.131,
+    "hash": "36996e490cc1dfe208a8d6851f49ee99"
+  },
+  "tests/test_cash_handoff_schema_repair.py": {
+    "mtime": 1784952419734.349,
+    "hash": "a91b843e3f89243323f46ca525eece2f"
   }
 }
