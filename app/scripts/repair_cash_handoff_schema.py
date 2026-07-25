@@ -11,7 +11,9 @@ Usage: ``python -m app.scripts.repair_cash_handoff_schema``.
 
 from __future__ import annotations
 
-from app.database import get_engine
+from sqlalchemy import inspect
+
+from app.database import Base, get_engine
 
 
 class CashHandoffSchemaRepairError(RuntimeError):
@@ -153,9 +155,30 @@ def repair_cash_handoff_schema(engine=None) -> None:
             connection.exec_driver_sql(statement)
 
 
+def missing_model_tables(engine, *, metadata=None, inspect_factory=None) -> list[str]:
+    """Return model tables absent from a PostgreSQL database without changing it."""
+
+    if getattr(getattr(engine, "dialect", None), "name", None) != "postgresql":
+        raise CashHandoffSchemaRepairError("Schema drift report requires PostgreSQL")
+
+    if metadata is None:
+        import app.models  # noqa: F401
+
+        metadata = Base.metadata
+    inspector = (inspect_factory or inspect)(engine)
+    existing_tables = set(inspector.get_table_names())
+    return sorted(table.name for table in metadata.sorted_tables if table.name not in existing_tables)
+
+
 def main() -> None:
-    repair_cash_handoff_schema()
+    engine = get_engine()
+    repair_cash_handoff_schema(engine)
     print("Cash handoff schema repair complete")
+    missing_tables = missing_model_tables(engine)
+    if missing_tables:
+        print("Schema drift missing model tables: " + ", ".join(missing_tables))
+    else:
+        print("Schema drift missing model tables: none")
 
 
 if __name__ == "__main__":

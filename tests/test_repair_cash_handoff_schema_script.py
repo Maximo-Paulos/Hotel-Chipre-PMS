@@ -45,3 +45,16 @@ def test_repair_refuses_non_postgres_targets():
 
     with pytest.raises(CashHandoffSchemaRepairError):
         repair_cash_handoff_schema(FakeEngine("sqlite"))
+
+
+def test_schema_report_lists_only_missing_model_tables():
+    from app.scripts.repair_cash_handoff_schema import missing_model_tables
+
+    metadata = SimpleNamespace(
+        sorted_tables=[SimpleNamespace(name="cash_sessions"), SimpleNamespace(name="cash_custody_handoffs")]
+    )
+    inspector = SimpleNamespace(get_table_names=lambda: ["cash_sessions", "users"])
+
+    assert missing_model_tables(FakeEngine(), metadata=metadata, inspect_factory=lambda _: inspector) == [
+        "cash_custody_handoffs"
+    ]
