@@ -38,12 +38,15 @@ export function ReservationGlobalSearch() {
           }}
           onFocus={() => setShowResults(true)}
           onBlur={() => window.setTimeout(() => setShowResults(false), 150)}
-          placeholder="Buscar reserva por código o apellido"
+          placeholder="Buscar reserva por confirmación o huésped"
           aria-label="Buscar reserva"
           className="w-56 rounded-lg border border-slate-300 px-3 py-2 text-sm sm:w-72"
         />
         {showResults && query.trim().length >= 2 && (
-          <div className="absolute left-0 top-full z-30 mt-1 w-80 max-w-[90vw] rounded-lg border border-slate-200 bg-white shadow-lg">
+          <div
+            data-testid="reservation-search-results"
+            className="absolute left-0 top-full z-30 mt-1 w-80 max-w-[90vw] rounded-lg border border-slate-200 bg-white shadow-lg"
+          >
             {searchQuery.isFetching ? (
               <p className="px-3 py-2 text-sm text-slate-500">Buscando...</p>
             ) : results.length === 0 ? (
