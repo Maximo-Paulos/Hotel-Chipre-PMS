@@ -95,6 +95,28 @@ test.describe("Responsive mobile smoke", () => {
     }
   });
 
+  test("cash close approval checkbox has a 44px touch target", async ({ page }) => {
+    await login(page);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/caja");
+
+    const openCashButton = page.getByRole("button", { name: "Abrir caja", exact: true });
+    const existingOpenCashButton = page.getByRole("button", { name: "Ya hay una caja abierta", exact: true });
+    if (await openCashButton.isVisible()) {
+      await openCashButton.click();
+      await expect(page.getByText("Caja abierta.", { exact: true })).toBeVisible();
+    } else {
+      await expect(existingOpenCashButton).toBeVisible();
+    }
+
+    const approvalCheckbox = page.locator("form").filter({ hasText: "Cerrar caja" }).locator('input[type="checkbox"]');
+    await expect(approvalCheckbox).toBeVisible();
+    const box = await approvalCheckbox.boundingBox();
+
+    expect(box?.width).toBeGreaterThanOrEqual(44);
+    expect(box?.height).toBeGreaterThanOrEqual(44);
+  });
+
   test("critical operational pages have no horizontal overflow", async ({ page }) => {
     await login(page);
     await page.setViewportSize({ width: 390, height: 844 });

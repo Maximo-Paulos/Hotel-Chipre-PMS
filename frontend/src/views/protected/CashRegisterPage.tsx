@@ -382,6 +382,7 @@ export function CashRegisterPage() {
                   type="checkbox"
                   checked={approveOnClose}
                   onChange={(event) => setApproveOnClose(event.target.checked)}
+                  className="h-11 w-11 shrink-0 cursor-pointer accent-brand-600"
                 />
                 Aprobar diferencia al cerrar
               </label>

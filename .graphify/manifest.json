@@ -1424,8 +1424,8 @@
     "hash": "8b8a75a93b9dcdb98ad6ad91aa0a4e80"
   },
   "frontend/src/views/protected/CashRegisterPage.tsx": {
-    "mtime": 1784942475334.1797,
-    "hash": "c5ce9e4fef14c0eed34b0eada634e832"
+    "mtime": 1784955494698.0044,
+    "hash": "2124b208e6a6a8ba51100941688cfcf6"
   },
   "frontend/src/views/protected/CompaniesPage.tsx": {
     "mtime": 1784862144905.8489,
@@ -3356,12 +3356,12 @@
     "hash": "11bf9583c0a905deb7f7e760df835718"
   },
   "frontend/e2e/responsive-smoke.spec.ts": {
-    "mtime": 1784949978316.7664,
-    "hash": "f8ddc5489bb86f227939652f475d9170"
+    "mtime": 1784955470781.9565,
+    "hash": "62dbb2f1b3275714d02208beba14f74c"
   },
   "docs/qa/2026-07-24-pms-e2e-status.md": {
-    "mtime": 1784950376793.5725,
-    "hash": "02e20e8b528cd8c5ce67c26583546251"
+    "mtime": 1784955205934.9954,
+    "hash": "3f99ea43d9750924b213f93041455ac7"
   },
   "frontend/e2e/business-journey.spec.ts": {
     "mtime": 1784904324073.8352,
