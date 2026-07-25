@@ -179,6 +179,49 @@ def test_master_login_bootstraps_env_account(master_client, monkeypatch):
         db.close()
 
 
+def test_master_bootstrap_login_does_not_hijack_existing_non_admin_account(master_client, monkeypatch):
+    """
+    If MASTER_ADMIN_EMAIL happens to collide with a real tenant's login
+    email (an operator config mistake, but a plausible one), bootstrap
+    login must not silently overwrite that tenant's password and promote
+    them to platform_admin - it must fail closed instead.
+    """
+    client, SessionLocal = master_client
+    monkeypatch.setenv("MASTER_ADMIN_EMAIL", "shared@example.com")
+    monkeypatch.setenv("MASTER_ADMIN_PASSWORD", "Secret123!")
+    monkeypatch.setenv("MANAGER_PIN", "654321")
+    get_settings.cache_clear()
+
+    db = SessionLocal()
+    try:
+        tenant = User(
+            email="shared@example.com",
+            password_hash=hash_password("TenantOwnPassword!"),
+            is_active=True,
+            is_verified=True,
+            role="owner",
+        )
+        db.add(tenant)
+        db.commit()
+        original_hash = tenant.password_hash
+    finally:
+        db.close()
+
+    response = client.post(
+        "/api/master-admin/auth/login",
+        json={"email": "shared@example.com", "password": "Secret123!", "pin": "654321"},
+    )
+    assert response.status_code != 200, response.text
+
+    db = SessionLocal()
+    try:
+        tenant = db.query(User).filter(User.email == "shared@example.com").first()
+        assert tenant.role == "owner"
+        assert tenant.password_hash == original_hash
+    finally:
+        db.close()
+
+
 def test_master_login_sets_cookie_and_hydrates_me(master_client, monkeypatch):
     client, SessionLocal = master_client
     monkeypatch.setenv("MASTER_ADMIN_PIN", "654321")

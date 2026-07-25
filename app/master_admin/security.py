@@ -235,6 +235,17 @@ def authenticate_master_login(db: Session, email: str, password: str, pin: str) 
     user = db.query(User).filter(User.email.ilike(email)).first()
     bootstrap_master = _bootstrap_master_credentials_match(email, password)
     if bootstrap_master:
+        # MASTER_ADMIN_EMAIL colliding with a real tenant's login email is an
+        # operator config mistake, but a plausible one. Never let bootstrap
+        # login silently overwrite that tenant's password and promote them
+        # to platform_admin - fail closed instead of hijacking the account.
+        if user and user.role != "platform_admin":
+            register_login_failure(db, normalized, "bootstrap_email_collision")
+            db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Credenciales invalidas",
+            )
         if not user:
             user = User(
                 email=_normalize_identifier(email),
