@@ -5,7 +5,7 @@ import csv
 from datetime import date
 from io import StringIO
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
@@ -113,8 +113,11 @@ def create_guest(
 
 @router.get("/", response_model=list[GuestRead])
 def list_guests(
-    skip: int = 0,
-    limit: int = 50,
+    skip: int = Query(0, ge=0),
+    # A5: was already paginated, cap added to match the A2 precedent for
+    # /api/reservations -- no `total` in the response (see frontend/src/api/
+    # guests.ts), the UI treats a full page as "there may be more".
+    limit: int = Query(50, ge=1, le=200),
     search: str = "",
     db: Session = Depends(get_db),
     context: AuthContext = Depends(get_auth_context),
@@ -127,7 +130,10 @@ def list_guests(
             | (Guest.document_number.ilike(f"%{search}%"))
             | (Guest.email.ilike(f"%{search}%"))
         )
-    return query.offset(skip).limit(limit).all()
+    # A5: skip/limit pagination is only well-defined with a deterministic
+    # order -- without this, two consecutive page requests have no SQL
+    # guarantee of returning disjoint rows.
+    return query.order_by(Guest.id.asc()).offset(skip).limit(limit).all()
 
 
 @router.get("/search", response_model=list[GuestRead])
