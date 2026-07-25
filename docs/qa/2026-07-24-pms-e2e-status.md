@@ -899,3 +899,41 @@ mensaje y luego libera una respuesta de error. La prueba fue roja antes del
 cambio y verde después. La revalidación posterior aprobó lint, typecheck,
 build, **38/38** E2E Chromium y **18/18** journeys operativos WebKit iPhone
 15. No se cambiaron credenciales, políticas de autenticación ni proveedores.
+
+### Revalidación owner del Preview existente — 2026-07-25
+
+Se abrió nuevamente el Preview Vercel de la rama de trabajo y la ruta privada
+`/login` permaneció en ese host. La sesión owner QA se autenticó y cargó el
+dashboard sin error visible. En modo sólo lectura, Reportes terminó con el
+reporte diario y su estado de caja, y Analytics/Operación mostró sus métricas
+y la procedencia PostgreSQL.
+
+La consulta de disponibilidad del Preview sigue sin poder certificarse por el
+navegador interno: este puente actualiza el valor visible de los controles
+nativos `date`, pero no propaga de manera fiable su evento a React antes de la
+consulta; al re-renderizar vuelve al valor controlado inicial. No se clasifica
+como defecto de producto porque el mismo contrato de preservación de rango
+aprobó en Chromium y WebKit iPhone 15. No se creó ninguna reserva, cobro,
+link, comprobante, email, webhook, OTA ni invitación.
+
+Esta lectura demuestra el comportamiento visible del Preview contra el
+entorno existente, no una procedencia provider-bound: Vercel no expone en esta
+ejecución un SHA verificable del backend ni existe la evidencia firmada
+requerida por la puerta de release. La matriz real de manager, recepción,
+housekeeping y master-admin, Safari nativo/dispositivo y las operaciones
+mutantes siguen pendientes.
+
+### P2 corregido — navegación móvil con objetivos táctiles de 44 px
+
+El audit visual del Preview a 390×844 detectó 28 enlaces de la navegación
+móvil con sólo 24 px de alto, además del acceso de inicio de 36 px. La prueba
+de regresión se agregó antes del cambio y falló con todos los enlaces listados
+como objetivos insuficientes.
+
+El commit `8f1d14d` convierte el acceso de inicio y cada enlace del carrusel
+de navegación móvil en controles de al menos 44 px, sin modificar sus rutas ni
+permisos. La prueba focal aprobó en Chromium móvil, WebKit iPhone SE, iPhone
+15 e iPhone 15 Pro Max; lint, typecheck y build también aprobaron. Tras
+publicar la rama, el Preview a 390 px mostró los 28 enlaces y el acceso de
+inicio a 44 px o más, sin overflow horizontal ni errores visibles. No hubo
+mutaciones de negocio ni efectos externos.
