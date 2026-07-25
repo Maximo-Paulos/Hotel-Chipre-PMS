@@ -71,11 +71,23 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
-      testIgnore: "**/responsive-smoke.spec.ts",
+      testIgnore: ["**/responsive-smoke.spec.ts", "**/preview-host-routing.spec.ts"],
       // The isolated E2E backend uses one SQLite database. Keep mutating
       // journeys deterministic while read-only page smoke tests run beside it.
       workers: 1,
       use: { ...devices["Desktop Chrome"] }
+    },
+    {
+      name: "preview-host-routing",
+      testMatch: "**/preview-host-routing.spec.ts",
+      workers: 1,
+      use: {
+        ...devices["Desktop Chrome"],
+        baseURL: "http://preview.localhost:5173",
+        launchOptions: {
+          args: ["--host-resolver-rules=MAP preview.localhost 127.0.0.1"]
+        }
+      }
     },
     {
       name: "mobile-chromium",
@@ -155,6 +167,8 @@ export default defineConfig({
       timeout: 120_000,
       env: {
         VITE_PUBLIC_APP_HOSTNAME: "127.0.0.1",
+        VITE_ALLOW_PREVIEW_APP_HOST: "true",
+        VITE_PREVIEW_APP_HOST_SUFFIXES: ".localhost",
         VITE_API_URL: `${backendURL}/api`,
         VITE_BACKEND_URL: backendURL
       }

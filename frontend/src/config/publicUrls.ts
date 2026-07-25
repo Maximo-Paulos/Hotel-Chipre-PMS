@@ -19,6 +19,12 @@ export const PUBLIC_APP_URL = normalizeUrl(import.meta.env.VITE_PUBLIC_APP_URL a
 const ENV_APP_HOSTNAME = (import.meta.env.VITE_PUBLIC_APP_HOSTNAME as string | undefined)?.trim() || "";
 const APP_URL_HOSTNAME = parseHostname(PUBLIC_APP_URL);
 const SITE_URL_HOSTNAME = parseHostname(PUBLIC_SITE_URL);
+const ALLOW_PREVIEW_APP_HOST = String(import.meta.env.VITE_ALLOW_PREVIEW_APP_HOST ?? "").toLowerCase() === "true";
+const PREVIEW_APP_HOST_SUFFIXES = (import.meta.env.VITE_PREVIEW_APP_HOST_SUFFIXES as string | undefined ?? ".vercel.app")
+  .split(",")
+  .map((suffix) => suffix.trim().toLowerCase())
+  .filter(Boolean)
+  .map((suffix) => (suffix.startsWith(".") ? suffix : `.${suffix}`));
 
 export const PUBLIC_APP_HOSTNAME = ENV_APP_HOSTNAME || APP_URL_HOSTNAME || "app.hotels-pms.com";
 export const PUBLIC_SITE_HOSTNAME =
@@ -29,12 +35,15 @@ export const resolveSalesContactUrl = (subject = "Consulta sobre Hotel Chipre PM
   `mailto:${PUBLIC_SALES_EMAIL}?subject=${encodeURIComponent(subject)}`;
 
 export const isAppHostname = (hostname?: string) => {
-  const resolved = hostname || (typeof window !== "undefined" ? window.location.hostname : "");
+  const resolved = (hostname || (typeof window !== "undefined" ? window.location.hostname : "")).toLowerCase();
   if (!resolved) return false;
   const candidates = Array.from(
-    new Set([PUBLIC_APP_HOSTNAME, APP_URL_HOSTNAME].map((value) => value.trim()).filter(Boolean))
+    new Set([PUBLIC_APP_HOSTNAME, APP_URL_HOSTNAME].map((value) => value.trim().toLowerCase()).filter(Boolean))
   );
-  return candidates.some((candidate) => resolved === candidate || resolved.endsWith(`.${candidate}`));
+  if (candidates.some((candidate) => resolved === candidate || resolved.endsWith(`.${candidate}`))) {
+    return true;
+  }
+  return ALLOW_PREVIEW_APP_HOST && PREVIEW_APP_HOST_SUFFIXES.some((suffix) => resolved.endsWith(suffix));
 };
 
 const buildAbsoluteUrl = (baseUrl: string, path = "/", search = "", hash = "") => {
