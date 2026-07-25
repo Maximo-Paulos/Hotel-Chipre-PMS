@@ -101,13 +101,15 @@ gate. Every new hotel-scoped model must be added to the explicit migration list.
 | Check | Status | Evidence |
 |-------|--------|---------|
 | Double-booking prevention | ⚠️ DB PARTIAL | UniqueConstraint patterns exist; `SELECT FOR UPDATE` pattern documented in architecture-hybrid.md; service implementation needed |
-| Concurrent cash close prevention | ✅ | Redis/Valkey lease `lock:cash_close:{hotel_id}:{session_id}` plus PostgreSQL row lock; production fails closed when the backend is unavailable |
-| Concurrent allocation solver prevention | ✅ | Redis/Valkey lease `lock:allocation:{hotel_id}` around the persisted solver; TTL provides worker-crash recovery |
+| Concurrent cash close prevention | ✅ | Redis/Valkey lease `lock:cash_close:{hotel_id}:{session_id}` with PostgreSQL advisory-lock fallback and row lock; production fails closed when neither lock backend is available |
+| Concurrent allocation solver prevention | ✅ | Redis/Valkey lease `lock:allocation:{hotel_id}` with PostgreSQL transaction advisory-lock fallback around the persisted solver; TTL provides worker-crash recovery for Redis |
 | Optimistic locking for reservation updates | ✅ | `reservations.version` and stale-version rejection in the reservation service |
 
-**Operational note:** Redis/Valkey is optional in local development, where PostgreSQL
-row locks remain the fallback. Production startup rejects configurations that do not
-enable and require the distributed lock backend.
+**Operational note:** Redis/Valkey is optional in local development. When the request
+uses PostgreSQL, critical cash and allocation paths fall back to a transaction-scoped
+PostgreSQL advisory lock; production startup still rejects configurations that do not
+enable and require a distributed lock policy, and operations fail closed if neither
+backend can acquire a lock.
 
 ---
 

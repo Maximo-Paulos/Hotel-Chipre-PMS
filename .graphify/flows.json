@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-25T03:30:58.601Z",
+  "generatedAt": "2026-07-25T03:58:43.877Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -11911,7 +11911,8 @@
         "services_distributed_lock_distributedlockunavailable",
         "services_distributed_lock_get_redis_client",
         "services_distributed_lock_required",
-        "services_distributed_lock_settings"
+        "services_distributed_lock_settings",
+        "services_distributed_lock_try_postgres_advisory_lock"
       ],
       "qualifiedPath": [
         "services_distributed_lock_distributed_lock",
@@ -11919,10 +11920,11 @@
         "services_distributed_lock_distributedlockunavailable",
         "services_distributed_lock_get_redis_client",
         "services_distributed_lock_required",
-        "services_distributed_lock_settings"
+        "services_distributed_lock_settings",
+        "services_distributed_lock_try_postgres_advisory_lock"
       ],
       "depth": 1,
-      "nodeCount": 6,
+      "nodeCount": 7,
       "fileCount": 1,
       "files": [
         "app/services/distributed_lock.py"

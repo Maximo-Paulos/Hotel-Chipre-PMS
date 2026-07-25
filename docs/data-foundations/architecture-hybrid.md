@@ -134,7 +134,7 @@ lock:cash_close:{hotel_id}:{session_id}                TTL=60s   (arqueo lock)
 - Availability cache invalidated on: reservation insert/update/cancel, room block create/resolve
 - Pattern: write-through invalidation (write PG first, then DEL Redis key)
 - On Redis unavailability: read caches degrade gracefully — query PG directly (no availability cache miss causes incorrect data, only slower response)
-- Cash close and allocation locks are different: local development may degrade to the PostgreSQL safeguards, but production must set `DISTRIBUTED_LOCK_ENABLED=true` and `DISTRIBUTED_LOCK_REQUIRED=true`.
+- Cash close and allocation locks are different: Redis/Valkey is the primary lease, with a transaction-scoped PostgreSQL advisory-lock fallback when Redis is unavailable. Production must set `DISTRIBUTED_LOCK_ENABLED=true` and `DISTRIBUTED_LOCK_REQUIRED=true`; it fails closed only when neither lock backend can be acquired.
 - Never serve stale availability as authoritative without re-checking PG
 
 ### Tenant-scoped realtime invalidation

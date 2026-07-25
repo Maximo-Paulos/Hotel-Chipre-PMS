@@ -70,7 +70,9 @@ Variables de entorno:
 
 Variables de capacidad y warehouse:
 - `REDIS_URL`, `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND`: provistas por el
-  servicio Key Value del Blueprint.
+  servicio Key Value del Blueprint cuando esté disponible. Redis/Valkey es el
+  backend primario para locks; caja y asignación usan un advisory lock
+  transaccional de PostgreSQL como fallback seguro si Redis no está disponible.
 - `DISTRIBUTED_LOCK_ENABLED=true`
 - `DISTRIBUTED_LOCK_REQUIRED=true`
 - `CLICKHOUSE_ENABLED=true`
