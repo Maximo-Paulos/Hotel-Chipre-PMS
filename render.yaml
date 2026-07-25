@@ -39,6 +39,18 @@ services:
         sync: false   # at least 6 digits, not 1234
       - key: INTEGRATIONS_ENCRYPTION_KEY
         sync: false   # generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+      - key: MERCADOPAGO_CLIENT_ID
+        sync: false   # platform OAuth app id; required for hotels to connect their own MP account
+      - key: MERCADOPAGO_CLIENT_SECRET
+        sync: false   # platform OAuth app secret
+      - key: MERCADOPAGO_WEBHOOK_SECRET
+        sync: false   # required (fail-closed) once any hotel has Mercado Pago connected
+      - key: PAYPAL_CLIENT_ID
+        sync: false   # platform OAuth app id; required for hotels to connect their own PayPal account
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false   # platform OAuth app secret
+      - key: PAYPAL_WEBHOOK_ID
+        sync: false
       - key: EMAIL_PROVIDER
         value: resend
       - key: RESEND_API_KEY
