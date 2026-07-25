@@ -44,6 +44,8 @@ def test_repair_adds_missing_cash_handoff_schema_objects():
     assert "CREATE TABLE IF NOT EXISTS payment_proof_blobs" in statements
     assert "fk_payment_proof_blobs_hotel_proof" in statements
     assert "tenant_isolation_payment_proof_blobs" in statements
+    assert "audit_logs" in statements
+    assert 'ALTER COLUMN "timestamp" SET DEFAULT CURRENT_TIMESTAMP' in statements
 
 
 def test_repair_refuses_non_postgres_targets():

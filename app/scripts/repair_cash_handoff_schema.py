@@ -1,10 +1,10 @@
-"""Repair a legacy cash-handoff schema before starting the API.
+"""Repair known legacy PostgreSQL schema drift before starting the API.
 
 The managed database can contain application tables created after an outdated
 Alembic version marker. Running a normal upgrade there replays already-present
 tables and fails. This narrow, PostgreSQL-only repair creates the missing
-cash-handoff reference, custody table, and their integrity constraints,
-idempotently and without rewriting business data.
+cash-handoff reference, custody table, audit timestamp default, and their
+integrity constraints, idempotently and without rewriting business data.
 
 Usage: ``python -m app.scripts.repair_cash_handoff_schema``.
 """
@@ -21,6 +21,25 @@ class CashHandoffSchemaRepairError(RuntimeError):
 
 
 _REPAIR_STATEMENTS = (
+    # Some existing databases retain the pre-Alembic ``timestamp`` column on
+    # audit_logs. The current model writes ``created_at`` instead, so that
+    # legacy NOT NULL column must provide its own value or every audited write
+    # rolls back after the business mutation has already committed.
+    """
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = current_schema()
+          AND table_name = 'audit_logs'
+          AND column_name = 'timestamp'
+      ) THEN
+        ALTER TABLE audit_logs
+          ALTER COLUMN "timestamp" SET DEFAULT CURRENT_TIMESTAMP;
+      END IF;
+    END $$
+    """,
     "ALTER TABLE cash_close_reports ADD COLUMN IF NOT EXISTS successor_session_id INTEGER",
     """
     DO $$
