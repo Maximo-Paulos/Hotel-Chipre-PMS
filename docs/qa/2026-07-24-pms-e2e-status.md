@@ -783,3 +783,48 @@ Stock 4/4, regresión E2E Chromium 37/37, journey de negocio WebKit iPhone 15
 18/18 y smoke Apple WebKit 12/12. Persisten warnings de cache/lock degradado
 del arnés local y warnings de serialización de Decimal; no hubo fallos
 funcionales en esas corridas.
+
+### P1 corregido — webhooks Mercado Pago sin secreto deben fallar cerrados
+
+La revisión manual de pagos detectó que las dos rutas públicas de webhook de
+Mercado Pago reutilizaban un validador que retornaba sin error cuando el
+secreto no estaba configurado. En esa condición un request podía avanzar hasta
+la resolución de la referencia de pago, en vez de ser rechazado antes de tocar
+el flujo financiero.
+
+Se añadió primero una prueba de regresión que falló al no recibir la excepción
+esperada. La corrección ahora rechaza explícitamente el webhook no configurado
+antes de validar headers, resolver referencias o crear movimientos. Las rutas
+de link de pago y de prueba usan el mismo validador, por lo que ambas quedan
+cubiertas. No se envió ningún webhook, pago o credencial real.
+
+Validación focal posterior: 16 pruebas de links, API, webhook e integridad de
+rutas aprobadas. La revisión ampliada de auth, aislamiento entre hoteles,
+webhooks, preview sin efectos externos, API keys y master-admin aprobó 132
+pruebas; el bloque específico de runtime, RLS, comprobantes, webhooks y rate
+limit aprobó 36. El fix está en el commit `7278b2c` de la rama de trabajo.
+
+### Regresión integral posterior a la corrección de seguridad
+
+La rama `7278b2c` aprobó nuevamente la puerta local completa:
+
+- Backend: **1223 passed, 17 skipped, 12 xfailed, 1 xpassed**.
+- Frontend: lint, typecheck y build aprobados. Persiste el warning conocido
+  de bundle de aproximadamente 793 kB, sin error de compilación.
+- Migraciones: `alembic upgrade head` sobre SQLite virgen aprobado.
+- E2E escritorio: **37/37** en Chromium.
+- E2E operativo Apple: **18/18** en WebKit iPhone 15.
+
+El Preview Vercel incorpora el cambio de interfaz móvil `8dfaf35` y se
+revalidó a 390 px: selector de hotel, rol, Aplicar y cerrar sesión miden 44 px
+sin overflow horizontal. El nuevo fix de webhook es de backend: está probado
+en la rama, pero no se declara desplegado en la API existente hasta que se
+ejecute su ciclo de despliegue explícito.
+
+La puerta de release confiable sigue sin aprobarse: el verificador encontró
+cero artefactos QA firmados y el contrato del repositorio exige un Preview con
+infraestructura aislada. Esta ejecución respetó la instrucción operativa de
+usar sólo el entorno existente, por lo que no se creó Supabase, Render ni
+servicio adicional y no se fabricó evidencia equivalente. La certificación
+Safari nativa/dispositivo físico y la prueba de pago real siguen pendientes
+por las exclusiones de efectos externos.
