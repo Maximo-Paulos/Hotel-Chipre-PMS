@@ -22,6 +22,11 @@ test("analytics exposes an actionable plan error", async ({ page }) => {
 
   await login(page);
   const operationsLink = page.locator('aside nav a[href="/analytics/operations"]');
+  // B6.1: Analytics now lives inside a collapsed sidebar group.
+  const group = operationsLink.locator("xpath=ancestor::details[1]");
+  if ((await group.count()) > 0 && !(await group.evaluate((el) => (el as HTMLDetailsElement).open))) {
+    await group.locator("summary").first().click();
+  }
   await expect(operationsLink).toHaveCount(1);
   await operationsLink.click();
   await expect(page).toHaveURL(/\/analytics\/operations$/);

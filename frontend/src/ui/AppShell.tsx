@@ -27,9 +27,29 @@ type NavSection = {
   items: NavItem[];
 };
 
-const baseNav: NavSection[] = [
+// B6.1: the user already decided the visible set -- only what a receptionist
+// touches every single shift stays as a flat top-level link. Everything else
+// (29 -> 5) moves into collapsible <details> sections below. The global
+// reservation search (B1) is what makes this safe: any reservation is one
+// search away regardless of which menu group it would have lived in, so the
+// menu no longer has to list every route to keep it reachable.
+const dailyNav: NavItem[] = [
+  { label: "Planilla", to: "/operacion/planilla", requiresRole: ["owner", "co_owner", "manager", "housekeeping", "receptionist"] },
+  { label: "Reservas", to: "/reservas" },
+  { label: "Huespedes", to: "/huespedes" },
+  { label: "Habitaciones", to: "/habitaciones" },
+  { label: "Caja", to: "/caja", requiresRole: ["owner", "co_owner", "manager", "receptionist"] },
+];
+
+// Grouping criterion: "Analitica" is every reporting/dashboard page a manager
+// checks periodically, not per-shift. "Mas operacion" is real day-to-day
+// hotel work that isn't touched *every* shift (stock counts, laundry batches,
+// waitlist, rate edits) plus Dashboard/Onboarding, which stay reachable here
+// even though the daily row above and the logo link already cover the home
+// screen. "Configuracion" is unchanged -- it was already its own group.
+const groupedNav: NavSection[] = [
   {
-    title: "Analytics",
+    title: "Analitica",
     items: [
       { label: "Resumen", to: "/analytics" },
       { label: "Habitaciones", to: "/analytics/rooms", minPlan: "pro" },
@@ -41,44 +61,32 @@ const baseNav: NavSection[] = [
     ]
   },
   {
-    title: "Operacion",
+    title: "Mas operacion",
     items: [
       { label: "Dashboard", to: "/dashboard" },
-      // Planilla sits right after Reservas -- it's the daily-use ocupacion
-      // view a receptionist reaches for constantly. Tarifas (precios, not
-      // ocupacion) stays lower with the less-daily operational tools so the
-      // two aren't picked by accident.
-      { label: "Reservas", to: "/reservas" },
-      { label: "Planilla", to: "/operacion/planilla", requiresRole: ["owner", "co_owner", "manager", "housekeeping", "receptionist"] },
-      { label: "Huespedes", to: "/huespedes" },
-      { label: "Habitaciones", to: "/habitaciones" },
-      { label: "Caja", to: "/caja", requiresRole: ["owner", "co_owner", "manager", "receptionist"] },
       { label: "Reportes", to: "/reportes", requiresRole: ["owner", "co_owner", "manager"] },
       { label: "Lista de espera", to: "/operacion/lista-espera", requiresRole: ["owner", "co_owner", "manager", "receptionist"] },
       { label: "Lavanderia", to: "/operacion/lavanderia", requiresRole: ["owner", "co_owner", "manager", "housekeeping"] },
       { label: "Stock", to: "/operacion/stock", requiresRole: ["owner", "co_owner", "manager"] },
       { label: "Tarifas", to: "/operacion/tarifas", requiresRole: ["owner", "co_owner", "manager"] },
+      { label: "Onboarding", to: "/onboarding" },
     ],
   },
   {
-    title: "Proceso",
-    items: [{ label: "Onboarding", to: "/onboarding" }],
-  },
-        {
-          title: "Configuracion",
-          items: [
-            { label: "Usuarios", to: "/settings/users", requiresRole: ["owner", "co_owner"] },
-            { label: "Asistente", to: "/settings/assistant", requiresRole: ["owner", "co_owner", "manager"] },
-            { label: "Suscripcion", to: "/settings/subscription", requiresRole: ["owner", "co_owner"] },
-            { label: "Empresas", to: "/settings/companies", requiresRole: ["owner", "co_owner"], minPlan: "pro" },
-            { label: "API Keys", to: "/settings/api-keys", requiresRole: ["owner", "co_owner"] },
-            { label: "Permisos", to: "/settings/permissions", requiresRole: ["owner", "co_owner"] },
-            { label: "WhatsApp", to: "/settings/whatsapp", requiresRole: ["owner", "co_owner"] },
-            { label: "Conexiones", to: "/settings/connections", requiresRole: ["owner", "co_owner"] },
-            { label: "Pruebas", to: "/settings/tests", requiresRole: ["owner", "co_owner"] },
-            { label: "Hotel", to: "/settings/hotel", requiresRole: ["owner", "co_owner"] },
-            { label: "Seguridad", to: "/settings/security", requiresRole: ["owner", "co_owner"] },
-          ],
+    title: "Configuracion",
+    items: [
+      { label: "Usuarios", to: "/settings/users", requiresRole: ["owner", "co_owner"] },
+      { label: "Asistente", to: "/settings/assistant", requiresRole: ["owner", "co_owner", "manager"] },
+      { label: "Suscripcion", to: "/settings/subscription", requiresRole: ["owner", "co_owner"] },
+      { label: "Empresas", to: "/settings/companies", requiresRole: ["owner", "co_owner"], minPlan: "pro" },
+      { label: "API Keys", to: "/settings/api-keys", requiresRole: ["owner", "co_owner"] },
+      { label: "Permisos", to: "/settings/permissions", requiresRole: ["owner", "co_owner"] },
+      { label: "WhatsApp", to: "/settings/whatsapp", requiresRole: ["owner", "co_owner"] },
+      { label: "Conexiones", to: "/settings/connections", requiresRole: ["owner", "co_owner"] },
+      { label: "Pruebas", to: "/settings/tests", requiresRole: ["owner", "co_owner"] },
+      { label: "Hotel", to: "/settings/hotel", requiresRole: ["owner", "co_owner"] },
+      { label: "Seguridad", to: "/settings/security", requiresRole: ["owner", "co_owner"] },
+    ],
   },
 ];
 
@@ -131,18 +139,25 @@ export function AppShell() {
     subscription && !ACTIVE_SUBSCRIPTION_STATUSES.includes(subscription.status);
   const subscriptionCTA = "/settings/subscription";
 
+  const filterItems = useMemo(() => {
+    return (items: NavItem[]) =>
+      items
+        .filter((item) => !item.requiresRole || (role ? item.requiresRole.includes(role) : false))
+        .filter((item) => !item.minPlan || (subscription?.plan ? (planRank[subscription.plan as keyof typeof planRank] ?? 0) >= (planRank[item.minPlan] ?? 0) : false))
+        .filter((item) => !(item.to === "/onboarding" && onboarding?.completed));
+  }, [role, onboarding?.completed, subscription?.plan]);
+
+  const visibleDailyNav = useMemo(() => filterItems(dailyNav), [filterItems]);
+
   const visibleNavSections = useMemo<NavSection[]>(() => {
-    return baseNav
+    return groupedNav
       .map((section) => {
-        const items = section.items
-          .filter((item) => !item.requiresRole || (role ? item.requiresRole.includes(role) : false))
-          .filter((item) => !item.minPlan || (subscription?.plan ? (planRank[subscription.plan as keyof typeof planRank] ?? 0) >= (planRank[item.minPlan] ?? 0) : false))
-          .filter((item) => !(item.to === "/onboarding" && onboarding?.completed));
+        const items = filterItems(section.items);
         if (!items.length) return null;
         return { ...section, items } as NavSection;
       })
       .filter((section): section is NavSection => Boolean(section));
-  }, [role, onboarding?.completed, subscription?.plan]);
+  }, [filterItems]);
 
   const path = location.pathname;
   if (role === "housekeeping" && path.startsWith("/settings")) return <Navigate to="/reservas" replace />;
@@ -212,11 +227,34 @@ export function AppShell() {
             </Link>
             <p className="mt-2 text-xs text-slate-500">Layout de navegacion prototipo</p>
           </div>
-          <nav className="flex-1 space-y-6 px-3 pb-6">
+          <nav className="flex-1 space-y-4 px-3 pb-6">
+            <div className="flex flex-col gap-1">
+              {visibleDailyNav.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  className={({ isActive }) =>
+                    cx(
+                      "flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium",
+                      isActive ? "bg-brand-50 text-brand-700" : "text-slate-700 hover:bg-slate-100",
+                    )
+                  }
+                >
+                  <span>{item.label}</span>
+                </NavLink>
+              ))}
+            </div>
+
+            {/* B6.1: everything that isn't daily-use lives behind a native
+                <details> disclosure per group -- no JS state, closed by
+                default, and every route stays a click away instead of
+                disappearing. */}
             {visibleNavSections.map((section) => (
-              <div key={section.title}>
-                <p className="px-2 text-xs uppercase tracking-wide text-slate-500">{section.title}</p>
-                <div className="mt-2 flex flex-col gap-1">
+              <details key={section.title} className="group">
+                <summary className="cursor-pointer select-none rounded-lg px-2 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500 hover:bg-slate-100">
+                  {section.title}
+                </summary>
+                <div className="mt-1 flex flex-col gap-1">
                   {section.items.map((item) => (
                     <NavLink
                       key={item.to}
@@ -232,7 +270,7 @@ export function AppShell() {
                     </NavLink>
                   ))}
                 </div>
-              </div>
+              </details>
             ))}
           </nav>
         </aside>
@@ -250,7 +288,7 @@ export function AppShell() {
                   <span className="leading-tight">Hotel Chipre PMS</span>
                 </Link>
                 <nav aria-label="Navegación móvil" className="flex min-w-0 max-w-full flex-1 items-center gap-2 overflow-x-auto overscroll-x-contain md:hidden">
-                  {visibleNavSections.flatMap((section) => section.items).map((item) => (
+                  {visibleDailyNav.map((item) => (
                     <NavLink
                       key={item.to}
                       to={item.to}
@@ -272,6 +310,41 @@ export function AppShell() {
                 <UserBadge />
               </div>
             </div>
+
+            {/* B6.1 mobile: the 5 daily links above stay a horizontal-scroll
+                bar (usable at 5 items, unlike the old 29). Everything else
+                sits behind one native disclosure instead of widening that
+                scroll bar further. */}
+            {visibleNavSections.length > 0 && (
+              <details className="border-t border-slate-100 px-4 py-2 md:hidden">
+                <summary className="flex min-h-11 cursor-pointer select-none items-center text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Más opciones
+                </summary>
+                <nav aria-label="Más navegación móvil" className="mt-2 flex flex-col gap-4">
+                  {visibleNavSections.map((section) => (
+                    <div key={section.title}>
+                      <p className="px-1 text-xs uppercase tracking-wide text-slate-400">{section.title}</p>
+                      <div className="mt-1 flex flex-col gap-1">
+                        {section.items.map((item) => (
+                          <NavLink
+                            key={item.to}
+                            to={item.to}
+                            className={({ isActive }) =>
+                              cx(
+                                "flex min-h-11 items-center rounded-lg px-3 py-2 text-sm font-medium",
+                                isActive ? "bg-brand-50 text-brand-700" : "text-slate-700 hover:bg-slate-100",
+                              )
+                            }
+                          >
+                            {item.label}
+                          </NavLink>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </nav>
+              </details>
+            )}
           </header>
 
           <main className="min-w-0 flex-1 px-4 py-8 sm:px-8">

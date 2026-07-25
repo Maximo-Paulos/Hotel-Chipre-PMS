@@ -460,6 +460,15 @@ test("rate calendar page renders annual editor and integrated channel view", asy
   await page.getByTestId("login-submit").click();
 
   await page.waitForURL("**/dashboard");
+  // B6.1: Tarifas now lives inside the collapsed "Mas operacion" sidebar
+  // group. A closed <details> removes its content from the accessibility
+  // tree, so open it via a plain href locator (which still finds hidden DOM
+  // nodes) before using the accessible-role locator to click.
+  const tarifasHrefLink = page.locator('aside nav a[href="/operacion/tarifas"]');
+  const tarifasGroup = tarifasHrefLink.locator("xpath=ancestor::details[1]");
+  if ((await tarifasGroup.count()) > 0 && !(await tarifasGroup.evaluate((el) => (el as HTMLDetailsElement).open))) {
+    await tarifasGroup.locator("summary").first().click();
+  }
   await page.getByRole("link", { name: "Tarifas" }).click();
   await page.waitForURL("**/operacion/tarifas");
 

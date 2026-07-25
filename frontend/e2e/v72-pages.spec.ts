@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 
 const credentials = {
@@ -39,8 +39,18 @@ async function login(page: Page) {
   await page.waitForTimeout(250);
 }
 
+// B6.1: most of these routes now sit inside a collapsed sidebar <details>
+// group -- open its <summary> first, closed content isn't clickable.
+async function revealCollapsedNavLink(link: Locator) {
+  const group = link.locator("xpath=ancestor::details[1]");
+  if ((await group.count()) > 0 && !(await group.evaluate((el) => (el as HTMLDetailsElement).open))) {
+    await group.locator("summary").first().click();
+  }
+}
+
 async function clientNavigate(page: Page, path: string) {
   const link = page.locator(`aside nav a[href="${path}"]`);
+  await revealCollapsedNavLink(link);
   await expect(link).toHaveCount(1);
   await expect(link).toBeVisible();
   await link.click();

@@ -68,6 +68,12 @@ for (const persona of personas) {
     }
 
     const allowedLink = navigation.locator(`a[href="${persona.allowedPath}"]`);
+    // B6.1: routes outside the daily nav row sit inside a collapsed sidebar
+    // <details> group -- open its <summary> first.
+    const allowedGroup = allowedLink.locator("xpath=ancestor::details[1]");
+    if ((await allowedGroup.count()) > 0 && !(await allowedGroup.evaluate((el) => (el as HTMLDetailsElement).open))) {
+      await allowedGroup.locator("summary").first().click();
+    }
     await expect(allowedLink).toBeVisible();
     await allowedLink.click();
     await expect(page).toHaveURL(new RegExp(`${persona.allowedPath.replaceAll("/", "\\/")}$`));
