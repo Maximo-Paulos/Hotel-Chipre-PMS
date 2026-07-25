@@ -1104,8 +1104,8 @@
     "hash": "65b2b3aaedaa8ba84b448a204d99c4ca"
   },
   "frontend/src/App.tsx": {
-    "mtime": 1784862144901.0059,
-    "hash": "fad1f1866c1d8da88dae55d15e2044b0"
+    "mtime": 1785013696561.1533,
+    "hash": "e69d76a84f882caa1323718d3a1cdd2d"
   },
   "frontend/src/api/allocationRuns.ts": {
     "mtime": 1784862144901.0884,
@@ -1356,16 +1356,16 @@
     "hash": "9ea5cdf2e4745f37a9b9eb3ac3332182"
   },
   "frontend/src/main.tsx": {
-    "mtime": 1784862144904.5803,
-    "hash": "1cea5177e1d69fc87401b9d3fde68f7e"
+    "mtime": 1785013807823.947,
+    "hash": "69c97f09dfe963d6c28e0615393f1237"
   },
   "frontend/src/master_admin/api.ts": {
     "mtime": 1784862144904.6545,
     "hash": "ffa689506725be9d4dd8c5cd2c829f41"
   },
   "frontend/src/master_admin/layout.tsx": {
-    "mtime": 1784913737331.1243,
-    "hash": "261b6227a9778fa267aa73f23b828d63"
+    "mtime": 1785013680017.4124,
+    "hash": "a3dace665744470ab61f8b5c32058ff8"
   },
   "frontend/src/master_admin/pages/AuditPage.tsx": {
     "mtime": 1784862144904.7727,
@@ -1396,16 +1396,16 @@
     "hash": "08799d0a79606bc067b2b8eb3753ed53"
   },
   "frontend/src/router.tsx": {
-    "mtime": 1785011355278.5725,
-    "hash": "e40d1eb8ce64e60ba807115c929e9ae5"
+    "mtime": 1785013794815.3696,
+    "hash": "de449bd160e6f915ecb497ac5c73fd19"
   },
   "frontend/src/state/session.tsx": {
     "mtime": 1784862144905.2417,
     "hash": "080f58a661cb1eb1b0f8ae7c84334f59"
   },
   "frontend/src/ui/AppShell.tsx": {
-    "mtime": 1785011364795.798,
-    "hash": "0b3888c1250767ffaa72dd20d181a91a"
+    "mtime": 1785013665382.882,
+    "hash": "d13d64449ca0c2173220a68391294110"
   },
   "frontend/src/ui/HotelSelector.tsx": {
     "mtime": 1784942811903.0242,
@@ -1552,8 +1552,8 @@
     "hash": "4411043e7f85453f69f87b87ae03a153"
   },
   "frontend/vite.config.mjs": {
-    "mtime": 1784862144908.1711,
-    "hash": "998f5b24e3011c7cf0e833af105f837d"
+    "mtime": 1785013812365.9993,
+    "hash": "c21e7c5e652db572956c292ff0845bdc"
   },
   "reset.py": {
     "mtime": 1784862144919.68,
