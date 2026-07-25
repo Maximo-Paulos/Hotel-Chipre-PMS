@@ -116,7 +116,7 @@ def price_quote(
     target_currency: str | None = None,
     occupancy: int = Query(1, gt=0),
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping")),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping", "receptionist")),
 ):
     """
     Calculate pricing for a potential booking without persisting it.

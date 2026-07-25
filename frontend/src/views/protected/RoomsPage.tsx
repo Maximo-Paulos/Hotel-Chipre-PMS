@@ -6,6 +6,7 @@ import { type RoomStatus } from "../../api/rooms";
 import { roomBlockReasonLabel, roomBlockReasonOptions, useRoomBlocks } from "../../hooks/useRoomBlocks";
 import { useSubscriptionStatus } from "../../hooks/useSubscription";
 import { roomStatusLabel, useRooms } from "../../hooks/useRooms";
+import { useSession } from "../../state/session";
 
 const statusColors: Record<RoomStatus, string> = {
   available: "bg-emerald-100 text-emerald-800",
@@ -38,6 +39,12 @@ const emptyBlockForm = (): BlockFormValues => ({
 });
 
 export function RoomsPage() {
+  const { session } = useSession();
+  // Only owner/co_owner/manager can PATCH room status or manage room blocks
+  // (see require_roles in app/api/rooms.py and PERMISSION_ROOM_BLOCK). Reception
+  // and housekeeping must see room state as read-only instead of controls that
+  // always fail with a permission error.
+  const canManageRooms = ["owner", "co_owner", "manager"].includes(session.role ?? "");
   const { roomsQuery, categoriesQuery, updateStatusMutation } = useRooms();
   const { blocksQuery, createBlockMutation, resolveBlockMutation } = useRoomBlocks();
   const rooms = useMemo(() => roomsQuery.data || [], [roomsQuery.data]);
@@ -216,30 +223,34 @@ export function RoomsPage() {
                   </span>
                 </div>
                 <p className="mt-3 text-sm text-slate-700">{room.notes || "Sin notas"}</p>
-                <div className="mt-4 text-xs text-slate-600">
-                  <select
-                    value={room.status}
-                    onChange={(e) => handleStatusUpdate(room.id, e.target.value as RoomStatus)}
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-brand-400 focus:outline-none disabled:bg-slate-50"
-                    disabled={actionsBlocked || (pendingRoom === room.id && updateStatusMutation.isPending)}
-                  >
-                    {statusOptions.map((status) => (
-                      <option key={status} value={status}>
-                        {roomStatusLabel[status]}
-                      </option>
-                    ))}
-                    <option value="maintenance">Mantenimiento</option>
-                    <option value="blocked">Bloqueada</option>
-                  </select>
-                  {pendingRoom === room.id && updateStatusMutation.isPending && (
-                    <p className="mt-2 text-xs text-slate-500">Guardando...</p>
-                  )}
-                  {roomStatusError?.roomId === room.id && (
-                    <p role="alert" className="mt-2 text-xs text-rose-700">
-                      No se pudo actualizar el estado: {roomStatusError.message}
-                    </p>
-                  )}
-                </div>
+                {canManageRooms ? (
+                  <div className="mt-4 text-xs text-slate-600">
+                    <select
+                      value={room.status}
+                      onChange={(e) => handleStatusUpdate(room.id, e.target.value as RoomStatus)}
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-brand-400 focus:outline-none disabled:bg-slate-50"
+                      disabled={actionsBlocked || (pendingRoom === room.id && updateStatusMutation.isPending)}
+                    >
+                      {statusOptions.map((status) => (
+                        <option key={status} value={status}>
+                          {roomStatusLabel[status]}
+                        </option>
+                      ))}
+                      <option value="maintenance">Mantenimiento</option>
+                      <option value="blocked">Bloqueada</option>
+                    </select>
+                    {pendingRoom === room.id && updateStatusMutation.isPending && (
+                      <p className="mt-2 text-xs text-slate-500">Guardando...</p>
+                    )}
+                    {roomStatusError?.roomId === room.id && (
+                      <p role="alert" className="mt-2 text-xs text-rose-700">
+                        No se pudo actualizar el estado: {roomStatusError.message}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="mt-4 text-xs text-slate-400">Solo lectura para tu rol.</p>
+                )}
               </div>
             );
           })}
@@ -262,6 +273,7 @@ export function RoomsPage() {
           {blocksQuery.isFetching && <p className="text-xs text-slate-500">Actualizando bloqueos...</p>}
         </div>
 
+        {canManageRooms && (
         <form className="mt-4 grid gap-4 rounded-lg border border-slate-200 bg-slate-50 p-4 lg:grid-cols-6" onSubmit={handleCreateBlock}>
           <label className="space-y-1 text-sm lg:col-span-1">
             <span className="text-slate-600">Habitación</span>
@@ -357,6 +369,7 @@ export function RoomsPage() {
             </button>
           </div>
         </form>
+        )}
 
         {blockMessage && (
           <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">{blockMessage}</div>
@@ -375,14 +388,16 @@ export function RoomsPage() {
                     <h3 className="text-base font-semibold text-slate-900">{roomBlockReasonLabel[block.reason_code]}</h3>
                     <p className="text-xs text-slate-500">{formatBlockDates(block.starts_at, block.ends_at, block.is_indefinite)}</p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => handleResolveBlock(block.id)}
-                    disabled={actionsBlocked || (pendingBlockId === block.id && resolveBlockMutation.isPending)}
-                    className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-                  >
-                    {pendingBlockId === block.id && resolveBlockMutation.isPending ? "Resolviendo..." : "Resolver"}
-                  </button>
+                  {canManageRooms && (
+                    <button
+                      type="button"
+                      onClick={() => handleResolveBlock(block.id)}
+                      disabled={actionsBlocked || (pendingBlockId === block.id && resolveBlockMutation.isPending)}
+                      className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                    >
+                      {pendingBlockId === block.id && resolveBlockMutation.isPending ? "Resolviendo..." : "Resolver"}
+                    </button>
+                  )}
                 </div>
                 <p className="mt-3 text-sm text-slate-700">{block.reason_note || "Sin detalle adicional."}</p>
               </div>

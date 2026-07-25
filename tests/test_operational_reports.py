@@ -305,3 +305,51 @@ def test_reports_permission_denied_for_housekeeping(reports_client):
     response = client.get("/api/reports/operational/daily", params={"report_date": "2026-06-13"})
 
     assert response.status_code == 403
+
+
+def test_daily_report_pending_payments_reflect_consumption_charges(reports_client):
+    """A fully-paid stay that later gets a consumption charge (BillingAdjustment)
+    must show up as a pending payment with the real balance due, matching the
+    canonical operational_balance_due helper used elsewhere in the app."""
+    client, db, _ctx = reports_client
+    report_date = date(2026, 6, 13)
+    category, rooms = _make_room_set(db, 1, "C")
+    guest = _make_guest(db, 1, "consumption")
+    reservation = _make_reservation(
+        db,
+        hotel_id=1,
+        guest=guest,
+        category=category,
+        room=rooms[0],
+        code="RPT-CONSUME",
+        check_in=date(2026, 6, 12),
+        check_out=date(2026, 6, 15),
+        total="200.00",
+        paid="200.00",
+        status=ReservationStatusEnum.CHECKED_IN,
+    )
+    db.commit()
+
+    # Real journey: charge a consumption via the normal API, not a DB write.
+    charge_response = client.post(
+        f"/api/reservations/{reservation.id}/charges",
+        json={"amount": "50.00", "currency_code": "ARS", "description": "Minibar QA"},
+    )
+    assert charge_response.status_code == 201, charge_response.text
+
+    response = client.get("/api/reports/operational/daily", params={"report_date": report_date.isoformat()})
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    pending_ids = [item["reservation_id"] for item in payload["pending_payments"]["reservations"]]
+    assert reservation.id in pending_ids, (
+        "A stay with an unpaid consumption charge must appear in pending_payments"
+    )
+    pending_item = next(
+        item for item in payload["pending_payments"]["reservations"] if item["reservation_id"] == reservation.id
+    )
+    assert Decimal(pending_item["balance_due"]) == Decimal("50.00")
+    alert_reservation_ids = {
+        alert["reservation_id"] for alert in payload["alerts"] if alert["code"] == "pending_payment"
+    }
+    assert reservation.id in alert_reservation_ids

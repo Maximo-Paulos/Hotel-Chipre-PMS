@@ -50,7 +50,10 @@ const businessWebKitTestMatch = [
   "**/role-journey.spec.ts",
   "**/guest-companion-journey.spec.ts",
   "**/reservation-charge-journey.spec.ts",
-  "**/zz-cash-control-journey.spec.ts"
+  "**/zz-cash-control-journey.spec.ts",
+  "**/reception-checkin-checkout-journey.spec.ts",
+  "**/housekeeping-laundry-journey.spec.ts",
+  "**/manager-reports-journey.spec.ts"
 ];
 process.env.E2E_EMAIL_OUTBOX_PATH = emailOutboxPath;
 
@@ -97,16 +100,25 @@ export default defineConfig({
     {
       name: "webkit-iphone-se",
       testMatch: "**/responsive-smoke.spec.ts",
+      // These 3 webkit-iphone-* projects share the same isolated E2E backend/
+      // SQLite database (same as the chromium project above), and
+      // responsive-smoke.spec.ts opens/closes a real cash session. Running
+      // them at workers > 1 lets two projects race to open the same hotel's
+      // cash session concurrently, leaving one worker polling for a button
+      // that already changed name/state (flaky 60s timeout, not a product bug).
+      workers: 1,
       use: { ...devices["iPhone SE"], browserName: "webkit" }
     },
     {
       name: "webkit-iphone-15",
       testMatch: "**/responsive-smoke.spec.ts",
+      workers: 1,
       use: { ...devices["iPhone 15"], browserName: "webkit" }
     },
     {
       name: "webkit-iphone-15-pro-max",
       testMatch: "**/responsive-smoke.spec.ts",
+      workers: 1,
       use: { ...devices["iPhone 15 Pro Max"], browserName: "webkit" }
     },
     ...(process.env.E2E_WEBKIT_BUSINESS === "true"

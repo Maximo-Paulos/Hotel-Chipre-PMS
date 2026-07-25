@@ -53,6 +53,14 @@ const emptyMovementForm = {
 
 export function StockPage() {
   const { session } = useSession();
+  // PERMISSION_STOCK_ADJUST is owner/co_owner only (see
+  // _ensure_adjustment_permission in app/api/stock.py); manager only has
+  // PERMISSION_STOCK_OPERATE (in/out movements).
+  const canAdjustStock = ["owner", "co_owner"].includes(session.role ?? "");
+  const availableMovementModeOptions = useMemo(
+    () => (canAdjustStock ? movementModeOptions : movementModeOptions.filter((option) => option.type !== "adjustment")),
+    [canAdjustStock]
+  );
   const queryClient = useQueryClient();
   const [itemForm, setItemForm] = useState(emptyItemForm);
   const [locationForm, setLocationForm] = useState(emptyLocationForm);
@@ -328,7 +336,7 @@ export function StockPage() {
               <p className="mt-1 text-xs text-slate-500">Elegí una acción, revisá el resultado previsto y confirmá con un motivo.</p>
             </div>
             <div className="grid gap-2" role="group" aria-label="Acción de inventario">
-              {movementModeOptions.map((option) => {
+              {availableMovementModeOptions.map((option) => {
                 const selected = movementForm.movement_type === option.type;
                 return (
                   <button

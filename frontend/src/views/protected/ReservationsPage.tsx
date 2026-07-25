@@ -675,6 +675,9 @@ export function ReservationsPage() {
   const handleCheckOut = (reservation: Reservation) => {
     // Cierra el loop cobro→estadía→egreso: si queda saldo, llevamos al operador a
     // cobrarlo (Pago total, que cae en la caja) en vez de fallar el check-out.
+    // reservation.balance_due sólo cubre total_amount - amount_paid: no ve los
+    // consumos cargados después del pago (BillingAdjustment), así que ese saldo
+    // "operativo" recién lo conoce el backend al intentar el check-out.
     const balance = reservation.balance_due ?? 0;
     if (balance > 0.01) {
       openEdit(reservation);
@@ -686,7 +689,15 @@ export function ReservationsPage() {
     }
     checkOutMutation.mutate(reservation.id, {
       onSuccess: () => showToast("success", "Check-out registrado"),
-      onError: (err: unknown) => showToast("error", err instanceof Error ? err.message : "No se pudo hacer check-out")
+      onError: (err: unknown) => {
+        const message = err instanceof Error ? err.message : "No se pudo hacer check-out";
+        if (/saldo pendiente/i.test(message)) {
+          openEdit(reservation);
+          showToast("info", `${message} Cobralo con "Pago total" (queda en la caja) y luego hacé el check-out.`);
+          return;
+        }
+        showToast("error", message);
+      }
     });
   };
 
@@ -853,7 +864,7 @@ export function ReservationsPage() {
       );
       return;
     }
-    const due = paymentSummary.balance_due ?? 0;
+    const due = paymentSummary.operational_balance_due ?? paymentSummary.balance_due ?? 0;
     if (due <= 0.01) {
       showToast("info", "No hay saldo pendiente.");
       return;
@@ -885,7 +896,7 @@ export function ReservationsPage() {
       return;
     }
     const amount = Number(paymentAmountInput);
-    const balance = Number(paymentSummary.balance_due ?? 0);
+    const balance = Number(paymentSummary.operational_balance_due ?? paymentSummary.balance_due ?? 0);
     if (!Number.isFinite(amount) || amount <= 0 || amount > balance + 0.01) {
       showToast("error", "Ingresá un importe positivo que no supere el saldo pendiente.");
       return;
@@ -947,7 +958,7 @@ export function ReservationsPage() {
       return;
     }
     const amount = Number(paymentAmountInput);
-    const balance = Number(paymentSummary.balance_due ?? 0);
+    const balance = Number(paymentSummary.operational_balance_due ?? paymentSummary.balance_due ?? 0);
     if (!Number.isFinite(amount) || amount <= 0 || amount > balance + 0.01) {
       showToast("error", "Ingresá un importe positivo que no supere el saldo pendiente.");
       return;
@@ -1006,7 +1017,9 @@ export function ReservationsPage() {
 
   const handleGenerateDepositLink = () => {
     if (!editing || !paymentSummary) return;
-    const due = Math.max(paymentSummary.deposit_required - paymentSummary.amount_paid, 0) || (paymentSummary.balance_due ?? 0);
+    const due =
+      Math.max(paymentSummary.deposit_required - paymentSummary.amount_paid, 0) ||
+      (paymentSummary.operational_balance_due ?? paymentSummary.balance_due ?? 0);
     if (due <= 0.01) {
       showToast("info", "No hay un monto pendiente para generar el link.");
       return;
@@ -2186,7 +2199,9 @@ export function ReservationsPage() {
                     <div className="mt-2 grid gap-2 sm:grid-cols-4">
                       <div className="rounded-lg border border-emerald-100 bg-white/70 px-3 py-2 text-sm text-slate-800">
                         <p className="text-xs text-slate-500">Total</p>
-                        <p className="font-semibold">{formatMoney(paymentSummary.total_amount ?? 0, editingCurrencyCode)}</p>
+                        <p className="font-semibold">
+                          {formatMoney(paymentSummary.operational_total_amount ?? paymentSummary.total_amount ?? 0, editingCurrencyCode)}
+                        </p>
                       </div>
                       <div className="rounded-lg border border-emerald-100 bg-white/70 px-3 py-2 text-sm text-slate-800">
                         <p className="text-xs text-slate-500">Pagado</p>
@@ -2198,7 +2213,9 @@ export function ReservationsPage() {
                       </div>
                       <div className="rounded-lg border border-emerald-100 bg-white/70 px-3 py-2 text-sm text-slate-800">
                         <p className="text-xs text-slate-500">Saldo</p>
-                        <p className="font-semibold">{formatMoney(paymentSummary.balance_due ?? 0, editingCurrencyCode)}</p>
+                        <p className="font-semibold">
+                          {formatMoney(paymentSummary.operational_balance_due ?? paymentSummary.balance_due ?? 0, editingCurrencyCode)}
+                        </p>
                       </div>
                     </div>
                   ) : (
@@ -2388,14 +2405,22 @@ export function ReservationsPage() {
                     </div>
                   )}
 
-                  {activeSurcharge && paymentSummary && (paymentSummary.balance_due ?? 0) > 0 && (
+                  {activeSurcharge && paymentSummary && (paymentSummary.operational_balance_due ?? paymentSummary.balance_due ?? 0) > 0 && (
                     <p className="mt-2 text-xs text-amber-700">
                       Recargo por {paymentMethodOptions.find((o) => o.value === paymentMethod)?.label ?? paymentMethod}:{" "}
                       {activeSurcharge.surcharge_type === "percentage"
                         ? `${activeSurcharge.amount}%`
                         : formatMoney(activeSurcharge.amount, editingCurrencyCode)}
-                      . Pago total: saldo {formatMoney(paymentSummary.balance_due ?? 0, editingCurrencyCode)} → se cobra{" "}
-                      <strong>{formatMoney(grossWithSurcharge(paymentSummary.balance_due ?? 0, activeSurcharge), editingCurrencyCode)}</strong>.
+                      . Pago total: saldo{" "}
+                      {formatMoney(paymentSummary.operational_balance_due ?? paymentSummary.balance_due ?? 0, editingCurrencyCode)} → se
+                      cobra{" "}
+                      <strong>
+                        {formatMoney(
+                          grossWithSurcharge(paymentSummary.operational_balance_due ?? paymentSummary.balance_due ?? 0, activeSurcharge),
+                          editingCurrencyCode
+                        )}
+                      </strong>
+                      .
                     </p>
                   )}
 

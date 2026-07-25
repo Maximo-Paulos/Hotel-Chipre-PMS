@@ -54,21 +54,30 @@ test.describe("Responsive mobile smoke", () => {
     await page.setViewportSize({ width: 375, height: 812 });
 
     const mobileNavigationTargets = await page.locator('nav[aria-label="Navegación móvil"] a').evaluateAll((nodes) =>
-      nodes.map((node) => {
-        const rect = (node as HTMLElement).getBoundingClientRect();
-        return {
-          label: node.textContent?.trim() || "",
-          height: Math.round(rect.height),
-          width: Math.round(rect.width)
-        };
-      })
+      nodes
+        .map((node) => {
+          const element = node as HTMLElement;
+          const rect = element.getBoundingClientRect();
+          const style = window.getComputedStyle(element);
+          return {
+            label: node.textContent?.trim() || "",
+            height: Math.round(rect.height),
+            width: Math.round(rect.width),
+            // A nav item can legitimately unmount between query and
+            // measurement (e.g. the Onboarding link disappears once
+            // onboarding completes), leaving a detached node whose rect is
+            // always 0x0. That is not a real undersized touch target.
+            connected: element.isConnected && style.display !== "none" && style.visibility !== "hidden"
+          };
+        })
+        .filter((target) => target.connected)
     );
     expect(
       mobileNavigationTargets.filter((target) => target.height < 44 || target.width < 44),
       "mobile navigation has undersized touch targets"
     ).toEqual([]);
 
-    for (const path of ["/reservas", "/caja", "/operacion/stock", "/reportes", "/operacion/lavanderia"]) {
+    for (const path of ["/reservas", "/caja", "/operacion/stock", "/reportes", "/operacion/lavanderia", "/habitaciones"]) {
       await page.goto(path);
       const targets = await page.evaluate(() => {
         const nodes = Array.from(
@@ -102,12 +111,19 @@ test.describe("Responsive mobile smoke", () => {
 
     const openCashButton = page.getByRole("button", { name: "Abrir caja", exact: true });
     const existingOpenCashButton = page.getByRole("button", { name: "Ya hay una caja abierta", exact: true });
-    if (await openCashButton.isVisible()) {
-      await openCashButton.click();
-      await expect(page.getByText("Caja abierta.", { exact: true })).toBeVisible();
-    } else {
-      await expect(existingOpenCashButton).toBeVisible();
-    }
+    // The 3 webkit-iphone-* projects share one backend/database, so whichever
+    // project's run reaches this test first "wins" opening the cash session.
+    // A single isVisible()+click() snapshot can catch the brief window before
+    // that other project's session finishes propagating to this page's query
+    // cache, so retry the whole decision instead of failing on a stale read.
+    await expect(async () => {
+      if (await openCashButton.isEnabled({ timeout: 500 }).catch(() => false)) {
+        await openCashButton.click({ timeout: 2_000 });
+        await expect(page.getByText("Caja abierta.", { exact: true })).toBeVisible({ timeout: 2_000 });
+      } else {
+        await expect(existingOpenCashButton).toBeVisible({ timeout: 2_000 });
+      }
+    }).toPass({ timeout: 20_000 });
 
     const approvalCheckbox = page.locator("form").filter({ hasText: "Cerrar caja" }).locator('input[type="checkbox"]');
     await expect(approvalCheckbox).toBeVisible();
@@ -121,7 +137,7 @@ test.describe("Responsive mobile smoke", () => {
     await login(page);
     await page.setViewportSize({ width: 390, height: 844 });
 
-    for (const path of ["/reservas", "/caja", "/operacion/stock", "/reportes", "/operacion/lavanderia"]) {
+    for (const path of ["/reservas", "/caja", "/operacion/stock", "/reportes", "/operacion/lavanderia", "/habitaciones"]) {
       await page.goto(path);
       const layout = await page.evaluate(() => ({
         viewportWidth: window.innerWidth,

@@ -422,7 +422,7 @@ export function CashRegisterPage() {
                 <p className="text-sm text-slate-600">
                   Estado: {Number(closeReport.difference) === 0 ? "sin diferencia" : closeReport.difference_approved ? "diferencia aprobada" : "pendiente de aprobacion"}
                 </p>
-                {!closeReport.difference_approved && Number(closeReport.difference) !== 0 ? (
+                {canApproveDifference && !closeReport.difference_approved && Number(closeReport.difference) !== 0 ? (
                   <button
                     type="button"
                     disabled={busy}

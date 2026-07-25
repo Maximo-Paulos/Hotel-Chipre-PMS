@@ -74,3 +74,68 @@ for (const persona of personas) {
     await expect(page.getByRole("heading", { name: persona.allowedHeading })).toBeVisible();
   });
 }
+
+// The "Habitaciones" nav link is shown to every operational role, but the backend
+// only lets owner/co_owner/manager mutate room status or room blocks
+// (require_roles / PERMISSION_ROOM_BLOCK). Reception and housekeeping must not be
+// offered controls that always fail; they should see room state as read-only.
+for (const persona of personas) {
+  const canManageRooms = persona.label === "manager";
+
+  test(`${persona.label} room controls on /habitaciones match its permission`, async ({ page }) => {
+    await login(page, persona);
+    await page.goto("/habitaciones");
+    // Scope to <main>: the header's hotel switcher also renders a <select>,
+    // which is unrelated to per-room permission controls.
+    const main = page.locator("main");
+    await expect(main.getByRole("heading", { name: "Habitaciones", exact: true })).toBeVisible();
+    await expect(main.locator("p", { hasText: "Hab. 101" })).toBeVisible();
+
+    if (canManageRooms) {
+      await expect(main.locator("select").first()).toBeVisible();
+      await expect(main.getByRole("button", { name: /Crear bloqueo/ })).toBeVisible();
+    } else {
+      await expect(main.locator("select")).toHaveCount(0);
+      await expect(main.getByRole("button", { name: /Crear bloqueo/ })).toHaveCount(0);
+    }
+  });
+}
+
+// Creating a laundry batch requires owner/co_owner/manager (see require_roles on
+// POST /api/laundry/batches); housekeeping can only list batches, add items and
+// change status. The "Crear lote" form was shown to housekeeping regardless and
+// always failed on submit.
+test("housekeeping sees laundry batch status/item controls but not batch creation", async ({ page }) => {
+  const housekeeping = personas.find((persona) => persona.label === "housekeeping")!;
+  await login(page, housekeeping);
+  await page.goto("/operacion/lavanderia");
+
+  const main = page.locator("main");
+  await expect(main.getByRole("heading", { name: "Lavanderia", exact: true })).toBeVisible();
+  await expect(main.getByRole("button", { name: "Crear lote" })).toHaveCount(0);
+});
+
+test("manager keeps laundry batch creation", async ({ page }) => {
+  const manager = personas.find((persona) => persona.label === "manager")!;
+  await login(page, manager);
+  await page.goto("/operacion/lavanderia");
+
+  const main = page.locator("main");
+  await expect(main.getByRole("heading", { name: "Lavanderia", exact: true })).toBeVisible();
+  await expect(main.getByRole("button", { name: "Crear lote" })).toBeVisible();
+});
+
+// PERMISSION_STOCK_ADJUST is owner/co_owner only; manager has PERMISSION_STOCK_OPERATE
+// (in/out movements) but not adjustments (see _ensure_adjustment_permission in
+// app/api/stock.py). StockPage offered the "Ajuste" movement-type option to
+// manager regardless, which always 403s on submit.
+test("manager does not see the stock adjustment option, only in/out movements", async ({ page }) => {
+  const manager = personas.find((persona) => persona.label === "manager")!;
+  await login(page, manager);
+  await page.goto("/operacion/stock");
+
+  const movementGroup = page.getByRole("group", { name: "Acción de inventario" });
+  await expect(movementGroup.getByRole("button", { name: /^Ingreso/ })).toBeVisible();
+  await expect(movementGroup.getByRole("button", { name: /^Egreso/ })).toBeVisible();
+  await expect(movementGroup.getByRole("button", { name: /^Ajuste/ })).toHaveCount(0);
+});
