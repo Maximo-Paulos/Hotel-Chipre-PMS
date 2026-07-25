@@ -24,6 +24,28 @@ test.describe("E2E smoke", () => {
     await expect(page.getByText(/credenciales|no se pudo/i)).toBeVisible();
   });
 
+  test("a slow login explains that the connection is taking longer than usual", async ({ page }) => {
+    let releaseLoginResponse: () => void = () => undefined;
+    const loginResponseGate = new Promise<void>((resolve) => {
+      releaseLoginResponse = resolve;
+    });
+
+    await page.route("**/api/auth/login", async (route) => {
+      await loginResponseGate;
+      await route.fulfill({ status: 503, contentType: "application/json", body: '{"detail":"Unavailable"}' });
+    });
+
+    await page.goto("/login");
+    await page.locator('input[type="email"]').fill(ownerEmail);
+    await page.locator('input[type="password"]').fill(ownerPassword);
+    await page.getByTestId("login-submit").click();
+
+    await expect(page.getByTestId("login-slow-hint")).toBeVisible({ timeout: 6_000 });
+
+    releaseLoginResponse();
+    await expect(page).toHaveURL(/\/login$/);
+  });
+
   test("logout is visible and clears the local session", async ({ page }) => {
     await login(page);
     await page.waitForURL("**/dashboard", { timeout: 15_000 });

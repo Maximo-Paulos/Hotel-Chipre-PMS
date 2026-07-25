@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { ApiError } from "../../api/client";
@@ -13,7 +13,18 @@ export function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [slowLogin, setSlowLogin] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!loading) {
+      setSlowLogin(false);
+      return;
+    }
+
+    const timeout = window.setTimeout(() => setSlowLogin(true), 5_000);
+    return () => window.clearTimeout(timeout);
+  }, [loading]);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -91,6 +102,11 @@ export function LoginPage() {
             />
           </div>
           {error && <p className="rounded-md bg-rose-50 p-2 text-sm text-rose-700">{error}</p>}
+          {loading && slowLogin && (
+            <p className="rounded-md bg-amber-50 p-2 text-sm text-amber-800" data-testid="login-slow-hint" role="status">
+              La conexión está demorando más de lo habitual. Estamos intentando ingresar sin perder tus datos.
+            </p>
+          )}
           <button
             type="submit"
             disabled={loading}
