@@ -30,14 +30,18 @@ const PRICE_FIELD_LABEL: Record<PriceField, string> = {
   price: "Precio base",
   price_cash: "Efectivo",
   price_transfer: "Transferencia",
-  price_mercadopago: "Mercado Pago"
+  price_mercadopago: "Mercado Pago",
+  price_paypal: "PayPal",
+  price_credit_card: "Tarjeta de crédito"
 };
 
 const BULK_FIELD_OPTIONS: Array<{ value: PriceField; label: string }> = [
   { value: "price", label: "Precio base" },
   { value: "price_cash", label: "Efectivo" },
   { value: "price_transfer", label: "Transferencia" },
-  { value: "price_mercadopago", label: "Mercado Pago" }
+  { value: "price_mercadopago", label: "Mercado Pago" },
+  { value: "price_paypal", label: "PayPal" },
+  { value: "price_credit_card", label: "Tarjeta de crédito" }
 ];
 
 const BULK_ACTION_OPTIONS = [
@@ -125,6 +129,8 @@ export function RateCalendarPage() {
   const [priceCash, setPriceCash] = useState("");
   const [priceTransfer, setPriceTransfer] = useState("");
   const [priceMercadopago, setPriceMercadopago] = useState("");
+  const [pricePaypal, setPricePaypal] = useState("");
+  const [priceCreditCard, setPriceCreditCard] = useState("");
   const [saveError, setSaveError] = useState<string | null>(null);
   const [bulkMode, setBulkMode] = useState<"range" | "weekdays">("range");
   const [bulkEditKind, setBulkEditKind] = useState<"all" | "field">("all");
@@ -169,6 +175,8 @@ export function RateCalendarPage() {
       setNumberInput(setPriceCash, row.price_cash);
       setNumberInput(setPriceTransfer, row.price_transfer);
       setNumberInput(setPriceMercadopago, row.price_mercadopago);
+      setNumberInput(setPricePaypal, row.price_paypal);
+      setNumberInput(setPriceCreditCard, row.price_credit_card);
     }
 
     if (selectionAnchor && selectionAnchor.field === field) {
@@ -248,6 +256,8 @@ export function RateCalendarPage() {
         price_cash: toNumberOrNull(priceCash),
         price_transfer: toNumberOrNull(priceTransfer),
         price_mercadopago: toNumberOrNull(priceMercadopago),
+        price_paypal: toNumberOrNull(pricePaypal),
+        price_credit_card: toNumberOrNull(priceCreditCard),
         exclude_dates: excludedDates
       },
       { onError: (err) => setSaveError(err.message) }
@@ -580,6 +590,14 @@ export function RateCalendarPage() {
                       Mercado Pago
                       <input type="number" min={0} step="0.01" value={priceMercadopago} onChange={(e) => setPriceMercadopago(e.target.value)} placeholder="opcional" className={`${inputClass} normal-case tracking-normal text-slate-900`} />
                     </label>
+                    <label className={labelClass}>
+                      PayPal
+                      <input type="number" min={0} step="0.01" value={pricePaypal} onChange={(e) => setPricePaypal(e.target.value)} placeholder="opcional" className={`${inputClass} normal-case tracking-normal text-slate-900`} />
+                    </label>
+                    <label className={labelClass}>
+                      Tarjeta de crédito
+                      <input type="number" min={0} step="0.01" value={priceCreditCard} onChange={(e) => setPriceCreditCard(e.target.value)} placeholder="opcional" className={`${inputClass} normal-case tracking-normal text-slate-900`} />
+                    </label>
                   </>
                 )}
               </div>
@@ -600,6 +618,8 @@ export function RateCalendarPage() {
                     setPriceCash("");
                     setPriceTransfer("");
                     setPriceMercadopago("");
+                    setPricePaypal("");
+                    setPriceCreditCard("");
                     setBulkFieldValue("");
                     setSaveError(null);
                     setSelectedWeekdays([]);

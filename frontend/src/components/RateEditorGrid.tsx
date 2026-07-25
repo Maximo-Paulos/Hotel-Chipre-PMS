@@ -18,13 +18,21 @@ type RateEditorGridProps = {
   disabled?: boolean;
 };
 
-export type PriceField = "price" | "price_cash" | "price_transfer" | "price_mercadopago";
+export type PriceField =
+  | "price"
+  | "price_cash"
+  | "price_transfer"
+  | "price_mercadopago"
+  | "price_paypal"
+  | "price_credit_card";
 
 const PRICE_ROWS: Array<{ field: PriceField; label: string; required?: boolean }> = [
   { field: "price", label: "Precio base", required: true },
   { field: "price_cash", label: "Efectivo" },
   { field: "price_transfer", label: "Transferencia" },
-  { field: "price_mercadopago", label: "Mercado Pago" }
+  { field: "price_mercadopago", label: "Mercado Pago" },
+  { field: "price_paypal", label: "PayPal" },
+  { field: "price_credit_card", label: "Tarjeta de crédito" }
 ];
 
 const WEEKDAY = new Intl.DateTimeFormat("es-AR", { weekday: "short" });
@@ -149,7 +157,9 @@ export function RateEditorGrid({
       price: field === "price" ? (value as number) : row.price,
       price_cash: field === "price_cash" ? value : row.price_cash ?? null,
       price_transfer: field === "price_transfer" ? value : row.price_transfer ?? null,
-      price_mercadopago: field === "price_mercadopago" ? value : row.price_mercadopago ?? null
+      price_mercadopago: field === "price_mercadopago" ? value : row.price_mercadopago ?? null,
+      price_paypal: field === "price_paypal" ? value : row.price_paypal ?? null,
+      price_credit_card: field === "price_credit_card" ? value : row.price_credit_card ?? null
     });
     return true;
   };
