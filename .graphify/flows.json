@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-25T06:25:58.722Z",
+  "generatedAt": "2026-07-25T08:22:33.719Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -3317,34 +3317,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_financial_ledger_operational_balance_due",
-      "name": "operational_balance_due",
-      "entryPoint": "services_financial_ledger_operational_balance_due",
-      "entryPointId": "services_financial_ledger_operational_balance_due",
-      "path": [
-        "services_financial_ledger_operational_balance_due",
-        "services_financial_ledger_paid_amount_with_legacy_fallback",
-        "services_financial_ledger_completed_paid_amount",
-        "services_financial_ledger_completed_paid_amounts_by_reservation",
-        "services_financial_ledger_signed_transaction_amount"
-      ],
-      "qualifiedPath": [
-        "services_financial_ledger_operational_balance_due",
-        "services_financial_ledger_paid_amount_with_legacy_fallback",
-        "services_financial_ledger_completed_paid_amount",
-        "services_financial_ledger_completed_paid_amounts_by_reservation",
-        "services_financial_ledger_signed_transaction_amount"
-      ],
-      "depth": 4,
-      "nodeCount": 5,
-      "fileCount": 1,
-      "files": [
-        "app/services/financial_ledger.py"
-      ],
-      "criticality": 0.24,
-      "warnings": []
-    },
-    {
       "id": "flow:services_gemma_service_gemmaservice_suggest_policy_from_questionnaire",
       "name": ".suggest_policy_from_questionnaire",
       "entryPoint": "services_gemma_service_gemmaservice_suggest_policy_from_questionnaire",
@@ -3602,6 +3574,36 @@
         "alembic/versions/20260724_room_move_enum_values.py"
       ],
       "criticality": 0.2325,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_financial_ledger_operational_balance_due",
+      "name": "operational_balance_due",
+      "entryPoint": "services_financial_ledger_operational_balance_due",
+      "entryPointId": "services_financial_ledger_operational_balance_due",
+      "path": [
+        "services_financial_ledger_operational_balance_due",
+        "services_financial_ledger_billing_adjustment_totals_by_reservation",
+        "services_financial_ledger_paid_amount_with_legacy_fallback",
+        "services_financial_ledger_completed_paid_amount",
+        "services_financial_ledger_completed_paid_amounts_by_reservation",
+        "services_financial_ledger_signed_transaction_amount"
+      ],
+      "qualifiedPath": [
+        "services_financial_ledger_operational_balance_due",
+        "services_financial_ledger_billing_adjustment_totals_by_reservation",
+        "services_financial_ledger_paid_amount_with_legacy_fallback",
+        "services_financial_ledger_completed_paid_amount",
+        "services_financial_ledger_completed_paid_amounts_by_reservation",
+        "services_financial_ledger_signed_transaction_amount"
+      ],
+      "depth": 4,
+      "nodeCount": 6,
+      "fileCount": 1,
+      "files": [
+        "app/services/financial_ledger.py"
+      ],
+      "criticality": 0.2317,
       "warnings": []
     },
     {
