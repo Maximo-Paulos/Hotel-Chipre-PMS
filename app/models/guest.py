@@ -62,6 +62,12 @@ class Guest(Base):
     postal_code = Column(String(20), nullable=True)
     country = Column(String(80), nullable=True)
 
+    # v72 §7.2 — required to complete check-in (B3.2/B3.3)
+    birth_place = Column(String(120), nullable=True)
+    birth_country = Column(String(80), nullable=True)
+    marital_status = Column(String(40), nullable=True)
+    occupation = Column(String(120), nullable=True)
+
     # Rating and behavioral classification (v72 §2.6)
     rating = Column(
         Enum(

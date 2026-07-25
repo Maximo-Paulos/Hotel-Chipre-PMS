@@ -52,6 +52,10 @@ def _guest(
         document_number=document_number,
         email=email,
         phone=phone,
+        birth_place="Buenos Aires",
+        birth_country="Argentina",
+        marital_status="single",
+        occupation="Comerciante",
         terms_accepted=True,
     )
     db.add(guest)

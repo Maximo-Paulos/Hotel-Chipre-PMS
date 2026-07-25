@@ -16,6 +16,12 @@ export type Guest = {
   state_province?: string | null;
   postal_code?: string | null;
   country?: string | null;
+  terms_accepted?: boolean;
+  // v72 §7.2 (B3.2/B3.3) -- always required to complete check-in.
+  birth_place?: string | null;
+  birth_country?: string | null;
+  marital_status?: string | null;
+  occupation?: string | null;
   special_requests?: string | null;
   observations?: string | null;
   created_at?: string | null;
@@ -108,6 +114,10 @@ export type GuestPayload = {
   state_province?: string;
   postal_code?: string;
   country?: string;
+  birth_place?: string;
+  birth_country?: string;
+  marital_status?: string;
+  occupation?: string;
   terms_accepted?: boolean;
   special_requests?: string;
   observations?: string;
@@ -125,6 +135,10 @@ export type GuestUpdatePayload = Partial<GuestPayload> & {
   state_province?: string | null;
   postal_code?: string | null;
   country?: string | null;
+  birth_place?: string | null;
+  birth_country?: string | null;
+  marital_status?: string | null;
+  occupation?: string | null;
   special_requests?: string | null;
   observations?: string | null;
 };
@@ -169,6 +183,18 @@ export const exportGuestLedger = (fromDate: string, toDate: string, session?: Se
   fetch(buildUrl(`/api/guests/ledger/export?from_date=${encodeURIComponent(fromDate)}&to_date=${encodeURIComponent(toDate)}`), {
     headers: buildAuthHeaders(session)
   });
+
+export type GuestCheckinValidation = {
+  guest_id: number;
+  valid: boolean;
+  errors: string[];
+};
+
+// B3.3/B3.4: lets the check-in UI know *before* attempting the check-in
+// whether the guest is missing required data, so it can show the capture
+// form up front instead of surfacing a raw 400 after the fact.
+export const validateGuestForCheckin = (guestId: number, session?: SessionLike) =>
+  apiFetch<GuestCheckinValidation>(`/api/checkin/validate/${guestId}`, { session });
 
 export const checkInGuestReservation = (
   reservationId: number,

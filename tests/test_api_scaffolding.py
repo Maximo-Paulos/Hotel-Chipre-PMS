@@ -303,6 +303,10 @@ def test_booking_status_and_overlap(api_client):
             document_number="30123456",
             nationality="Argentina",
             date_of_birth=date(1992, 6, 14),
+            birth_place="Buenos Aires",
+            birth_country="Argentina",
+            marital_status="single",
+            occupation="Analista",
             terms_accepted=True,
         )
         room1 = Room(room_number="301", floor=3, category_id=1, status=RoomStatusEnum.AVAILABLE, hotel_id=1)

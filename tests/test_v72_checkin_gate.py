@@ -298,6 +298,10 @@ class TestGuestValidationGates:
             last_name="NoDoc",
             email="ok_nodoc@test.com",
             terms_accepted=True,
+            birth_place="Salta",
+            birth_country="Argentina",
+            marital_status="single",
+            occupation="Chef",
             hotel_id=1,
         )
         db.add(guest)
@@ -319,6 +323,10 @@ class TestGuestValidationGates:
             document_type=DocumentTypeEnum.PASSPORT,
             document_number="XYZ123456",
             terms_accepted=False,
+            birth_place="Salta",
+            birth_country="Argentina",
+            marital_status="single",
+            occupation="Chef",
             hotel_id=1,
         )
         db.add(guest)

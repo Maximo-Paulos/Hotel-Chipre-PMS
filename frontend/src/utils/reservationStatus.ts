@@ -22,3 +22,8 @@ export const canCheckInReservation = (status: ReservationStatus) =>
   ["pending", "deposit_paid", "fully_paid", "pre_check_in"].includes(status);
 
 export const canCheckOutReservation = (status: ReservationStatus) => status === "checked_in";
+
+// B3.1: PRE_CHECK_IN is only reachable from fully_paid (see VALID_TRANSITIONS
+// in app/models/reservation.py) -- once already pre_check_in, only the final
+// confirmation (canCheckInReservation) makes sense.
+export const canPartialCheckIn = (status: ReservationStatus) => status === "fully_paid";

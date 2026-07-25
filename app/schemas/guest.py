@@ -44,6 +44,10 @@ class GuestBase(BaseModel):
     state_province: Optional[str] = None
     postal_code: Optional[str] = None
     country: Optional[str] = None
+    birth_place: Optional[str] = Field(default=None, max_length=120)
+    birth_country: Optional[str] = Field(default=None, max_length=80)
+    marital_status: Optional[str] = Field(default=None, max_length=40)
+    occupation: Optional[str] = Field(default=None, max_length=120)
     terms_accepted: bool = False
     digital_signature: Optional[str] = None
     special_requests: Optional[str] = None
@@ -70,6 +74,10 @@ class GuestUpdate(BaseModel):
     state_province: Optional[str] = None
     postal_code: Optional[str] = None
     country: Optional[str] = None
+    birth_place: Optional[str] = Field(default=None, max_length=120)
+    birth_country: Optional[str] = Field(default=None, max_length=80)
+    marital_status: Optional[str] = Field(default=None, max_length=40)
+    occupation: Optional[str] = Field(default=None, max_length=120)
     terms_accepted: Optional[bool] = None
     digital_signature: Optional[str] = None
     special_requests: Optional[str] = None

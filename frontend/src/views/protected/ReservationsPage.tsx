@@ -44,6 +44,7 @@ import { usePaymentLinks, usePaymentLinkCreate } from "../../hooks/usePaymentLin
 import { usePaymentProofMutations, usePaymentProofs } from "../../hooks/usePaymentProofs";
 import { fetchPaymentProofImage } from "../../api/paymentProofs";
 import { useHotelConfig } from "../../hooks/useHotelConfig";
+import { useReservationDrawer } from "../../hooks/useReservationDrawer";
 import { type HotelConfig } from "../../api/config";
 import { useRooms } from "../../hooks/useRooms";
 import { useSubscriptionStatus } from "../../hooks/useSubscription";
@@ -503,6 +504,7 @@ export function ReservationsPage() {
   // modal. Open it once on arrival and drop the flag so back/refresh
   // doesn't keep reopening it.
   const [searchParams, setSearchParams] = useSearchParams();
+  const { openReservation } = useReservationDrawer();
   useEffect(() => {
     if (searchParams.get("crear") === "1") {
       openCreate();
@@ -704,7 +706,19 @@ export function ReservationsPage() {
     }
     checkInMutation.mutate(reservation.id, {
       onSuccess: () => showToast("success", "Check-in registrado"),
-      onError: (err: unknown) => showToast("error", err instanceof Error ? err.message : "No se pudo hacer check-in")
+      onError: (err: unknown) => {
+        const msg = err instanceof Error ? err.message : "No se pudo hacer check-in";
+        // B3.3/B3.4: this quick action has no room to show the guest-data
+        // capture form inline -- send the receptionist to the reservation
+        // panel, which shows that form up front, instead of leaving them
+        // stuck on a bare 400 with no way to fix it from here.
+        if (msg.includes("missing required guest data")) {
+          openReservation(reservation.id);
+          showToast("info", "Faltan datos del huésped para el check-in: completalos en el panel de la reserva.");
+          return;
+        }
+        showToast("error", msg);
+      }
     });
   };
 

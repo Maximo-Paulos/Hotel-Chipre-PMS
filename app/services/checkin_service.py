@@ -67,24 +67,7 @@ def validate_guest_for_checkin(
     )
 
 
-def perform_checkin(
-    db: Session,
-    reservation_id: int,
-    hotel_id: int | None = None,
-    *,
-    override_prohibido: bool = False,
-    override_user_id: int | None = None,
-) -> Reservation:
-    """
-    Full check-in process:
-    1. Load reservation with guest data
-    2. Verify reservation is in 'fully_paid' status
-    3. Validate guest identity documents
-    4. Transition to checked_in
-    5. Record actual check-in timestamp
-    
-    Raises CheckInError with descriptive messages on failure.
-    """
+def _load_reservation(db: Session, reservation_id: int, hotel_id: int | None) -> tuple[Reservation, int]:
     reservation_q = db.query(Reservation).filter(Reservation.id == reservation_id)
     if hotel_id is not None:
         reservation_q = reservation_q.filter(Reservation.hotel_id == hotel_id)
@@ -93,26 +76,22 @@ def perform_checkin(
     if not reservation:
         raise CheckInError(f"Reservation {reservation_id} not found")
 
-    hotel_id = reservation.hotel_id or hotel_id
-    if hotel_id is None:
+    resolved_hotel_id = reservation.hotel_id or hotel_id
+    if resolved_hotel_id is None:
         raise CheckInError("hotel_id is required for check-in")
-    reservation.hotel_id = hotel_id
-    ledger_paid = paid_amount_with_legacy_fallback(db, hotel_id, reservation)
-    ledger_balance = max(Decimal("0"), Decimal(str(reservation.total_amount or 0)) - ledger_paid)
+    reservation.hotel_id = resolved_hotel_id
+    return reservation, resolved_hotel_id
 
-    # Must be fully_paid or pre_check_in to check in
-    allowed_pre_checkin = {ReservationStatusEnum.FULLY_PAID, ReservationStatusEnum.PRE_CHECK_IN}
-    if reservation.status not in allowed_pre_checkin:
-        raise CheckInError(
-            f"Cannot check in: reservation status is '{reservation.status.value}'. "
-            f"Must be 'fully_paid' or 'pre_check_in'. Outstanding balance: ${ledger_balance:.2f}"
-        )
 
-    # Load guest
-    guest = db.query(Guest).filter(Guest.id == reservation.guest_id, Guest.hotel_id == hotel_id).first()
-    if not guest:
-        raise CheckInError("Guest record not found for this reservation")
-
+def _guard_prohibido(
+    db: Session,
+    hotel_id: int,
+    guest: Guest,
+    reservation: Reservation,
+    *,
+    override_prohibido: bool,
+    override_user_id: int | None,
+) -> None:
     # v72 §2.7 — block check-in if guest has an active prohibido_alojar tag
     prohibido_tag = (
         db.query(GuestTag)
@@ -150,14 +129,71 @@ def perform_checkin(
             "An authorized override by a manager is required."
         )
 
-    # Validate guest data
+
+def _apply_guest_patch_and_validate(
+    db: Session,
+    guest: Guest,
+    hotel_id: int,
+    reservation: Reservation,
+    guest_patch: dict | None,
+) -> None:
+    """B3.4: apply the guest data captured at the check-in desk (if any) before
+    validating — same transaction, so the receptionist completes and checks in
+    in a single request instead of hitting a 400 with no way to fix it."""
+    if guest_patch:
+        for key, value in guest_patch.items():
+            setattr(guest, key, value)
+        db.flush()
+
     config = db.query(HotelConfiguration).filter(HotelConfiguration.id == hotel_id).first()
     validation_errors = validate_guest_for_checkin(db, guest, config or hotel_id, reservation=reservation)
-
     if validation_errors:
         raise CheckInError(
             f"Check-in blocked — missing required guest data: {'; '.join(validation_errors)}"
         )
+
+
+def perform_checkin(
+    db: Session,
+    reservation_id: int,
+    hotel_id: int | None = None,
+    *,
+    override_prohibido: bool = False,
+    override_user_id: int | None = None,
+    guest_patch: dict | None = None,
+) -> Reservation:
+    """
+    Full check-in process:
+    1. Load reservation with guest data
+    2. Verify reservation is in 'fully_paid' or 'pre_check_in' status
+    3. Apply any captured guest data, then validate guest identity documents
+    4. Transition to checked_in
+    5. Record actual check-in timestamp
+
+    Raises CheckInError with descriptive messages on failure.
+    """
+    reservation, hotel_id = _load_reservation(db, reservation_id, hotel_id)
+    ledger_paid = paid_amount_with_legacy_fallback(db, hotel_id, reservation)
+    ledger_balance = max(Decimal("0"), Decimal(str(reservation.total_amount or 0)) - ledger_paid)
+
+    # Must be fully_paid or pre_check_in to check in
+    allowed_pre_checkin = {ReservationStatusEnum.FULLY_PAID, ReservationStatusEnum.PRE_CHECK_IN}
+    if reservation.status not in allowed_pre_checkin:
+        raise CheckInError(
+            f"Cannot check in: reservation status is '{reservation.status.value}'. "
+            f"Must be 'fully_paid' or 'pre_check_in'. Outstanding balance: ${ledger_balance:.2f}"
+        )
+
+    # Load guest
+    guest = db.query(Guest).filter(Guest.id == reservation.guest_id, Guest.hotel_id == hotel_id).first()
+    if not guest:
+        raise CheckInError("Guest record not found for this reservation")
+
+    _guard_prohibido(
+        db, hotel_id, guest, reservation,
+        override_prohibido=override_prohibido, override_user_id=override_user_id,
+    )
+    _apply_guest_patch_and_validate(db, guest, hotel_id, reservation, guest_patch)
 
     # All validations passed — perform check-in
     try:
@@ -171,6 +207,51 @@ def perform_checkin(
         room = db.query(Room).filter(Room.id == reservation.room_id, Room.hotel_id == hotel_id).first()
         if room:
             room.status = RoomStatusEnum.OCCUPIED
+    db.flush()
+
+    return reservation
+
+
+def perform_partial_checkin(
+    db: Session,
+    reservation_id: int,
+    hotel_id: int | None = None,
+    *,
+    override_prohibido: bool = False,
+    override_user_id: int | None = None,
+    guest_patch: dict | None = None,
+) -> Reservation:
+    """
+    B3.1: writes the 'pre_check_in' state (v72 §7.2 — "docs loaded, awaiting
+    room entry"). Since PRE_CHECK_IN means the guest's data is already on
+    file, this shares the same guest-patch + validation gate as the final
+    check-in; only the target status and timestamp differ. Only reachable
+    from 'fully_paid' (see VALID_TRANSITIONS).
+    """
+    reservation, hotel_id = _load_reservation(db, reservation_id, hotel_id)
+
+    if reservation.status != ReservationStatusEnum.FULLY_PAID:
+        raise CheckInError(
+            f"Cannot start partial check-in: reservation status is '{reservation.status.value}'. "
+            "Must be 'fully_paid'."
+        )
+
+    guest = db.query(Guest).filter(Guest.id == reservation.guest_id, Guest.hotel_id == hotel_id).first()
+    if not guest:
+        raise CheckInError("Guest record not found for this reservation")
+
+    _guard_prohibido(
+        db, hotel_id, guest, reservation,
+        override_prohibido=override_prohibido, override_user_id=override_user_id,
+    )
+    _apply_guest_patch_and_validate(db, guest, hotel_id, reservation, guest_patch)
+
+    try:
+        transition_reservation_status(db, reservation, ReservationStatusEnum.PRE_CHECK_IN, hotel_id)
+    except ReservationError as e:
+        raise CheckInError(str(e))
+
+    reservation.pre_check_in_at = datetime.now(timezone.utc)
     db.flush()
 
     return reservation

@@ -1,6 +1,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
+  addReservationGuests,
   clearReservationManualReview,
   cancelReservation,
   checkInReservation,
@@ -12,11 +13,14 @@ import {
   getReservationOperationsSummary,
   listReservations,
   listPendingReservationActions,
+  partialCheckInReservation,
   resolveReservationExternal,
   updateReservation,
+  type CheckInPayload,
   type OccupancyGridResponse,
   type ReservationActionResolvePayload,
   type ReservationExternalResolutionResponse,
+  type ReservationGuestCreatePayload,
   type Reservation,
   type ReservationQuote,
   type ReservationQuoteParams,
@@ -28,6 +32,7 @@ import {
   type ReservationStatus,
   type ReservationUpdatePayload
 } from "../api/reservations";
+import { validateGuestForCheckin, type GuestCheckinValidation } from "../api/guests";
 import type { SessionState } from "../state/session";
 import { hasValidSession } from "../api/client";
 import { useSession } from "../state/session";
@@ -77,6 +82,18 @@ export function useReservation(reservationId?: number) {
     queryFn: () => getReservation(reservationId!, session),
     enabled: Boolean(reservationId) && hasValidSession(session),
     staleTime: 1000 * 15
+  });
+}
+
+// B3.3/B3.4: drives whether the check-in UI shows the "complete missing
+// data" form before the receptionist even attempts the check-in.
+export function useValidateGuestCheckin(guestId?: number) {
+  const { session } = useSession();
+  return useQuery<GuestCheckinValidation>({
+    queryKey: guestId ? ["guest-checkin-validation", session.hotelId, guestId] : ["guest-checkin-validation", "none"],
+    queryFn: () => validateGuestForCheckin(guestId!, session),
+    enabled: Boolean(guestId) && hasValidSession(session),
+    staleTime: 0
   });
 }
 
@@ -134,6 +151,16 @@ export function useReservationMutations(filters?: ReservationFilters) {
       queryKey: filters ? reservationsKey(session.hotelId, filters) : ["reservations", session.hotelId]
     });
 
+  // Check-in/check-out/companion changes are read by the drawer's own
+  // single-reservation query, not just the list -- refresh both so the
+  // status/guest data the receptionist just saved shows up immediately.
+  const invalidateReservationDetail = (reservationId: number) => {
+    invalidate();
+    queryClient.invalidateQueries({ queryKey: reservationKey(session.hotelId, reservationId) });
+    queryClient.invalidateQueries({ queryKey: reservationOperationsKey(session.hotelId, reservationId) });
+    queryClient.invalidateQueries({ queryKey: ["guest-checkin-validation", session.hotelId] });
+  };
+
   // Double-click / double-tap on "confirm" fires two submits in the same JS
   // turn, before React re-renders the button as disabled. Without a real
   // server-side idempotency key on reservation creation, that used to be able
@@ -157,14 +184,39 @@ export function useReservationMutations(filters?: ReservationFilters) {
     onSuccess: invalidate
   });
 
+  type CheckInParams = number | ({ id: number } & CheckInPayload);
+  const normalizeCheckInParams = (params: CheckInParams) =>
+    typeof params === "number" ? { id: params, guest: undefined, override_prohibido: undefined } : params;
+
   const checkInMutation = useGuardedMutation({
-    mutationFn: (id: number) => checkInReservation(id, session),
-    onSuccess: invalidate
+    mutationFn: (params: CheckInParams) => {
+      const { id, guest, override_prohibido } = normalizeCheckInParams(params);
+      return checkInReservation(id, { guest, override_prohibido }, session);
+    },
+    onSuccess: (_, params) => invalidateReservationDetail(normalizeCheckInParams(params).id)
+  });
+
+  // B3.1: partial check-in (PRE_CHECK_IN) -- same guest-capture payload shape
+  // as the final check-in, different target status.
+  const partialCheckInMutation = useGuardedMutation({
+    mutationFn: (params: CheckInParams) => {
+      const { id, guest, override_prohibido } = normalizeCheckInParams(params);
+      return partialCheckInReservation(id, { guest, override_prohibido }, session);
+    },
+    onSuccess: (_, params) => invalidateReservationDetail(normalizeCheckInParams(params).id)
   });
 
   const checkOutMutation = useGuardedMutation({
     mutationFn: (id: number) => checkOutReservation(id, session),
-    onSuccess: invalidate
+    onSuccess: (_, id) => invalidateReservationDetail(id)
+  });
+
+  // B3.5: acompañantes -- zero new backend, the endpoint already dedups by
+  // document and validates capacity.
+  const addGuestsMutation = useMutation({
+    mutationFn: ({ id, guests }: { id: number; guests: ReservationGuestCreatePayload[] }) =>
+      addReservationGuests(id, guests, session),
+    onSuccess: (_, { id }) => invalidateReservationDetail(id)
   });
 
   return {
@@ -172,7 +224,9 @@ export function useReservationMutations(filters?: ReservationFilters) {
     updateMutation,
     cancelMutation,
     checkInMutation,
-    checkOutMutation
+    partialCheckInMutation,
+    checkOutMutation,
+    addGuestsMutation
   };
 }
 

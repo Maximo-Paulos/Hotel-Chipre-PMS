@@ -77,6 +77,10 @@ class GuestCreatePayload:
     state_province: str | None = None
     postal_code: str | None = None
     country: str | None = None
+    birth_place: str | None = None
+    birth_country: str | None = None
+    marital_status: str | None = None
+    occupation: str | None = None
     terms_accepted: bool = False
     digital_signature: str | None = None
     special_requests: str | None = None
@@ -125,6 +129,10 @@ def find_or_create_guest(db: Session, payload: GuestCreatePayload) -> tuple[Gues
         "state_province": payload.state_province,
         "postal_code": payload.postal_code,
         "country": payload.country,
+        "birth_place": payload.birth_place,
+        "birth_country": payload.birth_country,
+        "marital_status": payload.marital_status,
+        "occupation": payload.occupation,
         "terms_accepted": payload.terms_accepted,
         "digital_signature": payload.digital_signature,
         "special_requests": payload.special_requests,

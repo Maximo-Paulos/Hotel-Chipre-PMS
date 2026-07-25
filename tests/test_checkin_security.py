@@ -38,6 +38,10 @@ def _make_guest(db: Session, hotel_id: int, doc: str = "11111111") -> Guest:
         last_name="Gomez",
         document_type="DNI",
         document_number=doc,
+        birth_place="Mendoza",
+        birth_country="Argentina",
+        marital_status="single",
+        occupation="Enfermera",
         terms_accepted=True,
     )
     db.add(guest)

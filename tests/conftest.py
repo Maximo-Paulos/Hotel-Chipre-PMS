@@ -341,6 +341,10 @@ def sample_guest(db: Session) -> Guest:
         date_of_birth=date(1990, 4, 12),
         email="carlos@email.com",
         phone="+54111234567",
+        birth_place="Buenos Aires",
+        birth_country="Argentina",
+        marital_status="single",
+        occupation="Contador",
         terms_accepted=True,
         hotel_id=1,
     )

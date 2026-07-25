@@ -1,11 +1,48 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { ApiError } from "../api/client";
+import { type GuestUpdatePayload } from "../api/guests";
 import { type PaymentMethod } from "../api/payments";
-import { useReservation, useReservationMutations, useReservationOperationsSummary } from "../hooks/useReservations";
+import {
+  useReservation,
+  useReservationMutations,
+  useReservationOperationsSummary,
+  useValidateGuestCheckin
+} from "../hooks/useReservations";
+import { useGuest } from "../hooks/useGuests";
 import { usePaymentMutation, usePaymentSummary } from "../hooks/usePayments";
 import { formatMoney, normalizeCurrencyCode } from "../utils/currency";
-import { canCancelReservation, canCheckInReservation, canCheckOutReservation, reservationStatusConfig } from "../utils/reservationStatus";
+import {
+  canCancelReservation,
+  canCheckInReservation,
+  canCheckOutReservation,
+  canPartialCheckIn,
+  reservationStatusConfig
+} from "../utils/reservationStatus";
+
+type CheckinCaptureForm = {
+  document_type: "" | "DNI" | "PASSPORT" | "CEDULA";
+  document_number: string;
+  nationality: string;
+  country: string;
+  birth_place: string;
+  birth_country: string;
+  marital_status: string;
+  occupation: string;
+  terms_accepted: boolean;
+};
+
+const emptyCaptureForm: CheckinCaptureForm = {
+  document_type: "",
+  document_number: "",
+  nationality: "",
+  country: "",
+  birth_place: "",
+  birth_country: "",
+  marital_status: "",
+  occupation: "",
+  terms_accepted: false
+};
 
 type Props = {
   reservationId: number | null;
@@ -31,17 +68,83 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
   const [paymentAmount, setPaymentAmount] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [captureForm, setCaptureForm] = useState<CheckinCaptureForm>(emptyCaptureForm);
+  const [companionForm, setCompanionForm] = useState({ first_name: "", last_name: "", document_number: "" });
+  const [companionError, setCompanionError] = useState<string | null>(null);
 
   const reservationQuery = useReservation(reservationId ?? undefined);
   const operationsQuery = useReservationOperationsSummary(reservationId ?? undefined);
   const summaryQuery = usePaymentSummary(reservationId ?? undefined);
   const paymentMutation = usePaymentMutation(reservationId ?? undefined);
-  const { cancelMutation, checkInMutation, checkOutMutation } = useReservationMutations();
+  const { cancelMutation, checkInMutation, partialCheckInMutation, checkOutMutation, addGuestsMutation } =
+    useReservationMutations();
 
   const open = Boolean(reservationId);
   const reservation = reservationQuery.data;
   const operations = operationsQuery.data;
   const summary = summaryQuery.data;
+
+  // B3.3/B3.4: FULLY_PAID/PRE_CHECK_IN is exactly when the guest's check-in
+  // data (birth place/country, marital status, occupation, etc.) still
+  // matters -- ask the backend if anything's missing before showing the
+  // capture form, instead of waiting for a 400 on the actual check-in.
+  const checkinDataRelevant = reservation?.status === "fully_paid" || reservation?.status === "pre_check_in";
+  const guestQuery = useGuest(checkinDataRelevant ? reservation?.guest_id : undefined);
+  const checkinValidation = useValidateGuestCheckin(checkinDataRelevant ? reservation?.guest_id : undefined);
+  const needsCheckinCapture = checkinDataRelevant && checkinValidation.data?.valid === false;
+
+  useEffect(() => {
+    if (!guestQuery.data) return;
+    setCaptureForm({
+      document_type: guestQuery.data.document_type ?? "",
+      document_number: guestQuery.data.document_number ?? "",
+      nationality: guestQuery.data.nationality ?? "",
+      country: guestQuery.data.country ?? "",
+      birth_place: guestQuery.data.birth_place ?? "",
+      birth_country: guestQuery.data.birth_country ?? "",
+      marital_status: guestQuery.data.marital_status ?? "",
+      occupation: guestQuery.data.occupation ?? "",
+      terms_accepted: guestQuery.data.terms_accepted ?? false
+    });
+  }, [guestQuery.data]);
+
+  const buildGuestPatch = (): GuestUpdatePayload => ({
+    document_type: captureForm.document_type || undefined,
+    document_number: captureForm.document_number.trim() || undefined,
+    nationality: captureForm.nationality.trim() || undefined,
+    country: captureForm.country.trim() || undefined,
+    birth_place: captureForm.birth_place.trim() || undefined,
+    birth_country: captureForm.birth_country.trim() || undefined,
+    marital_status: captureForm.marital_status.trim() || undefined,
+    occupation: captureForm.occupation.trim() || undefined,
+    terms_accepted: captureForm.terms_accepted
+  });
+
+  const handleAddCompanion = () => {
+    if (!reservationId) return;
+    if (!companionForm.first_name.trim() || !companionForm.last_name.trim()) {
+      setCompanionError("Completá nombre y apellido del acompañante.");
+      return;
+    }
+    setCompanionError(null);
+    addGuestsMutation.mutate(
+      {
+        id: reservationId,
+        guests: [
+          {
+            first_name: companionForm.first_name.trim(),
+            last_name: companionForm.last_name.trim(),
+            document_number: companionForm.document_number.trim() || undefined
+          }
+        ]
+      },
+      {
+        onSuccess: () => setCompanionForm({ first_name: "", last_name: "", document_number: "" }),
+        onError: (err) =>
+          setCompanionError(err instanceof ApiError ? err.message : "No se pudo agregar el acompañante.")
+      }
+    );
+  };
   // Bug documented in frontend/src/api/payments.ts: total_amount/balance_due
   // ignore consumption charges. Always prefer the operational figures for
   // anything the operator will actually collect.
@@ -152,7 +255,154 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                 ) : (
                   <p className="mt-2 text-xs text-slate-500">Sin acompañantes cargados.</p>
                 )}
+
+                {reservation.status !== "cancelled" && reservation.status !== "checked_out" && (
+                  <div className="mt-3 border-t border-slate-200 pt-3">
+                    <p className="text-xs uppercase tracking-wide text-slate-500">Agregar acompañante</p>
+                    <div className="mt-2 flex flex-wrap items-end gap-2">
+                      <input
+                        type="text"
+                        placeholder="Nombre"
+                        value={companionForm.first_name}
+                        onChange={(event) => setCompanionForm((prev) => ({ ...prev, first_name: event.target.value }))}
+                        className="w-28 rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+                        aria-label="Nombre del acompañante"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Apellido"
+                        value={companionForm.last_name}
+                        onChange={(event) => setCompanionForm((prev) => ({ ...prev, last_name: event.target.value }))}
+                        className="w-28 rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+                        aria-label="Apellido del acompañante"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Documento (opcional)"
+                        value={companionForm.document_number}
+                        onChange={(event) =>
+                          setCompanionForm((prev) => ({ ...prev, document_number: event.target.value }))
+                        }
+                        className="w-36 rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+                        aria-label="Documento del acompañante"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddCompanion}
+                        disabled={addGuestsMutation.isPending}
+                        className="rounded-lg border border-slate-300 bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {addGuestsMutation.isPending ? "Agregando..." : "Agregar"}
+                      </button>
+                    </div>
+                    {companionError && <p className="mt-2 text-xs text-rose-700">{companionError}</p>}
+                  </div>
+                )}
               </section>
+
+              {needsCheckinCapture && (
+                <section className="rounded-lg border border-amber-200 bg-amber-50 p-3" data-testid="checkin-capture-form">
+                  <p className="text-xs uppercase tracking-wide text-amber-800">Completar datos para el check-in</p>
+                  {checkinValidation.data && checkinValidation.data.errors.length > 0 && (
+                    <p className="mt-1 text-xs text-amber-800">{checkinValidation.data.errors.join("; ")}</p>
+                  )}
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    <label className="space-y-1 text-xs">
+                      <span className="text-slate-600">Tipo de documento</span>
+                      <select
+                        value={captureForm.document_type}
+                        onChange={(event) =>
+                          setCaptureForm((prev) => ({
+                            ...prev,
+                            document_type: event.target.value as CheckinCaptureForm["document_type"]
+                          }))
+                        }
+                        className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+                      >
+                        <option value="">Sin especificar</option>
+                        <option value="DNI">DNI</option>
+                        <option value="PASSPORT">Pasaporte</option>
+                        <option value="CEDULA">Cédula</option>
+                      </select>
+                    </label>
+                    <label className="space-y-1 text-xs">
+                      <span className="text-slate-600">Número de documento</span>
+                      <input
+                        type="text"
+                        value={captureForm.document_number}
+                        onChange={(event) => setCaptureForm((prev) => ({ ...prev, document_number: event.target.value }))}
+                        className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+                      />
+                    </label>
+                    <label className="space-y-1 text-xs">
+                      <span className="text-slate-600">Nacionalidad</span>
+                      <input
+                        type="text"
+                        value={captureForm.nationality}
+                        onChange={(event) => setCaptureForm((prev) => ({ ...prev, nationality: event.target.value }))}
+                        className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+                      />
+                    </label>
+                    <label className="space-y-1 text-xs">
+                      <span className="text-slate-600">País</span>
+                      <input
+                        type="text"
+                        value={captureForm.country}
+                        onChange={(event) => setCaptureForm((prev) => ({ ...prev, country: event.target.value }))}
+                        className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+                      />
+                    </label>
+                    <label className="space-y-1 text-xs">
+                      <span className="text-slate-600">Lugar de nacimiento</span>
+                      <input
+                        type="text"
+                        value={captureForm.birth_place}
+                        onChange={(event) => setCaptureForm((prev) => ({ ...prev, birth_place: event.target.value }))}
+                        className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+                        aria-label="Lugar de nacimiento"
+                      />
+                    </label>
+                    <label className="space-y-1 text-xs">
+                      <span className="text-slate-600">País de nacimiento</span>
+                      <input
+                        type="text"
+                        value={captureForm.birth_country}
+                        onChange={(event) => setCaptureForm((prev) => ({ ...prev, birth_country: event.target.value }))}
+                        className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+                        aria-label="País de nacimiento"
+                      />
+                    </label>
+                    <label className="space-y-1 text-xs">
+                      <span className="text-slate-600">Estado civil</span>
+                      <input
+                        type="text"
+                        value={captureForm.marital_status}
+                        onChange={(event) => setCaptureForm((prev) => ({ ...prev, marital_status: event.target.value }))}
+                        className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+                        aria-label="Estado civil"
+                      />
+                    </label>
+                    <label className="space-y-1 text-xs">
+                      <span className="text-slate-600">Profesión</span>
+                      <input
+                        type="text"
+                        value={captureForm.occupation}
+                        onChange={(event) => setCaptureForm((prev) => ({ ...prev, occupation: event.target.value }))}
+                        className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+                        aria-label="Profesión"
+                      />
+                    </label>
+                  </div>
+                  <label className="mt-2 flex items-center gap-2 text-xs text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={captureForm.terms_accepted}
+                      onChange={(event) => setCaptureForm((prev) => ({ ...prev, terms_accepted: event.target.checked }))}
+                    />
+                    Acepta términos y condiciones
+                  </label>
+                </section>
+              )}
 
               <section className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                 <div className="flex items-center justify-between">
@@ -257,20 +507,44 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
               )}
 
               <section className="flex flex-wrap gap-2 border-t border-slate-200 pt-3">
+                {canPartialCheckIn(reservation.status) && (
+                  <button
+                    type="button"
+                    disabled={partialCheckInMutation.isPending}
+                    onClick={() =>
+                      runAction("check-in parcial", () =>
+                        partialCheckInMutation.mutate(
+                          { id: reservation.id, guest: needsCheckinCapture ? buildGuestPatch() : undefined },
+                          {
+                            onSuccess: () => setActionMessage("Check-in parcial registrado."),
+                            onError: (err) =>
+                              setActionError(err instanceof ApiError ? err.message : "No se pudo hacer el check-in parcial.")
+                          }
+                        )
+                      )
+                    }
+                    className="rounded-lg border border-teal-200 bg-teal-50 px-3 py-2 text-xs font-semibold text-teal-700 hover:border-teal-300 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Check-in parcial
+                  </button>
+                )}
                 <button
                   type="button"
                   disabled={!canCheckInReservation(reservation.status) || checkInMutation.isPending}
                   onClick={() =>
                     runAction("check-in", () =>
-                      checkInMutation.mutate(reservation.id, {
-                        onSuccess: () => setActionMessage("Check-in registrado."),
-                        onError: (err) => setActionError(err instanceof ApiError ? err.message : "No se pudo hacer check-in.")
-                      })
+                      checkInMutation.mutate(
+                        { id: reservation.id, guest: needsCheckinCapture ? buildGuestPatch() : undefined },
+                        {
+                          onSuccess: () => setActionMessage("Check-in registrado."),
+                          onError: (err) => setActionError(err instanceof ApiError ? err.message : "No se pudo hacer check-in.")
+                        }
+                      )
                     )
                   }
                   className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-xs font-semibold text-brand-700 hover:border-brand-300 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  Check-in
+                  Confirmar check-in
                 </button>
                 <button
                   type="button"

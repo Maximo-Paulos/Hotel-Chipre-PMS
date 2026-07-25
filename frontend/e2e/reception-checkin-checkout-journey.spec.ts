@@ -89,8 +89,15 @@ test("receptionist runs the full check-in / checkout journey with a pending-bala
 
   const createReservationButton = reservationForm.getByRole("button", { name: "Crear", exact: true });
   await expect(createReservationButton).toBeEnabled();
-  await createReservationButton.click();
+  const [createResponse] = await Promise.all([
+    page.waitForResponse((res) => res.url().includes("/api/reservations/") && res.request().method() === "POST"),
+    createReservationButton.click()
+  ]);
   await expect(page.getByText("Reserva creada", { exact: true })).toBeVisible();
+  const created = await createResponse.json();
+  const reservationId: number = created.id;
+  const confirmationCode: string = created.confirmation_code;
+  expect(reservationId).toBeGreaterThan(0);
 
   const reservationTable = page.locator("table").filter({ hasText: "Código" });
   const reservationRow = reservationTable.locator("tbody tr").filter({ hasText: guestLastName });
@@ -106,9 +113,43 @@ test("receptionist runs the full check-in / checkout journey with a pending-bala
   await expect(page.getByText("Pago completo registrado", { exact: true })).toBeVisible();
   await editModal.getByRole("button", { name: "Cerrar", exact: true }).click();
 
-  const paidRow = reservationTable.locator("tbody tr").filter({ hasText: guestLastName });
-  await paidRow.getByRole("button", { name: "Check-in", exact: true }).click();
-  await expect(page.getByText("Check-in registrado", { exact: true })).toBeVisible();
+  // B3: check-in ocurre después de cobrar el saldo. La reserva rápida creada
+  // arriba (alta rápida) sólo carga nombre/documento -- le faltan los datos
+  // nuevos y obligatorios (lugar/país de nacimiento, estado civil, profesión),
+  // así que el drawer debe mostrar el formulario de captura antes de dejar
+  // avanzar el check-in, no un 400 después. B3.1 (check-in parcial) y B3.5
+  // (acompañante) se ejercitan en el mismo paso, con el mismo request que
+  // guarda los datos.
+  await page.goto(`/reservas?reserva=${reservationId}`);
+  const drawer = page.getByRole("dialog", { name: confirmationCode });
+  await expect(drawer).toBeVisible();
+  await expect(drawer.getByText("Pago completo", { exact: true })).toBeVisible();
+
+  const captureForm = drawer.getByTestId("checkin-capture-form");
+  await expect(captureForm).toBeVisible();
+  await expect(captureForm).toContainText("Birth place is required");
+  await captureForm.getByLabel("Lugar de nacimiento").fill("Rosario");
+  await captureForm.getByLabel("País de nacimiento").fill("Argentina");
+  await captureForm.getByLabel("Estado civil").fill("Soltero/a");
+  await captureForm.getByLabel("Profesión").fill("Recepcionista QA");
+
+  await drawer.getByLabel("Nombre del acompañante").fill("Acompañante");
+  await drawer.getByLabel("Apellido del acompañante").fill(guestLastName);
+  await drawer.getByRole("button", { name: "Agregar", exact: true }).click();
+  await expect(drawer.getByText(`Acompañante ${guestLastName}`, { exact: false })).toBeVisible();
+
+  await drawer.getByRole("button", { name: "Check-in parcial", exact: true }).click();
+  await expect(drawer.getByText("Check-in parcial registrado.", { exact: true })).toBeVisible();
+  await expect(drawer.getByText("Pre check-in", { exact: true })).toBeVisible();
+  // The capture form only shows while data is missing -- it's now saved.
+  await expect(captureForm).toHaveCount(0);
+
+  await drawer.getByRole("button", { name: "Confirmar check-in", exact: true }).click();
+  await expect(drawer.getByText("Check-in registrado.", { exact: true })).toBeVisible();
+  await expect(drawer.getByText("Check-in", { exact: true }).first()).toBeVisible();
+
+  await page.getByRole("button", { name: "Cerrar detalle de reserva" }).click();
+  await expect(drawer).not.toBeVisible();
 
   // Cargar un consumo (minibar) desde la Ficha: reception tiene reservation:charge.
   const checkedInRow = reservationTable.locator("tbody tr").filter({ hasText: guestLastName });

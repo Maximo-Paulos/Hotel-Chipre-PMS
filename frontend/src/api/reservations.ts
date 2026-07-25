@@ -1,4 +1,5 @@
 import { apiFetch, type SessionLike } from "./client";
+import type { GuestUpdatePayload } from "./guests";
 
 export type ReservationStatus =
   | "pending"
@@ -342,11 +343,38 @@ export const addReservationCharge = (id: number, payload: ReservationChargePaylo
     session
   });
 
-export const checkInReservation = (id: number, session?: SessionLike) =>
-  apiFetch<Reservation>(`/api/checkin/${id}`, { method: "POST", session });
+// B3.4: `guest` carries whatever check-in fields the receptionist just
+// completed (birth place/country, marital status, occupation, etc.) so the
+// backend applies them and validates in the same request/transaction.
+export type CheckInPayload = {
+  override_prohibido?: boolean;
+  guest?: GuestUpdatePayload;
+};
+
+export const checkInReservation = (id: number, payload: CheckInPayload = {}, session?: SessionLike) =>
+  apiFetch<Reservation>(`/api/checkin/${id}`, { method: "POST", data: payload, session });
+
+// B3.1: writes PRE_CHECK_IN ("huésped ingresó al cuarto, falta confirmar").
+export const partialCheckInReservation = (id: number, payload: CheckInPayload = {}, session?: SessionLike) =>
+  apiFetch<Reservation>(`/api/checkin/${id}/partial`, { method: "POST", data: payload, session });
 
 export const checkOutReservation = (id: number, session?: SessionLike) =>
   apiFetch<Reservation>(`/api/checkin/checkout/${id}`, { method: "POST", session });
+
+// B3.5: acompañantes -- the endpoint already dedups by document_number and
+// validates capacity against max_occupancy, so a quick-add with just a name
+// (+ optional document) is enough; no separate search step needed.
+export type ReservationGuestCreatePayload = {
+  first_name: string;
+  last_name: string;
+  document_type?: "DNI" | "PASSPORT" | "CEDULA";
+  document_number?: string;
+  nationality?: string;
+  date_of_birth?: string;
+};
+
+export const addReservationGuests = (id: number, guests: ReservationGuestCreatePayload[], session?: SessionLike) =>
+  apiFetch<Reservation>(`/api/reservations/${id}/guests`, { method: "POST", data: guests, session });
 
 export const resolveReservationExternal = (
   id: number,

@@ -29,6 +29,10 @@ def test_missing_field_computation_uses_profile(db, hotel_config):
         document_type="DNI",
         document_number="30111222",
         terms_accepted=True,
+        birth_place="Rosario",
+        birth_country="Argentina",
+        marital_status="single",
+        occupation="Ingeniera",
         hotel_id=hotel_config.id,
     )
     db.add(guest)

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-25T21:15:07.558Z",
+  "generatedAt": "2026-07-25T22:11:09.159Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -1161,6 +1161,28 @@
       "warnings": []
     },
     {
+      "id": "flow:versions_62fddec52b79_repair_sqlite_reservation_status_enum_downgrade",
+      "name": "downgrade",
+      "entryPoint": "versions_62fddec52b79_repair_sqlite_reservation_status_enum_downgrade",
+      "entryPointId": "versions_62fddec52b79_repair_sqlite_reservation_status_enum_downgrade",
+      "path": [
+        "versions_62fddec52b79_repair_sqlite_reservation_status_enum_downgrade",
+        "versions_62fddec52b79_repair_sqlite_reservation_status_enum_check_clause"
+      ],
+      "qualifiedPath": [
+        "versions_62fddec52b79_repair_sqlite_reservation_status_enum_downgrade",
+        "versions_62fddec52b79_repair_sqlite_reservation_status_enum_check_clause"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/62fddec52b79_repair_sqlite_reservation_status_enum_.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
       "id": "flow:protected_settingsconnectionspage_getprovidererrormessage",
       "name": "getProviderErrorMessage",
       "entryPoint": "protected_settingsconnectionspage_getprovidererrormessage",
@@ -1398,6 +1420,28 @@
       "fileCount": 1,
       "files": [
         "app/master_admin/billing_policy.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
+      "id": "flow:versions_62fddec52b79_repair_sqlite_reservation_status_enum_upgrade",
+      "name": "upgrade",
+      "entryPoint": "versions_62fddec52b79_repair_sqlite_reservation_status_enum_upgrade",
+      "entryPointId": "versions_62fddec52b79_repair_sqlite_reservation_status_enum_upgrade",
+      "path": [
+        "versions_62fddec52b79_repair_sqlite_reservation_status_enum_upgrade",
+        "versions_62fddec52b79_repair_sqlite_reservation_status_enum_check_clause"
+      ],
+      "qualifiedPath": [
+        "versions_62fddec52b79_repair_sqlite_reservation_status_enum_upgrade",
+        "versions_62fddec52b79_repair_sqlite_reservation_status_enum_check_clause"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/62fddec52b79_repair_sqlite_reservation_status_enum_.py"
       ],
       "criticality": 0.41,
       "warnings": []
@@ -2000,6 +2044,50 @@
       "fileCount": 1,
       "files": [
         "app/adapters/paypal_adapter.py"
+      ],
+      "criticality": 0.285,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_checkin_checkin",
+      "name": "checkin",
+      "entryPoint": "api_checkin_checkin",
+      "entryPointId": "api_checkin_checkin",
+      "path": [
+        "api_checkin_checkin",
+        "api_checkin_authorize_override"
+      ],
+      "qualifiedPath": [
+        "api_checkin_checkin",
+        "api_checkin_authorize_override"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/checkin.py"
+      ],
+      "criticality": 0.285,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_checkin_checkin_partial",
+      "name": "checkin_partial",
+      "entryPoint": "api_checkin_checkin_partial",
+      "entryPointId": "api_checkin_checkin_partial",
+      "path": [
+        "api_checkin_checkin_partial",
+        "api_checkin_authorize_override"
+      ],
+      "qualifiedPath": [
+        "api_checkin_checkin_partial",
+        "api_checkin_authorize_override"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/checkin.py"
       ],
       "criticality": 0.285,
       "warnings": []
@@ -3063,6 +3151,38 @@
       "warnings": []
     },
     {
+      "id": "flow:services_checkin_service_perform_partial_checkin",
+      "name": "perform_partial_checkin",
+      "entryPoint": "services_checkin_service_perform_partial_checkin",
+      "entryPointId": "services_checkin_service_perform_partial_checkin",
+      "path": [
+        "services_checkin_service_perform_partial_checkin",
+        "services_checkin_service_apply_guest_patch_and_validate",
+        "services_checkin_service_checkinerror",
+        "services_checkin_service_guard_prohibido",
+        "services_checkin_service_load_reservation",
+        "services_checkin_service_validate_guest_for_checkin",
+        "services_checkin_service_resolve_jurisdiction_code"
+      ],
+      "qualifiedPath": [
+        "services_checkin_service_perform_partial_checkin",
+        "services_checkin_service_apply_guest_patch_and_validate",
+        "services_checkin_service_checkinerror",
+        "services_checkin_service_guard_prohibido",
+        "services_checkin_service_load_reservation",
+        "services_checkin_service_validate_guest_for_checkin",
+        "services_checkin_service_resolve_jurisdiction_code"
+      ],
+      "depth": 3,
+      "nodeCount": 7,
+      "fileCount": 1,
+      "files": [
+        "app/services/checkin_service.py"
+      ],
+      "criticality": 0.2514,
+      "warnings": []
+    },
+    {
       "id": "flow:agent_ops_generate_qa_local_env_main",
       "name": "main",
       "entryPoint": "agent_ops_generate_qa_local_env_main",
@@ -3292,6 +3412,38 @@
         "app/services/audit_log_service.py"
       ],
       "criticality": 0.2425,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_checkin_service_perform_checkin",
+      "name": "perform_checkin",
+      "entryPoint": "services_checkin_service_perform_checkin",
+      "entryPointId": "services_checkin_service_perform_checkin",
+      "path": [
+        "services_checkin_service_perform_checkin",
+        "services_checkin_service_apply_guest_patch_and_validate",
+        "services_checkin_service_checkinerror",
+        "services_checkin_service_guard_prohibido",
+        "services_checkin_service_load_reservation",
+        "services_checkin_service_validate_guest_for_checkin",
+        "services_checkin_service_resolve_jurisdiction_code"
+      ],
+      "qualifiedPath": [
+        "services_checkin_service_perform_checkin",
+        "services_checkin_service_apply_guest_patch_and_validate",
+        "services_checkin_service_checkinerror",
+        "services_checkin_service_guard_prohibido",
+        "services_checkin_service_load_reservation",
+        "services_checkin_service_validate_guest_for_checkin",
+        "services_checkin_service_resolve_jurisdiction_code"
+      ],
+      "depth": 2,
+      "nodeCount": 7,
+      "fileCount": 1,
+      "files": [
+        "app/services/checkin_service.py"
+      ],
+      "criticality": 0.2414,
       "warnings": []
     },
     {
@@ -3526,32 +3678,6 @@
       "fileCount": 1,
       "files": [
         "app/services/domain_events.py"
-      ],
-      "criticality": 0.2325,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_checkin_service_perform_checkin",
-      "name": "perform_checkin",
-      "entryPoint": "services_checkin_service_perform_checkin",
-      "entryPointId": "services_checkin_service_perform_checkin",
-      "path": [
-        "services_checkin_service_perform_checkin",
-        "services_checkin_service_checkinerror",
-        "services_checkin_service_validate_guest_for_checkin",
-        "services_checkin_service_resolve_jurisdiction_code"
-      ],
-      "qualifiedPath": [
-        "services_checkin_service_perform_checkin",
-        "services_checkin_service_checkinerror",
-        "services_checkin_service_validate_guest_for_checkin",
-        "services_checkin_service_resolve_jurisdiction_code"
-      ],
-      "depth": 2,
-      "nodeCount": 4,
-      "fileCount": 1,
-      "files": [
-        "app/services/checkin_service.py"
       ],
       "criticality": 0.2325,
       "warnings": []

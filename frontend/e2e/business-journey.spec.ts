@@ -151,8 +151,14 @@ test("owner completes the core reservation journey through the UI", async ({ pag
 
   const createReservationButton = reservationForm.getByRole("button", { name: "Crear", exact: true });
   await expect(createReservationButton).toBeEnabled();
-  await createReservationButton.click();
+  const [createResponse] = await Promise.all([
+    page.waitForResponse((res) => res.url().includes("/api/reservations/") && res.request().method() === "POST"),
+    createReservationButton.click()
+  ]);
   await expect(page.getByText("Reserva creada", { exact: true })).toBeVisible();
+  const created = await createResponse.json();
+  const reservationId: number = created.id;
+  const confirmationCode: string = created.confirmation_code;
 
   const reservationTable = page.locator("table").filter({ hasText: "Código" });
   const reservationRow = reservationTable.locator("tbody tr").filter({ hasText: guestLastName });
@@ -212,7 +218,28 @@ test("owner completes the core reservation journey through the UI", async ({ pag
   const paidRow = reservationTable.locator("tbody tr").filter({ hasText: guestLastName });
   await expect(paidRow.getByRole("button", { name: "Check-in", exact: true })).toBeEnabled();
   await paidRow.getByRole("button", { name: "Check-in", exact: true }).click();
-  await expect(page.getByText("Check-in registrado", { exact: true })).toBeVisible();
+  // B3.3: this guest (quick "Alta rápida", no birth place/country/marital
+  // status/occupation) can't check in yet -- the row action redirects to the
+  // reservation panel, which shows the capture form up front instead of a
+  // bare 400.
+  await expect(
+    page.getByText("Faltan datos del huésped para el check-in: completalos en el panel de la reserva.", {
+      exact: true
+    })
+  ).toBeVisible();
+  const drawer = page.getByRole("dialog", { name: confirmationCode });
+  await expect(drawer).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`reserva=${reservationId}`));
+  const captureForm = drawer.getByTestId("checkin-capture-form");
+  await expect(captureForm).toBeVisible();
+  await captureForm.getByLabel("Lugar de nacimiento").fill("Mendoza");
+  await captureForm.getByLabel("País de nacimiento").fill("Argentina");
+  await captureForm.getByLabel("Estado civil").fill("Soltero/a");
+  await captureForm.getByLabel("Profesión").fill("QA");
+  await drawer.getByRole("button", { name: "Confirmar check-in", exact: true }).click();
+  await expect(drawer.getByText("Check-in registrado.", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Cerrar detalle de reserva" }).click();
+  await expect(drawer).not.toBeVisible();
 
   const checkedInRow = reservationTable.locator("tbody tr").filter({ hasText: guestLastName });
   await checkedInRow.getByRole("button", { name: "Check-out", exact: true }).click();

@@ -90,6 +90,10 @@ def seed_operational_reservation(
             document_number=f"{hotel_id}{suffix}" if with_valid_guest else None,
             nationality="AR",
             country="AR",
+            birth_place="Buenos Aires" if with_valid_guest else None,
+            birth_country="Argentina" if with_valid_guest else None,
+            marital_status="single" if with_valid_guest else None,
+            occupation="Programadora" if with_valid_guest else None,
             email=f"guest-{suffix.lower()}@example.com",
             terms_accepted=with_valid_guest,
         )

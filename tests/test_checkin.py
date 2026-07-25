@@ -38,6 +38,12 @@ class TestGuestValidation:
     def test_validation_respects_config(self, db, sample_guest_incomplete, hotel_config):
         hotel_config.require_document_for_checkin = False
         hotel_config.require_terms_acceptance = False
+        # birth_place/birth_country/marital_status/occupation (B3.3) are always
+        # required regardless of config -- only document/terms are config-gated.
+        sample_guest_incomplete.birth_place = "Cordoba"
+        sample_guest_incomplete.birth_country = "Argentina"
+        sample_guest_incomplete.marital_status = "single"
+        sample_guest_incomplete.occupation = "Docente"
         db.flush()
         errors = validate_guest_for_checkin(db, sample_guest_incomplete, hotel_config)
         assert len(errors) == 0

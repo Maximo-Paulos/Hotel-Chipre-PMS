@@ -16,7 +16,21 @@ FIELD_MESSAGES = {
     "document_number": "Document number is required",
     "nationality": "Nationality is required",
     "country": "Country is required",
+    "birth_place": "Birth place is required",
+    "birth_country": "Birth country is required",
+    "marital_status": "Marital status is required",
+    "occupation": "Occupation is required",
 }
+
+# B3.3: mandatory for every check-in regardless of jurisdiction/config —
+# unlike document_fields these don't depend on require_document, they're a
+# standalone hotel policy decision.
+ALWAYS_REQUIRED_FIELDS: tuple[str, ...] = (
+    "birth_place",
+    "birth_country",
+    "marital_status",
+    "occupation",
+)
 
 
 @dataclass(frozen=True)
@@ -78,7 +92,7 @@ def compute_missing_guest_fields(
     profile = get_profile(jurisdiction_code)
     missing: list[str] = []
 
-    required_fields: list[str] = ["first_name", "last_name"]
+    required_fields: list[str] = ["first_name", "last_name", *ALWAYS_REQUIRED_FIELDS]
     if require_document:
         required_fields.extend(profile.document_fields)
         required_fields.extend(profile.extra_required_fields)
