@@ -68,7 +68,7 @@ test.describe("Responsive mobile smoke", () => {
       "mobile navigation has undersized touch targets"
     ).toEqual([]);
 
-    for (const path of ["/reservas", "/caja", "/operacion/stock", "/reportes", "/operacion/lavanderia"]) {
+    for (const path of ["/reservas", "/caja", "/operacion/stock", "/reportes", "/operacion/lavanderia", "/habitaciones"]) {
       await page.goto(path);
       const targets = await page.evaluate(() => {
         const nodes = Array.from(
@@ -121,7 +121,7 @@ test.describe("Responsive mobile smoke", () => {
     await login(page);
     await page.setViewportSize({ width: 390, height: 844 });
 
-    for (const path of ["/reservas", "/caja", "/operacion/stock", "/reportes", "/operacion/lavanderia"]) {
+    for (const path of ["/reservas", "/caja", "/operacion/stock", "/reportes", "/operacion/lavanderia", "/habitaciones"]) {
       await page.goto(path);
       const layout = await page.evaluate(() => ({
         viewportWidth: window.innerWidth,
