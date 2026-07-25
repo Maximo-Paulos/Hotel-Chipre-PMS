@@ -16,6 +16,7 @@ import {
 } from "../../api/stock";
 import { listReservations, type Reservation } from "../../api/reservations";
 import { hasValidSession } from "../../api/client";
+import { useGuardedMutation } from "../../hooks/useGuardedMutation";
 import { useSession } from "../../state/session";
 
 // Used for the movement-mode buttons/heading, where "Ajuste" covers both
@@ -222,7 +223,10 @@ export function StockPage() {
     }
   });
 
-  const createMovementMutation = useMutation({
+  // A double-click/double-enter on "Registrar movimiento" before the button
+  // re-renders as disabled would otherwise double the recorded stock
+  // adjustment (register_movement has no server-side idempotency key).
+  const createMovementMutation = useGuardedMutation({
     mutationFn: (payload: StockMovementCreate) => createStockMovement(payload, session),
     onSuccess: () => {
       invalidateStock();

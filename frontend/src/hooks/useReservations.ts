@@ -29,6 +29,8 @@ import {
 import { hasValidSession } from "../api/client";
 import { useSession } from "../state/session";
 
+import { useGuardedMutation } from "./useGuardedMutation";
+
 const reservationsKey = (hotelId: number | null, filters: ReservationFilters) => ["reservations", hotelId, filters];
 const reservationKey = (hotelId: number | null, reservationId: number) => ["reservation", hotelId, reservationId];
 const reservationOperationsKey = (hotelId: number | null, reservationId: number) => [
@@ -120,7 +122,14 @@ export function useReservationMutations(filters?: ReservationFilters) {
       queryKey: filters ? reservationsKey(session.hotelId, filters) : ["reservations", session.hotelId]
     });
 
-  const createMutation = useMutation({
+  // Double-click / double-tap on "confirm" fires two submits in the same JS
+  // turn, before React re-renders the button as disabled. Without a real
+  // server-side idempotency key on reservation creation, that used to be able
+  // to book two separate rooms for the same guest/dates from one click.
+  // useGuardedMutation closes the client-side race the same way it already
+  // does for payments; check-in/check-out get the same guard since firing
+  // them twice would double-apply their side effects.
+  const createMutation = useGuardedMutation({
     mutationFn: (payload: ReservationPayload) => createReservation(payload, session),
     onSuccess: invalidate
   });
@@ -136,12 +145,12 @@ export function useReservationMutations(filters?: ReservationFilters) {
     onSuccess: invalidate
   });
 
-  const checkInMutation = useMutation({
+  const checkInMutation = useGuardedMutation({
     mutationFn: (id: number) => checkInReservation(id, session),
     onSuccess: invalidate
   });
 
-  const checkOutMutation = useMutation({
+  const checkOutMutation = useGuardedMutation({
     mutationFn: (id: number) => checkOutReservation(id, session),
     onSuccess: invalidate
   });
