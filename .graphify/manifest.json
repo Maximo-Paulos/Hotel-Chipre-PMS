@@ -3658,5 +3658,9 @@
   "frontend/e2e/integrations-status.spec.ts": {
     "mtime": 1784975734004.2239,
     "hash": "caf5b610c17ce3aece6cad1706783e58"
+  },
+  "tests/test_cross_hotel_id_collision_api.py": {
+    "mtime": 1784996262937.751,
+    "hash": "df979ab07636646212c20886d26eab2e"
   }
 }
