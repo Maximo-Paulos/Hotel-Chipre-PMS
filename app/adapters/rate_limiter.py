@@ -82,6 +82,7 @@ class SimpleRateLimiter:
 
 
 login_limiter = SimpleRateLimiter("login")
+register_limiter = SimpleRateLimiter("register", limit=5, window_seconds=15 * 60)
 verify_request_limiter = SimpleRateLimiter("email_verification_request", limit=3, window_seconds=15 * 60)
 reset_request_limiter = SimpleRateLimiter("password_reset", limit=3, window_seconds=15 * 60)
 invite_limiter = SimpleRateLimiter("invite_user", limit=5, window_seconds=60 * 60)

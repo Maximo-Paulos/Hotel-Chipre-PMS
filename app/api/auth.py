@@ -6,13 +6,14 @@ import logging
 from datetime import datetime, timezone
 import secrets
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.adapters.memory_tokens import token_store
 from app.adapters.rate_limiter import (
     code_guess_limiter,
     login_limiter,
+    register_limiter,
     reset_request_limiter,
     verify_request_limiter,
 )
@@ -131,7 +132,16 @@ def _issue_email_token(db: Session, email: str, token_type: str) -> str:
 
 
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
-def register(payload: RegisterRequest, db: Session = Depends(get_db)):
+def register(payload: RegisterRequest, request: Request, db: Session = Depends(get_db)):
+    # Registration always uses a fresh, distinct email, so the duplicate-email
+    # check below cannot throttle repeated farming/spam from one source the
+    # way it can for login/reset. Rate limit by source IP instead.
+    source = (request.client.host if request.client else None) or "unknown"
+    if not register_limiter.allow(source, db=db):
+        db.commit()
+        raise HTTPException(status_code=429, detail="Demasiados registros. Espera unos minutos.")
+    db.commit()
+
     existing = db.query(User).filter(User.email.ilike(payload.email)).first()
     if existing:
         raise HTTPException(status_code=400, detail="Ya existe un usuario con ese email")

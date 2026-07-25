@@ -8,7 +8,13 @@ from sqlalchemy.pool import StaticPool
 from app.main import app as fastapi_app
 from app.database import Base
 import app.models  # noqa: F401
-from app.adapters.rate_limiter import verify_request_limiter, reset_request_limiter, invite_limiter, code_guess_limiter
+from app.adapters.rate_limiter import (
+    verify_request_limiter,
+    reset_request_limiter,
+    invite_limiter,
+    code_guess_limiter,
+    register_limiter,
+)
 from app.services.security import hash_password
 from app.models.user import User
 from app.models.hotel_config import HotelConfiguration
@@ -186,6 +192,31 @@ def test_reset_password_code_guessing_is_rate_limited_and_shared_with_validate(c
     assert r2.status_code == 200
     assert r3.status_code == 400
     assert r4.status_code == 429
+
+
+def test_register_is_rate_limited_by_source(client_with_db):
+    """Registration had no throttle at all: an attacker could farm unlimited
+    accounts / spam verification emails to arbitrary distinct addresses from
+    a single source with no cap."""
+    client, db = client_with_db
+
+    register_limiter.limit = 3
+    register_limiter.reset("testclient", db=db)
+    db.commit()
+    try:
+        responses = [
+            client.post(
+                "/api/auth/register",
+                json={"email": f"farmed-{i}@test.com", "password": "Demo123!"},
+            )
+            for i in range(4)
+        ]
+    finally:
+        register_limiter.reset("testclient", db=db)
+        db.commit()
+
+    assert [r.status_code for r in responses[:3]] == [201, 201, 201]
+    assert responses[3].status_code == 429
 
 
 def test_invite_rate_limited(authed_client):
