@@ -402,6 +402,7 @@ export function ReservationsPage() {
     return {
       nights: quoteQuery.data.nights,
       total: quoteQuery.data.total_amount,
+      defaultDeposit: quoteQuery.data.deposit_amount,
       currencyCode: quoteQuery.data.currency_code,
       quoteToken: quoteQuery.data.quote_token,
       rows: quoteQuery.data.breakdown.map((row) => ({
@@ -416,10 +417,15 @@ export function ReservationsPage() {
     selectedFormCategory
   ]);
   const parsedDepositAmount = depositAmountInput.trim() === "" ? null : Number(depositAmountInput);
+  // Si el operador no escribe una seña manual, el backend aplica la seña
+  // porcentual configurada por el hotel (deposit_amount de la cotización) al
+  // crear la reserva: el preview tiene que mostrar ese mismo valor, no "Por
+  // configurar", para que lo mostrado antes de confirmar coincida con lo que
+  // termina grabado en la reserva.
   const depositPreview =
     parsedDepositAmount !== null && Number.isFinite(parsedDepositAmount) && parsedDepositAmount >= 0
       ? parsedDepositAmount
-      : null;
+      : (reservationQuote?.defaultDeposit ?? null);
   const quoteBalancePreview =
     reservationQuote && depositPreview !== null ? Math.max(reservationQuote.total - depositPreview, 0) : null;
 
