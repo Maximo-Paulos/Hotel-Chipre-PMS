@@ -100,3 +100,27 @@ for (const persona of personas) {
     }
   });
 }
+
+// Creating a laundry batch requires owner/co_owner/manager (see require_roles on
+// POST /api/laundry/batches); housekeeping can only list batches, add items and
+// change status. The "Crear lote" form was shown to housekeeping regardless and
+// always failed on submit.
+test("housekeeping sees laundry batch status/item controls but not batch creation", async ({ page }) => {
+  const housekeeping = personas.find((persona) => persona.label === "housekeeping")!;
+  await login(page, housekeeping);
+  await page.goto("/operacion/lavanderia");
+
+  const main = page.locator("main");
+  await expect(main.getByRole("heading", { name: "Lavanderia", exact: true })).toBeVisible();
+  await expect(main.getByRole("button", { name: "Crear lote" })).toHaveCount(0);
+});
+
+test("manager keeps laundry batch creation", async ({ page }) => {
+  const manager = personas.find((persona) => persona.label === "manager")!;
+  await login(page, manager);
+  await page.goto("/operacion/lavanderia");
+
+  const main = page.locator("main");
+  await expect(main.getByRole("heading", { name: "Lavanderia", exact: true })).toBeVisible();
+  await expect(main.getByRole("button", { name: "Crear lote" })).toBeVisible();
+});

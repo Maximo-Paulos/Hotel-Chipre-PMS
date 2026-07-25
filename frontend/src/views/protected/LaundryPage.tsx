@@ -49,6 +49,9 @@ export function LaundryPage() {
   const [itemForm, setItemForm] = useState(emptyItemForm);
   const [message, setMessage] = useState<string | null>(null);
   const enabled = hasValidSession(session);
+  // POST /api/laundry/batches requires owner/co_owner/manager; housekeeping can
+  // only list batches, add items and change status on existing ones.
+  const canCreateBatch = ["owner", "co_owner", "manager"].includes(session.role ?? "");
 
   const batchesQuery = useQuery({
     queryKey: ["laundry-batches", session.hotelId, statusFilter, batchCode],
@@ -229,6 +232,7 @@ export function LaundryPage() {
         </section>
 
         <aside className="space-y-4">
+          {canCreateBatch && (
           <form className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm" onSubmit={handleCreateBatch}>
             <div>
               <p className="text-xs uppercase tracking-wide text-slate-500">Nuevo lote</p>
@@ -251,6 +255,7 @@ export function LaundryPage() {
               Crear lote
             </button>
           </form>
+          )}
 
           <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <div>
