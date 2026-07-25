@@ -17,7 +17,7 @@ repositorio.
 | Frontend lint/typecheck/build | Pasan. Vite informa un bundle principal de 788.60 kB minificado (190.98 kB gzip); queda como deuda de performance. |
 | E2E desktop | Pasan los journeys de Chromium de login, logout, admin, calendario de tarifas, configuración del hotel, negocio, operaciones diarias, consumos, páginas V72, estados accionables de Analytics y Reportes, error de cotización y ciclo de vida de reserva. La ejecución serial fresh completa queda en 52/52 al sumar móvil Chromium y los tres perfiles WebKit. |
 | E2E mobile | 4/4 pasan con Chromium emulando iPhone y verificando 375×812, 390×844 y 430×932; 12/12 pasan con Playwright WebKit en perfiles iPhone SE, iPhone 15 y iPhone 15 Pro Max. La regresión de selector con nombre largo, touch targets críticos, overflow de páginas operativas, el journey de Reportes, consumos y el ciclo de vida de reserva en WebKit quedan cubiertos; la suite completa pasa 52/52. Esto no sustituye Safari nativo del simulador Xcode, que no está disponible en este host. |
-| Backend completo | 1233 pasan, 17 se omiten, 12 quedan xfail y 1 xpass en Python 3.12 limpio. El runner E2E rechaza explícitamente Python menor a 3.10. |
+| Backend completo | 1242 pasan, 17 se omiten, 12 quedan xfail y 1 xpass en Python 3.12 limpio. El runner E2E rechaza explícitamente Python menor a 3.10. |
 | Forward-tests de arquitectura de datos | 2/2 pasan: una entidad de otro hotel no puede leerse ni adjuntarse, y una cotización queda invalidada antes de persistir la reserva cuando cambia la tarifa. |
 | Migración virgen | `alembic upgrade head` pasa sobre SQLite temporal hasta `20260724_billing_adjustment_enum_values`, incluyendo blobs privados, rotación, custodia, claves tenant restantes, movimientos de habitación y el contrato de cargos operativos. |
 | Backend focalizado | 56/56 pasan: motor de asignación, operaciones de reservas, check-in, check-out y seguridad del flujo. |
@@ -1009,3 +1009,28 @@ archivos. El journey completo de reintento, rechazo y aprobación continúa
 cubierto localmente en Chromium y WebKit con imágenes sintéticas; no se
 transfirió dinero, no se usaron comprobantes reales y no se llamó a proveedores
 externos.
+
+### P1 corregido — inventario con historial operativo auditable
+
+El flujo cloud de inventario guiaba correctamente ingresos, egresos, ajustes y
+el bloqueo de stock negativo, pero no exponía al operador el historial de los
+movimientos ya persistidos. Eso impedía revisar rápidamente el motivo, la
+cantidad y el contexto de un egreso, que es esencial para la operación diaria.
+
+El commit `e32ded9` incorpora un endpoint hotel-scoped, limitado y ordenado por
+recencia, junto con un historial visible en Stock. La interfaz muestra nombres
+operativos de artículo y ubicación, código de reserva cuando corresponde,
+cantidad, fecha y motivo; nunca muestra IDs internos. La prueba se escribió
+roja por la ausencia del endpoint y luego aprobó tanto el servicio/API como el
+journey de UI. La regresión backend completa terminó en **1242 passed, 17
+skipped, 12 xfailed y 1 xpassed**; lint, typecheck, build y el E2E focal de
+stock también aprobaron.
+
+En el Preview existente, con la API y base de datos actuales, se registró un
+ingreso QA y un egreso QA sintéticos, se verificó el bloqueo del intento que
+dejaba el saldo negativo y luego se confirmó que ambos aparecen en el historial
+con sus motivos. Al elegir el artículo, el historial quedó filtrado sólo a sus
+movimientos. En 390×844 no hubo overflow horizontal y el historial permaneció
+visible. Render desplegó el commit y su health check quedó Live; Vercel publicó
+el Preview Ready. No se usaron dinero real, pagos, emails, webhooks, OTA ni
+datos de huéspedes.
