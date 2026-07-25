@@ -236,7 +236,7 @@ def list_reservations(
 def list_pending_actions(
     limit: int = 100,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping")),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping", "receptionist")),
 ):
     safe_limit = max(1, min(limit, 250))
     try:
@@ -253,7 +253,7 @@ def list_pending_actions(
 def reservation_operations_summary(
     reservation_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping")),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping", "receptionist")),
 ):
     try:
         return get_reservation_operations_summary(
