@@ -2828,8 +2828,8 @@
     "hash": "16edea12dd11a133dc0e220e02a28a35"
   },
   "scripts/agent_ops/normalize_graphify_portability.py": {
-    "mtime": 1784959147715.807,
-    "hash": "867d97ffe7d057a99ced4476ea9a6625"
+    "mtime": 1785012221896.7664,
+    "hash": "8cf495ead62f660809033d1b1c2c081f"
   },
   "scripts/agent_ops/check_cloud_surface_config.py": {
     "mtime": 1784862144920.1113,
@@ -3572,8 +3572,8 @@
     "hash": "c3ad6097f4847631a7b629772c955fda"
   },
   "tests/test_normalize_graphify_portability.py": {
-    "mtime": 1784945238140.6448,
-    "hash": "f7ba2484b7a09c81069f711a33ec4b6e"
+    "mtime": 1785012245584.8552,
+    "hash": "19fd1d50f649b4aa78ed81c45c2fc736"
   },
   "frontend/e2e/preview-host-routing.spec.ts": {
     "mtime": 1784947898493.1187,
