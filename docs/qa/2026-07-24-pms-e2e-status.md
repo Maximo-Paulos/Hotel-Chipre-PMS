@@ -17,7 +17,7 @@ repositorio.
 | Frontend lint/typecheck/build | Pasan. Vite informa un bundle principal de 788.60 kB minificado (190.98 kB gzip); queda como deuda de performance. |
 | E2E desktop | Pasan los journeys de Chromium de login, logout, admin, calendario de tarifas, configuración del hotel, negocio, operaciones diarias, consumos, páginas V72, estados accionables de Analytics y Reportes, error de cotización y ciclo de vida de reserva. La ejecución serial fresh completa queda en 52/52 al sumar móvil Chromium y los tres perfiles WebKit. |
 | E2E mobile | 4/4 pasan con Chromium emulando iPhone y verificando 375×812, 390×844 y 430×932; 12/12 pasan con Playwright WebKit en perfiles iPhone SE, iPhone 15 y iPhone 15 Pro Max. La regresión de selector con nombre largo, touch targets críticos, overflow de páginas operativas, el journey de Reportes, consumos y el ciclo de vida de reserva en WebKit quedan cubiertos; la suite completa pasa 52/52. Esto no sustituye Safari nativo del simulador Xcode, que no está disponible en este host. |
-| Backend completo | 1222 pasan, 17 se omiten, 12 quedan xfail y 1 xpass en Python 3.12 limpio. El runner E2E rechaza explícitamente Python menor a 3.10. |
+| Backend completo | 1233 pasan, 17 se omiten, 12 quedan xfail y 1 xpass en Python 3.12 limpio. El runner E2E rechaza explícitamente Python menor a 3.10. |
 | Forward-tests de arquitectura de datos | 2/2 pasan: una entidad de otro hotel no puede leerse ni adjuntarse, y una cotización queda invalidada antes de persistir la reserva cuando cambia la tarifa. |
 | Migración virgen | `alembic upgrade head` pasa sobre SQLite temporal hasta `20260724_billing_adjustment_enum_values`, incluyendo blobs privados, rotación, custodia, claves tenant restantes, movimientos de habitación y el contrato de cargos operativos. |
 | Backend focalizado | 56/56 pasan: motor de asignación, operaciones de reservas, check-in, check-out y seguridad del flujo. |
@@ -596,7 +596,7 @@ agregó `20260724_billing_adjustment_enum_values` para reparar SQLite y PostgreS
 sin quitar la restricción. La prueba focalizada pasó 1/1 en Chromium y 1/1 en
 WebKit iPhone 15; las pruebas backend relacionadas pasaron 13/13 y la regresión
 local serial fresh pasó 52/52 sobre el commit `9aa8dad`. La regresión backend
-completa posterior pasó 1222/1222 (con 17 skips, 12 xfails y 1 xpass). No se ejecutaron pagos,
+completa posterior pasó 1223/1223 (con 17 skips, 12 xfails y 1 xpass). No se ejecutaron pagos,
 emails, webhooks, OTA ni integraciones externas.
 
 ### Revalidación serial del estado actual — commit `c8e1034`
@@ -828,3 +828,26 @@ usar sólo el entorno existente, por lo que no se creó Supabase, Render ni
 servicio adicional y no se fabricó evidencia equivalente. La certificación
 Safari nativa/dispositivo físico y la prueba de pago real siguen pendientes
 por las exclusiones de efectos externos.
+
+### P1 corregido — exportación de huéspedes y snapshots de auditoría sin PII
+
+La auditoría de seguridad detectó que el CSV de libro de huéspedes contenía
+datos identificatorios y dependía solamente de una sesión hotel-scoped. También
+detectó que los snapshots de `guests` y `guest_companions` persistían toda la
+fila en `audit_logs` y podían proyectarse a Mongo.
+
+El commit `d260449` agrega el permiso explícito `guest:export`: owner,
+co-owner y manager lo tienen por defecto; recepción y housekeeping quedan
+denegados salvo override hotel-scoped. El endpoint de exportación ahora usa el
+guard existente y no devuelve CSV cuando responde 403. Los snapshots de huésped
+y acompañante se reducen a contexto operativo permitido; la misma
+normalización se aplica en la escritura directa, el decorador y la proyección
+de auditoría. No se procesaron datos de clientes, sesiones ni proveedores
+externos durante la validación.
+
+La prueba se escribió roja: recepción podía recibir HTTP 200 con el CSV y no
+existía `guest:export`. Posteriormente aprobaron 29 pruebas focales de
+permisos, exportación, auditoría y proyección Mongo; la regresión backend
+completa terminó en **1233 passed, 17 skipped, 12 xfailed, 1 xpassed**. Esto
+reduce una exposición local de PII, pero no sustituye el drill de backup/restore
+ni la evidencia cloud firmada.
