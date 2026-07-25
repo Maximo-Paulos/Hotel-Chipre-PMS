@@ -58,8 +58,11 @@ export function WaitlistPage() {
     staleTime: 30 * 1000
   });
   const guestsQuery = useQuery({
-    queryKey: ["guests", session.hotelId, ""],
-    queryFn: () => listGuests("", session),
+    queryKey: ["guests", session.hotelId, "", "picker"],
+    // A5: this feeds a guest picker, not the paginated GuestsPage list --
+    // ask for a larger page than the 50 default so the dropdown isn't
+    // silently missing hotels with >50 guests.
+    queryFn: () => listGuests({ limit: 200 }, session),
     enabled,
     staleTime: 60 * 1000
   });

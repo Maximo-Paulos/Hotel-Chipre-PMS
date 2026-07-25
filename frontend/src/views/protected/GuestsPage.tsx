@@ -14,7 +14,7 @@ import {
   type GuestTagType,
   type GuestUpdatePayload
 } from "../../api/guests";
-import { useGuestCompanionAdd, useGuestUpdate, useGuests } from "../../hooks/useGuests";
+import { GUEST_PAGE_SIZE, useGuestCompanionAdd, useGuestUpdate, useGuests } from "../../hooks/useGuests";
 import { useReservationDrawer } from "../../hooks/useReservationDrawer";
 import { useSession } from "../../state/session";
 
@@ -87,6 +87,10 @@ export function GuestsPage() {
   const { openReservation } = useReservationDrawer();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
+  // A5: the backend already paginated (app/api/guests.py:114-130) but the
+  // frontend never sent skip/limit, so a hotel with >50 guests only ever
+  // saw the first 50 with no indication more existed.
+  const [page, setPage] = useState(0);
   const [selectedGuestId, setSelectedGuestId] = useState<number | null>(null);
   const [formValues, setFormValues] = useState<GuestUpdatePayload>(emptyForm);
   const [companionValues, setCompanionValues] = useState<GuestCompanionPayload>(emptyCompanion);
@@ -95,10 +99,18 @@ export function GuestsPage() {
   const [companionMessage, setCompanionMessage] = useState<string | null>(null);
   const [tagMessage, setTagMessage] = useState<string | null>(null);
   const [checkInMessage, setCheckInMessage] = useState<string | null>(null);
-  const guestsQuery = useGuests(search);
+  const guestsQuery = useGuests(search, page);
   const updateGuestMutation = useGuestUpdate();
   const addCompanionMutation = useGuestCompanionAdd();
   const guests = useMemo(() => guestsQuery.data ?? [], [guestsQuery.data]);
+  // No exact total from the backend (deliberate -- see api/guests.ts):
+  // a full page is the only signal that a next page might exist.
+  const hasNextPage = guests.length === GUEST_PAGE_SIZE;
+
+  const handleSearchChange = (value: string) => {
+    setSearch(value);
+    setPage(0);
+  };
 
   const selectedGuest = useMemo(
     () => guests.find((guest) => guest.id === selectedGuestId) ?? guests[0] ?? null,
@@ -287,7 +299,7 @@ export function GuestsPage() {
           <input
             type="search"
             value={search}
-            onChange={(event) => setSearch(event.target.value)}
+            onChange={(event) => handleSearchChange(event.target.value)}
             placeholder="Buscar por nombre, documento o email"
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
           />
@@ -333,6 +345,32 @@ export function GuestsPage() {
                 })}
               </div>
             )}
+          </div>
+          <div className="flex items-center justify-between gap-2 border-t border-slate-200 px-4 py-3">
+            <span className="text-xs text-slate-500" data-testid="guests-page-indicator">
+              Página {page + 1}
+              {guestsQuery.isFetching ? " · Actualizando..." : ""}
+            </span>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                data-testid="guests-prev-page"
+                onClick={() => setPage((current) => Math.max(0, current - 1))}
+                disabled={page === 0 || guestsQuery.isFetching}
+                className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                ← Anterior
+              </button>
+              <button
+                type="button"
+                data-testid="guests-next-page"
+                onClick={() => setPage((current) => current + 1)}
+                disabled={!hasNextPage || guestsQuery.isFetching}
+                className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Siguiente →
+              </button>
+            </div>
           </div>
         </section>
 

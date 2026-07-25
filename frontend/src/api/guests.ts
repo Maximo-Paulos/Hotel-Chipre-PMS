@@ -148,8 +148,30 @@ export type GuestCompanionPayload = GuestCompanion;
 export const createGuest = (payload: GuestPayload, session?: SessionLike) =>
   apiFetch<Guest>("/api/guests/", { method: "POST", data: payload, session });
 
-export const listGuests = (search = "", session?: SessionLike) =>
-  apiFetch<Guest[]>(`/api/guests/${search ? `?search=${encodeURIComponent(search)}` : ""}`, { session });
+// A5: the backend has paginated this endpoint since app/api/guests.py:114-130
+// (skip/limit/search), but nothing here sent skip/limit -- every hotel with
+// more than 50 guests silently only ever saw the first page. No `total`
+// count field: matches the A2 precedent for /api/reservations (same
+// skip/limit/order shape, no COUNT(*) in the response) -- the UI treats a
+// full page (length === limit) as "there may be more" instead of paying for
+// an exact count.
+export type GuestFilters = {
+  search?: string;
+  skip?: number;
+  limit?: number;
+};
+
+const buildGuestQueryString = (filters: GuestFilters = {}) => {
+  const params = new URLSearchParams();
+  if (filters.search) params.set("search", filters.search);
+  if (typeof filters.skip === "number") params.set("skip", String(filters.skip));
+  if (typeof filters.limit === "number") params.set("limit", String(filters.limit));
+  const qs = params.toString();
+  return qs ? `?${qs}` : "";
+};
+
+export const listGuests = (filters: GuestFilters = {}, session?: SessionLike) =>
+  apiFetch<Guest[]>(`/api/guests/${buildGuestQueryString(filters)}`, { session });
 
 export const searchGuests = (q: string, limit = 20, session?: SessionLike) =>
   apiFetch<Guest[]>(`/api/guests/search?q=${encodeURIComponent(q)}&limit=${limit}`, { session });
