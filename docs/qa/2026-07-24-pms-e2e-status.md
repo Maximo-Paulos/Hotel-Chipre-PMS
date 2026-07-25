@@ -1034,3 +1034,26 @@ movimientos. En 390×844 no hubo overflow horizontal y el historial permaneció
 visible. Render desplegó el commit y su health check quedó Live; Vercel publicó
 el Preview Ready. No se usaron dinero real, pagos, emails, webhooks, OTA ni
 datos de huéspedes.
+
+### P1 corregido — check-in guía primero al cobro pendiente
+
+En el listado de reservas, el botón Check-in se habilitaba para reservas
+pendientes o con seña aun cuando el backend sólo admite `fully_paid` o
+`pre_check_in`. El operador encontraba así una acción que terminaba en un
+rechazo técnico, en vez de recibir el paso operativo necesario para completar
+la estadía.
+
+El commit `2b36070` alinea el contrato visible con el backend: al iniciar un
+check-in con saldo pendiente abre la ficha de pago y explica que debe cobrarse
+el saldo con `Pago total`, que queda registrado en caja. Una reserva pagada o
+en pre check-in sí ejecuta el check-in. También se incorpora el estado
+`pre_check_in` al contrato TypeScript, etiquetas, filtros y badges, para que
+no quede oculto ni degradado a texto técnico.
+
+La regresión fue roja antes de la corrección y verde después en el journey de
+reserva Chromium y WebKit iPhone 15. Lint, typecheck y build aprobaron. En el
+Preview existente, una reserva QA pendiente abrió el cobro con la guía visible
+sin devolver el error técnico; una reserva QA pagada pasó a Check-in y luego a
+Check-out. En 390×844 el botón de check-in midió 69×44 px y la página no tuvo
+overflow horizontal. No se realizaron pagos, links, emails, webhooks, OTA ni
+acciones sobre datos de huéspedes reales.
