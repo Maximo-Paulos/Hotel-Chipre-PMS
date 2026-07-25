@@ -208,8 +208,8 @@
     "hash": "880af4bd1fb81e8fc003a7d70d981a72"
   },
   "app/api/analytics.py": {
-    "mtime": 1784875272765.5923,
-    "hash": "e4b679cf45fd9f8fdec343d28a3155e9"
+    "mtime": 1784975386192.7373,
+    "hash": "99dc83d588d7ad52ef419c95ecaa1e06"
   },
   "app/api/auth.py": {
     "mtime": 1784862144874.1748,
@@ -808,8 +808,8 @@
     "hash": "6e085359e81bdfc1d1c33ec6a555cfa0"
   },
   "app/services/analytics_exports.py": {
-    "mtime": 1784863268798.4104,
-    "hash": "d6f02fdd2dbfba08f54d7af51c3a79a7"
+    "mtime": 1784975394037.3098,
+    "hash": "3c9b7a910ad51b5c7a325d88178941c2"
   },
   "app/services/analytics_facts.py": {
     "mtime": 1784862144882.8743,
@@ -820,8 +820,8 @@
     "hash": "9187ccb6200687b3602d41dab43db1c2"
   },
   "app/services/analytics_service.py": {
-    "mtime": 1784862144883.0432,
-    "hash": "d7b9d59dd777aa1d207bb72b3df47e16"
+    "mtime": 1784975378716.428,
+    "hash": "65d1f4c29af99bfce2b829066fa4878b"
   },
   "app/services/audit_log_service.py": {
     "mtime": 1784945069709.0815,
@@ -1656,8 +1656,8 @@
     "hash": "cf8158612279def87b0d8fb7f7e1b7a9"
   },
   "tests/test_analytics_api.py": {
-    "mtime": 1784875337238.4568,
-    "hash": "f69e068feca9efb7afc4e2d2b52534f9"
+    "mtime": 1784975222353.853,
+    "hash": "9a88e79a1d396f7876cbaf6cbf002496"
   },
   "tests/test_analytics_block1_schema.py": {
     "mtime": 1784881004137.5076,
@@ -3654,5 +3654,9 @@
   "frontend/e2e/reservation-deposit-preview.spec.ts": {
     "mtime": 1784973896023.85,
     "hash": "dcd7b6b5d4cb988fe8a2d94742c55fc9"
+  },
+  "frontend/e2e/integrations-status.spec.ts": {
+    "mtime": 1784975734004.2239,
+    "hash": "caf5b610c17ce3aece6cad1706783e58"
   }
 }
