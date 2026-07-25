@@ -982,3 +982,30 @@ horizontal. No se creó un movimiento adicional durante esta comprobación.
 No hay Xcode Simulator instalado en este equipo, por lo que la certificación
 manual en Safari nativo o dispositivo físico sigue pendiente. La evidencia
 actual cubre WebKit Playwright y el viewport cloud del navegador interno.
+
+### P1 corregido — configuración de medios de pago guardable
+
+En el Preview existente, habilitar Transferencia desde Configuración/Hotel no
+persistía. La causa no era autorización ni API: el formulario de configuración
+también contenía los borradores de alta de categoría y habitación; uno de esos
+campos tenía un mínimo numérico inválido por defecto y el navegador bloqueaba
+silenciosamente el submit de configuración.
+
+El commit `4529a78` hace que el botón `Guardar cambios` omita la validación
+nativa de los borradores no enviados, manteniendo las validaciones de sus
+acciones de alta. La regresión E2E fue roja antes del cambio y verde después:
+el owner habilita Transferencia, guarda y la opción permanece activa tras
+recargar. En el Preview cloud, el mismo recorrido mostró `Cambios guardados.`
+y la opción siguió habilitada tras la recarga. Esto también dejó visible el
+formulario de comprobante de transferencia sobre una reserva QA pendiente.
+
+El Render existente arrancó el commit `9d6d084` y su chequeo de drift informó
+que no faltan tablas de modelos; por lo tanto, `payment_proofs` y
+`payment_proof_blobs` ya están disponibles con sus restricciones y RLS. El
+selector nativo de archivos no está expuesto por el puente del navegador
+interno de Codex, así que la carga cloud de una imagen sintética y su
+aprobación quedan pendientes de un navegador/dispositivo con selector de
+archivos. El journey completo de reintento, rechazo y aprobación continúa
+cubierto localmente en Chromium y WebKit con imágenes sintéticas; no se
+transfirió dinero, no se usaron comprobantes reales y no se llamó a proveedores
+externos.
