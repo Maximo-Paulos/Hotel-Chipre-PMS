@@ -357,6 +357,15 @@ def validate_runtime_security(settings: Settings | None = None) -> None:
     if not manager_pin or manager_pin == "1234" or len(manager_pin) < 6 or not manager_pin.isdigit():
         errors.append("MASTER_ADMIN_PIN must be at least 6 digits and not the default")
 
+    # Bootstrap master-admin login is optional in production (an empty
+    # password disables it, since _bootstrap_master_credentials_match
+    # requires both fields truthy), but if it IS configured it must be as
+    # strong as the preview QA requirement, not just "whatever was typed".
+    if _has_value(runtime_settings.MASTER_ADMIN_EMAIL) and "@" not in runtime_settings.MASTER_ADMIN_EMAIL:
+        errors.append("MASTER_ADMIN_EMAIL must be a valid email address")
+    if _has_value(runtime_settings.MASTER_ADMIN_PASSWORD) and len(runtime_settings.MASTER_ADMIN_PASSWORD.strip()) < 12:
+        errors.append("MASTER_ADMIN_PASSWORD must be a strong value (12+ chars) when configured")
+
     try:
         Fernet(runtime_settings.INTEGRATIONS_ENCRYPTION_KEY.encode())
     except Exception:

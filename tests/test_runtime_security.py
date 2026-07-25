@@ -128,6 +128,39 @@ def test_validate_runtime_security_accepts_strong_production_settings():
     get_settings.cache_clear()
 
 
+def test_validate_runtime_security_rejects_weak_master_admin_password_in_production():
+    """Preview QA already requires a strong MASTER_ADMIN_PASSWORD/EMAIL, but
+    production only checked the PIN - a weak bootstrap password/email in a
+    real production deploy went unnoticed."""
+    settings = Settings(
+        APP_ENV="production",
+        JWT_SECRET="super-secret-value-for-production-1234567890",
+        MASTER_ADMIN_PIN="654321",
+        MASTER_ADMIN_EMAIL="not-an-email",
+        MASTER_ADMIN_PASSWORD="weak",
+        APP_BASE_URL="https://hotel-chipre.example.com",
+        INTEGRATIONS_ENCRYPTION_KEY="fRb9jE74bWw5gAKpNwZrl_uCWhsx2Nl7fNL1jK5vLG8=",
+        EMAIL_PROVIDER="resend",
+        RESEND_API_KEY="re_test_key",
+        SYSTEM_EMAIL_FROM="Hotel Chipre PMS <noreply@auth.hotels-pms.com>",
+        SYSTEM_EMAIL_REPLY_TO="hotelxpms@gmail.com",
+        MERCADOPAGO_WEBHOOK_SECRET="mp-webhook-secret",
+        PAYPAL_REDIRECT_URI="https://hotel-chipre.example.com/api/integrations/oauth/paypal/callback",
+        MERCADOPAGO_REDIRECT_URI="https://hotel-chipre.example.com/api/integrations/oauth/mercadopago/callback",
+        GMAIL_REDIRECT_URI="https://hotel-chipre.example.com/api/integrations/oauth/gmail/callback",
+    )
+
+    try:
+        validate_runtime_security(settings)
+    except RuntimeError as exc:
+        message = str(exc)
+        assert "MASTER_ADMIN_PASSWORD" in message
+        assert "MASTER_ADMIN_EMAIL" in message
+    else:
+        raise AssertionError("Production security validation should reject a weak master admin bootstrap")
+    get_settings.cache_clear()
+
+
 def test_validate_runtime_security_rejects_shared_token_secrets():
     settings = Settings(
         APP_ENV="production",
