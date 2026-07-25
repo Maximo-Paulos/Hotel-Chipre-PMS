@@ -364,8 +364,8 @@
     "hash": "01c0e7eaa55ecd4928a54ad8b3ba7311"
   },
   "app/api/stock.py": {
-    "mtime": 1784957963981.8777,
-    "hash": "729c3425bd842e86ed98f1ee8f514c36"
+    "mtime": 1784972147671.969,
+    "hash": "ee0419d95741e525c865a750d73393b4"
   },
   "app/api/subscription.py": {
     "mtime": 1784862144876.255,
@@ -608,8 +608,8 @@
     "hash": "264b74ea8cd83eee5193b8401807fcae"
   },
   "app/models/stock.py": {
-    "mtime": 1784880536606.9375,
-    "hash": "d9384738d4a040cc7d7703c83a6b104e"
+    "mtime": 1784972131515.2996,
+    "hash": "52e018bb24e870c6b233ed58df846e95"
   },
   "app/models/subscription.py": {
     "mtime": 1784862144880.114,
@@ -1036,8 +1036,8 @@
     "hash": "79d6d1e03bf10363d83dedfa312a534a"
   },
   "app/services/stock_service.py": {
-    "mtime": 1784957963981.5112,
-    "hash": "c52d543ba3c091a4d726ea889c7f81e7"
+    "mtime": 1784972143778.4873,
+    "hash": "991feea6f4de1ae1104da4f313e4f530"
   },
   "app/services/subscription_entitlements.py": {
     "mtime": 1784862144886.7397,
@@ -1100,8 +1100,8 @@
     "hash": "70ea4197fe8494bac4fc09ce0bd4dfb2"
   },
   "frontend/playwright.config.ts": {
-    "mtime": 1784965931685.9177,
-    "hash": "165a35f1914346c910510ea2a635e7c7"
+    "mtime": 1784972649146.039,
+    "hash": "225845e03b6b376fdb9f9c6d2d913070"
   },
   "frontend/src/App.tsx": {
     "mtime": 1784862144901.0059,
@@ -1204,8 +1204,8 @@
     "hash": "d976c0d923b94f3f72ba414452dee372"
   },
   "frontend/src/api/stock.ts": {
-    "mtime": 1784957963982.0518,
-    "hash": "963a9021efff81b9eaca374e8524aecc"
+    "mtime": 1784972232802.4102,
+    "hash": "db6dac89458303bce55f9d6f81501549"
   },
   "frontend/src/api/subscription.ts": {
     "mtime": 1784862144902.4917,
@@ -1500,8 +1500,8 @@
     "hash": "353d169ade8bfb8b38ab0e5f059b68ca"
   },
   "frontend/src/views/protected/StockPage.tsx": {
-    "mtime": 1784965931688.0408,
-    "hash": "f1afa8bafc7ca801708f5b2dd9da08f3"
+    "mtime": 1784972315569.9575,
+    "hash": "0c1684720fd515e45d8b84edc7f42571"
   },
   "frontend/src/views/protected/WaitlistPage.tsx": {
     "mtime": 1784862144907.1262,
@@ -1924,8 +1924,8 @@
     "hash": "6aeb4f419411d94ab42a349be82f953a"
   },
   "tests/test_permissions_api.py": {
-    "mtime": 1784957900922.0493,
-    "hash": "7f6f85efb95e1802fd7708db398dff95"
+    "mtime": 1784972165491.7249,
+    "hash": "713c13c7a1244ae8f477515213375da3"
   },
   "tests/test_postgres_validation.py": {
     "mtime": 1784862144934.7532,
@@ -2016,8 +2016,8 @@
     "hash": "73734b2628ff5c937b1166e9b5745bd6"
   },
   "tests/test_stock_service.py": {
-    "mtime": 1784957900921.5154,
-    "hash": "b7c137606bccb2b2dc4787f7cca29edb"
+    "mtime": 1784972119207.9893,
+    "hash": "1eff439da1dbb7c9294886a07ed4c286"
   },
   "tests/test_subscription_tiers.py": {
     "mtime": 1784862144937.6543,
@@ -3642,5 +3642,13 @@
   "tests/test_mercadopago_webhook_endpoint.py": {
     "mtime": 1784969308508.042,
     "hash": "4024a70a277e9fbb6b48f0b732f53ff1"
+  },
+  "alembic/versions/20260725_stock_adjustment_out.py": {
+    "mtime": 1784972188234.9639,
+    "hash": "4b54b79a778e926e2c7da385dd01d98c"
+  },
+  "frontend/e2e/stock-inventory-journey.spec.ts": {
+    "mtime": 1784972612969.0208,
+    "hash": "34a1095a203683d118b0ba565ddf7fdd"
   }
 }

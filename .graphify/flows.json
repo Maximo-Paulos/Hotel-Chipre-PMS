@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-25T09:30:36.475Z",
+  "generatedAt": "2026-07-25T09:54:35.613Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -12029,6 +12029,28 @@
       "warnings": []
     },
     {
+      "id": "flow:versions_20260725_stock_adjustment_out_downgrade",
+      "name": "downgrade",
+      "entryPoint": "versions_20260725_stock_adjustment_out_downgrade",
+      "entryPointId": "versions_20260725_stock_adjustment_out_downgrade",
+      "path": [
+        "versions_20260725_stock_adjustment_out_downgrade",
+        "versions_20260725_stock_adjustment_out_constraint"
+      ],
+      "qualifiedPath": [
+        "versions_20260725_stock_adjustment_out_downgrade",
+        "versions_20260725_stock_adjustment_out_constraint"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20260725_stock_adjustment_out.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:versions_d4f8c21e7b10_extend_payment_link_tests_states_downgrade",
       "name": "downgrade",
       "entryPoint": "versions_d4f8c21e7b10_extend_payment_link_tests_states_downgrade",
@@ -14852,6 +14874,28 @@
       "fileCount": 1,
       "files": [
         "alembic/versions/20260725_repair_cash_handoff_schema.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:versions_20260725_stock_adjustment_out_upgrade",
+      "name": "upgrade",
+      "entryPoint": "versions_20260725_stock_adjustment_out_upgrade",
+      "entryPointId": "versions_20260725_stock_adjustment_out_upgrade",
+      "path": [
+        "versions_20260725_stock_adjustment_out_upgrade",
+        "versions_20260725_stock_adjustment_out_constraint"
+      ],
+      "qualifiedPath": [
+        "versions_20260725_stock_adjustment_out_upgrade",
+        "versions_20260725_stock_adjustment_out_constraint"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20260725_stock_adjustment_out.py"
       ],
       "criticality": 0.16,
       "warnings": []
