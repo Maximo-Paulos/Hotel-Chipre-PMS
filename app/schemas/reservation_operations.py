@@ -237,3 +237,42 @@ class ReservationManualReviewResponse(BaseModel):
     requires_manual_review: bool
     allocation_status: str
     reviewed_by_user_id: Optional[int] = None
+
+
+# ── B2: occupancy grid (planilla de ocupación) ──────────────────────────────
+
+
+class OccupancyGridRoomRead(BaseModel):
+    id: int
+    room_number: str
+    floor: int
+    category_id: int
+    category_name: str
+    status: str
+
+
+class OccupancyGridReservationRead(BaseModel):
+    id: int
+    room_id: Optional[int] = None
+    confirmation_code: str
+    check_in_date: date
+    check_out_date: date
+    status: str
+    guest_name: str
+    num_adults: int
+    num_children: int
+    operational_balance_due: float
+
+
+class OccupancyGridBlockRead(BaseModel):
+    room_id: int
+    starts_at: date
+    ends_at: Optional[date] = None
+    reason_code: str
+
+
+class OccupancyGridResponse(BaseModel):
+    rooms: list[OccupancyGridRoomRead]
+    reservations: list[OccupancyGridReservationRead]
+    unassigned: list[OccupancyGridReservationRead]
+    blocks: list[OccupancyGridBlockRead]

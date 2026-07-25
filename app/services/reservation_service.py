@@ -12,6 +12,7 @@ from decimal import Decimal
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.commercial import RatePlan, SellableProduct, TaxPolicy
@@ -31,11 +32,12 @@ from app.models.hotel_config import HotelConfiguration
 from app.models.pricing import CategoryPricing
 from app.models.operations import ReservationStatusHistory
 from app.schemas.reservation import ReservationCreate, ReservationUpdate
+from app.services.financial_ledger import billing_adjustment_totals_by_reservation, completed_paid_amounts_by_reservation
 from app.services.pricing_policy_service import PricingPolicyError, StayPricingQuote, quote_rate_plan_stay
 from app.services.pricing_service import build_pricing_revision, get_price_for_date
 from app.services.quote_token_service import QuoteTokenError, verify_quote_token
 from app.services.read_model_cache import invalidate_hotel_operational_caches
-from app.services.room_block_service import blocked_room_ids_for_range, room_has_active_block
+from app.services.room_block_service import blocked_room_ids_for_range, list_active_blocks, room_has_active_block
 
 
 logger = logging.getLogger(__name__)
@@ -982,6 +984,120 @@ def list_reservations(
     else:
         query = query.order_by(Reservation.created_at.desc(), Reservation.id.desc())
     return query.offset(max(skip, 0)).limit(max(limit, 1)).all()
+
+
+def get_occupancy_grid(db: Session, hotel_id: int, date_from: date, date_to: date) -> dict:
+    """B2: occupancy grid data for the planilla — rooms x days.
+
+    Explicit-column ``select()`` throughout: Room/RoomCategory/Reservation all
+    carry lazy="selectin" relationships (see A2's fan-out fix) that a plain
+    ORM `.query(Reservation).all()` would trigger per-row. This stays at a
+    fixed, small query count regardless of how many rooms/reservations exist
+    (verified by tests/test_occupancy_grid.py's query-count test).
+    """
+    room_rows = db.execute(
+        select(
+            Room.id,
+            Room.room_number,
+            Room.floor,
+            Room.category_id,
+            RoomCategory.name.label("category_name"),
+            Room.status,
+        )
+        .join(RoomCategory, RoomCategory.id == Room.category_id)
+        .where(
+            Room.hotel_id == hotel_id,
+            RoomCategory.hotel_id == hotel_id,
+            Room.deleted_at.is_(None),
+        )
+        .order_by(RoomCategory.name.asc(), Room.room_number.asc())
+    ).all()
+
+    # Overlap test: a stay overlaps [date_from, date_to) unless it ends at/
+    # before date_from or starts at/after date_to. Cancelled/deleted excluded.
+    reservation_rows = db.execute(
+        select(
+            Reservation.id,
+            Reservation.room_id,
+            Reservation.confirmation_code,
+            Reservation.check_in_date,
+            Reservation.check_out_date,
+            Reservation.status,
+            Reservation.num_adults,
+            Reservation.num_children,
+            Reservation.total_amount,
+            Reservation.amount_paid,
+            Guest.first_name,
+            Guest.last_name,
+        )
+        .join(Guest, Guest.id == Reservation.guest_id)
+        .where(
+            Reservation.hotel_id == hotel_id,
+            Guest.hotel_id == hotel_id,
+            Reservation.deleted_at.is_(None),
+            Reservation.status != ReservationStatusEnum.CANCELLED,
+            Reservation.check_in_date < date_to,
+            Reservation.check_out_date > date_from,
+        )
+    ).all()
+
+    reservation_ids = [row.id for row in reservation_rows]
+    # Same bulk pattern as operational_report_service.daily_report: confirmed
+    # transactions win, materialized amount_paid is only the fallback for
+    # legacy rows with no ledger entries at all.
+    paid_by_reservation = completed_paid_amounts_by_reservation(db, hotel_id, reservation_ids)
+    for row in reservation_rows:
+        paid_by_reservation.setdefault(row.id, Decimal(row.amount_paid or 0))
+    adjustments_by_reservation = billing_adjustment_totals_by_reservation(db, hotel_id, reservation_ids)
+
+    reservations: list[dict] = []
+    unassigned: list[dict] = []
+    for row in reservation_rows:
+        balance = max(
+            Decimal("0.00"),
+            Decimal(row.total_amount or 0)
+            + adjustments_by_reservation.get(row.id, Decimal("0"))
+            - paid_by_reservation.get(row.id, Decimal("0")),
+        )
+        item = {
+            "id": row.id,
+            "room_id": row.room_id,
+            "confirmation_code": row.confirmation_code,
+            "check_in_date": row.check_in_date,
+            "check_out_date": row.check_out_date,
+            "status": row.status.value,
+            "guest_name": f"{row.first_name} {row.last_name}",
+            "num_adults": row.num_adults,
+            "num_children": row.num_children,
+            "operational_balance_due": float(balance),
+        }
+        (unassigned if row.room_id is None else reservations).append(item)
+
+    # ends_at nullable = indefinite; the frontend clips indefinite blocks to
+    # the requested window (date_to) for display, this returns the raw value.
+    blocks = [
+        {
+            "room_id": block.room_id,
+            "starts_at": block.starts_at,
+            "ends_at": block.ends_at,
+            "reason_code": block.reason_code.value,
+        }
+        for block in list_active_blocks(db, hotel_id=hotel_id, start_date=date_from, end_date=date_to)
+    ]
+
+    rooms = [
+        {
+            "id": row.id,
+            "room_number": row.room_number,
+            "floor": row.floor,
+            "category_id": row.category_id,
+            "category_name": row.category_name,
+            "status": row.status.value,
+        }
+        for row in room_rows
+    ]
+
+    return {"rooms": rooms, "reservations": reservations, "unassigned": unassigned, "blocks": blocks}
 
 
 def get_reservation_by_id(db: Session, reservation_id: int, hotel_id: int) -> Reservation | None:

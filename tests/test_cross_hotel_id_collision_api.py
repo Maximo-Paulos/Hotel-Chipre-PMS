@@ -263,3 +263,29 @@ def test_daily_rate_category_write_denied_across_hotels(two_hotel_client):
         json={"date": "2026-09-01", "price": 999},
     )
     assert resp.status_code == 404, resp.text
+
+
+# ── Occupancy grid (B2): unlike the probes above, this is a list/aggregate
+# endpoint with no target id in the URL, so the risk is a scoping bug in the
+# query itself (e.g. a join missing a hotel_id filter) rather than a guessable
+# path. Hotel B's room/reservation was seeded with an overlapping date range
+# and a colliding-adjacent id, so if the grid query ever forgot to scope by
+# hotel_id, Hotel B's row would show up in Hotel A's response.
+def test_occupancy_grid_never_leaks_hotel_b_data(two_hotel_client):
+    client, ids = two_hotel_client
+    resp = client.get("/api/reservations/occupancy-grid?date_from=2026-08-01&date_to=2026-08-03")
+    assert resp.status_code == 200, resp.text
+    payload = resp.json()
+
+    room_ids = {room["id"] for room in payload["rooms"]}
+    reservation_ids = {r["id"] for r in [*payload["reservations"], *payload["unassigned"]]}
+    confirmation_codes = {r["confirmation_code"] for r in [*payload["reservations"], *payload["unassigned"]]}
+
+    assert ids["room_b"] not in room_ids
+    assert ids["reservation_b"] not in reservation_ids
+    assert "RES-B" not in confirmation_codes
+
+    # Sanity: Hotel A's own overlapping reservation IS present, so this isn't
+    # a false-negative from an empty/broken response.
+    assert ids["reservation_a"] in reservation_ids
+    assert "RES-A" in confirmation_codes

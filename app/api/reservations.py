@@ -32,6 +32,7 @@ from app.schemas.reservation_operations import (
     OTARebookToDirectResponse,
     ReservationActionResolveRequest,
     ReservationExternalResolutionResponse,
+    OccupancyGridResponse,
     ReservationBillingAdjustmentSummaryRead,
     ReservationChargeCreate,
     ReservationManualReviewResponse,
@@ -45,6 +46,7 @@ from app.services.reservation_service import (
     find_available_rooms,
     ReservationError,
     list_reservations as list_reservations_service,
+    get_occupancy_grid,
     get_reservation_by_id,
     mark_reservation_no_show,
     update_reservation_fields,
@@ -260,6 +262,23 @@ def list_pending_actions(
             status_code=500,
             detail=f"No se pudieron calcular las acciones pendientes: {exc}",
         ) from exc
+
+
+@router.get("/occupancy-grid", response_model=OccupancyGridResponse)
+def occupancy_grid(
+    date_from: date = Query(...),
+    date_to: date = Query(...),
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(
+        require_roles("owner", "co_owner", "manager", "housekeeping", "receptionist")
+    ),
+):
+    """B2: planilla de ocupación — rooms x days grid data for one hotel."""
+    if date_to <= date_from:
+        raise HTTPException(status_code=422, detail="date_to must be greater than date_from")
+    if (date_to - date_from).days > 92:
+        raise HTTPException(status_code=422, detail="Date range cannot exceed 92 days")
+    return get_occupancy_grid(db, hotel_id=context.hotel_id, date_from=date_from, date_to=date_to)
 
 
 @router.get("/{reservation_id}/operations-summary", response_model=ReservationOperationsSummaryRead)
