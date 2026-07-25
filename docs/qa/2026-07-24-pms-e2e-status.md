@@ -851,3 +851,27 @@ permisos, exportación, auditoría y proyección Mongo; la regresión backend
 completa terminó en **1233 passed, 17 skipped, 12 xfailed, 1 xpassed**. Esto
 reduce una exposición local de PII, pero no sustituye el drill de backup/restore
 ni la evidencia cloud firmada.
+
+### P1 corregido — las rutas privadas del Preview no deben redirigir a producción
+
+El Preview de Vercel de la rama de trabajo identificaba sólo el host canónico
+de producción como aplicación. Por eso abrir `/login` en un dominio Preview
+trataba el Preview como sitio público y redirigía la ruta privada a producción,
+impidiendo hacer QA provider-bound del commit a revisar.
+
+El commit `121ec1a` agrega una excepción explícita, desactivada por defecto y
+limitada mediante variables de entorno de Preview, para los sufijos de host
+permitidos. La suite contiene una regresión independiente: antes del cambio
+el navegador terminaba en el host equivocado; después, el test quedó verde
+**1/1** y la pantalla de login permaneció en el dominio Preview. La variable
+se creó únicamente con alcance Preview; no se cambiaron Render, Supabase,
+producción ni ningún proveedor externo.
+
+Como validación posterior, el owner QA inició sesión en el Preview y cargó
+`/reservas`, `/tarifas`, `/caja` y `/operacion/stock` contra el entorno
+existente, sin pagos, emails, webhooks, OTA, ni mutaciones externas. También
+aprobaron la regresión completa **37/37** en Chromium y **18/18** para el
+journey operativo en WebKit iPhone 15. La primera autenticación completó, pero
+tardó aproximadamente un minuto: se clasifica como **P2 de performance** del
+arranque del backend y queda pendiente diagnosticarlo con telemetría del
+provider. No es evidencia de un fallo de credenciales ni de routing.
