@@ -1,6 +1,6 @@
 import { apiFetch, type SessionLike } from "./client";
 
-export type StockMovementType = "in" | "out" | "adjustment";
+export type StockMovementType = "in" | "out" | "adjustment" | "adjustment_out";
 
 export type DecimalValue = string | number;
 

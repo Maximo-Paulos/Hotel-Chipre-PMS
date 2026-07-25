@@ -18,10 +18,22 @@ import { listReservations, type Reservation } from "../../api/reservations";
 import { hasValidSession } from "../../api/client";
 import { useSession } from "../../state/session";
 
+// Used for the movement-mode buttons/heading, where "Ajuste" covers both
+// directions (the direction toggle underneath clarifies which one).
 const movementLabel: Record<StockMovementType, string> = {
   in: "Ingreso",
   out: "Egreso",
-  adjustment: "Ajuste"
+  adjustment: "Ajuste",
+  adjustment_out: "Ajuste"
+};
+
+// Used for the movement history, where each row must show the recorded
+// direction so an audit reviewer can tell an increase from a decrease.
+const movementHistoryLabel: Record<StockMovementType, string> = {
+  in: "Ingreso",
+  out: "Egreso",
+  adjustment: "Ajuste (alta)",
+  adjustment_out: "Ajuste (baja)"
 };
 
 const movementModeOptions: Array<{ type: StockMovementType; title: string; description: string }> = [
@@ -65,6 +77,7 @@ export function StockPage() {
   const [itemForm, setItemForm] = useState(emptyItemForm);
   const [locationForm, setLocationForm] = useState(emptyLocationForm);
   const [movementForm, setMovementForm] = useState(emptyMovementForm);
+  const [adjustmentDirection, setAdjustmentDirection] = useState<"increase" | "decrease">("increase");
   const [reservationSearch, setReservationSearch] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const enabled = hasValidSession(session);
@@ -135,15 +148,26 @@ export function StockPage() {
   const reservationById = useMemo(() => new Map(reservations.map((reservation) => [reservation.id, reservation])), [reservations]);
   const requestedQuantity = Number(movementForm.quantity);
   const currentQuantity = selectedCurrentStock ? Number(selectedCurrentStock) : null;
+  // "Ajuste" (adjustment) is bidirectional: an owner correcting a physical
+  // count can find more units (increase, sent as "adjustment") or fewer
+  // (decrease, sent as "adjustment_out"). Both need the same negative-stock
+  // guard as a regular "Egreso".
+  const isDecreasingMovement =
+    movementForm.movement_type === "out" ||
+    (movementForm.movement_type === "adjustment" && adjustmentDirection === "decrease");
+  const apiMovementType: StockMovementType =
+    movementForm.movement_type === "adjustment" && adjustmentDirection === "decrease"
+      ? "adjustment_out"
+      : movementForm.movement_type;
   const willGoNegative =
-    movementForm.movement_type === "out" &&
+    isDecreasingMovement &&
     currentQuantity !== null &&
     Number.isFinite(currentQuantity) &&
     Number.isFinite(requestedQuantity) &&
     requestedQuantity > currentQuantity;
   const projectedQuantity =
     currentQuantity !== null && Number.isFinite(currentQuantity) && Number.isFinite(requestedQuantity)
-      ? movementForm.movement_type === "out"
+      ? isDecreasingMovement
         ? currentQuantity - requestedQuantity
         : currentQuantity + requestedQuantity
       : null;
@@ -158,6 +182,7 @@ export function StockPage() {
 
   const selectMovement = (itemId: number, movementType: StockMovementType) => {
     setMovementForm((currentForm) => ({ ...currentForm, item_id: String(itemId), movement_type: movementType }));
+    setAdjustmentDirection("increase");
     document.getElementById("stock-movement-form")?.scrollIntoView({ behavior: "smooth", block: "center" });
   };
 
@@ -207,6 +232,7 @@ export function StockPage() {
         location_id: current.location_id,
         movement_type: current.movement_type
       }));
+      setAdjustmentDirection("increase");
       setMessage("Movimiento registrado.");
     }
   });
@@ -238,7 +264,7 @@ export function StockPage() {
       await createMovementMutation.mutateAsync({
         item_id: Number(movementForm.item_id),
         location_id: movementForm.location_id ? Number(movementForm.location_id) : null,
-        movement_type: movementForm.movement_type,
+        movement_type: apiMovementType,
         quantity: movementForm.quantity,
         reason: movementForm.reason || null,
         reservation_id: movementForm.reservation_id ? Number(movementForm.reservation_id) : null
@@ -343,7 +369,10 @@ export function StockPage() {
                     key={option.type}
                     type="button"
                     aria-pressed={selected}
-                    onClick={() => setMovementForm((current) => ({ ...current, movement_type: option.type }))}
+                    onClick={() => {
+                      setMovementForm((current) => ({ ...current, movement_type: option.type }));
+                      setAdjustmentDirection("increase");
+                    }}
                     className={`min-h-11 rounded-lg border px-3 py-2 text-left text-sm ${
                       selected ? "border-brand-300 bg-brand-50 text-brand-800" : "border-slate-200 bg-white text-slate-700"
                     }`}
@@ -354,6 +383,34 @@ export function StockPage() {
                 );
               })}
             </div>
+            {movementForm.movement_type === "adjustment" && (
+              <div className="grid grid-cols-2 gap-2" role="group" aria-label="Sentido del ajuste">
+                <button
+                  type="button"
+                  aria-pressed={adjustmentDirection === "increase"}
+                  onClick={() => setAdjustmentDirection("increase")}
+                  className={`min-h-11 rounded-lg border px-3 py-2 text-xs font-semibold ${
+                    adjustmentDirection === "increase"
+                      ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+                      : "border-slate-200 bg-white text-slate-700"
+                  }`}
+                >
+                  Encontré más stock
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={adjustmentDirection === "decrease"}
+                  onClick={() => setAdjustmentDirection("decrease")}
+                  className={`min-h-11 rounded-lg border px-3 py-2 text-xs font-semibold ${
+                    adjustmentDirection === "decrease"
+                      ? "border-rose-300 bg-rose-50 text-rose-800"
+                      : "border-slate-200 bg-white text-slate-700"
+                  }`}
+                >
+                  Encontré menos stock
+                </button>
+              </div>
+            )}
             <label className="space-y-1 text-sm">
               <span className="text-slate-600">Item</span>
               <select
@@ -378,7 +435,7 @@ export function StockPage() {
                 </span>
                 {willGoNegative && (
                   <p className="mt-1 text-xs font-medium text-rose-700" role="alert">
-                    Este egreso dejará el stock en negativo. Verificá la cantidad antes de confirmar.
+                    Este movimiento dejará el stock en negativo. Verificá la cantidad antes de confirmar.
                   </p>
                 )}
                 {projectedQuantity !== null && !willGoNegative && (
@@ -604,7 +661,7 @@ function StockMovementHistory({
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="font-semibold text-slate-900">
-                    {movementLabel[movement.movement_type]} · {item?.name ?? "Item eliminado"}
+                    {movementHistoryLabel[movement.movement_type]} · {item?.name ?? "Item eliminado"}
                   </p>
                   <p className="text-xs text-slate-600">
                     {movement.quantity} {item?.unit ?? "unidad"}
