@@ -3512,8 +3512,8 @@
     "hash": "0a6f4c3275a1655a8495875facc67318"
   },
   "frontend/e2e/auth-onboarding-journey.spec.ts": {
-    "mtime": 1784896137961.9326,
-    "hash": "487a37b27ca8ad300a3453453f396fd5"
+    "mtime": 1784968317982.268,
+    "hash": "e85692446a9a9dfacbf2fc5751cec074"
   },
   "frontend/src/state/pendingOwner.ts": {
     "mtime": 1784895598996.4717,
@@ -3626,5 +3626,13 @@
   "tests/test_rooms_api_roles.py": {
     "mtime": 1784965931689.5137,
     "hash": "2b793f34635030573d03fcc86f88ff54"
+  },
+  "frontend/e2e/onboarding-resume-and-hotel-setup-journey.spec.ts": {
+    "mtime": 1784968481253.289,
+    "hash": "0d03659c80b9afd1ea65b9cec2173a34"
+  },
+  "frontend/e2e/support/email-outbox.ts": {
+    "mtime": 1784968308950.5935,
+    "hash": "e2d0560e6f954b5f3f2b69bb1edd7bf6"
   }
 }
