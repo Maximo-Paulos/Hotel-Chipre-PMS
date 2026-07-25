@@ -299,14 +299,19 @@ export function OnboardingWizard() {
         {steps.map((step, idx) => (
           <Link
             key={step.path}
-            to={step.path}
+            // ponytail: absolute path, not relative -- react-router-dom v7 made
+            // v7_relativeSplatPath the default, so a relative `to` here now
+            // resolves against the full "/onboarding/<current-step>" splat match
+            // instead of the "/onboarding" base, stacking segments on every click
+            // (e.g. /onboarding/identity/finish). Absolute paths sidestep that.
+            to={`/onboarding${step.path ? `/${step.path}` : ""}`}
             className="rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:border-brand-500 hover:text-brand-700"
           >
             {idx + 1}. {step.label}
           </Link>
         ))}
         <Link
-          to="finish"
+          to="/onboarding/finish"
           className="rounded-full border border-emerald-200 px-3 py-1 text-xs font-medium text-emerald-700 hover:border-emerald-400"
         >
           Finalizar
