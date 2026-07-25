@@ -6,6 +6,13 @@
   font-family: "Inter", system-ui, -apple-system, sans-serif;
   color: #0f172a;
   background-color: #f8fafc;
+  /* AppShell's header is `sticky top-0`; without scroll-padding-top the
+     browser's native scrollIntoView (used by keyboard nav, anchor links,
+     and Playwright's scrollIntoViewIfNeeded) can land a target right
+     under it, making it visible in the a11y tree but unclickable. Sized
+     for the mobile header's tallest state (wrapped nav row + hotel/user
+     row on narrow viewports). */
+  scroll-padding-top: 160px;
 }
 
 @media (max-width: 639px) {
