@@ -149,6 +149,47 @@ def test_submit_transfer_proof_reencodes_and_removes_exif(db):
     assert db.query(PaymentProofBlob).filter(PaymentProofBlob.proof_id == proof.id).count() == 1
 
 
+def test_submit_transfer_proof_rejects_non_image_disguised_as_png(db):
+    """A .png-declared upload whose bytes are NOT actually a decodable image
+    (magic-byte spoofing, e.g. an executable or script renamed to look like
+    a photo) must be rejected. The service never trusts a client-declared
+    filename/content-type; it decodes the real image data with PIL.
+    """
+    reservation = _reservation(db, 1, "PROOF-SPOOF")
+    fake_image = base64.b64encode(b"#!/bin/sh\necho not-an-image\n").decode("ascii")
+
+    with pytest.raises(PaymentProofError, match="imagen valida"):
+        submit_transfer_proof(
+            db,
+            hotel_id=1,
+            reservation_id=reservation.id,
+            amount=Decimal("30.00"),
+            image_base64=fake_image,
+            original_filename="totally-legit.png",
+            submitted_by_user_id=10,
+        )
+    assert db.query(PaymentProof).count() == 0
+
+
+def test_submit_transfer_proof_rejects_oversized_payload(db):
+    reservation = _reservation(db, 1, "PROOF-BIG")
+    from app.services.payment_proof_service import MAX_PROOF_BYTES
+
+    oversized = base64.b64encode(b"0" * (MAX_PROOF_BYTES + 1)).decode("ascii")
+
+    with pytest.raises(PaymentProofError, match="5 MB"):
+        submit_transfer_proof(
+            db,
+            hotel_id=1,
+            reservation_id=reservation.id,
+            amount=Decimal("30.00"),
+            image_base64=oversized,
+            original_filename="huge.png",
+            submitted_by_user_id=10,
+        )
+    assert db.query(PaymentProof).count() == 0
+
+
 def test_proof_bytes_are_tenant_scoped(db):
     reservation = _reservation(db, 1, "PROOF-TENANT")
     proof = submit_transfer_proof(
