@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-25T23:41:21.652Z",
+  "generatedAt": "2026-07-25T23:57:08.600Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -2202,6 +2202,28 @@
       "fileCount": 1,
       "files": [
         "app/main.py"
+      ],
+      "criticality": 0.285,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_guests_listguests",
+      "name": "listGuests",
+      "entryPoint": "api_guests_listguests",
+      "entryPointId": "api_guests_listguests",
+      "path": [
+        "api_guests_listguests",
+        "api_guests_buildguestquerystring"
+      ],
+      "qualifiedPath": [
+        "api_guests_listguests",
+        "api_guests_buildguestquerystring"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/api/guests.ts"
       ],
       "criticality": 0.285,
       "warnings": []
