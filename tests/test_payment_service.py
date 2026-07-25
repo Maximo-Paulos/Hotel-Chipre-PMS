@@ -475,6 +475,46 @@ class TestPaymentEdgeCases:
         assert res.status == ReservationStatusEnum.DEPOSIT_PAID
         assert res.balance_due == 200.0
 
+    def test_refund_exceeding_paid_amount_rejected(self, db, sample_guest, sample_rooms, sample_categories, hotel_config):
+        """A refund can never exceed what was actually collected in the ledger --
+        the backend guard must hold even if a caller bypasses the UI's own
+        amount-vs-amount_paid check (frontend ReservationsPage.handleRefund)."""
+        data = ReservationCreate(
+            guest_id=sample_guest.id,
+            category_id=sample_categories[0].id,
+            check_in_date=date(2026, 8, 16),
+            check_out_date=date(2026, 8, 18),  # $200
+        )
+        res = create_reservation(db, data, hotel_id=1)
+        db.flush()
+
+        deposit_payment = PaymentRequest(
+            reservation_id=res.id,
+            amount=60.0,
+            payment_method=PaymentMethodEnum.CASH,
+            transaction_type=TransactionTypeEnum.DEPOSIT,
+        )
+        process_payment(db, deposit_payment, hotel_id=DEFAULT_HOTEL_ID)
+        db.flush()
+
+        over_refund = PaymentRequest(
+            reservation_id=res.id,
+            amount=100.0,  # Only $60 was ever paid.
+            payment_method=PaymentMethodEnum.CASH,
+            transaction_type=TransactionTypeEnum.REFUND,
+        )
+        with pytest.raises(PaymentError, match="exceeds paid amount"):
+            process_payment(db, over_refund, hotel_id=DEFAULT_HOTEL_ID)
+
+        db.refresh(res)
+        assert res.amount_paid == 60.0
+        assert (
+            db.query(Transaction)
+            .filter(Transaction.reservation_id == res.id, Transaction.transaction_type == TransactionTypeEnum.REFUND)
+            .count()
+            == 0
+        )
+
     def test_financial_summary_includes_billing_adjustments_and_operational_balance(self, db, sample_guest, sample_rooms, sample_categories, hotel_config):
         data = ReservationCreate(
             guest_id=sample_guest.id,
