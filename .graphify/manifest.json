@@ -1404,8 +1404,8 @@
     "hash": "080f58a661cb1eb1b0f8ae7c84334f59"
   },
   "frontend/src/ui/AppShell.tsx": {
-    "mtime": 1784897227540.3755,
-    "hash": "433753665e4d2e9a00e3c98b7e1b072e"
+    "mtime": 1784950019143.0178,
+    "hash": "b87247e726a3cf5b6346d3a3d2bed504"
   },
   "frontend/src/ui/HotelSelector.tsx": {
     "mtime": 1784942811903.0242,
@@ -3356,12 +3356,12 @@
     "hash": "11bf9583c0a905deb7f7e760df835718"
   },
   "frontend/e2e/responsive-smoke.spec.ts": {
-    "mtime": 1784942750695.8025,
-    "hash": "c249391e5ad55f9d8b4f876690cc2d5d"
+    "mtime": 1784949978316.7664,
+    "hash": "f8ddc5489bb86f227939652f475d9170"
   },
   "docs/qa/2026-07-24-pms-e2e-status.md": {
-    "mtime": 1784948485993.294,
-    "hash": "c4b026992b423eebf858b9eb032c65b1"
+    "mtime": 1784949852486.5825,
+    "hash": "b9fdb08a5c1c73c47c12f3dac75220f4"
   },
   "frontend/e2e/business-journey.spec.ts": {
     "mtime": 1784904324073.8352,

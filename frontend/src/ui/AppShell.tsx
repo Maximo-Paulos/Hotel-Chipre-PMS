@@ -232,7 +232,7 @@ export function AppShell() {
           <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur">
             <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex min-w-0 items-center gap-3">
-                <Link to="/dashboard" className="flex shrink-0 items-center gap-2 text-lg font-semibold text-slate-900 md:hidden">
+                <Link to="/dashboard" className="flex min-h-11 shrink-0 items-center gap-2 text-lg font-semibold text-slate-900 md:hidden">
                   <img
                     src="/brand/logo-avatar.png"
                     alt="Hotel Chipre PMS"
@@ -247,7 +247,7 @@ export function AppShell() {
                       to={item.to}
                       className={({ isActive }) =>
                         cx(
-                          "shrink-0 rounded-full px-3 py-1 text-xs font-semibold",
+                          "inline-flex min-h-11 shrink-0 items-center rounded-full px-3 py-1 text-xs font-semibold",
                           isActive ? "bg-brand-100 text-brand-800" : "bg-slate-100 text-slate-600",
                         )
                       }

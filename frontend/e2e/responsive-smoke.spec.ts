@@ -53,6 +53,21 @@ test.describe("Responsive mobile smoke", () => {
     await login(page);
     await page.setViewportSize({ width: 375, height: 812 });
 
+    const mobileNavigationTargets = await page.locator('nav[aria-label="Navegación móvil"] a').evaluateAll((nodes) =>
+      nodes.map((node) => {
+        const rect = (node as HTMLElement).getBoundingClientRect();
+        return {
+          label: node.textContent?.trim() || "",
+          height: Math.round(rect.height),
+          width: Math.round(rect.width)
+        };
+      })
+    );
+    expect(
+      mobileNavigationTargets.filter((target) => target.height < 44 || target.width < 44),
+      "mobile navigation has undersized touch targets"
+    ).toEqual([]);
+
     for (const path of ["/reservas", "/caja", "/operacion/stock", "/reportes", "/operacion/lavanderia"]) {
       await page.goto(path);
       const targets = await page.evaluate(() => {
