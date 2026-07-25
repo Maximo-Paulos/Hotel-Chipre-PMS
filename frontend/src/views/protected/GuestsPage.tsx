@@ -15,6 +15,7 @@ import {
   type GuestUpdatePayload
 } from "../../api/guests";
 import { useGuestCompanionAdd, useGuestUpdate, useGuests } from "../../hooks/useGuests";
+import { useReservationDrawer } from "../../hooks/useReservationDrawer";
 import { useSession } from "../../state/session";
 
 const DOCUMENT_TYPES = ["DNI", "PASSPORT", "CEDULA"] as const;
@@ -83,6 +84,7 @@ const isProhibidoTag = (tag: GuestTag) => tag.tag_type === "prohibido_alojar";
 
 export function GuestsPage() {
   const { session } = useSession();
+  const { openReservation } = useReservationDrawer();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [selectedGuestId, setSelectedGuestId] = useState<number | null>(null);
@@ -582,7 +584,15 @@ export function GuestsPage() {
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                               <div>
                                 <p className="font-semibold text-slate-900">
-                                  Reserva {stay.confirmation_code} · {formatStatus(String(stay.status))}
+                                  Reserva{" "}
+                                  <button
+                                    type="button"
+                                    onClick={() => openReservation(stay.reservation_id)}
+                                    className="text-brand-700 hover:underline"
+                                  >
+                                    {stay.confirmation_code}
+                                  </button>{" "}
+                                  · {formatStatus(String(stay.status))}
                                 </p>
                                 <p className="text-xs text-slate-500">
                                   {formatDate(stay.check_in_date)} a {formatDate(stay.check_out_date)}

@@ -2,8 +2,11 @@ import { useEffect, useMemo } from "react";
 import cx from "clsx";
 import { Link, NavLink, Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 
+import { ReservationDetailDrawer } from "../components/ReservationDetailDrawer";
+import { ReservationGlobalSearch } from "../components/ReservationGlobalSearch";
 import { Seo } from "../components/Seo";
 import { useOnboardingStatus } from "../hooks/useOnboardingStatus";
+import { useReservationDrawer } from "../hooks/useReservationDrawer";
 import { useSubscriptionStatus } from "../hooks/useSubscription";
 import { useSession } from "../state/session";
 import { ApiError, hasValidSession } from "../api/client";
@@ -89,6 +92,7 @@ export function AppShell() {
   const isLoggedIn = hasValidSession(session);
   const isVerified = Boolean(session.isVerified);
   const role = session.role;
+  const { reservationId: drawerReservationId, closeReservation } = useReservationDrawer();
 
   useCrossTabSync();
 
@@ -258,6 +262,7 @@ export function AppShell() {
                 </nav>
               </div>
               <div className="flex flex-wrap items-center gap-3">
+                <ReservationGlobalSearch />
                 <HotelSelector />
                 <UserBadge />
               </div>
@@ -271,6 +276,8 @@ export function AppShell() {
           </main>
         </div>
       </div>
+
+      <ReservationDetailDrawer reservationId={drawerReservationId} onClose={closeReservation} />
     </div>
   );
 }

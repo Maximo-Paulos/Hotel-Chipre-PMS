@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 
 import { type ReservationStatus } from "../../api/reservations";
 import { usePendingReservationActions, useReservations } from "../../hooks/useReservations";
+import { useReservationDrawer } from "../../hooks/useReservationDrawer";
 import { useRooms } from "../../hooks/useRooms";
 import { formatMoney, resolveSingleCurrencyCode } from "../../utils/currency";
 
@@ -35,6 +36,7 @@ export function DashboardPage() {
   const today = todayIso();
   const { data: reservations = [] } = useReservations({});
   const pendingActionsQuery = usePendingReservationActions(8);
+  const { openReservation } = useReservationDrawer();
   const { roomsQuery } = useRooms();
   const rooms = useMemo(() => roomsQuery.data || [], [roomsQuery.data]);
   const pendingActions = pendingActionsQuery.data || [];
@@ -113,7 +115,7 @@ export function DashboardPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <Link
-            to="/reservas"
+            to="/reservas?crear=1"
             className="rounded-lg border border-brand-200 bg-brand-50 px-4 py-2 text-sm font-semibold text-brand-700 hover:border-brand-300 hover:bg-brand-100"
           >
             Nueva reserva
@@ -162,7 +164,15 @@ export function DashboardPage() {
               <tbody className="divide-y divide-slate-200 bg-white">
                 {arrivals.map((reservation) => (
                   <tr key={reservation.id} className="hover:bg-slate-50/60">
-                    <td className="px-4 py-2 font-medium text-slate-900">{reservation.confirmation_code}</td>
+                    <td className="px-4 py-2 font-medium text-slate-900">
+                      <button
+                        type="button"
+                        onClick={() => openReservation(reservation.id)}
+                        className="text-brand-700 hover:underline"
+                      >
+                        {reservation.confirmation_code}
+                      </button>
+                    </td>
                     <td className="px-4 py-2 text-slate-600">{reservationGuestLabel(reservation)}</td>
                     <td className="px-4 py-2 text-slate-600">
                       {reservation.check_in_date} - {reservation.check_out_date}
@@ -192,7 +202,13 @@ export function DashboardPage() {
               <article key={reservation.id} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-slate-900">{reservation.confirmation_code}</p>
+                    <button
+                      type="button"
+                      onClick={() => openReservation(reservation.id)}
+                      className="truncate text-sm font-semibold text-brand-700 hover:underline"
+                    >
+                      {reservation.confirmation_code}
+                    </button>
                     <p className="mt-1 break-words text-sm text-slate-600">{reservationGuestLabel(reservation)}</p>
                   </div>
                   <span className={`shrink-0 rounded-full px-2 py-1 text-xs font-semibold ${statusClass(reservation.status)}`}>
