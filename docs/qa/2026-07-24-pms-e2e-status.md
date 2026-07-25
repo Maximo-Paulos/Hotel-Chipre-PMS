@@ -965,3 +965,20 @@ OTAs. La regresión backend posterior aprobó **1239 passed, 17 skipped,
 12 xfailed, 1 xpassed**. Esta evidencia valida el flujo cloud de caja para el
 owner QA, pero no sustituye la auditoría completa de drift de Alembic ni la
 evidencia firmada de la puerta de release.
+
+### P2 corregido — aprobación de diferencia de caja usable en móvil
+
+La inspección del Preview existente a 390×844 confirmó que Stock no presenta
+overflow y sus controles visibles alcanzan 44 px; Caja tampoco presenta
+overflow, pero el checkbox `Aprobar diferencia al cerrar` medía 13 px. Era un
+riesgo de interacción para una confirmación financiera en teléfono.
+
+El commit `8b6cb4d` hace que el checkbox de aprobación mida 44×44 px y añade
+una regresión específica. La prueba fue roja en WebKit iPhone 15 con 12 px y
+verde tras el cambio: el smoke mobile completo aprobó 5/5. Después de publicar
+la rama, el Preview existente volvió a medir 44×44 px a 390×844 y sin overflow
+horizontal. No se creó un movimiento adicional durante esta comprobación.
+
+No hay Xcode Simulator instalado en este equipo, por lo que la certificación
+manual en Safari nativo o dispositivo físico sigue pendiente. La evidencia
+actual cubre WebKit Playwright y el viewport cloud del navegador interno.
