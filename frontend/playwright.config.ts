@@ -43,6 +43,7 @@ const emailOutboxPath =
 const businessWebKitTestMatch = [
   "**/business-journey.spec.ts",
   "**/reservation-lifecycle.spec.ts",
+  "**/reservation-deposit-preview.spec.ts",
   "**/analytics-success.spec.ts",
   "**/rate-calendar.spec.ts",
   "**/master_admin.spec.ts",
@@ -64,6 +65,14 @@ export default defineConfig({
   expect: {
     timeout: 10_000
   },
+  // The 3 webkit-*-business Apple device projects share one SQLite database
+  // and one hotel's cash register (a single non-date-scoped resource, unlike
+  // rooms/reservations which can be disambiguated by date). Concurrent
+  // workers racing to open/close/approve that one cash session produces
+  // false negatives (stuck "Abrir caja", unresolved arqueo differences) that
+  // no per-test date isolation can fix. Force full serialization across the
+  // whole business matrix instead of just within each project.
+  workers: process.env.E2E_WEBKIT_BUSINESS === "true" ? 1 : undefined,
   reporter: [["list"], ["html", { outputFolder: "e2e-report" }]],
   use: {
     baseURL,
