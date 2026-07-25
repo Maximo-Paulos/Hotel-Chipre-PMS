@@ -67,6 +67,27 @@ def paid_amount_with_legacy_fallback(db: Session, hotel_id: int, reservation) ->
     return completed_paid_amount(db, hotel_id, reservation.id)
 
 
+def billing_adjustment_totals_by_reservation(
+    db: Session,
+    hotel_id: int,
+    reservation_ids: Iterable[int] | None = None,
+) -> dict[int, Decimal]:
+    """Aggregate billing adjustments (consumption/extra charges) once per reservation."""
+    query = db.query(BillingAdjustment).filter(BillingAdjustment.hotel_id == hotel_id)
+    if reservation_ids is not None:
+        ids = tuple(reservation_ids)
+        if not ids:
+            return {}
+        query = query.filter(BillingAdjustment.reservation_id.in_(ids))
+
+    totals: dict[int, Decimal] = {}
+    for row in query.all():
+        totals[row.reservation_id] = totals.get(row.reservation_id, Decimal("0.00")) + Decimal(
+            str(row.total_amount or 0)
+        )
+    return {reservation_id: amount.quantize(Decimal("0.01")) for reservation_id, amount in totals.items()}
+
+
 def operational_balance_due(
     db: Session,
     *,
@@ -75,13 +96,9 @@ def operational_balance_due(
     paid_amount: Decimal | None = None,
 ) -> Decimal:
     """Compute the collectible balance from confirmed transactions and adjustments."""
-    adjustment_total = sum(
-        (Decimal(str(row.total_amount or 0)) for row in db.query(BillingAdjustment).filter(
-            BillingAdjustment.hotel_id == hotel_id,
-            BillingAdjustment.reservation_id == reservation.id,
-        ).all()),
-        Decimal("0.00"),
-    )
+    adjustment_total = billing_adjustment_totals_by_reservation(
+        db, hotel_id, [reservation.id]
+    ).get(reservation.id, Decimal("0.00"))
     paid = paid_amount if paid_amount is not None else paid_amount_with_legacy_fallback(db, hotel_id, reservation)
     return max(
         Decimal("0.00"),

@@ -25,7 +25,10 @@ from app.schemas.reports import (
     OperationalReservationGroup,
     OperationalReservationSummary,
 )
-from app.services.financial_ledger import completed_paid_amounts_by_reservation
+from app.services.financial_ledger import (
+    billing_adjustment_totals_by_reservation,
+    completed_paid_amounts_by_reservation,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -57,9 +60,12 @@ def _guest_name(reservation: Reservation) -> str | None:
 def _reservation_summary(
     reservation: Reservation,
     paid_amount: Decimal | None = None,
+    adjustment_total: Decimal | None = None,
 ) -> OperationalReservationSummary:
     room = reservation.room
     paid = paid_amount if paid_amount is not None else Decimal(reservation.amount_paid or 0)
+    adjustments = adjustment_total if adjustment_total is not None else Decimal("0")
+    total_due = Decimal(reservation.total_amount or 0) + adjustments
     return OperationalReservationSummary(
         reservation_id=reservation.id,
         confirmation_code=reservation.confirmation_code,
@@ -72,17 +78,23 @@ def _reservation_summary(
         check_out_date=reservation.check_out_date,
         total_amount=Decimal(reservation.total_amount or 0),
         amount_paid=paid,
-        balance_due=max(Decimal("0"), Decimal(reservation.total_amount or 0) - paid),
+        balance_due=max(Decimal("0"), total_due - paid),
     )
 
 
 def _group(
     reservations: Iterable[Reservation],
     paid_by_reservation: dict[int, Decimal] | None = None,
+    adjustments_by_reservation: dict[int, Decimal] | None = None,
 ) -> OperationalReservationGroup:
     paid_by_reservation = paid_by_reservation or {}
+    adjustments_by_reservation = adjustments_by_reservation or {}
     items = [
-        _reservation_summary(reservation, paid_by_reservation.get(reservation.id))
+        _reservation_summary(
+            reservation,
+            paid_by_reservation.get(reservation.id),
+            adjustments_by_reservation.get(reservation.id),
+        )
         for reservation in reservations
     ]
     return OperationalReservationGroup(count=len(items), reservations=items)
@@ -268,15 +280,29 @@ def daily_report(db: Session, hotel_id: int, report_date: date) -> DailyOperatio
             reservation.id,
             Decimal(reservation.amount_paid or 0),
         )
+    # Consumption/extra charges (BillingAdjustment) are part of the collectible
+    # balance, same as the canonical operational_balance_due helper used
+    # elsewhere; omitting them understated/hid pending payments once a guest
+    # had unpaid consumption on an otherwise fully-paid stay.
+    adjustments_by_reservation = billing_adjustment_totals_by_reservation(db, hotel_id, candidate_ids)
     pending_payments = [
         reservation
         for reservation in balance_candidates
-        if Decimal(reservation.total_amount or 0) - paid_by_reservation.get(reservation.id, Decimal("0")) > 0
+        if (
+            Decimal(reservation.total_amount or 0)
+            + adjustments_by_reservation.get(reservation.id, Decimal("0"))
+            - paid_by_reservation.get(reservation.id, Decimal("0"))
+        )
+        > 0
     ]
 
-    pending_group = _group(pending_payments, paid_by_reservation)
+    pending_group = _group(pending_payments, paid_by_reservation, adjustments_by_reservation)
     late_items = [
-        _reservation_summary(reservation, paid_by_reservation.get(reservation.id))
+        _reservation_summary(
+            reservation,
+            paid_by_reservation.get(reservation.id),
+            adjustments_by_reservation.get(reservation.id),
+        )
         for reservation in late_arrivals
     ]
     review_items = _available_with_review(db, hotel_id, report_date)
@@ -287,8 +313,8 @@ def daily_report(db: Session, hotel_id: int, report_date: date) -> DailyOperatio
         hotel_id=hotel_id,
         report_date=report_date,
         generated_at=datetime.now(timezone.utc),
-        arrivals=_group(arrivals, paid_by_reservation),
-        departures=_group(departures, paid_by_reservation),
+        arrivals=_group(arrivals, paid_by_reservation, adjustments_by_reservation),
+        departures=_group(departures, paid_by_reservation, adjustments_by_reservation),
         pending_payments=pending_group,
         late_arrivals=late_items,
         available_with_review=review_items,
