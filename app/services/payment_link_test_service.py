@@ -152,7 +152,7 @@ def validate_mercadopago_webhook_signature(
     max_age_seconds: int = 300,
 ) -> None:
     if not secret:
-        return
+        raise PaymentLinkTestError("El webhook de Mercado Pago no esta configurado.")
     signature_parts = parse_mercadopago_signature_header(signature_header)
     if not request_id or not signature_parts:
         raise PaymentLinkTestError("Faltan headers de firma de Mercado Pago para validar el webhook.")

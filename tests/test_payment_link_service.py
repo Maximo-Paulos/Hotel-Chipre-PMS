@@ -17,6 +17,10 @@ from app.services.payment_link_service import (
     get_preference_id,
     list_links_for_reservation,
 )
+from app.services.payment_link_test_service import (
+    PaymentLinkTestError,
+    validate_mercadopago_webhook_signature,
+)
 
 
 def _reservation(db, hotel_id: int, code: str = "RL-1") -> Reservation:
@@ -205,3 +209,14 @@ def test_deliver_link_whatsapp_stub_pending(db):
     deliver_link(db, 1, link, channel="whatsapp")
     assert link.gateway_response.get("delivery_channel") == "whatsapp"
     assert link.gateway_response.get("delivery_status") == "pending"
+
+
+def test_mercadopago_webhook_signature_rejects_when_secret_is_unconfigured():
+    """A public webhook endpoint must fail closed without a configured secret."""
+    with pytest.raises(PaymentLinkTestError, match="no esta configurado"):
+        validate_mercadopago_webhook_signature(
+            "",
+            data_id="payment-789",
+            request_id="req-123",
+            signature_header="ts=1700000000,v1=deadbeef",
+        )
