@@ -198,6 +198,11 @@ def approve_transfer_proof(
         raise PaymentProofError("No se puede aprobar un comprobante rechazado")
 
     try:
+        # apply_surcharge=False: proof.amount is a historical fact -- the guest
+        # already sent this exact, already-capped-at-balance amount (see
+        # submit_transfer_proof) before this approval ever runs. There is no
+        # live collection point here to ask for "a bit more", so process_payment
+        # must not fabricate a PaymentSurcharge on top of money nobody sent.
         transaction = process_payment(
             db,
             PaymentRequest(
@@ -212,6 +217,7 @@ def approve_transfer_proof(
             actor_user_id=reviewed_by_user_id,
             idempotency_key=f"transfer-proof:{proof.id}",
             manual_confirmation=True,
+            apply_surcharge=False,
         )
     except (PaymentError, ValueError) as exc:
         raise PaymentProofError(str(exc)) from exc

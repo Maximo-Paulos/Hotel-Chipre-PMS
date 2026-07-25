@@ -2425,7 +2425,12 @@ export function ReservationsPage() {
                     </div>
                   )}
 
-                  {activeSurcharge && paymentSummary && (paymentSummary.operational_balance_due ?? paymentSummary.balance_due ?? 0) > 0 && (
+                  {/* bank_transfer is reconciled from a proof of an already-sent amount
+                      (submit_transfer_proof caps it at the balance due) -- approval never
+                      adds a surcharge on top (see payment_service.process_payment
+                      apply_surcharge=False), so showing a "se cobra más" figure here would
+                      promise a recargo that is never actually charged. */}
+                  {activeSurcharge && paymentMethod !== "bank_transfer" && paymentSummary && (paymentSummary.operational_balance_due ?? paymentSummary.balance_due ?? 0) > 0 && (
                     <p className="mt-2 text-xs text-amber-700">
                       Recargo por {paymentMethodOptions.find((o) => o.value === paymentMethod)?.label ?? paymentMethod}:{" "}
                       {activeSurcharge.surcharge_type === "percentage"

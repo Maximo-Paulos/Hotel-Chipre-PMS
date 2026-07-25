@@ -200,6 +200,7 @@ def process_payment(
     idempotency_key: Optional[str] = None,
     actor_user_id: Optional[int] = None,
     manual_confirmation: bool = False,
+    apply_surcharge: bool = True,
 ) -> Transaction:
     """
     Process a payment for a reservation.
@@ -215,6 +216,17 @@ def process_payment(
 
     For cash payments, the transaction is completed immediately.
     For gateway payments, the caller provides the gateway_response.
+
+    ``apply_surcharge`` (default True) adds any active PaymentSurcharge on top
+    of ``request.amount`` and records it as gross_amount/fee_amount. This is
+    correct when the caller represents a live collection point (cash handed
+    over now, or a gateway/link amount that already asked the guest for the
+    grossed-up figure before it arrived). It is WRONG when ``request.amount``
+    is itself a historical fact -- e.g. a bank-transfer proof, where the guest
+    already sent an exact, already-capped-at-balance amount and there is no
+    additional money to invent on top. Callers reconciling such a fact must
+    pass ``apply_surcharge=False`` so fee_amount/gross_amount are not
+    fabricated for money nobody actually collected.
     """
     # 1. Validate reservation
     reservation = (
@@ -255,13 +267,16 @@ def process_payment(
     # 2. Validate payment method
     validate_payment_method_enabled(db, request.payment_method, resolved_hotel_id)
     transaction_currency = _resolve_payment_currency(reservation, request.currency)
-    surcharge_info = calculate_payment_surcharge(
-        db,
-        hotel_id=resolved_hotel_id,
-        payment_method=request.payment_method,
-        base_amount=request.amount,
-    )
-    surcharge_amount = Decimal("0.00") if is_refund else surcharge_info["surcharge_amount"]
+    if apply_surcharge and not is_refund:
+        surcharge_info = calculate_payment_surcharge(
+            db,
+            hotel_id=resolved_hotel_id,
+            payment_method=request.payment_method,
+            base_amount=request.amount,
+        )
+        surcharge_amount = surcharge_info["surcharge_amount"]
+    else:
+        surcharge_amount = Decimal("0.00")
     gross_amount = (Decimal(str(request.amount)) + surcharge_amount).quantize(Decimal("0.01"))
 
     # 3. Validate against the confirmed transaction ledger; amount_paid is only
