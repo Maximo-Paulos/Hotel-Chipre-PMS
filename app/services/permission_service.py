@@ -54,6 +54,7 @@ PERMISSION_CONFIG_MANAGE = "config:manage"
 PERMISSION_PERMISSION_MANAGE = "permissions:manage"
 PERMISSION_GUEST_EDIT = "guest:edit"
 PERMISSION_GUEST_TAGS = "guest:tags"
+PERMISSION_GUEST_EXPORT = "guest:export"
 PERMISSION_RESERVATION_CREATE = "reservation:create"
 PERMISSION_RESERVATION_CHARGE = "reservation:charge"
 PERMISSION_RESERVATION_ROOM_MOVE = "reservation:room_move"
@@ -75,6 +76,7 @@ PERMISSION_DEFINITIONS: dict[str, str] = {
     PERMISSION_PERMISSION_MANAGE: "Manage hotel role permission overrides",
     PERMISSION_GUEST_EDIT: "Edit guest profile data",
     PERMISSION_GUEST_TAGS: "Edit guest tags and segmentation",
+    PERMISSION_GUEST_EXPORT: "Export guest ledger data",
     PERMISSION_RESERVATION_CREATE: "Create reservations",
     PERMISSION_RESERVATION_CHARGE: "Add consumption and extra charges to active reservations",
     PERMISSION_RESERVATION_ROOM_MOVE: "Move reservations between rooms",
@@ -100,6 +102,7 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
         PERMISSION_PERMISSION_MANAGE: False,
         PERMISSION_GUEST_EDIT: True,
         PERMISSION_GUEST_TAGS: True,
+        PERMISSION_GUEST_EXPORT: True,
         PERMISSION_RESERVATION_CREATE: True,
         PERMISSION_RESERVATION_CHARGE: True,
         PERMISSION_RESERVATION_ROOM_MOVE: True,
@@ -121,6 +124,7 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
         PERMISSION_PERMISSION_MANAGE: False,
         PERMISSION_GUEST_EDIT: False,
         PERMISSION_GUEST_TAGS: False,
+        PERMISSION_GUEST_EXPORT: False,
         PERMISSION_RESERVATION_CREATE: True,
         PERMISSION_RESERVATION_CHARGE: True,
         PERMISSION_RESERVATION_ROOM_MOVE: False,
@@ -140,6 +144,7 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
         PERMISSION_PERMISSION_MANAGE: False,
         PERMISSION_GUEST_EDIT: False,
         PERMISSION_GUEST_TAGS: False,
+        PERMISSION_GUEST_EXPORT: False,
         PERMISSION_RESERVATION_CREATE: False,
         PERMISSION_RESERVATION_CHARGE: False,
         PERMISSION_RESERVATION_ROOM_MOVE: False,

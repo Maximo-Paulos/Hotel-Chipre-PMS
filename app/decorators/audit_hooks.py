@@ -2,17 +2,14 @@ from __future__ import annotations
 
 import functools
 import inspect
-import json
 import logging
-from datetime import date, datetime
-from decimal import Decimal
-from enum import Enum
 from typing import Any, Callable, TypeVar
 
 from sqlalchemy.orm import Session
 
 from app.database import Base
 from app.models.audit_log import AuditActionEnum, AuditLog
+from app.services.audit_log_service import model_snapshot, payload_json
 from app.services.audit_projection import project_audit_to_mongo
 
 logger = logging.getLogger(__name__)
@@ -20,31 +17,12 @@ logger = logging.getLogger(__name__)
 F = TypeVar("F", bound=Callable[..., Any])
 
 
-def _json_default(value: Any) -> Any:
-    if isinstance(value, Enum):
-        return value.value
-    if isinstance(value, (datetime, date)):
-        return value.isoformat()
-    if isinstance(value, Decimal):
-        return str(value)
-    return str(value)
-
-
 def _entity_to_dict(entity: Any) -> dict[str, Any]:
-    if entity is None or not hasattr(entity, "__table__"):
-        return {}
-
-    return {
-        column.name: getattr(entity, column.name, None)
-        for column in entity.__table__.columns
-        if not column.name.startswith("_")
-    }
+    return model_snapshot(entity) or {}
 
 
-def _payload(state: dict[str, Any] | None) -> str | None:
-    if not state:
-        return None
-    return json.dumps(state, sort_keys=True, default=_json_default)
+def _payload(table_name: str, state: dict[str, Any] | None) -> str | None:
+    return payload_json(state, table_name=table_name)
 
 
 def _audit_projection_doc(audit_log: AuditLog) -> dict[str, Any]:
@@ -210,8 +188,8 @@ def audited_change(table_name: str, action: AuditActionEnum | str) -> Callable[[
                         record_id=final_record_id,
                         action=audit_action,
                         actor_user_id=actor_user_id,
-                        payload_before=_payload(before_state),
-                        payload_after=_payload(after_state),
+                        payload_before=_payload(table_name, before_state),
+                        payload_after=_payload(table_name, after_state),
                     )
                     db.add(audit_log)
                     db.flush()

@@ -13,6 +13,23 @@ from app.models.audit_log import AuditActionEnum, AuditLog
 
 logger = logging.getLogger(__name__)
 
+_GUEST_AUDIT_FIELDS = frozenset(
+    {
+        "id",
+        "hotel_id",
+        "rating",
+        "terms_accepted",
+        "created_at",
+        "updated_at",
+        "retention_until",
+    }
+)
+_GUEST_COMPANION_AUDIT_FIELDS = frozenset({"id", "guest_id"})
+_AUDIT_FIELDS_BY_TABLE = {
+    "guests": _GUEST_AUDIT_FIELDS,
+    "guest_companions": _GUEST_COMPANION_AUDIT_FIELDS,
+}
+
 
 def _json_default(value: Any) -> Any:
     if isinstance(value, Enum):
@@ -27,16 +44,40 @@ def _json_default(value: Any) -> Any:
 def model_snapshot(entity: Any) -> dict[str, Any] | None:
     if entity is None or not hasattr(entity, "__table__"):
         return None
-    return {
+    snapshot = {
         column.name: getattr(entity, column.name, None)
         for column in entity.__table__.columns
         if not column.name.startswith("_")
     }
+    return sanitize_audit_payload(entity.__tablename__, snapshot)
 
 
-def payload_json(payload: dict[str, Any] | None) -> str | None:
+def sanitize_audit_payload(table_name: str, payload: dict[str, Any] | str | None) -> dict[str, Any] | str | None:
+    """Allow-list guest audit context before persistence or external projection."""
+
+    allowed_fields = _AUDIT_FIELDS_BY_TABLE.get(table_name)
+    if allowed_fields is None or payload is None:
+        return payload
+
+    if isinstance(payload, str):
+        try:
+            payload = json.loads(payload)
+        except (TypeError, ValueError):
+            return None
+
+    if not isinstance(payload, dict):
+        return None
+
+    return {field: payload[field] for field in allowed_fields if field in payload}
+
+
+def payload_json(payload: dict[str, Any] | str | None, *, table_name: str | None = None) -> str | None:
+    if table_name is not None:
+        payload = sanitize_audit_payload(table_name, payload)
     if not payload:
         return None
+    if isinstance(payload, str):
+        return payload
     return json.dumps(payload, sort_keys=True, default=_json_default)
 
 
@@ -58,8 +99,8 @@ def create_audit_log(
         record_id=record_id,
         action=audit_action,
         actor_user_id=actor_user_id,
-        payload_before=payload_before if isinstance(payload_before, str) else payload_json(payload_before),
-        payload_after=payload_after if isinstance(payload_after, str) else payload_json(payload_after),
+        payload_before=payload_json(payload_before, table_name=table_name),
+        payload_after=payload_json(payload_after, table_name=table_name),
     )
     db.add(audit_log)
     db.commit()
@@ -84,8 +125,8 @@ def queue_audit_log(
         record_id=record_id,
         action=audit_action,
         actor_user_id=actor_user_id,
-        payload_before=payload_before if isinstance(payload_before, str) else payload_json(payload_before),
-        payload_after=payload_after if isinstance(payload_after, str) else payload_json(payload_after),
+        payload_before=payload_json(payload_before, table_name=table_name),
+        payload_after=payload_json(payload_after, table_name=table_name),
     )
     db.add(audit_log)
     return audit_log

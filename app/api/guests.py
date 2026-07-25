@@ -28,7 +28,7 @@ from app.services.guest_service import (
 )
 from app.models.audit_log import AuditActionEnum
 from app.services import audit_log_service
-from app.services.permission_service import PERMISSION_GUEST_EDIT, PERMISSION_GUEST_TAGS
+from app.services.permission_service import PERMISSION_GUEST_EDIT, PERMISSION_GUEST_EXPORT, PERMISSION_GUEST_TAGS
 
 router = APIRouter(prefix="/api/guests", tags=["Guests"])
 
@@ -145,7 +145,7 @@ def export_guest_ledger(
     from_date: date,
     to_date: date,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(get_auth_context),
+    context: AuthContext = Depends(require_permission(PERMISSION_GUEST_EXPORT)),
 ):
     if to_date <= from_date:
         raise HTTPException(status_code=400, detail="to_date must be after from_date")
