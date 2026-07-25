@@ -356,6 +356,8 @@ class Reservation(Base):
         CheckConstraint("num_children >= 0", name="ck_reservation_children_positive"),
         Index("ix_reservation_dates", "check_in_date", "check_out_date"),
         Index("ix_reservation_hotel_id", "hotel_id"),
+        # A2: recent-order paging (created_at DESC) scoped per hotel.
+        Index("ix_reservation_hotel_created_at", "hotel_id", "created_at"),
         Index("ix_reservation_sellable_product_id", "sellable_product_id"),
         Index("ix_reservation_rate_plan_id", "rate_plan_id"),
         # OTA deduplication (v72 §10.1): same channel+ID must not produce duplicate reservations

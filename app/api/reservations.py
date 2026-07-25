@@ -4,7 +4,8 @@ Complete CRUD + cancel, modify, no-show, extend stay.
 """
 import logging
 from datetime import date
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from typing import Literal
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -220,6 +221,9 @@ def list_reservations(
     from_date: date = None,
     to_date: date = None,
     search: str = "",
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    order: Literal["recent", "check_in"] = "recent",
     db: Session = Depends(get_db),
     context: AuthContext = Depends(get_auth_context),
 ):
@@ -230,6 +234,9 @@ def list_reservations(
         from_date=from_date,
         to_date=to_date,
         search=search,
+        skip=skip,
+        limit=limit,
+        order=order,
     )
     try:
         return [_to_read(r) for r in reservations]

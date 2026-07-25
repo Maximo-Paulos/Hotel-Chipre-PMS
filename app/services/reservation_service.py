@@ -948,6 +948,9 @@ def list_reservations(
     from_date: Optional[date] = None,
     to_date: Optional[date] = None,
     search: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 50,
+    order: str = "recent",
 ) -> list[Reservation]:
     query = db.query(Reservation).filter(
         Reservation.hotel_id == hotel_id,
@@ -970,7 +973,15 @@ def list_reservations(
                 Guest.hotel_id == hotel_id,
                 (Reservation.confirmation_code.ilike(like)) | (Guest.last_name.ilike(like)),
             )
-    return query.order_by(Reservation.check_in_date).all()
+    # A2: "recent" (created_at DESC, id DESC) is the new default -- dashboards
+    # and any "recent activity" view want newest-first. "check_in" preserves
+    # the pre-A2 ordering (check_in_date ASC) for operational views that
+    # already assume arrivals are sorted by stay date, not creation date.
+    if order == "check_in":
+        query = query.order_by(Reservation.check_in_date.asc())
+    else:
+        query = query.order_by(Reservation.created_at.desc(), Reservation.id.desc())
+    return query.offset(max(skip, 0)).limit(max(limit, 1)).all()
 
 
 def get_reservation_by_id(db: Session, reservation_id: int, hotel_id: int) -> Reservation | None:
