@@ -3588,12 +3588,12 @@
     "hash": "a91b843e3f89243323f46ca525eece2f"
   },
   "app/scripts/repair_cash_handoff_schema.py": {
-    "mtime": 1784956280359.3132,
-    "hash": "ff4a4785fe7a0fa1e91a2a25dbd47f06"
+    "mtime": 1784960516331.5298,
+    "hash": "14566bb5face959a487aabe11a9c0ec5"
   },
   "tests/test_repair_cash_handoff_schema_script.py": {
-    "mtime": 1784956236687.055,
-    "hash": "a540ab98ed77e893e9a6bbe25b4fd810"
+    "mtime": 1784960503170.8552,
+    "hash": "03ba1788322e3f6538624b30be7380fd"
   },
   "frontend/e2e/settings-hotel.spec.ts": {
     "mtime": 1784957174365.4082,
