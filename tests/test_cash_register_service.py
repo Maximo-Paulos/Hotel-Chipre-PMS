@@ -234,6 +234,40 @@ def test_close_with_difference_requires_approval(db):
     assert session.status == CashSessionStatusEnum.PENDING_APPROVAL
 
 
+def test_close_with_positive_difference_also_requires_approval(db):
+    """A cash surplus (counted > expected) is exactly as much a discrepancy as
+    a shortage and must follow the same pending-approval gate -- there is no
+    reason to special-case 'found more cash than expected' as harmless."""
+    _hotel(db, 1)
+    _user(db, 10)
+    session = open_session(db, hotel_id=1, opened_by_user_id=10, opening_balance=Decimal("100.00"))
+    add_movement(
+        db,
+        hotel_id=1,
+        session_id=session.id,
+        recorded_by_user_id=10,
+        movement_type=CashMovementTypeEnum.INCOME,
+        amount=Decimal("25.00"),
+    )
+
+    report = close_session(
+        db,
+        hotel_id=1,
+        session_id=session.id,
+        closed_by_user_id=10,
+        counted_balance=Decimal("140.00"),
+    )
+
+    assert report.expected_balance == Decimal("125.00")
+    assert report.difference == Decimal("15.00")
+    assert report.difference_approved is False
+    assert session.status == CashSessionStatusEnum.PENDING_APPROVAL
+
+    approve_close_difference(db, hotel_id=1, report_id=report.id, approved_by_user_id=10)
+    assert report.difference_approved is True
+    assert session.status == CashSessionStatusEnum.CLOSED
+
+
 def test_successor_cash_session_starts_even_with_pending_difference(db):
     _hotel(db, 1)
     _user(db, 10)
