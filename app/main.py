@@ -116,6 +116,37 @@ async def normalize_master_admin_prefix(request: Request, call_next):
             request.scope["raw_path"] = raw_path.replace(b"/api/master_admin", b"/api/master-admin", 1)
     return await call_next(request)
 
+
+# Baseline browser-enforced defenses on every response (API JSON and the SPA
+# shell alike). CSP is deliberately permissive for the SPA's own same-origin
+# assets/XHR plus the OTA/payment iframes it embeds; it still blocks arbitrary
+# third-party script injection. HSTS is only sent in production because local
+# dev and preview QA run over plain HTTP.
+_CSP = (
+    "default-src 'self'; "
+    "script-src 'self'; "
+    "style-src 'self' 'unsafe-inline'; "
+    "img-src 'self' data: https:; "
+    "font-src 'self' data:; "
+    "connect-src 'self' https:; "
+    "frame-src 'self' https:; "
+    "frame-ancestors 'none'; "
+    "base-uri 'self'; "
+    "form-action 'self'"
+)
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Content-Security-Policy"] = _CSP
+    if is_production_mode():
+        response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
+    return response
+
 # CORS: local dev + production domains (add CORS_ORIGINS env var for extra origins)
 _base_origins = [
     "http://localhost:5173",
