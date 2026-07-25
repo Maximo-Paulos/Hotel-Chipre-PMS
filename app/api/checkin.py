@@ -75,7 +75,7 @@ def checkout(
     reservation_id: int,
     force: bool = False,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(get_auth_context),
+    context: AuthContext = Depends(require_permission(PERMISSION_CHECKIN_PERFORM)),
 ):
     try:
         reservation = perform_checkout(db, reservation_id, hotel_id=context.hotel_id, force=force)
