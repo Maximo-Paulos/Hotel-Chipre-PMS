@@ -344,8 +344,8 @@
     "hash": "de09f11139cc84b783d8719f34bb7cdb"
   },
   "app/api/reservations.py": {
-    "mtime": 1784965931683.5266,
-    "hash": "b125f8525305b58636cc5c2342a67bb3"
+    "mtime": 1785007436922.8157,
+    "hash": "ba9f429ecece57aa1c0cbae506866fa2"
   },
   "app/api/room_blocks.py": {
     "mtime": 1784862144875.9834,
@@ -1020,8 +1020,8 @@
     "hash": "b40820b9c90889625c33322d978b8871"
   },
   "app/services/reservation_service.py": {
-    "mtime": 1784889349964.9397,
-    "hash": "66bdafc570fcd0c3470ce93e27abec49"
+    "mtime": 1785007432901.4907,
+    "hash": "b6ca167ab6b4912afc1cd6d072ea5beb"
   },
   "app/services/room_block_service.py": {
     "mtime": 1784889349962.5137,
@@ -1192,8 +1192,8 @@
     "hash": "ef6f8c58b53e1909c0844e94c1659942"
   },
   "frontend/src/api/reservations.ts": {
-    "mtime": 1784958956322.333,
-    "hash": "1958314117d1cc478df1adbfc27dd09a"
+    "mtime": 1785007490668.473,
+    "hash": "0849cff0fec837b2dee666606bd81966"
   },
   "frontend/src/api/roomBlocks.ts": {
     "mtime": 1784862144902.3428,
@@ -1336,8 +1336,8 @@
     "hash": "b9fc3178cad7e0fc8e1c321d2fe82c46"
   },
   "frontend/src/hooks/useReservations.ts": {
-    "mtime": 1784997527817.596,
-    "hash": "15801990211acd898747765fc8e0eeb4"
+    "mtime": 1785007496308.3813,
+    "hash": "eea810173a28a651c730488116944b2b"
   },
   "frontend/src/hooks/useRoomBlocks.ts": {
     "mtime": 1784862144904.3977,
@@ -1404,8 +1404,8 @@
     "hash": "080f58a661cb1eb1b0f8ae7c84334f59"
   },
   "frontend/src/ui/AppShell.tsx": {
-    "mtime": 1784950019143.0178,
-    "hash": "b87247e726a3cf5b6346d3a3d2bed504"
+    "mtime": 1785007629364.604,
+    "hash": "3300bd798f32a9c71889e9b1f122e1a6"
   },
   "frontend/src/ui/HotelSelector.tsx": {
     "mtime": 1784942811903.0242,
@@ -1432,12 +1432,12 @@
     "hash": "38679b49521cf22a610b4cc9b5f9c624"
   },
   "frontend/src/views/protected/DashboardPage.tsx": {
-    "mtime": 1784958956323.0364,
-    "hash": "b1b90d63b15321c4585085fc93703620"
+    "mtime": 1785007655220.9377,
+    "hash": "5fb59c206ddb55768ee90742de56e546"
   },
   "frontend/src/views/protected/GuestsPage.tsx": {
-    "mtime": 1784862144906.0164,
-    "hash": "8d34ffcb554619b79b1ca8b82eaae0e0"
+    "mtime": 1785007678222.607,
+    "hash": "2866438436db1986196e0a019c2a79bd"
   },
   "frontend/src/views/protected/LaundryPage.tsx": {
     "mtime": 1784965931687.4028,
@@ -1452,8 +1452,8 @@
     "hash": "2d960effb79d50cb5debf39038a49702"
   },
   "frontend/src/views/protected/ReservationsPage.tsx": {
-    "mtime": 1784988638693.521,
-    "hash": "b780f7866dae1dffff5266484d180362"
+    "mtime": 1785007539030.446,
+    "hash": "3ea6ec736d4c0f03efb862681f02f94e"
   },
   "frontend/src/views/protected/RoomsPage.tsx": {
     "mtime": 1784965978800.4614,
@@ -1572,8 +1572,8 @@
     "hash": "8d771d95e254e5e632c1dcfdef3bd38a"
   },
   "tests/conftest.py": {
-    "mtime": 1785006848581.7957,
-    "hash": "7b88e9dedfee7009625fcaa47fb8eed1"
+    "mtime": 1785006925728.2244,
+    "hash": "e0bbddb192a6af7fa32687f584e72194"
   },
   "tests/perf/__init__.py": {
     "mtime": 1784862144927.63,
@@ -3674,5 +3674,29 @@
   "tests/test_security_headers.py": {
     "mtime": 1784999194507.564,
     "hash": "b1477cc78ff12f13b11fed7e238974e0"
+  },
+  "frontend/e2e/reservation-drawer-global.spec.ts": {
+    "mtime": 1785008263856.0088,
+    "hash": "018235ccba28ac80f097d79d63405d4d"
+  },
+  "frontend/src/components/ReservationDetailDrawer.tsx": {
+    "mtime": 1785007587563.5486,
+    "hash": "5eefd0ee73633e0f24982a744a1e2634"
+  },
+  "frontend/src/components/ReservationGlobalSearch.tsx": {
+    "mtime": 1785008566562.2659,
+    "hash": "622c9d2d94227358092c1be721087855"
+  },
+  "frontend/src/hooks/useReservationDrawer.ts": {
+    "mtime": 1785007597728.602,
+    "hash": "31d13fd1dc75a9c8a1039401459e5560"
+  },
+  "frontend/src/utils/reservationStatus.ts": {
+    "mtime": 1785007502979.3025,
+    "hash": "c6ebd5e7d8a19a0e4c2f0594cd26cf71"
+  },
+  "tests/test_reservation_search.py": {
+    "mtime": 1785007461768.6484,
+    "hash": "27e5fcafb872019dd6ab92f638f49bed"
   }
 }

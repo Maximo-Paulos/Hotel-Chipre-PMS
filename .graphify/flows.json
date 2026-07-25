@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-25T19:15:07.359Z",
+  "generatedAt": "2026-07-25T19:48:49.255Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -10372,6 +10372,28 @@
       "fileCount": 1,
       "files": [
         "frontend/src/views/protected/ReportsPage.tsx"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:components_reservationdetaildrawer_reservationdetaildrawer",
+      "name": "ReservationDetailDrawer",
+      "entryPoint": "components_reservationdetaildrawer_reservationdetaildrawer",
+      "entryPointId": "components_reservationdetaildrawer_reservationdetaildrawer",
+      "path": [
+        "components_reservationdetaildrawer_reservationdetaildrawer",
+        "components_reservationdetaildrawer_guestfullname"
+      ],
+      "qualifiedPath": [
+        "components_reservationdetaildrawer_reservationdetaildrawer",
+        "components_reservationdetaildrawer_guestfullname"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/components/ReservationDetailDrawer.tsx"
       ],
       "criticality": 0.16,
       "warnings": []
