@@ -371,11 +371,19 @@ def process_payment(
         if request.payment_method == PaymentMethodEnum.CASH:
             from app.services import cash_register_service
 
-            cash_register_service.record_cash_payment_movement(
-                db,
-                transaction=transaction,
-                recorded_by_user_id=actor_user_id,
-            )
+            try:
+                cash_register_service.record_cash_payment_movement(
+                    db,
+                    transaction=transaction,
+                    recorded_by_user_id=actor_user_id,
+                )
+            except cash_register_service.CashRegisterError as exc:
+                # Every process_payment caller (direct payment route, webhook
+                # processing, reservation extension, transfer-proof approval)
+                # already catches PaymentError with a clean 4xx response.
+                # Without this translation a cash charge with no open caja
+                # crashed as an unhandled 500 instead of blocking clearly.
+                raise PaymentError(str(exc)) from exc
 
     return transaction
 

@@ -313,15 +313,22 @@ def test_cash_payment_posts_income_movement_to_open_session(db):
 
 
 def test_cash_payment_without_open_session_is_rejected(db):
-    """A cash payment cannot be approved outside an explicitly opened caja."""
+    """A cash payment cannot be approved outside an explicitly opened caja.
+
+    process_payment translates the cash-register guard's CashRegisterError into
+    its own PaymentError so every caller (the direct payment API route, the
+    MercadoPago webhook, reservation extension, transfer-proof approval) gets
+    the same clean 4xx contract instead of an unhandled 500 -- see the P1 fix
+    in payment_service.process_payment.
+    """
     from app.schemas.transaction import PaymentRequest
-    from app.services.payment_service import process_payment
+    from app.services.payment_service import PaymentError, process_payment
 
     _hotel(db, 1)
     _user(db, 10)
     reservation = _reservation(db, 1, "CASH-PAY-2")
 
-    with pytest.raises(CashRegisterError, match="open cash session"):
+    with pytest.raises(PaymentError, match="open cash session"):
         process_payment(
             db,
             PaymentRequest(
