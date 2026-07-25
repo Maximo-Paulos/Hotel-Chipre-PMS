@@ -14,7 +14,17 @@ import app.database as db_module
 import app.main as main_module
 from app.database import Base, get_db
 from app.dependencies.auth import AuthContext, get_auth_context
-from app.models.analytics import AnalyticsAIUsageMonthly, AnalyticsExportJob, AnalyticsExportStatusEnum, HotelAuditEvent, RoomStateEvent, RoomStateEventReasonCodeEnum, RoomStateEventTypeEnum
+from app.models.analytics import (
+    AnalyticsAIUsageMonthly,
+    AnalyticsExportJob,
+    AnalyticsExportStatusEnum,
+    FactReservationDaily,
+    FactRoomOccupancyDaily,
+    HotelAuditEvent,
+    RoomStateEvent,
+    RoomStateEventReasonCodeEnum,
+    RoomStateEventTypeEnum,
+)
 from app.models.company import Company
 from app.models.hotel_config import HotelConfiguration
 from app.models.hotel_membership import HotelMembership
@@ -723,3 +733,35 @@ def test_cleanup_expired_exports_task(api_client, monkeypatch: pytest.MonkeyPatc
         job = db.query(AnalyticsExportJob).filter(AnalyticsExportJob.id == job_id).first()
         assert job is not None
         assert job.status == AnalyticsExportStatusEnum.EXPIRED
+
+
+def test_analytics_freshness_reflects_stale_derived_facts(api_client):
+    # Fase 8: the analytics home/rooms/etc payloads are built entirely from
+    # FactReservationDaily/FactRoomOccupancyDaily, which are only refreshed by
+    # the Celery beat job (every 5 minutes in prod; never in this test
+    # environment unless a test calls refresh_fact_* directly, same as
+    # _seed_analytics_data does above). If those derived rows go stale
+    # (worker lagging, or -- in this local/E2E environment -- no worker at
+    # all), the UI must say so via source_lag_seconds/data_as_of instead of
+    # silently claiming "al dia" for data that predates a real operation.
+    client, SessionLocal, headers, plan_state = api_client
+    _seed_analytics_data(SessionLocal)
+    plan_state["plan"] = "pro"
+
+    stale_since = datetime.now(timezone.utc) - timedelta(hours=2)
+    with SessionLocal() as db:
+        db.query(FactReservationDaily).filter(FactReservationDaily.hotel_id == 1).update({"updated_at": stale_since})
+        db.query(FactRoomOccupancyDaily).filter(FactRoomOccupancyDaily.hotel_id == 1).update({"updated_at": stale_since})
+        db.commit()
+
+    resp = client.get(
+        "/api/analytics/home",
+        params={"date_from": "2026-04-01", "date_to": "2026-04-05"},
+        headers=headers,
+    )
+    assert resp.status_code == 200, resp.text
+    payload = resp.json()
+    assert_freshness_metadata(payload)
+    # The derived facts backing this payload were computed 2 hours ago: the
+    # reported lag must reflect that, not the instant the request ran.
+    assert payload["source_lag_seconds"] >= 7000, payload

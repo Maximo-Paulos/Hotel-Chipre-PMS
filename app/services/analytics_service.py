@@ -61,6 +61,26 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _facts_data_as_of(*fact_row_groups: list[Any]) -> datetime | None:
+    """Honest freshness for payloads built from derived fact tables.
+
+    FactReservationDaily/FactRoomOccupancyDaily are only refreshed by the
+    Celery beat job (analytics.project_all_derived_facts_incremental, every
+    5 minutes) or the nightly reconciliation -- never synchronously on
+    reservation/payment writes. Without this, `annotate_analytics_payload`
+    falls back to "generated_at" (the instant this query ran) and always
+    reports source_lag_seconds=0, which lies about data that can be minutes,
+    hours, or (if the worker is down) indefinitely stale.
+
+    Returns the oldest `updated_at` among the fact rows actually used to
+    build the payload -- the conservative, honest worst case for this
+    window. Returns None (falls back to "now") only when the window has no
+    fact rows at all, i.e. nothing to be stale.
+    """
+    timestamps = [row.updated_at for group in fact_row_groups for row in group if getattr(row, "updated_at", None)]
+    return min(timestamps) if timestamps else None
+
+
 def _hotel_local_now(db: Session, hotel_id: int) -> datetime:
     hotel = db.get(HotelConfiguration, hotel_id)
     timezone_name = normalize_timezone(hotel.hotel_timezone if hotel and hotel.hotel_timezone else get_settings().HOTEL_TIMEZONE)
@@ -503,6 +523,10 @@ def get_company_fact_detail(db: Session, *, hotel_id: int, company_id: int, date
             metric_card("company_revenue_net", "Revenue neto del período", value_ars=sum((_money(f.revenue_net_ars) for f in facts), Decimal("0"))).model_dump(),
             metric_card("company_reservations", "Reservas asociadas", value_count=len(reservations)).model_dump(),
         ],
+        # Internal-only: consumed and popped by the /companies/{id} endpoint to
+        # set honest envelope freshness. analytics_exports.py, the other
+        # caller, pops and discards it so it never leaks into export files.
+        "_data_as_of": _facts_data_as_of(facts),
     }
 
 
@@ -889,6 +913,7 @@ def build_starter_summary_payload(db: Session, *, hotel_id: int, date_from: date
         "date_to": window.date_to,
         "data": {"cards": cards},
         "generated_at": _now(),
+        "data_as_of": _facts_data_as_of(facts, occupancy_rows),
     }
 
 
@@ -942,6 +967,7 @@ def build_home_payload(
             "segments": build_segments_breakdown(db, hotel_id=hotel_id, date_from=window.date_from, date_to=window.date_to),
         },
         "generated_at": _now(),
+        "data_as_of": _facts_data_as_of(facts, room_rows),
     }
 
 
@@ -995,6 +1021,7 @@ def build_rooms_overview_payload(
             "rooms": payload_rooms,
         },
         "generated_at": _now(),
+        "data_as_of": _facts_data_as_of(facts),
     }
 
 
@@ -1059,6 +1086,7 @@ def build_room_detail_payload(
             "events": [_serialize_room_state_event(event) for event in events],
         },
         "generated_at": _now(),
+        "data_as_of": _facts_data_as_of(facts),
     }
 
 
@@ -1132,6 +1160,7 @@ def build_category_detail_payload(
             ],
         },
         "generated_at": _now(),
+        "data_as_of": _facts_data_as_of(facts),
     }
 
 
@@ -1194,6 +1223,7 @@ def build_segments_payload(
             "segments": segments,
         },
         "generated_at": _now(),
+        "data_as_of": _facts_data_as_of(_load_reservation_facts(db, hotel_id, window.date_from, window.date_to)),
     }
 
 
@@ -1222,6 +1252,7 @@ def build_channels_payload(
             "channels": channels,
         },
         "generated_at": _now(),
+        "data_as_of": _facts_data_as_of(_load_reservation_facts(db, hotel_id, window.date_from, window.date_to)),
     }
 
 
@@ -1293,6 +1324,7 @@ def build_operations_payload(
             ],
         },
         "generated_at": _now(),
+        "data_as_of": _facts_data_as_of(facts),
     }
 
 

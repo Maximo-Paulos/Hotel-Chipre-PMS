@@ -263,6 +263,7 @@ def analytics_company_detail(
         date_from=window.date_from,
         date_to=window.date_to,
     )
+    data_as_of = payload.pop("_data_as_of", None)
     return annotate_analytics_payload(
         {
             "hotel_id": context.hotel_id,
@@ -272,6 +273,7 @@ def analytics_company_detail(
             "comparison": window.comparison,
             "data": payload,
             "generated_at": datetime.now(timezone.utc),
+            "data_as_of": data_as_of,
         }
     )
 

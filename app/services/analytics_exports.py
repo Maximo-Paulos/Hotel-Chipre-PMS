@@ -340,19 +340,21 @@ def _build_payload_for_request(db: Session, *, hotel_id: int, request: Analytics
             compare_previous=request.compare_previous,
             compare_yoy=request.compare_yoy,
         )
+        company_detail = get_company_fact_detail(
+            db,
+            hotel_id=hotel_id,
+            company_id=request.company_id,
+            date_from=window.date_from,
+            date_to=window.date_to,
+        )
+        company_detail.pop("_data_as_of", None)
         return {
             "hotel_id": hotel_id,
             "date_from": window.date_from,
             "date_to": window.date_to,
             "currency_display": request.currency_display,
             "comparison": window.comparison,
-            "data": get_company_fact_detail(
-                db,
-                hotel_id=hotel_id,
-                company_id=request.company_id,
-                date_from=window.date_from,
-                date_to=window.date_to,
-            ),
+            "data": company_detail,
             "generated_at": _now(),
         }
     if request.entity_code == "channels":
