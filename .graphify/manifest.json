@@ -364,8 +364,8 @@
     "hash": "aae4e845c792d6bc8669c01055196ce0"
   },
   "app/api/stock.py": {
-    "mtime": 1784884168641.9695,
-    "hash": "72fa96f0cb5f7603641baf290a588877"
+    "mtime": 1784957963981.8777,
+    "hash": "729c3425bd842e86ed98f1ee8f514c36"
   },
   "app/api/subscription.py": {
     "mtime": 1784862144876.255,
@@ -1036,8 +1036,8 @@
     "hash": "79d6d1e03bf10363d83dedfa312a534a"
   },
   "app/services/stock_service.py": {
-    "mtime": 1784870556094.4507,
-    "hash": "10efe471991057519dc5da3d703f6da0"
+    "mtime": 1784957963981.5112,
+    "hash": "c52d543ba3c091a4d726ea889c7f81e7"
   },
   "app/services/subscription_entitlements.py": {
     "mtime": 1784862144886.7397,
@@ -1204,8 +1204,8 @@
     "hash": "d976c0d923b94f3f72ba414452dee372"
   },
   "frontend/src/api/stock.ts": {
-    "mtime": 1784862144902.4377,
-    "hash": "c5c33db23be939933bc0bb46a75fa634"
+    "mtime": 1784957963982.0518,
+    "hash": "963a9021efff81b9eaca374e8524aecc"
   },
   "frontend/src/api/subscription.ts": {
     "mtime": 1784862144902.4917,
@@ -1500,8 +1500,8 @@
     "hash": "353d169ade8bfb8b38ab0e5f059b68ca"
   },
   "frontend/src/views/protected/StockPage.tsx": {
-    "mtime": 1784884458002.5247,
-    "hash": "7927d255abf034a64d4bf4148666c0e6"
+    "mtime": 1784957963982.3792,
+    "hash": "a4c5d57b6da4e664d36696d0e120b17c"
   },
   "frontend/src/views/protected/WaitlistPage.tsx": {
     "mtime": 1784862144907.1262,
@@ -1924,8 +1924,8 @@
     "hash": "6aeb4f419411d94ab42a349be82f953a"
   },
   "tests/test_permissions_api.py": {
-    "mtime": 1784884279750.2603,
-    "hash": "d740c610419c0067a63c922528211c98"
+    "mtime": 1784957900922.0493,
+    "hash": "7f6f85efb95e1802fd7708db398dff95"
   },
   "tests/test_postgres_validation.py": {
     "mtime": 1784862144934.7532,
@@ -2016,8 +2016,8 @@
     "hash": "73734b2628ff5c937b1166e9b5745bd6"
   },
   "tests/test_stock_service.py": {
-    "mtime": 1784870466661.2334,
-    "hash": "1b6ea3ccf39b90f928ba7fab7b6ce47e"
+    "mtime": 1784957900921.5154,
+    "hash": "b7c137606bccb2b2dc4787f7cca29edb"
   },
   "tests/test_subscription_tiers.py": {
     "mtime": 1784862144937.6543,
@@ -3364,8 +3364,8 @@
     "hash": "119148ac4b4b3b2b9c0e5d019af7e06b"
   },
   "frontend/e2e/business-journey.spec.ts": {
-    "mtime": 1784904324073.8352,
-    "hash": "9f31f50bfd78f0438fcc439ae0dde3e4"
+    "mtime": 1784958009665.629,
+    "hash": "a76937e857f24b35c75d3a87a75cbd86"
   },
   "alembic/versions/20260724_allocation_enum_values.py": {
     "mtime": 1784868257342.7349,

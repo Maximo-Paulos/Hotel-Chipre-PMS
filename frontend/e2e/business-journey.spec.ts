@@ -219,6 +219,7 @@ test("owner completes guided stock movements through the UI", async ({ page }) =
   await expect(page.getByRole("heading", { name: itemName, exact: true })).toBeVisible();
 
   const movementForm = page.locator("#stock-movement-form");
+  const movementHistory = page.getByRole("region", { name: "Historial reciente", exact: true });
   await page.getByRole("button", { name: `Registrar ingreso de ${itemName}`, exact: true }).click();
   await expect(movementForm.getByRole("heading", { name: "Registrar Ingreso", exact: true })).toBeVisible();
   await movementForm.getByLabel("Item").selectOption({ label: itemName });
@@ -228,6 +229,8 @@ test("owner completes guided stock movements through the UI", async ({ page }) =
   await movementForm.getByRole("button", { name: "Registrar Ingreso", exact: true }).click();
   await expect(page.getByText("Movimiento registrado.", { exact: true })).toBeVisible();
   await expect(movementForm.getByText(/^(?:10|10\.00) unidad$/, { exact: true })).toBeVisible();
+  await expect(movementHistory).toContainText(`Ingreso · ${itemName}`);
+  await expect(movementHistory).toContainText("Compra inicial");
 
   await page.getByRole("button", { name: `Registrar egreso de ${itemName}`, exact: true }).click();
   await expect(movementForm.getByRole("heading", { name: "Registrar Egreso", exact: true })).toBeVisible();
@@ -236,6 +239,8 @@ test("owner completes guided stock movements through the UI", async ({ page }) =
   await movementForm.getByRole("button", { name: "Registrar Egreso", exact: true }).click();
   await expect(page.getByText("Movimiento registrado.", { exact: true })).toBeVisible();
   await expect(movementForm.getByText(/^(?:7|7\.00) unidad$/, { exact: true })).toBeVisible();
+  await expect(movementHistory).toContainText(`Egreso · ${itemName}`);
+  await expect(movementHistory).toContainText("Consumo habitación");
 
   await movementForm.getByRole("button", { name: /^Ajuste/ }).click();
   await movementForm.getByLabel("Cantidad").fill("1");

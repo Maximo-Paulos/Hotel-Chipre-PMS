@@ -7,8 +7,10 @@ import {
   createStockMovement,
   getCurrentStock,
   listLowStockItems,
+  listStockMovements,
   listStockItems,
   listStockLocations,
+  type StockMovement,
   type StockMovementCreate,
   type StockMovementType
 } from "../../api/stock";
@@ -112,6 +114,17 @@ export function StockPage() {
     [items, movementForm.item_id]
   );
   const selectedCurrentStock = selectedItem ? currentByItemId.get(selectedItem.id) : null;
+  const historyItemId = movementForm.item_id ? Number(movementForm.item_id) : undefined;
+  const movementHistoryQuery = useQuery({
+    queryKey: ["stock-movements", session.hotelId, historyItemId],
+    queryFn: () => listStockMovements({ itemId: historyItemId }, session),
+    enabled,
+    staleTime: 15 * 1000
+  });
+  const movementHistory = useMemo(() => movementHistoryQuery.data ?? [], [movementHistoryQuery.data]);
+  const itemById = useMemo(() => new Map(items.map((item) => [item.id, item])), [items]);
+  const locationById = useMemo(() => new Map(locations.map((location) => [location.id, location])), [locations]);
+  const reservationById = useMemo(() => new Map(reservations.map((reservation) => [reservation.id, reservation])), [reservations]);
   const requestedQuantity = Number(movementForm.quantity);
   const currentQuantity = selectedCurrentStock ? Number(selectedCurrentStock) : null;
   const willGoNegative =
@@ -145,6 +158,7 @@ export function StockPage() {
     queryClient.invalidateQueries({ queryKey: ["stock-locations", session.hotelId] });
     queryClient.invalidateQueries({ queryKey: ["stock-low", session.hotelId] });
     queryClient.invalidateQueries({ queryKey: ["stock-current", session.hotelId] });
+    queryClient.invalidateQueries({ queryKey: ["stock-movements", session.hotelId] });
   };
 
   const createItemMutation = useMutation({
@@ -436,6 +450,15 @@ export function StockPage() {
             </button>
           </form>
 
+          <StockMovementHistory
+            movements={movementHistory}
+            isLoading={movementHistoryQuery.isLoading}
+            selectedItem={selectedItem?.name}
+            itemById={itemById}
+            locationById={locationById}
+            reservationById={reservationById}
+          />
+
           <form className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm" onSubmit={handleCreateItem}>
             <div>
               <p className="text-xs uppercase tracking-wide text-slate-500">Nuevo item</p>
@@ -535,4 +558,61 @@ function reservationSearchText(reservation: Reservation) {
 function reservationLabel(reservation: Reservation) {
   const guestName = reservation.guest ? `${reservation.guest.first_name} ${reservation.guest.last_name}`.trim() : "Huésped sin nombre";
   return `${reservation.confirmation_code} · ${guestName} · ${reservation.check_in_date}`;
+}
+
+function StockMovementHistory({
+  movements,
+  isLoading,
+  selectedItem,
+  itemById,
+  locationById,
+  reservationById
+}: {
+  movements: StockMovement[];
+  isLoading: boolean;
+  selectedItem?: string;
+  itemById: Map<number, { name: string; unit: string }>;
+  locationById: Map<number, { name: string }>;
+  reservationById: Map<number, Reservation>;
+}) {
+  return (
+    <section aria-labelledby="stock-history-title" className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div>
+        <p className="text-xs uppercase tracking-wide text-slate-500">Auditoría operativa</p>
+        <h2 id="stock-history-title" className="text-lg font-semibold text-slate-900">Historial reciente</h2>
+        <p className="mt-1 text-xs text-slate-500">
+          {selectedItem ? `Movimientos de ${selectedItem}.` : "Seleccioná un item para filtrar sus movimientos."}
+        </p>
+      </div>
+      {isLoading ? <p className="text-sm text-slate-500">Cargando movimientos...</p> : null}
+      {!isLoading && movements.length === 0 ? <p className="text-sm text-slate-600">Todavía no hay movimientos para mostrar.</p> : null}
+      <ul className="space-y-2" aria-label="Historial de movimientos de stock">
+        {movements.map((movement) => {
+          const item = itemById.get(movement.item_id);
+          const location = movement.location_id ? locationById.get(movement.location_id) : undefined;
+          const reservation = movement.reservation_id ? reservationById.get(movement.reservation_id) : undefined;
+          return (
+            <li key={movement.id} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-semibold text-slate-900">
+                    {movementLabel[movement.movement_type]} · {item?.name ?? "Item eliminado"}
+                  </p>
+                  <p className="text-xs text-slate-600">
+                    {movement.quantity} {item?.unit ?? "unidad"}
+                    {location ? ` · ${location.name}` : ""}
+                    {reservation ? ` · Reserva ${reservation.confirmation_code}` : ""}
+                  </p>
+                </div>
+                <time className="shrink-0 text-xs text-slate-500" dateTime={movement.created_at}>
+                  {new Date(movement.created_at).toLocaleString("es-AR")}
+                </time>
+              </div>
+              {movement.reason ? <p className="mt-1 text-xs text-slate-600">Motivo: {movement.reason}</p> : null}
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
 }

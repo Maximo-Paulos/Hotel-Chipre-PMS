@@ -5,7 +5,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
@@ -26,6 +26,7 @@ from app.services.stock_service import (
     delete_stock_item,
     get_location,
     get_stock_item,
+    list_stock_movements,
     list_locations,
     list_stock_items,
     low_stock_items,
@@ -276,6 +277,16 @@ def create_movement(
     db.commit()
     db.refresh(movement)
     return movement
+
+
+@router.get("/movements", response_model=list[StockMovementRead])
+def list_movements(
+    item_id: Optional[int] = None,
+    limit: int = Query(default=50, ge=1, le=200),
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_OPERATE)),
+):
+    return list_stock_movements(db, hotel_id=context.hotel_id, item_id=item_id, limit=limit)
 
 
 @router.get("/items/{item_id}/current")

@@ -168,3 +168,33 @@ def test_stock_operator_cannot_adjust_without_explicit_adjust_permission():
         fastapi_app.dependency_overrides.clear()
         db.close()
         engine.dispose()
+
+
+def test_stock_history_api_is_hotel_scoped_and_limited():
+    client, db, engine = _client_with_db()
+    fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner", user_id=11)
+    try:
+        item = client.post("/api/stock/items", json={"name": "Amenities", "unit": "unidad"})
+        assert item.status_code == 201
+        item_id = item.json()["id"]
+
+        first = client.post(
+            "/api/stock/movements",
+            json={"item_id": item_id, "movement_type": "in", "quantity": "5", "reason": "Ingreso"},
+        )
+        latest = client.post(
+            "/api/stock/movements",
+            json={"item_id": item_id, "movement_type": "out", "quantity": "2", "reason": "Consumo"},
+        )
+        assert first.status_code == latest.status_code == 201
+
+        limited = client.get(f"/api/stock/movements?item_id={item_id}&limit=1")
+        assert limited.status_code == 200
+        assert [row["id"] for row in limited.json()] == [latest.json()["id"]]
+
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(2, "owner", user_id=12)
+        assert client.get(f"/api/stock/movements?item_id={item_id}").json() == []
+    finally:
+        fastapi_app.dependency_overrides.clear()
+        db.close()
+        engine.dispose()

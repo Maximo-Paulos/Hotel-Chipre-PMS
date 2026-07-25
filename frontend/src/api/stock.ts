@@ -76,5 +76,14 @@ export const createStockLocation = (payload: StockLocationCreate, session?: Sess
 export const createStockMovement = (payload: StockMovementCreate, session?: SessionLike) =>
   apiFetch<StockMovement>("/api/stock/movements", { method: "POST", data: payload, session });
 
+export const listStockMovements = (
+  { itemId, limit = 20 }: { itemId?: number; limit?: number } = {},
+  session?: SessionLike
+) => {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (itemId) params.set("item_id", String(itemId));
+  return apiFetch<StockMovement[]>(`/api/stock/movements?${params.toString()}`, { session });
+};
+
 export const getCurrentStock = (itemId: number, session?: SessionLike) =>
   apiFetch<CurrentStock>(`/api/stock/items/${itemId}/current`, { session });

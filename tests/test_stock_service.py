@@ -8,6 +8,7 @@ from app.services.stock_service import (
     create_location,
     create_stock_item,
     current_stock,
+    list_stock_movements,
     list_stock_items,
     low_stock_items,
     register_movement,
@@ -151,6 +152,69 @@ def test_stock_outbound_cannot_make_quantity_negative(db):
             reservation_id=None,
             created_by_user_id=None,
         )
+
+
+def test_stock_movement_history_is_hotel_scoped_newest_first_and_limited(db):
+    _seed_hotels(db)
+    item = create_stock_item(
+        db,
+        hotel_id=1,
+        name="Amenities",
+        sku=None,
+        unit="unit",
+        min_quantity=None,
+        active=True,
+    )
+    other_item = create_stock_item(
+        db,
+        hotel_id=2,
+        name="Amenities",
+        sku=None,
+        unit="unit",
+        min_quantity=None,
+        active=True,
+    )
+    db.flush()
+
+    first = register_movement(
+        db,
+        hotel_id=1,
+        item_id=item.id,
+        location_id=None,
+        movement_type="in",
+        quantity=Decimal("5.00"),
+        reason="opening balance",
+        reservation_id=None,
+        created_by_user_id=None,
+    )
+    latest = register_movement(
+        db,
+        hotel_id=1,
+        item_id=item.id,
+        location_id=None,
+        movement_type="out",
+        quantity=Decimal("2.00"),
+        reason="room consumption",
+        reservation_id=None,
+        created_by_user_id=None,
+    )
+    register_movement(
+        db,
+        hotel_id=2,
+        item_id=other_item.id,
+        location_id=None,
+        movement_type="in",
+        quantity=Decimal("99.00"),
+        reason="other hotel",
+        reservation_id=None,
+        created_by_user_id=None,
+    )
+    db.commit()
+
+    history = list_stock_movements(db, hotel_id=1, item_id=item.id, limit=20)
+
+    assert [movement.id for movement in history] == [latest.id, first.id]
+    assert [movement.id for movement in list_stock_movements(db, hotel_id=1, item_id=None, limit=1)] == [latest.id]
 
 
 def test_low_stock_items_are_hotel_scoped(db):

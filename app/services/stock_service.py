@@ -176,6 +176,23 @@ def register_movement(
     return movement
 
 
+def list_stock_movements(
+    db: Session,
+    *,
+    hotel_id: int,
+    item_id: int | None = None,
+    limit: int = 50,
+) -> list[StockMovement]:
+    """Return the newest auditable inventory movements for one hotel."""
+
+    if limit < 1:
+        raise StockError("Stock movement history limit must be positive")
+    query = db.query(StockMovement).filter(StockMovement.hotel_id == hotel_id)
+    if item_id is not None:
+        query = query.filter(StockMovement.item_id == item_id)
+    return query.order_by(StockMovement.created_at.desc(), StockMovement.id.desc()).limit(limit).all()
+
+
 def current_stock(db: Session, *, hotel_id: int, item_id: int) -> Decimal:
     _get_item(db, hotel_id=hotel_id, item_id=item_id)
     signed_quantity = case(
