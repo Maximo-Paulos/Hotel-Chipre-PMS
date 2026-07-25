@@ -299,6 +299,7 @@
       "frontend/e2e/business-journey.spec.ts",
       "frontend/e2e/guest-companion-journey.spec.ts",
       "frontend/e2e/master_admin.spec.ts",
+      "frontend/e2e/preview-host-routing.spec.ts",
       "frontend/e2e/rate-calendar.spec.ts",
       "frontend/e2e/reports-error-state.spec.ts",
       "frontend/e2e/reservation-charge-journey.spec.ts",
@@ -776,10 +777,10 @@
     ],
     "video": []
   },
-  "total_files": 767,
-  "total_words": 511876,
+  "total_files": 768,
+  "total_words": 512224,
   "needs_graph": true,
-  "warning": "Large corpus: 767 files · ~511,876 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
+  "warning": "Large corpus: 768 files · ~512,224 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
   "skipped_sensitive": [
     "alembic/versions/20260408_security_tokens.py",
     "app/adapters/memory_tokens.py",
@@ -793,7 +794,7 @@
   "graphifyignore_patterns": 60,
   "git": {
     "source_owner": "git",
-    "source_hash": "d1dbe7fc01722cf6c994bb607ea9b247223e4109",
+    "source_hash": "121ec1a9e8d49128c2f2d8027a56e0a65f72ffc1",
     "branches": [
       "codex/feature/agent-ops-knowledge",
       "codex/feature/pms-e2e-scale-hardening",
@@ -810,9 +811,9 @@
     "source": "cli",
     "root": ".",
     "git_root": ".",
-    "head": "d1dbe7fc01722cf6c994bb607ea9b247223e4109",
+    "head": "121ec1a9e8d49128c2f2d8027a56e0a65f72ffc1",
     "candidate_count": null,
-    "included_count": 767,
+    "included_count": 768,
     "excluded_untracked_count": 0,
     "excluded_ignored_count": 0,
     "excluded_sensitive_count": 8,

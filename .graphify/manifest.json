@@ -1100,8 +1100,8 @@
     "hash": "70ea4197fe8494bac4fc09ce0bd4dfb2"
   },
   "frontend/playwright.config.ts": {
-    "mtime": 1784913630593.293,
-    "hash": "334856a30a70212564598d5470b48ad4"
+    "mtime": 1784947736730.105,
+    "hash": "90e438adf957f38891a0b1b6220d70ec"
   },
   "frontend/src/App.tsx": {
     "mtime": 1784862144901.0059,
@@ -1264,8 +1264,8 @@
     "hash": "57a89ac45220ec4f0caff2474b93b1f4"
   },
   "frontend/src/config/publicUrls.ts": {
-    "mtime": 1784862144903.44,
-    "hash": "7f22ce21b53de1939d720281f5585b27"
+    "mtime": 1784947603120.6606,
+    "hash": "dfe5273457141f157d2c923675d067bf"
   },
   "frontend/src/content/integrationHelp.ts": {
     "mtime": 1784862144903.5195,
@@ -3360,8 +3360,8 @@
     "hash": "c249391e5ad55f9d8b4f876690cc2d5d"
   },
   "docs/qa/2026-07-24-pms-e2e-status.md": {
-    "mtime": 1784945727012.9216,
-    "hash": "9de7bdbb917547decdae43e932904fd7"
+    "mtime": 1784948185477.102,
+    "hash": "d1691a8c7a4a7461b7813c898e34ed6a"
   },
   "frontend/e2e/business-journey.spec.ts": {
     "mtime": 1784904324073.8352,
@@ -3574,5 +3574,9 @@
   "tests/test_normalize_graphify_portability.py": {
     "mtime": 1784945238140.6448,
     "hash": "f7ba2484b7a09c81069f711a33ec4b6e"
+  },
+  "frontend/e2e/preview-host-routing.spec.ts": {
+    "mtime": 1784947898493.1187,
+    "hash": "66ec530473609b229ecdc6fd4537f273"
   }
 }
