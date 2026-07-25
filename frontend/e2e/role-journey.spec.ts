@@ -124,3 +124,18 @@ test("manager keeps laundry batch creation", async ({ page }) => {
   await expect(main.getByRole("heading", { name: "Lavanderia", exact: true })).toBeVisible();
   await expect(main.getByRole("button", { name: "Crear lote" })).toBeVisible();
 });
+
+// PERMISSION_STOCK_ADJUST is owner/co_owner only; manager has PERMISSION_STOCK_OPERATE
+// (in/out movements) but not adjustments (see _ensure_adjustment_permission in
+// app/api/stock.py). StockPage offered the "Ajuste" movement-type option to
+// manager regardless, which always 403s on submit.
+test("manager does not see the stock adjustment option, only in/out movements", async ({ page }) => {
+  const manager = personas.find((persona) => persona.label === "manager")!;
+  await login(page, manager);
+  await page.goto("/operacion/stock");
+
+  const movementGroup = page.getByRole("group", { name: "Acción de inventario" });
+  await expect(movementGroup.getByRole("button", { name: /^Ingreso/ })).toBeVisible();
+  await expect(movementGroup.getByRole("button", { name: /^Egreso/ })).toBeVisible();
+  await expect(movementGroup.getByRole("button", { name: /^Ajuste/ })).toHaveCount(0);
+});
