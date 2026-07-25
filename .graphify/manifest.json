@@ -984,8 +984,8 @@
     "hash": "25edc81baf3396843737e4debfb02910"
   },
   "app/services/payment_service.py": {
-    "mtime": 1784890395103.1372,
-    "hash": "2ef75e67ab1862450bbe076299517abb"
+    "mtime": 1784970850990.8337,
+    "hash": "7e65de2319e6faef9d4b11ce30d36686"
   },
   "app/services/payment_webhook_service.py": {
     "mtime": 1784862144885.9111,
@@ -1712,8 +1712,8 @@
     "hash": "27b54fefb8fa644be7ec405f6ea62318"
   },
   "tests/test_cash_register_service.py": {
-    "mtime": 1784871895982.7485,
-    "hash": "ea010c47412c2f1c5efb7027219ea19e"
+    "mtime": 1784971351702.7273,
+    "hash": "b2cefb29da0f158bb4bb7aef32df46b5"
   },
   "tests/test_cassandra_timeseries.py": {
     "mtime": 1784862144930.471,
@@ -3504,8 +3504,8 @@
     "hash": "41a3484101e54b075b62140487908d6b"
   },
   "tests/test_payment_api_idempotency.py": {
-    "mtime": 1784890091762.8228,
-    "hash": "9cb4abce74c620496562e8813f25b0e9"
+    "mtime": 1784971145035.0552,
+    "hash": "e0ae8b141515e93f7a89adf07fd11713"
   },
   "frontend/e2e/role-journey.spec.ts": {
     "mtime": 1784965931685.4329,
