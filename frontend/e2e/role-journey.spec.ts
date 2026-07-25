@@ -74,3 +74,29 @@ for (const persona of personas) {
     await expect(page.getByRole("heading", { name: persona.allowedHeading })).toBeVisible();
   });
 }
+
+// The "Habitaciones" nav link is shown to every operational role, but the backend
+// only lets owner/co_owner/manager mutate room status or room blocks
+// (require_roles / PERMISSION_ROOM_BLOCK). Reception and housekeeping must not be
+// offered controls that always fail; they should see room state as read-only.
+for (const persona of personas) {
+  const canManageRooms = persona.label === "manager";
+
+  test(`${persona.label} room controls on /habitaciones match its permission`, async ({ page }) => {
+    await login(page, persona);
+    await page.goto("/habitaciones");
+    // Scope to <main>: the header's hotel switcher also renders a <select>,
+    // which is unrelated to per-room permission controls.
+    const main = page.locator("main");
+    await expect(main.getByRole("heading", { name: "Habitaciones", exact: true })).toBeVisible();
+    await expect(main.locator("p", { hasText: "Hab. 101" })).toBeVisible();
+
+    if (canManageRooms) {
+      await expect(main.locator("select").first()).toBeVisible();
+      await expect(main.getByRole("button", { name: /Crear bloqueo/ })).toBeVisible();
+    } else {
+      await expect(main.locator("select")).toHaveCount(0);
+      await expect(main.getByRole("button", { name: /Crear bloqueo/ })).toHaveCount(0);
+    }
+  });
+}
