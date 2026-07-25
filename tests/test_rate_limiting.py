@@ -8,7 +8,7 @@ from sqlalchemy.pool import StaticPool
 from app.main import app as fastapi_app
 from app.database import Base
 import app.models  # noqa: F401
-from app.adapters.rate_limiter import verify_request_limiter, reset_request_limiter, invite_limiter
+from app.adapters.rate_limiter import verify_request_limiter, reset_request_limiter, invite_limiter, code_guess_limiter
 from app.services.security import hash_password
 from app.models.user import User
 from app.models.hotel_config import HotelConfiguration
@@ -126,6 +126,66 @@ def test_request_verify_rate_limited(client_with_db):
     assert r1.status_code == 200
     assert r2.status_code == 200
     assert r3.status_code == 429
+
+
+def test_verify_email_code_guessing_is_rate_limited(client_with_db):
+    """Guessing the 6-digit verification code must itself be throttled, not
+    just requests for a new code."""
+    client, db = client_with_db
+    email = "guess-verify@test.com"
+    user = User(email=email, password_hash=hash_password("pw"), role="owner", is_verified=False, is_active=True)
+    db.add(user)
+    db.commit()
+
+    code_guess_limiter.limit = 3
+    code_guess_limiter.reset("email_verification:" + email, db=db)
+    db.commit()
+    try:
+        responses = [
+            client.post("/api/auth/verify-email", json={"email": email, "code": "000000"})
+            for _ in range(4)
+        ]
+    finally:
+        code_guess_limiter.reset("email_verification:" + email, db=db)
+        db.commit()
+
+    assert [r.status_code for r in responses[:3]] == [400, 400, 400]
+    assert responses[3].status_code == 429
+
+
+def test_reset_password_code_guessing_is_rate_limited_and_shared_with_validate(client_with_db):
+    """validate-reset (no-op check) and reset-password (consumes the code)
+    guess the same password_reset code, so they must share one attempt
+    budget - otherwise validate-reset alone lets an attacker brute force
+    the code for free before ever touching reset-password."""
+    client, db = client_with_db
+    email = "guess-reset@test.com"
+    user = User(email=email, password_hash=hash_password("pw"), role="owner", is_verified=True, is_active=True)
+    db.add(user)
+    db.commit()
+
+    code_guess_limiter.limit = 3
+    code_guess_limiter.reset("password_reset:" + email, db=db)
+    db.commit()
+    try:
+        r1 = client.post("/api/auth/validate-reset", json={"email": email, "code": "000000"})
+        r2 = client.post("/api/auth/validate-reset", json={"email": email, "code": "000000"})
+        r3 = client.post(
+            "/api/auth/reset-password",
+            json={"email": email, "code": "000000", "new_password": "Demo1234!"},
+        )
+        r4 = client.post(
+            "/api/auth/reset-password",
+            json={"email": email, "code": "000000", "new_password": "Demo1234!"},
+        )
+    finally:
+        code_guess_limiter.reset("password_reset:" + email, db=db)
+        db.commit()
+
+    assert r1.status_code == 200
+    assert r2.status_code == 200
+    assert r3.status_code == 400
+    assert r4.status_code == 429
 
 
 def test_invite_rate_limited(authed_client):

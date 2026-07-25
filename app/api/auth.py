@@ -10,7 +10,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.adapters.memory_tokens import token_store
-from app.adapters.rate_limiter import login_limiter, reset_request_limiter, verify_request_limiter
+from app.adapters.rate_limiter import (
+    code_guess_limiter,
+    login_limiter,
+    reset_request_limiter,
+    verify_request_limiter,
+)
 from app.database import get_db
 from app.models.user import User
 from app.schemas.auth import (
@@ -209,9 +214,16 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
 
 @router.post("/verify-email", response_model=AuthResponse)
 def verify_email(payload: VerifyCodeRequest, db: Session = Depends(get_db)):
+    key = payload.email.lower()
+    if not code_guess_limiter.allow(f"email_verification:{key}", db=db):
+        db.commit()
+        raise HTTPException(status_code=429, detail="Demasiados intentos. Espera unos minutos.")
+    db.commit()
+
     user = db.query(User).filter(User.email.ilike(payload.email)).first()
     if not user or not token_store.verify(db, "email_verification", payload.email, payload.code):
         raise HTTPException(status_code=400, detail="Codigo invalido o expirado")
+    code_guess_limiter.reset(f"email_verification:{key}", db=db)
     user.is_verified = True
     user.last_login = datetime.now(timezone.utc)
     db.add(user)
@@ -251,15 +263,30 @@ def request_reset(payload: RequestCode, db: Session = Depends(get_db)):
 @router.post("/validate-reset", response_model=ResetCodeValidationResponse)
 def validate_reset(payload: VerifyCodeRequest, db: Session = Depends(get_db)):
     """Validate reset code without changing password (paso previo en UI)."""
+    key = payload.email.lower()
+    # Shares its attempt budget with /reset-password: both guess the same
+    # password_reset code, so an attacker could otherwise brute force it here
+    # for free (this endpoint never consumes the code) before cashing it in.
+    if not code_guess_limiter.allow(f"password_reset:{key}", db=db):
+        db.commit()
+        raise HTTPException(status_code=429, detail="Demasiados intentos. Espera unos minutos.")
+    db.commit()
     is_valid = token_store.verify(db, "password_reset", payload.email, payload.code, consume=False)
     return ResetCodeValidationResponse(valid=is_valid)
 
 
 @router.post("/reset-password", response_model=AuthResponse)
 def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db)):
+    key = payload.email.lower()
+    if not code_guess_limiter.allow(f"password_reset:{key}", db=db):
+        db.commit()
+        raise HTTPException(status_code=429, detail="Demasiados intentos. Espera unos minutos.")
+    db.commit()
+
     user = db.query(User).filter(User.email.ilike(payload.email)).first()
     if not user or not token_store.verify(db, "password_reset", payload.email, payload.code):
         raise HTTPException(status_code=400, detail="Codigo invalido o expirado")
+    code_guess_limiter.reset(f"password_reset:{key}", db=db)
     user.password_hash = hash_password(payload.new_password)
     user.is_verified = True
     user.last_login = datetime.now(timezone.utc)

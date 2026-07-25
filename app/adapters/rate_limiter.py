@@ -85,3 +85,10 @@ login_limiter = SimpleRateLimiter("login")
 verify_request_limiter = SimpleRateLimiter("email_verification_request", limit=3, window_seconds=15 * 60)
 reset_request_limiter = SimpleRateLimiter("password_reset", limit=3, window_seconds=15 * 60)
 invite_limiter = SimpleRateLimiter("invite_user", limit=5, window_seconds=60 * 60)
+
+# Throttles guesses of the 6-digit one-time codes themselves (as opposed to
+# how often a new code can be requested). Without this, /verify-email,
+# /validate-reset and /reset-password had no attempt limit at all, so a code
+# could be brute-forced within its TTL. Keyed by "{token_type}:{email}" so
+# validate-reset and reset-password share a budget against the same code.
+code_guess_limiter = SimpleRateLimiter("code_guess", limit=8, window_seconds=15 * 60)
