@@ -123,8 +123,8 @@ test("owner completes the core reservation journey through the UI", async ({ pag
   const reservationTable = page.locator("table").filter({ hasText: "Código" });
   const reservationRow = reservationTable.locator("tbody tr").filter({ hasText: guestLastName });
   await expect(reservationRow).toHaveCount(1);
-
-  await reservationRow.getByRole("button", { name: "Editar", exact: true }).click();
+  await reservationRow.getByRole("button", { name: "Check-in", exact: true }).click();
+  await expect(page.getByText(/Saldo pendiente de .*Cobralo con "Pago total"/)).toBeVisible();
   const editModal = page.locator("div.fixed").filter({ hasText: "Pagos y balance" });
   const editForm = editModal.locator("form").filter({ hasText: "Pagos y balance" });
   await expect(editForm.getByText("Resumen financiero y acciones rápidas.", { exact: true })).toBeVisible();
@@ -176,6 +176,7 @@ test("owner completes the core reservation journey through the UI", async ({ pag
   await editModal.getByRole("button", { name: "Cerrar", exact: true }).click();
 
   const paidRow = reservationTable.locator("tbody tr").filter({ hasText: guestLastName });
+  await expect(paidRow.getByRole("button", { name: "Check-in", exact: true })).toBeEnabled();
   await paidRow.getByRole("button", { name: "Check-in", exact: true }).click();
   await expect(page.getByText("Check-in registrado", { exact: true })).toBeVisible();
 

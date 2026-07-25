@@ -1192,8 +1192,8 @@
     "hash": "ef6f8c58b53e1909c0844e94c1659942"
   },
   "frontend/src/api/reservations.ts": {
-    "mtime": 1784908264653.234,
-    "hash": "127dd135bdd5dab238852aebdcae5697"
+    "mtime": 1784958956322.333,
+    "hash": "1958314117d1cc478df1adbfc27dd09a"
   },
   "frontend/src/api/roomBlocks.ts": {
     "mtime": 1784862144902.3428,
@@ -1336,8 +1336,8 @@
     "hash": "b9fc3178cad7e0fc8e1c321d2fe82c46"
   },
   "frontend/src/hooks/useReservations.ts": {
-    "mtime": 1784868950215.603,
-    "hash": "b864bfa483400ab2571e978edd7c10d8"
+    "mtime": 1784958956322.7002,
+    "hash": "ea635b770d0cac43db3614c1f177104c"
   },
   "frontend/src/hooks/useRoomBlocks.ts": {
     "mtime": 1784862144904.3977,
@@ -1432,8 +1432,8 @@
     "hash": "38679b49521cf22a610b4cc9b5f9c624"
   },
   "frontend/src/views/protected/DashboardPage.tsx": {
-    "mtime": 1784864400121.8455,
-    "hash": "b9bcdad98753dc86c36b586a44d26843"
+    "mtime": 1784958956323.0364,
+    "hash": "b1b90d63b15321c4585085fc93703620"
   },
   "frontend/src/views/protected/GuestsPage.tsx": {
     "mtime": 1784862144906.0164,
@@ -1452,8 +1452,8 @@
     "hash": "2d960effb79d50cb5debf39038a49702"
   },
   "frontend/src/views/protected/ReservationsPage.tsx": {
-    "mtime": 1784908325046.7131,
-    "hash": "0a2c89300a55ac00f43ed1787fb7facb"
+    "mtime": 1784958956323.8025,
+    "hash": "0e6dd0506ed357ee14fb005691c2fdcc"
   },
   "frontend/src/views/protected/RoomsPage.tsx": {
     "mtime": 1784862144906.3872,
@@ -3360,12 +3360,12 @@
     "hash": "62dbb2f1b3275714d02208beba14f74c"
   },
   "docs/qa/2026-07-24-pms-e2e-status.md": {
-    "mtime": 1784957616944.9824,
-    "hash": "119148ac4b4b3b2b9c0e5d019af7e06b"
+    "mtime": 1784958620512.421,
+    "hash": "a2d0859ab2b2a089193fa7dc9a88acf7"
   },
   "frontend/e2e/business-journey.spec.ts": {
-    "mtime": 1784958009665.629,
-    "hash": "a76937e857f24b35c75d3a87a75cbd86"
+    "mtime": 1784958956319.2368,
+    "hash": "e39e2be0d1b49f3bad07b08d2e21d297"
   },
   "alembic/versions/20260724_allocation_enum_values.py": {
     "mtime": 1784868257342.7349,

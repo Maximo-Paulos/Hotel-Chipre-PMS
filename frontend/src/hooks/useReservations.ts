@@ -205,6 +205,8 @@ export const reservationStatusLabel = (status: ReservationStatus): string => {
       return "Seña";
     case "fully_paid":
       return "Pago completo";
+    case "pre_check_in":
+      return "Pre check-in";
     case "checked_in":
       return "Check-in";
     case "checked_out":

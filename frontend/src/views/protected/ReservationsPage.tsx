@@ -104,6 +104,7 @@ const statusConfig: Record<ReservationStatus, { label: string; className: string
   pending: { label: "Pendiente", className: "bg-slate-100 text-slate-800" },
   deposit_paid: { label: "Seña", className: "bg-amber-100 text-amber-800" },
   fully_paid: { label: "Pago completo", className: "bg-emerald-100 text-emerald-800" },
+  pre_check_in: { label: "Pre check-in", className: "bg-teal-100 text-teal-800" },
   checked_in: { label: "Check-in", className: "bg-emerald-200 text-emerald-900" },
   checked_out: { label: "Check-out", className: "bg-sky-100 text-sky-800" },
   cancelled: { label: "Cancelada", className: "bg-rose-100 text-rose-800" },
@@ -640,7 +641,8 @@ export function ReservationsPage() {
   };
 
   const canCancel = (status: ReservationStatus) => status !== "cancelled" && status !== "checked_out" && status !== "checked_in";
-  const canCheckIn = (status: ReservationStatus) => ["pending", "deposit_paid", "fully_paid"].includes(status);
+  const canCheckIn = (status: ReservationStatus) => ["pending", "deposit_paid", "fully_paid", "pre_check_in"].includes(status);
+  const isCheckInReady = (status: ReservationStatus) => ["fully_paid", "pre_check_in"].includes(status);
   const canCheckOut = (status: ReservationStatus) => status === "checked_in";
   const canNoShow = (status: ReservationStatus) => ["pending", "deposit_paid", "fully_paid"].includes(status);
   const canMoveRoom = (status: ReservationStatus) => !["cancelled", "checked_out", "no_show"].includes(status);
@@ -652,11 +654,23 @@ export function ReservationsPage() {
       onError: (err: unknown) => showToast("error", err instanceof Error ? err.message : "No se pudo cancelar")
     });
 
-  const handleCheckIn = (id: number) =>
-    checkInMutation.mutate(id, {
+  const handleCheckIn = (reservation: Reservation) => {
+    if (!isCheckInReady(reservation.status)) {
+      const balance = reservation.balance_due ?? Math.max(0, reservation.total_amount - reservation.amount_paid);
+      openEdit(reservation);
+      showToast(
+        "info",
+        balance > 0.01
+          ? `Saldo pendiente de ${formatMoney(balance, normalizeCurrencyCode(reservation.currency_code))}. Cobralo con "Pago total" (queda en la caja) y luego hacé el check-in.`
+          : "El pago todavía no se confirmó. Revisá los pagos antes de hacer el check-in."
+      );
+      return;
+    }
+    checkInMutation.mutate(reservation.id, {
       onSuccess: () => showToast("success", "Check-in registrado"),
       onError: (err: unknown) => showToast("error", err instanceof Error ? err.message : "No se pudo hacer check-in")
     });
+  };
 
   const handleCheckOut = (reservation: Reservation) => {
     // Cierra el loop cobro→estadía→egreso: si queda saldo, llevamos al operador a
@@ -1405,6 +1419,7 @@ export function ReservationsPage() {
                 <option value="pending">Pendiente</option>
                 <option value="deposit_paid">Seña</option>
                 <option value="fully_paid">Pago completo</option>
+                <option value="pre_check_in">Pre check-in</option>
                 <option value="checked_in">Check-in</option>
                 <option value="checked_out">Check-out</option>
                 <option value="cancelled">Cancelada</option>
@@ -1777,7 +1792,12 @@ export function ReservationsPage() {
                         <button
                           type="button"
                           disabled={!canCheckIn(reservation.status) || checkInMutation.isPending || subscriptionBlocked}
-                          onClick={() => handleCheckIn(reservation.id)}
+                          onClick={() => handleCheckIn(reservation)}
+                          title={
+                            isCheckInReady(reservation.status)
+                              ? "Registrar check-in"
+                              : "Cobrar el saldo antes del check-in"
+                          }
                           className="rounded-lg border border-emerald-200 px-2 py-1 text-emerald-700 hover:border-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           Check-in
@@ -2134,6 +2154,7 @@ export function ReservationsPage() {
                     <option value="pending">Pendiente</option>
                     <option value="deposit_paid">Seña</option>
                     <option value="fully_paid">Pago completo</option>
+                    <option value="pre_check_in">Pre check-in</option>
                     <option value="checked_in">Check-in</option>
                     <option value="checked_out">Check-out</option>
                     <option value="cancelled">Cancelada</option>

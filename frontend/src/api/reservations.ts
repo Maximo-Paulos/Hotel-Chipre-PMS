@@ -4,6 +4,7 @@ export type ReservationStatus =
   | "pending"
   | "deposit_paid"
   | "fully_paid"
+  | "pre_check_in"
   | "checked_in"
   | "checked_out"
   | "cancelled"

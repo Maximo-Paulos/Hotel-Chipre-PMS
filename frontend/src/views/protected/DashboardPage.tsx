@@ -14,6 +14,8 @@ const statusClass = (status: ReservationStatus) => {
       return "bg-sky-100 text-sky-800";
     case "fully_paid":
       return "bg-slate-100 text-slate-800";
+    case "pre_check_in":
+      return "bg-teal-100 text-teal-800";
     case "deposit_paid":
       return "bg-amber-100 text-amber-800";
     case "pending":

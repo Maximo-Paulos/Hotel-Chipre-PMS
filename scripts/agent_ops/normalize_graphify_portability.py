@@ -21,7 +21,7 @@ INSTRUCTION_DIR_NAMES = (
     "description-instructions",
     "label-instructions",
 )
-PATTERN = re.compile(r'("label"\s*:\s*")([^"\\]*)(")')
+PATTERN = re.compile(r'("(?:label|message_summary)"\s*:\s*")([^"\\]*)(")')
 
 
 def normalize_instruction_paths() -> int:
