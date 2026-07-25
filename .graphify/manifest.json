@@ -3588,11 +3588,11 @@
     "hash": "a91b843e3f89243323f46ca525eece2f"
   },
   "app/scripts/repair_cash_handoff_schema.py": {
-    "mtime": 1784955749192.2788,
-    "hash": "f6a1398edb600729d145c6b50e922476"
+    "mtime": 1784956280359.3132,
+    "hash": "ff4a4785fe7a0fa1e91a2a25dbd47f06"
   },
   "tests/test_repair_cash_handoff_schema_script.py": {
-    "mtime": 1784955732003.3972,
-    "hash": "743bf56f98a30a7b5142020393d7694b"
+    "mtime": 1784956236687.055,
+    "hash": "a540ab98ed77e893e9a6bbe25b4fd810"
   }
 }

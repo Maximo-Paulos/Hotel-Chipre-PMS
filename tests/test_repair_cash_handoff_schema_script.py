@@ -38,6 +38,12 @@ def test_repair_adds_missing_cash_handoff_schema_objects():
     assert "CREATE TABLE IF NOT EXISTS cash_custody_handoffs" in statements
     assert "fk_cash_custody_handoffs_hotel_close_report" in statements
     assert "tenant_isolation_cash_custody_handoffs" in statements
+    assert "CREATE TABLE IF NOT EXISTS payment_proofs" in statements
+    assert "fk_payment_proofs_hotel_transaction" in statements
+    assert "tenant_isolation_payment_proofs" in statements
+    assert "CREATE TABLE IF NOT EXISTS payment_proof_blobs" in statements
+    assert "fk_payment_proof_blobs_hotel_proof" in statements
+    assert "tenant_isolation_payment_proof_blobs" in statements
 
 
 def test_repair_refuses_non_postgres_targets():
