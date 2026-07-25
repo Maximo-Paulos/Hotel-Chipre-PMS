@@ -1,13 +1,13 @@
 # Graph Report - .  (2026-07-25)
 
 ## Corpus Check
-- Large corpus: 792 files · ~534,940 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.
+- Large corpus: 792 files · ~535,113 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.
 
 ## Summary
-- 7586 nodes · 26282 edges · 314 communities detected
+- 7591 nodes · 26295 edges · 314 communities detected
 - Extraction: 61% EXTRACTED · 39% INFERRED · 0% AMBIGUOUS · INFERRED: 10135 edges (avg confidence: 0.5)
 - Token cost: 0 input · 0 output
-- Edge kinds: uses: 10135 · contains: 4597 · calls: 3475 · MODIFIES: 2096 · ON_BRANCH: 1720 · rationale_for: 1268 · imports: 761 · imports_from: 601 · method: 593 · inherits: 535 · PARENT_OF: 501
+- Edge kinds: uses: 10135 · contains: 4597 · calls: 3475 · MODIFIES: 2099 · ON_BRANCH: 1725 · rationale_for: 1268 · imports: 761 · imports_from: 601 · method: 593 · inherits: 535 · PARENT_OF: 506
 
 
 ## Input Scope
@@ -17,7 +17,7 @@
 - Excluded: 0 untracked · 0 ignored · 9 sensitive · 0 missing committed
 
 ## Graph Freshness
-- Built from Git commit: `3574c6f`
+- Built from Git commit: `45be255`
 - Compare this hash to `git rev-parse HEAD` before trusting freshness-sensitive graph output.
 ## God Nodes (most connected - your core abstractions)
 1. `Reservation` - 656 edges
@@ -51,7 +51,7 @@ Nodes (326): availability(), price_quote(), FastAPI routes for Booking managemen
 
 ### Community 1 - "Community 1"
 Cohesion: 0.02
-Nodes (268): claude/feature/pms-roles-housekeeping-qa, codex/feature/pms-e2e-scale-hardening, 00bf891 Explain analytics errors and add retry action, 0255d4f Normalize Graphify artifact paths, 02f4bb4 Record Apple WebKit business matrix, 03832c5 Run onboarding journey on WebKit, 0391f8f Fix flaky detached-node false positive in mobile touch-target check, 03ec9de Refresh Graphify after Fase 9 role QA fixes (+260 more)
+Nodes (273): claude/feature/pms-roles-housekeeping-qa, codex/feature/pms-e2e-scale-hardening, 00bf891 Explain analytics errors and add retry action, 0255d4f Normalize Graphify artifact paths, 02f4bb4 Record Apple WebKit business matrix, 03832c5 Run onboarding journey on WebKit, 0391f8f Fix flaky detached-node false positive in mobile touch-target check, 03ec9de Refresh Graphify after Fase 9 role QA fixes (+265 more)
 
 ### Community 2 - "Community 2"
 Cohesion: 0.01
