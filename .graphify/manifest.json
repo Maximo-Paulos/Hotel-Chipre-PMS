@@ -736,8 +736,8 @@
     "hash": "f3f112757ae3676ee43734231e6fa98c"
   },
   "app/schemas/reservation_operations.py": {
-    "mtime": 1785020375985.01,
-    "hash": "8375fd0945b7e2fca9c159f3c13d9247"
+    "mtime": 1785021599570.448,
+    "hash": "bf1a6d7d464764f58709723103d08536"
   },
   "app/schemas/room.py": {
     "mtime": 1784862144881.7388,
@@ -1012,8 +1012,8 @@
     "hash": "9d57bf31375c966341644bfe436e8012"
   },
   "app/services/reservation_action_service.py": {
-    "mtime": 1785013230974.6597,
-    "hash": "238574fadef5367987066c86bb00e898"
+    "mtime": 1785021596059.4998,
+    "hash": "3cc04f05f3567b51e24617f879fb765d"
   },
   "app/services/reservation_operations_service.py": {
     "mtime": 1785020350517.4036,
@@ -1088,16 +1088,16 @@
     "hash": "943d171579f4a4fe0c36a72355ebeafd"
   },
   "frontend/e2e/rate-calendar.spec.ts": {
-    "mtime": 1784862144897.7493,
-    "hash": "efd8e6db82a493985c8df57c1cd3ef47"
+    "mtime": 1785022543274.7004,
+    "hash": "984df621106c6380bd37da47bfa4e3cc"
   },
   "frontend/e2e/smoke.spec.ts": {
     "mtime": 1784948805923.044,
     "hash": "013b7f24e73bfa1cec329176bdc11bf3"
   },
   "frontend/e2e/v72-pages.spec.ts": {
-    "mtime": 1784866834505.0403,
-    "hash": "70ea4197fe8494bac4fc09ce0bd4dfb2"
+    "mtime": 1785021796309.497,
+    "hash": "91cfeb79e5359e056d4848e7a2ec60f2"
   },
   "frontend/playwright.config.ts": {
     "mtime": 1784990366671.7307,
@@ -1192,8 +1192,8 @@
     "hash": "ef6f8c58b53e1909c0844e94c1659942"
   },
   "frontend/src/api/reservations.ts": {
-    "mtime": 1785020456343.6206,
-    "hash": "c17b783847f5d468069cf2fd657957b1"
+    "mtime": 1785021607247.6096,
+    "hash": "113e1bc758e85f6163c09134fec0ae9b"
   },
   "frontend/src/api/roomBlocks.ts": {
     "mtime": 1784862144902.3428,
@@ -1404,8 +1404,8 @@
     "hash": "080f58a661cb1eb1b0f8ae7c84334f59"
   },
   "frontend/src/ui/AppShell.tsx": {
-    "mtime": 1785013665382.882,
-    "hash": "d13d64449ca0c2173220a68391294110"
+    "mtime": 1785021738902.4429,
+    "hash": "6a8e4671b55fccfb52eaa3d6fe2b147c"
   },
   "frontend/src/ui/HotelSelector.tsx": {
     "mtime": 1784942811903.0242,
@@ -1432,8 +1432,8 @@
     "hash": "38679b49521cf22a610b4cc9b5f9c624"
   },
   "frontend/src/views/protected/DashboardPage.tsx": {
-    "mtime": 1785009944903.0715,
-    "hash": "9a44103df23aa0c58b24b1536c40cfca"
+    "mtime": 1785021628371.663,
+    "hash": "afac69e5d44b914d6b0fc1c399959ebe"
   },
   "frontend/src/views/protected/GuestsPage.tsx": {
     "mtime": 1785007678222.607,
@@ -3364,8 +3364,8 @@
     "hash": "6c6ac15ede5f33ded16c944491cd73d7"
   },
   "frontend/e2e/business-journey.spec.ts": {
-    "mtime": 1785017227999.93,
-    "hash": "f5a07553ee3effaaf136e91396f4f36d"
+    "mtime": 1785021777169.8762,
+    "hash": "5bcb120a691d705d6048ce151c76f389"
   },
   "alembic/versions/20260724_allocation_enum_values.py": {
     "mtime": 1784868257342.7349,
@@ -3508,8 +3508,8 @@
     "hash": "e0ae8b141515e93f7a89adf07fd11713"
   },
   "frontend/e2e/role-journey.spec.ts": {
-    "mtime": 1784965931685.4329,
-    "hash": "0a6f4c3275a1655a8495875facc67318"
+    "mtime": 1785021809192.7224,
+    "hash": "7f717ce6b9a7608eeb0789efd4333bff"
   },
   "frontend/e2e/auth-onboarding-journey.spec.ts": {
     "mtime": 1784968317982.268,
@@ -3520,8 +3520,8 @@
     "hash": "e9292d1b4a294b78e389bff4f25294b6"
   },
   "frontend/e2e/analytics-error-state.spec.ts": {
-    "mtime": 1784897454225.2747,
-    "hash": "a4f2e89b6559f35a1a90b7001558bd00"
+    "mtime": 1785021800845.6292,
+    "hash": "665d005f0c2728ad69570c63369ada84"
   },
   "frontend/e2e/reservation-quote-error.spec.ts": {
     "mtime": 1784899733271.752,
@@ -3676,12 +3676,12 @@
     "hash": "b1477cc78ff12f13b11fed7e238974e0"
   },
   "frontend/e2e/reservation-drawer-global.spec.ts": {
-    "mtime": 1785009944902.6145,
-    "hash": "3dcbb64d67201ec5748c2dbbcccf0c15"
+    "mtime": 1785022270121.2402,
+    "hash": "832aa66b2e2c77a108bf86332a27ed30"
   },
   "frontend/src/components/ReservationDetailDrawer.tsx": {
-    "mtime": 1785016205849.2534,
-    "hash": "8f25e6ee0c51d5b6d01f86f8eae82e55"
+    "mtime": 1785022265900.1213,
+    "hash": "d6ffddcddf0f52f3e57f143133f8c08a"
   },
   "frontend/src/components/ReservationGlobalSearch.tsx": {
     "mtime": 1785008566562.2659,
