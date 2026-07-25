@@ -358,6 +358,41 @@ def test_register_rejects_malformed_email(client_and_db, monkeypatch):
     assert db.query(User).filter(User.email == "not-an-email-at-all").first() is None
 
 
+def test_reset_password_revokes_previously_issued_tokens(client_and_db, fixed_code_patch, monkeypatch):
+    """
+    JWTs are stateless with no server-side blacklist, so a password reset -
+    the standard remediation after a suspected credential/token leak - must
+    itself invalidate tokens issued before the reset, or the compromised
+    session simply keeps working for up to JWT_EXPIRES_MINUTES regardless.
+    """
+    client, db, _session_factory = client_and_db
+    _configure_resend(monkeypatch, [])
+
+    register = _register_owner(client, "leaked@example.com")
+    old_token = register["access_token"]
+
+    verify = client.post(
+        "/api/auth/verify-email",
+        json={"email": "leaked@example.com", "code": "123456"},
+    )
+    assert verify.status_code == 200, verify.text
+
+    me_before = client.get("/api/auth/me", headers={"Authorization": f"Bearer {old_token}"})
+    assert me_before.status_code == 200, me_before.text
+
+    request_reset = client.post("/api/auth/request-reset", json={"email": "leaked@example.com"})
+    assert request_reset.status_code == 200, request_reset.text
+
+    reset = client.post(
+        "/api/auth/reset-password",
+        json={"email": "leaked@example.com", "code": "123456", "new_password": "Demo1234!"},
+    )
+    assert reset.status_code == 200, reset.text
+
+    me_after = client.get("/api/auth/me", headers={"Authorization": f"Bearer {old_token}"})
+    assert me_after.status_code == 401, me_after.text
+
+
 def test_self_registration_cannot_grant_platform_admin_role(client_and_db, fixed_code_patch, monkeypatch):
     """
     A guest self-registering must never end up with User.role="platform_admin"

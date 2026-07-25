@@ -108,6 +108,7 @@ def _build_auth_response(db: Session, user: User, requested_hotel_id: int | None
             "verified": user.is_verified,
             "hotel_id": hotel_id,
             "hotel_ids": hotel_ids,
+            "token_version": user.token_version or 0,
         },
     )
     return AuthResponse(
@@ -300,6 +301,8 @@ def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db))
     user.password_hash = hash_password(payload.new_password)
     user.is_verified = True
     user.last_login = datetime.now(timezone.utc)
+    # Revoke every token issued before this reset (see users.token_version).
+    user.token_version = (user.token_version or 0) + 1
     db.add(user)
     db.commit()
     db.refresh(user)

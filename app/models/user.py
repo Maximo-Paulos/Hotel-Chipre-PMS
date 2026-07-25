@@ -18,6 +18,10 @@ class User(Base):
     is_active = Column(Boolean, nullable=False, default=True)
     is_verified = Column(Boolean, nullable=False, default=False)
     role = Column(String(50), nullable=False, default="owner")
+    # Bumped whenever previously issued JWTs must be invalidated server-side
+    # (currently: password reset). JWTs are otherwise stateless with no
+    # blacklist, so this is the only revocation mechanism available.
+    token_version = Column(Integer, nullable=False, default=0, server_default="0")
     created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(
         DateTime,
