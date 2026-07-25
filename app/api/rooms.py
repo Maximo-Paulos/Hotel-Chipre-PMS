@@ -257,7 +257,7 @@ def create_room(
 @router.get("/", response_model=list[RoomRead])
 def list_rooms(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping")),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping", "receptionist")),
 ):
     return db.query(Room).filter(Room.hotel_id == context.hotel_id, Room.deleted_at.is_(None)).all()
 
@@ -268,7 +268,7 @@ def room_availability(
     check_in_date: date | None = None,
     check_out_date: date | None = None,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping")),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping", "receptionist")),
 ):
     """
     Simple availability helper. Returns a placeholder message if required
