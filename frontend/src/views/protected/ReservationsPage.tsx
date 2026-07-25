@@ -1,5 +1,5 @@
-import React, { useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
@@ -49,6 +49,12 @@ import { useRooms } from "../../hooks/useRooms";
 import { useSubscriptionStatus } from "../../hooks/useSubscription";
 import { useSession } from "../../state/session";
 import { formatMoney, normalizeCurrencyCode } from "../../utils/currency";
+import {
+  canCancelReservation,
+  canCheckInReservation,
+  canCheckOutReservation,
+  reservationStatusConfig
+} from "../../utils/reservationStatus";
 import ReservationStatCard from "../../components/StatCard";
 
 type FormState = {
@@ -100,16 +106,7 @@ const pricingPaymentMethodOptions: { value: PricingPaymentMethod; label: string 
   { value: "paypal", label: "PayPal" }
 ];
 
-const statusConfig: Record<ReservationStatus, { label: string; className: string }> = {
-  pending: { label: "Pendiente", className: "bg-slate-100 text-slate-800" },
-  deposit_paid: { label: "Seña", className: "bg-amber-100 text-amber-800" },
-  fully_paid: { label: "Pago completo", className: "bg-emerald-100 text-emerald-800" },
-  pre_check_in: { label: "Pre check-in", className: "bg-teal-100 text-teal-800" },
-  checked_in: { label: "Check-in", className: "bg-emerald-200 text-emerald-900" },
-  checked_out: { label: "Check-out", className: "bg-sky-100 text-sky-800" },
-  cancelled: { label: "Cancelada", className: "bg-rose-100 text-rose-800" },
-  no_show: { label: "No-show", className: "bg-violet-100 text-violet-800" }
-};
+const statusConfig = reservationStatusConfig;
 
 const priorityConfig: Record<ReservationPendingAction["priority"], { label: string; className: string }> = {
   critical: { label: "Crítica", className: "bg-rose-100 text-rose-800" },
@@ -494,6 +491,26 @@ export function ReservationsPage() {
     setFormOpen(true);
   };
 
+  // "Reserva rápida" (B1 global access) links here as /reservas?crear=1
+  // instead of duplicating this ~600-line create form as a standalone
+  // modal. Open it once on arrival and drop the flag so back/refresh
+  // doesn't keep reopening it.
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    if (searchParams.get("crear") === "1") {
+      openCreate();
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete("crear");
+          return next;
+        },
+        { replace: true }
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const openEdit = (reservation: Reservation) => {
     setEditing(reservation);
     setFormValues({
@@ -652,10 +669,10 @@ export function ReservationsPage() {
     }
   };
 
-  const canCancel = (status: ReservationStatus) => status !== "cancelled" && status !== "checked_out" && status !== "checked_in";
-  const canCheckIn = (status: ReservationStatus) => ["pending", "deposit_paid", "fully_paid", "pre_check_in"].includes(status);
+  const canCancel = canCancelReservation;
+  const canCheckIn = canCheckInReservation;
   const isCheckInReady = (status: ReservationStatus) => ["fully_paid", "pre_check_in"].includes(status);
-  const canCheckOut = (status: ReservationStatus) => status === "checked_in";
+  const canCheckOut = canCheckOutReservation;
   const canNoShow = (status: ReservationStatus) => ["pending", "deposit_paid", "fully_paid"].includes(status);
   const canMoveRoom = (status: ReservationStatus) => !["cancelled", "checked_out", "no_show"].includes(status);
   const canAddCharge = (status: ReservationStatus) => !["cancelled", "checked_out", "no_show"].includes(status);

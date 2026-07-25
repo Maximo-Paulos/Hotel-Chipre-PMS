@@ -201,6 +201,7 @@ export type ReservationFilters = {
   status?: ReservationStatus | "all" | "";
   fromDate?: string;
   toDate?: string;
+  search?: string;
 };
 
 export type ReservationPayload = {
@@ -277,6 +278,7 @@ const buildQueryString = (filters: ReservationFilters = {}) => {
   }
   if (filters.fromDate) params.set("from_date", filters.fromDate);
   if (filters.toDate) params.set("to_date", filters.toDate);
+  if (filters.search) params.set("search", filters.search);
   const qs = params.toString();
   return qs ? `?${qs}` : "";
 };

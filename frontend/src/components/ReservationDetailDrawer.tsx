@@ -1,0 +1,314 @@
+import { useState } from "react";
+
+import { ApiError } from "../api/client";
+import { type PaymentMethod } from "../api/payments";
+import { useReservation, useReservationMutations, useReservationOperationsSummary } from "../hooks/useReservations";
+import { usePaymentMutation, usePaymentSummary } from "../hooks/usePayments";
+import { formatMoney, normalizeCurrencyCode } from "../utils/currency";
+import { canCancelReservation, canCheckInReservation, canCheckOutReservation, reservationStatusConfig } from "../utils/reservationStatus";
+
+type Props = {
+  reservationId: number | null;
+  onClose: () => void;
+};
+
+const paymentMethodOptions: Array<{ value: PaymentMethod; label: string }> = [
+  { value: "cash", label: "Efectivo" },
+  { value: "bank_transfer", label: "Transferencia" },
+  { value: "mercado_pago", label: "Mercado Pago" },
+  { value: "credit_card", label: "Tarjeta de crédito" },
+  { value: "debit_card", label: "Tarjeta de débito" },
+  { value: "paypal", label: "PayPal" }
+];
+
+function guestFullName(guest?: { first_name: string; last_name: string } | null, fallbackId?: number) {
+  if (guest) return `${guest.first_name} ${guest.last_name}`.trim();
+  return fallbackId ? `Huésped #${fallbackId}` : "Sin huésped";
+}
+
+export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
+
+  const reservationQuery = useReservation(reservationId ?? undefined);
+  const operationsQuery = useReservationOperationsSummary(reservationId ?? undefined);
+  const summaryQuery = usePaymentSummary(reservationId ?? undefined);
+  const paymentMutation = usePaymentMutation(reservationId ?? undefined);
+  const { cancelMutation, checkInMutation, checkOutMutation } = useReservationMutations();
+
+  const open = Boolean(reservationId);
+  const reservation = reservationQuery.data;
+  const operations = operationsQuery.data;
+  const summary = summaryQuery.data;
+  // Bug documented in frontend/src/api/payments.ts: total_amount/balance_due
+  // ignore consumption charges. Always prefer the operational figures for
+  // anything the operator will actually collect.
+  const currencyCode = normalizeCurrencyCode(summary?.currency_code ?? reservation?.currency_code);
+  const operationalBalanceDue = summary?.operational_balance_due ?? summary?.balance_due;
+
+  const runAction = (label: string, action: () => void) => {
+    setActionError(null);
+    setActionMessage(null);
+    try {
+      action();
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : `No se pudo completar: ${label}.`);
+    }
+  };
+
+  const handlePay = () => {
+    if (!reservationId) return;
+    const amount = Number(paymentAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setActionError("Ingresá un importe válido para cobrar.");
+      return;
+    }
+    setActionError(null);
+    setActionMessage(null);
+    paymentMutation.mutate(
+      {
+        reservation_id: reservationId,
+        amount,
+        payment_method: paymentMethod,
+        transaction_type: reservation?.status === "pending" ? "deposit" : "balance_payment",
+        currency: currencyCode
+      },
+      {
+        onSuccess: () => {
+          setPaymentAmount("");
+          setActionMessage("Pago registrado.");
+        },
+        onError: (err) => setActionError(err instanceof ApiError ? err.message : "No se pudo registrar el pago.")
+      }
+    );
+  };
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex" role="dialog" aria-modal="true" aria-labelledby="reservation-drawer-title">
+      <div className="flex-1 bg-black/30" onClick={onClose} />
+      <div className="flex w-full max-w-xl flex-col border-l border-slate-200 bg-white shadow-xl">
+        <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-3">
+          <div className="min-w-0">
+            <p className="text-xs uppercase tracking-wide text-slate-500">Reserva</p>
+            <h3 id="reservation-drawer-title" className="truncate text-lg font-semibold text-slate-900">
+              {reservation ? reservation.confirmation_code : `#${reservationId}`}
+            </h3>
+            {reservation && (
+              <span
+                className={`mt-1 inline-block rounded-full px-2 py-1 text-xs font-semibold ${reservationStatusConfig[reservation.status]?.className ?? "bg-slate-100 text-slate-800"}`}
+              >
+                {reservationStatusConfig[reservation.status]?.label ?? reservation.status}
+              </span>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Cerrar detalle de reserva"
+            className="text-lg leading-none text-slate-500 hover:text-slate-800"
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4 text-sm text-slate-700">
+          {reservationQuery.isLoading && <p className="text-slate-500">Cargando reserva...</p>}
+          {reservationQuery.isError && (
+            <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-rose-700">
+              No se pudo cargar la reserva. Cerrá y volvé a intentar.
+            </p>
+          )}
+
+          {reservation && (
+            <>
+              <section className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Estadía</p>
+                <p className="mt-1 font-semibold text-slate-900">
+                  {reservation.check_in_date} → {reservation.check_out_date}
+                </p>
+                <p className="text-xs text-slate-500">
+                  {reservation.room_id ? `Habitación #${reservation.room_id}` : "Sin habitación asignada"} · Categoría{" "}
+                  {reservation.category_id}
+                </p>
+              </section>
+
+              <section className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Huéspedes</p>
+                <p className="mt-1 font-semibold text-slate-900">{guestFullName(reservation.guest, reservation.guest_id)}</p>
+                <p className="text-xs text-slate-500">Titular</p>
+                {reservation.additional_guests && reservation.additional_guests.length > 0 ? (
+                  <ul className="mt-2 space-y-1">
+                    {reservation.additional_guests.map((guest) => (
+                      <li key={guest.id} className="text-sm text-slate-800">
+                        {guestFullName(guest)}
+                        <span className="ml-2 text-xs text-slate-500">Acompañante</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-2 text-xs text-slate-500">Sin acompañantes cargados.</p>
+                )}
+              </section>
+
+              <section className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Cobros</p>
+                  {summaryQuery.isFetching && <span className="text-xs text-slate-500">Actualizando...</span>}
+                </div>
+                {summaryQuery.isLoading ? (
+                  <p className="mt-2 text-slate-500">Cargando resumen financiero...</p>
+                ) : summary ? (
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    <div>
+                      <p className="text-xs text-slate-500">Total operativo</p>
+                      <p className="font-semibold">
+                        {formatMoney(operations?.financial_summary?.operational_total_amount ?? summary.total_amount, currencyCode)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Pagado</p>
+                      <p className="font-semibold">{formatMoney(summary.amount_paid, currencyCode)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Saldo operativo</p>
+                      <p className="font-semibold text-slate-900" data-testid="drawer-balance-due">
+                        {formatMoney(operationalBalanceDue ?? 0, currencyCode)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Depósito requerido</p>
+                      <p className="font-semibold">{formatMoney(summary.deposit_required, currencyCode)}</p>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="mt-2 text-rose-700">No se pudo cargar el resumen financiero.</p>
+                )}
+              </section>
+
+              {reservation.status !== "cancelled" && reservation.status !== "checked_out" && (
+                <section className="rounded-lg border border-slate-200 bg-white p-3">
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Cobrar</p>
+                  <div className="mt-2 flex flex-wrap items-end gap-2">
+                    <label className="flex-1 space-y-1 text-xs">
+                      <span className="text-slate-600">Importe</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={paymentAmount}
+                        onChange={(event) => setPaymentAmount(event.target.value)}
+                        placeholder={operationalBalanceDue ? String(operationalBalanceDue) : "0"}
+                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                        aria-label="Importe a cobrar"
+                      />
+                    </label>
+                    <label className="space-y-1 text-xs">
+                      <span className="text-slate-600">Método</span>
+                      <select
+                        value={paymentMethod}
+                        onChange={(event) => setPaymentMethod(event.target.value as PaymentMethod)}
+                        className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                        aria-label="Método de pago"
+                      >
+                        {paymentMethodOptions.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handlePay}
+                      disabled={paymentMutation.isPending}
+                      className="rounded-lg border border-emerald-200 bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {paymentMutation.isPending ? "Cobrando..." : "Registrar cobro"}
+                    </button>
+                  </div>
+                </section>
+              )}
+
+              {operations?.pending_actions && operations.pending_actions.length > 0 && (
+                <section className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                  <p className="text-xs uppercase tracking-wide text-amber-800">Acciones pendientes</p>
+                  <ul className="mt-2 space-y-1">
+                    {operations.pending_actions.map((action) => (
+                      <li key={action.action_key} className="text-sm text-amber-900">
+                        {action.title}
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+
+              {(actionError || actionMessage) && (
+                <div
+                  className={`rounded-lg border px-3 py-2 text-sm ${
+                    actionError ? "border-rose-200 bg-rose-50 text-rose-700" : "border-emerald-200 bg-emerald-50 text-emerald-800"
+                  }`}
+                >
+                  {actionError || actionMessage}
+                </div>
+              )}
+
+              <section className="flex flex-wrap gap-2 border-t border-slate-200 pt-3">
+                <button
+                  type="button"
+                  disabled={!canCheckInReservation(reservation.status) || checkInMutation.isPending}
+                  onClick={() =>
+                    runAction("check-in", () =>
+                      checkInMutation.mutate(reservation.id, {
+                        onSuccess: () => setActionMessage("Check-in registrado."),
+                        onError: (err) => setActionError(err instanceof ApiError ? err.message : "No se pudo hacer check-in.")
+                      })
+                    )
+                  }
+                  className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-xs font-semibold text-brand-700 hover:border-brand-300 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Check-in
+                </button>
+                <button
+                  type="button"
+                  disabled={!canCheckOutReservation(reservation.status) || checkOutMutation.isPending}
+                  onClick={() =>
+                    runAction("check-out", () =>
+                      checkOutMutation.mutate(reservation.id, {
+                        onSuccess: () => setActionMessage("Check-out registrado."),
+                        onError: (err) => setActionError(err instanceof ApiError ? err.message : "No se pudo hacer check-out.")
+                      })
+                    )
+                  }
+                  className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-semibold text-sky-700 hover:border-sky-300 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Check-out
+                </button>
+                <button
+                  type="button"
+                  disabled={!canCancelReservation(reservation.status) || cancelMutation.isPending}
+                  onClick={() =>
+                    runAction("cancelación", () =>
+                      cancelMutation.mutate(reservation.id, {
+                        onSuccess: () => setActionMessage("Reserva cancelada."),
+                        onError: (err) => setActionError(err instanceof ApiError ? err.message : "No se pudo cancelar.")
+                      })
+                    )
+                  }
+                  className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 hover:border-rose-300 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Cancelar
+                </button>
+              </section>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default ReservationDetailDrawer;

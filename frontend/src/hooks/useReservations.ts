@@ -50,7 +50,10 @@ export function useReservations(filters: ReservationFilters) {
   return useQuery<Reservation[]>({
     queryKey: reservationsKey(session.hotelId, filters),
     queryFn: () => listReservations(filters, session),
-    enabled: hasValidSession(session),
+    // A caller-provided search term shorter than 2 chars is not useful (and
+    // noisy against the DB), so hold off until there's enough to match on.
+    // Filters without a search term behave exactly as before.
+    enabled: hasValidSession(session) && (!filters.search || filters.search.trim().length >= 2),
     placeholderData: keepPreviousData,
     staleTime: 1000 * 15
   });
