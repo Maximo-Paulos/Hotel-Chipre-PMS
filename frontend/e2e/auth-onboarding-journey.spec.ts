@@ -1,34 +1,6 @@
-import { expect, test } from "@playwright/test";
-import { readFileSync, rmSync, unlinkSync } from "node:fs";
-import os from "node:os";
-import path from "node:path";
+import { expect, test, type Page } from "@playwright/test";
 
-const emailOutboxPath = path.join(os.tmpdir(), "hotel-chipre-e2e-email-outbox.jsonl");
-
-function readLatestCode(email: string, subjectPattern: RegExp): string {
-  if (!emailOutboxPath) throw new Error("El outbox local de E2E no está configurado");
-
-  let raw = "";
-  try {
-    raw = readFileSync(emailOutboxPath, "utf8");
-  } catch {
-    return "";
-  }
-  const messages = raw
-    .trim()
-    .split("\n")
-    .filter(Boolean)
-    .map((line) => JSON.parse(line) as { to?: string[]; subject?: string; body?: string })
-    .filter((message) => message.to?.includes(email) && subjectPattern.test(message.subject ?? ""));
-  const body = messages.at(-1)?.body ?? "";
-  const code = body.match(/\b\d{6}\b/)?.[0];
-  return code ?? "";
-}
-
-async function waitForCode(email: string, subjectPattern: RegExp): Promise<string> {
-  await expect.poll(() => readLatestCode(email, subjectPattern), { timeout: 10_000 }).toMatch(/^\d{6}$/);
-  return readLatestCode(email, subjectPattern);
-}
+import { cleanupEmailOutbox, resetEmailOutbox, waitForCode } from "./support/email-outbox";
 
 async function saveAndExpectPath(page: Page, path: string) {
   await page.getByRole("button", { name: "Guardar y seguir", exact: true }).click();
@@ -36,17 +8,11 @@ async function saveAndExpectPath(page: Page, path: string) {
 }
 
 test.beforeAll(() => {
-  if (emailOutboxPath) rmSync(emailOutboxPath, { force: true });
+  resetEmailOutbox();
 });
 
 test.afterAll(() => {
-  if (emailOutboxPath) {
-    try {
-      unlinkSync(emailOutboxPath);
-    } catch {
-      // The file may not exist when the test was interrupted before email delivery.
-    }
-  }
+  cleanupEmailOutbox();
 });
 
 test("owner can register, verify, recover access and complete onboarding through the UI", async ({ page }) => {
