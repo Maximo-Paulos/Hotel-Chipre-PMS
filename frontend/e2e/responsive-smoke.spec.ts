@@ -111,12 +111,19 @@ test.describe("Responsive mobile smoke", () => {
 
     const openCashButton = page.getByRole("button", { name: "Abrir caja", exact: true });
     const existingOpenCashButton = page.getByRole("button", { name: "Ya hay una caja abierta", exact: true });
-    if (await openCashButton.isVisible()) {
-      await openCashButton.click();
-      await expect(page.getByText("Caja abierta.", { exact: true })).toBeVisible();
-    } else {
-      await expect(existingOpenCashButton).toBeVisible();
-    }
+    // The 3 webkit-iphone-* projects share one backend/database, so whichever
+    // project's run reaches this test first "wins" opening the cash session.
+    // A single isVisible()+click() snapshot can catch the brief window before
+    // that other project's session finishes propagating to this page's query
+    // cache, so retry the whole decision instead of failing on a stale read.
+    await expect(async () => {
+      if (await openCashButton.isEnabled({ timeout: 500 }).catch(() => false)) {
+        await openCashButton.click({ timeout: 2_000 });
+        await expect(page.getByText("Caja abierta.", { exact: true })).toBeVisible({ timeout: 2_000 });
+      } else {
+        await expect(existingOpenCashButton).toBeVisible({ timeout: 2_000 });
+      }
+    }).toPass({ timeout: 20_000 });
 
     const approvalCheckbox = page.locator("form").filter({ hasText: "Cerrar caja" }).locator('input[type="checkbox"]');
     await expect(approvalCheckbox).toBeVisible();

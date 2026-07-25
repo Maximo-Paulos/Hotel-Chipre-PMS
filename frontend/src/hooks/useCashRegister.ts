@@ -95,7 +95,13 @@ export function useCashRegisterMutations(sessionId?: number) {
 
   const openSessionMutation = useMutation({
     mutationFn: (payload: CashSessionOpenPayload) => openCashSession(payload, session),
-    onSuccess: invalidateSessions
+    onSuccess: invalidateSessions,
+    // A rejected "open" (e.g. someone else already opened the register on
+    // another device) means our cached session list is stale, not just the
+    // request. Without this, the UI keeps offering an "Abrir caja" button
+    // that will fail again instead of switching to the real "already open"
+    // state.
+    onError: invalidateSessions
   });
 
   const addMovementMutation = useMutation({
@@ -108,17 +114,20 @@ export function useCashRegisterMutations(sessionId?: number) {
 
   const closeSessionMutation = useMutation<CashCloseReport, unknown, CashSessionClosePayload>({
     mutationFn: (payload) => closeCashSession(sessionId!, payload, session),
-    onSuccess: invalidateSessions
+    onSuccess: invalidateSessions,
+    onError: invalidateSessions
   });
 
   const approveDifferenceMutation = useMutation({
     mutationFn: (reportId: number) => approveCashCloseDifference(reportId, session),
-    onSuccess: invalidateSessions
+    onSuccess: invalidateSessions,
+    onError: invalidateSessions
   });
 
   const confirmCustodyMutation = useMutation({
     mutationFn: (reportId: number) => confirmCashCustody(reportId, session),
-    onSuccess: invalidateSessions
+    onSuccess: invalidateSessions,
+    onError: invalidateSessions
   });
 
   return { openSessionMutation, addMovementMutation, closeSessionMutation, approveDifferenceMutation, confirmCustodyMutation };
