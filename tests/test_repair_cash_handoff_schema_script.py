@@ -24,7 +24,7 @@ class FakeEngine:
         yield self.connection
 
 
-def test_repair_adds_only_missing_cash_handoff_schema_objects():
+def test_repair_adds_missing_cash_handoff_schema_objects():
     from app.scripts.repair_cash_handoff_schema import repair_cash_handoff_schema
 
     engine = FakeEngine()
@@ -34,6 +34,10 @@ def test_repair_adds_only_missing_cash_handoff_schema_objects():
     assert "ADD COLUMN IF NOT EXISTS successor_session_id" in statements
     assert "uq_cash_close_reports_successor_session" in statements
     assert "fk_cash_close_reports_hotel_successor_session" in statements
+    assert "cash_custody_status_enum" in statements
+    assert "CREATE TABLE IF NOT EXISTS cash_custody_handoffs" in statements
+    assert "fk_cash_custody_handoffs_hotel_close_report" in statements
+    assert "tenant_isolation_cash_custody_handoffs" in statements
 
 
 def test_repair_refuses_non_postgres_targets():
