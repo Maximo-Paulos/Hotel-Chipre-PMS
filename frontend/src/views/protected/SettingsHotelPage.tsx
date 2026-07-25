@@ -367,7 +367,12 @@ export function SettingsHotelPage() {
           <div className="flex items-center justify-end gap-3">
             {updateConfigMutation.isError && <p className="text-sm text-rose-700">No se pudo guardar.</p>}
             {updateConfigMutation.isSuccess && <p className="text-sm text-emerald-700">Cambios guardados.</p>}
-            <button type="submit" className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60" disabled={updateConfigMutation.isPending}>
+            <button
+              type="submit"
+              formNoValidate
+              className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
+              disabled={updateConfigMutation.isPending}
+            >
               Guardar cambios
             </button>
           </div>
@@ -465,4 +470,3 @@ function PaymentSurchargesCard() {
 }
 
 export default SettingsHotelPage;
-

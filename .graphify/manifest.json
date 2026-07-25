@@ -1472,8 +1472,8 @@
     "hash": "d66858ebd22abe0495960f0c9a231205"
   },
   "frontend/src/views/protected/SettingsHotelPage.tsx": {
-    "mtime": 1784865890935.91,
-    "hash": "7687a4c31686fd1e495491075c754f05"
+    "mtime": 1784957223793.1018,
+    "hash": "08ed666b62e2ec53eeaec2e415a8dd3c"
   },
   "frontend/src/views/protected/SettingsPermissionsPage.tsx": {
     "mtime": 1784884168644.6104,
@@ -3594,5 +3594,9 @@
   "tests/test_repair_cash_handoff_schema_script.py": {
     "mtime": 1784956236687.055,
     "hash": "a540ab98ed77e893e9a6bbe25b4fd810"
+  },
+  "frontend/e2e/settings-hotel.spec.ts": {
+    "mtime": 1784957174365.4082,
+    "hash": "231c40b593cdd5359ff542e1c64b34ef"
   }
 }
