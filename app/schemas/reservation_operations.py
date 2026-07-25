@@ -5,15 +5,18 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator
+
+from app.schemas.reservation import ReservationRead
 
 
 class RoomMoveRequest(BaseModel):
     to_room_id: int
     reason_code: str = Field(..., min_length=1)
     notes: Optional[str] = None
+    price_action: Literal["keep", "reprice"] = "keep"
 
     @field_validator("reason_code")
     @classmethod
@@ -22,6 +25,16 @@ class RoomMoveRequest(BaseModel):
         if not value:
             raise ValueError("reason_code is required")
         return value
+
+
+class RoomMoveResponse(BaseModel):
+    reservation: ReservationRead
+    category_changed: bool
+    price_action: Literal["keep", "reprice"]
+    previous_total_amount: Decimal
+    quoted_total_amount: Decimal
+    amount_delta: Decimal
+    currency_code: str
 
 
 class ReservationChargeCreate(BaseModel):

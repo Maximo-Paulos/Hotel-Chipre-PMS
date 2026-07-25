@@ -284,6 +284,17 @@ export type ReservationRoomMovePayload = {
   to_room_id: number;
   reason_code: string;
   notes?: string | null;
+  price_action?: "keep" | "reprice";
+};
+
+export type ReservationRoomMoveResponse = {
+  reservation: Reservation;
+  category_changed: boolean;
+  price_action: "keep" | "reprice";
+  previous_total_amount: number;
+  quoted_total_amount: number;
+  amount_delta: number;
+  currency_code: string;
 };
 
 export type ReservationChargePayload = {
@@ -370,7 +381,7 @@ export const markReservationNoShow = (id: number, payload: ReservationNoShowPayl
   apiFetch<Reservation>(`/api/reservations/${id}/noshow`, { method: "POST", data: payload, session });
 
 export const moveReservationRoom = (id: number, payload: ReservationRoomMovePayload, session?: SessionLike) =>
-  apiFetch<Reservation>(`/api/reservations/${id}/room-move`, { method: "POST", data: payload, session });
+  apiFetch<ReservationRoomMoveResponse>(`/api/reservations/${id}/room-move`, { method: "POST", data: payload, session });
 
 export const addReservationCharge = (id: number, payload: ReservationChargePayload, session?: SessionLike) =>
   apiFetch<ReservationBillingAdjustmentSummary>(`/api/reservations/${id}/charges`, {

@@ -11,6 +11,7 @@ import {
   type ReservationNoShowPayload,
   type ReservationPendingAction,
   type ReservationRoomMovePayload,
+  type ReservationRoomMoveResponse,
   type ReservationSource,
   type ReservationStatus
 } from "../../api/reservations";
@@ -209,7 +210,12 @@ export function ReservationsPage() {
   });
   const [calendarRange, setCalendarRange] = useState<"week" | "month">("week");
   const [detailsReservationId, setDetailsReservationId] = useState<number | null>(null);
-  const [roomMoveForm, setRoomMoveForm] = useState({ to_room_id: "", reason_code: "", notes: "" });
+  const [roomMoveForm, setRoomMoveForm] = useState({
+    to_room_id: "",
+    reason_code: "",
+    notes: "",
+    price_action: "keep" as "keep" | "reprice"
+  });
   const [chargeForm, setChargeForm] = useState({ description: "", amount: "" });
   const [noShowNotes, setNoShowNotes] = useState("");
   const [guestIdOpen, setGuestIdOpen] = useState<number | null>(null);
@@ -288,12 +294,28 @@ export function ReservationsPage() {
     queryClient.invalidateQueries({ queryKey: ["payment-summary", session.hotelId] });
   };
 
-  const roomMoveMutation = useMutation<Reservation, unknown, { reservationId: number; payload: ReservationRoomMovePayload }>({
+  const roomMoveMutation = useMutation<
+    ReservationRoomMoveResponse,
+    unknown,
+    { reservationId: number; payload: ReservationRoomMovePayload }
+  >({
     mutationFn: ({ reservationId, payload }) => moveReservationRoom(reservationId, payload, session),
-    onSuccess: () => {
+    onSuccess: (result) => {
       invalidateAllocationState();
-      setRoomMoveForm({ to_room_id: "", reason_code: "", notes: "" });
-      showToast("success", "Habitación cambiada.");
+      setRoomMoveForm({ to_room_id: "", reason_code: "", notes: "", price_action: "keep" });
+      const currency = normalizeCurrencyCode(result.currency_code);
+      if (!result.category_changed || result.amount_delta === 0) {
+        showToast("success", "Habitación cambiada.");
+        return;
+      }
+      if (result.price_action === "reprice") {
+        showToast("success", `Habitación cambiada. Precio actualizado a ${formatMoney(result.quoted_total_amount, currency)}.`);
+      } else {
+        showToast(
+          "info",
+          `Habitación cambiada, se mantuvo el precio actual. Precio de la nueva categoría: ${formatMoney(result.quoted_total_amount, currency)} (diferencia ${formatMoney(result.amount_delta, currency)}).`
+        );
+      }
     }
   });
 
@@ -348,15 +370,31 @@ export function ReservationsPage() {
   const totalRooms = roomsQuery.data?.length ?? 0;
   const moveRoomOptions = useMemo(() => {
     if (!detailsReservation) return [];
+    // B5: also list rooms in other categories -- moving across categories is a
+    // real operational need (upgrade/downgrade), it's just gated by capacity
+    // validation and an explicit price_action on the backend now.
     return (roomsQuery.data ?? []).filter(
       (room) =>
         room.is_active &&
-        room.category_id === detailsReservation.category_id &&
         room.id !== detailsReservation.room_id &&
         room.status !== "maintenance" &&
         room.status !== "blocked"
     );
   }, [detailsReservation, roomsQuery.data]);
+
+  const categoryNameById = useMemo(() => {
+    const map = new Map<number, string>();
+    categoriesData.forEach((cat) => map.set(cat.id, cat.name));
+    return map;
+  }, [categoriesData]);
+
+  const selectedMoveRoom = useMemo(
+    () => moveRoomOptions.find((room) => String(room.id) === roomMoveForm.to_room_id) ?? null,
+    [moveRoomOptions, roomMoveForm.to_room_id]
+  );
+  const moveCrossesCategory = Boolean(
+    selectedMoveRoom && detailsReservation && selectedMoveRoom.category_id !== detailsReservation.category_id
+  );
 
   const categoryOptions = useMemo(
     () => categoriesData.map((cat) => ({ value: String(cat.id), label: `${cat.name} (#${cat.id})` })),
@@ -1095,19 +1133,19 @@ export function ReservationsPage() {
 
   const openDetails = (reservation: Reservation) => {
     setDetailsReservationId(reservation.id);
-    setRoomMoveForm({ to_room_id: "", reason_code: "", notes: "" });
+    setRoomMoveForm({ to_room_id: "", reason_code: "", notes: "", price_action: "keep" });
     setNoShowNotes("");
     setChargeForm({ description: "", amount: "" });
   };
   const openDetailsById = (reservationId: number) => {
     setDetailsReservationId(reservationId);
-    setRoomMoveForm({ to_room_id: "", reason_code: "", notes: "" });
+    setRoomMoveForm({ to_room_id: "", reason_code: "", notes: "", price_action: "keep" });
     setNoShowNotes("");
     setChargeForm({ description: "", amount: "" });
   };
   const closeDetails = () => {
     setDetailsReservationId(null);
-    setRoomMoveForm({ to_room_id: "", reason_code: "", notes: "" });
+    setRoomMoveForm({ to_room_id: "", reason_code: "", notes: "", price_action: "keep" });
     setNoShowNotes("");
     setChargeForm({ description: "", amount: "" });
   };
@@ -1146,7 +1184,8 @@ export function ReservationsPage() {
         payload: {
           to_room_id: Number(roomMoveForm.to_room_id),
           reason_code: roomMoveForm.reason_code.trim(),
-          notes: roomMoveForm.notes.trim() || null
+          notes: roomMoveForm.notes.trim() || null,
+          price_action: roomMoveForm.price_action
         }
       },
       {
@@ -2838,10 +2877,35 @@ export function ReservationsPage() {
                       {moveRoomOptions.map((room) => (
                         <option key={room.id} value={room.id}>
                           Hab {room.room_number} · Piso {room.floor}
+                          {room.category_id !== detailsReservation.category_id
+                            ? ` · ${categoryNameById.get(room.category_id) ?? "otra categoría"}`
+                            : ""}
                         </option>
                       ))}
                     </select>
                   </label>
+                  {moveCrossesCategory ? (
+                    <label className="space-y-1 text-sm">
+                      <span className="text-slate-600">Precio al cambiar de categoría</span>
+                      <select
+                        value={roomMoveForm.price_action}
+                        onChange={(event) =>
+                          setRoomMoveForm((current) => ({
+                            ...current,
+                            price_action: event.target.value as "keep" | "reprice"
+                          }))
+                        }
+                        disabled={!canMoveRoom(detailsReservation.status) || roomMoveMutation.isPending}
+                        className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                      >
+                        <option value="keep">Mantener precio actual</option>
+                        <option value="reprice">Recalcular al precio de la nueva categoría</option>
+                      </select>
+                      <span className="block text-xs text-slate-500">
+                        Cambiar de categoría no actualiza el monto cobrado a menos que elijas recalcular.
+                      </span>
+                    </label>
+                  ) : null}
                   <label className="space-y-1 text-sm">
                     <span className="text-slate-600">Motivo del cambio</span>
                     <input
@@ -2871,7 +2935,7 @@ export function ReservationsPage() {
                     {roomMoveMutation.isPending ? "Moviendo..." : "Mover habitación"}
                   </button>
                   {moveRoomOptions.length === 0 && canMoveRoom(detailsReservation.status) ? (
-                    <p className="text-xs text-amber-700">No hay otra habitación activa disponible en esta categoría.</p>
+                    <p className="text-xs text-amber-700">No hay otra habitación activa disponible.</p>
                   ) : null}
                 </form>
 

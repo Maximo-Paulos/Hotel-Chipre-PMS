@@ -8,7 +8,7 @@ from app.models.commercial import FxPolicy, ProductRoomCompatibility, RatePlan, 
 from app.models.hotel_config import HotelConfiguration
 from app.models.ota_core import OTACommissionRule, OTACurrencyRate, OTAProvider, OTAReservationLink, OTAReservationLifecycleEnum
 from app.models.reservation import Reservation, ReservationSourceEnum, ReservationStatusEnum
-from app.models.room import Room
+from app.models.room import Room, RoomCategory
 from app.services.allocation_runtime_service import run_persisted_allocation
 from app.services.reservation_operations_service import preview_ota_rebook_as_direct, rebook_ota_reservation_as_direct
 
@@ -514,7 +514,7 @@ def test_move_reservation_room_creates_manual_audit_event(
 
     previous_room_id = sample_rooms[0].id
     new_room_id = sample_rooms[1].id
-    event = move_reservation_room(
+    result = move_reservation_room(
         db,
         reservation=reservation,
         to_room_id=new_room_id,
@@ -525,7 +525,7 @@ def test_move_reservation_room_creates_manual_audit_event(
     )
     db.commit()
 
-    persisted_event = db.get(RoomMoveEvent, event.id)
+    persisted_event = db.get(RoomMoveEvent, result.event.id)
     assert persisted_event.from_room_id == previous_room_id
     assert persisted_event.to_room_id == new_room_id
     assert persisted_event.trigger_event == "manual"
@@ -571,3 +571,171 @@ def test_move_reservation_room_requires_reason_code(
             hotel_id=hotel_config.id,
             reason_code=" ",
         )
+
+
+# ── B5: room move across categories must revalidate capacity and gate repricing ──
+
+
+def test_move_reservation_room_rejects_capacity_overflow_across_categories(
+    db,
+    hotel_config,
+    sample_categories,
+    sample_rooms,
+    sample_guest,
+):
+    single_category = RoomCategory(
+        hotel_id=hotel_config.id,
+        name="Single",
+        code="SGL_B5",
+        base_price_per_night=80.0,
+        max_occupancy=1,
+    )
+    db.add(single_category)
+    db.flush()
+    single_room = Room(
+        room_number="501",
+        floor=5,
+        category_id=single_category.id,
+        hotel_id=hotel_config.id,
+    )
+    db.add(single_room)
+    db.flush()
+
+    reservation = Reservation(
+        confirmation_code="ROOM-MOVE-CAPACITY",
+        hotel_id=hotel_config.id,
+        guest_id=sample_guest.id,
+        room_id=sample_rooms[0].id,
+        category_id=sample_categories[0].id,
+        check_in_date=date(2026, 9, 1),
+        check_out_date=date(2026, 9, 3),
+        total_amount=200.0,
+        subtotal_amount=200.0,
+        net_amount=200.0,
+        amount_paid=0.0,
+        deposit_amount=60.0,
+        currency_code="ARS",
+        status=ReservationStatusEnum.PENDING,
+        source=ReservationSourceEnum.DIRECT,
+        num_adults=2,
+        num_children=0,
+    )
+    db.add(reservation)
+    db.flush()
+
+    from app.services.reservation_operations_service import ReservationOperationsError, move_reservation_room
+
+    with pytest.raises(ReservationOperationsError, match="hasta 1"):
+        move_reservation_room(
+            db,
+            reservation=reservation,
+            to_room_id=single_room.id,
+            hotel_id=hotel_config.id,
+            reason_code="guest_preference",
+        )
+    db.refresh(reservation)
+    assert reservation.room_id == sample_rooms[0].id
+    assert reservation.category_id == sample_categories[0].id
+
+
+def test_move_reservation_room_keep_price_action_does_not_change_total_but_returns_quote(
+    db,
+    hotel_config,
+    sample_categories,
+    sample_rooms,
+    sample_guest,
+):
+    reservation = Reservation(
+        confirmation_code="ROOM-MOVE-KEEP",
+        hotel_id=hotel_config.id,
+        guest_id=sample_guest.id,
+        room_id=sample_rooms[0].id,  # STD_DBL, 100/night
+        category_id=sample_categories[0].id,
+        check_in_date=date(2026, 9, 5),
+        check_out_date=date(2026, 9, 7),
+        total_amount=200.0,
+        subtotal_amount=200.0,
+        net_amount=200.0,
+        amount_paid=0.0,
+        deposit_amount=60.0,
+        currency_code="ARS",
+        status=ReservationStatusEnum.PENDING,
+        source=ReservationSourceEnum.DIRECT,
+        num_adults=2,
+        num_children=0,
+    )
+    db.add(reservation)
+    db.flush()
+
+    from app.services.reservation_operations_service import move_reservation_room
+
+    superior_room = sample_rooms[20]  # SUP_DBL, 150/night
+    result = move_reservation_room(
+        db,
+        reservation=reservation,
+        to_room_id=superior_room.id,
+        hotel_id=hotel_config.id,
+        reason_code="upgrade",
+        price_action="keep",
+    )
+    db.commit()
+    db.refresh(reservation)
+
+    assert reservation.room_id == superior_room.id
+    assert reservation.category_id == sample_categories[1].id
+    assert float(reservation.total_amount) == 200.0  # untouched, "keep" never applies money
+    assert result.category_changed is True
+    assert result.price_action == "keep"
+    assert float(result.previous_total_amount) == 200.0
+    assert float(result.quoted_total_amount) == 300.0  # 2 nights * 150
+    assert float(result.amount_delta) == 100.0
+
+
+def test_move_reservation_room_reprice_updates_total_amount(
+    db,
+    hotel_config,
+    sample_categories,
+    sample_rooms,
+    sample_guest,
+):
+    reservation = Reservation(
+        confirmation_code="ROOM-MOVE-REPRICE",
+        hotel_id=hotel_config.id,
+        guest_id=sample_guest.id,
+        room_id=sample_rooms[0].id,  # STD_DBL, 100/night
+        category_id=sample_categories[0].id,
+        check_in_date=date(2026, 9, 9),
+        check_out_date=date(2026, 9, 11),
+        total_amount=200.0,
+        subtotal_amount=200.0,
+        net_amount=200.0,
+        amount_paid=0.0,
+        deposit_amount=60.0,
+        currency_code="ARS",
+        status=ReservationStatusEnum.PENDING,
+        source=ReservationSourceEnum.DIRECT,
+        num_adults=2,
+        num_children=0,
+    )
+    db.add(reservation)
+    db.flush()
+
+    from app.services.reservation_operations_service import move_reservation_room
+
+    superior_room = sample_rooms[21]  # SUP_DBL, 150/night
+    result = move_reservation_room(
+        db,
+        reservation=reservation,
+        to_room_id=superior_room.id,
+        hotel_id=hotel_config.id,
+        reason_code="upgrade",
+        price_action="reprice",
+    )
+    db.commit()
+    db.refresh(reservation)
+
+    assert reservation.room_id == superior_room.id
+    assert float(reservation.total_amount) == 300.0  # 2 nights * 150, applied
+    assert result.price_action == "reprice"
+    assert float(result.quoted_total_amount) == 300.0
+    assert float(result.amount_delta) == 100.0

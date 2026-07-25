@@ -55,6 +55,45 @@ def reservation_api_client():
         engine.dispose()
 
 
+@pytest.fixture
+def reservation_api_client_as_receptionist():
+    """Same wiring as reservation_api_client, but a role without room_move by default (B5)."""
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    Base.metadata.create_all(bind=engine)
+    db = SessionLocal()
+
+    def override_get_db():
+        try:
+            yield db
+        finally:
+            pass
+
+    def override_auth():
+        return AuthContext(
+            hotel_id=1,
+            user_id=1,
+            user_email="reception@test.com",
+            user_role="receptionist",
+            is_verified=True,
+            permissions=set(),
+        )
+
+    fastapi_app.dependency_overrides[get_db] = override_get_db
+    fastapi_app.dependency_overrides[get_auth_context] = override_auth
+    client = TestClient(fastapi_app)
+    try:
+        yield client, db
+    finally:
+        fastapi_app.dependency_overrides.clear()
+        db.close()
+        engine.dispose()
+
+
 def _seed_reservation_prerequisites(db):
     hotel = HotelConfiguration(id=1, owner_email="owner@test.com", subscription_active=True)
     guest = Guest(first_name="Mobility", last_name="Guest", hotel_id=1)
@@ -260,3 +299,113 @@ def test_room_move_requires_reason_code_and_accepts_valid_reason(reservation_api
     assert valid.status_code == 200, valid.text
     db.refresh(reservation)
     assert reservation.room_id == room_b.id
+
+
+def test_room_move_rejects_receptionist_without_room_move_permission(reservation_api_client_as_receptionist, monkeypatch):
+    """B5: reservation:room_move is gated -- receptionist is denied by default."""
+    client, db = reservation_api_client_as_receptionist
+    monkeypatch.setattr("app.api.reservations._trigger_reoptimization_bg", lambda **_kwargs: None)
+    guest, category, room_a, room_b = _seed_reservation_prerequisites(db)
+    reservation = Reservation(
+        confirmation_code="MOVE-DENIED-API",
+        hotel_id=1,
+        guest_id=guest.id,
+        room_id=room_a.id,
+        category_id=category.id,
+        check_in_date=date(2027, 5, 10),
+        check_out_date=date(2027, 5, 12),
+        total_amount=200.0,
+        subtotal_amount=200.0,
+        net_amount=200.0,
+        amount_paid=0.0,
+        deposit_amount=60.0,
+        currency_code="ARS",
+        status=ReservationStatusEnum.PENDING,
+        source=ReservationSourceEnum.DIRECT,
+        num_adults=1,
+        num_children=0,
+    )
+    db.add(reservation)
+    db.commit()
+
+    response = client.post(
+        f"/api/reservations/{reservation.id}/room-move",
+        json={"to_room_id": room_b.id, "reason_code": "guest_request"},
+    )
+    assert response.status_code == 403, response.text
+    db.refresh(reservation)
+    assert reservation.room_id == room_a.id
+
+
+def test_room_move_endpoint_rejects_capacity_overflow_and_returns_delta_on_reprice(
+    reservation_api_client, monkeypatch
+):
+    """B5: cross-category move via the endpoint enforces capacity and price_action."""
+    client, db = reservation_api_client
+    monkeypatch.setattr("app.api.reservations._trigger_reoptimization_bg", lambda **_kwargs: None)
+    guest, category, room_a, room_b = _seed_reservation_prerequisites(db)
+
+    single_category = RoomCategory(
+        hotel_id=1,
+        name="Single Mobility",
+        code="SGL_MOB",
+        base_price_per_night=80.0,
+        max_occupancy=1,
+    )
+    superior_category = RoomCategory(
+        hotel_id=1,
+        name="Superior Mobility",
+        code="SUP_MOB",
+        base_price_per_night=150.0,
+        max_occupancy=2,
+    )
+    db.add_all([single_category, superior_category])
+    db.flush()
+    single_room = Room(hotel_id=1, room_number="M501", floor=5, category=single_category, status=RoomStatusEnum.AVAILABLE)
+    superior_room = Room(hotel_id=1, room_number="M401", floor=4, category=superior_category, status=RoomStatusEnum.AVAILABLE)
+    db.add_all([single_room, superior_room])
+    db.commit()
+
+    reservation = Reservation(
+        confirmation_code="MOVE-CROSS-API",
+        hotel_id=1,
+        guest_id=guest.id,
+        room_id=room_a.id,
+        category_id=category.id,
+        check_in_date=date(2027, 6, 1),
+        check_out_date=date(2027, 6, 3),
+        total_amount=200.0,
+        subtotal_amount=200.0,
+        net_amount=200.0,
+        amount_paid=0.0,
+        deposit_amount=60.0,
+        currency_code="ARS",
+        status=ReservationStatusEnum.PENDING,
+        source=ReservationSourceEnum.DIRECT,
+        num_adults=2,
+        num_children=0,
+    )
+    db.add(reservation)
+    db.commit()
+
+    overflow = client.post(
+        f"/api/reservations/{reservation.id}/room-move",
+        json={"to_room_id": single_room.id, "reason_code": "guest_request"},
+    )
+    assert overflow.status_code == 400, overflow.text
+    db.refresh(reservation)
+    assert reservation.room_id == room_a.id
+
+    reprice = client.post(
+        f"/api/reservations/{reservation.id}/room-move",
+        json={"to_room_id": superior_room.id, "reason_code": "upgrade", "price_action": "reprice"},
+    )
+    assert reprice.status_code == 200, reprice.text
+    body = reprice.json()
+    assert body["category_changed"] is True
+    assert body["price_action"] == "reprice"
+    assert float(body["quoted_total_amount"]) == 300.0
+    assert float(body["reservation"]["total_amount"]) == 300.0
+    db.refresh(reservation)
+    assert reservation.room_id == superior_room.id
+    assert float(reservation.total_amount) == 300.0

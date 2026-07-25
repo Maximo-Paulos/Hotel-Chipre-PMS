@@ -39,6 +39,7 @@ from app.schemas.reservation_operations import (
     ReservationOperationsSummaryRead,
     ReservationPendingActionRead,
     RoomMoveRequest,
+    RoomMoveResponse,
 )
 from app.services.reservation_service import (
     create_reservation,
@@ -821,7 +822,7 @@ def extend_stay(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/{reservation_id}/room-move", response_model=ReservationRead)
+@router.post("/{reservation_id}/room-move", response_model=RoomMoveResponse)
 def room_move(
     reservation_id: int,
     payload: RoomMoveRequest,
@@ -834,7 +835,7 @@ def room_move(
         raise HTTPException(status_code=404, detail="Reservation not found")
     before = audit_log_service.model_snapshot(reservation)
     try:
-        event = move_reservation_room(
+        result = move_reservation_room(
             db,
             reservation=reservation,
             to_room_id=payload.to_room_id,
@@ -842,7 +843,9 @@ def room_move(
             moved_by_user_id=context.user_id,
             reason_code=payload.reason_code,
             notes=payload.notes,
+            price_action=payload.price_action,
         )
+        event = result.event
         db.commit()
         db.refresh(reservation)
         audit_log_service.safe_create_audit_log(
@@ -868,7 +871,15 @@ def room_move(
             hotel_id=context.hotel_id,
             trigger_type="reservation_room_move",
         )
-        return _to_read(reservation)
+        return RoomMoveResponse(
+            reservation=_to_read(reservation),
+            category_changed=result.category_changed,
+            price_action=result.price_action,
+            previous_total_amount=result.previous_total_amount,
+            quoted_total_amount=result.quoted_total_amount,
+            amount_delta=result.amount_delta,
+            currency_code=result.currency_code,
+        )
     except ReservationOperationsError as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))

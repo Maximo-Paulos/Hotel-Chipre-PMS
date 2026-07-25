@@ -151,7 +151,7 @@ def test_neo4j_off_create_and_move_reservation_still_write_postgres(graph_api_cl
         json={"to_room_id": room_two_id, "reason_code": "guest_request", "notes": "quiet room"},
     )
     assert move_response.status_code == 200, move_response.text
-    assert move_response.json()["room_id"] == room_two_id
+    assert move_response.json()["reservation"]["room_id"] == room_two_id
 
     with SessionLocal() as db:
         reservation = db.get(Reservation, reservation_id)
