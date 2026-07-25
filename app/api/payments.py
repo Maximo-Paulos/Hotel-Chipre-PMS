@@ -23,7 +23,7 @@ def make_payment(
     data: PaymentRequest,
     idempotency_key: str = Header(..., alias="Idempotency-Key", min_length=8, max_length=100),
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "receptionist")),
 ):
     try:
         transaction = process_payment(
@@ -44,7 +44,7 @@ def make_payment(
 def financial_summary(
     reservation_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "receptionist")),
 ):
     try:
         return get_reservation_financial_summary(db, context.hotel_id, reservation_id)
