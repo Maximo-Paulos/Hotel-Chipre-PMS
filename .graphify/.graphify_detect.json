@@ -802,9 +802,9 @@
     "video": []
   },
   "total_files": 792,
-  "total_words": 535113,
+  "total_words": 535813,
   "needs_graph": true,
-  "warning": "Large corpus: 792 files · ~535,113 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
+  "warning": "Large corpus: 792 files · ~535,813 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
   "skipped_sensitive": [
     "alembic/versions/20260408_security_tokens.py",
     "alembic/versions/20260725_user_token_version.py",
@@ -819,7 +819,7 @@
   "graphifyignore_patterns": 60,
   "git": {
     "source_owner": "git",
-    "source_hash": "45be255904c4106f83776c8e87c0e03b5eae8b8e",
+    "source_hash": "672b76d59cf880bf00df8eb11b3a149ce59f460c",
     "branches": [
       "claude/feature/pms-roles-housekeeping-qa",
       "codex/feature/agent-ops-knowledge",
@@ -837,7 +837,7 @@
     "source": "cli",
     "root": ".",
     "git_root": ".",
-    "head": "45be255904c4106f83776c8e87c0e03b5eae8b8e",
+    "head": "672b76d59cf880bf00df8eb11b3a149ce59f460c",
     "candidate_count": null,
     "included_count": 792,
     "excluded_untracked_count": 0,

@@ -428,8 +428,8 @@
     "hash": "21003b2f02f213513cb88859eaac5df0"
   },
   "app/main.py": {
-    "mtime": 1784999130486.5444,
-    "hash": "eb51b6a629c882558659d713087a7b68"
+    "mtime": 1785006848581.3184,
+    "hash": "971e3c4bda59298878df861a5b08b922"
   },
   "app/master_admin/__init__.py": {
     "mtime": 1784862144877.3862,
@@ -992,8 +992,8 @@
     "hash": "07aa97bab89a23a1b60f6f76957979ba"
   },
   "app/services/permission_service.py": {
-    "mtime": 1784945069708.4604,
-    "hash": "188d6a0a91d33809b12dfd8d7948d26c"
+    "mtime": 1785006848581.504,
+    "hash": "8da5da877541bb6849372b80aca683fe"
   },
   "app/services/pricing_policy_service.py": {
     "mtime": 1784862144886.0344,
@@ -1572,8 +1572,8 @@
     "hash": "8d771d95e254e5e632c1dcfdef3bd38a"
   },
   "tests/conftest.py": {
-    "mtime": 1784862144927.2368,
-    "hash": "1aa1207f86bfb5fc88a6510d21cf6d80"
+    "mtime": 1785006848581.7957,
+    "hash": "7b88e9dedfee7009625fcaa47fb8eed1"
   },
   "tests/perf/__init__.py": {
     "mtime": 1784862144927.63,
@@ -1920,8 +1920,8 @@
     "hash": "ef0cc8a3c90c239686ade2099f405771"
   },
   "tests/test_permission_service.py": {
-    "mtime": 1784884142684.5586,
-    "hash": "6aeb4f419411d94ab42a349be82f953a"
+    "mtime": 1785006848582.064,
+    "hash": "03e00b82002851cb66a7372a88342b52"
   },
   "tests/test_permissions_api.py": {
     "mtime": 1784972165491.7249,

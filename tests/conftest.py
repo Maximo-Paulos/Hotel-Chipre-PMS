@@ -122,6 +122,20 @@ from app.models.rate_limit_event import RateLimitEvent
 TEST_DATABASE_URL = "sqlite:///:memory:"
 
 
+@pytest.fixture(autouse=True)
+def _reset_permission_seed_cache():
+    """A1: permission_service seeds the matrix once per DB engine, not per
+    request. Each test's engine is a brand new object already, so this is
+    just defensive cleanup against any long-lived/session-scoped engine
+    reusing stale seeded state across tests.
+    """
+    from app.services.permission_service import reset_permission_seed_cache
+
+    reset_permission_seed_cache()
+    yield
+    reset_permission_seed_cache()
+
+
 @pytest.fixture(scope="function")
 def db_engine():
     """Create a fresh in-memory SQLite engine for each test."""

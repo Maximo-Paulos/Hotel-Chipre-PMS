@@ -3,6 +3,7 @@ Hotel PMS — FastAPI Main Application.
 Serves the API + bundled frontend files.
 """
 import json
+import logging
 import os
 from contextlib import asynccontextmanager
 from decimal import Decimal
@@ -14,6 +15,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+
+LOGGER = logging.getLogger(__name__)
 
 
 class _DecimalAwareEncoder(json.JSONEncoder):
@@ -87,11 +90,46 @@ def _require_demo_mode():
         )
 
 
+def _seed_permission_matrix_once() -> None:
+    """Seed the permission matrix once at boot (per worker process).
+
+    A1 fix: seed_default_permissions() used to run inside resolve(), i.e. on
+    every request through require_permission. Doing it here — with its own
+    session and an explicit commit — means it's durable before any request
+    is served, so ensure_permission_matrix_seeded() finds the engine already
+    marked seeded and skips straight to the override/default lookup.
+
+    Best-effort like the rest of init_db()'s startup self-heal: some tests
+    stub out init_db() itself to avoid touching a real database, which can
+    leave no usable engine/schema here. Never block boot over this — the
+    per-engine cache stays cold on failure, so the first real request just
+    falls back to seeding lazily (the original per-request behavior, minus
+    the "every request" part).
+    """
+    from app.database import get_session_factory
+    from app.services.permission_service import ensure_permission_matrix_seeded
+
+    try:
+        db = get_session_factory()()
+    except Exception as exc:  # pragma: no cover - defensive, see docstring
+        LOGGER.warning("permission matrix seed: no session factory available: %s", exc)
+        return
+    try:
+        ensure_permission_matrix_seeded(db)
+        db.commit()
+    except Exception as exc:  # pragma: no cover - defensive, see docstring
+        LOGGER.warning("permission matrix seed: deferred to first request: %s", exc)
+        db.rollback()
+    finally:
+        db.close()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize database on application startup."""
     validate_runtime_security()
     init_db()
+    _seed_permission_matrix_once()
     yield
 
 

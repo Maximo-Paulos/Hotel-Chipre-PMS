@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-25T17:51:37.825Z",
+  "generatedAt": "2026-07-25T19:15:07.359Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -501,16 +501,20 @@
       "entryPointId": "services_permission_service_get_matrix",
       "path": [
         "services_permission_service_get_matrix",
+        "services_permission_service_ensure_permission_matrix_seeded",
         "services_permission_service_seed_default_permissions",
+        "services_permission_service_engine_key",
         "services_permission_service_insert_if_missing"
       ],
       "qualifiedPath": [
         "services_permission_service_get_matrix",
+        "services_permission_service_ensure_permission_matrix_seeded",
         "services_permission_service_seed_default_permissions",
+        "services_permission_service_engine_key",
         "services_permission_service_insert_if_missing"
       ],
       "depth": 2,
-      "nodeCount": 3,
+      "nodeCount": 5,
       "fileCount": 1,
       "files": [
         "app/services/permission_service.py"
@@ -633,16 +637,20 @@
       "entryPointId": "services_permission_service_resolve",
       "path": [
         "services_permission_service_resolve",
+        "services_permission_service_ensure_permission_matrix_seeded",
         "services_permission_service_seed_default_permissions",
+        "services_permission_service_engine_key",
         "services_permission_service_insert_if_missing"
       ],
       "qualifiedPath": [
         "services_permission_service_resolve",
+        "services_permission_service_ensure_permission_matrix_seeded",
         "services_permission_service_seed_default_permissions",
+        "services_permission_service_engine_key",
         "services_permission_service_insert_if_missing"
       ],
       "depth": 2,
-      "nodeCount": 3,
+      "nodeCount": 5,
       "fileCount": 1,
       "files": [
         "app/services/permission_service.py"
@@ -689,16 +697,20 @@
       "entryPointId": "services_permission_service_set_override",
       "path": [
         "services_permission_service_set_override",
+        "services_permission_service_ensure_permission_matrix_seeded",
         "services_permission_service_seed_default_permissions",
+        "services_permission_service_engine_key",
         "services_permission_service_insert_if_missing"
       ],
       "qualifiedPath": [
         "services_permission_service_set_override",
+        "services_permission_service_ensure_permission_matrix_seeded",
         "services_permission_service_seed_default_permissions",
+        "services_permission_service_engine_key",
         "services_permission_service_insert_if_missing"
       ],
       "depth": 2,
-      "nodeCount": 3,
+      "nodeCount": 5,
       "fileCount": 1,
       "files": [
         "app/services/permission_service.py"
@@ -2080,6 +2092,28 @@
       "fileCount": 1,
       "files": [
         "app/services/hotel_api_key_service.py"
+      ],
+      "criticality": 0.285,
+      "warnings": []
+    },
+    {
+      "id": "flow:app_main_lifespan",
+      "name": "lifespan",
+      "entryPoint": "app_main_lifespan",
+      "entryPointId": "app_main_lifespan",
+      "path": [
+        "app_main_lifespan",
+        "app_main_seed_permission_matrix_once"
+      ],
+      "qualifiedPath": [
+        "app_main_lifespan",
+        "app_main_seed_permission_matrix_once"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/main.py"
       ],
       "criticality": 0.285,
       "warnings": []

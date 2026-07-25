@@ -4,7 +4,9 @@ Permission matrix resolution and mutation.
 from __future__ import annotations
 
 import json
+import threading
 from datetime import datetime, timezone
+from weakref import WeakSet
 
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
@@ -205,13 +207,66 @@ def seed_default_permissions(db: Session) -> None:
     db.flush()
 
 
+# A1 fix: seed_default_permissions() above is idempotent but not cheap (~120
+# rows inserted/repaired + a full RolePermissionDefault scan + 2 flushes). It
+# used to run on every resolve()/set_override()/get_matrix() call, i.e. on
+# every authenticated request via require_permission. Each process/worker now
+# seeds at most once per DB engine: app/main.py's startup does it eagerly so
+# normal request traffic never pays for it, and _ensure_seeded() below is a
+# cheap fallback for callers that never went through app startup (tests,
+# scripts). Keyed by engine identity (not a plain bool) so pytest's per-test
+# engines each get seeded exactly once, without needing an explicit reset —
+# only long-lived engines shared across tests would need one, and none do
+# today (see reset_permission_seed_cache() for that case).
+_seeded_engines: "WeakSet" = WeakSet()
+_seed_lock = threading.Lock()
+
+
+def _engine_key(db: Session):
+    bind = db.get_bind()
+    return getattr(bind, "engine", bind)
+
+
+def ensure_permission_matrix_seeded(db: Session) -> None:
+    """Seed the permission matrix for this DB engine, at most once.
+
+    Commits right away. The whole point of the once-per-engine cache is that
+    every later resolve()/get_matrix()/set_override() call on any session
+    sharing this engine trusts the seed already landed — a plain flush() is
+    not enough, since a caller-side db.rollback() later in the *same* session
+    (e.g. an unrelated business error handled a few requests later) would
+    silently wipe the seeded rows while the cache still says "done".
+    """
+
+    key = _engine_key(db)
+    if key in _seeded_engines:
+        return
+    with _seed_lock:
+        if key in _seeded_engines:
+            return
+        seed_default_permissions(db)
+        db.commit()
+        _seeded_engines.add(key)
+
+
+def reset_permission_seed_cache() -> None:
+    """Test-only hook: forget which engines were already seeded.
+
+    Needed only if a test reuses one long-lived engine across cases where the
+    seeded rows themselves get wiped out between them (e.g. a session-scoped
+    Postgres fixture); per-test SQLite engines already reseed for free since
+    each test gets a brand new engine object.
+    """
+    _seeded_engines.clear()
+
+
 def resolve(db: Session, hotel_id: int, role: str | None, permission_code: str) -> bool:
     """Resolve override > default > deny for a hotel role permission."""
 
     if not role:
         return False
 
-    seed_default_permissions(db)
+    ensure_permission_matrix_seeded(db)
 
     override = (
         db.query(HotelPermissionOverride)
@@ -246,7 +301,7 @@ def set_override(
 ) -> HotelPermissionOverride:
     """Create or update a hotel-specific role permission override and audit it."""
 
-    seed_default_permissions(db)
+    ensure_permission_matrix_seeded(db)
     override = (
         db.query(HotelPermissionOverride)
         .filter(
@@ -313,7 +368,7 @@ def audit_permission_denied(
 def get_matrix(db: Session, hotel_id: int) -> dict[str, dict[str, dict[str, object]]]:
     """Return the resolved permission matrix for a hotel."""
 
-    seed_default_permissions(db)
+    ensure_permission_matrix_seeded(db)
 
     defaults = {
         (row.role, row.permission_code): bool(row.allowed)

@@ -1,6 +1,6 @@
 from concurrent.futures import ThreadPoolExecutor
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 from app.models.security_audit_log import SecurityAuditLog
@@ -87,6 +87,42 @@ def test_get_matrix_includes_hotel_overrides(db):
 
     assert matrix["receptionist"][PERMISSION_GUEST_EDIT]["allowed"] is True
     assert matrix["receptionist"][PERMISSION_GUEST_EDIT]["source"] == "override"
+
+
+def test_resolve_seeds_the_matrix_once_per_engine_not_per_call(db):
+    """A1: resolve() used to call seed_default_permissions() on every invocation
+
+    (~120 rows inserted/repaired + a full RolePermissionDefault scan + 2 flushes,
+    every single authenticated request). Two consecutive resolve() calls on the
+    same engine must seed at most once; the second call should cost ~2 queries
+    (override lookup + default lookup), not re-run the whole seed.
+    """
+    _seed_hotel(db, 1)
+    engine = db.get_bind()
+
+    query_counts: list[int] = [0]
+
+    def _count_query(*_args, **_kwargs):
+        query_counts[0] += 1
+
+    event.listen(engine, "before_cursor_execute", _count_query)
+    try:
+        query_counts[0] = 0
+        resolve(db, 1, "receptionist", PERMISSION_GUEST_EDIT)
+        first_call_queries = query_counts[0]
+
+        query_counts[0] = 0
+        resolve(db, 1, "receptionist", PERMISSION_GUEST_EDIT)
+        second_call_queries = query_counts[0]
+    finally:
+        event.remove(engine, "before_cursor_execute", _count_query)
+
+    # The first call still has to seed a cold engine (insert-if-missing on two
+    # tables + a full RolePermissionDefault scan), so it costs more than a
+    # plain override/default lookup.
+    assert first_call_queries > 2
+    # The second call must not repeat the seed: only override + default lookups.
+    assert second_call_queries <= 2
 
 
 def test_permission_seed_is_safe_when_two_requests_initialize_it_concurrently(tmp_path):
