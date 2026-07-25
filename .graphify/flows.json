@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-25T16:22:27.177Z",
+  "generatedAt": "2026-07-25T16:53:14.969Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -8057,6 +8057,7 @@
         "services_payment_webhook_service_ensure_completed_transaction",
         "services_payment_webhook_service_find_existing_event",
         "services_payment_webhook_service_insert_event",
+        "services_payment_webhook_service_is_allowed_status_transition",
         "services_payment_webhook_service_normalize_status",
         "services_payment_webhook_service_payload_value",
         "services_payment_webhook_service_paymentwebhookerror",
@@ -8068,13 +8069,14 @@
         "services_payment_webhook_service_ensure_completed_transaction",
         "services_payment_webhook_service_find_existing_event",
         "services_payment_webhook_service_insert_event",
+        "services_payment_webhook_service_is_allowed_status_transition",
         "services_payment_webhook_service_normalize_status",
         "services_payment_webhook_service_payload_value",
         "services_payment_webhook_service_paymentwebhookerror",
         "services_payment_webhook_service_transaction_exists"
       ],
       "depth": 2,
-      "nodeCount": 9,
+      "nodeCount": 10,
       "fileCount": 1,
       "files": [
         "app/services/payment_webhook_service.py"
