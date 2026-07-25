@@ -22,7 +22,12 @@ import {
   type RoomMovementGroup
 } from "../../api/allocationRuns";
 import { ApiError, hasValidSession } from "../../api/client";
-import { type Guest, type GuestPayload } from "../../api/guests";
+import GuestQuickCreatePanel, {
+  emptyQuickGuestForm,
+  hasQuickGuestFormData,
+  type QuickGuestFormValues
+} from "../../components/GuestQuickCreatePanel";
+import ManualOtaReservationModal from "../../components/ManualOtaReservationModal";
 import { checkRoomAvailability, type RoomAvailabilityResponse } from "../../api/rooms";
 import { type PaymentMethod } from "../../api/payments";
 import { useCategories } from "../../hooks/useCategories";
@@ -129,24 +134,6 @@ const defaultFormState = (): FormState => ({
   status: "pending"
 });
 
-type QuickGuestForm = {
-  first_name: string;
-  last_name: string;
-  email: string;
-  phone: string;
-  document_type: NonNullable<GuestPayload["document_type"]>;
-  document_number: string;
-};
-
-const emptyQuickGuest = (): QuickGuestForm => ({
-  first_name: "",
-  last_name: "",
-  email: "",
-  phone: "",
-  document_type: "DNI",
-  document_number: ""
-});
-
 const todayIso = () => new Date().toISOString().slice(0, 10);
 const reservationGuestLabel = (reservation: {
   guest?: { first_name: string; last_name: string } | null;
@@ -191,7 +178,7 @@ export function ReservationsPage() {
   const [editing, setEditing] = useState<Reservation | null>(null);
   const [formValues, setFormValues] = useState<FormState>(defaultFormState);
   const [formError, setFormError] = useState<string | null>(null);
-  const [guestForm, setGuestForm] = useState(emptyQuickGuest);
+  const [guestForm, setGuestForm] = useState<QuickGuestFormValues>(emptyQuickGuestForm);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
   const [paymentAmountInput, setPaymentAmountInput] = useState("");
   const [paymentProofFile, setPaymentProofFile] = useState<File | null>(null);
@@ -201,6 +188,12 @@ export function ReservationsPage() {
   const [paymentProofRejectReason, setPaymentProofRejectReason] = useState("");
   const [pricingPaymentMethod, setPricingPaymentMethod] = useState<PricingPaymentMethod>("base");
   const [depositAmountInput, setDepositAmountInput] = useState("");
+  // B4: tarifa manual opcional en la reserva directa -- cuando se completa,
+  // reemplaza la cotización automática en vez de convivir con ella.
+  const [manualTotalAmountInput, setManualTotalAmountInput] = useState("");
+  const [manualTargetCurrency, setManualTargetCurrency] = useState<"ARS" | "USD">("ARS");
+  const [lastCreatedReservation, setLastCreatedReservation] = useState<Reservation | null>(null);
+  const [otaFormOpen, setOtaFormOpen] = useState(false);
   const [availabilityForm, setAvailabilityForm] = useState<{
     category_id: string;
     check_in_date: string;
@@ -494,6 +487,9 @@ export function ReservationsPage() {
     setFormError(null);
     setPricingPaymentMethod("base");
     setDepositAmountInput("");
+    setManualTotalAmountInput("");
+    setManualTargetCurrency("ARS");
+    setLastCreatedReservation(null);
     setPaymentAmountInput("");
     setPaymentProofFile(null);
     setFormOpen(true);
@@ -537,6 +533,9 @@ export function ReservationsPage() {
     setFormError(null);
     setPricingPaymentMethod("base");
     setDepositAmountInput("");
+    setManualTotalAmountInput("");
+    setManualTargetCurrency("ARS");
+    setLastCreatedReservation(null);
     setPaymentAmountInput("");
     setPaymentProofFile(null);
     setFormOpen(true);
@@ -547,6 +546,8 @@ export function ReservationsPage() {
     setEditing(null);
     setFormError(null);
     setDepositAmountInput("");
+    setManualTotalAmountInput("");
+    setLastCreatedReservation(null);
     setPaymentAmountInput("");
     setPaymentProofFile(null);
   };
@@ -562,14 +563,7 @@ export function ReservationsPage() {
     const categoryIdNum = Number(formValues.category_id);
     let guestIdNum = Number(formValues.guest_id);
     if (!editing && (!guestIdNum || Number.isNaN(guestIdNum))) {
-      const hasGuestData =
-        guestForm.first_name.trim() !== "" ||
-        guestForm.last_name.trim() !== "" ||
-        guestForm.email.trim() !== "" ||
-        guestForm.phone.trim() !== "" ||
-        guestForm.document_number.trim() !== "";
-
-      if (!hasGuestData) {
+      if (!hasQuickGuestFormData(guestForm)) {
         setFormError("Ingresá el ID del huésped o completá los datos para crearlo automáticamente.");
         return;
       }
@@ -586,7 +580,7 @@ export function ReservationsPage() {
         });
         guestIdNum = newGuest.id;
         setFormValues((prev) => ({ ...prev, guest_id: String(newGuest.id) }));
-        setGuestForm(emptyQuickGuest());
+        setGuestForm(emptyQuickGuestForm());
         showToast("success", "Huésped creado y asignado automáticamente");
       } catch (err) {
         const msg = err instanceof Error ? err.message : "No se pudo crear el huésped";
@@ -608,12 +602,19 @@ export function ReservationsPage() {
       setFormError("La fecha de salida debe ser posterior al ingreso.");
       return;
     }
+    const manualTotalAmount =
+      manualTotalAmountInput.trim() === "" ? null : Number(manualTotalAmountInput);
+    if (!editing && manualTotalAmount !== null && (!Number.isFinite(manualTotalAmount) || manualTotalAmount < 0)) {
+      setFormError("Ingresá una tarifa manual válida (mayor o igual a 0).");
+      return;
+    }
+    const effectiveTotal = manualTotalAmount ?? reservationQuote?.total;
     if (!editing && parsedDepositAmount !== null) {
       if (!Number.isFinite(parsedDepositAmount) || parsedDepositAmount < 0) {
         setFormError("Ingresá una seña válida o dejá el campo vacío.");
         return;
       }
-      if (reservationQuote && parsedDepositAmount > reservationQuote.total) {
+      if (effectiveTotal !== undefined && parsedDepositAmount > effectiveTotal) {
         setFormError("La seña no puede ser mayor al total final de la reserva.");
         return;
       }
@@ -652,7 +653,11 @@ export function ReservationsPage() {
         }
       );
     } else {
-      if (!reservationQuote?.quoteToken || quoteQuery.isFetching) {
+      // B4: con tarifa manual, la cotización automática (y su quote_token) no
+      // aplica -- el backend usaría el total manual igual, pero no tiene
+      // sentido bloquear la creación esperando una cotización que no se va a
+      // usar (y que puede ni existir si la categoría no tiene tarifa cargada).
+      if (manualTotalAmount === null && (!reservationQuote?.quoteToken || quoteQuery.isFetching)) {
         setFormError("Esperá a que se actualice la cotización vigente antes de crear la reserva.");
         return;
       }
@@ -662,12 +667,22 @@ export function ReservationsPage() {
         source: formValues.source,
         pricing_payment_method: pricingPaymentMethod === "base" ? null : pricingPaymentMethod,
         deposit_amount: parsedDepositAmount,
-        quote_token: reservationQuote.quoteToken
+        ...(manualTotalAmount !== null
+          ? { total_amount: manualTotalAmount, target_currency: manualTargetCurrency }
+          : { quote_token: reservationQuote?.quoteToken })
       };
       createMutation.mutate(createPayload, {
-        onSuccess: () => {
+        onSuccess: (created) => {
           showToast("success", "Reserva creada");
-          closeForm();
+          if (manualTotalAmount !== null) {
+            // Keep the form open just long enough to show the operator what
+            // currency/cotización the manual total was saved with -- closing
+            // immediately would hide fx_rate_snapshot right after they asked
+            // for a currency conversion.
+            setLastCreatedReservation(created);
+          } else {
+            closeForm();
+          }
         },
         onError: (err: unknown) => {
           const msg = err instanceof Error ? err.message : "No se pudo crear la reserva";
@@ -811,24 +826,6 @@ export function ReservationsPage() {
       onError: (err: unknown) =>
         showToast("error", err instanceof Error ? err.message : "No se pudo revertir el grupo")
     });
-  };
-
-  const handleCreateGuest = () => {
-    guestMutation.mutate(
-      {
-        ...guestForm,
-        document_number: guestForm.document_number.trim() || undefined,
-        terms_accepted: true
-      },
-      {
-      onSuccess: (guest: Guest) => {
-        setFormValues((prev) => ({ ...prev, guest_id: String(guest.id) }));
-        setGuestForm(emptyQuickGuest());
-        showToast("success", "Huésped creado y asignado");
-      },
-      onError: (err: unknown) => showToast("error", err instanceof Error ? err.message : "No se pudo crear el Huésped")
-      }
-    );
   };
 
   const paymentSummary = paymentSummaryQuery.data;
@@ -1289,6 +1286,20 @@ export function ReservationsPage() {
             disabled={subscriptionBlocked}
           >
             Crear reserva
+          </button>
+          <button
+            className="rounded-lg border border-violet-200 bg-violet-50 px-4 py-2 text-sm font-semibold text-violet-700 hover:border-violet-300 hover:bg-violet-100 disabled:opacity-60"
+            onClick={() => {
+              if (subscriptionBlocked) {
+                setToast({ type: "error", message: subscriptionBlockReason || "Acción bloqueada por suscripción." });
+                return;
+              }
+              setOtaFormOpen(true);
+            }}
+            type="button"
+            disabled={subscriptionBlocked}
+          >
+            Cargar reserva de OTA
           </button>
           <Link
             to="/dashboard"
@@ -1913,18 +1924,15 @@ export function ReservationsPage() {
                 Datos de la reserva
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
-                <label className="text-xs font-semibold text-slate-600">
-                  ID Huésped
-                  <input
-                    type="number"
-                    min={1}
-                    placeholder="Ej: 12 (deja vacío y usa Huésped rápido)"
-                    value={formValues.guest_id}
-                    onChange={(e) => setFormValues((prev) => ({ ...prev, guest_id: e.target.value }))}
-                    disabled={Boolean(editing)}
-                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm disabled:bg-slate-50"
-                  />
-                </label>
+                <GuestQuickCreatePanel
+                  guestId={formValues.guest_id}
+                  onGuestIdChange={(value) => setFormValues((prev) => ({ ...prev, guest_id: value }))}
+                  guestIdDisabled={Boolean(editing)}
+                  form={guestForm}
+                  onFormChange={setGuestForm}
+                  onGuestCreated={() => showToast("success", "Huésped creado y asignado")}
+                  onError={(msg) => showToast("error", msg)}
+                />
                 <label className="text-xs font-semibold text-slate-600">
                   Categoría
                   <select
@@ -1942,77 +1950,6 @@ export function ReservationsPage() {
                     ))}
                   </select>
                 </label>
-              </div>
-
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs uppercase tracking-wide text-slate-500">Huésped rápido</p>
-                    <p className="text-xs text-slate-600">Creá y asigná sin salir del formulario.</p>
-                  </div>
-                  {guestMutation.isPending && <span className="text-xs text-slate-500">Guardando...</span>}
-                </div>
-                <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
-                  <input
-                    placeholder="Nombre"
-                    value={guestForm.first_name}
-                    onChange={(e) => setGuestForm((prev) => ({ ...prev, first_name: e.target.value }))}
-                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
-                  />
-                  <input
-                    placeholder="Apellido"
-                    value={guestForm.last_name}
-                    onChange={(e) => setGuestForm((prev) => ({ ...prev, last_name: e.target.value }))}
-                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
-                  />
-                  <input
-                    placeholder="Email"
-                    value={guestForm.email}
-                    onChange={(e) => setGuestForm((prev) => ({ ...prev, email: e.target.value }))}
-                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
-                  />
-                  <input
-                    placeholder="Teléfono"
-                    value={guestForm.phone}
-                    onChange={(e) => setGuestForm((prev) => ({ ...prev, phone: e.target.value }))}
-                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
-                  />
-                  <label className="text-xs font-semibold text-slate-600">
-                    Tipo de documento
-                    <select
-                      aria-label="Tipo de documento"
-                      value={guestForm.document_type ?? "DNI"}
-                      onChange={(e) =>
-                        setGuestForm((prev) => ({
-                          ...prev,
-                          document_type: e.target.value as NonNullable<GuestPayload["document_type"]>
-                        }))
-                      }
-                      className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
-                    >
-                      <option value="DNI">DNI</option>
-                      <option value="PASSPORT">Pasaporte</option>
-                      <option value="CEDULA">Cédula</option>
-                    </select>
-                  </label>
-                  <input
-                    placeholder="Documento"
-                    value={guestForm.document_number ?? ""}
-                    onChange={(e) => setGuestForm((prev) => ({ ...prev, document_number: e.target.value }))}
-                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
-                  />
-                </div>
-                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-600">
-                  <button
-                    type="button"
-                    onClick={handleCreateGuest}
-                    disabled={guestMutation.isPending || !guestForm.first_name || !guestForm.last_name}
-                    className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-xs font-semibold text-brand-700 hover:border-brand-300 hover:bg-brand-100 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    Crear Huésped y asignar ID
-                  </button>
-                  <span>Se asigna automáticamente al campo ID Huésped</span>
-                </div>
               </div>
 
               <div className="grid gap-3 sm:grid-cols-2">
@@ -2099,94 +2036,167 @@ export function ReservationsPage() {
                     </label>
                   </div>
 
-                  <div className="mt-3 grid gap-2 sm:grid-cols-4">
-                    <div className="rounded-lg border border-blue-100 bg-white/80 px-3 py-2 text-sm text-slate-800">
-                      <p className="text-xs text-slate-500">Noches</p>
-                      <p className="font-semibold">{reservationQuote?.nights ?? quoteNights}</p>
-                    </div>
-                    <div className="rounded-lg border border-blue-100 bg-white/80 px-3 py-2 text-sm text-slate-800">
-                      <p className="text-xs text-slate-500">Total final</p>
-                      <p className="font-semibold">
-                        {quoteQuery.isFetching
-                          ? "Actualizando..."
-                          : quoteQuery.isError
-                            ? "Total no disponible"
-                          : formatMoney(reservationQuote?.total ?? 0, reservationQuote?.currencyCode ?? "ARS")}
-                      </p>
-                    </div>
-                    <div className="rounded-lg border border-blue-100 bg-white/80 px-3 py-2 text-sm text-slate-800">
-                      <p className="text-xs text-slate-500">Seña</p>
-                      <p className="font-semibold">
-                        {quoteQuery.isError
-                          ? "No disponible"
-                          : depositPreview !== null
-                          ? formatMoney(depositPreview, reservationQuote?.currencyCode ?? "ARS")
-                          : "Por configurar"}
-                      </p>
-                    </div>
-                    <div className="rounded-lg border border-blue-100 bg-white/80 px-3 py-2 text-sm text-slate-800">
-                      <p className="text-xs text-slate-500">Saldo estimado</p>
-                      <p className="font-semibold">
-                        {quoteBalancePreview !== null
-                          ? formatMoney(quoteBalancePreview, reservationQuote?.currencyCode ?? "ARS")
-                          : "-"}
-                      </p>
+                  <div className="mt-3 rounded-lg border border-violet-200 bg-violet-50/60 p-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-violet-700">Tarifa manual (opcional)</p>
+                    <p className="mt-1 text-xs text-slate-600">
+                      Si completás un monto acá, reemplaza la cotización automática de Tarifas para esta reserva.
+                    </p>
+                    <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                      <label className="text-xs font-semibold text-slate-600">
+                        Monto total manual
+                        <input
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          value={manualTotalAmountInput}
+                          onChange={(e) => setManualTotalAmountInput(e.target.value)}
+                          placeholder="Dejar vacío para usar Tarifas"
+                          className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
+                        />
+                      </label>
+                      <label className="text-xs font-semibold text-slate-600">
+                        Moneda
+                        <select
+                          value={manualTargetCurrency}
+                          onChange={(e) => setManualTargetCurrency(e.target.value as "ARS" | "USD")}
+                          disabled={manualTotalAmountInput.trim() === ""}
+                          className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm disabled:bg-slate-50"
+                        >
+                          <option value="ARS">ARS</option>
+                          <option value="USD">USD</option>
+                        </select>
+                      </label>
                     </div>
                   </div>
 
-                  {quoteQuery.isError ? (
-                    <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800" role="alert">
-                      <p>
-                        {quoteQuery.error instanceof ApiError && quoteQuery.error.status === 404
-                          ? "No hay una tarifa disponible para la categoría y las fechas elegidas."
-                          : "No se pudo calcular la cotización. Revisá las fechas y las tarifas antes de confirmar."}
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => void quoteQuery.refetch()}
-                        disabled={quoteQuery.isFetching}
-                        className="mt-2 rounded-lg border border-rose-300 bg-white px-3 py-2 font-semibold text-rose-800 hover:bg-rose-100 disabled:opacity-60"
-                      >
-                        Reintentar
-                      </button>
-                    </div>
-                  ) : reservationQuote?.rows.length ? (
-                    <div className="mt-3 overflow-x-auto rounded-lg border border-blue-100 bg-white/70">
-                      <table className="min-w-full text-left text-xs">
-                        <thead className="bg-white text-slate-500">
-                          <tr>
-                            <th className="px-3 py-2 font-semibold">Noche</th>
-                            <th className="px-3 py-2 font-semibold">Origen</th>
-                            <th className="px-3 py-2 text-right font-semibold">Importe</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {reservationQuote.rows.slice(0, 6).map((row) => (
-                            <tr key={row.date} className="border-t border-blue-100">
-                              <td className="px-3 py-2 text-slate-700">{row.date}</td>
-                              <td className="px-3 py-2 text-slate-500">{row.source}</td>
-                              <td className="px-3 py-2 text-right font-semibold text-slate-800">
-                                {formatMoney(row.amount, reservationQuote.currencyCode)}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                      {reservationQuote.rows.length > 6 ? (
-                        <p className="border-t border-blue-100 px-3 py-2 text-xs text-slate-500">
-                          {reservationQuote.rows.length - 6} noches más incluidas en el total.
-                        </p>
-                      ) : null}
+                  {manualTotalAmountInput.trim() !== "" ? (
+                    <div className="mt-3 rounded-lg border border-violet-100 bg-white/80 px-3 py-2 text-sm text-slate-800">
+                      Total manual: <strong>{formatMoney(Number(manualTotalAmountInput) || 0, manualTargetCurrency)}</strong>.
+                      No se usa la cotización automática de Tarifas para esta reserva.
                     </div>
                   ) : (
-                    <p className="mt-2 text-xs text-slate-600">
-                      {quoteNights > 0
-                        ? "Calculando la cotización vigente desde Tarifas..."
-                        : "Elegí categoría y fechas para calcular el precio desde Tarifas."}
-                    </p>
+                    <>
+                      <div className="mt-3 grid gap-2 sm:grid-cols-4">
+                        <div className="rounded-lg border border-blue-100 bg-white/80 px-3 py-2 text-sm text-slate-800">
+                          <p className="text-xs text-slate-500">Noches</p>
+                          <p className="font-semibold">{reservationQuote?.nights ?? quoteNights}</p>
+                        </div>
+                        <div className="rounded-lg border border-blue-100 bg-white/80 px-3 py-2 text-sm text-slate-800">
+                          <p className="text-xs text-slate-500">Total final</p>
+                          <p className="font-semibold">
+                            {quoteQuery.isFetching
+                              ? "Actualizando..."
+                              : quoteQuery.isError
+                                ? "Total no disponible"
+                              : formatMoney(reservationQuote?.total ?? 0, reservationQuote?.currencyCode ?? "ARS")}
+                          </p>
+                        </div>
+                        <div className="rounded-lg border border-blue-100 bg-white/80 px-3 py-2 text-sm text-slate-800">
+                          <p className="text-xs text-slate-500">Seña</p>
+                          <p className="font-semibold">
+                            {quoteQuery.isError
+                              ? "No disponible"
+                              : depositPreview !== null
+                              ? formatMoney(depositPreview, reservationQuote?.currencyCode ?? "ARS")
+                              : "Por configurar"}
+                          </p>
+                        </div>
+                        <div className="rounded-lg border border-blue-100 bg-white/80 px-3 py-2 text-sm text-slate-800">
+                          <p className="text-xs text-slate-500">Saldo estimado</p>
+                          <p className="font-semibold">
+                            {quoteBalancePreview !== null
+                              ? formatMoney(quoteBalancePreview, reservationQuote?.currencyCode ?? "ARS")
+                              : "-"}
+                          </p>
+                        </div>
+                      </div>
+
+                      {quoteQuery.isError ? (
+                        <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800" role="alert">
+                          <p>
+                            {quoteQuery.error instanceof ApiError && quoteQuery.error.status === 404
+                              ? "No hay una tarifa disponible para la categoría y las fechas elegidas. Cargá una tarifa manual arriba o configurala en Tarifas."
+                              : "No se pudo calcular la cotización. Revisá las fechas y las tarifas antes de confirmar."}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => void quoteQuery.refetch()}
+                            disabled={quoteQuery.isFetching}
+                            className="mt-2 rounded-lg border border-rose-300 bg-white px-3 py-2 font-semibold text-rose-800 hover:bg-rose-100 disabled:opacity-60"
+                          >
+                            Reintentar
+                          </button>
+                        </div>
+                      ) : reservationQuote?.rows.length ? (
+                        <div className="mt-3 overflow-x-auto rounded-lg border border-blue-100 bg-white/70">
+                          <table className="min-w-full text-left text-xs">
+                            <thead className="bg-white text-slate-500">
+                              <tr>
+                                <th className="px-3 py-2 font-semibold">Noche</th>
+                                <th className="px-3 py-2 font-semibold">Origen</th>
+                                <th className="px-3 py-2 text-right font-semibold">Importe</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {reservationQuote.rows.slice(0, 6).map((row) => (
+                                <tr key={row.date} className="border-t border-blue-100">
+                                  <td className="px-3 py-2 text-slate-700">{row.date}</td>
+                                  <td className="px-3 py-2 text-slate-500">{row.source}</td>
+                                  <td className="px-3 py-2 text-right font-semibold text-slate-800">
+                                    {formatMoney(row.amount, reservationQuote.currencyCode)}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                          {reservationQuote.rows.length > 6 ? (
+                            <p className="border-t border-blue-100 px-3 py-2 text-xs text-slate-500">
+                              {reservationQuote.rows.length - 6} noches más incluidas en el total.
+                            </p>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <p className="mt-2 text-xs text-slate-600">
+                          {quoteNights > 0
+                            ? "Calculando la cotización vigente desde Tarifas..."
+                            : "Elegí categoría y fechas para calcular el precio desde Tarifas."}
+                        </p>
+                      )}
+                    </>
                   )}
                 </div>
               )}
+
+              {lastCreatedReservation ? (
+                <div
+                  className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900"
+                  role="status"
+                >
+                  <p className="font-semibold">
+                    Reserva {lastCreatedReservation.confirmation_code} creada en{" "}
+                    {normalizeCurrencyCode(lastCreatedReservation.currency_code)}.
+                  </p>
+                  {lastCreatedReservation.fx_rate_snapshot ? (
+                    <p className="mt-1">
+                      Cotización usada: 1 {manualTargetCurrency} ={" "}
+                      {lastCreatedReservation.fx_rate_snapshot.toLocaleString("es-AR")} ARS.
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-xs text-emerald-800">
+                      No hay una conversión automática configurada para esta categoría: el monto se guardó
+                      directamente en {normalizeCurrencyCode(lastCreatedReservation.currency_code)}, sin tasa
+                      aplicada.
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={closeForm}
+                    className="mt-2 rounded-lg border border-emerald-300 bg-white px-3 py-2 text-xs font-semibold text-emerald-800 hover:bg-emerald-100"
+                  >
+                    Cerrar
+                  </button>
+                </div>
+              ) : null}
 
               <div className="grid gap-3 sm:grid-cols-3">
                 <label className="text-xs font-semibold text-slate-600">
@@ -2567,16 +2577,21 @@ export function ReservationsPage() {
                     createMutation.isPending ||
                     updateMutation.isPending ||
                     subscriptionBlocked ||
-                    (!editing && (quoteQuery.isFetching || !reservationQuote?.quoteToken))
+                    Boolean(lastCreatedReservation) ||
+                    (!editing &&
+                      manualTotalAmountInput.trim() === "" &&
+                      (quoteQuery.isFetching || !reservationQuote?.quoteToken))
                   }
                 >
-                  {editing ? "Guardar cambios" : quoteQuery.isFetching ? "Actualizando..." : "Crear"}
+                  {editing ? "Guardar cambios" : quoteQuery.isFetching && manualTotalAmountInput.trim() === "" ? "Actualizando..." : "Crear"}
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
+
+      <ManualOtaReservationModal open={otaFormOpen} onClose={() => setOtaFormOpen(false)} />
 
       {detailsReservation && (
         <div className="fixed inset-0 z-30 flex items-center justify-center bg-slate-900/30 px-4 py-6">
