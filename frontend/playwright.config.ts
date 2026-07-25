@@ -53,7 +53,8 @@ const businessWebKitTestMatch = [
   "**/zz-cash-control-journey.spec.ts",
   "**/reception-checkin-checkout-journey.spec.ts",
   "**/housekeeping-laundry-journey.spec.ts",
-  "**/manager-reports-journey.spec.ts"
+  "**/manager-reports-journey.spec.ts",
+  "**/stock-inventory-journey.spec.ts"
 ];
 process.env.E2E_EMAIL_OUTBOX_PATH = emailOutboxPath;
 
