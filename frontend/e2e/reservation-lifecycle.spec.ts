@@ -134,3 +134,44 @@ test("owner edits, extends, rejects an overlap and cancels a reservation", async
   await expect(page.getByText("Reserva cancelada", { exact: true })).toBeVisible();
   await expect(reservationTable.locator("tbody tr").filter({ hasText: guestLastName })).toContainText("Cancelada");
 });
+
+test("editing a reservation cannot silently no-op a category/status change through disabled fields", async ({ page }) => {
+  // Bug real: PATCH /api/reservations/{id} no tiene campos category_id ni
+  // status (ver ReservationUpdate en app/schemas/reservation.py), asi que el
+  // backend los ignora en silencio y devuelve 200. El selector "Categoria" y
+  // "Estado" del formulario de edicion tenian que estar deshabilitados para
+  // no sugerir una accion que no hace nada; el cambio de huespedes (un campo
+  // que si persiste) tiene que seguir funcionando en el mismo formulario.
+  const suffix = `${Date.now()}`;
+  const guestLastName = `QA-EditLock ${suffix}`;
+  const checkIn = localIsoDate(70);
+  const checkOut = localIsoDate(72);
+
+  await login(page);
+  await openReservationForm(page, guestLastName, checkIn, checkOut);
+
+  const reservationTable = page.locator("table").filter({ hasText: "Código" });
+  const reservationRow = reservationTable.locator("tbody tr").filter({ hasText: guestLastName });
+  await expect(reservationRow).toHaveCount(1);
+  await expect(reservationRow).toContainText("Pendiente");
+  await reservationRow.getByRole("button", { name: "Editar", exact: true }).click();
+
+  const editForm = page.locator("form").filter({ hasText: "Pagos y balance" });
+  await expect(editForm).toBeVisible();
+
+  const categorySelect = editForm.locator("label").filter({ hasText: "Categoría" }).locator("select");
+  await expect(categorySelect).toBeDisabled();
+  const statusSelect = editForm.locator("label").filter({ hasText: "Estado" }).locator("select");
+  await expect(statusSelect).toBeDisabled();
+  await expect(statusSelect).toHaveValue("pending");
+
+  const adultsInput = editForm.locator("label").filter({ hasText: "Adultos" }).locator("input");
+  await adultsInput.fill("2");
+  await editForm.getByRole("button", { name: "Guardar cambios", exact: true }).click();
+  await expect(page.getByText("Reserva actualizada", { exact: true })).toBeVisible();
+
+  // El cambio de huespedes (campo soportado por el backend) se guardo, y el
+  // estado sigue siendo "Pendiente" (no quedo en un estado inconsistente por
+  // un control que nunca debio ofrecerse como editable).
+  await expect(reservationRow).toContainText("Pendiente");
+});

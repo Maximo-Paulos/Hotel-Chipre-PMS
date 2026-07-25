@@ -604,7 +604,13 @@ export function ReservationsPage() {
     };
 
     if (editing) {
-      const updatePayload = { ...commonPayload, status: formValues.status };
+      // "status" y "category_id" no forman parte de ReservationUpdate en el
+      // backend (ver app/schemas/reservation.py): se ignoran en silencio.
+      // Los selectores correspondientes están deshabilitados en modo edición
+      // para no sugerir un cambio que no persiste; los estados reales se
+      // cambian con Check-in/Check-out/Cancelar/Marcar no-show.
+      const { category_id, ...updatePayload } = commonPayload;
+      void category_id;
       updateMutation.mutate(
         { id: editing.id, payload: updatePayload },
         {
@@ -1886,7 +1892,9 @@ export function ReservationsPage() {
                   <select
                     value={formValues.category_id}
                     onChange={(e) => setFormValues((prev) => ({ ...prev, category_id: e.target.value, room_id: "" }))}
-                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
+                    disabled={Boolean(editing)}
+                    title={editing ? "La categoría de una reserva existente no se puede cambiar desde acá." : undefined}
+                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm disabled:bg-slate-50"
                   >
                     <option value="">Elegí una Categoría</option>
                     {categoryOptions.map((opt) => (
@@ -2168,7 +2176,13 @@ export function ReservationsPage() {
                   <select
                     value={formValues.status}
                     onChange={(e) => setFormValues((prev) => ({ ...prev, status: e.target.value as ReservationStatus }))}
-                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
+                    disabled={Boolean(editing)}
+                    title={
+                      editing
+                        ? "El estado no se cambia desde acá: usá Check-in, Check-out, Cancelar o Marcar no-show."
+                        : undefined
+                    }
+                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm disabled:bg-slate-50"
                   >
                     <option value="pending">Pendiente</option>
                     <option value="deposit_paid">Seña</option>

@@ -160,6 +160,70 @@ def test_update_mobility_restriction_triggers_reoptimization(reservation_api_cli
     assert calls == [{"hotel_id": 1, "trigger_type": "reservation_update"}]
 
 
+def test_patch_reservation_silently_ignores_unsupported_category_and_status_fields(
+    reservation_api_client, monkeypatch
+):
+    """Fase 3 (QA reservas): PATCH /api/reservations/{id} only understands
+    room_id/check_in_date/check_out_date/num_adults/num_children/notes/
+    mobility_restriction/client_version (see ReservationUpdate). category_id
+    and status are NOT part of that schema, so FastAPI/Pydantic drop them
+    silently instead of raising a 422 -- the request still returns 200 with
+    an unchanged reservation.
+
+    This is the backend contract driving the frontend fix in
+    ReservationsPage.tsx: the edit form must not offer an interactive
+    "Categoria"/"Estado" control, since submitting a change there produces a
+    misleading 200 "Reserva actualizada" without actually changing anything.
+    Real status transitions must go through their dedicated, validated
+    endpoints/buttons (cancel, check-in, check-out, no-show).
+    """
+    client, db = reservation_api_client
+    monkeypatch.setattr("app.api.reservations._trigger_reoptimization_bg", lambda **kwargs: None)
+    guest, category, room, _ = _seed_reservation_prerequisites(db)
+    other_category = RoomCategory(
+        hotel_id=1,
+        name="Deluxe Mobility",
+        code="DLX_MOB",
+        base_price_per_night=500.0,
+        max_occupancy=4,
+    )
+    db.add(other_category)
+    db.commit()
+
+    reservation = Reservation(
+        confirmation_code="MOB-IGNORE-1",
+        hotel_id=1,
+        guest_id=guest.id,
+        room_id=room.id,
+        category_id=category.id,
+        check_in_date=date(2027, 6, 1),
+        check_out_date=date(2027, 6, 3),
+        total_amount=200.0,
+        subtotal_amount=200.0,
+        net_amount=200.0,
+        amount_paid=0.0,
+        deposit_amount=60.0,
+        currency_code="ARS",
+        status=ReservationStatusEnum.PENDING,
+        source=ReservationSourceEnum.DIRECT,
+        num_adults=1,
+        num_children=0,
+    )
+    db.add(reservation)
+    db.commit()
+
+    response = client.patch(
+        f"/api/reservations/{reservation.id}",
+        json={"category_id": other_category.id, "status": "cancelled", "notes": "intento de cambio"},
+    )
+
+    assert response.status_code == 200, response.text
+    db.refresh(reservation)
+    assert reservation.category_id == category.id
+    assert reservation.status == ReservationStatusEnum.PENDING
+    assert reservation.notes == "intento de cambio"
+
+
 def test_room_move_requires_reason_code_and_accepts_valid_reason(reservation_api_client, monkeypatch):
     client, db = reservation_api_client
     monkeypatch.setattr("app.api.reservations._trigger_reoptimization_bg", lambda **_kwargs: None)
