@@ -342,6 +342,107 @@ def test_cash_payment_without_open_session_is_rejected(db):
         )
 
 
+def test_non_cash_payments_never_increase_physical_cash_in_the_open_session(db):
+    """MercadoPago and bank-transfer payments settle the reservation balance
+    but must NEVER post a movement into the caja or move expected_balance --
+    only physical CASH does. Exercised through the real process_payment path
+    (not just the record_cash_payment_movement early-return unit), because a
+    non-cash payment increasing the physical cash count would be a critical
+    reconciliation bug (Fase 6 caja checklist item 11)."""
+    from app.schemas.transaction import PaymentRequest
+    from app.services.cash_register_service import get_session_summary, list_movements
+    from app.services.payment_service import process_payment
+
+    def _extra_reservation(code: str) -> Reservation:
+        # _reservation() reuses a fixed "Cash Room 1"/"CASH1" category per
+        # hotel_id, so a second call in the same hotel hits its unique
+        # (hotel_id, name) constraint. This test needs several independent
+        # reservations in the SAME hotel/cash session, so give each its own
+        # category instead of reusing the shared helper.
+        guest = Guest(first_name="Cash", last_name="Guest", hotel_id=1)
+        category = RoomCategory(
+            hotel_id=1,
+            name=f"Cash Room 1 {code}",
+            code=code,
+            base_price_per_night=Decimal("100.00"),
+            max_occupancy=2,
+        )
+        db.add_all([guest, category])
+        db.flush()
+        reservation = Reservation(
+            hotel_id=1,
+            confirmation_code=code,
+            guest_id=guest.id,
+            category_id=category.id,
+            check_in_date=date(2026, 8, 1),
+            check_out_date=date(2026, 8, 2),
+            total_amount=Decimal("100.00"),
+            deposit_amount=Decimal("30.00"),
+            currency_code="ARS",
+            status=ReservationStatusEnum.PENDING,
+        )
+        db.add(reservation)
+        db.flush()
+        return reservation
+
+    hotel = _hotel(db, 1)
+    hotel.enable_bank_transfer = True
+    _user(db, 10)
+    mp_reservation = _reservation(db, 1, "CASH-NONCASH-MP")
+    transfer_reservation = _extra_reservation("CASH-NONCASH-XFER")
+    session = open_session(db, hotel_id=1, opened_by_user_id=10, opening_balance=Decimal("100.00"))
+
+    process_payment(
+        db,
+        PaymentRequest(
+            reservation_id=mp_reservation.id,
+            amount=30.0,
+            payment_method=PaymentMethodEnum.MERCADO_PAGO,
+            transaction_type=TransactionTypeEnum.DEPOSIT,
+        ),
+        hotel_id=1,
+        actor_user_id=10,
+    )
+    process_payment(
+        db,
+        PaymentRequest(
+            reservation_id=transfer_reservation.id,
+            amount=45.0,
+            payment_method=PaymentMethodEnum.BANK_TRANSFER,
+            transaction_type=TransactionTypeEnum.DEPOSIT,
+        ),
+        hotel_id=1,
+        actor_user_id=10,
+    )
+    db.flush()
+
+    assert list_movements(db, hotel_id=1, session_id=session.id) == []
+    summary = get_session_summary(db, hotel_id=1, session_id=session.id)
+    assert summary["expected_balance"] == Decimal("100.00")
+    assert summary["income_total"] == Decimal("0.00")
+    assert summary["movements_count"] == 0
+
+    # Now a real cash payment on a third reservation is the only thing that
+    # may move the caja.
+    cash_reservation = _extra_reservation("CASH-NONCASH-CASH")
+    process_payment(
+        db,
+        PaymentRequest(
+            reservation_id=cash_reservation.id,
+            amount=30.0,
+            payment_method=PaymentMethodEnum.CASH,
+            transaction_type=TransactionTypeEnum.DEPOSIT,
+        ),
+        hotel_id=1,
+        actor_user_id=10,
+    )
+    db.flush()
+
+    summary_after_cash = get_session_summary(db, hotel_id=1, session_id=session.id)
+    assert summary_after_cash["expected_balance"] == Decimal("130.00")
+    assert len(list_movements(db, hotel_id=1, session_id=session.id)) == 1
+
+
 def test_close_creates_zero_balance_successor_and_custody_handoff(db):
     _hotel(db, 1)
     _user(db, 10)
