@@ -1100,8 +1100,8 @@
     "hash": "70ea4197fe8494bac4fc09ce0bd4dfb2"
   },
   "frontend/playwright.config.ts": {
-    "mtime": 1784955601503.1125,
-    "hash": "90e438adf957f38891a0b1b6220d70ec"
+    "mtime": 1784965144659.8662,
+    "hash": "165a35f1914346c910510ea2a635e7c7"
   },
   "frontend/src/App.tsx": {
     "mtime": 1784955601506.4058,
@@ -1280,8 +1280,8 @@
     "hash": "61cf34416d974ca23a4862fae03c4114"
   },
   "frontend/src/hooks/useCashRegister.ts": {
-    "mtime": 1784955601509.5327,
-    "hash": "7547b23a2215f839bf901b80f9dd926a"
+    "mtime": 1784963653760.751,
+    "hash": "0e23ac94951201e52a9e40da8bf91b87"
   },
   "frontend/src/hooks/useCategories.ts": {
     "mtime": 1784955601509.5803,
@@ -3356,8 +3356,8 @@
     "hash": "11bf9583c0a905deb7f7e760df835718"
   },
   "frontend/e2e/responsive-smoke.spec.ts": {
-    "mtime": 1784955601500.2031,
-    "hash": "62dbb2f1b3275714d02208beba14f74c"
+    "mtime": 1784965137254.6406,
+    "hash": "13bf86e6645a25ed00d115823c42ab82"
   },
   "docs/qa/2026-07-24-pms-e2e-status.md": {
     "mtime": 1784955601496.8403,
@@ -3604,8 +3604,8 @@
     "hash": "20eb4089eabf8f710042345d248d2d27"
   },
   "frontend/e2e/manager-reports-journey.spec.ts": {
-    "mtime": 1784960324880.066,
-    "hash": "339ee68cb4d682f3f72c7fa376c458a4"
+    "mtime": 1784964783393.6157,
+    "hash": "8cc98ceede6209051341f73a1419d41f"
   },
   "frontend/e2e/reception-checkin-checkout-journey.spec.ts": {
     "mtime": 1784960960019.7356,
