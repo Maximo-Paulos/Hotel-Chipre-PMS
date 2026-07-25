@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import { Link, Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import { MasterAdminSessionProvider, useMasterAdminSession } from "./session";
@@ -125,7 +125,9 @@ export function MasterAdminProtectedShell() {
               ))}
             </nav>
           </div>
-          <Outlet />
+          <Suspense fallback={<p className="text-sm text-slate-300">Cargando...</p>}>
+            <Outlet />
+          </Suspense>
         </main>
       </div>
     </div>

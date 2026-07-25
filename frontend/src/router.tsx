@@ -1,67 +1,145 @@
-import { useEffect, type ReactNode } from "react";
+import { lazy, useEffect, type ReactNode } from "react";
 import { createBrowserRouter, Navigate, useLocation } from "react-router-dom";
 
 import { isAppHostname, resolveAppLocation, resolveSiteLocation } from "./config/publicUrls";
 import { useOnboardingStatus } from "./hooks/useOnboardingStatus";
 import { useSession } from "./state/session";
 import { AppShell } from "./ui/AppShell";
-import { AcceptInvitationPage } from "./views/public/AcceptInvitationPage";
 import { FaqPage } from "./views/public/FaqPage";
-import { ForgotPasswordPage } from "./views/public/ForgotPasswordPage";
 import { FunctionsPage } from "./views/public/FunctionsPage";
-import { LoginPage } from "./views/public/LoginPage";
 import { MarketingHomePage } from "./views/public/MarketingHomePage";
 import { PmsHoteleroPage } from "./views/public/PmsHoteleroPage";
 import { PricingPage as PricingPageView } from "./views/public/PricingPage";
-import { RegisterOwnerPage } from "./views/public/RegisterOwnerPage";
-import { ResetPasswordPage } from "./views/public/ResetPasswordPage";
 import { SoftwareParaHotelesPage } from "./views/public/SoftwareParaHotelesPage";
-import { VerifyEmailPage } from "./views/public/VerifyEmailPage";
-import { CashRegisterPage } from "./views/protected/CashRegisterPage";
-import { CompaniesPage } from "./views/protected/CompaniesPage";
-import { DashboardPage } from "./views/protected/DashboardPage";
-import { GuestsPage } from "./views/protected/GuestsPage";
-import { LaundryPage } from "./views/protected/LaundryPage";
-import { OccupancyPlanningPage } from "./views/protected/OccupancyPlanningPage";
-import { RateCalendarPage } from "./views/protected/RateCalendarPage";
-import { ReservationsPage } from "./views/protected/ReservationsPage";
-import { ReportsPage } from "./views/protected/ReportsPage";
-import { RoomsPage } from "./views/protected/RoomsPage";
-import { SettingsAssistantPage } from "./views/protected/SettingsAssistantPage";
-import SettingsSubscriptionPage from "./views/protected/SettingsSubscriptionPage";
-import { SettingsConnectionsPage } from "./views/protected/SettingsConnectionsPage";
-import { SettingsHotelPage } from "./views/protected/SettingsHotelPage";
-import { SettingsSecurityPage } from "./views/protected/SettingsSecurityPage";
-import { SettingsTestsPage } from "./views/protected/SettingsTestsPage";
-import { SettingsUsersPage } from "./views/protected/SettingsUsersPage";
-import { SettingsApiKeysPage } from "./views/protected/SettingsApiKeysPage";
-import { SettingsPermissionsPage } from "./views/protected/SettingsPermissionsPage";
-import { SettingsWhatsAppPage } from "./views/protected/SettingsWhatsAppPage";
-import { StockPage } from "./views/protected/StockPage";
-import { WaitlistPage } from "./views/protected/WaitlistPage";
-import {
-  AnalyticsCategoryDetailPage,
-  AnalyticsAIChatPage,
-  AnalyticsChannelsPage,
-  AnalyticsCompanyDetailPage,
-  AnalyticsHomePage,
-  AnalyticsOperationsPage,
-  AnalyticsRoomDetailPage,
-  AnalyticsRoomsPage,
-  AnalyticsSegmentsPage,
-  RoomStateEventsPage
-} from "./views/protected/analytics/AnalyticsPages";
-import { OnboardingWizard } from "./views/onboarding/OnboardingWizard";
 import {
   MasterAdminProtectedShell,
   MasterAdminRoot
 } from "./master_admin/layout";
-import { MasterAdminAuditPage } from "./master_admin/pages/AuditPage";
-import { MasterAdminBillingPage } from "./master_admin/pages/BillingPage";
-import { MasterAdminDashboardPage } from "./master_admin/pages/DashboardPage";
-import { MasterAdminEmailPage } from "./master_admin/pages/EmailPage";
-import { MasterAdminLoginPage } from "./master_admin/pages/LoginPage";
-import { MasterAdminStripePage } from "./master_admin/pages/StripePage";
+
+// Marketing pages stay eager: they render on hotels-pms.com for SEO/first paint,
+// and are excluded from the app-host bundle path entirely (see appRoutes below).
+
+// Auth/public app-host pages: no SEO need, safe to lazy-load.
+const LoginPage = lazy(() => import("./views/public/LoginPage").then((m) => ({ default: m.LoginPage })));
+const RegisterOwnerPage = lazy(() =>
+  import("./views/public/RegisterOwnerPage").then((m) => ({ default: m.RegisterOwnerPage }))
+);
+const ForgotPasswordPage = lazy(() =>
+  import("./views/public/ForgotPasswordPage").then((m) => ({ default: m.ForgotPasswordPage }))
+);
+const ResetPasswordPage = lazy(() =>
+  import("./views/public/ResetPasswordPage").then((m) => ({ default: m.ResetPasswordPage }))
+);
+const AcceptInvitationPage = lazy(() =>
+  import("./views/public/AcceptInvitationPage").then((m) => ({ default: m.AcceptInvitationPage }))
+);
+const VerifyEmailPage = lazy(() =>
+  import("./views/public/VerifyEmailPage").then((m) => ({ default: m.VerifyEmailPage }))
+);
+
+// Protected app pages.
+const CashRegisterPage = lazy(() =>
+  import("./views/protected/CashRegisterPage").then((m) => ({ default: m.CashRegisterPage }))
+);
+const CompaniesPage = lazy(() =>
+  import("./views/protected/CompaniesPage").then((m) => ({ default: m.CompaniesPage }))
+);
+const DashboardPage = lazy(() =>
+  import("./views/protected/DashboardPage").then((m) => ({ default: m.DashboardPage }))
+);
+const GuestsPage = lazy(() => import("./views/protected/GuestsPage").then((m) => ({ default: m.GuestsPage })));
+const LaundryPage = lazy(() => import("./views/protected/LaundryPage").then((m) => ({ default: m.LaundryPage })));
+const OccupancyPlanningPage = lazy(() =>
+  import("./views/protected/OccupancyPlanningPage").then((m) => ({ default: m.OccupancyPlanningPage }))
+);
+const RateCalendarPage = lazy(() =>
+  import("./views/protected/RateCalendarPage").then((m) => ({ default: m.RateCalendarPage }))
+);
+const ReservationsPage = lazy(() =>
+  import("./views/protected/ReservationsPage").then((m) => ({ default: m.ReservationsPage }))
+);
+const ReportsPage = lazy(() => import("./views/protected/ReportsPage").then((m) => ({ default: m.ReportsPage })));
+const RoomsPage = lazy(() => import("./views/protected/RoomsPage").then((m) => ({ default: m.RoomsPage })));
+const SettingsAssistantPage = lazy(() => import("./views/protected/SettingsAssistantPage"));
+const SettingsSubscriptionPage = lazy(() => import("./views/protected/SettingsSubscriptionPage"));
+const SettingsConnectionsPage = lazy(() =>
+  import("./views/protected/SettingsConnectionsPage").then((m) => ({ default: m.SettingsConnectionsPage }))
+);
+const SettingsHotelPage = lazy(() => import("./views/protected/SettingsHotelPage"));
+const SettingsSecurityPage = lazy(() =>
+  import("./views/protected/SettingsSecurityPage").then((m) => ({ default: m.SettingsSecurityPage }))
+);
+const SettingsTestsPage = lazy(() => import("./views/protected/SettingsTestsPage"));
+const SettingsUsersPage = lazy(() =>
+  import("./views/protected/SettingsUsersPage").then((m) => ({ default: m.SettingsUsersPage }))
+);
+const SettingsApiKeysPage = lazy(() =>
+  import("./views/protected/SettingsApiKeysPage").then((m) => ({ default: m.SettingsApiKeysPage }))
+);
+const SettingsPermissionsPage = lazy(() =>
+  import("./views/protected/SettingsPermissionsPage").then((m) => ({ default: m.SettingsPermissionsPage }))
+);
+const SettingsWhatsAppPage = lazy(() =>
+  import("./views/protected/SettingsWhatsAppPage").then((m) => ({ default: m.SettingsWhatsAppPage }))
+);
+const StockPage = lazy(() => import("./views/protected/StockPage").then((m) => ({ default: m.StockPage })));
+const WaitlistPage = lazy(() => import("./views/protected/WaitlistPage").then((m) => ({ default: m.WaitlistPage })));
+const OnboardingWizard = lazy(() =>
+  import("./views/onboarding/OnboardingWizard").then((m) => ({ default: m.OnboardingWizard }))
+);
+
+// Analytics pages all live in one file; Vite splits it into a single shared chunk
+// loaded once on first visit to any /analytics/* route.
+const AnalyticsHomePage = lazy(() =>
+  import("./views/protected/analytics/AnalyticsPages").then((m) => ({ default: m.AnalyticsHomePage }))
+);
+const AnalyticsRoomsPage = lazy(() =>
+  import("./views/protected/analytics/AnalyticsPages").then((m) => ({ default: m.AnalyticsRoomsPage }))
+);
+const AnalyticsRoomDetailPage = lazy(() =>
+  import("./views/protected/analytics/AnalyticsPages").then((m) => ({ default: m.AnalyticsRoomDetailPage }))
+);
+const AnalyticsCategoryDetailPage = lazy(() =>
+  import("./views/protected/analytics/AnalyticsPages").then((m) => ({ default: m.AnalyticsCategoryDetailPage }))
+);
+const AnalyticsSegmentsPage = lazy(() =>
+  import("./views/protected/analytics/AnalyticsPages").then((m) => ({ default: m.AnalyticsSegmentsPage }))
+);
+const AnalyticsCompanyDetailPage = lazy(() =>
+  import("./views/protected/analytics/AnalyticsPages").then((m) => ({ default: m.AnalyticsCompanyDetailPage }))
+);
+const AnalyticsChannelsPage = lazy(() =>
+  import("./views/protected/analytics/AnalyticsPages").then((m) => ({ default: m.AnalyticsChannelsPage }))
+);
+const AnalyticsOperationsPage = lazy(() =>
+  import("./views/protected/analytics/AnalyticsPages").then((m) => ({ default: m.AnalyticsOperationsPage }))
+);
+const AnalyticsAIChatPage = lazy(() =>
+  import("./views/protected/analytics/AnalyticsPages").then((m) => ({ default: m.AnalyticsAIChatPage }))
+);
+const RoomStateEventsPage = lazy(() =>
+  import("./views/protected/analytics/AnalyticsPages").then((m) => ({ default: m.RoomStateEventsPage }))
+);
+
+// Master admin pages.
+const MasterAdminAuditPage = lazy(() =>
+  import("./master_admin/pages/AuditPage").then((m) => ({ default: m.MasterAdminAuditPage }))
+);
+const MasterAdminBillingPage = lazy(() =>
+  import("./master_admin/pages/BillingPage").then((m) => ({ default: m.MasterAdminBillingPage }))
+);
+const MasterAdminDashboardPage = lazy(() =>
+  import("./master_admin/pages/DashboardPage").then((m) => ({ default: m.MasterAdminDashboardPage }))
+);
+const MasterAdminEmailPage = lazy(() =>
+  import("./master_admin/pages/EmailPage").then((m) => ({ default: m.MasterAdminEmailPage }))
+);
+const MasterAdminLoginPage = lazy(() =>
+  import("./master_admin/pages/LoginPage").then((m) => ({ default: m.MasterAdminLoginPage }))
+);
+const MasterAdminStripePage = lazy(() =>
+  import("./master_admin/pages/StripePage").then((m) => ({ default: m.MasterAdminStripePage }))
+);
 
 const APP_HOST = isAppHostname();
 

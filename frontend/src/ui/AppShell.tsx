@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { Suspense, useEffect, useMemo } from "react";
 import cx from "clsx";
 import { Link, NavLink, Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 
@@ -276,7 +276,9 @@ export function AppShell() {
 
           <main className="min-w-0 flex-1 px-4 py-8 sm:px-8">
             <div className="mx-auto max-w-6xl min-w-0">
-              <Outlet />
+              <Suspense fallback={<p className="text-sm text-slate-500">Cargando...</p>}>
+                <Outlet />
+              </Suspense>
             </div>
           </main>
         </div>
