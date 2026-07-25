@@ -174,6 +174,7 @@ class ReservationPendingActionRead(BaseModel):
     detail: str
     reservation_id: int
     confirmation_code: str
+    guest_name: Optional[str] = None
     reservation_status: str
     source: str
     source_provider_code: Optional[str] = None

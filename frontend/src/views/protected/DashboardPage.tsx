@@ -308,16 +308,28 @@ export function DashboardPage() {
                         {action.priority}
                       </span>
                       <span className="text-xs font-semibold text-slate-700">{action.confirmation_code}</span>
+                      {action.guest_name && (
+                        <span className="text-xs text-slate-600">{action.guest_name}</span>
+                      )}
                     </div>
                     <p className="mt-1 text-sm font-semibold text-slate-900">{action.title}</p>
                     <p className="text-sm text-slate-600">{action.detail}</p>
                   </div>
                   <div className="text-right text-xs text-slate-500">
                     <p>
-                      {action.check_in_date} ? {action.check_out_date}
+                      {action.check_in_date} → {action.check_out_date}
                     </p>
                     <p>{action.source_provider_code || action.source}</p>
                   </div>
+                </div>
+                <div className="mt-2 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => openReservation(action.reservation_id)}
+                    className="inline-flex min-h-11 items-center rounded-lg border border-brand-200 bg-white px-3 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-50"
+                  >
+                    Ver reserva
+                  </button>
                 </div>
               </div>
             ))

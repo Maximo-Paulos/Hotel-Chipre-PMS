@@ -241,7 +241,7 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
 
               <section className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                 <p className="text-xs uppercase tracking-wide text-slate-500">Huéspedes</p>
-                <p className="mt-1 font-semibold text-slate-900">{guestFullName(reservation.guest, reservation.guest_id)}</p>
+                <p data-testid="drawer-guest-name" className="mt-1 font-semibold text-slate-900">{guestFullName(reservation.guest, reservation.guest_id)}</p>
                 <p className="text-xs text-slate-500">Titular</p>
                 {reservation.additional_guests && reservation.additional_guests.length > 0 ? (
                   <ul className="mt-2 space-y-1">

@@ -108,7 +108,11 @@ test("owner opens the reservation drawer from the dashboard, global search, and 
   const drawer = page.getByRole("dialog", { name: confirmationCode });
   await expect(drawer).toBeVisible();
   await expect(drawer.getByText("Pendiente", { exact: true })).toBeVisible();
-  await expect(drawer.getByText(`Huésped ${guestLastName}`, { exact: false })).toBeVisible();
+  // B6.2 pending-action titles can now also contain the guest's full name
+  // (e.g. "Cobrar saldo pendiente a Huésped ..."), so scope this assertion to
+  // the drawer's own guest-name field instead of a substring search over the
+  // whole dialog.
+  await expect(drawer.getByTestId("drawer-guest-name")).toHaveText(`Huésped ${guestLastName}`);
   await expect(drawer).toContainText(guestLastName);
   await expect(drawer.getByText("Sin acompañantes cargados.", { exact: true })).toBeVisible();
   const balanceBeforePayment = await drawer.getByTestId("drawer-balance-due").innerText();

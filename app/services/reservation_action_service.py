@@ -320,6 +320,16 @@ def clear_reservation_manual_review(
 
 
 
+def _guest_display_name(reservation: Reservation) -> str:
+    """B6.2: hotel-vocabulary titles need a human name, not a system code."""
+    guest = reservation.guest
+    return guest.full_name if guest is not None else f"Huésped #{reservation.guest_id}"
+
+
+def _fmt_date(value: date) -> str:
+    return value.strftime("%d/%m/%Y")
+
+
 def _build_pending_actions(
     *,
     reservation: Reservation,
@@ -328,6 +338,9 @@ def _build_pending_actions(
     financial_summary: dict[str, Any],
 ) -> list[dict[str, Any]]:
     candidates: list[_ActionCandidate] = []
+    guest_name = _guest_display_name(reservation)
+    check_in = _fmt_date(reservation.check_in_date)
+    check_out = _fmt_date(reservation.check_out_date)
 
     def add(candidate: _ActionCandidate) -> None:
         candidates.append(candidate)
@@ -343,7 +356,7 @@ def _build_pending_actions(
                 action_key="manual_review_required",
                 code="manual_review_required",
                 priority="critical",
-                title="Revision manual requerida",
+                title=f"Revisar reserva de {guest_name} — llega {check_in}",
                 detail="La reserva quedo marcada para revision manual antes de seguir operando.",
             )
         )
@@ -354,7 +367,7 @@ def _build_pending_actions(
                 action_key="assign_room",
                 code="assign_room",
                 priority="high" if reservation.check_in_date <= reservation.check_out_date else "medium",
-                title="Asignar habitacion",
+                title=f"Asignar habitación a {guest_name} — llega {check_in}",
                 detail="La reserva sigue sin habitacion asignada y requiere confirmacion operativa.",
             )
         )
@@ -365,7 +378,7 @@ def _build_pending_actions(
                 action_key=f"allocation:{reservation.allocation_status}",
                 code="allocation_follow_up",
                 priority="critical" if reservation.allocation_status == "error" else "high",
-                title="Revisar asignacion",
+                title=f"Revisar asignación de habitación de {guest_name} — llega {check_in}",
                 detail=f"El motor de asignacion dejo la reserva en estado '{reservation.allocation_status}'.",
             )
         )
@@ -377,7 +390,7 @@ def _build_pending_actions(
                 action_key="resolve_external_channel",
                 code="resolve_external_channel",
                 priority="critical",
-                title="Resolver canal externo",
+                title=f"Resolver pago pendiente con el canal de {guest_name} — sale {check_out}",
                 detail="La reserva requiere una accion pendiente contra la OTA o una resolucion manual del settlement.",
                 reference_type="ota_link" if ota_link else None,
                 reference_id=ota_link.id if ota_link else None,
@@ -389,7 +402,7 @@ def _build_pending_actions(
                 action_key="collect_from_guest",
                 code="collect_from_guest",
                 priority="high",
-                title="Cobrar saldo al huesped",
+                title=f"Cobrar saldo pendiente a {guest_name} — sale {check_out}",
                 detail="Queda saldo operativo por cobrar directamente en el hotel.",
             )
         )
@@ -399,7 +412,7 @@ def _build_pending_actions(
                 action_key="await_channel_settlement",
                 code="await_channel_settlement",
                 priority="medium",
-                title="Esperar settlement del canal",
+                title=f"Esperar liquidación del canal de {guest_name} — sale {check_out}",
                 detail="La reserva esta marcada como OTA prepaga y todavia falta confirmar el settlement del canal.",
             )
         )
@@ -409,7 +422,7 @@ def _build_pending_actions(
                 action_key="review_cancellation_settlement",
                 code="review_cancellation_settlement",
                 priority="high",
-                title="Revisar cancelacion y settlement",
+                title=f"Revisar cancelación y liquidación de {guest_name} — sale {check_out}",
                 detail="La reserva fue cancelada pero todavia requiere revisar el settlement o devolucion con el canal.",
             )
         )
@@ -420,7 +433,7 @@ def _build_pending_actions(
                 action_key="financial_reconciliation_gap",
                 code="financial_reconciliation_gap",
                 priority="critical",
-                title="Conciliar diferencia financiera",
+                title=f"Conciliar diferencia de pagos de {guest_name} — sale {check_out}",
                 detail="El monto pagado en la reserva no coincide con la suma de transacciones registradas.",
             )
         )
@@ -431,7 +444,7 @@ def _build_pending_actions(
                 action_key=f"ota_link:{ota_link.id}:manual_resolution_required",
                 code="resolve_external_channel",
                 priority="critical",
-                title="Cerrar estado en OTA",
+                title=f"Cerrar estado en el canal externo de {guest_name} — sale {check_out}",
                 detail="El vinculo OTA quedo en resolucion manual requerida y necesita cierre operativo.",
                 reference_type="ota_link",
                 reference_id=ota_link.id,
@@ -445,7 +458,7 @@ def _build_pending_actions(
                     action_key=f"adjustment:{adjustment.id}:review",
                     code="review_adjustment",
                     priority="high",
-                    title="Revisar ajuste operativo",
+                    title=f"Revisar ajuste operativo de {guest_name} — sale {check_out}",
                     detail=f"Hay un ajuste '{adjustment.kind.value}' todavia en estado '{adjustment.status.value}'.",
                     reference_type="reservation_adjustment",
                     reference_id=adjustment.id,
@@ -457,7 +470,7 @@ def _build_pending_actions(
                     action_key=f"adjustment:{adjustment.id}:external_resolution",
                     code="resolve_adjustment_external_action",
                     priority="high",
-                    title="Resolver accion externa del ajuste",
+                    title=f"Resolver acción externa del ajuste de {guest_name} — sale {check_out}",
                     detail="El ajuste operativo requiere una accion pendiente sobre el canal o una confirmacion manual del hotel.",
                     reference_type="reservation_adjustment",
                     reference_id=adjustment.id,
@@ -465,13 +478,13 @@ def _build_pending_actions(
             )
 
     return [
-        _decorate_action(reservation=reservation, candidate=candidate)
+        _decorate_action(reservation=reservation, candidate=candidate, guest_name=guest_name)
         for candidate in _dedupe_candidates(candidates)
     ]
 
 
 
-def _decorate_action(*, reservation: Reservation, candidate: _ActionCandidate) -> dict[str, Any]:
+def _decorate_action(*, reservation: Reservation, candidate: _ActionCandidate, guest_name: str) -> dict[str, Any]:
     return {
         "action_key": candidate.action_key,
         "code": candidate.code,
@@ -480,6 +493,7 @@ def _decorate_action(*, reservation: Reservation, candidate: _ActionCandidate) -
         "detail": candidate.detail,
         "reservation_id": reservation.id,
         "confirmation_code": reservation.confirmation_code,
+        "guest_name": guest_name,
         "reservation_status": reservation.status.value,
         "source": reservation.source.value,
         "source_provider_code": reservation.source_provider_code,

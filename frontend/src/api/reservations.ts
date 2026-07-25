@@ -74,6 +74,7 @@ export type ReservationPendingAction = {
   detail: string;
   reservation_id: number;
   confirmation_code: string;
+  guest_name?: string | null;
   reservation_status: string;
   source: string;
   source_provider_code?: string | null;
