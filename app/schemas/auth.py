@@ -1,8 +1,8 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 
 
 class RegisterRequest(BaseModel):
-    email: str
+    email: EmailStr
     password: str = Field(min_length=6)
     role: str | None = "owner"
 

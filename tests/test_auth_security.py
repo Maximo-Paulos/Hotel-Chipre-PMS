@@ -344,6 +344,20 @@ def test_legacy_public_email_endpoints_are_retired(client_and_db):
     assert resp.status_code == 410
 
 
+def test_register_rejects_malformed_email(client_and_db, monkeypatch):
+    """RegisterRequest.email was a plain str with no format validation, so
+    garbage like "not-an-email" was silently accepted and stored."""
+    client, db, _session_factory = client_and_db
+    _configure_resend(monkeypatch, [])
+
+    response = client.post(
+        "/api/auth/register",
+        json={"email": "not-an-email-at-all", "password": "Demo123!"},
+    )
+    assert response.status_code == 422, response.text
+    assert db.query(User).filter(User.email == "not-an-email-at-all").first() is None
+
+
 def test_self_registration_cannot_grant_platform_admin_role(client_and_db, fixed_code_patch, monkeypatch):
     """
     A guest self-registering must never end up with User.role="platform_admin"
