@@ -8,6 +8,7 @@ import re
 import secrets
 import warnings
 from datetime import datetime, timezone
+from decimal import Decimal
 from io import BytesIO
 
 from PIL import Image, ImageOps, UnidentifiedImageError
@@ -19,6 +20,7 @@ from app.models.payment_proof import PaymentProof, PaymentProofBlob, PaymentProo
 from app.models.reservation import Reservation
 from app.models.transaction import PaymentMethodEnum, TransactionTypeEnum
 from app.schemas.transaction import PaymentRequest
+from app.services.financial_ledger import operational_balance_due
 from app.services.payment_service import PaymentError, process_payment
 from app.services.audit_log_service import queue_audit_log
 
@@ -104,7 +106,12 @@ def submit_transfer_proof(
     reservation = _reservation(db, hotel_id, reservation_id)
     if amount <= 0:
         raise PaymentProofError("El importe del comprobante debe ser positivo")
-    if amount > reservation.balance_due:
+    # Use the ledger-derived operational balance (room + billing adjustments like
+    # consumption charges), not the naive Reservation.balance_due property, which
+    # only accounts for total_amount - amount_paid and would reject legitimate
+    # transfers that also cover real consumption on the account.
+    balance = operational_balance_due(db, hotel_id=hotel_id, reservation=reservation)
+    if Decimal(str(amount)) > balance:
         raise PaymentProofError("El importe supera el saldo pendiente de la reserva")
 
     content, content_type, extension = _decode_image(image_base64)

@@ -11,6 +11,7 @@ from PIL import Image
 from app.models.guest import Guest
 from app.models.audit_log import AuditLog
 from app.models.hotel_config import HotelConfiguration
+from app.models.operations import BillingAdjustment, BillingAdjustmentTypeEnum
 from app.models.payment_proof import PaymentProof, PaymentProofBlob, PaymentProofStatusEnum
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.room import RoomCategory
@@ -188,6 +189,43 @@ def test_approval_creates_completed_transfer_transaction_and_updates_balance(db)
     again = approve_transfer_proof(db, hotel_id=1, proof_id=proof.id, reviewed_by_user_id=20)
     assert again.transaction_id == approved.transaction_id
     assert db.query(PaymentProof).count() == 1
+
+
+def test_submit_transfer_proof_allows_amount_covering_billing_adjustments(db):
+    """A guest with real consumption charges (e.g. minibar) owes more than
+    total_amount - amount_paid. Reservation.balance_due ignores those charges
+    (same known gap already fixed in the frontend and operational reports), so
+    submit_transfer_proof must not reuse that naive property as its cap -- a
+    legitimate transfer that covers room + consumption must not be rejected.
+    """
+    reservation = _reservation(db, 1, "PROOF-ADJ")
+    db.add(
+        BillingAdjustment(
+            hotel_id=1,
+            reservation_id=reservation.id,
+            adjustment_type=BillingAdjustmentTypeEnum.CHARGE,
+            amount=Decimal("50.00"),
+            currency_code="ARS",
+            total_amount=Decimal("50.00"),
+            notes="Minibar",
+        )
+    )
+    db.flush()
+
+    # Naive reservation.balance_due is still 100.00 (total_amount - amount_paid),
+    # but the real operational balance is 150.00 (100 room + 50 consumption).
+    assert reservation.balance_due == Decimal("100.00")
+
+    proof = submit_transfer_proof(
+        db,
+        hotel_id=1,
+        reservation_id=reservation.id,
+        amount=Decimal("120.00"),
+        image_base64=_image_base64(),
+        original_filename="transfer.png",
+        submitted_by_user_id=10,
+    )
+    assert proof.amount == Decimal("120.00")
 
 
 def test_rejected_proof_requires_reason_and_cannot_be_approved(db):
