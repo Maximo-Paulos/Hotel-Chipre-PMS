@@ -219,11 +219,17 @@ def list_reservations(
     status_filter: str = "",
     from_date: date = None,
     to_date: date = None,
+    search: str = "",
     db: Session = Depends(get_db),
     context: AuthContext = Depends(get_auth_context),
 ):
     reservations = list_reservations_service(
-        db, hotel_id=context.hotel_id, status_filter=status_filter, from_date=from_date, to_date=to_date
+        db,
+        hotel_id=context.hotel_id,
+        status_filter=status_filter,
+        from_date=from_date,
+        to_date=to_date,
+        search=search,
     )
     try:
         return [_to_read(r) for r in reservations]

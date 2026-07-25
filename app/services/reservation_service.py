@@ -947,6 +947,7 @@ def list_reservations(
     status_filter: str = "",
     from_date: Optional[date] = None,
     to_date: Optional[date] = None,
+    search: Optional[str] = None,
 ) -> list[Reservation]:
     query = db.query(Reservation).filter(
         Reservation.hotel_id == hotel_id,
@@ -958,6 +959,17 @@ def list_reservations(
         query = query.filter(Reservation.check_in_date >= from_date)
     if to_date:
         query = query.filter(Reservation.check_out_date <= to_date)
+    if search:
+        term = search.strip()
+        if term:
+            # Global reservation search (B1 header search): match confirmation
+            # code or guest last name. Guest is joined scoped to the same
+            # hotel_id so a search can never leak a match from another hotel.
+            like = f"%{term}%"
+            query = query.join(Guest, Guest.id == Reservation.guest_id).filter(
+                Guest.hotel_id == hotel_id,
+                (Reservation.confirmation_code.ilike(like)) | (Guest.last_name.ilike(like)),
+            )
     return query.order_by(Reservation.check_in_date).all()
 
 
