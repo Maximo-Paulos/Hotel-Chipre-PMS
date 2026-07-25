@@ -327,6 +327,12 @@ def _apply_manual_amounts(reservation: Reservation, data: ManualOTAReservationCr
         reservation.total_amount = data.total_amount
         reservation.subtotal_amount = data.total_amount
         reservation.net_amount = data.total_amount
+    if data.target_currency:
+        # Labels the reservation with the currency the operator entered the
+        # total in. This does NOT run a live FX conversion (that mechanism is
+        # rate_plan + OTACurrencyRate-only, see reservation_service.py) -- it
+        # just prevents a USD total from being silently mislabeled as ARS.
+        reservation.currency_code = data.target_currency.strip().upper()
     if data.amount_paid is not None:
         reservation.amount_paid = data.amount_paid
 

@@ -157,7 +157,13 @@ def create_new_reservation(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_CREATE)),
 ):
-    if not data.quote_token:
+    # A manual total_amount (B4: tarifa manual en reserva directa) is an
+    # explicit operator override -- it deliberately does not match whatever
+    # the auto-quote for this category/dates would be, so a quote_token
+    # would always fail its own consistency check in
+    # _validate_quote_token_for_reservation. Only the normal auto-priced path
+    # is required to prove it went through a live quote.
+    if not data.quote_token and data.total_amount is None:
         raise HTTPException(
             status_code=400,
             detail="Se requiere una cotización vigente para crear la reserva.",

@@ -143,6 +143,52 @@ def test_duplicate_channel_external_id_updates_existing_reservation_and_audits(d
     assert "BKG-DUP" in audit.details
 
 
+def test_manual_ota_total_amount_and_currency_label_applied(db):
+    """B4: the manual OTA form lets the receptionist type a total + currency
+    that don't come from any rate plan. fx_rate_snapshot is a real schema
+    field on the response (ReservationRead.fx_rate_snapshot) but stays None
+    here on purpose -- this hotel has no rate_plan/OTACurrencyRate configured
+    for this category, so there is no live conversion rate to report, and
+    this function must not fabricate one. currency_code must still reflect
+    what the operator typed so the amount isn't silently mislabeled."""
+    category, room, guest = _seed_hotel(db, hotel_id=1)
+    payload = _manual_payload(guest_id=guest.id, category_id=category.id, room_id=room.id, external_id="BKG-USD")
+    payload.target_currency = "usd"
+
+    reservation = create_or_update_manual_ota_reservation(db, hotel_id=1, data=payload, actor_user_id=7)
+    db.flush()
+
+    assert reservation.total_amount == 250
+    assert reservation.currency_code == "USD"
+    assert reservation.fx_rate_snapshot is None
+
+    # The frontend reads fx_rate_snapshot straight off the manual-ota response
+    # body (POST /api/reservations/manual-ota uses response_model=ReservationRead,
+    # see app/api/reservations.py). Confirm the field really is part of that
+    # schema so the UI isn't assuming a key that doesn't exist -- it's None
+    # here (no rate_plan/OTACurrencyRate configured), not absent.
+    from app.api.reservations import _to_read
+
+    body = _to_read(reservation).model_dump()
+    assert "fx_rate_snapshot" in body
+    assert body["fx_rate_snapshot"] is None
+    assert body["currency_code"] == "USD"
+
+    # Correcting the currency on a duplicate submission (update path) must
+    # also relabel it -- not just the initial create path.
+    updated_payload = _manual_payload(
+        guest_id=guest.id, category_id=category.id, room_id=room.id, external_id="BKG-USD"
+    )
+    updated_payload.target_currency = "ars"
+    updated_payload.total_amount = 300
+    updated = create_or_update_manual_ota_reservation(db, hotel_id=1, data=updated_payload, actor_user_id=7)
+    db.flush()
+
+    assert updated.id == reservation.id
+    assert updated.total_amount == 300
+    assert updated.currency_code == "ARS"
+
+
 def test_no_guarantee_ota_internal_release_does_not_call_provider_cancel(db, monkeypatch):
     category, room, guest = _seed_hotel(db, hotel_id=1)
     reservation = create_or_update_manual_ota_reservation(

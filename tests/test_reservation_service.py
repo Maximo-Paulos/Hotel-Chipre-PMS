@@ -3,6 +3,7 @@ Tests for Reservation Service — booking creation, availability checks, state t
 """
 import pytest
 from datetime import date
+from decimal import Decimal
 from sqlalchemy import event
 
 from app.models.daily_rate import DailyRate
@@ -146,6 +147,32 @@ class TestReservationCreation:
         assert res.balance_due == 400.0
         assert res.status == ReservationStatusEnum.PENDING
         assert res.room_id is not None  # Auto-assigned
+
+    def test_create_reservation_manual_total_override_without_company(
+        self, db, sample_guest, sample_rooms, sample_categories, hotel_config
+    ):
+        """B4: manual tarifa on a direct reservation with no company_id -- the
+        auto-computed daily-rate total (4 nights x $100 = $400) must be
+        overridden by the explicit total_amount, and the reservation must be
+        labeled with target_currency even though no rate_plan/OTACurrencyRate
+        is configured (so fx_rate_snapshot legitimately stays None -- this
+        only labels the currency, it never fabricates a conversion rate)."""
+        data = ReservationCreate(
+            guest_id=sample_guest.id,
+            category_id=sample_categories[0].id,
+            check_in_date=date(2026, 4, 1),
+            check_out_date=date(2026, 4, 5),
+            total_amount=Decimal("250.00"),
+            target_currency="USD",
+        )
+        res = create_reservation(db, data)
+        db.flush()
+
+        assert res.total_amount == 250.0
+        assert res.subtotal_amount == 250.0
+        assert res.net_amount == 250.0
+        assert res.currency_code == "USD"
+        assert res.fx_rate_snapshot is None
 
     def test_create_reservation_specific_room(self, db, sample_guest, sample_rooms, sample_categories, hotel_config):
         """Reserve a specific room."""

@@ -466,7 +466,8 @@ def _pricing_with_total(
     total_amount,
     nightly_rate,
     pricing_source: str,
-    company_id: int,
+    company_id: int | None = None,
+    currency_code: str | None = None,
 ) -> ReservationPricingResult:
     total = round(float(total_amount), 2)
     nightly = round(float(nightly_rate), 2)
@@ -481,6 +482,7 @@ def _pricing_with_total(
         pricing,
         nightly_rate=nightly,
         total_amount=total,
+        currency_code=(currency_code or pricing.currency_code),
         deposit_amount=_compute_deposit_amount(db, hotel_id=hotel_id, gross_total=total),
         subtotal_amount=total,
         tax_amount=0.0,
@@ -489,6 +491,34 @@ def _pricing_with_total(
         net_amount=total,
         pricing_source=pricing_source,
         pricing_snapshot=json.dumps(snapshot, ensure_ascii=True, sort_keys=True),
+    )
+
+
+# ponytail: manual-total override does not run the OTACurrencyRate/FxPolicy
+# conversion pipeline (that lives in pricing_policy_service.py and only fires
+# for rate_plan-priced stays) -- it just labels the reservation with the
+# currency the operator typed. fx_rate_snapshot stays whatever the earlier
+# rate_plan quote (if any) already computed; it is not fabricated here. If a
+# hotel needs a real live conversion for manual/no-rate-plan pricing, that is
+# its own feature (wiring pricing_policy_service's converter or fx_service.py
+# into this path), not something to invent inside a UI wiring task.
+def _apply_manual_total_override(
+    db: Session,
+    *,
+    hotel_id: int,
+    pricing: ReservationPricingResult,
+    total_amount,
+    target_currency: str | None,
+) -> ReservationPricingResult:
+    nightly = float(total_amount) / pricing.nights if pricing.nights else 0.0
+    return _pricing_with_total(
+        db,
+        hotel_id=hotel_id,
+        pricing=pricing,
+        total_amount=total_amount,
+        nightly_rate=nightly,
+        pricing_source="manual_total_override",
+        currency_code=target_currency.strip().upper() if target_currency else None,
     )
 
 
@@ -720,6 +750,17 @@ def create_reservation(db: Session, data: ReservationCreate, hotel_id: Optional[
     )
     if company is not None:
         pricing = _apply_corporate_pricing(db, hotel_id=hotel_id, pricing=pricing, company=company, explicit_total=data.total_amount)
+    elif data.total_amount is not None:
+        # B4: manual tarifa on a direct (non-corporate) reservation -- the
+        # same override mechanism corporate accounts already use, just
+        # without requiring a Company record for a one-off negotiated price.
+        pricing = _apply_manual_total_override(
+            db,
+            hotel_id=hotel_id,
+            pricing=pricing,
+            total_amount=data.total_amount,
+            target_currency=data.target_currency,
+        )
     pricing = _apply_custom_deposit_amount(pricing, data.deposit_amount)
     pricing_revision = build_pricing_revision(
         db,
