@@ -288,6 +288,14 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
     if not event_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Stripe event sin id")
 
+    # Stripe retries a webhook delivery whenever it doesn't get a fast 2xx ack
+    # (e.g. our own timeout). A genuine retry redelivers the SAME event id and
+    # must be a no-op, not a 500 from the unique constraint on event_id — an
+    # unhandled 500 here would just make Stripe retry forever.
+    existing = db.query(MasterStripeWebhookEvent).filter(MasterStripeWebhookEvent.event_id == event_id).first()
+    if existing is not None:
+        return {"received": True, "event_id": event_id, "duplicate": True}
+
     event = MasterStripeWebhookEvent(
         event_id=event_id,
         event_type=str(event_data.get("type") or "unknown"),

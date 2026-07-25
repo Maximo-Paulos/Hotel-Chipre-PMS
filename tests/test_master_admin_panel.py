@@ -577,3 +577,66 @@ def test_master_stripe_connect_and_webhook_signature_is_verified(master_client, 
         assert stored.delivery_status == "processed"
     finally:
         db.close()
+
+
+def test_master_stripe_webhook_retry_of_same_event_is_idempotent_not_500(master_client, monkeypatch):
+    """A genuine Stripe retry (network timeout, no ack received) redelivers the
+    SAME event id. That must be a no-op 200, never a 500 from a unique
+    constraint violation — an unhandled 500 just makes Stripe retry forever.
+    """
+    client, SessionLocal = master_client
+    monkeypatch.setenv("MASTER_ADMIN_PIN", "654321")
+    _configure_resend(monkeypatch, [])
+    get_settings.cache_clear()
+
+    db = SessionLocal()
+    try:
+        _seed_platform_admin(db)
+        db.commit()
+    finally:
+        db.close()
+
+    login = client.post(
+        "/api/master-admin/auth/login",
+        json={"email": "platform-admin@example.com", "password": "Master123!", "pin": "654321"},
+    )
+    assert login.status_code == 200, login.text
+    csrf_token = login.cookies.get("master_admin_csrf")
+
+    connect = client.post(
+        "/api/master-admin/stripe/connect",
+        headers={"X-CSRF-Token": csrf_token},
+        json={
+            "stripe_secret_key": "sk_test_123",
+            "webhook_secret": "whsec_test_secret",
+            "enabled": True,
+        },
+    )
+    assert connect.status_code == 200, connect.text
+
+    payload = {"id": "evt_retry_1", "type": "invoice.paid"}
+    body = json.dumps(payload, separators=(",", ":"))
+
+    def _post():
+        timestamp = int(time.time())
+        signed_payload = f"{timestamp}.{body}"
+        signature = hmac.new(b"whsec_test_secret", signed_payload.encode("utf-8"), hashlib.sha256).hexdigest()
+        header = f"t={timestamp},v1={signature}"
+        return client.post(
+            "/api/master-admin/stripe/webhook",
+            content=body,
+            headers={"Stripe-Signature": header, "Content-Type": "application/json"},
+        )
+
+    first = _post()
+    assert first.status_code == 200, first.text
+    second = _post()
+    assert second.status_code == 200, second.text
+    assert second.json()["event_id"] == "evt_retry_1"
+
+    db = SessionLocal()
+    try:
+        count = db.query(MasterStripeWebhookEvent).filter(MasterStripeWebhookEvent.event_id == "evt_retry_1").count()
+        assert count == 1
+    finally:
+        db.close()
