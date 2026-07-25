@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import or_
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from app.models.operations import ReservationAdjustment, ReservationAdjustmentStatusEnum, RoomMoveEvent
+from app.models.operations import BillingAdjustment, ReservationAdjustment, ReservationAdjustmentStatusEnum, RoomMoveEvent
 from app.models.ota_core import OTAReservationLink, OTAReservationLifecycleEnum
-from app.models.reservation import Reservation, ReservationStatusEnum
+from app.models.reservation import Reservation, ReservationSourceEnum, ReservationStatusEnum
+from app.models.transaction import Transaction, TransactionStatusEnum, TransactionTypeEnum
 from app.services.payment_service import get_reservation_financial_summary
 
 
@@ -23,6 +25,20 @@ _PRIORITY_SCORE = {
     "medium": 2,
     "low": 1,
 }
+
+# Mirrors the trigger conditions read by `_build_pending_actions` /
+# `_recommended_financial_action` so the SQL-level prefilter below can't drift
+# silently from the actual candidates for an action.
+_TERMINAL_STATUSES = {ReservationStatusEnum.CANCELLED, ReservationStatusEnum.CHECKED_OUT}
+_PROBLEM_ALLOCATION_STATUSES = {"manual_review", "unassigned", "error"}
+_PROBLEM_SETTLEMENT_STATUSES = {"manual_resolution_required", "pending_hotel_action"}
+_PENDING_ADJUSTMENT_STATUSES = {ReservationAdjustmentStatusEnum.DRAFT, ReservationAdjustmentStatusEnum.PENDING}
+_ACTIVE_WINDOW_DAYS = 1
+# ponytail: known ceiling -- if a hotel legitimately has more real candidates
+# than this, only the first `_CANDIDATE_CAP_MULTIPLIER * limit` (min 100) get a
+# full summary computed. Raise the multiplier if that ever clips a real hotel.
+_CANDIDATE_CAP_MULTIPLIER = 5
+_MIN_CANDIDATE_CAP = 100
 
 
 @dataclass(slots=True)
@@ -76,16 +92,13 @@ def list_pending_reservation_actions(
     hotel_id: int,
     limit: int = 100,
 ) -> list[dict[str, Any]]:
-    reservations = (
-        db.query(Reservation)
-        .filter(Reservation.hotel_id == hotel_id)
-        .order_by(Reservation.check_in_date, Reservation.id)
-        .all()
-    )
+    candidate_ids = _candidate_reservation_ids(db, hotel_id=hotel_id)
+    cap = max(_MIN_CANDIDATE_CAP, limit * _CANDIDATE_CAP_MULTIPLIER)
+    candidate_ids = candidate_ids[:cap]
 
     actions: list[dict[str, Any]] = []
-    for reservation in reservations:
-        summary = get_reservation_operations_summary(db, hotel_id=hotel_id, reservation_id=reservation.id)
+    for reservation_id in candidate_ids:
+        summary = get_reservation_operations_summary(db, hotel_id=hotel_id, reservation_id=reservation_id)
         actions.extend(summary["pending_actions"])
 
     actions.sort(
@@ -97,6 +110,143 @@ def list_pending_reservation_actions(
         )
     )
     return actions[:limit]
+
+
+def _candidate_reservation_ids(db: Session, *, hotel_id: int) -> list[int]:
+    """Bulk-compute reservation ids that could produce a pending action.
+
+    A handful of grouped/EXISTS-style queries replace the old N per-reservation
+    query fan-out. The predicate mirrors `_build_pending_actions` /
+    `_recommended_financial_action` exactly (not a rough approximation) so no
+    real action is silently dropped -- see tests/test_reservation_action_service.py
+    for the before/after correctness comparison.
+    """
+    cutoff = date.today() - timedelta(days=_ACTIVE_WINDOW_DAYS)
+    rows = db.execute(
+        select(
+            Reservation.id,
+            Reservation.status,
+            Reservation.source,
+            Reservation.room_id,
+            Reservation.allocation_status,
+            Reservation.requires_manual_review,
+            Reservation.settlement_status,
+            Reservation.payment_collection_model,
+            Reservation.amount_paid,
+            Reservation.total_amount,
+            Reservation.check_in_date,
+        )
+        .where(Reservation.hotel_id == hotel_id, Reservation.check_out_date >= cutoff)
+        .order_by(Reservation.check_in_date, Reservation.id)
+    ).all()
+    if not rows:
+        return []
+
+    ids = [row.id for row in rows]
+
+    ota_manual_resolution_ids = {
+        reservation_id
+        for (reservation_id,) in db.execute(
+            select(OTAReservationLink.reservation_id).where(
+                OTAReservationLink.hotel_id == hotel_id,
+                OTAReservationLink.reservation_id.in_(ids),
+                OTAReservationLink.provider_state == OTAReservationLifecycleEnum.MANUAL_RESOLUTION_REQUIRED,
+            )
+        )
+    }
+
+    adjustment_flag_ids: set[int] = set()
+    for reservation_id, resulting_reservation_id in db.execute(
+        select(ReservationAdjustment.reservation_id, ReservationAdjustment.resulting_reservation_id).where(
+            ReservationAdjustment.hotel_id == hotel_id,
+            or_(
+                ReservationAdjustment.reservation_id.in_(ids),
+                ReservationAdjustment.resulting_reservation_id.in_(ids),
+            ),
+            or_(
+                ReservationAdjustment.status.in_(_PENDING_ADJUSTMENT_STATUSES),
+                ReservationAdjustment.external_resolution_status.in_(_PROBLEM_SETTLEMENT_STATUSES),
+            ),
+        )
+    ):
+        if reservation_id in ids:
+            adjustment_flag_ids.add(reservation_id)
+        if resulting_reservation_id in ids:
+            adjustment_flag_ids.add(resulting_reservation_id)
+
+    billing_adjustment_ids = {
+        reservation_id
+        for (reservation_id,) in db.execute(
+            select(BillingAdjustment.reservation_id).where(
+                BillingAdjustment.hotel_id == hotel_id,
+                BillingAdjustment.reservation_id.in_(ids),
+            )
+        )
+    }
+
+    completed_paid_by_reservation: dict[int, Decimal] = {}
+    for reservation_id, amount, transaction_type in db.execute(
+        select(Transaction.reservation_id, Transaction.amount, Transaction.transaction_type).where(
+            Transaction.hotel_id == hotel_id,
+            Transaction.reservation_id.in_(ids),
+            Transaction.status == TransactionStatusEnum.COMPLETED,
+        )
+    ):
+        signed = -Decimal(str(amount)) if transaction_type == TransactionTypeEnum.REFUND else Decimal(str(amount))
+        completed_paid_by_reservation[reservation_id] = completed_paid_by_reservation.get(reservation_id, Decimal("0")) + signed
+
+    return [
+        row.id
+        for row in rows
+        if _row_could_generate_action(
+            row,
+            ota_manual_resolution_ids=ota_manual_resolution_ids,
+            adjustment_flag_ids=adjustment_flag_ids,
+            billing_adjustment_ids=billing_adjustment_ids,
+            completed_paid_by_reservation=completed_paid_by_reservation,
+        )
+    ]
+
+
+def _row_could_generate_action(
+    row: Any,
+    *,
+    ota_manual_resolution_ids: set[int],
+    adjustment_flag_ids: set[int],
+    billing_adjustment_ids: set[int],
+    completed_paid_by_reservation: dict[int, Decimal],
+) -> bool:
+    if row.requires_manual_review:
+        return True
+
+    active = row.status not in _TERMINAL_STATUSES
+    if active and row.room_id is None:
+        return True
+    if active and row.allocation_status in _PROBLEM_ALLOCATION_STATUSES:
+        return True
+
+    if row.status == ReservationStatusEnum.CANCELLED and row.source != ReservationSourceEnum.DIRECT:
+        return True
+    if row.settlement_status in _PROBLEM_SETTLEMENT_STATUSES:
+        return True
+    if row.payment_collection_model == "ota_prepaid" and row.settlement_status in {"pending", "unknown"}:
+        return True
+    if row.payment_collection_model == "hotel_collect" and (
+        Decimal(str(row.amount_paid or 0)) < Decimal(str(row.total_amount or 0)) or row.id in billing_adjustment_ids
+    ):
+        return True
+
+    if row.id in ota_manual_resolution_ids:
+        return True
+    if row.id in adjustment_flag_ids:
+        return True
+
+    materialized_paid = Decimal(str(row.amount_paid or 0))
+    completed_total = completed_paid_by_reservation.get(row.id, Decimal("0"))
+    if abs(materialized_paid - completed_total) > Decimal("0.01"):
+        return True
+
+    return False
 
 
 
