@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 
+from fastapi.routing import APIRoute, iter_route_contexts
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -90,7 +91,14 @@ def _seed_hotel(db, hotel_id: int, suffix: str) -> RoomCategory:
 
 
 def test_endpoint_is_registered():
-    paths = {route.path for route in fastapi_app.routes}
+    # FastAPI >=0.137 wraps included routers in `_IncludedRouter`; `app.routes` is
+    # no longer a flat list of `APIRoute`, so we walk it with `iter_route_contexts`
+    # (the helper FastAPI itself uses for this purpose, see fastapi/openapi/utils.py).
+    paths = {
+        context.path
+        for context in iter_route_contexts(fastapi_app.routes)
+        if isinstance(context.original_route, APIRoute)
+    }
     assert "/api/rate-calendar/daily" in paths
 
 

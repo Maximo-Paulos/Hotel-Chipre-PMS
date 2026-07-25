@@ -4,7 +4,7 @@ import fnmatch
 import inspect
 from dataclasses import dataclass
 
-from fastapi.routing import APIRoute
+from fastapi.routing import APIRoute, iter_route_contexts
 
 from app.main import app
 
@@ -124,7 +124,18 @@ def _is_route_secured(route: APIRoute) -> bool:
 
 
 def test_all_routes_are_authenticated_or_explicitly_allowlisted():
-    routes = [route for route in app.routes if isinstance(route, APIRoute)]
+    # ponytail: FastAPI >=0.137 wraps included sub-routers in `_IncludedRouter`
+    # objects, so `app.routes` is no longer a flat list of `APIRoute` -- a naive
+    # `isinstance(route, APIRoute)` filter here silently dropped every nested
+    # route (only 6 of 288 real routes survived), turning this guardrail into a
+    # false pass. `iter_route_contexts` is the helper FastAPI itself uses to walk
+    # the real route tree (see fastapi/openapi/utils.py); each `RouteContext`
+    # proxies `.path`/`.methods`/`.dependant`/`.endpoint` to the real route.
+    routes = [
+        context
+        for context in iter_route_contexts(app.routes)
+        if isinstance(context.original_route, APIRoute)
+    ]
 
     unsecured = [
         f"{','.join(sorted(route.methods))} {route.path} -> {route.name}"
