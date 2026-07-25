@@ -38,7 +38,7 @@ export function UserBadge() {
           <span data-testid="session-role">{currentRole ? roleLabels[currentRole] : "Sin rol"}</span>
           <span aria-hidden="true">|</span>
           <button
-            className="text-brand-700 hover:underline"
+            className="inline-flex min-h-11 items-center px-2 text-brand-700 hover:underline"
             onClick={handleLogout}
             type="button"
             data-testid="logout-btn"
@@ -50,7 +50,7 @@ export function UserBadge() {
           <label className="mt-2 block text-xs text-slate-600">
             <span className="mr-2 font-semibold text-slate-700">Cambiar vista</span>
             <select
-              className="rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 shadow-sm focus:border-brand-400 focus:outline-none"
+              className="h-11 rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 shadow-sm focus:border-brand-400 focus:outline-none"
               value={currentRole ?? ""}
               onChange={handleRoleChange}
               data-testid="role-switcher"

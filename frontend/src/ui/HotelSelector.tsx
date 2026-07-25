@@ -60,7 +60,7 @@ export function HotelSelector() {
     <div className="flex w-full min-w-0 max-w-full items-center gap-2 overflow-hidden rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 shadow-sm sm:w-auto">
       <select
         aria-label="Hotel activo"
-        className="min-w-0 max-w-full flex-1 rounded-md border border-slate-200 px-2 py-1 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 sm:flex-none"
+        className="h-11 min-w-0 max-w-full flex-1 rounded-md border border-slate-200 px-2 py-1 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 sm:flex-none"
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onBlur={apply}
@@ -77,7 +77,7 @@ export function HotelSelector() {
       </select>
       <button
         type="button"
-        className="text-brand-700 underline decoration-dotted decoration-2 underline-offset-2"
+        className="inline-flex min-h-11 items-center px-2 text-brand-700 underline decoration-dotted decoration-2 underline-offset-2"
         onClick={apply}
         disabled={isLoading}
       >

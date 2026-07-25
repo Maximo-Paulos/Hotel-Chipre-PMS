@@ -58,7 +58,7 @@ test.describe("Responsive mobile smoke", () => {
       const targets = await page.evaluate(() => {
         const nodes = Array.from(
           document.querySelectorAll(
-            "main button, main input:not([type='checkbox']):not([type='radio']), main select, main textarea, [role='banner'] button, [role='banner'] select"
+            "main button, main input:not([type='checkbox']):not([type='radio']), main select, main textarea, header button, header select, [role='banner'] button, [role='banner'] select"
           )
         );
         return nodes
