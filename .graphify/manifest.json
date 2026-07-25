@@ -1324,8 +1324,8 @@
     "hash": "c8e18f132eb1b14a6f2b54c5d30ac8fc"
   },
   "frontend/src/hooks/usePayments.ts": {
-    "mtime": 1784883691239.3916,
-    "hash": "1d27a7f901ab56b8ac29b39077a21c14"
+    "mtime": 1784969763615.7278,
+    "hash": "dd1cfe1e685672b54b709e33d841aca8"
   },
   "frontend/src/hooks/useRateCalendar.ts": {
     "mtime": 1784862144904.2566,
@@ -1912,8 +1912,8 @@
     "hash": "0b19fedaeb2c92477963613459feb541"
   },
   "tests/test_payment_service.py": {
-    "mtime": 1784890013982.4053,
-    "hash": "0a076a3116f77c15dfa7cd153201af0b"
+    "mtime": 1784970167166.0754,
+    "hash": "4f159245a523cfbf5e3d781cb775ee80"
   },
   "tests/test_payment_webhook_service.py": {
     "mtime": 1784862144934.3757,
@@ -3348,12 +3348,12 @@
     "hash": "aa3a745e3a950ba426beeb784c0f6fb8"
   },
   "app/services/payment_proof_service.py": {
-    "mtime": 1784873287314.2268,
-    "hash": "c08bf4bdbc5ee2698f5e448e40e04fc3"
+    "mtime": 1784969079276.4517,
+    "hash": "e5ee551af3e4960d9e8ddc0c449ec074"
   },
   "tests/test_payment_proof_service.py": {
-    "mtime": 1784873275400.87,
-    "hash": "11bf9583c0a905deb7f7e760df835718"
+    "mtime": 1784969049612.1301,
+    "hash": "a889b72dc54e8f7e74f9c01a961f074d"
   },
   "frontend/e2e/responsive-smoke.spec.ts": {
     "mtime": 1784965931685.1272,
@@ -3634,5 +3634,13 @@
   "frontend/e2e/support/email-outbox.ts": {
     "mtime": 1784968308950.5935,
     "hash": "e2d0560e6f954b5f3f2b69bb1edd7bf6"
+  },
+  "frontend/e2e/payment-journey-full-matrix.spec.ts": {
+    "mtime": 1784969701472.666,
+    "hash": "cf24ef55230d60e7c743840e57bec2e1"
+  },
+  "tests/test_mercadopago_webhook_endpoint.py": {
+    "mtime": 1784969308508.042,
+    "hash": "4024a70a277e9fbb6b48f0b732f53ff1"
   }
 }
