@@ -169,6 +169,65 @@ def test_process_payment_replays_on_duplicate_idempotency_key(db):
     assert db.query(Transaction).filter(Transaction.idempotency_key == key).count() == 1
 
 
+def test_out_of_order_webhook_cannot_regress_completed_payment_to_pending(db):
+    """A later-arriving webhook for the SAME payment reporting an earlier status
+    (network reordering, not a real refund) must not undo a completed payment.
+    """
+    reservation = _reservation(db)
+    link = _link(db, reservation)
+    approved_payload = {
+        "webhook_id": "mp-hook-order-1",
+        "payment_id": "mp-payment-order",
+        "status": "approved",
+        "amount": "100.00",
+        "currency": "ARS",
+    }
+    ingest_webhook(db, hotel_id=1, provider="mercado_pago", webhook_id="mp-hook-order-1", payload=approved_payload, payment_link_id=link.id)
+
+    stale_pending_payload = {
+        "webhook_id": "mp-hook-order-0-late",
+        "payment_id": "mp-payment-order",
+        "status": "pending",
+        "amount": "100.00",
+        "currency": "ARS",
+    }
+    ingest_webhook(db, hotel_id=1, provider="mercado_pago", webhook_id="mp-hook-order-0-late", payload=stale_pending_payload, payment_link_id=link.id)
+
+    payment = db.query(Payment).filter(Payment.external_payment_id == "mp-payment-order").one()
+    assert payment.status == "completed"
+    db.refresh(link)
+    assert link.collected_amount == Decimal("100.00")
+    assert db.query(Transaction).count() == 1
+
+
+def test_rejected_payment_cannot_be_flipped_to_completed_by_later_webhook(db):
+    """A payment already recorded as rejected/failed must not silently become
+    completed from a later webhook for the same external payment id."""
+    reservation = _reservation(db)
+    link = _link(db, reservation)
+    rejected_payload = {
+        "webhook_id": "mp-hook-rej-1",
+        "payment_id": "mp-payment-rej",
+        "status": "rejected",
+        "amount": "100.00",
+        "currency": "ARS",
+    }
+    ingest_webhook(db, hotel_id=1, provider="mercado_pago", webhook_id="mp-hook-rej-1", payload=rejected_payload, payment_link_id=link.id)
+
+    approved_payload = {
+        "webhook_id": "mp-hook-rej-2-suspicious",
+        "payment_id": "mp-payment-rej",
+        "status": "approved",
+        "amount": "100.00",
+        "currency": "ARS",
+    }
+    ingest_webhook(db, hotel_id=1, provider="mercado_pago", webhook_id="mp-hook-rej-2-suspicious", payload=approved_payload, payment_link_id=link.id)
+
+    payment = db.query(Payment).filter(Payment.external_payment_id == "mp-payment-rej").one()
+    assert payment.status == "failed"
+    assert db.query(Transaction).count() == 0
+
+
 def test_balance_due_uses_transactions_not_payments(db):
     reservation = _reservation(db)
     link = _link(db, reservation)

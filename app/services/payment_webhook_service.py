@@ -10,8 +10,6 @@ A completed gateway Payment writes exactly one Transaction via payment_service.p
 (the canonical ledger). PaymentLink collection totals are recomputed from completed Payments.
 """
 from datetime import datetime, timezone
-import hashlib
-import hmac
 import json
 from typing import Any
 
@@ -22,22 +20,15 @@ from app.models.payment import Payment, PaymentLink, PaymentWebhookEvent
 from app.models.transaction import PaymentMethodEnum, Transaction, TransactionTypeEnum
 from app.schemas.transaction import PaymentGatewayResponse, PaymentRequest
 from app.services.payment_link_service import _money, refresh_link_collection
+from app.services.payment_link_test_service import PaymentLinkTestError
+from app.services.payment_link_test_service import (
+    validate_mercadopago_webhook_signature as _validate_signature_or_raise,
+)
 from app.services.payment_service import calculate_base_amount_before_surcharge, process_payment
 
 
 class PaymentWebhookError(Exception):
     pass
-
-
-def _parse_mercadopago_signature_header(signature_header: str | None) -> dict[str, str]:
-    if not signature_header:
-        return {}
-    parts: dict[str, str] = {}
-    for chunk in signature_header.split(","):
-        key, separator, value = chunk.strip().partition("=")
-        if separator and key:
-            parts[key.strip()] = value.strip()
-    return parts
 
 
 def validate_mercadopago_webhook_signature(
@@ -47,15 +38,18 @@ def validate_mercadopago_webhook_signature(
     request_id: str | None,
     signature_header: str | None,
 ) -> bool:
-    signature_parts = _parse_mercadopago_signature_header(signature_header)
-    ts = signature_parts.get("ts")
-    v1 = signature_parts.get("v1")
-    if not secret or not data_id or not request_id or not ts or not v1:
+    """Bool-returning shim over the canonical (raising, replay-protected)
+    validator in payment_link_test_service — the one every real webhook route
+    actually calls. Kept only so existing callers of this bool API don't need
+    to change; there is exactly ONE signature-checking implementation now.
+    """
+    try:
+        _validate_signature_or_raise(
+            secret, data_id=data_id, request_id=request_id, signature_header=signature_header
+        )
+        return True
+    except PaymentLinkTestError:
         return False
-
-    manifest = f"id:{data_id};request-id:{request_id};ts:{ts};"
-    expected = hmac.new(secret.encode("utf-8"), manifest.encode("utf-8"), hashlib.sha256).hexdigest()
-    return hmac.compare_digest(expected, v1)
 
 
 def _payload_value(payload: dict[str, Any], *keys: str) -> Any:
@@ -95,6 +89,23 @@ def _completed_at(payload: dict[str, Any]) -> datetime:
             except ValueError:
                 pass
     return datetime.now(timezone.utc)
+
+
+# Payment status state machine. A later-arriving webhook (out-of-order delivery,
+# or a stale retry) must never regress a payment past a terminal state, and a
+# rejected/failed payment must never become completed except through a brand
+# new payment id (that is a distinct, correctly-approved payment).
+_ALLOWED_STATUS_TRANSITIONS: dict[str, set[str]] = {
+    "pending": {"pending", "completed", "failed", "refunded", "partially_refunded"},
+    "completed": {"completed", "refunded", "partially_refunded"},
+    "failed": {"failed"},
+    "refunded": {"refunded"},
+    "partially_refunded": {"partially_refunded", "refunded"},
+}
+
+
+def _is_allowed_status_transition(current: str, new: str) -> bool:
+    return new in _ALLOWED_STATUS_TRANSITIONS.get(current, {new})
 
 
 def _find_existing_event(db: Session, hotel_id: int, provider: str, webhook_id: str) -> PaymentWebhookEvent | None:
@@ -235,6 +246,7 @@ def ingest_webhook(
         )
         .first()
     )
+    invalid_transition = False
     if not payment:
         payment = Payment(
             hotel_id=hotel_id,
@@ -249,16 +261,32 @@ def ingest_webhook(
         )
         db.add(payment)
         db.flush()
-    else:
+    elif _is_allowed_status_transition(payment.status, status):
         payment.payment_link_id = link.id
         payment.amount = amount
         payment.currency = currency
         payment.status = status
         payment.gateway_response = payload
+    else:
+        # Out-of-order delivery or a rejected/failed payment "resurrected" by a
+        # later webhook for the same external payment id: keep the recorded
+        # (already-processed) status untouched. The event is still logged for
+        # audit, just marked as not applied.
+        attempted_status = status
+        status = payment.status
+        invalid_transition = True
 
     event, duplicate = _insert_event(db, hotel_id, payment.id, provider, webhook_id, payload)
     if duplicate:
         return {"status": "ignored", "duplicate": True, "event_id": event.id, "payment_id": payment.id}
+
+    if invalid_transition:
+        event.processed = False
+        event.processing_error = f"invalid_status_transition:{status}->{attempted_status}"
+        event.processed_at = datetime.now(timezone.utc)
+        db.flush()
+        return {"status": "ignored", "duplicate": False, "reason": "invalid_status_transition",
+                "event_id": event.id, "payment_id": payment.id}
 
     try:
         if status == "completed":
