@@ -428,8 +428,8 @@
     "hash": "21003b2f02f213513cb88859eaac5df0"
   },
   "app/main.py": {
-    "mtime": 1784888530821.8923,
-    "hash": "dc97bdf9975eecf7fc68da8b08241620"
+    "mtime": 1784999130486.5444,
+    "hash": "eb51b6a629c882558659d713087a7b68"
   },
   "app/master_admin/__init__.py": {
     "mtime": 1784862144877.3862,
@@ -2568,8 +2568,8 @@
     "hash": "8a1a0e0ec0e572f42ac241813e209bcc"
   },
   "requirements.txt": {
-    "mtime": 1784862144919.6294,
-    "hash": "157772f07b8138aaf46baffd23ba526e"
+    "mtime": 1784998997376.006,
+    "hash": "0f4308a64dd1f8d4d3bae0bcf69c717f"
   },
   "runtime.txt": {
     "mtime": 1784862144919.718,
@@ -3670,5 +3670,9 @@
   "frontend/src/hooks/useGuardedMutation.ts": {
     "mtime": 1784997512000.5457,
     "hash": "1bfb07c5777b173bc1dab7385a797c67"
+  },
+  "tests/test_security_headers.py": {
+    "mtime": 1784999194507.564,
+    "hash": "b1477cc78ff12f13b11fed7e238974e0"
   }
 }

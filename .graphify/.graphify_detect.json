@@ -618,6 +618,7 @@
       "tests/test_route_security_guardrail.py",
       "tests/test_runtime_security.py",
       "tests/test_scale_data_architecture_forward.py",
+      "tests/test_security_headers.py",
       "tests/test_soft_delete.py",
       "tests/test_staged_http_load.py",
       "tests/test_stock_service.py",
@@ -800,10 +801,10 @@
     ],
     "video": []
   },
-  "total_files": 791,
-  "total_words": 534652,
+  "total_files": 792,
+  "total_words": 534940,
   "needs_graph": true,
-  "warning": "Large corpus: 791 files · ~534,652 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
+  "warning": "Large corpus: 792 files · ~534,940 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
   "skipped_sensitive": [
     "alembic/versions/20260408_security_tokens.py",
     "alembic/versions/20260725_user_token_version.py",
@@ -818,7 +819,7 @@
   "graphifyignore_patterns": 60,
   "git": {
     "source_owner": "git",
-    "source_hash": "a333382439a2f9a54ad19d9a7ff5624604495aba",
+    "source_hash": "3574c6f81d94746a45d76ba5a9e57949d359fb8c",
     "branches": [
       "claude/feature/pms-roles-housekeeping-qa",
       "codex/feature/agent-ops-knowledge",
@@ -836,9 +837,9 @@
     "source": "cli",
     "root": ".",
     "git_root": ".",
-    "head": "a333382439a2f9a54ad19d9a7ff5624604495aba",
+    "head": "3574c6f81d94746a45d76ba5a9e57949d359fb8c",
     "candidate_count": null,
-    "included_count": 791,
+    "included_count": 792,
     "excluded_untracked_count": 0,
     "excluded_ignored_count": 0,
     "excluded_sensitive_count": 9,
