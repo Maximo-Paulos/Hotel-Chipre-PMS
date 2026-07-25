@@ -133,7 +133,7 @@ def _attach_current_rate(db: Session, hotel_id: int, category: RoomCategory) -> 
 @router.get("/categories", response_model=list[RoomCategoryRead])
 def list_categories(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping")),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping", "receptionist")),
 ):
     categories = db.query(RoomCategory).filter(RoomCategory.hotel_id == context.hotel_id).all()
     for category in categories:

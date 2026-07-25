@@ -111,3 +111,20 @@ def test_receptionist_can_check_room_availability(client):
 
     assert response.status_code == 200, response.text
     assert response.json()["status"] == "ok"
+
+
+def test_receptionist_can_list_room_categories(client):
+    """GET /api/rooms/categories feeds the category picker on both the
+    Reservations page (useCategories -> listCategories) and the Waitlist
+    page (listRoomCategories). Both are reachable by receptionist per the
+    nav role matrix, so the endpoint must not 403 for that role -- a
+    receptionist who cannot list categories cannot create a reservation
+    or a waitlist entry, both core front-desk tasks.
+    """
+    test_client, app, hotel_id, category_id = client
+    app.dependency_overrides[get_auth_context] = _override_auth(hotel_id, "receptionist")
+
+    response = test_client.get("/api/rooms/categories")
+
+    assert response.status_code == 200, response.text
+    assert any(cat["id"] == category_id for cat in response.json())
