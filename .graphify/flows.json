@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-25T22:51:46.953Z",
+  "generatedAt": "2026-07-25T23:09:54.548Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -3341,30 +3341,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_reservation_operations_service_move_reservation_room",
-      "name": "move_reservation_room",
-      "entryPoint": "services_reservation_operations_service_move_reservation_room",
-      "entryPointId": "services_reservation_operations_service_move_reservation_room",
-      "path": [
-        "services_reservation_operations_service_move_reservation_room",
-        "services_reservation_operations_service_invalidate_availability_cache",
-        "services_reservation_operations_service_reservationoperationserror"
-      ],
-      "qualifiedPath": [
-        "services_reservation_operations_service_move_reservation_room",
-        "services_reservation_operations_service_invalidate_availability_cache",
-        "services_reservation_operations_service_reservationoperationserror"
-      ],
-      "depth": 1,
-      "nodeCount": 3,
-      "fileCount": 1,
-      "files": [
-        "app/services/reservation_operations_service.py"
-      ],
-      "criticality": 0.2433,
-      "warnings": []
-    },
-    {
       "id": "flow:services_graph_projection_project_reservation_assignment",
       "name": "project_reservation_assignment",
       "entryPoint": "services_graph_projection_project_reservation_assignment",
@@ -4348,6 +4324,32 @@
       "fileCount": 1,
       "files": [
         "app/services/reservation_service.py"
+      ],
+      "criticality": 0.2225,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_reservation_operations_service_move_reservation_room",
+      "name": "move_reservation_room",
+      "entryPoint": "services_reservation_operations_service_move_reservation_room",
+      "entryPointId": "services_reservation_operations_service_move_reservation_room",
+      "path": [
+        "services_reservation_operations_service_move_reservation_room",
+        "services_reservation_operations_service_invalidate_availability_cache",
+        "services_reservation_operations_service_reservationoperationserror",
+        "services_reservation_operations_service_roommoveresult"
+      ],
+      "qualifiedPath": [
+        "services_reservation_operations_service_move_reservation_room",
+        "services_reservation_operations_service_invalidate_availability_cache",
+        "services_reservation_operations_service_reservationoperationserror",
+        "services_reservation_operations_service_roommoveresult"
+      ],
+      "depth": 1,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/services/reservation_operations_service.py"
       ],
       "criticality": 0.2225,
       "warnings": []
