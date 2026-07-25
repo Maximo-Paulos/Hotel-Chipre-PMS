@@ -54,14 +54,23 @@ test.describe("Responsive mobile smoke", () => {
     await page.setViewportSize({ width: 375, height: 812 });
 
     const mobileNavigationTargets = await page.locator('nav[aria-label="Navegación móvil"] a').evaluateAll((nodes) =>
-      nodes.map((node) => {
-        const rect = (node as HTMLElement).getBoundingClientRect();
-        return {
-          label: node.textContent?.trim() || "",
-          height: Math.round(rect.height),
-          width: Math.round(rect.width)
-        };
-      })
+      nodes
+        .map((node) => {
+          const element = node as HTMLElement;
+          const rect = element.getBoundingClientRect();
+          const style = window.getComputedStyle(element);
+          return {
+            label: node.textContent?.trim() || "",
+            height: Math.round(rect.height),
+            width: Math.round(rect.width),
+            // A nav item can legitimately unmount between query and
+            // measurement (e.g. the Onboarding link disappears once
+            // onboarding completes), leaving a detached node whose rect is
+            // always 0x0. That is not a real undersized touch target.
+            connected: element.isConnected && style.display !== "none" && style.visibility !== "hidden"
+          };
+        })
+        .filter((target) => target.connected)
     );
     expect(
       mobileNavigationTargets.filter((target) => target.height < 44 || target.width < 44),
