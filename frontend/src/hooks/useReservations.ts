@@ -6,6 +6,7 @@ import {
   cancelReservation,
   checkInReservation,
   checkOutReservation,
+  createManualOtaReservation,
   createReservation,
   getOccupancyGrid,
   getReservation,
@@ -17,6 +18,7 @@ import {
   resolveReservationExternal,
   updateReservation,
   type CheckInPayload,
+  type ManualOtaReservationPayload,
   type OccupancyGridResponse,
   type ReservationActionResolvePayload,
   type ReservationExternalResolutionResponse,
@@ -173,6 +175,13 @@ export function useReservationMutations(filters?: ReservationFilters) {
     onSuccess: invalidate
   });
 
+  // B4: "Cargar reserva de OTA" -- upsert by (channel, external_id), see
+  // createManualOtaReservation.
+  const createManualOtaMutation = useGuardedMutation({
+    mutationFn: (payload: ManualOtaReservationPayload) => createManualOtaReservation(payload, session),
+    onSuccess: invalidate
+  });
+
   const updateMutation = useMutation({
     mutationFn: ({ id, payload }: { id: number; payload: ReservationUpdatePayload }) =>
       updateReservation(id, payload, session),
@@ -221,6 +230,7 @@ export function useReservationMutations(filters?: ReservationFilters) {
 
   return {
     createMutation,
+    createManualOtaMutation,
     updateMutation,
     cancelMutation,
     checkInMutation,

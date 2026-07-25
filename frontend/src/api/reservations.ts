@@ -230,6 +230,15 @@ export type ReservationPayload = {
   pricing_payment_method?: string | null;
   deposit_amount?: number | null;
   quote_token?: string | null;
+  // B4: manual tarifa override -- when set, the backend skips the
+  // auto-computed daily-rate/rate-plan total for this reservation and uses
+  // this amount instead (see app/services/reservation_service.py
+  // _apply_manual_total_override). target_currency only relabels
+  // currency_code; it does not run a live FX conversion unless the category
+  // also has a rate_plan + OTACurrencyRate configured (fx_rate_snapshot
+  // stays null otherwise -- show it only when present).
+  total_amount?: number | null;
+  target_currency?: string | null;
 };
 
 export type ReservationQuote = {
@@ -312,6 +321,33 @@ export const listPendingReservationActions = (limit = 100, session?: SessionLike
 
 export const createReservation = (payload: ReservationPayload, session?: SessionLike) =>
   apiFetch<Reservation>("/api/reservations/", { method: "POST", data: payload, session });
+
+// B4: "Cargar reserva de OTA" -- backend is an upsert keyed by (channel,
+// external_id), NOT a create-or-reject: submitting the same pair again
+// updates the existing reservation instead of erroring (see
+// app/services/ota_manual_service.py create_or_update_manual_ota_reservation).
+// There is no separate "duplicate" error to catch here.
+export type ManualOtaChannel = "booking" | "expedia" | "despegar" | "other_ota";
+
+export type ManualOtaReservationPayload = {
+  guest_id: number;
+  category_id: number;
+  room_id?: number | null;
+  check_in_date: string;
+  check_out_date: string;
+  num_adults?: number;
+  num_children?: number;
+  notes?: string | null;
+  channel: ManualOtaChannel;
+  external_id: string;
+  external_confirmation_code?: string | null;
+  target_currency?: string | null;
+  total_amount?: number | null;
+  amount_paid?: number | null;
+};
+
+export const createManualOtaReservation = (payload: ManualOtaReservationPayload, session?: SessionLike) =>
+  apiFetch<Reservation>("/api/reservations/manual-ota", { method: "POST", data: payload, session });
 
 export const getReservationQuote = (params: ReservationQuoteParams, session?: SessionLike) => {
   const query = new URLSearchParams({
