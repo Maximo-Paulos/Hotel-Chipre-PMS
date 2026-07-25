@@ -884,3 +884,18 @@ volvió a aprobar **12/12** entre iPhone SE, iPhone 15 e iPhone 15 Pro Max. El
 navegador interno no dispara de forma fiable los eventos nativos de los campos
 `date` controlados, por lo que no se usa para descalificar la cotización cloud:
 esa interacción sigue cubierta por las pruebas Chromium y WebKit ya aprobadas.
+
+### P2 mitigado — el login lento ahora informa progreso
+
+La primera autenticación del Preview completó pero quedó cerca de un minuto en
+`Conectando...` mientras el backend existente arrancaba. El tiempo de respuesta
+de proveedor requiere telemetría y no se oculta como resuelto; sin embargo, el
+operador ya no queda sin explicación durante la espera.
+
+El commit `900c866` muestra un estado accesible después de cinco segundos,
+indicando que la conexión está demorando y que los datos de acceso continúan
+en curso. Una regresión E2E mantiene `/api/auth/login` pendiente, verifica el
+mensaje y luego libera una respuesta de error. La prueba fue roja antes del
+cambio y verde después. La revalidación posterior aprobó lint, typecheck,
+build, **38/38** E2E Chromium y **18/18** journeys operativos WebKit iPhone
+15. No se cambiaron credenciales, políticas de autenticación ni proveedores.
