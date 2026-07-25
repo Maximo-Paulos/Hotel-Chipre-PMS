@@ -24,25 +24,28 @@ function parseMoney(text: string) {
 
 test("owner controls manual cash movements, approves an arqueo difference and confirms custody", async ({ page }) => {
   await login(page);
+  // The "Abrir caja" button starts enabled optimistically and only flips to
+  // "Ya hay una caja abierta" once GET /api/cash-register/sessions resolves
+  // (CashRegisterPage derives openSession from an initially-empty sessions
+  // array). Other specs sharing this hotel's cash sessions can leave one
+  // open, so wait for that response before reading the button state --
+  // otherwise the decision (and the click right after) can race the
+  // real data and target a button that is about to disappear.
+  const sessionsResponse = page.waitForResponse(
+    (response) => response.url().includes("/api/cash-register/sessions") && response.request().method() === "GET"
+  );
   await page.goto("/caja");
+  await sessionsResponse;
 
   const openingForm = page.locator("form").filter({ hasText: "Saldo inicial" }).filter({ hasText: "Abrir caja" });
   const openButton = page.getByRole("button", { name: "Abrir caja", exact: true });
   const existingOpenButton = page.getByRole("button", { name: "Ya hay una caja abierta", exact: true });
-  await expect
-    .poll(
-      async () => {
-        if (await existingOpenButton.count()) return "already-open";
-        if (await openButton.count()) return "can-open";
-        return "loading";
-      },
-      { timeout: 15_000 }
-    )
-    .toMatch(/^(already-open|can-open)$/);
-  if (!(await existingOpenButton.count())) {
+  if (await openButton.isVisible().catch(() => false)) {
     await openingForm.getByText("Saldo inicial", { exact: true }).locator("..").locator("input").fill("1000");
     await openButton.click();
     await expect(page.getByText("Caja abierta.", { exact: true })).toBeVisible();
+  } else {
+    await expect(existingOpenButton).toBeVisible();
   }
 
   const movementForm = page.locator("form").filter({ hasText: "Registrar movimiento" });

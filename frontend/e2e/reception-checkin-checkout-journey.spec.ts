@@ -35,7 +35,15 @@ test("receptionist runs the full check-in / checkout journey with a pending-bala
   await login(page);
 
   // Recepción opera su propia caja (cash:operate) para poder cobrar en efectivo.
+  // Otro spec puede haber dejado una caja abierta para el hotel compartido: el
+  // botón arranca optimistamente en "Abrir caja" y recién cambia a "Ya hay una
+  // caja abierta" cuando resuelve GET /api/cash-register/sessions, así que hay
+  // que esperar esa respuesta antes de decidir si corresponde abrir una nueva.
+  const sessionsResponse = page.waitForResponse(
+    (response) => response.url().includes("/api/cash-register/sessions") && response.request().method() === "GET"
+  );
   await page.goto("/caja");
+  await sessionsResponse;
   const openingForm = page.locator("form").filter({ hasText: "Saldo inicial" }).filter({ hasText: "Abrir caja" });
   const openButton = openingForm.getByRole("button", { name: "Abrir caja", exact: true });
   if (await openButton.isVisible().catch(() => false)) {
@@ -137,4 +145,19 @@ test("receptionist runs the full check-in / checkout journey with a pending-bala
   const settledRow = reservationTable.locator("tbody tr").filter({ hasText: guestLastName });
   await settledRow.getByRole("button", { name: "Check-out", exact: true }).click();
   await expect(page.getByText("Check-out registrado", { exact: true })).toBeVisible();
+
+  // Dejar la caja compartida del hotel E2E cerrada: otros specs (p.ej.
+  // zz-cash-control-journey.spec.ts) asumen que pueden decidir libremente
+  // si abren una caja nueva, y una caja abierta con saldo dejada acá rompe
+  // esa decisión para el siguiente spec que corra.
+  await page.goto("/caja");
+  const closeCashForm = page.locator("form").filter({ hasText: "Cerrar caja" });
+  const expectedBalanceLabel = closeCashForm.getByText(/Saldo esperado:/);
+  await expect(expectedBalanceLabel).not.toContainText("$ 0,00");
+  const expectedBalanceText = await expectedBalanceLabel.innerText();
+  const expectedBalance = Number(expectedBalanceText.replace(/[^0-9,.-]/g, "").replace(/\./g, "").replace(",", "."));
+  expect(expectedBalance).toBeGreaterThan(0);
+  await closeCashForm.locator('input[type="number"]').fill(String(expectedBalance));
+  await closeCashForm.getByRole("button", { name: "Cerrar caja", exact: true }).click();
+  await expect(page.getByText("Caja cerrada.", { exact: true })).toBeVisible();
 });
