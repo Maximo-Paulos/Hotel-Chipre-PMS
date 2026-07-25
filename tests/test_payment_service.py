@@ -17,6 +17,7 @@ from app.models.pricing import CategoryPricing
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.room import Room, RoomCategory
 from app.models.transaction import Transaction, PaymentMethodEnum, TransactionStatusEnum, TransactionTypeEnum
+from app.models.user import User
 from app.schemas.reservation import ReservationCreate
 from app.schemas.transaction import PaymentRequest, PaymentGatewayResponse
 from app.services.reservation_service import create_reservation
@@ -640,3 +641,71 @@ class TestPaymentEdgeCases:
         assert tx.currency == "USD"
         assert summary["currency_code"] == "USD"
         assert summary["transactions"][0]["currency"] == "USD"
+
+
+class TestPaymentActorAudit:
+    """A payment state change is a money-moving event and must record WHO
+    triggered it (a staff user) and WHEN, not just when. Machine-initiated
+    payments (gateway webhooks) legitimately have no human actor and must
+    record None, not a fabricated one.
+    """
+
+    def test_staff_initiated_payment_records_actor_user_id(
+        self, db, sample_guest, sample_rooms, sample_categories, hotel_config
+    ):
+        data = ReservationCreate(
+            guest_id=sample_guest.id,
+            category_id=sample_categories[0].id,
+            check_in_date=date(2026, 5, 1),
+            check_out_date=date(2026, 5, 3),
+        )
+        res = create_reservation(db, data, hotel_id=1)
+        db.flush()
+        _assign_hotel(res, DEFAULT_HOTEL_ID, db)
+        db.add(User(id=42, email="cashier-42@test.com", password_hash="test-hash", is_active=True, is_verified=True))
+        db.flush()
+
+        tx = process_payment(
+            db,
+            PaymentRequest(
+                reservation_id=res.id,
+                amount=50.0,
+                payment_method=PaymentMethodEnum.CASH,
+                transaction_type=TransactionTypeEnum.DEPOSIT,
+            ),
+            hotel_id=DEFAULT_HOTEL_ID,
+            actor_user_id=42,
+        )
+        db.flush()
+
+        assert tx.created_by_user_id == 42
+
+    def test_payment_without_actor_records_none_not_a_fabricated_actor(
+        self, db, sample_guest, sample_rooms, sample_categories, hotel_config
+    ):
+        """A gateway webhook has no human actor -- it must stay None, never
+        silently attributed to whichever user happens to be in context."""
+        data = ReservationCreate(
+            guest_id=sample_guest.id,
+            category_id=sample_categories[0].id,
+            check_in_date=date(2026, 5, 5),
+            check_out_date=date(2026, 5, 7),
+        )
+        res = create_reservation(db, data, hotel_id=1)
+        db.flush()
+        _assign_hotel(res, DEFAULT_HOTEL_ID, db)
+
+        tx = process_payment(
+            db,
+            PaymentRequest(
+                reservation_id=res.id,
+                amount=50.0,
+                payment_method=PaymentMethodEnum.MERCADO_PAGO,
+                transaction_type=TransactionTypeEnum.DEPOSIT,
+            ),
+            hotel_id=DEFAULT_HOTEL_ID,
+            gateway_response=PaymentGatewayResponse(success=True, external_payment_id="mp-x", external_status="approved"),
+        )
+        db.flush()
+
+        assert tx.created_by_user_id is None

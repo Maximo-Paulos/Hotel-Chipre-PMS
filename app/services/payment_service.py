@@ -345,6 +345,7 @@ def process_payment(
         description=request.description,
         processed_at=processed_at,
         idempotency_key=idempotency_key,
+        created_by_user_id=actor_user_id,
     )
     if idempotency_key is not None:
         # Savepoint: if a concurrent delivery already inserted this key, the unique

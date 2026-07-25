@@ -100,6 +100,11 @@ class Transaction(Base):
     # Idempotency: dedupe gateway-driven transactions (hotel_id, reservation_id, idempotency_key)
     idempotency_key = Column(String(100), nullable=True)
 
+    # Audit: which staff user triggered this money-moving state change, if any.
+    # NULL is a legitimate value for gateway/webhook-initiated transactions
+    # (no human actor exists) -- never fabricate one for those.
+    created_by_user_id = Column(Integer, nullable=True)
+
     # Description / notes
     description = Column(Text, nullable=True)
     pricing_snapshot = Column(Text, nullable=True)

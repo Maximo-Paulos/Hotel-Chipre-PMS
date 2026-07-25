@@ -672,7 +672,7 @@ def extend_reservation_stay(
     link = None
     try:
         if payment_action == "immediate_payment":
-            transaction = process_payment(db, immediate_payment, hotel_id=hotel_id)
+            transaction = process_payment(db, immediate_payment, hotel_id=hotel_id, actor_user_id=changed_by_user_id)
             if original_status == ReservationStatusEnum.CHECKED_IN and reservation.status != ReservationStatusEnum.CHECKED_IN:
                 reservation.status = ReservationStatusEnum.CHECKED_IN
         else:

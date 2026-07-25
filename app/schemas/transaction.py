@@ -31,6 +31,7 @@ class TransactionRead(BaseModel):
     description: Optional[str]
     created_at: Optional[datetime]
     processed_at: Optional[datetime]
+    created_by_user_id: Optional[int] = None
 
     model_config = {"from_attributes": True}
 
