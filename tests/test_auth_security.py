@@ -342,3 +342,43 @@ def test_legacy_public_email_endpoints_are_retired(client_and_db):
 
     resp = client.post("/api/email/verify?to=test@example.com")
     assert resp.status_code == 410
+
+
+def test_self_registration_cannot_grant_platform_admin_role(client_and_db, fixed_code_patch, monkeypatch):
+    """
+    A guest self-registering must never end up with User.role="platform_admin"
+    just by sending that value in the request body (mass-assignment /
+    privilege escalation). require_platform_admin() trusts User.role alone,
+    with no PIN or master-admin session, so this role must be server-assigned.
+    """
+    client, db, _session_factory = client_and_db
+    _configure_resend(monkeypatch, [])
+
+    register = client.post(
+        "/api/auth/register",
+        json={"email": "attacker@example.com", "password": "Demo123!", "role": "platform_admin"},
+    )
+    assert register.status_code == 201, register.text
+
+    stored_user = db.query(User).filter(User.email == "attacker@example.com").first()
+    assert stored_user.role != "platform_admin"
+
+    verify = client.post(
+        "/api/auth/verify-email",
+        json={"email": "attacker@example.com", "code": "123456"},
+    )
+    assert verify.status_code == 200, verify.text
+
+    login = client.post(
+        "/api/auth/login",
+        json={"email": "attacker@example.com", "password": "Demo123!"},
+    )
+    assert login.status_code == 200, login.text
+    token = login.json()["access_token"]
+
+    forged_admin_action = client.post(
+        "/api/admin/subscription/comped-override",
+        json={"hotel_id": 1, "plan_code": "ultra", "reason": "self-escalated"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert forged_admin_action.status_code == 403, forged_admin_action.text

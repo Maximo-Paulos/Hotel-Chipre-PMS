@@ -131,10 +131,14 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
     if existing:
         raise HTTPException(status_code=400, detail="Ya existe un usuario con ese email")
 
+    # Self-registration always creates a plain owner account. `payload.role`
+    # is never trusted here: `require_platform_admin()` authorizes purely on
+    # `User.role`, so honoring a client-supplied role would let anyone
+    # self-escalate to platform_admin by sending it in the register body.
     user = User(
         email=payload.email.lower(),
         password_hash=hash_password(payload.password),
-        role=payload.role or "owner",
+        role="owner",
         is_verified=False,
     )
     db.add(user)
