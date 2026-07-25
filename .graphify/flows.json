@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-25T22:11:09.159Z",
+  "generatedAt": "2026-07-25T22:51:46.953Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -4649,6 +4649,7 @@
         "services_reservation_service_create_reservation",
         "services_reservation_service_apply_corporate_pricing",
         "services_reservation_service_apply_custom_deposit_amount",
+        "services_reservation_service_apply_manual_total_override",
         "services_reservation_service_calculate_reservation_pricing",
         "services_reservation_service_check_room_availability",
         "services_reservation_service_find_available_rooms",
@@ -4678,6 +4679,7 @@
         "services_reservation_service_create_reservation",
         "services_reservation_service_apply_corporate_pricing",
         "services_reservation_service_apply_custom_deposit_amount",
+        "services_reservation_service_apply_manual_total_override",
         "services_reservation_service_calculate_reservation_pricing",
         "services_reservation_service_check_room_availability",
         "services_reservation_service_find_available_rooms",
@@ -4704,12 +4706,12 @@
         "services_reservation_service_reservationpricingresult"
       ],
       "depth": 3,
-      "nodeCount": 27,
+      "nodeCount": 28,
       "fileCount": 1,
       "files": [
         "app/services/reservation_service.py"
       ],
-      "criticality": 0.217,
+      "criticality": 0.2157,
       "warnings": []
     },
     {
@@ -12362,6 +12364,30 @@
       "fileCount": 1,
       "files": [
         "frontend/src/views/protected/RoomsPage.tsx"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:components_manualotareservationmodal_emptyformstate",
+      "name": "emptyFormState",
+      "entryPoint": "components_manualotareservationmodal_emptyformstate",
+      "entryPointId": "components_manualotareservationmodal_emptyformstate",
+      "path": [
+        "components_manualotareservationmodal_emptyformstate",
+        "components_manualotareservationmodal_todayiso",
+        "components_manualotareservationmodal_tomorrowiso"
+      ],
+      "qualifiedPath": [
+        "components_manualotareservationmodal_emptyformstate",
+        "components_manualotareservationmodal_todayiso",
+        "components_manualotareservationmodal_tomorrowiso"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/components/ManualOtaReservationModal.tsx"
       ],
       "criticality": 0.16,
       "warnings": []

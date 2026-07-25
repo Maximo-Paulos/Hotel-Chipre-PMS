@@ -344,8 +344,8 @@
     "hash": "de09f11139cc84b783d8719f34bb7cdb"
   },
   "app/api/reservations.py": {
-    "mtime": 1785010729398.1606,
-    "hash": "18a0f5d061cef98fff07964170ac2612"
+    "mtime": 1785019330173.2957,
+    "hash": "b9a0ae337dd4dc609ab543460f301a3d"
   },
   "app/api/room_blocks.py": {
     "mtime": 1784862144875.9834,
@@ -968,8 +968,8 @@
     "hash": "801fd2946e48e87da9c75938e111c8ad"
   },
   "app/services/ota_manual_service.py": {
-    "mtime": 1784862144885.407,
-    "hash": "871c1e86fd445768e4cfdbb7cc195e4a"
+    "mtime": 1785018271236.4055,
+    "hash": "4d5ee39d2c2efd8b50596f8696aca2e5"
   },
   "app/services/ota_service.py": {
     "mtime": 1784862144885.644,
@@ -1020,8 +1020,8 @@
     "hash": "b40820b9c90889625c33322d978b8871"
   },
   "app/services/reservation_service.py": {
-    "mtime": 1785010705126.0984,
-    "hash": "da272c2c5988d0d237311f971b2740e4"
+    "mtime": 1785018265792.824,
+    "hash": "87fea86aa4bcb32b2695ee0739e63f5d"
   },
   "app/services/room_block_service.py": {
     "mtime": 1784889349962.5137,
@@ -1192,8 +1192,8 @@
     "hash": "ef6f8c58b53e1909c0844e94c1659942"
   },
   "frontend/src/api/reservations.ts": {
-    "mtime": 1785016017000.4956,
-    "hash": "7f6106d57bc6a46385715da5c41451b0"
+    "mtime": 1785018367731.4814,
+    "hash": "055cbb6f55ae759b1e7d30edcc8829e1"
   },
   "frontend/src/api/roomBlocks.ts": {
     "mtime": 1784862144902.3428,
@@ -1244,8 +1244,8 @@
     "hash": "a8feb0c2c8dad74723ae76b5dfe29878"
   },
   "frontend/src/components/RateEditorGrid.tsx": {
-    "mtime": 1784862144902.9824,
-    "hash": "9bfc65255e55e8e14caecce84d412c6c"
+    "mtime": 1785018785723.7747,
+    "hash": "2d6f17b0061ef1e62c6101b6ef622d6e"
   },
   "frontend/src/components/Seo.tsx": {
     "mtime": 1784862144903.0347,
@@ -1336,8 +1336,8 @@
     "hash": "b9fc3178cad7e0fc8e1c321d2fe82c46"
   },
   "frontend/src/hooks/useReservations.ts": {
-    "mtime": 1785016050760.4934,
-    "hash": "fa628337037cd40c5d686ecbc6afe33b"
+    "mtime": 1785018384253.7153,
+    "hash": "945c7dcfb18179e15fd9bcff88f64266"
   },
   "frontend/src/hooks/useRoomBlocks.ts": {
     "mtime": 1784862144904.3977,
@@ -1444,16 +1444,16 @@
     "hash": "924d83b193b3f826a4a77d5860a48d72"
   },
   "frontend/src/views/protected/RateCalendarPage.tsx": {
-    "mtime": 1784862144906.1326,
-    "hash": "ef08a518a44be131766b0c44eada6534"
+    "mtime": 1785018817447.759,
+    "hash": "4c4958246dbd55fd0e64dd2133b77b28"
   },
   "frontend/src/views/protected/ReportsPage.tsx": {
     "mtime": 1784900343395.599,
     "hash": "2d960effb79d50cb5debf39038a49702"
   },
   "frontend/src/views/protected/ReservationsPage.tsx": {
-    "mtime": 1785016334993.8171,
-    "hash": "ff6fe459dac13b41a01586aa1c5950e3"
+    "mtime": 1785018771902.9358,
+    "hash": "ed4217ce2308790cf14d2d4688958f39"
   },
   "frontend/src/views/protected/RoomsPage.tsx": {
     "mtime": 1784965978800.4614,
@@ -1888,8 +1888,8 @@
     "hash": "534d1999e2085039f714da6b7a8e15ad"
   },
   "tests/test_ota_manual_service.py": {
-    "mtime": 1784862144933.971,
-    "hash": "3b9d89ce1da28b5bf4129317d9f1fa9c"
+    "mtime": 1785018340025.99,
+    "hash": "c07e844828795c02c45929cf0a9c76dd"
   },
   "tests/test_ota_orchestrator.py": {
     "mtime": 1784862144934.031,
@@ -1984,8 +1984,8 @@
     "hash": "427dd02ac6d6f46256dd892e08581ac6"
   },
   "tests/test_reservation_service.py": {
-    "mtime": 1784889364684.1843,
-    "hash": "9e615bf7827c2ed275b06b58195c6d77"
+    "mtime": 1785018303975.345,
+    "hash": "60160740539273c92731bf1dfb9c8fbb"
   },
   "tests/test_room_block_service.py": {
     "mtime": 1784862144937.2139,
@@ -3750,5 +3750,17 @@
   "tests/test_reservation_status_enum_migration.py": {
     "mtime": 1785016867569.6199,
     "hash": "9be87860e458af8c17a96b861bea2b32"
+  },
+  "frontend/e2e/manual-ota-reservation-journey.spec.ts": {
+    "mtime": 1785019360334.733,
+    "hash": "366086247e7f5cc9ef0bccdc81076cf4"
+  },
+  "frontend/src/components/GuestQuickCreatePanel.tsx": {
+    "mtime": 1785018594538.3252,
+    "hash": "2925b76a711a55417084105f602a7731"
+  },
+  "frontend/src/components/ManualOtaReservationModal.tsx": {
+    "mtime": 1785019353971.7222,
+    "hash": "f691088aebb7954b5834c14d2fe08980"
   }
 }
