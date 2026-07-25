@@ -114,4 +114,18 @@ test("manager reads a daily report whose arrivals and pending balance match a re
   const pendingRow = pendingSection.locator("div.grid").filter({ hasText: confirmationCode });
   await expect(pendingRow).toBeVisible();
   await expect(pendingRow).toContainText("$ 100,00");
+
+  // Cleanup: this test pins room 101 for today/tomorrow so its own report
+  // assertions are deterministic. Only 2 rooms exist in the seeded E2E
+  // category, and the WebKit Apple matrix reruns this exact spec once per
+  // device project against the same shared database, so a stale "pending"
+  // reservation left behind here would make the very next device run fail
+  // room availability with "Room 101 is not available for the requested
+  // dates" -- a false negative caused by test leftovers, not a real defect.
+  // Cancelling (not checking out) frees the room for the next device run.
+  await page.goto("/reservas");
+  const reservasTable = page.locator("table").filter({ hasText: "Código" });
+  const ownReservationRow = reservasTable.locator("tbody tr").filter({ hasText: guestLastName });
+  await ownReservationRow.getByRole("button", { name: "Cancelar", exact: true }).click();
+  await expect(page.getByText("Reserva cancelada", { exact: true })).toBeVisible();
 });
