@@ -220,16 +220,16 @@
     "hash": "660ca2da4fcce4999873e52155de30ce"
   },
   "app/api/bookings.py": {
-    "mtime": 1784955601464.4863,
-    "hash": "90071ff09cdc9176db8b05d8c89387da"
+    "mtime": 1784958357143.3804,
+    "hash": "c53737b423e8ec15f6c9f0b65fcab5a1"
   },
   "app/api/cash_register.py": {
     "mtime": 1784955601464.5818,
     "hash": "7bd4ad794a0f8f690ba3168089d362dc"
   },
   "app/api/checkin.py": {
-    "mtime": 1784955601464.6274,
-    "hash": "178563d52cd3b6fe5d0ef8a3f2ce385f"
+    "mtime": 1784957877367.051,
+    "hash": "65edfe4ae173c9c220cf182344cd377c"
   },
   "app/api/commercial.py": {
     "mtime": 1784955601464.679,
@@ -320,8 +320,8 @@
     "hash": "6b3e85ea5ecd2edf539de6ceafe0e58d"
   },
   "app/api/payments.py": {
-    "mtime": 1784955601466.4211,
-    "hash": "2cbadce68d79a052104eac83cc0b65ff"
+    "mtime": 1784958623340.3042,
+    "hash": "1d8fd337abc7a60a7dba434c083a3d28"
   },
   "app/api/permissions.py": {
     "mtime": 1784955601466.4714,
@@ -344,8 +344,8 @@
     "hash": "de09f11139cc84b783d8719f34bb7cdb"
   },
   "app/api/reservations.py": {
-    "mtime": 1784955601466.8977,
-    "hash": "c8bd7ecc7b44f427fcbca5231de56da3"
+    "mtime": 1784959094092.1077,
+    "hash": "b125f8525305b58636cc5c2342a67bb3"
   },
   "app/api/room_blocks.py": {
     "mtime": 1784955601466.9597,
@@ -360,8 +360,8 @@
     "hash": "d4ad6e57197ac05160f235be30b99f42"
   },
   "app/api/rooms.py": {
-    "mtime": 1784956350587.8865,
-    "hash": "24c62b00068162a1b11f7e06e94264bf"
+    "mtime": 1784957533355.653,
+    "hash": "01c0e7eaa55ecd4928a54ad8b3ba7311"
   },
   "app/api/stock.py": {
     "mtime": 1784955601467.2861,
@@ -1176,8 +1176,8 @@
     "hash": "54b7f58fde0829ae660bb19b6b9fa54a"
   },
   "frontend/src/api/payments.ts": {
-    "mtime": 1784955601507.834,
-    "hash": "9a085e1e818cf5f2aac49db7cf76622b"
+    "mtime": 1784959559808.741,
+    "hash": "264d1deefc66edd6efce1ed4fa2a6318"
   },
   "frontend/src/api/permissions.ts": {
     "mtime": 1784955601507.8984,
@@ -1452,8 +1452,8 @@
     "hash": "2d960effb79d50cb5debf39038a49702"
   },
   "frontend/src/views/protected/ReservationsPage.tsx": {
-    "mtime": 1784955601513.4143,
-    "hash": "0a2c89300a55ac00f43ed1787fb7facb"
+    "mtime": 1784959609508.9575,
+    "hash": "5b16ea941f3a2ac4eee2e810017a1de7"
   },
   "frontend/src/views/protected/RoomsPage.tsx": {
     "mtime": 1784956460439.7307,
@@ -1624,8 +1624,8 @@
     "hash": "eff886a9a5bb35a7677158f3f891c6f7"
   },
   "tests/smoke/test_reservation_operations.py": {
-    "mtime": 1784955601541.1577,
-    "hash": "0242454301d787d15d1cb8e2e675f7e7"
+    "mtime": 1784957865177.4624,
+    "hash": "9d346e4ff4f38bde010d7c89d77ca09a"
   },
   "tests/test_allocation_engine.py": {
     "mtime": 1784955601541.3254,
@@ -2828,8 +2828,8 @@
     "hash": "16edea12dd11a133dc0e220e02a28a35"
   },
   "scripts/agent_ops/normalize_graphify_portability.py": {
-    "mtime": 1784955601537.7925,
-    "hash": "bc493a85c62fee8d3c0c02c44570226a"
+    "mtime": 1784961521860.3755,
+    "hash": "3112f0bcc2e01c2fdb1482e89cdd38ca"
   },
   "scripts/agent_ops/check_cloud_surface_config.py": {
     "mtime": 1784955601536.9153,
@@ -3548,8 +3548,8 @@
     "hash": "76330f364d90aa0bfa88aee681ca4e76"
   },
   "frontend/e2e/zz-cash-control-journey.spec.ts": {
-    "mtime": 1784956847316.8137,
-    "hash": "7defa8d1f49a5cced061c41c34f98840"
+    "mtime": 1784961228773.7654,
+    "hash": "1a8bcdc7ca4169f086b0448ed86564a1"
   },
   "alembic/versions/20260724_billing_adjustment_enum_values.py": {
     "mtime": 1784955601461.8606,
@@ -3596,7 +3596,31 @@
     "hash": "eb5b0f1472f3ed5796a185e5ef0b121e"
   },
   "tests/test_rooms_api_roles.py": {
-    "mtime": 1784956336872.4192,
-    "hash": "15f62a6ccb465ef9141b12d6bae2fc5c"
+    "mtime": 1784957525305.9827,
+    "hash": "2b793f34635030573d03fcc86f88ff54"
+  },
+  "frontend/e2e/housekeeping-laundry-journey.spec.ts": {
+    "mtime": 1784959957658.0466,
+    "hash": "20eb4089eabf8f710042345d248d2d27"
+  },
+  "frontend/e2e/manager-reports-journey.spec.ts": {
+    "mtime": 1784960324880.066,
+    "hash": "339ee68cb4d682f3f72c7fa376c458a4"
+  },
+  "frontend/e2e/reception-checkin-checkout-journey.spec.ts": {
+    "mtime": 1784960960019.7356,
+    "hash": "f9800ca28b5b6454d0da259e02b00f94"
+  },
+  "tests/smoke/test_payments_api_roles.py": {
+    "mtime": 1784958659054.579,
+    "hash": "0fb890409c44ea59f8c426c2bf5f51d2"
+  },
+  "tests/smoke/test_reservations_api_roles.py": {
+    "mtime": 1784961564775.4124,
+    "hash": "1190d004a774ecd4f7b5fd4c94c2a32d"
+  },
+  "tests/test_bookings_api_roles.py": {
+    "mtime": 1784958349721.4832,
+    "hash": "d7220bd0654f3c5cf4f502f20595a61f"
   }
 }

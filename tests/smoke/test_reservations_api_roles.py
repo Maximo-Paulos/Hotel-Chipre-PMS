@@ -20,8 +20,9 @@ def _receptionist_context(hotel_id: int):
 
 
 def test_receptionist_can_view_operations_summary_and_pending_actions(client, engine):
-    """GET /{id}/operations-summary and GET /actions/pending were
-    owner/co_owner/manager/housekeeping only, omitting receptionist.
+    """GET /api/reservations/{id}/operations-summary and
+    GET /api/reservations/actions/pending were owner/co_owner/manager/
+    housekeeping only, omitting receptionist.
 
     operations-summary feeds the "Ficha" modal on the Reservations page
     (Operaciones de estadía + Consumos y cargos): receptionist could add a

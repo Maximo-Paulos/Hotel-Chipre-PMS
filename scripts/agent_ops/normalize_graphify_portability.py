@@ -21,7 +21,7 @@ INSTRUCTION_DIR_NAMES = (
     "description-instructions",
     "label-instructions",
 )
-PATTERN = re.compile(r'("label"\s*:\s*")([^"\\]*)(")')
+PATTERN = re.compile(r'("(?:label|message_summary)"\s*:\s*")([^"\\]*)(")')
 
 
 def normalize_instruction_paths() -> int:
@@ -54,10 +54,16 @@ def main() -> int:
     def normalize_label(match: re.Match[str]) -> str:
         nonlocal count
         label = match.group(2)
-        if "/api/" not in label:
-            return match.group(0)
-        count += 1
-        return f"{match.group(1)}{label.replace('/api/', 'api/')}{match.group(3)}"
+        if "/api/" in label:
+            count += 1
+            return f"{match.group(1)}{label.replace('/api/', 'api/')}{match.group(3)}"
+        # Route fragments stored without the /api prefix (e.g. "/actions/pending"
+        # from a sub-router) still read as an absolute path to the portable
+        # checker; strip the leading slash the same way.
+        if label.startswith("/"):
+            count += 1
+            return f"{match.group(1)}{label[1:]}{match.group(3)}"
+        return match.group(0)
 
     normalized = PATTERN.sub(normalize_label, text)
     if count:
