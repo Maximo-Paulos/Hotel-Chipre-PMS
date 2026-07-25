@@ -799,7 +799,7 @@
   "graphifyignore_patterns": 60,
   "git": {
     "source_owner": "git",
-    "source_hash": "1a0097b273399a1047ae45da7845e8913e51208e",
+    "source_hash": "e32ded98244f667e9674d4e7066c539f50a55be5",
     "branches": [
       "claude/feature/pms-roles-housekeeping-qa",
       "codex/feature/agent-ops-knowledge",
@@ -817,7 +817,7 @@
     "source": "cli",
     "root": ".",
     "git_root": ".",
-    "head": "1a0097b273399a1047ae45da7845e8913e51208e",
+    "head": "e32ded98244f667e9674d4e7066c539f50a55be5",
     "candidate_count": null,
     "included_count": 773,
     "excluded_untracked_count": 0,
