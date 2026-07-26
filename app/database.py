@@ -18,8 +18,8 @@ class Base(DeclarativeBase):
     pass
 
 
-@event.listens_for(Session, "after_commit")
-def _reapply_tenant_context(session: Session) -> None:
+@event.listens_for(Session, "after_begin")
+def _reapply_tenant_context(session: Session, transaction, connection) -> None:
     """Reapply RLS tenant context lost when a commit ends the transaction.
 
     ``app.services.tenant_context`` sets PostgreSQL settings with
@@ -29,14 +29,22 @@ def _reapply_tenant_context(session: Session) -> None:
     issues another query on the same session would otherwise run that query
     with no tenant context, which the RLS policies (NULL-comparison) treat
     as fail-closed: zero rows, not a cross-tenant leak, but silently broken.
-    This listener fires for every Session after every commit; it is a clean
-    no-op for sessions that never set tenant context (nothing stashed on
-    ``session.info``) and for SQLite (tenant_context's own dialect check
+
+    This listener fires when a new transaction begins on the session --
+    including the implicit one SQLAlchemy autobegins right after a commit --
+    and is handed the raw ``Connection`` for that transaction directly.
+    That's deliberate: an ``after_commit`` listener would receive only the
+    ``Session``, which SQLAlchemy considers to be in a transitional
+    "committed" state where ``session.execute()`` raises
+    ``InvalidRequestError`` (no new transaction has been opened yet).
+    Executing on the ``Connection`` here sidesteps that entirely. It is a
+    clean no-op for sessions that never set tenant context (nothing stashed
+    on ``session.info``) and for SQLite (tenant_context's own dialect check
     short-circuits there).
     """
-    from app.services.tenant_context import reapply_tenant_context
+    from app.services.tenant_context import reapply_tenant_context_on_connection
 
-    reapply_tenant_context(session)
+    reapply_tenant_context_on_connection(session, connection)
 
 
 def get_engine(database_url: str | None = None):

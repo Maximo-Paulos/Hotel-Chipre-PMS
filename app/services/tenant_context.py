@@ -5,9 +5,9 @@ no-ops for SQLite so the existing local/test harness remains lightweight.
 ``set_config(..., is_local=true)`` is transaction-scoped by design, so a
 commit silently clears it.  Every setter here also stashes its last-applied
 value on ``session.info`` (survives commits, since it lives on the Session
-object, not the transaction), and ``app.database``'s ``after_commit`` listener
-reapplies those stashed values immediately after every commit -- so callers
-no longer need to remember to re-set context by hand.
+object, not the transaction), and ``app.database``'s ``after_begin`` listener
+reapplies those stashed values as soon as the next transaction begins -- so
+callers no longer need to remember to re-set context by hand.
 """
 from __future__ import annotations
 
@@ -17,12 +17,20 @@ from sqlalchemy.orm import Session
 _SESSION_INFO_KEY = "_tenant_settings"
 
 
-def _apply_setting(db: Session, setting_name: str, setting_value: str) -> None:
+def _apply_setting(db: Session, setting_name: str, setting_value: str, connection=None) -> None:
+    """Issue ``set_config`` for one setting.
+
+    ``connection`` is passed by ``reapply_tenant_context_on_connection`` so the
+    statement runs directly on a just-begun ``Connection`` instead of through
+    ``db.execute`` -- required there because the ``Session`` is not yet ready
+    to emit SQL at that point in its lifecycle (see that function's docstring).
+    """
     bind = db.get_bind()
     if bind is None or bind.dialect.name != "postgresql":
         return
 
-    db.execute(
+    executor = connection if connection is not None else db
+    executor.execute(
         text("SELECT set_config(:setting_name, :setting_value, true)"),
         {"setting_name": setting_name, "setting_value": setting_value},
     )
@@ -33,8 +41,8 @@ def _remember_setting(db: Session, setting_name: str, setting_value: str) -> Non
 
     ``session.info`` is a plain dict that lives on the Session instance and
     survives commits/rollbacks (unlike ``set_config(..., is_local=true)``),
-    which is exactly what lets ``reapply_tenant_context`` restore it after a
-    commit clears PostgreSQL's transaction-scoped setting.
+    which is exactly what lets ``reapply_tenant_context_on_connection``
+    restore it after a commit clears PostgreSQL's transaction-scoped setting.
     """
     db.info.setdefault(_SESSION_INFO_KEY, {})[setting_name] = setting_value
 
@@ -48,19 +56,20 @@ def _set_context_value(db: Session, setting_name: str, value: int | None) -> Non
     _apply_setting(db, setting_name, setting_value)
 
 
-def reapply_tenant_context(db: Session) -> None:
-    """Reapply every ``set_config`` value this session set before a commit.
+def reapply_tenant_context_on_connection(db: Session, connection) -> None:
+    """Reapply stashed tenant settings directly on a just-begun ``Connection``.
 
-    Called from ``app.database``'s ``Session``-level ``after_commit`` event.
-    No-op if this session never called a ``set_tenant_*``/
-    ``set_master_admin_context`` helper (most sessions aren't tenant-scoped)
-    or if the bind isn't PostgreSQL (``_apply_setting`` short-circuits there).
+    Called from ``app.database``'s ``Session``-level ``after_begin`` event.
+    Executing through the raw ``Connection`` (rather than ``db.execute``)
+    is required here: ``after_begin`` can fire for the transaction
+    SQLAlchemy autobegins immediately after a commit, and the ``Session``
+    object itself is not yet ready to emit SQL at that point.
     """
     settings = db.info.get(_SESSION_INFO_KEY)
     if not settings:
         return
     for setting_name, setting_value in settings.items():
-        _apply_setting(db, setting_name, setting_value)
+        _apply_setting(db, setting_name, setting_value, connection=connection)
 
 
 def set_tenant_user_context(db: Session, user_id: int | None) -> None:
@@ -94,7 +103,7 @@ def set_master_admin_context(db: Session, enabled: bool = True) -> None:
 
     Same transaction-scoped caveat as set_tenant_hotel_context, but this is
     now handled automatically: the value is stashed on ``session.info`` and
-    reapplied by ``app.database``'s ``after_commit`` listener.
+    reapplied by ``app.database``'s ``after_begin`` listener.
     """
     setting_value = "true" if enabled else ""
     _remember_setting(db, "app.master_admin", setting_value)
