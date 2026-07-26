@@ -199,17 +199,28 @@ def list_stock_movements(
     return query.order_by(StockMovement.created_at.desc(), StockMovement.id.desc()).limit(limit).all()
 
 
-def current_stock(db: Session, *, hotel_id: int, item_id: int) -> Decimal:
+def current_stock(
+    db: Session, *, hotel_id: int, item_id: int, location_id: int | None = None
+) -> Decimal:
+    """Balance of one item for a hotel, optionally narrowed to one location.
+
+    Without ``location_id`` this is the hotel-wide total (unchanged behavior
+    for every existing caller). With it, only movements recorded against that
+    location are summed -- e.g. "clean linen at the hotel" vs "linen
+    currently at the laundry vendor" are the same item with different
+    location_id filters.
+    """
     _get_item(db, hotel_id=hotel_id, item_id=item_id)
     signed_quantity = case(
         (StockMovement.movement_type.in_(_OUTBOUND_MOVEMENT_TYPES), -StockMovement.quantity),
         else_=StockMovement.quantity,
     )
-    total = (
-        db.query(func.coalesce(func.sum(signed_quantity), 0))
-        .filter(StockMovement.hotel_id == hotel_id, StockMovement.item_id == item_id)
-        .scalar()
+    query = db.query(func.coalesce(func.sum(signed_quantity), 0)).filter(
+        StockMovement.hotel_id == hotel_id, StockMovement.item_id == item_id
     )
+    if location_id is not None:
+        query = query.filter(StockMovement.location_id == location_id)
+    total = query.scalar()
     return Decimal(total).quantize(Decimal("0.01"))
 
 

@@ -292,6 +292,37 @@ def test_stock_adjustment_downward_cannot_make_quantity_negative(db):
         )
 
 
+def test_current_stock_location_filter_is_additive_and_hotel_wide_total_unchanged(db):
+    """D1: current_stock(location_id=...) narrows the balance to one location;
+    omitting it must keep returning the old hotel-wide total (no regression
+    for any existing caller that never passes the parameter)."""
+    _seed_hotels(db)
+    item = create_stock_item(db, hotel_id=1, name="Sabanas", sku=None, unit="unit", min_quantity=None, active=True)
+    house = create_location(db, hotel_id=1, name="Deposito casa")
+    vendor_location = create_location(db, hotel_id=1, name="Lavadero X")
+    db.flush()
+
+    register_movement(
+        db, hotel_id=1, item_id=item.id, location_id=house.id, movement_type="in",
+        quantity=Decimal("10.00"), reason="opening balance", reservation_id=None, created_by_user_id=None,
+    )
+    register_movement(
+        db, hotel_id=1, item_id=item.id, location_id=house.id, movement_type="out",
+        quantity=Decimal("4.00"), reason="sent to laundry", reservation_id=None, created_by_user_id=None,
+    )
+    register_movement(
+        db, hotel_id=1, item_id=item.id, location_id=vendor_location.id, movement_type="in",
+        quantity=Decimal("4.00"), reason="received by laundry", reservation_id=None, created_by_user_id=None,
+    )
+    db.commit()
+
+    # Hotel-wide total (no location_id) still adds up across every location.
+    assert current_stock(db, hotel_id=1, item_id=item.id) == Decimal("10.00")
+    # Per-location balances split the same total correctly.
+    assert current_stock(db, hotel_id=1, item_id=item.id, location_id=house.id) == Decimal("6.00")
+    assert current_stock(db, hotel_id=1, item_id=item.id, location_id=vendor_location.id) == Decimal("4.00")
+
+
 def test_low_stock_items_are_hotel_scoped(db):
     _seed_hotels(db)
     item = create_stock_item(
