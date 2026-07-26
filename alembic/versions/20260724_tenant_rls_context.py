@@ -11,7 +11,7 @@ from sqlalchemy import inspect
 
 
 revision: str = "20260724_tenant_rls_context"
-down_revision: Union[str, None] = "20260626_repair_reservation_unique_constraint"
+down_revision: Union[str, None] = "20260726_repair_missing_hotel_memberships"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

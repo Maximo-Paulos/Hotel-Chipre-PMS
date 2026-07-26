@@ -37,31 +37,30 @@ class FakeInspector:
 
 def test_repair_migration_adds_missing_successor_column_and_constraints(monkeypatch):
     migration = _load_migration()
-    bind = SimpleNamespace(dialect=SimpleNamespace(name="postgresql"))
+    executed_sql = []
+    bind = SimpleNamespace(
+        dialect=SimpleNamespace(name="postgresql"),
+        execute=lambda clause: executed_sql.append(str(clause)),
+    )
     added_columns = []
-    created_uniques = []
-    created_foreign_keys = []
 
     monkeypatch.setattr(migration.op, "get_bind", lambda: bind)
     monkeypatch.setattr(migration.sa, "inspect", lambda _bind: FakeInspector())
     monkeypatch.setattr(migration.op, "add_column", lambda table, column: added_columns.append((table, column)))
-    monkeypatch.setattr(
-        migration.op,
-        "create_unique_constraint",
-        lambda name, table, columns: created_uniques.append((name, table, columns)),
-    )
-    monkeypatch.setattr(
-        migration.op,
-        "create_foreign_key",
-        lambda name, source, target, local, remote, **kwargs: created_foreign_keys.append(
-            (name, source, target, local, remote, kwargs)
-        ),
-    )
 
     migration.upgrade()
 
     assert added_columns[0][0] == "cash_close_reports"
     assert added_columns[0][1].name == "successor_session_id"
-    assert ("uq_cash_close_reports_successor_session", "cash_close_reports", ["successor_session_id"]) in created_uniques
-    assert any(item[0] == "fk_cash_close_reports_successor_session" for item in created_foreign_keys)
-    assert any(item[0] == "fk_cash_close_reports_hotel_successor_session" for item in created_foreign_keys)
+
+    # Each ALTER TABLE is wrapped in a DO block (see _add_constraint_if_missing's
+    # docstring for why: same-transaction DDL isn't always visible to the
+    # inspector-based pre-checks, so the actual duplicate-object tolerance has
+    # to happen server-side).
+    joined = " | ".join(executed_sql)
+    assert "ADD CONSTRAINT uq_cash_close_reports_successor_session" in joined
+    assert "ADD CONSTRAINT fk_cash_close_reports_successor_session" in joined
+    assert "ADD CONSTRAINT fk_cash_close_reports_hotel_successor_session" in joined
+    # These two already exist per FakeInspector, so they must NOT be reissued.
+    assert "uq_cash_sessions_hotel_id_id" not in joined
+    assert "uq_cash_close_reports_hotel_id_id" not in joined

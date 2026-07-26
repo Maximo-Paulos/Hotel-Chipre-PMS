@@ -32,15 +32,14 @@ def _add_successor_reference(dialect: str) -> None:
                 ["successor_session_id"],
             )
         return
+    # `op.add_column` with a Column whose ForeignKey has an explicit `name=`
+    # already emits the FK constraint inline as part of ADD COLUMN on
+    # PostgreSQL. A separate `op.create_foreign_key(...)` call here was
+    # redundant and failed with DuplicateObject on a real Postgres server
+    # (confirmed by reproducing this migration against a from-scratch local
+    # PostgreSQL 16 instance) -- SQLite's batch-recreate path never exercised
+    # this, which is why it went unnoticed.
     op.add_column("cash_close_reports", column)
-    op.create_foreign_key(
-        "fk_cash_close_reports_successor_session",
-        "cash_close_reports",
-        "cash_sessions",
-        ["successor_session_id"],
-        ["id"],
-        ondelete="SET NULL",
-    )
     op.create_unique_constraint(
         "uq_cash_close_reports_successor_session",
         "cash_close_reports",
@@ -64,10 +63,18 @@ def upgrade() -> None:
     _add_successor_reference(dialect)
 
     if dialect == "postgresql":
+        # create_type=False: the type is created explicitly right below with
+        # checkfirst=True. Leaving the default (True) makes create_table's own
+        # before_create dispatch try to create it a second time -- without a
+        # checkfirst guard on that second attempt -- and fail with
+        # DuplicateObject on a real PostgreSQL server (same class of bug as
+        # 20260612_audit_log_and_transaction_fk.py's _audit_action_enum, which
+        # already documents this exact pattern).
         custody_status = postgresql.ENUM(
             "pending",
             "confirmed",
             name="cash_custody_status_enum",
+            create_type=False,
         )
         custody_status.create(op.get_bind(), checkfirst=True)
     else:

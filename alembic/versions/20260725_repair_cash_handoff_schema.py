@@ -35,6 +35,27 @@ def _has_fk(inspector, table_name: str, columns: tuple[str, ...], referred_colum
     )
 
 
+def _add_constraint_if_missing(bind, alter_sql: str) -> None:
+    """Run a constraint-adding ALTER TABLE, tolerating it already existing.
+
+    The inspector-based pre-checks above (`_has_unique`/`_has_fk`) proved
+    unreliable when the constraint was created earlier in the SAME open
+    migration transaction (e.g. by 20260724_cash_handoff_rotation running
+    just before this repair in a single `alembic upgrade head` invocation) --
+    SQLAlchemy's reflection cache does not always see same-transaction DDL.
+
+    A plain Python try/except is not enough: a failed statement inside a
+    Postgres transaction aborts the whole transaction (every later statement
+    errors with "current transaction is aborted" until a ROLLBACK), so the
+    exception must be caught server-side inside a DO block instead.
+    """
+    escaped = alter_sql.replace("'", "''")
+    bind.execute(sa.text(
+        f"DO $$ BEGIN EXECUTE '{escaped}'; "
+        f"EXCEPTION WHEN duplicate_object THEN NULL; END $$;"
+    ))
+
+
 def upgrade() -> None:
     bind = op.get_bind()
     if bind.dialect.name != "postgresql":
@@ -46,34 +67,36 @@ def upgrade() -> None:
 
     # The original cash-handoff migration owns these constraints. Reapply only
     # the missing pieces so a partially applied historical revision becomes a
-    # valid schema without rewriting or deleting data.
+    # valid schema without rewriting or deleting data. Each add is wrapped to
+    # tolerate the constraint already existing (see _add_constraint_if_missing).
     if not _has_unique(inspector, "cash_close_reports", ("successor_session_id",)):
-        op.create_unique_constraint(
-            "uq_cash_close_reports_successor_session",
-            "cash_close_reports",
-            ["successor_session_id"],
+        _add_constraint_if_missing(
+            bind,
+            "ALTER TABLE cash_close_reports ADD CONSTRAINT uq_cash_close_reports_successor_session "
+            "UNIQUE (successor_session_id)",
         )
     if not _has_fk(inspector, "cash_close_reports", ("successor_session_id",), ("id",)):
-        op.create_foreign_key(
-            "fk_cash_close_reports_successor_session",
-            "cash_close_reports",
-            "cash_sessions",
-            ["successor_session_id"],
-            ["id"],
-            ondelete="SET NULL",
+        _add_constraint_if_missing(
+            bind,
+            "ALTER TABLE cash_close_reports ADD CONSTRAINT fk_cash_close_reports_successor_session "
+            "FOREIGN KEY (successor_session_id) REFERENCES cash_sessions (id) ON DELETE SET NULL",
         )
 
     if not _has_unique(inspector, "cash_sessions", ("hotel_id", "id")):
-        op.create_unique_constraint("uq_cash_sessions_hotel_id_id", "cash_sessions", ["hotel_id", "id"])
+        _add_constraint_if_missing(
+            bind,
+            "ALTER TABLE cash_sessions ADD CONSTRAINT uq_cash_sessions_hotel_id_id UNIQUE (hotel_id, id)",
+        )
     if not _has_unique(inspector, "cash_close_reports", ("hotel_id", "id")):
-        op.create_unique_constraint("uq_cash_close_reports_hotel_id_id", "cash_close_reports", ["hotel_id", "id"])
+        _add_constraint_if_missing(
+            bind,
+            "ALTER TABLE cash_close_reports ADD CONSTRAINT uq_cash_close_reports_hotel_id_id UNIQUE (hotel_id, id)",
+        )
     if not _has_fk(inspector, "cash_close_reports", ("hotel_id", "successor_session_id"), ("hotel_id", "id")):
-        op.create_foreign_key(
-            "fk_cash_close_reports_hotel_successor_session",
-            "cash_close_reports",
-            "cash_sessions",
-            ["hotel_id", "successor_session_id"],
-            ["hotel_id", "id"],
+        _add_constraint_if_missing(
+            bind,
+            "ALTER TABLE cash_close_reports ADD CONSTRAINT fk_cash_close_reports_hotel_successor_session "
+            "FOREIGN KEY (hotel_id, successor_session_id) REFERENCES cash_sessions (hotel_id, id)",
         )
 
 
