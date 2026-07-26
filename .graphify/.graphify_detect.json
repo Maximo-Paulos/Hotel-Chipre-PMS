@@ -844,9 +844,9 @@
     "video": []
   },
   "total_files": 834,
-  "total_words": 575951,
+  "total_words": 576319,
   "needs_graph": true,
-  "warning": "Large corpus: 834 files · ~575,951 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
+  "warning": "Large corpus: 834 files · ~576,319 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
   "skipped_sensitive": [
     "alembic/versions/20260408_security_tokens.py",
     "alembic/versions/20260725_user_token_version.py",
@@ -861,7 +861,7 @@
   "graphifyignore_patterns": 60,
   "git": {
     "source_owner": "git",
-    "source_hash": "a5ee7bedf274b9797bdbfa74307582c4b3ff2608",
+    "source_hash": "9f8c4cdd347699fad4ecb9b6eab4324096a83ccd",
     "branches": [
       "claude/feature/pms-roles-housekeeping-qa",
       "codex/feature/agent-ops-knowledge",
@@ -869,7 +869,9 @@
       "codex/feature/trusted-qa-bootstrap",
       "codex/fix-render-postgres-enum-values",
       "main",
-      "worktree-agent-a945788514ece683f"
+      "worktree-agent-a945788514ece683f",
+      "worktree-agent-aa90c760fab5d7651",
+      "worktree-agent-accdf065d7f106429"
     ],
     "max_commits": 200,
     "active_within_days": 30
@@ -880,7 +882,7 @@
     "source": "cli",
     "root": ".",
     "git_root": ".",
-    "head": "a5ee7bedf274b9797bdbfa74307582c4b3ff2608",
+    "head": "9f8c4cdd347699fad4ecb9b6eab4324096a83ccd",
     "candidate_count": null,
     "included_count": 834,
     "excluded_untracked_count": 0,
