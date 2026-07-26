@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-26T00:20:17.378Z",
+  "generatedAt": "2026-07-26T01:01:45.900Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -10423,6 +10423,30 @@
       "warnings": []
     },
     {
+      "id": "flow:protected_laundrypage_laundrypage",
+      "name": "LaundryPage",
+      "entryPoint": "protected_laundrypage_laundrypage",
+      "entryPointId": "protected_laundrypage_laundrypage",
+      "path": [
+        "protected_laundrypage_laundrypage",
+        "protected_laundrypage_canmanagevendors",
+        "protected_laundrypage_canoperateremitos"
+      ],
+      "qualifiedPath": [
+        "protected_laundrypage_laundrypage",
+        "protected_laundrypage_canmanagevendors",
+        "protected_laundrypage_canoperateremitos"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/views/protected/LaundryPage.tsx"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:analytics_analyticspages_planguard",
       "name": "PlanGuard",
       "entryPoint": "analytics_analyticspages_planguard",
@@ -12438,6 +12462,28 @@
       "fileCount": 1,
       "files": [
         "frontend/src/components/ManualOtaReservationModal.tsx"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:protected_laundrypage_emptyremitoform",
+      "name": "emptyRemitoForm",
+      "entryPoint": "protected_laundrypage_emptyremitoform",
+      "entryPointId": "protected_laundrypage_emptyremitoform",
+      "path": [
+        "protected_laundrypage_emptyremitoform",
+        "protected_laundrypage_todayiso"
+      ],
+      "qualifiedPath": [
+        "protected_laundrypage_emptyremitoform",
+        "protected_laundrypage_todayiso"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/views/protected/LaundryPage.tsx"
       ],
       "criticality": 0.16,
       "warnings": []
