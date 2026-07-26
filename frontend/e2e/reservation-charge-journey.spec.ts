@@ -56,6 +56,7 @@ test("owner records a reservation consumption from the guest stay file", async (
   await page.getByRole("button", { name: "Crear reserva", exact: true }).click();
 
   const reservationForm = page.locator("form").filter({ hasText: "Datos de la reserva" });
+  await reservationForm.getByRole("button", { name: "¿No lo encontrás? Crear huésped nuevo", exact: true }).click();
   await reservationForm.getByPlaceholder("Nombre").fill("Huésped");
   await reservationForm.getByPlaceholder("Apellido").fill(guestLastName);
   await reservationForm.getByPlaceholder("Email").fill(`charge.${suffix}@example.test`);

@@ -61,6 +61,7 @@ test("receptionist runs the full check-in / checkout journey with a pending-bala
   const reservationForm = page.locator("form").filter({ hasText: "Datos de la reserva" });
   await expect(reservationForm).toBeVisible();
 
+  await reservationForm.getByRole("button", { name: "¿No lo encontrás? Crear huésped nuevo", exact: true }).click();
   await reservationForm.getByPlaceholder("Nombre").fill("Huésped");
   await reservationForm.getByPlaceholder("Apellido").fill(guestLastName);
   await reservationForm.getByPlaceholder("Email").fill(`qa.recepcion.${suffix}@example.test`);

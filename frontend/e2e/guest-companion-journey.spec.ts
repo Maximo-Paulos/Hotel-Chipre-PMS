@@ -25,6 +25,7 @@ test("owner creates a guest and records a documented companion from the guest fi
   await page.getByRole("button", { name: "Crear reserva", exact: true }).click();
 
   const reservationForm = page.locator("form").filter({ hasText: "Datos de la reserva" });
+  await reservationForm.getByRole("button", { name: "¿No lo encontrás? Crear huésped nuevo", exact: true }).click();
   await reservationForm.getByPlaceholder("Nombre").fill("Huésped");
   await reservationForm.getByPlaceholder("Apellido").fill(guestLastName);
   await reservationForm.getByPlaceholder("Email").fill("guest." + suffix + "@example.test");

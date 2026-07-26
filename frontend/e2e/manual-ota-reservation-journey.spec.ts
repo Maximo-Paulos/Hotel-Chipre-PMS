@@ -53,6 +53,7 @@ test("cargar reserva de Booking en USD, ver conversion y reenviar el mismo ID ex
   const form = modal.locator("form");
   await expect(form).toBeVisible();
 
+  await form.getByRole("button", { name: "¿No lo encontrás? Crear huésped nuevo", exact: true }).click();
   await form.getByPlaceholder("Nombre").fill("Huésped");
   await form.getByPlaceholder("Apellido").fill(guestLastName);
   await form.getByLabel("Tipo de documento").selectOption("DNI");
@@ -86,8 +87,10 @@ test("cargar reserva de Booking en USD, ver conversion y reenviar el mismo ID ex
   await successPanel.getByRole("button", { name: "Cargar otra", exact: true }).click();
   await expect(form).toBeVisible();
 
-  const guestIdField = form.locator("label").filter({ hasText: "ID Huésped" }).locator("input");
-  await expect(guestIdField).toHaveValue("");
+  const guestSearchInput = form.getByPlaceholder("Buscar por nombre, documento o email");
+  await expect(guestSearchInput).toBeVisible();
+  await expect(guestSearchInput).toHaveValue("");
+  await form.getByRole("button", { name: "¿No lo encontrás? Crear huésped nuevo", exact: true }).click();
   await form.getByPlaceholder("Nombre").fill("Huésped");
   await form.getByPlaceholder("Apellido").fill(guestLastName);
   await categorySelect.selectOption((await categoryOption.getAttribute("value"))!);
@@ -123,6 +126,7 @@ test("tarifa manual en reserva directa muestra la moneda usada aunque no haya co
 
   const form = page.locator("form").filter({ hasText: "Datos de la reserva" });
   await expect(form).toBeVisible();
+  await form.getByRole("button", { name: "¿No lo encontrás? Crear huésped nuevo", exact: true }).click();
   await form.getByPlaceholder("Nombre").fill("Huésped");
   await form.getByPlaceholder("Apellido").fill(guestLastName);
   await form.getByLabel("Tipo de documento").selectOption("DNI");

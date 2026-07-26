@@ -129,6 +129,7 @@ test("owner completes the core reservation journey through the UI", async ({ pag
   const reservationForm = page.locator("form").filter({ hasText: "Datos de la reserva" });
   await expect(reservationForm).toBeVisible();
 
+  await reservationForm.getByRole("button", { name: "¿No lo encontrás? Crear huésped nuevo", exact: true }).click();
   await reservationForm.getByPlaceholder("Nombre").fill("Huésped");
   await reservationForm.getByPlaceholder("Apellido").fill(guestLastName);
   await reservationForm.getByPlaceholder("Email").fill(`journey.${suffix}@example.test`);
@@ -402,6 +403,7 @@ test("owner manages a room move and no-show from the reservation ficha", async (
   await navigateFromShell(page, "/reservas");
   await page.getByRole("button", { name: "Crear reserva", exact: true }).click();
   const reservationForm = page.locator("form").filter({ hasText: "Datos de la reserva" });
+  await reservationForm.getByRole("button", { name: "¿No lo encontrás? Crear huésped nuevo", exact: true }).click();
   await reservationForm.getByPlaceholder("Nombre").fill("Huésped");
   await reservationForm.getByPlaceholder("Apellido").fill(guestLastName);
   await reservationForm.getByPlaceholder("Email").fill(`operations.${suffix}@example.test`);

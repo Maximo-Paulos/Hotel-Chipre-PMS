@@ -58,6 +58,7 @@ async function createReservation(page: Page, guestLastName: string, suffix: stri
   const reservationForm = page.locator("form").filter({ hasText: "Datos de la reserva" });
   await expect(reservationForm).toBeVisible();
 
+  await reservationForm.getByRole("button", { name: "¿No lo encontrás? Crear huésped nuevo", exact: true }).click();
   await reservationForm.getByPlaceholder("Nombre").fill("Huésped");
   await reservationForm.getByPlaceholder("Apellido").fill(guestLastName);
   await reservationForm.getByPlaceholder("Email").fill(`qa.pay.${suffix}@example.test`);

@@ -57,6 +57,7 @@ test("QA- default hotel deposit shown before confirming matches the deposit stor
 
   const form = page.locator("form").filter({ hasText: "Datos de la reserva" });
   await expect(form).toBeVisible();
+  await form.getByRole("button", { name: "¿No lo encontrás? Crear huésped nuevo", exact: true }).click();
   await form.getByPlaceholder("Nombre").fill("Huésped");
   await form.getByPlaceholder("Apellido").fill(guestLastName);
   await form.getByPlaceholder("Email").fill(`${guestLastName.toLowerCase().replaceAll(" ", ".")}@example.test`);

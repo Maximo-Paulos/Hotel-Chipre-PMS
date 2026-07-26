@@ -44,6 +44,7 @@ async function openReservationForm(
   await page.getByRole("button", { name: "Crear reserva", exact: true }).click();
   const form = page.locator("form").filter({ hasText: "Datos de la reserva" });
   await expect(form).toBeVisible();
+  await form.getByRole("button", { name: "¿No lo encontrás? Crear huésped nuevo", exact: true }).click();
   await form.getByPlaceholder("Nombre").fill("Huésped");
   await form.getByPlaceholder("Apellido").fill(lastName);
   await form.getByPlaceholder("Email").fill(`${lastName.toLowerCase().replaceAll(" ", ".")}@example.test`);
