@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-26T22:25:52.852Z",
+  "generatedAt": "2026-07-26T22:54:32.126Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -4366,6 +4366,32 @@
       "fileCount": 1,
       "files": [
         "app/services/analytics_service.py"
+      ],
+      "criticality": 0.2225,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_reservations_create_new_reservation",
+      "name": "create_new_reservation",
+      "entryPoint": "api_reservations_create_new_reservation",
+      "entryPointId": "api_reservations_create_new_reservation",
+      "path": [
+        "api_reservations_create_new_reservation",
+        "api_reservations_ensure_manual_rate_permission",
+        "api_reservations_project_reservation_graph",
+        "api_reservations_to_read"
+      ],
+      "qualifiedPath": [
+        "api_reservations_create_new_reservation",
+        "api_reservations_ensure_manual_rate_permission",
+        "api_reservations_project_reservation_graph",
+        "api_reservations_to_read"
+      ],
+      "depth": 1,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/api/reservations.py"
       ],
       "criticality": 0.2225,
       "warnings": []
@@ -12140,30 +12166,6 @@
       "fileCount": 1,
       "files": [
         "app/services/payment_link_service.py"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
-      "id": "flow:api_reservations_create_new_reservation",
-      "name": "create_new_reservation",
-      "entryPoint": "api_reservations_create_new_reservation",
-      "entryPointId": "api_reservations_create_new_reservation",
-      "path": [
-        "api_reservations_create_new_reservation",
-        "api_reservations_project_reservation_graph",
-        "api_reservations_to_read"
-      ],
-      "qualifiedPath": [
-        "api_reservations_create_new_reservation",
-        "api_reservations_project_reservation_graph",
-        "api_reservations_to_read"
-      ],
-      "depth": 1,
-      "nodeCount": 3,
-      "fileCount": 1,
-      "files": [
-        "app/api/reservations.py"
       ],
       "criticality": 0.16,
       "warnings": []

@@ -897,6 +897,11 @@ export function ReservationsPage() {
   const detailsGuest = useGuest(detailsReservation?.guest_id || undefined).data;
   const editingCurrencyCode = normalizeCurrencyCode(paymentSummary?.currency_code ?? editing?.currency_code);
   const canApprovePaymentProof = ["owner", "co_owner", "manager"].includes(session.baseRole ?? "");
+  // Security fix: reads baseRole -- not the "Cambiar vista" preview role --
+  // so this only hides the manual tarifa override for the real authenticated
+  // role. The backend (POST /api/reservations) enforces this independently
+  // via reservation:manual_rate; this is UX only, not the real gate.
+  const canSetManualRate = ["owner", "co_owner"].includes(session.baseRole ?? "");
   const detailsCurrencyCode = normalizeCurrencyCode(
     detailsSummary?.currency_code ??
       detailsOperations?.financial_summary.currency_code ??
@@ -2071,38 +2076,40 @@ export function ReservationsPage() {
                     </label>
                   </div>
 
-                  <div className="mt-3 rounded-lg border border-violet-200 bg-violet-50/60 p-3">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-violet-700">Tarifa manual (opcional)</p>
-                    <p className="mt-1 text-xs text-slate-600">
-                      Si completás un monto acá, reemplaza la cotización automática de Tarifas para esta reserva.
-                    </p>
-                    <div className="mt-2 grid gap-3 sm:grid-cols-2">
-                      <label className="text-xs font-semibold text-slate-600">
-                        Monto total manual
-                        <input
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          value={manualTotalAmountInput}
-                          onChange={(e) => setManualTotalAmountInput(e.target.value)}
-                          placeholder="Dejar vacío para usar Tarifas"
-                          className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
-                        />
-                      </label>
-                      <label className="text-xs font-semibold text-slate-600">
-                        Moneda
-                        <select
-                          value={manualTargetCurrency}
-                          onChange={(e) => setManualTargetCurrency(e.target.value as "ARS" | "USD")}
-                          disabled={manualTotalAmountInput.trim() === ""}
-                          className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm disabled:bg-slate-50"
-                        >
-                          <option value="ARS">ARS</option>
-                          <option value="USD">USD</option>
-                        </select>
-                      </label>
+                  {canSetManualRate && (
+                    <div className="mt-3 rounded-lg border border-violet-200 bg-violet-50/60 p-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-violet-700">Tarifa manual (opcional)</p>
+                      <p className="mt-1 text-xs text-slate-600">
+                        Si completás un monto acá, reemplaza la cotización automática de Tarifas para esta reserva.
+                      </p>
+                      <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                        <label className="text-xs font-semibold text-slate-600">
+                          Monto total manual
+                          <input
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            value={manualTotalAmountInput}
+                            onChange={(e) => setManualTotalAmountInput(e.target.value)}
+                            placeholder="Dejar vacío para usar Tarifas"
+                            className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
+                          />
+                        </label>
+                        <label className="text-xs font-semibold text-slate-600">
+                          Moneda
+                          <select
+                            value={manualTargetCurrency}
+                            onChange={(e) => setManualTargetCurrency(e.target.value as "ARS" | "USD")}
+                            disabled={manualTotalAmountInput.trim() === ""}
+                            className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm disabled:bg-slate-50"
+                          >
+                            <option value="ARS">ARS</option>
+                            <option value="USD">USD</option>
+                          </select>
+                        </label>
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   {manualTotalAmountInput.trim() !== "" ? (
                     <div className="mt-3 rounded-lg border border-violet-100 bg-white/80 px-3 py-2 text-sm text-slate-800">

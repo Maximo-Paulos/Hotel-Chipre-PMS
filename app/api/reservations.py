@@ -80,7 +80,10 @@ from app.dependencies.auth import get_auth_context, AuthContext, require_roles, 
 from app.services.permission_service import (
     PERMISSION_RESERVATION_CHARGE,
     PERMISSION_RESERVATION_CREATE,
+    PERMISSION_RESERVATION_MANUAL_RATE,
     PERMISSION_RESERVATION_ROOM_MOVE,
+    audit_permission_denied,
+    resolve,
 )
 from app.services import audit_log_service
 from app.services.graph_projection import (
@@ -106,6 +109,26 @@ def _to_read(r: Reservation) -> ReservationRead:
 
 def _is_manager_context(context: AuthContext) -> bool:
     return context.user_role in {"owner", "co_owner", "manager"}
+
+
+def _ensure_manual_rate_permission(db: Session, context: AuthContext) -> None:
+    """A manual total_amount replaces the auto-quote from Tarifas entirely --
+    only a role holding reservation:manual_rate (owner/co_owner by default)
+    may use it. Rejects instead of silently ignoring the client-supplied
+    override, so a direct API call can't bypass the UI gate."""
+    if resolve(db, context.hotel_id, context.user_role, PERMISSION_RESERVATION_MANUAL_RATE):
+        return
+    audit_permission_denied(
+        db,
+        hotel_id=context.hotel_id,
+        user_id=context.user_id,
+        role=context.user_role,
+        permission_code=PERMISSION_RESERVATION_MANUAL_RATE,
+    )
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="No tenes permisos para fijar una tarifa manual en la reserva.",
+    )
 
 
 def _trigger_reoptimization_bg(hotel_id: int, trigger_type: str = "new_reservation") -> None:
@@ -158,6 +181,8 @@ def create_new_reservation(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_CREATE)),
 ):
+    if data.total_amount is not None:
+        _ensure_manual_rate_permission(db, context)
     # A manual total_amount (B4: tarifa manual en reserva directa) is an
     # explicit operator override -- it deliberately does not match whatever
     # the auto-quote for this category/dates would be, so a quote_token

@@ -60,6 +60,7 @@ PERMISSION_GUEST_EXPORT = "guest:export"
 PERMISSION_RESERVATION_CREATE = "reservation:create"
 PERMISSION_RESERVATION_CHARGE = "reservation:charge"
 PERMISSION_RESERVATION_ROOM_MOVE = "reservation:room_move"
+PERMISSION_RESERVATION_MANUAL_RATE = "reservation:manual_rate"
 PERMISSION_CHECKIN_PERFORM = "checkin:perform"
 PERMISSION_ROOM_BLOCK = "room:block"
 PERMISSION_ROOM_BLOCK_CREATE = "room_block:create"
@@ -88,6 +89,7 @@ PERMISSION_DEFINITIONS: dict[str, str] = {
     PERMISSION_RESERVATION_CREATE: "Create reservations",
     PERMISSION_RESERVATION_CHARGE: "Add consumption and extra charges to active reservations",
     PERMISSION_RESERVATION_ROOM_MOVE: "Move reservations between rooms",
+    PERMISSION_RESERVATION_MANUAL_RATE: "Set a manual rate that overrides the automatic Tarifas quote on a new reservation",
     PERMISSION_CHECKIN_PERFORM: "Perform guest check-in",
     PERMISSION_ROOM_BLOCK: "Create and resolve room blocks",
     PERMISSION_ROOM_BLOCK_CREATE: "Create room blocks (BRM §14.1)",
@@ -116,6 +118,7 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
         PERMISSION_RESERVATION_CREATE: True,
         PERMISSION_RESERVATION_CHARGE: True,
         PERMISSION_RESERVATION_ROOM_MOVE: True,
+        PERMISSION_RESERVATION_MANUAL_RATE: False,
         PERMISSION_CHECKIN_PERFORM: True,
         PERMISSION_ROOM_BLOCK: True,
         PERMISSION_ROOM_BLOCK_CREATE: True,
@@ -140,6 +143,7 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
         PERMISSION_RESERVATION_CREATE: True,
         PERMISSION_RESERVATION_CHARGE: True,
         PERMISSION_RESERVATION_ROOM_MOVE: False,
+        PERMISSION_RESERVATION_MANUAL_RATE: False,
         PERMISSION_CHECKIN_PERFORM: True,
         PERMISSION_ROOM_BLOCK: False,
         PERMISSION_ROOM_BLOCK_CREATE: True,
