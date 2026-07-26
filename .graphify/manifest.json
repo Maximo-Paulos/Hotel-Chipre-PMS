@@ -364,8 +364,8 @@
     "hash": "01c0e7eaa55ecd4928a54ad8b3ba7311"
   },
   "app/api/stock.py": {
-    "mtime": 1785026930838.4363,
-    "hash": "e174a8ffd5378ae1abee2e2aa24ff005"
+    "mtime": 1785031771674.6653,
+    "hash": "3dc264306a05969313e51ee86025ce77"
   },
   "app/api/subscription.py": {
     "mtime": 1784862144876.255,
@@ -1036,8 +1036,8 @@
     "hash": "79d6d1e03bf10363d83dedfa312a534a"
   },
   "app/services/stock_service.py": {
-    "mtime": 1785024275038.9219,
-    "hash": "5de84ddaf505795eff8667c77fa7394d"
+    "mtime": 1785031742464.329,
+    "hash": "aade827a0772efbb756d17fef2e90602"
   },
   "app/services/subscription_entitlements.py": {
     "mtime": 1784862144886.7397,
@@ -1204,8 +1204,8 @@
     "hash": "d976c0d923b94f3f72ba414452dee372"
   },
   "frontend/src/api/stock.ts": {
-    "mtime": 1785025678786.7356,
-    "hash": "5ca1368939518a2e9e33a82ae03383ad"
+    "mtime": 1785031857076.5444,
+    "hash": "6cc5d15f910e1babdbc45a80370f5f61"
   },
   "frontend/src/api/subscription.ts": {
     "mtime": 1784862144902.4917,
@@ -1328,8 +1328,8 @@
     "hash": "a83aaa714dc010be39a6db20bbe5e1c5"
   },
   "frontend/src/hooks/useRateCalendar.ts": {
-    "mtime": 1784862144904.2566,
-    "hash": "19f29787c08ced48e8b83a8a6359104e"
+    "mtime": 1785030095897.9956,
+    "hash": "87f394588a479f86874f4df6491be51a"
   },
   "frontend/src/hooks/useReports.ts": {
     "mtime": 1784862144904.3018,
@@ -1432,32 +1432,32 @@
     "hash": "38679b49521cf22a610b4cc9b5f9c624"
   },
   "frontend/src/views/protected/DashboardPage.tsx": {
-    "mtime": 1785021628371.663,
-    "hash": "afac69e5d44b914d6b0fc1c399959ebe"
+    "mtime": 1785030137963.768,
+    "hash": "44c88c3c59be1e8177e28843717cd2c3"
   },
   "frontend/src/views/protected/GuestsPage.tsx": {
     "mtime": 1785023233653.9268,
     "hash": "691843ade7fd813f86c17cf32f7b3426"
   },
   "frontend/src/views/protected/LaundryPage.tsx": {
-    "mtime": 1785028134992.4348,
-    "hash": "2bba23be76435e4a9056ba06610aaa16"
+    "mtime": 1785031884831.0303,
+    "hash": "aaa50face5b4e3922c9bc63b115bc6e2"
   },
   "frontend/src/views/protected/RateCalendarPage.tsx": {
     "mtime": 1785018817447.759,
     "hash": "4c4958246dbd55fd0e64dd2133b77b28"
   },
   "frontend/src/views/protected/ReportsPage.tsx": {
-    "mtime": 1784900343395.599,
-    "hash": "2d960effb79d50cb5debf39038a49702"
+    "mtime": 1785030099841.671,
+    "hash": "52376332a53c52681f11692532b83fc4"
   },
   "frontend/src/views/protected/ReservationsPage.tsx": {
-    "mtime": 1785020912007.273,
-    "hash": "ea689bea9725a69fb27e7dacb96f355a"
+    "mtime": 1785030211714.5513,
+    "hash": "b558f854e60859e90815b0d81ba5f92a"
   },
   "frontend/src/views/protected/RoomsPage.tsx": {
-    "mtime": 1784965978800.4614,
-    "hash": "47636894b29ff5b9fea490d847aa8478"
+    "mtime": 1785030161796.0088,
+    "hash": "a6d54cb0627862502c2ef33d2a646339"
   },
   "frontend/src/views/protected/SettingsApiKeysPage.tsx": {
     "mtime": 1784862144906.4473,
@@ -1500,8 +1500,8 @@
     "hash": "353d169ade8bfb8b38ab0e5f059b68ca"
   },
   "frontend/src/views/protected/StockPage.tsx": {
-    "mtime": 1785025682134.3997,
-    "hash": "a46931a13c8040cf7c712dadac55e0e0"
+    "mtime": 1785031968481.9368,
+    "hash": "e99c04e94ab10565d54d12ab36580d86"
   },
   "frontend/src/views/protected/WaitlistPage.tsx": {
     "mtime": 1785023139092.8506,
@@ -3364,8 +3364,8 @@
     "hash": "6c6ac15ede5f33ded16c944491cd73d7"
   },
   "frontend/e2e/business-journey.spec.ts": {
-    "mtime": 1785028602499.0574,
-    "hash": "47b8c6dd4dca1c52be3c98f05012d134"
+    "mtime": 1785030839866.4607,
+    "hash": "35d46b67b2b3c20fbe6ceb8e0d9c56e3"
   },
   "alembic/versions/20260724_allocation_enum_values.py": {
     "mtime": 1784868257342.7349,
@@ -3600,8 +3600,8 @@
     "hash": "231c40b593cdd5359ff542e1c64b34ef"
   },
   "frontend/e2e/housekeeping-laundry-journey.spec.ts": {
-    "mtime": 1785027140305.5781,
-    "hash": "981e042b83d9354bb61148dccc627d59"
+    "mtime": 1785030820581.954,
+    "hash": "7f386dfd315317202b1ba4fcfdee336b"
   },
   "frontend/e2e/manager-reports-journey.spec.ts": {
     "mtime": 1784965931684.6663,
@@ -3648,8 +3648,8 @@
     "hash": "4b54b79a778e926e2c7da385dd01d98c"
   },
   "frontend/e2e/stock-inventory-journey.spec.ts": {
-    "mtime": 1784972612969.0208,
-    "hash": "34a1095a203683d118b0ba565ddf7fdd"
+    "mtime": 1785032231478.1794,
+    "hash": "878a3f68ddc3e1459a106dbc0f95760b"
   },
   "frontend/e2e/reservation-deposit-preview.spec.ts": {
     "mtime": 1784989953755.3613,
@@ -3760,8 +3760,8 @@
     "hash": "2925b76a711a55417084105f602a7731"
   },
   "frontend/src/components/ManualOtaReservationModal.tsx": {
-    "mtime": 1785019353971.7222,
-    "hash": "f691088aebb7954b5834c14d2fe08980"
+    "mtime": 1785030175064.3594,
+    "hash": "bcac539e1853678f74a0ae34fe3d0adc"
   },
   "frontend/e2e/guest-pagination.spec.ts": {
     "mtime": 1785023328874.3608,
@@ -3800,11 +3800,23 @@
     "hash": "e5170358b3b8914d25107ac62d246e8d"
   },
   "frontend/e2e/laundry-vendor-cycle-journey.spec.ts": {
-    "mtime": 1785028567071.4944,
-    "hash": "f20e5889b6f1129553194e395c9e9608"
+    "mtime": 1785031235793.5208,
+    "hash": "d073ca394d1f3c9b803a87e98ff47ffa"
   },
   "frontend/src/api/laundryVendor.ts": {
     "mtime": 1785025663973.282,
     "hash": "aeda8101b753e5e2ce6de6aa85397a77"
+  },
+  "frontend/e2e/reports-default-date-timezone.spec.ts": {
+    "mtime": 1785030124348.801,
+    "hash": "5cce627115a04b5606a8b3e6f1315cc9"
+  },
+  "frontend/src/utils/date.ts": {
+    "mtime": 1785031870797.76,
+    "hash": "ec0a9417a7cfb635d28a6025512782c3"
+  },
+  "tests/test_stock_consumption_report.py": {
+    "mtime": 1785031832425.3716,
+    "hash": "856965cdddf7283680e1d26e536797ce"
   }
 }

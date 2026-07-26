@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-26T01:35:38.361Z",
+  "generatedAt": "2026-07-26T02:23:50.623Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -6961,6 +6961,30 @@
       "warnings": []
     },
     {
+      "id": "flow:utils_date_adddaysiso",
+      "name": "addDaysIso",
+      "entryPoint": "utils_date_adddaysiso",
+      "entryPointId": "utils_date_adddaysiso",
+      "path": [
+        "utils_date_adddaysiso",
+        "utils_date_formatlocalisodate",
+        "utils_date_pad"
+      ],
+      "qualifiedPath": [
+        "utils_date_adddaysiso",
+        "utils_date_formatlocalisodate",
+        "utils_date_pad"
+      ],
+      "depth": 2,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/utils/date.ts"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
       "id": "flow:services_guest_service_add_tag",
       "name": "add_tag",
       "entryPoint": "services_guest_service_add_tag",
@@ -9187,6 +9211,54 @@
       "warnings": []
     },
     {
+      "id": "flow:utils_date_startofcurrentmonthiso",
+      "name": "startOfCurrentMonthIso",
+      "entryPoint": "utils_date_startofcurrentmonthiso",
+      "entryPointId": "utils_date_startofcurrentmonthiso",
+      "path": [
+        "utils_date_startofcurrentmonthiso",
+        "utils_date_formatlocalisodate",
+        "utils_date_pad"
+      ],
+      "qualifiedPath": [
+        "utils_date_startofcurrentmonthiso",
+        "utils_date_formatlocalisodate",
+        "utils_date_pad"
+      ],
+      "depth": 2,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/utils/date.ts"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
+      "id": "flow:utils_date_startofcurrentweekiso",
+      "name": "startOfCurrentWeekIso",
+      "entryPoint": "utils_date_startofcurrentweekiso",
+      "entryPointId": "utils_date_startofcurrentweekiso",
+      "path": [
+        "utils_date_startofcurrentweekiso",
+        "utils_date_formatlocalisodate",
+        "utils_date_pad"
+      ],
+      "qualifiedPath": [
+        "utils_date_startofcurrentweekiso",
+        "utils_date_formatlocalisodate",
+        "utils_date_pad"
+      ],
+      "depth": 2,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/utils/date.ts"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
       "id": "flow:api_subscription_start_subscription_trial",
       "name": "start_subscription_trial",
       "entryPoint": "api_subscription_start_subscription_trial",
@@ -9328,6 +9400,30 @@
       "fileCount": 1,
       "files": [
         "frontend/src/hooks/useRateCalendar.ts"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
+      "id": "flow:utils_date_todayiso",
+      "name": "todayIso",
+      "entryPoint": "utils_date_todayiso",
+      "entryPointId": "utils_date_todayiso",
+      "path": [
+        "utils_date_todayiso",
+        "utils_date_formatlocalisodate",
+        "utils_date_pad"
+      ],
+      "qualifiedPath": [
+        "utils_date_todayiso",
+        "utils_date_formatlocalisodate",
+        "utils_date_pad"
+      ],
+      "depth": 2,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/utils/date.ts"
       ],
       "criticality": 0.17,
       "warnings": []
@@ -11758,6 +11854,30 @@
       "fileCount": 1,
       "files": [
         "app/services/cash_register_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_stock_service_consumption_report",
+      "name": "consumption_report",
+      "entryPoint": "services_stock_service_consumption_report",
+      "entryPointId": "services_stock_service_consumption_report",
+      "path": [
+        "services_stock_service_consumption_report",
+        "services_stock_service_consumption_totals_by_item",
+        "services_stock_service_stockerror"
+      ],
+      "qualifiedPath": [
+        "services_stock_service_consumption_report",
+        "services_stock_service_consumption_totals_by_item",
+        "services_stock_service_stockerror"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/services/stock_service.py"
       ],
       "criticality": 0.16,
       "warnings": []
