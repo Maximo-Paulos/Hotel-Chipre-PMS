@@ -388,8 +388,8 @@
     "hash": "264bc61735c308ba232871f446906e98"
   },
   "app/database.py": {
-    "mtime": 1784862641428.6223,
-    "hash": "68a187f31df04c16d101dee7d8eb800d"
+    "mtime": 1785034947400.238,
+    "hash": "da3618a1501710d941b3124ae855f93b"
   },
   "app/db/__init__.py": {
     "mtime": 1784862144876.852,
@@ -3324,8 +3324,8 @@
     "hash": "04d05c267e70567aa2b5241f6f0496d5"
   },
   "app/services/tenant_context.py": {
-    "mtime": 1785032895102.5356,
-    "hash": "fabf49328c6219ace5c0e9a3f70a26c7"
+    "mtime": 1785034936659.1648,
+    "hash": "cc1f15c888deee3d024229e0c3745184"
   },
   "tests/test_tenant_rls_contract.py": {
     "mtime": 1785033107953.3977,
@@ -3826,5 +3826,9 @@
   "tests/test_master_admin_rls_bypass_pg.py": {
     "mtime": 1785033065484.76,
     "hash": "5484cabcd03b48cce6b9515f3b5efaaa"
+  },
+  "tests/test_tenant_context_after_commit.py": {
+    "mtime": 1785034994296.0212,
+    "hash": "8a1ffd17cc687e67368b1da3e47c708c"
   }
 }

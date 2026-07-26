@@ -18,6 +18,27 @@ class Base(DeclarativeBase):
     pass
 
 
+@event.listens_for(Session, "after_commit")
+def _reapply_tenant_context(session: Session) -> None:
+    """Reapply RLS tenant context lost when a commit ends the transaction.
+
+    ``app.services.tenant_context`` sets PostgreSQL settings with
+    ``set_config(..., is_local=true)`` -- transaction-scoped by design, so a
+    commit silently clears ``app.hotel_id``/``app.user_id``/
+    ``app.master_admin``. Any service that commits mid-request and then
+    issues another query on the same session would otherwise run that query
+    with no tenant context, which the RLS policies (NULL-comparison) treat
+    as fail-closed: zero rows, not a cross-tenant leak, but silently broken.
+    This listener fires for every Session after every commit; it is a clean
+    no-op for sessions that never set tenant context (nothing stashed on
+    ``session.info``) and for SQLite (tenant_context's own dialect check
+    short-circuits there).
+    """
+    from app.services.tenant_context import reapply_tenant_context
+
+    reapply_tenant_context(session)
+
+
 def get_engine(database_url: str | None = None):
     """Create a SQLAlchemy engine for SQLite (dev) or PostgreSQL (prod)."""
     url = database_url or get_settings().DATABASE_URL

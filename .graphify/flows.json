@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-26T02:34:58.045Z",
+  "generatedAt": "2026-07-26T03:06:10.532Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -3430,6 +3430,30 @@
       "fileCount": 1,
       "files": [
         "app/services/graph_projection.py"
+      ],
+      "criticality": 0.2433,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_tenant_context_set_master_admin_context",
+      "name": "set_master_admin_context",
+      "entryPoint": "services_tenant_context_set_master_admin_context",
+      "entryPointId": "services_tenant_context_set_master_admin_context",
+      "path": [
+        "services_tenant_context_set_master_admin_context",
+        "services_tenant_context_apply_setting",
+        "services_tenant_context_remember_setting"
+      ],
+      "qualifiedPath": [
+        "services_tenant_context_set_master_admin_context",
+        "services_tenant_context_apply_setting",
+        "services_tenant_context_remember_setting"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/services/tenant_context.py"
       ],
       "criticality": 0.2433,
       "warnings": []
@@ -6957,6 +6981,36 @@
       "warnings": []
     },
     {
+      "id": "flow:services_tenant_context_set_tenant_context",
+      "name": "set_tenant_context",
+      "entryPoint": "services_tenant_context_set_tenant_context",
+      "entryPointId": "services_tenant_context_set_tenant_context",
+      "path": [
+        "services_tenant_context_set_tenant_context",
+        "services_tenant_context_set_tenant_hotel_context",
+        "services_tenant_context_set_tenant_user_context",
+        "services_tenant_context_set_context_value",
+        "services_tenant_context_apply_setting",
+        "services_tenant_context_remember_setting"
+      ],
+      "qualifiedPath": [
+        "services_tenant_context_set_tenant_context",
+        "services_tenant_context_set_tenant_hotel_context",
+        "services_tenant_context_set_tenant_user_context",
+        "services_tenant_context_set_context_value",
+        "services_tenant_context_apply_setting",
+        "services_tenant_context_remember_setting"
+      ],
+      "depth": 3,
+      "nodeCount": 6,
+      "fileCount": 1,
+      "files": [
+        "app/services/tenant_context.py"
+      ],
+      "criticality": 0.18,
+      "warnings": []
+    },
+    {
       "id": "flow:email_providers_resendemailprovider_send",
       "name": ".send",
       "entryPoint": "email_providers_resendemailprovider_send",
@@ -9228,32 +9282,6 @@
       "fileCount": 1,
       "files": [
         "app/services/onboarding_service.py"
-      ],
-      "criticality": 0.17,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_tenant_context_set_tenant_context",
-      "name": "set_tenant_context",
-      "entryPoint": "services_tenant_context_set_tenant_context",
-      "entryPointId": "services_tenant_context_set_tenant_context",
-      "path": [
-        "services_tenant_context_set_tenant_context",
-        "services_tenant_context_set_tenant_hotel_context",
-        "services_tenant_context_set_tenant_user_context",
-        "services_tenant_context_set_context_value"
-      ],
-      "qualifiedPath": [
-        "services_tenant_context_set_tenant_context",
-        "services_tenant_context_set_tenant_hotel_context",
-        "services_tenant_context_set_tenant_user_context",
-        "services_tenant_context_set_context_value"
-      ],
-      "depth": 2,
-      "nodeCount": 4,
-      "fileCount": 1,
-      "files": [
-        "app/services/tenant_context.py"
       ],
       "criticality": 0.17,
       "warnings": []
@@ -14250,6 +14278,28 @@
       "fileCount": 1,
       "files": [
         "app/services/analytics_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_tenant_context_reapply_tenant_context",
+      "name": "reapply_tenant_context",
+      "entryPoint": "services_tenant_context_reapply_tenant_context",
+      "entryPointId": "services_tenant_context_reapply_tenant_context",
+      "path": [
+        "services_tenant_context_reapply_tenant_context",
+        "services_tenant_context_apply_setting"
+      ],
+      "qualifiedPath": [
+        "services_tenant_context_reapply_tenant_context",
+        "services_tenant_context_apply_setting"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/services/tenant_context.py"
       ],
       "criticality": 0.16,
       "warnings": []
