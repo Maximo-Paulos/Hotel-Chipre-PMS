@@ -55,6 +55,7 @@ from app.api import (
     whatsapp_hooks,
     permissions,
     laundry,
+    laundry_vendor,
     stock,
     commercial,
     allocation_policy,
@@ -241,6 +242,7 @@ app.include_router(public_booking.router)
 app.include_router(whatsapp_hooks.router)
 app.include_router(permissions.router)
 app.include_router(laundry.router)
+app.include_router(laundry_vendor.router)
 app.include_router(stock.router)
 app.include_router(commercial.router)
 app.include_router(allocation_policy.router)

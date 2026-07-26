@@ -72,6 +72,12 @@ PERMISSION_STOCK_ADJUST = "stock:adjust"
 PERMISSION_CHECKIN_OVERRIDE_PROHIBIDO = "checkin:override_prohibido"
 PERMISSION_REPORTS_VIEW = "reports:view"
 PERMISSION_APIKEY_MANAGE = "apikey:manage"
+# Vendor/pricing setup is management-trust (billing terms with a third party);
+# day-to-day remito creation/viewing is operational and, like stock:operate,
+# also granted to housekeeping who already physically handle the linen
+# baskets -- see app/api/laundry_vendor.py.
+PERMISSION_LAUNDRY_MANAGE_VENDORS = "laundry:manage_vendors"
+PERMISSION_LAUNDRY_OPERATE_REMITOS = "laundry:operate_remitos"
 
 PERMISSION_DEFINITIONS: dict[str, str] = {
     PERMISSION_CONFIG_MANAGE: "Manage hotel configuration",
@@ -94,6 +100,8 @@ PERMISSION_DEFINITIONS: dict[str, str] = {
     PERMISSION_CHECKIN_OVERRIDE_PROHIBIDO: "Override prohibido_alojar check-in blocks",
     PERMISSION_REPORTS_VIEW: "View operational and financial reports",
     PERMISSION_APIKEY_MANAGE: "Manage public hotel API keys",
+    PERMISSION_LAUNDRY_MANAGE_VENDORS: "Manage laundry vendors and their pricing",
+    PERMISSION_LAUNDRY_OPERATE_REMITOS: "Create and view laundry remitos (delivery notes)",
 }
 
 DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
@@ -120,6 +128,8 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
         PERMISSION_CHECKIN_OVERRIDE_PROHIBIDO: True,
         PERMISSION_REPORTS_VIEW: True,
         PERMISSION_APIKEY_MANAGE: False,
+        PERMISSION_LAUNDRY_MANAGE_VENDORS: True,
+        PERMISSION_LAUNDRY_OPERATE_REMITOS: True,
     },
     ROLE_RECEPTIONIST: {
         PERMISSION_CONFIG_MANAGE: False,
@@ -140,6 +150,8 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
         PERMISSION_CHECKIN_OVERRIDE_PROHIBIDO: False,
         PERMISSION_REPORTS_VIEW: True,
         PERMISSION_APIKEY_MANAGE: False,
+        PERMISSION_LAUNDRY_MANAGE_VENDORS: False,
+        PERMISSION_LAUNDRY_OPERATE_REMITOS: False,
     },
     ROLE_HOUSEKEEPING: {
         PERMISSION_CONFIG_MANAGE: False,
@@ -159,6 +171,8 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
         PERMISSION_CASH_APPROVE_DIFFERENCE: False,
         PERMISSION_CHECKIN_OVERRIDE_PROHIBIDO: False,
         PERMISSION_REPORTS_VIEW: False,
+        PERMISSION_LAUNDRY_MANAGE_VENDORS: False,
+        PERMISSION_LAUNDRY_OPERATE_REMITOS: True,
     },
 }
 
