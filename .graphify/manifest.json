@@ -428,8 +428,8 @@
     "hash": "21003b2f02f213513cb88859eaac5df0"
   },
   "app/main.py": {
-    "mtime": 1785006848581.3184,
-    "hash": "971e3c4bda59298878df861a5b08b922"
+    "mtime": 1785024426336.3496,
+    "hash": "0cf50f74bc5d715268ffe1dedf22fe6a"
   },
   "app/master_admin/__init__.py": {
     "mtime": 1784862144877.3862,
@@ -472,8 +472,8 @@
     "hash": "62ef3eaf849f09518abe70f4b804b84a"
   },
   "app/models/__init__.py": {
-    "mtime": 1784873116313.2737,
-    "hash": "d5f09fbe60913ededcec25c960155c6c"
+    "mtime": 1785024266234.1697,
+    "hash": "7b7aca3a614bdc9c27fcc2ebba2a336e"
   },
   "app/models/ai_assistant.py": {
     "mtime": 1784862144878.3958,
@@ -992,8 +992,8 @@
     "hash": "07aa97bab89a23a1b60f6f76957979ba"
   },
   "app/services/permission_service.py": {
-    "mtime": 1785006848581.504,
-    "hash": "8da5da877541bb6849372b80aca683fe"
+    "mtime": 1785024384754.1936,
+    "hash": "c40dc51e115e39ea9bb26c4f32d7402d"
   },
   "app/services/pricing_policy_service.py": {
     "mtime": 1784862144886.0344,
@@ -1036,8 +1036,8 @@
     "hash": "79d6d1e03bf10363d83dedfa312a534a"
   },
   "app/services/stock_service.py": {
-    "mtime": 1784972143778.4873,
-    "hash": "991feea6f4de1ae1104da4f313e4f530"
+    "mtime": 1785024275038.9219,
+    "hash": "5de84ddaf505795eff8667c77fa7394d"
   },
   "app/services/subscription_entitlements.py": {
     "mtime": 1784862144886.7397,
@@ -2016,8 +2016,8 @@
     "hash": "73734b2628ff5c937b1166e9b5745bd6"
   },
   "tests/test_stock_service.py": {
-    "mtime": 1784972119207.9893,
-    "hash": "1eff439da1dbb7c9294886a07ed4c286"
+    "mtime": 1785024492550.2058,
+    "hash": "a0c7fd77e8ed8fd1d49ea91d104fe1b7"
   },
   "tests/test_subscription_tiers.py": {
     "mtime": 1784862144937.6543,
@@ -3320,8 +3320,8 @@
     "hash": "7fd53040cf6e74dc7c3ebe34d6b61f42"
   },
   "alembic/versions/20260724_tenant_rls_context.py": {
-    "mtime": 1784873225788.5142,
-    "hash": "177cafaf036203fa219368804f951781"
+    "mtime": 1785024906639.1528,
+    "hash": "04d05c267e70567aa2b5241f6f0496d5"
   },
   "app/services/tenant_context.py": {
     "mtime": 1784863159407.4492,
@@ -3770,5 +3770,29 @@
   "tests/test_guest_listing_pagination.py": {
     "mtime": 1785023188898.9216,
     "hash": "6457a5355978195c0ae0ff8982f8f0f7"
+  },
+  "alembic/versions/795e124adaad_laundry_vendors_and_remitos.py": {
+    "mtime": 1785024901958.4436,
+    "hash": "c46a3eb43159efadeffa6888c2316927"
+  },
+  "app/api/laundry_vendor.py": {
+    "mtime": 1785024417268.2615,
+    "hash": "9e5a0a95b1887177e2cd36dcbc9c2bb3"
+  },
+  "app/models/laundry_vendor.py": {
+    "mtime": 1785024812801.268,
+    "hash": "4ae050606f36ac9a073852e5584f3b77"
+  },
+  "app/services/laundry_vendor_service.py": {
+    "mtime": 1785024817980.7224,
+    "hash": "cbc904dd4e975035ea78d59302f35b21"
+  },
+  "tests/test_laundry_vendor_api.py": {
+    "mtime": 1785024577107.0857,
+    "hash": "c844762f3a81a1a6a1bc244973e67212"
+  },
+  "tests/test_laundry_vendor_service.py": {
+    "mtime": 1785024541901.3655,
+    "hash": "4ded409e77a7d6701d39fb1c32edfabd"
   }
 }
