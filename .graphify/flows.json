@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-26T02:23:50.623Z",
+  "generatedAt": "2026-07-26T02:34:58.045Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -1183,6 +1183,30 @@
       "warnings": []
     },
     {
+      "id": "flow:versions_f3bdaadd3d15_master_admin_rls_bypass_downgrade",
+      "name": "downgrade",
+      "entryPoint": "versions_f3bdaadd3d15_master_admin_rls_bypass_downgrade",
+      "entryPointId": "versions_f3bdaadd3d15_master_admin_rls_bypass_downgrade",
+      "path": [
+        "versions_f3bdaadd3d15_master_admin_rls_bypass_downgrade",
+        "versions_f3bdaadd3d15_master_admin_rls_bypass_policy_name",
+        "versions_f3bdaadd3d15_master_admin_rls_bypass_quoted_table"
+      ],
+      "qualifiedPath": [
+        "versions_f3bdaadd3d15_master_admin_rls_bypass_downgrade",
+        "versions_f3bdaadd3d15_master_admin_rls_bypass_policy_name",
+        "versions_f3bdaadd3d15_master_admin_rls_bypass_quoted_table"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/f3bdaadd3d15_master_admin_rls_bypass.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
       "id": "flow:protected_settingsconnectionspage_getprovidererrormessage",
       "name": "getProviderErrorMessage",
       "entryPoint": "protected_settingsconnectionspage_getprovidererrormessage",
@@ -1442,6 +1466,30 @@
       "fileCount": 1,
       "files": [
         "alembic/versions/62fddec52b79_repair_sqlite_reservation_status_enum_.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
+      "id": "flow:versions_f3bdaadd3d15_master_admin_rls_bypass_upgrade",
+      "name": "upgrade",
+      "entryPoint": "versions_f3bdaadd3d15_master_admin_rls_bypass_upgrade",
+      "entryPointId": "versions_f3bdaadd3d15_master_admin_rls_bypass_upgrade",
+      "path": [
+        "versions_f3bdaadd3d15_master_admin_rls_bypass_upgrade",
+        "versions_f3bdaadd3d15_master_admin_rls_bypass_policy_name",
+        "versions_f3bdaadd3d15_master_admin_rls_bypass_quoted_table"
+      ],
+      "qualifiedPath": [
+        "versions_f3bdaadd3d15_master_admin_rls_bypass_upgrade",
+        "versions_f3bdaadd3d15_master_admin_rls_bypass_policy_name",
+        "versions_f3bdaadd3d15_master_admin_rls_bypass_quoted_table"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/f3bdaadd3d15_master_admin_rls_bypass.py"
       ],
       "criticality": 0.41,
       "warnings": []

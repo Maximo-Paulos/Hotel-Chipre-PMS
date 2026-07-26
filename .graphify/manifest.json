@@ -456,8 +456,8 @@
     "hash": "c8c097582158cbfb97d50db81368445f"
   },
   "app/master_admin/security.py": {
-    "mtime": 1784995114458.8564,
-    "hash": "61fa38c29fd512cee5e5d47dc9eadc7d"
+    "mtime": 1785032906573.1677,
+    "hash": "6efaf9789ee3fd9b6cee3e07ba31b7b6"
   },
   "app/master_admin/stripe.py": {
     "mtime": 1784862144878.1345,
@@ -1824,8 +1824,8 @@
     "hash": "faef5712014e865983d6a999d88480b7"
   },
   "tests/test_master_admin_panel.py": {
-    "mtime": 1784997104595.648,
-    "hash": "b12ec4678ccbbc7fc927e675a652843e"
+    "mtime": 1785033089470.3286,
+    "hash": "227cc890b96decebe5ac30a66f162336"
   },
   "tests/test_mercadopago_webhook_signature.py": {
     "mtime": 1784997072441.7417,
@@ -3324,12 +3324,12 @@
     "hash": "04d05c267e70567aa2b5241f6f0496d5"
   },
   "app/services/tenant_context.py": {
-    "mtime": 1784863159407.4492,
-    "hash": "7a3d9d4bbd4b7876bdc3d15a5879d175"
+    "mtime": 1785032895102.5356,
+    "hash": "fabf49328c6219ace5c0e9a3f70a26c7"
   },
   "tests/test_tenant_rls_contract.py": {
-    "mtime": 1784881802648.3293,
-    "hash": "8370d8f4620fa49b52fb9769d8fa6b4b"
+    "mtime": 1785033107953.3977,
+    "hash": "f5723f4777912cc56b0884237e31fc9a"
   },
   "alembic/versions/20260724_payment_proofs.py": {
     "mtime": 1784863830364.9287,
@@ -3818,5 +3818,13 @@
   "tests/test_stock_consumption_report.py": {
     "mtime": 1785031832425.3716,
     "hash": "856965cdddf7283680e1d26e536797ce"
+  },
+  "alembic/versions/f3bdaadd3d15_master_admin_rls_bypass.py": {
+    "mtime": 1785032887818.2974,
+    "hash": "0e8048155142ebca6aae413c73f12135"
+  },
+  "tests/test_master_admin_rls_bypass_pg.py": {
+    "mtime": 1785033065484.76,
+    "hash": "5484cabcd03b48cce6b9515f3b5efaaa"
   }
 }
