@@ -36,7 +36,7 @@ import {
 } from "../api/reservations";
 import { validateGuestForCheckin, type GuestCheckinValidation } from "../api/guests";
 import type { SessionState } from "../state/session";
-import { hasValidSession } from "../api/client";
+import { ApiError, hasValidSession } from "../api/client";
 import { useSession } from "../state/session";
 
 import { useGuardedMutation } from "./useGuardedMutation";
@@ -115,7 +115,10 @@ export function useReservationQuote(params: ReservationQuoteParams | null) {
     enabled: Boolean(params) && hasValidSession(session),
     staleTime: 0,
     gcTime: 1000 * 60 * 10,
-    retry: 1
+    // price-quote 4xx (no active rate plan, invalid date range, etc.) is a
+    // deterministic business rejection -- retrying the identical request
+    // just delays the actionable error behind an extra round trip.
+    retry: (failureCount, error) => (error instanceof ApiError && error.status < 500 ? false : failureCount < 1)
   });
 }
 
