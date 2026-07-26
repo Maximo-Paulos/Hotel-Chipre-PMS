@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-26T03:57:18.091Z",
+  "generatedAt": "2026-07-26T21:54:04.201Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -1967,32 +1967,6 @@
       "warnings": []
     },
     {
-      "id": "flow:versions_20260724_allocation_enum_values_upgrade",
-      "name": "upgrade",
-      "entryPoint": "versions_20260724_allocation_enum_values_upgrade",
-      "entryPointId": "versions_20260724_allocation_enum_values_upgrade",
-      "path": [
-        "versions_20260724_allocation_enum_values_upgrade",
-        "versions_20260724_allocation_enum_values_rename_postgres_enum_values",
-        "versions_20260724_allocation_enum_values_repair_sqlite",
-        "versions_20260724_allocation_enum_values_sqlite_rebuild_constraints"
-      ],
-      "qualifiedPath": [
-        "versions_20260724_allocation_enum_values_upgrade",
-        "versions_20260724_allocation_enum_values_rename_postgres_enum_values",
-        "versions_20260724_allocation_enum_values_repair_sqlite",
-        "versions_20260724_allocation_enum_values_sqlite_rebuild_constraints"
-      ],
-      "depth": 2,
-      "nodeCount": 4,
-      "fileCount": 1,
-      "files": [
-        "alembic/versions/20260724_allocation_enum_values.py"
-      ],
-      "criticality": 0.295,
-      "warnings": []
-    },
-    {
       "id": "flow:services_integration_service_validate_provider_credentials",
       "name": "validate_provider_credentials",
       "entryPoint": "services_integration_service_validate_provider_credentials",
@@ -2765,6 +2739,34 @@
       "warnings": []
     },
     {
+      "id": "flow:versions_20260724_allocation_enum_values_upgrade",
+      "name": "upgrade",
+      "entryPoint": "versions_20260724_allocation_enum_values_upgrade",
+      "entryPointId": "versions_20260724_allocation_enum_values_upgrade",
+      "path": [
+        "versions_20260724_allocation_enum_values_upgrade",
+        "versions_20260724_allocation_enum_values_rename_postgres_enum_values",
+        "versions_20260724_allocation_enum_values_repair_sqlite",
+        "versions_20260724_allocation_enum_values_existing_enum_labels",
+        "versions_20260724_allocation_enum_values_sqlite_rebuild_constraints"
+      ],
+      "qualifiedPath": [
+        "versions_20260724_allocation_enum_values_upgrade",
+        "versions_20260724_allocation_enum_values_rename_postgres_enum_values",
+        "versions_20260724_allocation_enum_values_repair_sqlite",
+        "versions_20260724_allocation_enum_values_existing_enum_labels",
+        "versions_20260724_allocation_enum_values_sqlite_rebuild_constraints"
+      ],
+      "depth": 2,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20260724_allocation_enum_values.py"
+      ],
+      "criticality": 0.27,
+      "warnings": []
+    },
+    {
       "id": "flow:agent_ops_provision_qa_bootstrap_main",
       "name": "main",
       "entryPoint": "agent_ops_provision_qa_bootstrap_main",
@@ -3409,30 +3411,6 @@
       "warnings": []
     },
     {
-      "id": "flow:versions_20260724_allocation_enum_values_downgrade",
-      "name": "downgrade",
-      "entryPoint": "versions_20260724_allocation_enum_values_downgrade",
-      "entryPointId": "versions_20260724_allocation_enum_values_downgrade",
-      "path": [
-        "versions_20260724_allocation_enum_values_downgrade",
-        "versions_20260724_allocation_enum_values_rename_postgres_enum_values",
-        "versions_20260724_allocation_enum_values_sqlite_rebuild_constraints"
-      ],
-      "qualifiedPath": [
-        "versions_20260724_allocation_enum_values_downgrade",
-        "versions_20260724_allocation_enum_values_rename_postgres_enum_values",
-        "versions_20260724_allocation_enum_values_sqlite_rebuild_constraints"
-      ],
-      "depth": 1,
-      "nodeCount": 3,
-      "fileCount": 1,
-      "files": [
-        "alembic/versions/20260724_allocation_enum_values.py"
-      ],
-      "criticality": 0.2433,
-      "warnings": []
-    },
-    {
       "id": "flow:services_graph_projection_project_reservation_assignment",
       "name": "project_reservation_assignment",
       "entryPoint": "services_graph_projection_project_reservation_assignment",
@@ -3694,6 +3672,32 @@
         "app/services/gemma_service.py"
       ],
       "criticality": 0.2333,
+      "warnings": []
+    },
+    {
+      "id": "flow:versions_20260724_allocation_enum_values_downgrade",
+      "name": "downgrade",
+      "entryPoint": "versions_20260724_allocation_enum_values_downgrade",
+      "entryPointId": "versions_20260724_allocation_enum_values_downgrade",
+      "path": [
+        "versions_20260724_allocation_enum_values_downgrade",
+        "versions_20260724_allocation_enum_values_rename_postgres_enum_values",
+        "versions_20260724_allocation_enum_values_sqlite_rebuild_constraints",
+        "versions_20260724_allocation_enum_values_existing_enum_labels"
+      ],
+      "qualifiedPath": [
+        "versions_20260724_allocation_enum_values_downgrade",
+        "versions_20260724_allocation_enum_values_rename_postgres_enum_values",
+        "versions_20260724_allocation_enum_values_sqlite_rebuild_constraints",
+        "versions_20260724_allocation_enum_values_existing_enum_labels"
+      ],
+      "depth": 2,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20260724_allocation_enum_values.py"
+      ],
+      "criticality": 0.2325,
       "warnings": []
     },
     {
