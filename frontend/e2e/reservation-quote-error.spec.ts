@@ -58,3 +58,50 @@ test("reservation quote failure explains why confirmation is blocked", async ({ 
   await expect(reservationForm.getByText("Total no disponible", { exact: true })).toBeVisible();
   await expect(reservationForm.getByRole("button", { name: "Crear", exact: true })).toBeDisabled();
 });
+
+// Real bug reported live: a category/date pair with no active rate plan
+// makes the backend answer 400 "No active prices found for rate plan" (not
+// 404). The UI must show the dedicated error block, not hang forever on
+// "Calculando la cotización vigente desde Tarifas...".
+test("reservation quote 400 (no active rate plan) shows the dedicated error, not a stuck loading state", async ({
+  page
+}) => {
+  await page.route("**/api/rooms/categories**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify([
+        {
+          id: 998,
+          name: "QA No Rate Plan",
+          code: "QNRP",
+          base_price_per_night: 100,
+          max_occupancy: 2
+        }
+      ])
+    });
+  });
+  await page.route("**/api/bookings/price-quote**", async (route) => {
+    await route.fulfill({
+      status: 400,
+      contentType: "application/json",
+      body: JSON.stringify({ detail: "No active prices found for rate plan" })
+    });
+  });
+
+  await login(page);
+  await page.goto("/reservas");
+  await page.getByRole("button", { name: "Crear reserva", exact: true }).click();
+
+  const reservationForm = page.locator("form").filter({ hasText: "Datos de la reserva" });
+  const categorySelect = reservationForm.locator("label").filter({ hasText: "Categoría" }).locator("select");
+  await categorySelect.selectOption("998");
+  await reservationForm.locator("label").filter({ hasText: "Check-in" }).locator('input[type="date"]').fill(localIsoDate(1));
+  await reservationForm.locator("label").filter({ hasText: "Check-out" }).locator('input[type="date"]').fill(localIsoDate(2));
+
+  const quoteAlert = reservationForm.getByRole("alert");
+  await expect(quoteAlert).toContainText("No hay una tarifa disponible");
+  await expect(quoteAlert.getByRole("button", { name: "Reintentar", exact: true })).toBeVisible();
+  await expect(reservationForm.getByText("Calculando la cotización vigente desde Tarifas...")).toHaveCount(0);
+  await expect(reservationForm.getByRole("button", { name: "Crear", exact: true })).toBeDisabled();
+});

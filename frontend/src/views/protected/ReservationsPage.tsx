@@ -2149,7 +2149,12 @@ export function ReservationsPage() {
                       {quoteQuery.isError ? (
                         <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800" role="alert">
                           <p>
-                            {quoteQuery.error instanceof ApiError && quoteQuery.error.status === 404
+                            {/* The backend always answers price-quote failures with 400 (never
+                                404), so the missing-rate case can't be told apart by status code.
+                                Detect it from the backend's own message instead (pricing_policy_service
+                                raises "No active/matching price..." / "Rate plan not found..." for
+                                every "nothing configured" scenario). */}
+                            {quoteQuery.error instanceof ApiError && /price|rate plan/i.test(quoteQuery.error.message)
                               ? "No hay una tarifa disponible para la categoría y las fechas elegidas. Cargá una tarifa manual arriba o configurala en Tarifas."
                               : "No se pudo calcular la cotización. Revisá las fechas y las tarifas antes de confirmar."}
                           </p>
