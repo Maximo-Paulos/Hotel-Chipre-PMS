@@ -191,6 +191,17 @@ test("owner runs the full inventory journey: item/location, movements, adjustmen
     .filter({ hasText: itemName });
   await expect(itemCard.getByText("Bajo", { exact: true })).toBeVisible();
 
+  // --- D5 (Via D): reporte de consumo por periodo refleja los egresos/ajustes
+  // de baja de esta sesion (4 egreso + 3 ajuste a la baja + 1 egreso = 8), no
+  // los 10 de ingreso ni los 2 de ajuste al alza. Rango explicito y amplio
+  // (en vez del preset "Semana actual") para no depender de a que lado de la
+  // medianoche UTC/local cae "hoy" en el navegador de e2e.
+  const consumptionSection = page.locator("section").filter({ hasText: "Consumo de stock por periodo" });
+  await consumptionSection.getByLabel("Desde").fill(localIsoDate(-10));
+  await consumptionSection.getByLabel("Hasta").fill(localIsoDate(1));
+  const consumptionRow = consumptionSection.locator("tbody tr").filter({ hasText: itemName });
+  await expect(consumptionRow).toContainText("8.00 unidad");
+
   // --- Eliminar item (item 10, D4 parte 3): boton "Eliminar" pide confirmacion,
   // mismo patron (window.confirm) que el resto de la app usa para acciones
   // destructivas (ej: revertir movimientos de habitacion en ReservationsPage).

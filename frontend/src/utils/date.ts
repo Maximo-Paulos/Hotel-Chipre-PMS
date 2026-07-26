@@ -18,3 +18,18 @@ export const addDaysIso = (iso: string, days: number) => {
   base.setDate(base.getDate() + days);
   return formatLocalIsoDate(base);
 };
+
+// Range presets shared by period reports (laundry spend D3, stock
+// consumption D5) -- hotel-local, same reasoning as todayIso() above.
+export const startOfCurrentWeekIso = () => {
+  const now = new Date();
+  const day = now.getDay();
+  now.setDate(now.getDate() - (day === 0 ? 6 : day - 1));
+  return formatLocalIsoDate(now);
+};
+
+export const startOfCurrentMonthIso = () => {
+  const now = new Date();
+  now.setDate(1);
+  return formatLocalIsoDate(now);
+};

@@ -59,6 +59,27 @@ export type CurrentStock = {
   quantity: DecimalValue;
 };
 
+export type StockConsumptionGroupBy = "week" | "month";
+
+export type StockConsumptionItem = {
+  stock_item_id: number;
+  stock_item_name: string;
+  unit: string;
+  current_quantity: DecimalValue;
+  previous_quantity: DecimalValue;
+  variation_pct?: DecimalValue | null;
+};
+
+export type StockConsumptionReport = {
+  hotel_id: number;
+  group_by: StockConsumptionGroupBy;
+  date_from: string;
+  date_to: string;
+  previous_date_from: string;
+  previous_date_to: string;
+  items: StockConsumptionItem[];
+};
+
 export const listStockItems = (session?: SessionLike) => apiFetch<StockItem[]>("/api/stock/items", { session });
 
 export const listLowStockItems = (session?: SessionLike) =>
@@ -95,4 +116,14 @@ export const getCurrentStock = (
 ) => {
   const query = locationId ? `?location_id=${locationId}` : "";
   return apiFetch<CurrentStock>(`/api/stock/items/${itemId}/current${query}`, { session });
+};
+
+// D5 (Via D): "cuanto se consumio de cada item" por periodo, con el periodo
+// anterior de igual largo para calcular variacion % (ver plan D5).
+export const getStockConsumptionReport = (
+  { dateFrom, dateTo, groupBy = "week" }: { dateFrom: string; dateTo: string; groupBy?: StockConsumptionGroupBy },
+  session?: SessionLike
+) => {
+  const params = new URLSearchParams({ date_from: dateFrom, date_to: dateTo, group_by: groupBy });
+  return apiFetch<StockConsumptionReport>(`/api/stock/consumption-report?${params.toString()}`, { session });
 };

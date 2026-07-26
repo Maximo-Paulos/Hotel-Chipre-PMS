@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 
 import {
   createStockItem,
@@ -7,10 +7,13 @@ import {
   createStockMovement,
   deleteStockItem,
   getCurrentStock,
+  getStockConsumptionReport,
   listLowStockItems,
   listStockMovements,
   listStockItems,
   listStockLocations,
+  type StockConsumptionGroupBy,
+  type StockConsumptionReport,
   type StockMovement,
   type StockMovementCreate,
   type StockMovementType
@@ -19,6 +22,7 @@ import { listReservations, type Reservation } from "../../api/reservations";
 import { hasValidSession } from "../../api/client";
 import { useGuardedMutation } from "../../hooks/useGuardedMutation";
 import { useSession } from "../../state/session";
+import { startOfCurrentMonthIso, startOfCurrentWeekIso, todayIso } from "../../utils/date";
 
 // Used for the movement-mode buttons/heading, where "Ajuste" covers both
 // directions (the direction toggle underneath clarifies which one).
@@ -82,6 +86,10 @@ export function StockPage() {
   const [adjustmentDirection, setAdjustmentDirection] = useState<"increase" | "decrease">("increase");
   const [reservationSearch, setReservationSearch] = useState("");
   const [message, setMessage] = useState<string | null>(null);
+  // D5 (Via D): "cuanto se consumio de cada item" por periodo, con variacion
+  // % contra el periodo anterior de igual largo (calculado en el backend).
+  const [consumptionGroupBy, setConsumptionGroupBy] = useState<StockConsumptionGroupBy>("week");
+  const [consumptionRange, setConsumptionRange] = useState(() => ({ from: startOfCurrentWeekIso(), to: todayIso() }));
   const enabled = hasValidSession(session);
 
   const itemsQuery = useQuery({
@@ -109,6 +117,16 @@ export function StockPage() {
     // explicitly instead of silently losing rows past #50.
     queryFn: () => listReservations({ status: "all", order: "check_in", limit: 200 }, session),
     enabled,
+    staleTime: 15 * 1000
+  });
+  const consumptionReportQuery = useQuery({
+    queryKey: ["stock-consumption-report", session.hotelId, consumptionRange.from, consumptionRange.to, consumptionGroupBy],
+    queryFn: () =>
+      getStockConsumptionReport(
+        { dateFrom: consumptionRange.from, dateTo: consumptionRange.to, groupBy: consumptionGroupBy },
+        session
+      ),
+    enabled: enabled && consumptionRange.from <= consumptionRange.to,
     staleTime: 15 * 1000
   });
 
@@ -197,6 +215,7 @@ export function StockPage() {
     queryClient.invalidateQueries({ queryKey: ["stock-low", session.hotelId] });
     queryClient.invalidateQueries({ queryKey: ["stock-current", session.hotelId] });
     queryClient.invalidateQueries({ queryKey: ["stock-movements", session.hotelId] });
+    queryClient.invalidateQueries({ queryKey: ["stock-consumption-report", session.hotelId] });
   };
 
   const createItemMutation = useMutation({
@@ -646,6 +665,14 @@ export function StockPage() {
           </form>
         </aside>
       </div>
+
+      <StockConsumptionReportSection
+        range={consumptionRange}
+        onRangeChange={setConsumptionRange}
+        groupBy={consumptionGroupBy}
+        onGroupByChange={setConsumptionGroupBy}
+        query={consumptionReportQuery}
+      />
     </div>
   );
 }
@@ -659,6 +686,156 @@ function StatusBadge({ label, value, className }: { label: string; value: number
       </div>
     </div>
   );
+}
+
+// D5 (Via D): equivalente para stock del "15% ocupacion, $500.000 hoy" del
+// dashboard -- cuanto se consumio de cada item en el periodo, comparado
+// contra el periodo anterior de igual largo (variacion % calculada en el
+// backend) para detectar consumo anomalo. Reusa el patron visual del panel
+// de gasto de lavadero (D3, LaundryPage.tsx): mismos presets de rango y
+// mismo layout de tarjeta/seccion, cambiando la tabla por-item.
+function StockConsumptionReportSection({
+  range,
+  onRangeChange,
+  groupBy,
+  onGroupByChange,
+  query
+}: {
+  range: { from: string; to: string };
+  onRangeChange: (range: { from: string; to: string }) => void;
+  groupBy: StockConsumptionGroupBy;
+  onGroupByChange: (groupBy: StockConsumptionGroupBy) => void;
+  query: UseQueryResult<StockConsumptionReport>;
+}) {
+  const report = query.data;
+  const items = report?.items ?? [];
+
+  return (
+    <section
+      aria-labelledby="stock-consumption-title"
+      className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+    >
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="text-xs uppercase tracking-wide text-slate-500">Reporte</p>
+          <h2 id="stock-consumption-title" className="text-lg font-semibold text-slate-900">
+            Consumo de stock por periodo
+          </h2>
+          <p className="text-sm text-slate-600">
+            Egresos y ajustes de baja por item en el rango elegido, comparados contra el periodo anterior de igual
+            largo.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-end gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              onGroupByChange("week");
+              onRangeChange({ from: startOfCurrentWeekIso(), to: todayIso() });
+            }}
+            className={`min-h-9 rounded-lg border px-3 py-1.5 text-xs font-semibold hover:bg-slate-50 ${
+              groupBy === "week" ? "border-brand-300 bg-brand-50 text-brand-700" : "border-slate-200 bg-white text-slate-700"
+            }`}
+          >
+            Semana actual
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              onGroupByChange("month");
+              onRangeChange({ from: startOfCurrentMonthIso(), to: todayIso() });
+            }}
+            className={`min-h-9 rounded-lg border px-3 py-1.5 text-xs font-semibold hover:bg-slate-50 ${
+              groupBy === "month" ? "border-brand-300 bg-brand-50 text-brand-700" : "border-slate-200 bg-white text-slate-700"
+            }`}
+          >
+            Mes actual
+          </button>
+          <label className="space-y-1 text-sm">
+            <span className="text-slate-600">Desde</span>
+            <input
+              type="date"
+              value={range.from}
+              max={range.to}
+              onChange={(event) => onRangeChange({ ...range, from: event.target.value })}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            />
+          </label>
+          <label className="space-y-1 text-sm">
+            <span className="text-slate-600">Hasta</span>
+            <input
+              type="date"
+              value={range.to}
+              min={range.from}
+              onChange={(event) => onRangeChange({ ...range, to: event.target.value })}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            />
+          </label>
+        </div>
+      </div>
+
+      {query.isFetching && <p className="text-xs text-slate-500">Actualizando...</p>}
+      {query.isError && (
+        <p className="text-xs text-rose-700">No se pudo cargar el reporte de consumo. Revisa el rango elegido.</p>
+      )}
+      {report && (
+        <p className="text-xs text-slate-500">
+          Periodo anterior comparado: {report.previous_date_from} a {report.previous_date_to}
+        </p>
+      )}
+
+      <div className="overflow-x-auto">
+        <table className="min-w-full divide-y divide-slate-200 text-sm">
+          <thead>
+            <tr className="text-left text-xs uppercase tracking-wide text-slate-500">
+              <th className="px-3 py-2">Item</th>
+              <th className="px-3 py-2">Este periodo</th>
+              <th className="px-3 py-2">Periodo anterior</th>
+              <th className="px-3 py-2">Variacion</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {items.map((item) => (
+              <tr key={item.stock_item_id}>
+                <td className="px-3 py-2 font-semibold text-slate-900">{item.stock_item_name}</td>
+                <td className="px-3 py-2 text-slate-700">
+                  {item.current_quantity} {item.unit}
+                </td>
+                <td className="px-3 py-2 text-slate-500">
+                  {item.previous_quantity} {item.unit}
+                </td>
+                <td className={`px-3 py-2 font-semibold ${variationColor(item.variation_pct)}`}>
+                  {formatVariation(item.variation_pct)}
+                </td>
+              </tr>
+            ))}
+            {items.length === 0 && !query.isLoading && (
+              <tr>
+                <td colSpan={4} className="px-3 py-3 text-xs text-slate-500">
+                  Sin consumo registrado en este periodo.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function formatVariation(value?: string | number | null) {
+  if (value === null || value === undefined) return "Sin dato anterior";
+  const number = Number(value);
+  const sign = number > 0 ? "+" : "";
+  return `${sign}${number}%`;
+}
+
+function variationColor(value?: string | number | null) {
+  if (value === null || value === undefined) return "text-slate-500";
+  const number = Number(value);
+  if (number > 0) return "text-rose-700";
+  if (number < 0) return "text-emerald-700";
+  return "text-slate-700";
 }
 
 function reservationSearchText(reservation: Reservation) {
