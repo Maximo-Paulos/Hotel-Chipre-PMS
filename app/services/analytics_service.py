@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, status
 from sqlalchemy import and_, func, or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -42,6 +43,7 @@ from app.schemas.analytics_api import (
 )
 from app.services.analytics_ai_providers import build_analytics_ai_config, get_analytics_ai_provider
 from app.services.analytics_contracts import build_analytics_window, calculate_physical_room_nights_for_hotel, calculate_pickup_30d_count
+from app.services.analytics_facts import refresh_fact_reservation_daily, refresh_fact_room_occupancy_daily
 from app.services.subscription_entitlements import get_subscription_snapshot
 from app.services.timezones import normalize_timezone
 
@@ -466,6 +468,7 @@ def reactivate_company(db: Session, *, hotel_id: int, user_id: int, company_id: 
 
 def get_company_fact_detail(db: Session, *, hotel_id: int, company_id: int, date_from: date, date_to: date) -> dict[str, Any]:
     company = get_company_or_404(db, hotel_id, company_id)
+    _ensure_facts_materialized(db, hotel_id, date_from, date_to)
     facts = (
         db.query(FactReservationDaily)
         .filter(
@@ -855,7 +858,43 @@ def _company_lookup_map(db: Session, hotel_id: int) -> dict[int, Company]:
     return {company.id: company for company in companies}
 
 
+def _ensure_facts_materialized(db: Session, hotel_id: int, date_from: date, date_to: date) -> None:
+    """Self-heal FactReservationDaily/FactRoomOccupancyDaily when nothing has
+    ever populated them for this window.
+
+    These tables are meant to be kept fresh by a scheduled job (Celery beat
+    -> analytics.refresh_fact_*), but that job is never triggered anywhere in
+    this codebase -- no beat entry, no signal on reservation/payment writes,
+    no manual call outside tests. A deployment without a worker wired up to
+    call it (or one where it simply never ran for a given window) silently
+    reports $0 revenue/occupancy forever even with real paid reservations.
+    Rather than duplicate the aggregation logic, reuse the exact same
+    idempotent refresh functions synchronously, once, only when the window
+    has zero rows. ponytail: no distributed lock -- both fact tables have a
+    (hotel_id, ..., stay_date) unique constraint, so a losing concurrent
+    request just rolls back and reads what the winner wrote; add a lock only
+    if refresh cost/contention becomes measurable.
+    """
+    already_materialized = (
+        db.query(FactReservationDaily.id)
+        .filter(FactReservationDaily.hotel_id == hotel_id, FactReservationDaily.stay_date.between(date_from, date_to))
+        .first()
+        or db.query(FactRoomOccupancyDaily.id)
+        .filter(FactRoomOccupancyDaily.hotel_id == hotel_id, FactRoomOccupancyDaily.stay_date.between(date_from, date_to))
+        .first()
+    )
+    if already_materialized:
+        return
+    try:
+        refresh_fact_reservation_daily(db, hotel_id=hotel_id, date_from=date_from, date_to=date_to)
+        refresh_fact_room_occupancy_daily(db, hotel_id=hotel_id, date_from=date_from, date_to=date_to)
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+
+
 def _load_reservation_facts(db: Session, hotel_id: int, date_from: date, date_to: date) -> list[FactReservationDaily]:
+    _ensure_facts_materialized(db, hotel_id, date_from, date_to)
     return (
         db.query(FactReservationDaily)
         .filter(
@@ -867,6 +906,7 @@ def _load_reservation_facts(db: Session, hotel_id: int, date_from: date, date_to
 
 
 def _load_room_facts(db: Session, hotel_id: int, date_from: date, date_to: date) -> list[FactRoomOccupancyDaily]:
+    _ensure_facts_materialized(db, hotel_id, date_from, date_to)
     return (
         db.query(FactRoomOccupancyDaily)
         .filter(
@@ -1041,6 +1081,7 @@ def build_room_detail_payload(
     if not room:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Room no encontrada")
     category = db.get(RoomCategory, room.category_id) if room.category_id else None
+    _ensure_facts_materialized(db, hotel_id, window.date_from, window.date_to)
     facts = (
         db.query(FactRoomOccupancyDaily)
         .filter(
@@ -1111,6 +1152,7 @@ def build_category_detail_payload(
         .order_by(Room.room_number.asc())
         .all()
     )
+    _ensure_facts_materialized(db, hotel_id, window.date_from, window.date_to)
     facts = (
         db.query(FactReservationDaily)
         .filter(

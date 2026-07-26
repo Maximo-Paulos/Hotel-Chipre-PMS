@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal
 from pathlib import Path
 import zipfile
 
@@ -765,3 +766,86 @@ def test_analytics_freshness_reflects_stale_derived_facts(api_client):
     # The derived facts backing this payload were computed 2 hours ago: the
     # reported lag must reflect that, not the instant the request ran.
     assert payload["source_lag_seconds"] >= 7000, payload
+
+
+def test_analytics_home_self_heals_when_derived_facts_were_never_materialized(api_client):
+    # Reproduces the real production bug (2026-07-26, hotel_id=4): nothing in
+    # this codebase ever schedules/triggers analytics.refresh_fact_* (no
+    # Celery beat entry, no signal on reservation/payment writes, no manual
+    # call outside tests) -- so on a deployment without that piece wired up,
+    # FactReservationDaily/FactRoomOccupancyDaily stay empty forever and
+    # /api/analytics/home silently reports $0 revenue/occupancy despite real
+    # paid reservations. Unlike _seed_analytics_data, this test deliberately
+    # never calls refresh_fact_* -- exactly the "no worker ever ran" state.
+    client, SessionLocal, headers, plan_state = api_client
+    plan_state["plan"] = "pro"
+
+    with SessionLocal() as db:
+        from app.models.guest import Guest
+
+        category = RoomCategory(
+            hotel_id=1,
+            name="Standard",
+            code="STD-SH",
+            description="Standard room",
+            base_price_per_night=100.0,
+            variable_cost_per_night=12.50,
+            max_occupancy=2,
+        )
+        db.add(category)
+        db.flush()
+        room = Room(hotel_id=1, room_number="201", floor=2, category_id=category.id, status=RoomStatusEnum.AVAILABLE, is_active=True)
+        db.add(room)
+        db.flush()
+        guest = Guest(hotel_id=1, first_name="Rita", last_name="Gomez", email="rita@test.com", terms_accepted=True)
+        db.add(guest)
+        db.flush()
+        db.add(
+            Reservation(
+                confirmation_code="RES-SELFHEAL",
+                hotel_id=1,
+                guest_id=guest.id,
+                room_id=room.id,
+                category_id=category.id,
+                check_in_date=date(2026, 5, 1),
+                check_out_date=date(2026, 5, 3),
+                total_amount=198000.0,
+                subtotal_amount=180000.0,
+                tax_amount=18000.0,
+                fee_amount=0.0,
+                commission_amount=0.0,
+                net_amount=180000.0,
+                amount_paid=198000.0,
+                deposit_amount=0.0,
+                currency_code="ARS",
+                status=ReservationStatusEnum.FULLY_PAID,
+                outcome=ReservationOutcomeEnum.PENDING,
+                source=ReservationSourceEnum.DIRECT,
+                channel_code=ReservationChannelCodeEnum.OTHER_DIRECT,
+                guest_segment=ReservationGuestSegmentEnum.LEISURE,
+                guest_segment_source=ReservationGuestSegmentSourceEnum.SYSTEM_DEFAULT,
+                no_show_policy_applied=ReservationNoShowPolicyAppliedEnum.NONE,
+                num_adults=2,
+                num_children=0,
+            )
+        )
+        db.commit()
+        assert db.query(FactReservationDaily).filter(FactReservationDaily.hotel_id == 1).count() == 0
+
+    resp = client.get(
+        "/api/analytics/home",
+        params={"date_from": "2026-01-01", "date_to": "2026-07-26"},
+        headers=headers,
+    )
+    assert resp.status_code == 200, resp.text
+    payload = resp.json()
+    cards = {card["card_code"]: card for card in payload["data"]["cards"]}
+    assert Decimal(cards["home_revenue_gross"]["value_ars"]) > 0, payload
+    assert Decimal(cards["home_revenue_net"]["value_ars"]) > 0, payload
+    assert cards["home_occupancy"]["value_pct"] > 0, payload
+
+    with SessionLocal() as db:
+        # Self-heal must have materialized the facts, not just computed them
+        # ad hoc -- future reads (and the freshness annotation) stay correct.
+        assert db.query(FactReservationDaily).filter(FactReservationDaily.hotel_id == 1).count() > 0
+        assert db.query(FactRoomOccupancyDaily).filter(FactRoomOccupancyDaily.hotel_id == 1).count() > 0

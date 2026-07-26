@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-26T22:25:52.852Z",
+  "generatedAt": "2026-07-26T23:06:12.240Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -6303,6 +6303,7 @@
         "services_analytics_service_group_rows",
         "services_analytics_service_money_str",
         "services_analytics_service_sum_money",
+        "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_money"
       ],
       "qualifiedPath": [
@@ -6319,10 +6320,11 @@
         "services_analytics_service_group_rows",
         "services_analytics_service_money_str",
         "services_analytics_service_sum_money",
+        "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_money"
       ],
       "depth": 3,
-      "nodeCount": 14,
+      "nodeCount": 15,
       "fileCount": 1,
       "files": [
         "app/services/analytics_service.py"
@@ -6395,6 +6397,7 @@
         "services_analytics_service_group_rows",
         "services_analytics_service_money_str",
         "services_analytics_service_sum_money",
+        "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_money"
       ],
       "qualifiedPath": [
@@ -6411,10 +6414,11 @@
         "services_analytics_service_group_rows",
         "services_analytics_service_money_str",
         "services_analytics_service_sum_money",
+        "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_money"
       ],
       "depth": 3,
-      "nodeCount": 14,
+      "nodeCount": 15,
       "fileCount": 1,
       "files": [
         "app/services/analytics_service.py"
@@ -7258,6 +7262,7 @@
       "path": [
         "services_analytics_service_build_category_detail_payload",
         "services_analytics_service_analytics_window",
+        "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_facts_data_as_of",
         "services_analytics_service_money_str",
         "services_analytics_service_now",
@@ -7269,6 +7274,7 @@
       "qualifiedPath": [
         "services_analytics_service_build_category_detail_payload",
         "services_analytics_service_analytics_window",
+        "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_facts_data_as_of",
         "services_analytics_service_money_str",
         "services_analytics_service_now",
@@ -7278,7 +7284,7 @@
         "services_analytics_service_money"
       ],
       "depth": 2,
-      "nodeCount": 9,
+      "nodeCount": 10,
       "fileCount": 1,
       "files": [
         "app/services/analytics_service.py"
@@ -7307,6 +7313,7 @@
         "services_analytics_service_utc_date_range",
         "services_analytics_service_group_rows",
         "services_analytics_service_money_str",
+        "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_money"
       ],
       "qualifiedPath": [
@@ -7325,10 +7332,11 @@
         "services_analytics_service_utc_date_range",
         "services_analytics_service_group_rows",
         "services_analytics_service_money_str",
+        "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_money"
       ],
       "depth": 2,
-      "nodeCount": 16,
+      "nodeCount": 17,
       "fileCount": 1,
       "files": [
         "app/services/analytics_service.py"
@@ -7353,6 +7361,7 @@
         "services_analytics_service_comparison_read",
         "services_analytics_service_datewindow",
         "services_analytics_service_utc_date_range",
+        "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_money"
       ],
       "qualifiedPath": [
@@ -7367,10 +7376,11 @@
         "services_analytics_service_comparison_read",
         "services_analytics_service_datewindow",
         "services_analytics_service_utc_date_range",
+        "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_money"
       ],
       "depth": 2,
-      "nodeCount": 12,
+      "nodeCount": 13,
       "fileCount": 1,
       "files": [
         "app/services/analytics_service.py"
@@ -7386,6 +7396,7 @@
       "path": [
         "services_analytics_service_build_room_detail_payload",
         "services_analytics_service_analytics_window",
+        "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_facts_data_as_of",
         "services_analytics_service_fetch_room_state_events",
         "services_analytics_service_money_str",
@@ -7399,6 +7410,7 @@
       "qualifiedPath": [
         "services_analytics_service_build_room_detail_payload",
         "services_analytics_service_analytics_window",
+        "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_facts_data_as_of",
         "services_analytics_service_fetch_room_state_events",
         "services_analytics_service_money_str",
@@ -7410,7 +7422,7 @@
         "services_analytics_service_money"
       ],
       "depth": 2,
-      "nodeCount": 11,
+      "nodeCount": 12,
       "fileCount": 1,
       "files": [
         "app/services/analytics_service.py"
@@ -7458,6 +7470,7 @@
         "services_analytics_service_money_str",
         "services_analytics_service_room_lookup_map",
         "services_analytics_service_sum_money",
+        "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_money"
       ],
       "qualifiedPath": [
@@ -7467,10 +7480,11 @@
         "services_analytics_service_money_str",
         "services_analytics_service_room_lookup_map",
         "services_analytics_service_sum_money",
+        "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_money"
       ],
       "depth": 2,
-      "nodeCount": 7,
+      "nodeCount": 8,
       "fileCount": 1,
       "files": [
         "app/services/analytics_service.py"
@@ -7498,6 +7512,7 @@
         "services_analytics_service_comparison_read",
         "services_analytics_service_datewindow",
         "services_analytics_service_utc_date_range",
+        "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_money"
       ],
       "qualifiedPath": [
@@ -7515,10 +7530,11 @@
         "services_analytics_service_comparison_read",
         "services_analytics_service_datewindow",
         "services_analytics_service_utc_date_range",
+        "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_money"
       ],
       "depth": 2,
-      "nodeCount": 15,
+      "nodeCount": 16,
       "fileCount": 1,
       "files": [
         "app/services/analytics_service.py"
@@ -7539,6 +7555,7 @@
         "services_analytics_service_now",
         "services_analytics_service_sum_money",
         "services_analytics_service_utc_date_range",
+        "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_money_str",
         "services_analytics_service_money",
         "services_analytics_service_comparison_read",
@@ -7552,13 +7569,14 @@
         "services_analytics_service_now",
         "services_analytics_service_sum_money",
         "services_analytics_service_utc_date_range",
+        "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_money_str",
         "services_analytics_service_money",
         "services_analytics_service_comparison_read",
         "services_analytics_service_datewindow"
       ],
       "depth": 2,
-      "nodeCount": 11,
+      "nodeCount": 12,
       "fileCount": 1,
       "files": [
         "app/services/analytics_service.py"
@@ -13167,6 +13185,7 @@
       "entryPointId": "services_analytics_service_get_company_fact_detail",
       "path": [
         "services_analytics_service_get_company_fact_detail",
+        "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_facts_data_as_of",
         "services_analytics_service_get_company_or_404",
         "services_analytics_service_metric_card",
@@ -13176,6 +13195,7 @@
       ],
       "qualifiedPath": [
         "services_analytics_service_get_company_fact_detail",
+        "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_facts_data_as_of",
         "services_analytics_service_get_company_or_404",
         "services_analytics_service_metric_card",
@@ -13184,7 +13204,7 @@
         "services_analytics_service_serialize_company"
       ],
       "depth": 1,
-      "nodeCount": 7,
+      "nodeCount": 8,
       "fileCount": 1,
       "files": [
         "app/services/analytics_service.py"
