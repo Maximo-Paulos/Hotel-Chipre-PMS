@@ -1,7 +1,7 @@
 """
 FastAPI routes for stock and inventory operations.
 """
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
@@ -20,6 +20,7 @@ from app.services.permission_service import (
 )
 from app.services.stock_service import (
     StockError,
+    consumption_report,
     create_location,
     create_stock_item,
     current_stock,
@@ -114,6 +115,25 @@ class StockMovementRead(BaseModel):
     reservation_id: Optional[int] = None
     created_by_user_id: Optional[int] = None
     created_at: datetime
+
+
+class StockConsumptionItem(BaseModel):
+    stock_item_id: int
+    stock_item_name: str
+    unit: str
+    current_quantity: Decimal
+    previous_quantity: Decimal
+    variation_pct: Optional[Decimal] = None
+
+
+class StockConsumptionReportRead(BaseModel):
+    hotel_id: int
+    group_by: str
+    date_from: date
+    date_to: date
+    previous_date_from: date
+    previous_date_to: date
+    items: list[StockConsumptionItem]
 
 
 @router.post("/items", response_model=StockItemRead, status_code=status.HTTP_201_CREATED)
@@ -297,6 +317,26 @@ def list_movements(
     context: AuthContext = Depends(require_permission(PERMISSION_STOCK_OPERATE)),
 ):
     return list_stock_movements(db, hotel_id=context.hotel_id, item_id=item_id, limit=limit)
+
+
+@router.get("/consumption-report", response_model=StockConsumptionReportRead)
+def get_stock_consumption_report(
+    date_from: date = Query(...),
+    date_to: date = Query(...),
+    group_by: str = Query(default="week"),
+    db: Session = Depends(get_db),
+    # D5 (Via D): same permission as every other stock read in this router
+    # (list_items, list_movements, ...) -- there is no separate "read stock"
+    # permission today, and this report is derived from the same movements
+    # anyone with stock:operate can already list one by one.
+    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_OPERATE)),
+):
+    try:
+        return consumption_report(
+            db, hotel_id=context.hotel_id, date_from=date_from, date_to=date_to, group_by=group_by
+        )
+    except StockError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
 
 
 @router.get("/items/{item_id}/current")

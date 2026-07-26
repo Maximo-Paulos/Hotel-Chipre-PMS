@@ -3,7 +3,7 @@ Hotel-scoped stock and inventory movement service.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 
 from sqlalchemy import case, func
@@ -23,6 +23,12 @@ class StockError(ValueError):
 # stock:adjust permission, unlike plain "in"/"out" (see app/api/stock.py).
 VALID_MOVEMENT_TYPES = {"in", "out", "adjustment", "adjustment_out"}
 _OUTBOUND_MOVEMENT_TYPES = {"out", "adjustment_out"}
+
+# D5 (Via D): "week"/"month" is presentation metadata the frontend uses to
+# label its range presets -- the previous-period math below is always "same
+# number of days, immediately before" (plan D5 wording), which is correct
+# regardless of calendar boundaries, so group_by never changes the query.
+CONSUMPTION_GROUP_BY_VALUES = {"week", "month"}
 
 
 def list_stock_items(db: Session, *, hotel_id: int) -> list[StockItem]:
@@ -237,6 +243,91 @@ def low_stock_items(db: Session, *, hotel_id: int) -> list[StockItem]:
         .all()
     )
     return [item for item in items if current_stock(db, hotel_id=hotel_id, item_id=item.id) < item.min_quantity]
+
+
+def consumption_report(
+    db: Session,
+    *,
+    hotel_id: int,
+    date_from: date,
+    date_to: date,
+    group_by: str,
+) -> dict:
+    """Stock consumed (``out``/``adjustment_out``) per item in [date_from,
+    date_to], plus the same-length period immediately before it so the
+    caller can show a variation % (D5 -- see plan Via D: detect anomalous
+    consumption, e.g. usage doubling with flat occupancy).
+    """
+    if group_by not in CONSUMPTION_GROUP_BY_VALUES:
+        raise StockError("group_by must be 'week' or 'month'")
+    if date_to < date_from:
+        raise StockError("date_to must be on or after date_from")
+
+    period_days = (date_to - date_from).days + 1
+    previous_date_to = date_from - timedelta(days=1)
+    previous_date_from = previous_date_to - timedelta(days=period_days - 1)
+
+    current_totals = _consumption_totals_by_item(db, hotel_id=hotel_id, date_from=date_from, date_to=date_to)
+    previous_totals = _consumption_totals_by_item(
+        db, hotel_id=hotel_id, date_from=previous_date_from, date_to=previous_date_to
+    )
+
+    item_ids = set(current_totals) | set(previous_totals)
+    stock_items = (
+        db.query(StockItem).filter(StockItem.hotel_id == hotel_id, StockItem.id.in_(item_ids)).all()
+        if item_ids
+        else []
+    )
+    items_by_id = {item.id: item for item in stock_items}
+
+    items = []
+    for item_id in item_ids:
+        item = items_by_id.get(item_id)
+        current = current_totals.get(item_id, Decimal("0.00"))
+        previous = previous_totals.get(item_id, Decimal("0.00"))
+        variation_pct = (
+            ((current - previous) / previous * 100).quantize(Decimal("0.1")) if previous > 0 else None
+        )
+        items.append(
+            {
+                "stock_item_id": item_id,
+                "stock_item_name": item.name if item else f"Item #{item_id}",
+                "unit": item.unit if item else "",
+                "current_quantity": current,
+                "previous_quantity": previous,
+                "variation_pct": variation_pct,
+            }
+        )
+    items.sort(key=lambda entry: entry["stock_item_name"])
+
+    return {
+        "hotel_id": hotel_id,
+        "group_by": group_by,
+        "date_from": date_from,
+        "date_to": date_to,
+        "previous_date_from": previous_date_from,
+        "previous_date_to": previous_date_to,
+        "items": items,
+    }
+
+
+def _consumption_totals_by_item(
+    db: Session, *, hotel_id: int, date_from: date, date_to: date
+) -> dict[int, Decimal]:
+    start = datetime.combine(date_from, time.min, tzinfo=timezone.utc)
+    end = datetime.combine(date_to + timedelta(days=1), time.min, tzinfo=timezone.utc)
+    rows = (
+        db.query(StockMovement.item_id, func.coalesce(func.sum(StockMovement.quantity), 0))
+        .filter(
+            StockMovement.hotel_id == hotel_id,
+            StockMovement.movement_type.in_(_OUTBOUND_MOVEMENT_TYPES),
+            StockMovement.created_at >= start,
+            StockMovement.created_at < end,
+        )
+        .group_by(StockMovement.item_id)
+        .all()
+    )
+    return {item_id: Decimal(total).quantize(Decimal("0.01")) for item_id, total in rows}
 
 
 def get_stock_item(db: Session, *, hotel_id: int, item_id: int) -> StockItem:
