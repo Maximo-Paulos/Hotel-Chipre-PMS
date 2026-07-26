@@ -201,6 +201,54 @@ def test_tenant_context_is_safe_for_local_sqlite_sessions():
         set_tenant_hotel_context(db, None)
 
 
+def _load_master_admin_bypass_migration():
+    path = Path(__file__).parents[1] / "alembic" / "versions" / "f3bdaadd3d15_master_admin_rls_bypass.py"
+    spec = importlib.util.spec_from_file_location("master_admin_rls_bypass_migration", path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_master_admin_bypass_migration_only_touches_tables_the_panel_actually_queries():
+    """C2: app/master_admin/router.py queries Subscription directly, and
+    transitively (via app/services/subscription_entitlements.py) touches
+    subscription_events and hotel_subscriptions. No other tenant table
+    should get the master_admin bypass clause without a matching router change.
+    """
+    migration = _load_master_admin_bypass_migration()
+    assert set(migration.MASTER_ADMIN_BYPASS_TABLES) == {
+        "subscriptions",
+        "subscription_events",
+        "hotel_subscriptions",
+    }
+    # Every bypass table must already be a reviewed tenant table -- the
+    # bypass only ever widens an existing hotel_id policy, never installs a
+    # brand-new one.
+    baseline = _load_rls_migration()
+    assert set(migration.MASTER_ADMIN_BYPASS_TABLES) <= set(baseline.TENANT_TABLES)
+
+
+def test_master_admin_bypass_migration_uses_the_documented_session_flag():
+    migration = _load_master_admin_bypass_migration()
+    source = Path(migration.__file__).read_text(encoding="utf-8")
+    assert "current_setting('app.master_admin', true) = 'true'" in source
+    assert "OR hotel_id = NULLIF(current_setting('app.hotel_id', true), '')::integer" in source
+    # Reversible: downgrade must restore the original hotel_id-only clause,
+    # not just drop the policy and leave the table unprotected.
+    assert source.count("hotel_id = NULLIF(current_setting('app.hotel_id', true), '')::integer") >= 3
+    assert "NO FORCE ROW LEVEL SECURITY" not in source  # bypass never disables RLS entirely
+
+
+def test_set_master_admin_context_is_safe_for_local_sqlite_sessions():
+    from app.services.tenant_context import set_master_admin_context
+
+    engine = create_engine("sqlite:///:memory:")
+    with Session(engine) as db:
+        set_master_admin_context(db)
+        set_master_admin_context(db, enabled=False)
+
+
 @pytest.mark.parametrize("user_id,hotel_id", [(0, 1), (1, 0), (-1, 1), (1, -1)])
 def test_tenant_context_rejects_invalid_principals(user_id: int, hotel_id: int):
     engine = create_engine("sqlite:///:memory:")

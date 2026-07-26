@@ -45,3 +45,27 @@ def set_tenant_context(db: Session, *, user_id: int | None, hotel_id: int | None
 
     set_tenant_user_context(db, user_id)
     set_tenant_hotel_context(db, hotel_id)
+
+
+def set_master_admin_context(db: Session, enabled: bool = True) -> None:
+    """Flag the transaction as a verified master-admin session.
+
+    RLS policies that opt in (see alembic/versions/f3bdaadd3d15_*) read
+    ``current_setting('app.master_admin', true) = 'true'`` as an OR bypass
+    of the normal ``hotel_id = app.hotel_id`` clause, so a real master-admin
+    request (never any other caller) can see rows across every hotel. Call
+    only from app/master_admin/security.py::require_master_admin, after the
+    session/CSRF/lockout checks pass -- never from request input.
+
+    Same transaction-scoped caveat as set_tenant_hotel_context: this must be
+    re-set after any commit within the same request (tracked as C1, not
+    fixed here).
+    """
+    bind = db.get_bind()
+    if bind is None or bind.dialect.name != "postgresql":
+        return
+
+    db.execute(
+        text("SELECT set_config('app.master_admin', :value, true)"),
+        {"value": "true" if enabled else ""},
+    )

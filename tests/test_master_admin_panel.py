@@ -278,6 +278,94 @@ def test_master_login_cookie_works_on_underscore_alias(master_client, monkeypatc
     assert hotels.status_code == 200, hotels.text
 
 
+def test_master_dashboard_summary_counts_subscriptions_across_hotels(master_client, monkeypatch):
+    """C2 regression (SQLite, syntactic only -- RLS is a Postgres-only concern,
+    see tests/test_master_admin_rls_bypass_pg.py for the functional proof).
+
+    Confirms wiring set_master_admin_context(db) into require_master_admin
+    didn't break the existing request flow: with subscriptions seeded across
+    three different hotels, the dashboard summary must still count every
+    hotel's row, not just one.
+    """
+    client, SessionLocal = master_client
+    monkeypatch.setenv("MASTER_ADMIN_PIN", "654321")
+    get_settings.cache_clear()
+
+    db = SessionLocal()
+    try:
+        _seed_platform_admin(db)
+        _seed_hotel(db, hotel_id=1, name="Hotel Uno")
+        _seed_hotel(db, hotel_id=2, name="Hotel Dos")
+        _seed_hotel(db, hotel_id=3, name="Hotel Tres")
+        _seed_subscription(db, hotel_id=1, status="active")
+        _seed_subscription(db, hotel_id=2, status="trialing")
+        _seed_subscription(db, hotel_id=3, status="past_due")
+        db.commit()
+    finally:
+        db.close()
+
+    login = client.post(
+        "/api/master-admin/auth/login",
+        json={"email": "platform-admin@example.com", "password": "Master123!", "pin": "654321"},
+    )
+    assert login.status_code == 200, login.text
+
+    summary = client.get("/api/master-admin/dashboard/summary")
+    assert summary.status_code == 200, summary.text
+    counts = summary.json()["counts"]
+    assert counts["hotels"] == 3
+    assert counts["active_subscriptions"] == 1
+    assert counts["trialing"] == 1
+    assert counts["past_due"] == 1
+
+    hotels = client.get("/api/master-admin/dashboard/hotels")
+    assert hotels.status_code == 200, hotels.text
+    assert {item["hotel_id"] for item in hotels.json()["items"]} == {1, 2, 3}
+
+
+def test_require_master_admin_sets_master_admin_rls_context(master_client, monkeypatch):
+    """Wiring proof: every authenticated master-admin call must set the RLS
+    bypass context (app/services/tenant_context.py::set_master_admin_context)
+    before touching any endpoint logic -- not just some endpoints.
+    """
+    client, SessionLocal = master_client
+    monkeypatch.setenv("MASTER_ADMIN_PIN", "654321")
+    get_settings.cache_clear()
+
+    db = SessionLocal()
+    try:
+        _seed_platform_admin(db)
+        db.commit()
+    finally:
+        db.close()
+
+    calls: list[object] = []
+    original = master_security.set_master_admin_context
+
+    def _spy(db_arg, *args, **kwargs):
+        calls.append(db_arg)
+        return original(db_arg, *args, **kwargs)
+
+    monkeypatch.setattr(master_security, "set_master_admin_context", _spy)
+
+    login = client.post(
+        "/api/master-admin/auth/login",
+        json={"email": "platform-admin@example.com", "password": "Master123!", "pin": "654321"},
+    )
+    assert login.status_code == 200, login.text
+    # login doesn't call require_master_admin (it's the endpoint that creates
+    # the session), so the spy should still be empty here.
+    assert calls == []
+
+    me = client.get("/api/master-admin/auth/me")
+    assert me.status_code == 200, me.text
+    assert len(calls) == 1
+
+    summary = client.get("/api/master-admin/dashboard/summary")
+    assert summary.status_code == 200, summary.text
+    assert len(calls) == 2
+
+
 def test_master_session_cookie_uses_cross_site_settings_in_production(monkeypatch):
     monkeypatch.setattr(master_security, "is_production_mode", lambda settings=None: True)
     response = Response()

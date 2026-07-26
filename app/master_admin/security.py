@@ -15,6 +15,7 @@ from app.adapters.rate_limiter import SimpleRateLimiter
 from app.config import get_settings, is_preview_qa_mode, is_production_mode
 from app.models.user import User
 from app.services.security import hash_password, verify_password
+from app.services.tenant_context import set_master_admin_context
 from .models import MasterAdminAuditEvent, MasterAdminAuthLockout, MasterAdminSession
 
 SESSION_COOKIE_NAME = "master_admin_session"
@@ -327,6 +328,12 @@ def require_master_admin(
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="CSRF invalido")
         if not hmac.compare_digest(session.csrf_token_hash, _hash_value(expected_csrf)):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="CSRF invalido")
+
+    # Verified platform_admin cookie session, CSRF/lockout checks passed:
+    # safe to let this transaction bypass hotel-scoped RLS on the
+    # subscriptions/subscription_events/hotel_subscriptions tables the
+    # panel reads across every hotel (see f3bdaadd3d15_master_admin_rls_bypass).
+    set_master_admin_context(db)
 
     session.last_seen_at = _now()
     db.flush()
