@@ -3,8 +3,7 @@ import { useMemo, useState } from "react";
 import { type OperationalReservationGroup, type OperationalReservationSummary } from "../../api/reports";
 import { ApiError } from "../../api/client";
 import { useDailyOperationalReport, useOperationalAlerts } from "../../hooks/useReports";
-
-const today = () => new Date().toISOString().slice(0, 10);
+import { todayIso as today } from "../../utils/date";
 
 const money = (value?: number | string | null) =>
   Number(value ?? 0).toLocaleString("es-AR", { style: "currency", currency: "ARS" });

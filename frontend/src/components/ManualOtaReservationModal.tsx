@@ -6,6 +6,7 @@ import { useGuestCreate } from "../hooks/useGuests";
 import { useReservationMutations } from "../hooks/useReservations";
 import { useRooms } from "../hooks/useRooms";
 import { normalizeCurrencyCode } from "../utils/currency";
+import { addDaysIso, todayIso } from "../utils/date";
 
 import GuestQuickCreatePanel, { emptyQuickGuestForm, hasQuickGuestFormData, type QuickGuestFormValues } from "./GuestQuickCreatePanel";
 
@@ -21,12 +22,7 @@ const CHANNEL_OPTIONS: Array<{ value: string; label: string }> = [
   { value: "other_ota", label: "Otra OTA" }
 ];
 
-const todayIso = () => new Date().toISOString().slice(0, 10);
-const tomorrowIso = () => {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  return d.toISOString().slice(0, 10);
-};
+const tomorrowIso = () => addDaysIso(todayIso(), 1);
 
 type FormState = {
   category_id: string;

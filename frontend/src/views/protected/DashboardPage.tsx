@@ -6,6 +6,7 @@ import { usePendingReservationActions, useReservations } from "../../hooks/useRe
 import { useReservationDrawer } from "../../hooks/useReservationDrawer";
 import { useRooms } from "../../hooks/useRooms";
 import { formatMoney, resolveSingleCurrencyCode } from "../../utils/currency";
+import { todayIso } from "../../utils/date";
 
 const statusClass = (status: ReservationStatus) => {
   switch (status) {
@@ -26,7 +27,6 @@ const statusClass = (status: ReservationStatus) => {
   }
 };
 
-const todayIso = () => new Date().toISOString().slice(0, 10);
 const monthRangeIso = (base: Date) => {
   const pad = (part: number) => String(part).padStart(2, "0");
   const format = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -128,6 +128,7 @@ export function DashboardPage() {
           <p className="text-xs uppercase tracking-wide text-slate-500">Dashboard</p>
           <h1 className="text-2xl font-semibold text-slate-900">Visión general</h1>
           <p className="text-sm text-slate-600">KPIs en vivo, llegadas/salidas y acciones operativas del hotel activo.</p>
+          <span className="sr-only" data-testid="dashboard-today-date">{today}</span>
         </div>
         <div className="flex flex-wrap gap-2">
           <Link

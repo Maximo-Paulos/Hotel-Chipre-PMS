@@ -7,6 +7,7 @@ import { roomBlockReasonLabel, roomBlockReasonOptions, useRoomBlocks } from "../
 import { useSubscriptionStatus } from "../../hooks/useSubscription";
 import { roomStatusLabel, useRooms } from "../../hooks/useRooms";
 import { useSession } from "../../state/session";
+import { todayIso } from "../../utils/date";
 
 const statusColors: Record<RoomStatus, string> = {
   available: "bg-emerald-100 text-emerald-800",
@@ -17,8 +18,6 @@ const statusColors: Record<RoomStatus, string> = {
 };
 
 const statusOptions: RoomStatus[] = ["available", "occupied", "cleaning"];
-
-const todayIso = () => new Date().toISOString().slice(0, 10);
 
 type BlockFormValues = {
   room_id: string;

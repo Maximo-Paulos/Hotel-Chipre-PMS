@@ -17,19 +17,7 @@ import {
 } from "../api/rate-calendar";
 import { useSession } from "../state/session";
 
-const pad = (value: number) => String(value).padStart(2, "0");
-
-export const formatLocalIsoDate = (value: Date) =>
-  `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
-
-export const todayIso = () => formatLocalIsoDate(new Date());
-
-/** Shift an ISO date (YYYY-MM-DD) by a number of days, returning ISO. */
-export const addDaysIso = (iso: string, days: number) => {
-  const base = new Date(`${iso}T00:00:00`);
-  base.setDate(base.getDate() + days);
-  return formatLocalIsoDate(base);
-};
+export { formatLocalIsoDate, todayIso, addDaysIso } from "../utils/date";
 
 export function useRateCalendar(categoryId: number | null, dateFrom: string, dateTo: string) {
   const { session } = useSession();

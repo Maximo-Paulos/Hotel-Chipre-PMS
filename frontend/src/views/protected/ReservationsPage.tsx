@@ -56,6 +56,7 @@ import { useRooms } from "../../hooks/useRooms";
 import { useSubscriptionStatus } from "../../hooks/useSubscription";
 import { useSession } from "../../state/session";
 import { formatMoney, normalizeCurrencyCode } from "../../utils/currency";
+import { addDaysIso, formatLocalIsoDate, todayIso } from "../../utils/date";
 import {
   canCancelReservation,
   canCheckInReservation,
@@ -135,7 +136,6 @@ const defaultFormState = (): FormState => ({
   status: "pending"
 });
 
-const todayIso = () => new Date().toISOString().slice(0, 10);
 const reservationGuestLabel = (reservation: {
   guest?: { first_name: string; last_name: string } | null;
   guest_id: number;
@@ -202,11 +202,7 @@ export function ReservationsPage() {
   }>({
     category_id: "",
     check_in_date: todayIso(),
-    check_out_date: (() => {
-      const d = new Date();
-      d.setDate(d.getDate() + 1);
-      return d.toISOString().slice(0, 10);
-    })()
+    check_out_date: addDaysIso(todayIso(), 1)
   });
   const [calendarRange, setCalendarRange] = useState<"week" | "month">("week");
   const [detailsReservationId, setDetailsReservationId] = useState<number | null>(null);
@@ -478,7 +474,7 @@ export function ReservationsPage() {
     for (let i = 0; i < window; i += 1) {
       const date = new Date();
       date.setDate(date.getDate() + i);
-      const iso = date.toISOString().slice(0, 10);
+      const iso = formatLocalIsoDate(date);
       const active = reservations.filter(
         (r) =>
           r.status !== "cancelled" &&

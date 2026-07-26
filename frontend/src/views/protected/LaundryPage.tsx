@@ -20,6 +20,7 @@ import { hasValidSession } from "../../api/client";
 import { useGuardedMutation } from "../../hooks/useGuardedMutation";
 import { useSession } from "../../state/session";
 import { formatMoney } from "../../utils/currency";
+import { formatLocalIsoDate, todayIso } from "../../utils/date";
 
 // D2 (Via D lavanderia): replaces the old LaundryBatch/LaundryItem UI
 // entirely -- D0 confirmed no open batches in production, so there is no
@@ -33,20 +34,18 @@ const canManageVendors = (role: string | null) => ["owner", "co_owner", "manager
 const canOperateRemitos = (role: string | null) =>
   ["owner", "co_owner", "manager", "housekeeping"].includes(role ?? "");
 
-const todayIso = () => new Date().toISOString().slice(0, 10);
-
-// D3 (Via D lavanderia): "cuanto le pague al lavadero" range presets, mirroring
-// todayIso's UTC-slice style already used above for the remito date field.
+// D3 (Via D lavanderia): "cuanto le pague al lavadero" range presets, using
+// hotel-local (not UTC) dates -- see utils/date.ts.
 const startOfCurrentWeekIso = () => {
   const now = new Date();
   const day = now.getDay();
   now.setDate(now.getDate() - (day === 0 ? 6 : day - 1));
-  return now.toISOString().slice(0, 10);
+  return formatLocalIsoDate(now);
 };
 const startOfCurrentMonthIso = () => {
   const now = new Date();
   now.setDate(1);
-  return now.toISOString().slice(0, 10);
+  return formatLocalIsoDate(now);
 };
 const dayStartIso = (day: string) => new Date(`${day}T00:00:00`).toISOString();
 const dayEndIso = (day: string) => new Date(`${day}T23:59:59.999`).toISOString();
