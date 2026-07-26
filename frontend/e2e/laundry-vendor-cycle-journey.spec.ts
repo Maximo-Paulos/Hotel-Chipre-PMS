@@ -93,6 +93,7 @@ test("owner runs the full vendor/remito cycle: pricing, outbound, partial inboun
   await expect(page.getByText(`Remito R-OUT-${suffix} guardado.`, { exact: true })).toBeVisible();
 
   const vendorBalance = page
+    .getByRole("region", { name: "Qué está en cada lavadero ahora", exact: true })
     .locator("div.rounded-lg.border.border-slate-200.bg-slate-50.p-3")
     .filter({ hasText: vendorName });
   await expect(vendorBalance).toContainText(sheetsName);
@@ -131,4 +132,22 @@ test("owner runs the full vendor/remito cycle: pricing, outbound, partial inboun
   await expect(remitoForm.getByRole("alert")).toContainText(towelsName);
   // No exitoso: el remito invalido no queda en el historial.
   await expect(page.getByText(`Remito R-FAIL-${suffix} guardado.`, { exact: true })).toHaveCount(0);
+
+  // --- D3: reporte de gasto del mes actual cubre el remito de salida (6
+  // sabanas * 150 + 4 toallas * 250 = 1900) y no el remito de entrada (no
+  // se factura) ni el intento fallido (nunca se creo). El total global de la
+  // seccion suma todos los lavaderos del hotel (puede incluir otros vendors
+  // de otros specs corriendo sobre la misma DB), asi que se valida el total
+  // y el desglose *de este vendor* -- vendor_spend() ya esta aislado por
+  // vendor_id en el backend -- en vez del total agregado de la pagina.
+  const spendSection = page.locator("section").filter({ hasText: "Gasto de lavadero por período" });
+  await spendSection.getByRole("button", { name: "Mes actual", exact: true }).click();
+  const vendorSpendCard = spendSection.locator("div.rounded-lg.border.border-slate-200.bg-slate-50.p-3").filter({
+    hasText: vendorName
+  });
+  await expect(vendorSpendCard.getByText(/\$\s*1\.?900/)).toBeVisible();
+  await expect(vendorSpendCard).toContainText(`${sheetsName} × 6`);
+  await expect(vendorSpendCard.getByText(/\$\s*900/)).toBeVisible();
+  await expect(vendorSpendCard).toContainText(`${towelsName} × 4`);
+  await expect(vendorSpendCard.getByText(/\$\s*1\.?000/)).toBeVisible();
 });

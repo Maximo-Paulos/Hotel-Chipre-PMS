@@ -5,6 +5,7 @@ import {
   createLaundryRemito,
   createLaundryVendor,
   getLaundryVendorBalance,
+  getLaundryVendorSpend,
   listLaundryRemitos,
   listLaundryVendorPrices,
   listLaundryVendors,
@@ -33,6 +34,22 @@ const canOperateRemitos = (role: string | null) =>
   ["owner", "co_owner", "manager", "housekeeping"].includes(role ?? "");
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
+
+// D3 (Via D lavanderia): "cuanto le pague al lavadero" range presets, mirroring
+// todayIso's UTC-slice style already used above for the remito date field.
+const startOfCurrentWeekIso = () => {
+  const now = new Date();
+  const day = now.getDay();
+  now.setDate(now.getDate() - (day === 0 ? 6 : day - 1));
+  return now.toISOString().slice(0, 10);
+};
+const startOfCurrentMonthIso = () => {
+  const now = new Date();
+  now.setDate(1);
+  return now.toISOString().slice(0, 10);
+};
+const dayStartIso = (day: string) => new Date(`${day}T00:00:00`).toISOString();
+const dayEndIso = (day: string) => new Date(`${day}T23:59:59.999`).toISOString();
 
 const emptyVendorForm = { name: "", contact_phone: "", contact_email: "" };
 const emptyPriceForm = { stock_item_id: "", unit_price: "" };
@@ -64,6 +81,7 @@ export function LaundryPage() {
   const [lineDraft, setLineDraft] = useState({ stock_item_id: "", quantity: "1" });
   const [remitoError, setRemitoError] = useState<string | null>(null);
   const [houseStockLocationId, setHouseStockLocationId] = useState<string>("");
+  const [spendRange, setSpendRange] = useState(() => ({ from: startOfCurrentMonthIso(), to: todayIso() }));
 
   const vendorsQuery = useQuery({
     queryKey: ["laundry-vendors", session.hotelId],
@@ -143,6 +161,32 @@ export function LaundryPage() {
     }))
   });
 
+  // Spend report: GET /api/laundry/vendors/{id}/spend is per-vendor only
+  // (gated by laundry:manage_vendors, which housekeeping never holds anyway).
+  // A hotel realistically has 1-3 laundries (see plan D3), so N small
+  // parallel requests summed client-side is simpler than adding and testing
+  // a new aggregate backend endpoint for a handful of rows.
+  // ponytail: revisit with a real GET /api/laundry/spend-summary if a hotel
+  // ever runs enough vendors that N requests becomes noticeable.
+  const spendQueries = useQueries({
+    queries: vendors.map((vendor) => ({
+      queryKey: ["laundry-vendor-spend", session.hotelId, vendor.id, spendRange.from, spendRange.to],
+      queryFn: () =>
+        getLaundryVendorSpend(
+          vendor.id,
+          { dateFrom: dayStartIso(spendRange.from), dateTo: dayEndIso(spendRange.to) },
+          session
+        ),
+      enabled: enabled && manageVendors,
+      staleTime: 15 * 1000
+    }))
+  });
+  const spendTotal = useMemo(
+    () => spendQueries.reduce((sum, query) => sum + Number(query.data?.total ?? 0), 0),
+    [spendQueries]
+  );
+  const spendFetching = spendQueries.some((query) => query.isFetching);
+
   const houseStockQueries = useQueries({
     queries: items.map((item) => ({
       queryKey: ["stock-current", session.hotelId, item.id, houseStockLocationId || "hotel-wide"],
@@ -159,6 +203,7 @@ export function LaundryPage() {
   const invalidateAfterRemito = () => {
     queryClient.invalidateQueries({ queryKey: ["laundry-remitos", session.hotelId] });
     queryClient.invalidateQueries({ queryKey: ["laundry-vendor-balance", session.hotelId] });
+    queryClient.invalidateQueries({ queryKey: ["laundry-vendor-spend", session.hotelId] });
     queryClient.invalidateQueries({ queryKey: ["stock-current", session.hotelId] });
   };
 
@@ -451,6 +496,91 @@ export function LaundryPage() {
         </section>
       )}
 
+      {manageVendors && (
+        <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-slate-500">Reporte</p>
+              <h2 className="text-lg font-semibold text-slate-900">Gasto de lavadero por período</h2>
+              <p className="text-sm text-slate-600">
+                Total facturado según lo que se mandó a lavar (remitos de salida) en el rango elegido.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-end gap-2">
+              <button
+                type="button"
+                onClick={() => setSpendRange({ from: startOfCurrentWeekIso(), to: todayIso() })}
+                className="min-h-9 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Semana actual
+              </button>
+              <button
+                type="button"
+                onClick={() => setSpendRange({ from: startOfCurrentMonthIso(), to: todayIso() })}
+                className="min-h-9 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Mes actual
+              </button>
+              <label className="space-y-1 text-sm">
+                <span className="text-slate-600">Desde</span>
+                <input
+                  type="date"
+                  value={spendRange.from}
+                  max={spendRange.to}
+                  onChange={(event) => setSpendRange((current) => ({ ...current, from: event.target.value }))}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                />
+              </label>
+              <label className="space-y-1 text-sm">
+                <span className="text-slate-600">Hasta</span>
+                <input
+                  type="date"
+                  value={spendRange.to}
+                  min={spendRange.from}
+                  onChange={(event) => setSpendRange((current) => ({ ...current, to: event.target.value }))}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                />
+              </label>
+            </div>
+          </div>
+
+          <p className="text-2xl font-semibold text-slate-900">
+            Total del período: {formatMoney(spendTotal)}
+            {spendFetching && <span className="ml-2 text-xs font-normal text-slate-500">Actualizando...</span>}
+          </p>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            {vendors.map((vendor, index) => {
+              const spend = spendQueries[index]?.data;
+              const byItem = spend?.by_item ?? [];
+              return (
+                <div key={vendor.id} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-semibold text-slate-900">{vendor.name}</p>
+                    <p className="text-sm font-semibold text-slate-900">{formatMoney(spend?.total ?? 0)}</p>
+                  </div>
+                  {byItem.length === 0 ? (
+                    <p className="mt-2 text-xs text-slate-500">Sin remitos de salida en este período.</p>
+                  ) : (
+                    <ul className="mt-2 space-y-1 text-xs text-slate-700">
+                      {byItem.map((line) => (
+                        <li key={line.stock_item_id} className="flex justify-between gap-2">
+                          <span>
+                            {line.stock_item_name} × {line.quantity}
+                          </span>
+                          <span className="font-semibold">{formatMoney(line.subtotal)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              );
+            })}
+            {vendors.length === 0 && <p className="text-xs text-slate-500">Todavía no hay lavaderos.</p>}
+          </div>
+        </section>
+      )}
+
       {operateRemitos && (
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_420px]">
           <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -492,9 +622,11 @@ export function LaundryPage() {
               )}
             </ul>
 
-            <div className="border-t border-slate-200 pt-4">
+            <div className="border-t border-slate-200 pt-4" role="region" aria-labelledby="vendor-balance-title">
               <p className="text-xs uppercase tracking-wide text-slate-500">Balance por lavadero</p>
-              <h3 className="text-base font-semibold text-slate-900">Qué está en cada lavadero ahora</h3>
+              <h3 id="vendor-balance-title" className="text-base font-semibold text-slate-900">
+                Qué está en cada lavadero ahora
+              </h3>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 {vendors.map((vendor, index) => {
                   const balance = balanceQueries[index]?.data ?? [];

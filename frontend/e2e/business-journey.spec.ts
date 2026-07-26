@@ -566,6 +566,7 @@ test("owner operates waitlist, housekeeping, laundry and daily reports", async (
   await expect(page.getByText(`Remito R-${suffix} guardado.`, { exact: true })).toBeVisible();
 
   const vendorBalance = page
+    .getByRole("region", { name: "Qué está en cada lavadero ahora", exact: true })
     .locator("div.rounded-lg.border.border-slate-200.bg-slate-50.p-3")
     .filter({ hasText: vendorName });
   await expect(vendorBalance).toContainText(stockItemName);
