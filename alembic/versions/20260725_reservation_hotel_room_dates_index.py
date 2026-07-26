@@ -6,6 +6,7 @@ Create Date: 2026-07-25
 """
 from typing import Sequence, Union
 
+import sqlalchemy as sa
 from alembic import op
 
 
@@ -16,11 +17,17 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.create_index(
-        "ix_reservation_hotel_room_dates",
-        "reservations",
-        ["hotel_id", "room_id", "check_in_date", "check_out_date"],
-    )
+    # Guarded because some production environments already have this index
+    # out-of-band via an old startup self-heal pass while alembic_version
+    # stayed on an older revision -- see
+    # 20260612_audit_log_and_transaction_fk for the same pattern.
+    inspector = sa.inspect(op.get_bind())
+    if "ix_reservation_hotel_room_dates" not in {ix["name"] for ix in inspector.get_indexes("reservations")}:
+        op.create_index(
+            "ix_reservation_hotel_room_dates",
+            "reservations",
+            ["hotel_id", "room_id", "check_in_date", "check_out_date"],
+        )
 
 
 def downgrade() -> None:

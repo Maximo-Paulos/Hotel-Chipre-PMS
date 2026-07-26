@@ -14,34 +14,44 @@ depends_on = None
 
 
 def upgrade() -> None:
+    inspector = sa.inspect(op.get_bind())
+
     # ── 1. room_movement_groups (v72 §5.4) ───────────────────────────────────
-    op.create_table(
-        "room_movement_groups",
-        sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
-        sa.Column("hotel_id", sa.Integer, sa.ForeignKey("hotel_configuration.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("trigger_reason", sa.String(100), nullable=False),
-        sa.Column("notes", sa.Text, nullable=True),
-        sa.Column("is_reverted", sa.Boolean, nullable=False, server_default="0"),
-        sa.Column("reverted_by_user_id", sa.Integer, sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
-        sa.Column("reverted_at", sa.DateTime, nullable=True),
-        sa.Column("created_by_user_id", sa.Integer, sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
-        sa.Column("created_at", sa.DateTime, nullable=False),
-    )
-    op.create_index("ix_room_movement_groups_hotel_id", "room_movement_groups", ["hotel_id"])
+    if "room_movement_groups" not in inspector.get_table_names():
+        op.create_table(
+            "room_movement_groups",
+            sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
+            sa.Column("hotel_id", sa.Integer, sa.ForeignKey("hotel_configuration.id", ondelete="CASCADE"), nullable=False),
+            sa.Column("trigger_reason", sa.String(100), nullable=False),
+            sa.Column("notes", sa.Text, nullable=True),
+            sa.Column("is_reverted", sa.Boolean, nullable=False, server_default="0"),
+            sa.Column("reverted_by_user_id", sa.Integer, sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
+            sa.Column("reverted_at", sa.DateTime, nullable=True),
+            sa.Column("created_by_user_id", sa.Integer, sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
+            sa.Column("created_at", sa.DateTime, nullable=False),
+        )
+    if "ix_room_movement_groups_hotel_id" not in ({ix["name"] for ix in inspector.get_indexes("room_movement_groups")} if inspector.has_table("room_movement_groups") else set()):
+        op.create_index("ix_room_movement_groups_hotel_id", "room_movement_groups", ["hotel_id"])
 
     # ── 2. room_move_events: add movement_group_id FK ────────────────────────
+    room_move_events_columns = {c["name"] for c in inspector.get_columns("room_move_events")}
+    room_move_events_fks = {fk["name"] for fk in inspector.get_foreign_keys("room_move_events")}
+    room_move_events_indexes = {ix["name"] for ix in inspector.get_indexes("room_move_events")}
     with op.batch_alter_table("room_move_events") as batch_op:
-        batch_op.add_column(
-            sa.Column("movement_group_id", sa.Integer, nullable=True)
-        )
-        batch_op.create_foreign_key(
-            "fk_room_move_events_movement_group_id",
-            "room_movement_groups",
-            ["movement_group_id"],
-            ["id"],
-            ondelete="SET NULL",
-        )
-        batch_op.create_index("ix_room_move_events_group_id", ["movement_group_id"])
+        if "movement_group_id" not in room_move_events_columns:
+            batch_op.add_column(
+                sa.Column("movement_group_id", sa.Integer, nullable=True)
+            )
+        if "fk_room_move_events_movement_group_id" not in room_move_events_fks:
+            batch_op.create_foreign_key(
+                "fk_room_move_events_movement_group_id",
+                "room_movement_groups",
+                ["movement_group_id"],
+                ["id"],
+                ondelete="SET NULL",
+            )
+        if "ix_room_move_events_group_id" not in room_move_events_indexes:
+            batch_op.create_index("ix_room_move_events_group_id", ["movement_group_id"])
 
     # ── 3. billing_adjustments: Float → Numeric(12,2) ────────────────────────
     with op.batch_alter_table("billing_adjustments") as batch_op:
@@ -56,8 +66,10 @@ def upgrade() -> None:
                               existing_nullable=True)
 
     # ── 5. rooms: add description field (v72 §4.6) ───────────────────────────
+    rooms_columns = {c["name"] for c in inspector.get_columns("rooms")}
     with op.batch_alter_table("rooms") as batch_op:
-        batch_op.add_column(sa.Column("description", sa.Text, nullable=True))
+        if "description" not in rooms_columns:
+            batch_op.add_column(sa.Column("description", sa.Text, nullable=True))
 
 
 def downgrade() -> None:

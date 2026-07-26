@@ -23,19 +23,27 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "reservations",
-        sa.Column(
-            "is_wait_listed",
-            sa.Boolean(),
-            nullable=False,
-            server_default=sa.false(),
-        ),
-    )
-    op.add_column(
-        "reservations",
-        sa.Column("wait_list_reason", sa.String(length=255), nullable=True),
-    )
+    # Guarded because some production environments already have these
+    # columns out-of-band via an old startup self-heal pass while
+    # alembic_version stayed on an older revision -- see
+    # 20260612_audit_log_and_transaction_fk for the same pattern.
+    inspector = sa.inspect(op.get_bind())
+    reservations_columns = {c["name"] for c in inspector.get_columns("reservations")}
+    if "is_wait_listed" not in reservations_columns:
+        op.add_column(
+            "reservations",
+            sa.Column(
+                "is_wait_listed",
+                sa.Boolean(),
+                nullable=False,
+                server_default=sa.false(),
+            ),
+        )
+    if "wait_list_reason" not in reservations_columns:
+        op.add_column(
+            "reservations",
+            sa.Column("wait_list_reason", sa.String(length=255), nullable=True),
+        )
 
 
 def downgrade() -> None:

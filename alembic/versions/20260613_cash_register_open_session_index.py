@@ -17,14 +17,16 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.create_index(
-        "uq_cash_sessions_one_open_per_hotel",
-        "cash_sessions",
-        ["hotel_id"],
-        unique=True,
-        postgresql_where=sa.text("status = 'open'"),
-        sqlite_where=sa.text("status = 'open'"),
-    )
+    inspector = sa.inspect(op.get_bind())
+    if "uq_cash_sessions_one_open_per_hotel" not in {ix["name"] for ix in inspector.get_indexes("cash_sessions")}:
+        op.create_index(
+            "uq_cash_sessions_one_open_per_hotel",
+            "cash_sessions",
+            ["hotel_id"],
+            unique=True,
+            postgresql_where=sa.text("status = 'open'"),
+            sqlite_where=sa.text("status = 'open'"),
+        )
 
 
 def downgrade() -> None:

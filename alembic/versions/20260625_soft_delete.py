@@ -29,9 +29,17 @@ TABLES = (
 
 
 def upgrade() -> None:
+    # Guarded because some production environments already have these
+    # columns out-of-band via an old startup self-heal pass while
+    # alembic_version stayed on an older revision -- see
+    # 20260612_audit_log_and_transaction_fk for the same pattern.
+    inspector = sa.inspect(op.get_bind())
     for table_name in TABLES:
-        op.add_column(table_name, sa.Column("deleted_at", sa.DateTime(), nullable=True))
-        op.add_column(table_name, sa.Column("deleted_by_user_id", sa.Integer(), nullable=True))
+        existing_columns = {c["name"] for c in inspector.get_columns(table_name)}
+        if "deleted_at" not in existing_columns:
+            op.add_column(table_name, sa.Column("deleted_at", sa.DateTime(), nullable=True))
+        if "deleted_by_user_id" not in existing_columns:
+            op.add_column(table_name, sa.Column("deleted_by_user_id", sa.Integer(), nullable=True))
 
 
 def downgrade() -> None:

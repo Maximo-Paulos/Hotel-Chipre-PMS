@@ -21,17 +21,21 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    inspector = sa.inspect(op.get_bind())
+    transactions_columns = {c["name"] for c in inspector.get_columns("transactions")}
     with op.batch_alter_table("transactions") as batch_op:
-        batch_op.add_column(sa.Column("idempotency_key", sa.String(length=100), nullable=True))
+        if "idempotency_key" not in transactions_columns:
+            batch_op.add_column(sa.Column("idempotency_key", sa.String(length=100), nullable=True))
 
-    op.create_index(
-        "uq_transactions_hotel_reservation_idempotency_key",
-        "transactions",
-        ["hotel_id", "reservation_id", "idempotency_key"],
-        unique=True,
-        postgresql_where=sa.text("idempotency_key IS NOT NULL"),
-        sqlite_where=sa.text("idempotency_key IS NOT NULL"),
-    )
+    if "uq_transactions_hotel_reservation_idempotency_key" not in {ix["name"] for ix in inspector.get_indexes("transactions")}:
+        op.create_index(
+            "uq_transactions_hotel_reservation_idempotency_key",
+            "transactions",
+            ["hotel_id", "reservation_id", "idempotency_key"],
+            unique=True,
+            postgresql_where=sa.text("idempotency_key IS NOT NULL"),
+            sqlite_where=sa.text("idempotency_key IS NOT NULL"),
+        )
 
 
 def downgrade() -> None:

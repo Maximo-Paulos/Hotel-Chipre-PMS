@@ -18,41 +18,65 @@ depends_on = None
 def upgrade() -> None:
     conn = op.get_bind()
     is_postgres = conn.dialect.name == "postgresql"
+    inspector = sa.inspect(conn)
 
     # ── 1. guest_tag_type_enum: add 3 new values (PostgreSQL ALTER TYPE) ──────
     if is_postgres:
         op.execute("ALTER TYPE guest_tag_type_enum ADD VALUE IF NOT EXISTS 'robo_cosas'")
         op.execute("ALTER TYPE guest_tag_type_enum ADD VALUE IF NOT EXISTS 'prohibido_alojar'")
         op.execute("ALTER TYPE guest_tag_type_enum ADD VALUE IF NOT EXISTS 'requiere_deposito'")
-        op.execute("CREATE TYPE room_block_reason_enum AS ENUM ("
-                   "'maintenance', 'deep_cleaning', 'owner_use', "
-                   "'vip_hold', 'overbooking_buffer', 'other')")
+        # Guarded (checkfirst=True instead of raw CREATE TYPE) because some
+        # production environments created this enum out-of-band via an old
+        # startup self-heal pass while alembic_version stayed on an older
+        # revision -- see 20260612_audit_log_and_transaction_fk.
+        postgresql.ENUM(
+            "maintenance", "deep_cleaning", "owner_use",
+            "vip_hold", "overbooking_buffer", "other",
+            name="room_block_reason_enum",
+        ).create(conn, checkfirst=True)
 
     # ── 2. guests: search indexes (v72 §2.4) ─────────────────────────────────
+    guests_indexes = {ix["name"] for ix in inspector.get_indexes("guests")}
     with op.batch_alter_table("guests") as batch_op:
-        batch_op.create_index("ix_guest_hotel_last_name", ["hotel_id", "last_name"])
-        batch_op.create_index("ix_guest_hotel_email", ["hotel_id", "email"])
-        batch_op.create_index("ix_guest_hotel_phone", ["hotel_id", "phone"])
-        batch_op.create_index("ix_guest_hotel_document_number", ["hotel_id", "document_number"])
+        if "ix_guest_hotel_last_name" not in guests_indexes:
+            batch_op.create_index("ix_guest_hotel_last_name", ["hotel_id", "last_name"])
+        if "ix_guest_hotel_email" not in guests_indexes:
+            batch_op.create_index("ix_guest_hotel_email", ["hotel_id", "email"])
+        if "ix_guest_hotel_phone" not in guests_indexes:
+            batch_op.create_index("ix_guest_hotel_phone", ["hotel_id", "phone"])
+        if "ix_guest_hotel_document_number" not in guests_indexes:
+            batch_op.create_index("ix_guest_hotel_document_number", ["hotel_id", "document_number"])
 
     # ── 3. reservations: OTA dedup constraint (v72 §10.1) ────────────────────
+    reservations_unique = {uc["name"] for uc in inspector.get_unique_constraints("reservations")}
     with op.batch_alter_table("reservations") as batch_op:
-        batch_op.create_unique_constraint(
-            "uq_reservation_ota_external_id",
-            ["hotel_id", "source_provider_code", "external_id"],
-        )
+        if "uq_reservation_ota_external_id" not in reservations_unique:
+            batch_op.create_unique_constraint(
+                "uq_reservation_ota_external_id",
+                ["hotel_id", "source_provider_code", "external_id"],
+            )
 
     # ── 4. companies: commercial fields (v72 §3.3-3.5) ───────────────────────
+    companies_columns = {c["name"] for c in inspector.get_columns("companies")}
     with op.batch_alter_table("companies") as batch_op:
-        batch_op.add_column(sa.Column("contact_name", sa.String(200), nullable=True))
-        batch_op.add_column(sa.Column("contact_email", sa.String(200), nullable=True))
-        batch_op.add_column(sa.Column("contact_phone", sa.String(50), nullable=True))
-        batch_op.add_column(sa.Column("administrative_contact", sa.String(200), nullable=True))
-        batch_op.add_column(sa.Column("base_price", sa.Numeric(12, 2), nullable=True))
-        batch_op.add_column(sa.Column("payment_deferred", sa.Boolean, nullable=False, server_default="0"))
-        batch_op.add_column(sa.Column("deferred_days", sa.Integer, nullable=True))
-        batch_op.add_column(sa.Column("requires_voucher", sa.Boolean, nullable=False, server_default="0"))
-        batch_op.add_column(sa.Column("requires_signature", sa.Boolean, nullable=False, server_default="0"))
+        if "contact_name" not in companies_columns:
+            batch_op.add_column(sa.Column("contact_name", sa.String(200), nullable=True))
+        if "contact_email" not in companies_columns:
+            batch_op.add_column(sa.Column("contact_email", sa.String(200), nullable=True))
+        if "contact_phone" not in companies_columns:
+            batch_op.add_column(sa.Column("contact_phone", sa.String(50), nullable=True))
+        if "administrative_contact" not in companies_columns:
+            batch_op.add_column(sa.Column("administrative_contact", sa.String(200), nullable=True))
+        if "base_price" not in companies_columns:
+            batch_op.add_column(sa.Column("base_price", sa.Numeric(12, 2), nullable=True))
+        if "payment_deferred" not in companies_columns:
+            batch_op.add_column(sa.Column("payment_deferred", sa.Boolean, nullable=False, server_default="0"))
+        if "deferred_days" not in companies_columns:
+            batch_op.add_column(sa.Column("deferred_days", sa.Integer, nullable=True))
+        if "requires_voucher" not in companies_columns:
+            batch_op.add_column(sa.Column("requires_voucher", sa.Boolean, nullable=False, server_default="0"))
+        if "requires_signature" not in companies_columns:
+            batch_op.add_column(sa.Column("requires_signature", sa.Boolean, nullable=False, server_default="0"))
 
     # ── 5. room_blocks (v72 §14) ──────────────────────────────────────────────
     reason_col = (
@@ -64,30 +88,34 @@ def upgrade() -> None:
         if is_postgres
         else sa.String(30)
     )
-    op.create_table(
-        "room_blocks",
-        sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
-        sa.Column("hotel_id", sa.Integer, sa.ForeignKey("hotel_configuration.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("room_id", sa.Integer, sa.ForeignKey("rooms.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("reason_code", reason_col, nullable=False, server_default="other"),
-        sa.Column("reason_note", sa.String(500), nullable=True),
-        sa.Column("starts_at", sa.Date, nullable=False),
-        sa.Column("ends_at", sa.Date, nullable=True),
-        sa.Column("is_indefinite", sa.Boolean, nullable=False, server_default="0"),
-        sa.Column("created_by_user_id", sa.Integer, sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
-        sa.Column("resolved_by_user_id", sa.Integer, sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
-        sa.Column("resolved_at", sa.DateTime, nullable=True),
-        sa.Column("created_at", sa.DateTime, nullable=False),
-        sa.Column("updated_at", sa.DateTime, nullable=False),
-        sa.CheckConstraint("ends_at IS NULL OR ends_at > starts_at", name="ck_room_block_dates"),
-        sa.CheckConstraint(
-            # Cross-dialect: SQLite stores booleans as integers; PG rejects boolean = integer
-            "(is_indefinite AND ends_at IS NULL) OR (NOT is_indefinite)",
-            name="ck_room_block_indefinite_consistency",
-        ),
-    )
-    op.create_index("ix_room_blocks_hotel_room", "room_blocks", ["hotel_id", "room_id"])
-    op.create_index("ix_room_blocks_hotel_dates", "room_blocks", ["hotel_id", "starts_at", "ends_at"])
+    if "room_blocks" not in inspector.get_table_names():
+        op.create_table(
+            "room_blocks",
+            sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
+            sa.Column("hotel_id", sa.Integer, sa.ForeignKey("hotel_configuration.id", ondelete="CASCADE"), nullable=False),
+            sa.Column("room_id", sa.Integer, sa.ForeignKey("rooms.id", ondelete="CASCADE"), nullable=False),
+            sa.Column("reason_code", reason_col, nullable=False, server_default="other"),
+            sa.Column("reason_note", sa.String(500), nullable=True),
+            sa.Column("starts_at", sa.Date, nullable=False),
+            sa.Column("ends_at", sa.Date, nullable=True),
+            sa.Column("is_indefinite", sa.Boolean, nullable=False, server_default="0"),
+            sa.Column("created_by_user_id", sa.Integer, sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
+            sa.Column("resolved_by_user_id", sa.Integer, sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
+            sa.Column("resolved_at", sa.DateTime, nullable=True),
+            sa.Column("created_at", sa.DateTime, nullable=False),
+            sa.Column("updated_at", sa.DateTime, nullable=False),
+            sa.CheckConstraint("ends_at IS NULL OR ends_at > starts_at", name="ck_room_block_dates"),
+            sa.CheckConstraint(
+                # Cross-dialect: SQLite stores booleans as integers; PG rejects boolean = integer
+                "(is_indefinite AND ends_at IS NULL) OR (NOT is_indefinite)",
+                name="ck_room_block_indefinite_consistency",
+            ),
+        )
+    room_blocks_indexes = {ix["name"] for ix in inspector.get_indexes("room_blocks")} if inspector.has_table("room_blocks") else set()
+    if "ix_room_blocks_hotel_room" not in room_blocks_indexes:
+        op.create_index("ix_room_blocks_hotel_room", "room_blocks", ["hotel_id", "room_id"])
+    if "ix_room_blocks_hotel_dates" not in room_blocks_indexes:
+        op.create_index("ix_room_blocks_hotel_dates", "room_blocks", ["hotel_id", "starts_at", "ends_at"])
 
 
 def downgrade() -> None:

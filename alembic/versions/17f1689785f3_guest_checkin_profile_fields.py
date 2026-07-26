@@ -17,11 +17,21 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    # Guarded because some production environments already have these
+    # columns out-of-band via an old startup self-heal pass while
+    # alembic_version stayed on an older revision -- see
+    # 20260612_audit_log_and_transaction_fk for the same pattern.
+    inspector = sa.inspect(op.get_bind())
+    guests_columns = {c["name"] for c in inspector.get_columns("guests")}
     with op.batch_alter_table("guests") as batch_op:
-        batch_op.add_column(sa.Column("birth_place", sa.String(length=120), nullable=True))
-        batch_op.add_column(sa.Column("birth_country", sa.String(length=80), nullable=True))
-        batch_op.add_column(sa.Column("marital_status", sa.String(length=40), nullable=True))
-        batch_op.add_column(sa.Column("occupation", sa.String(length=120), nullable=True))
+        if "birth_place" not in guests_columns:
+            batch_op.add_column(sa.Column("birth_place", sa.String(length=120), nullable=True))
+        if "birth_country" not in guests_columns:
+            batch_op.add_column(sa.Column("birth_country", sa.String(length=80), nullable=True))
+        if "marital_status" not in guests_columns:
+            batch_op.add_column(sa.Column("marital_status", sa.String(length=40), nullable=True))
+        if "occupation" not in guests_columns:
+            batch_op.add_column(sa.Column("occupation", sa.String(length=120), nullable=True))
 
 
 def downgrade() -> None:

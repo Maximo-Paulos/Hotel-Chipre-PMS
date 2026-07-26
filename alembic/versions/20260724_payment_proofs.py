@@ -17,60 +17,80 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.create_table(
-        "payment_proofs",
-        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column("hotel_id", sa.Integer(), nullable=False),
-        sa.Column("reservation_id", sa.Integer(), nullable=False),
-        sa.Column("transaction_id", sa.Integer(), nullable=True),
-        sa.Column("amount", sa.Numeric(12, 2), nullable=False),
-        sa.Column("currency", sa.String(length=3), nullable=False),
-        sa.Column("payment_method", sa.String(length=30), nullable=False),
-        sa.Column("status", sa.String(length=20), nullable=False),
-        sa.Column("storage_key", sa.String(length=255), nullable=False),
-        sa.Column("original_filename", sa.String(length=255), nullable=True),
-        sa.Column("content_type", sa.String(length=80), nullable=False),
-        sa.Column("file_size_bytes", sa.Integer(), nullable=False),
-        sa.Column("sha256_hex", sa.String(length=64), nullable=False),
-        sa.Column("submitted_by_user_id", sa.Integer(), nullable=True),
-        sa.Column("reviewed_by_user_id", sa.Integer(), nullable=True),
-        sa.Column("rejection_reason", sa.Text(), nullable=True),
-        sa.Column("created_at", sa.DateTime(), nullable=False),
-        sa.Column("reviewed_at", sa.DateTime(), nullable=True),
-        sa.CheckConstraint("amount > 0", name="ck_payment_proofs_amount_positive"),
-        sa.CheckConstraint("file_size_bytes > 0", name="ck_payment_proofs_file_size_positive"),
-        sa.CheckConstraint("payment_method = 'bank_transfer'", name="ck_payment_proofs_bank_transfer_only"),
-        sa.ForeignKeyConstraint(["hotel_id"], ["hotel_configuration.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["transaction_id"], ["transactions.id"], ondelete="SET NULL"),
-        sa.ForeignKeyConstraint(["submitted_by_user_id"], ["users.id"], ondelete="SET NULL"),
-        sa.ForeignKeyConstraint(["reviewed_by_user_id"], ["users.id"], ondelete="SET NULL"),
-        sa.ForeignKeyConstraint(
-            ["hotel_id", "reservation_id"],
-            ["reservations.hotel_id", "reservations.id"],
-            name="fk_payment_proofs_hotel_reservation",
-            ondelete="CASCADE",
-        ),
-        sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("transaction_id"),
-        sa.UniqueConstraint("storage_key"),
-        sa.UniqueConstraint("hotel_id", "sha256_hex", name="uq_payment_proofs_hotel_sha256"),
-    )
-    op.create_index("ix_payment_proofs_hotel_id", "payment_proofs", ["hotel_id"], unique=False)
-    op.create_index("ix_payment_proofs_reservation_id", "payment_proofs", ["reservation_id"], unique=False)
-    op.create_index("ix_payment_proofs_status", "payment_proofs", ["status"], unique=False)
-    op.create_index(
-        "ix_payment_proofs_hotel_reservation_status",
-        "payment_proofs",
-        ["hotel_id", "reservation_id", "status"],
-        unique=False,
-    )
+    # Guarded because some production environments already created this
+    # table out-of-band via an old startup self-heal pass while
+    # alembic_version stayed on an older revision -- see
+    # 20260612_audit_log_and_transaction_fk for the same pattern.
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
 
-    if op.get_bind().dialect.name == "postgresql":
+    if "payment_proofs" not in inspector.get_table_names():
+        op.create_table(
+            "payment_proofs",
+            sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
+            sa.Column("hotel_id", sa.Integer(), nullable=False),
+            sa.Column("reservation_id", sa.Integer(), nullable=False),
+            sa.Column("transaction_id", sa.Integer(), nullable=True),
+            sa.Column("amount", sa.Numeric(12, 2), nullable=False),
+            sa.Column("currency", sa.String(length=3), nullable=False),
+            sa.Column("payment_method", sa.String(length=30), nullable=False),
+            sa.Column("status", sa.String(length=20), nullable=False),
+            sa.Column("storage_key", sa.String(length=255), nullable=False),
+            sa.Column("original_filename", sa.String(length=255), nullable=True),
+            sa.Column("content_type", sa.String(length=80), nullable=False),
+            sa.Column("file_size_bytes", sa.Integer(), nullable=False),
+            sa.Column("sha256_hex", sa.String(length=64), nullable=False),
+            sa.Column("submitted_by_user_id", sa.Integer(), nullable=True),
+            sa.Column("reviewed_by_user_id", sa.Integer(), nullable=True),
+            sa.Column("rejection_reason", sa.Text(), nullable=True),
+            sa.Column("created_at", sa.DateTime(), nullable=False),
+            sa.Column("reviewed_at", sa.DateTime(), nullable=True),
+            sa.CheckConstraint("amount > 0", name="ck_payment_proofs_amount_positive"),
+            sa.CheckConstraint("file_size_bytes > 0", name="ck_payment_proofs_file_size_positive"),
+            sa.CheckConstraint("payment_method = 'bank_transfer'", name="ck_payment_proofs_bank_transfer_only"),
+            sa.ForeignKeyConstraint(["hotel_id"], ["hotel_configuration.id"], ondelete="CASCADE"),
+            sa.ForeignKeyConstraint(["transaction_id"], ["transactions.id"], ondelete="SET NULL"),
+            sa.ForeignKeyConstraint(["submitted_by_user_id"], ["users.id"], ondelete="SET NULL"),
+            sa.ForeignKeyConstraint(["reviewed_by_user_id"], ["users.id"], ondelete="SET NULL"),
+            sa.ForeignKeyConstraint(
+                ["hotel_id", "reservation_id"],
+                ["reservations.hotel_id", "reservations.id"],
+                name="fk_payment_proofs_hotel_reservation",
+                ondelete="CASCADE",
+            ),
+            sa.PrimaryKeyConstraint("id"),
+            sa.UniqueConstraint("transaction_id"),
+            sa.UniqueConstraint("storage_key"),
+            sa.UniqueConstraint("hotel_id", "sha256_hex", name="uq_payment_proofs_hotel_sha256"),
+        )
+    payment_proofs_indexes = {ix["name"] for ix in inspector.get_indexes("payment_proofs")} if inspector.has_table("payment_proofs") else set()
+    if "ix_payment_proofs_hotel_id" not in payment_proofs_indexes:
+        op.create_index("ix_payment_proofs_hotel_id", "payment_proofs", ["hotel_id"], unique=False)
+    if "ix_payment_proofs_reservation_id" not in payment_proofs_indexes:
+        op.create_index("ix_payment_proofs_reservation_id", "payment_proofs", ["reservation_id"], unique=False)
+    if "ix_payment_proofs_status" not in payment_proofs_indexes:
+        op.create_index("ix_payment_proofs_status", "payment_proofs", ["status"], unique=False)
+    if "ix_payment_proofs_hotel_reservation_status" not in payment_proofs_indexes:
+        op.create_index(
+            "ix_payment_proofs_hotel_reservation_status",
+            "payment_proofs",
+            ["hotel_id", "reservation_id", "status"],
+            unique=False,
+        )
+
+    if bind.dialect.name == "postgresql":
+        # ENABLE/FORCE ROW LEVEL SECURITY are idempotent (safe to re-run);
+        # CREATE POLICY is not, so guard it against pg_policies.
         op.execute('ALTER TABLE "payment_proofs" ENABLE ROW LEVEL SECURITY')
         op.execute('ALTER TABLE "payment_proofs" FORCE ROW LEVEL SECURITY')
-        op.execute('''CREATE POLICY "tenant_isolation_payment_proofs" ON "payment_proofs"
-            USING (hotel_id = NULLIF(current_setting('app.hotel_id', true), '')::integer)
-            WITH CHECK (hotel_id = NULLIF(current_setting('app.hotel_id', true), '')::integer)''')
+        policy_exists = bind.execute(sa.text(
+            "SELECT 1 FROM pg_policies WHERE tablename = 'payment_proofs' "
+            "AND policyname = 'tenant_isolation_payment_proofs'"
+        )).first()
+        if not policy_exists:
+            op.execute('''CREATE POLICY "tenant_isolation_payment_proofs" ON "payment_proofs"
+                USING (hotel_id = NULLIF(current_setting('app.hotel_id', true), '')::integer)
+                WITH CHECK (hotel_id = NULLIF(current_setting('app.hotel_id', true), '')::integer)''')
 
 
 def downgrade() -> None:

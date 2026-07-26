@@ -8,6 +8,7 @@ already-migrated PostgreSQL databases on the same contract.
 
 from typing import Sequence, Union
 
+import sqlalchemy as sa
 from alembic import op
 
 
@@ -44,16 +45,36 @@ def _repair_sqlite() -> None:
         )
 
 
+def _existing_enum_labels(bind, enum_name: str) -> set[str]:
+    rows = bind.execute(
+        sa.text(
+            "SELECT e.enumlabel FROM pg_enum e "
+            "JOIN pg_type t ON e.enumtypid = t.oid "
+            "WHERE t.typname = :enum_name"
+        ),
+        {"enum_name": enum_name},
+    )
+    return {row[0] for row in rows}
+
+
 def _rename_postgres_enum_values(
     enum_name: str,
     values: tuple[str, ...],
     *,
     restore_uppercase: bool = False,
 ) -> None:
+    # Guarded because some production environments already have these enums
+    # created directly from the current (already-lowercase) model values via
+    # an old startup self-heal pass -- in that case the uppercase source
+    # label this migration expects to rename from was never written, and
+    # RENAME VALUE on a nonexistent label raises InvalidParameterValue.
+    bind = op.get_bind()
+    existing_labels = _existing_enum_labels(bind, enum_name)
     for value in values:
         current = value if restore_uppercase else value.upper()
         target = value.upper() if restore_uppercase else value
-        op.execute(f'ALTER TYPE "{enum_name}" RENAME VALUE \'{current}\' TO \'{target}\'')
+        if current in existing_labels and target not in existing_labels:
+            op.execute(f'ALTER TYPE "{enum_name}" RENAME VALUE \'{current}\' TO \'{target}\'')
 
 
 def upgrade() -> None:

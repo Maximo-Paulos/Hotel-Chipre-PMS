@@ -24,79 +24,93 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.create_table(
-        "permissions",
-        sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
-        sa.Column("code", sa.String(length=100), nullable=False),
-        sa.Column("description", sa.String(length=255), nullable=False),
-        sa.UniqueConstraint("code", name="uq_permissions_code"),
-    )
+    # Guarded because some production environments already created these
+    # tables out-of-band via an old startup self-heal pass while
+    # alembic_version stayed on an older revision -- see
+    # 20260612_audit_log_and_transaction_fk for the same pattern.
+    inspector = sa.inspect(op.get_bind())
 
-    op.create_table(
-        "role_permission_defaults",
-        sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
-        sa.Column("role", sa.String(length=50), nullable=False),
-        sa.Column("permission_code", sa.String(length=100), nullable=False),
-        sa.Column("allowed", sa.Boolean(), nullable=False, server_default="0"),
-        sa.ForeignKeyConstraint(
-            ["permission_code"], ["permissions.code"],
-            name="fk_role_permission_defaults_permission_code_permissions",
-            ondelete="CASCADE",
-        ),
-        sa.UniqueConstraint("role", "permission_code", name="uq_role_permission_defaults_role_permission"),
-    )
+    if "permissions" not in inspector.get_table_names():
+        op.create_table(
+            "permissions",
+            sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
+            sa.Column("code", sa.String(length=100), nullable=False),
+            sa.Column("description", sa.String(length=255), nullable=False),
+            sa.UniqueConstraint("code", name="uq_permissions_code"),
+        )
 
-    op.create_table(
-        "hotel_permission_overrides",
-        sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
-        sa.Column("hotel_id", sa.Integer(), nullable=False),
-        sa.Column("role", sa.String(length=50), nullable=False),
-        sa.Column("permission_code", sa.String(length=100), nullable=False),
-        sa.Column("allowed", sa.Boolean(), nullable=False, server_default="0"),
-        sa.Column("updated_by_user_id", sa.Integer(), nullable=True),
-        sa.Column("updated_at", sa.DateTime(), nullable=False, server_default=sa.func.now()),
-        sa.ForeignKeyConstraint(
-            ["hotel_id"], ["hotel_configuration.id"],
-            name="fk_hotel_permission_overrides_hotel_id_hotel_configuration",
-            ondelete="CASCADE",
-        ),
-        sa.ForeignKeyConstraint(
-            ["permission_code"], ["permissions.code"],
-            name="fk_hotel_permission_overrides_permission_code_permissions",
-            ondelete="CASCADE",
-        ),
-        sa.ForeignKeyConstraint(
-            ["updated_by_user_id"], ["users.id"],
-            name="fk_hotel_permission_overrides_updated_by_user_id_users",
-            ondelete="SET NULL",
-        ),
-        sa.UniqueConstraint(
-            "hotel_id", "role", "permission_code",
-            name="uq_hotel_permission_overrides_hotel_role_permission",
-        ),
-    )
-    op.create_index(
-        "ix_hotel_permission_overrides_hotel_id", "hotel_permission_overrides", ["hotel_id"], unique=False
-    )
+    if "role_permission_defaults" not in inspector.get_table_names():
+        op.create_table(
+            "role_permission_defaults",
+            sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
+            sa.Column("role", sa.String(length=50), nullable=False),
+            sa.Column("permission_code", sa.String(length=100), nullable=False),
+            sa.Column("allowed", sa.Boolean(), nullable=False, server_default="0"),
+            sa.ForeignKeyConstraint(
+                ["permission_code"], ["permissions.code"],
+                name="fk_role_permission_defaults_permission_code_permissions",
+                ondelete="CASCADE",
+            ),
+            sa.UniqueConstraint("role", "permission_code", name="uq_role_permission_defaults_role_permission"),
+        )
 
-    op.create_table(
-        "security_audit_logs",
-        sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
-        sa.Column("hotel_id", sa.Integer(), nullable=False),
-        sa.Column("user_id", sa.Integer(), nullable=True),
-        sa.Column("action", sa.String(length=100), nullable=False),
-        sa.Column("resource_type", sa.String(length=100), nullable=True),
-        sa.Column("resource_id", sa.String(length=100), nullable=True),
-        sa.Column("details", sa.Text(), nullable=True),
-        sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.func.now()),
-        sa.ForeignKeyConstraint(
-            ["hotel_id"], ["hotel_configuration.id"],
-            name="fk_security_audit_logs_hotel_id_hotel_configuration",
-            ondelete="CASCADE",
-        ),
-    )
-    op.create_index("ix_security_audit_logs_hotel_created", "security_audit_logs", ["hotel_id", "created_at"])
-    op.create_index("ix_security_audit_logs_hotel_action", "security_audit_logs", ["hotel_id", "action"])
+    if "hotel_permission_overrides" not in inspector.get_table_names():
+        op.create_table(
+            "hotel_permission_overrides",
+            sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
+            sa.Column("hotel_id", sa.Integer(), nullable=False),
+            sa.Column("role", sa.String(length=50), nullable=False),
+            sa.Column("permission_code", sa.String(length=100), nullable=False),
+            sa.Column("allowed", sa.Boolean(), nullable=False, server_default="0"),
+            sa.Column("updated_by_user_id", sa.Integer(), nullable=True),
+            sa.Column("updated_at", sa.DateTime(), nullable=False, server_default=sa.func.now()),
+            sa.ForeignKeyConstraint(
+                ["hotel_id"], ["hotel_configuration.id"],
+                name="fk_hotel_permission_overrides_hotel_id_hotel_configuration",
+                ondelete="CASCADE",
+            ),
+            sa.ForeignKeyConstraint(
+                ["permission_code"], ["permissions.code"],
+                name="fk_hotel_permission_overrides_permission_code_permissions",
+                ondelete="CASCADE",
+            ),
+            sa.ForeignKeyConstraint(
+                ["updated_by_user_id"], ["users.id"],
+                name="fk_hotel_permission_overrides_updated_by_user_id_users",
+                ondelete="SET NULL",
+            ),
+            sa.UniqueConstraint(
+                "hotel_id", "role", "permission_code",
+                name="uq_hotel_permission_overrides_hotel_role_permission",
+            ),
+        )
+    if "ix_hotel_permission_overrides_hotel_id" not in ({ix["name"] for ix in inspector.get_indexes("hotel_permission_overrides")} if inspector.has_table("hotel_permission_overrides") else set()):
+        op.create_index(
+            "ix_hotel_permission_overrides_hotel_id", "hotel_permission_overrides", ["hotel_id"], unique=False
+        )
+
+    if "security_audit_logs" not in inspector.get_table_names():
+        op.create_table(
+            "security_audit_logs",
+            sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
+            sa.Column("hotel_id", sa.Integer(), nullable=False),
+            sa.Column("user_id", sa.Integer(), nullable=True),
+            sa.Column("action", sa.String(length=100), nullable=False),
+            sa.Column("resource_type", sa.String(length=100), nullable=True),
+            sa.Column("resource_id", sa.String(length=100), nullable=True),
+            sa.Column("details", sa.Text(), nullable=True),
+            sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.func.now()),
+            sa.ForeignKeyConstraint(
+                ["hotel_id"], ["hotel_configuration.id"],
+                name="fk_security_audit_logs_hotel_id_hotel_configuration",
+                ondelete="CASCADE",
+            ),
+        )
+    security_audit_logs_indexes = {ix["name"] for ix in inspector.get_indexes("security_audit_logs")} if inspector.has_table("security_audit_logs") else set()
+    if "ix_security_audit_logs_hotel_created" not in security_audit_logs_indexes:
+        op.create_index("ix_security_audit_logs_hotel_created", "security_audit_logs", ["hotel_id", "created_at"])
+    if "ix_security_audit_logs_hotel_action" not in security_audit_logs_indexes:
+        op.create_index("ix_security_audit_logs_hotel_action", "security_audit_logs", ["hotel_id", "action"])
 
 
 def downgrade() -> None:

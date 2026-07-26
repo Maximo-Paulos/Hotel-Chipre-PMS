@@ -18,10 +18,13 @@ depends_on = None
 
 
 def upgrade() -> None:
+    inspector = sa.inspect(op.get_bind())
+    reservations_columns = {c["name"] for c in inspector.get_columns("reservations")}
     with op.batch_alter_table("reservations") as batch_op:
-        batch_op.add_column(
-            sa.Column("version", sa.Integer(), nullable=False, server_default="0")
-        )
+        if "version" not in reservations_columns:
+            batch_op.add_column(
+                sa.Column("version", sa.Integer(), nullable=False, server_default="0")
+            )
 
 
 def downgrade() -> None:

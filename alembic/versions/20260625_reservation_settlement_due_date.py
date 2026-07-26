@@ -24,10 +24,16 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "reservations",
-        sa.Column("settlement_due_date", sa.Date(), nullable=True),
-    )
+    # Guarded because some production environments already have this column
+    # out-of-band via an old startup self-heal pass while alembic_version
+    # stayed on an older revision -- see
+    # 20260612_audit_log_and_transaction_fk for the same pattern.
+    inspector = sa.inspect(op.get_bind())
+    if "settlement_due_date" not in {c["name"] for c in inspector.get_columns("reservations")}:
+        op.add_column(
+            "reservations",
+            sa.Column("settlement_due_date", sa.Date(), nullable=True),
+        )
 
 
 def downgrade() -> None:

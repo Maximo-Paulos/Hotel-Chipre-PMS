@@ -14,6 +14,16 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def _add_successor_reference(dialect: str) -> None:
+    # Guarded because some production environments already have this column
+    # (and its unique constraint) out-of-band via an old startup self-heal
+    # pass while alembic_version stayed on an older revision -- see
+    # 20260612_audit_log_and_transaction_fk for the same pattern.
+    inspector = sa.inspect(op.get_bind())
+    has_column = "successor_session_id" in {c["name"] for c in inspector.get_columns("cash_close_reports")}
+    has_unique = "uq_cash_close_reports_successor_session" in {
+        uc["name"] for uc in inspector.get_unique_constraints("cash_close_reports")
+    }
+
     column = sa.Column(
         "successor_session_id",
         sa.Integer(),
@@ -25,12 +35,16 @@ def _add_successor_reference(dialect: str) -> None:
         nullable=True,
     )
     if dialect == "sqlite":
+        if has_column and has_unique:
+            return
         with op.batch_alter_table("cash_close_reports", recreate="always") as batch:
-            batch.add_column(column)
-            batch.create_unique_constraint(
-                "uq_cash_close_reports_successor_session",
-                ["successor_session_id"],
-            )
+            if not has_column:
+                batch.add_column(column)
+            if not has_unique:
+                batch.create_unique_constraint(
+                    "uq_cash_close_reports_successor_session",
+                    ["successor_session_id"],
+                )
         return
     # `op.add_column` with a Column whose ForeignKey has an explicit `name=`
     # already emits the FK constraint inline as part of ADD COLUMN on
@@ -39,12 +53,14 @@ def _add_successor_reference(dialect: str) -> None:
     # (confirmed by reproducing this migration against a from-scratch local
     # PostgreSQL 16 instance) -- SQLite's batch-recreate path never exercised
     # this, which is why it went unnoticed.
-    op.add_column("cash_close_reports", column)
-    op.create_unique_constraint(
-        "uq_cash_close_reports_successor_session",
-        "cash_close_reports",
-        ["successor_session_id"],
-    )
+    if not has_column:
+        op.add_column("cash_close_reports", column)
+    if not has_unique:
+        op.create_unique_constraint(
+            "uq_cash_close_reports_successor_session",
+            "cash_close_reports",
+            ["successor_session_id"],
+        )
 
 
 def _drop_successor_reference(dialect: str) -> None:
@@ -80,38 +96,49 @@ def upgrade() -> None:
     else:
         custody_status = sa.String(length=20)
 
-    op.create_table(
-        "cash_custody_handoffs",
-        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column("hotel_id", sa.Integer(), nullable=False),
-        sa.Column("close_report_id", sa.Integer(), nullable=False),
-        sa.Column("delivered_by_user_id", sa.Integer(), nullable=True),
-        sa.Column("received_by_user_id", sa.Integer(), nullable=True),
-        sa.Column("delivered_amount", sa.Numeric(12, 2), nullable=False),
-        sa.Column("status", custody_status, nullable=False, server_default="pending"),
-        sa.Column("delivered_at", sa.DateTime(), nullable=False),
-        sa.Column("received_at", sa.DateTime(), nullable=True),
-        sa.Column("notes", sa.Text(), nullable=True),
-        sa.CheckConstraint("delivered_amount >= 0", name="ck_cash_custody_delivered_nonneg"),
-        sa.ForeignKeyConstraint(["hotel_id"], ["hotel_configuration.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["close_report_id"], ["cash_close_reports.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["delivered_by_user_id"], ["users.id"], ondelete="SET NULL"),
-        sa.ForeignKeyConstraint(["received_by_user_id"], ["users.id"], ondelete="SET NULL"),
-        sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("close_report_id"),
-    )
-    op.create_index(
-        "ix_cash_custody_handoffs_hotel_status",
-        "cash_custody_handoffs",
-        ["hotel_id", "status"],
-    )
+    inspector = sa.inspect(op.get_bind())
+    if "cash_custody_handoffs" not in inspector.get_table_names():
+        op.create_table(
+            "cash_custody_handoffs",
+            sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
+            sa.Column("hotel_id", sa.Integer(), nullable=False),
+            sa.Column("close_report_id", sa.Integer(), nullable=False),
+            sa.Column("delivered_by_user_id", sa.Integer(), nullable=True),
+            sa.Column("received_by_user_id", sa.Integer(), nullable=True),
+            sa.Column("delivered_amount", sa.Numeric(12, 2), nullable=False),
+            sa.Column("status", custody_status, nullable=False, server_default="pending"),
+            sa.Column("delivered_at", sa.DateTime(), nullable=False),
+            sa.Column("received_at", sa.DateTime(), nullable=True),
+            sa.Column("notes", sa.Text(), nullable=True),
+            sa.CheckConstraint("delivered_amount >= 0", name="ck_cash_custody_delivered_nonneg"),
+            sa.ForeignKeyConstraint(["hotel_id"], ["hotel_configuration.id"], ondelete="CASCADE"),
+            sa.ForeignKeyConstraint(["close_report_id"], ["cash_close_reports.id"], ondelete="CASCADE"),
+            sa.ForeignKeyConstraint(["delivered_by_user_id"], ["users.id"], ondelete="SET NULL"),
+            sa.ForeignKeyConstraint(["received_by_user_id"], ["users.id"], ondelete="SET NULL"),
+            sa.PrimaryKeyConstraint("id"),
+            sa.UniqueConstraint("close_report_id"),
+        )
+    if "ix_cash_custody_handoffs_hotel_status" not in ({ix["name"] for ix in inspector.get_indexes("cash_custody_handoffs")} if inspector.has_table("cash_custody_handoffs") else set()):
+        op.create_index(
+            "ix_cash_custody_handoffs_hotel_status",
+            "cash_custody_handoffs",
+            ["hotel_id", "status"],
+        )
 
     if dialect == "postgresql":
+        bind = op.get_bind()
+        # ENABLE/FORCE ROW LEVEL SECURITY are idempotent (safe to re-run);
+        # CREATE POLICY is not, so guard it against pg_policies.
         op.execute('ALTER TABLE "cash_custody_handoffs" ENABLE ROW LEVEL SECURITY')
         op.execute('ALTER TABLE "cash_custody_handoffs" FORCE ROW LEVEL SECURITY')
-        op.execute('''CREATE POLICY "tenant_isolation_cash_custody_handoffs" ON "cash_custody_handoffs"
-            USING (hotel_id = NULLIF(current_setting('app.hotel_id', true), '')::integer)
-            WITH CHECK (hotel_id = NULLIF(current_setting('app.hotel_id', true), '')::integer)''')
+        policy_exists = bind.execute(sa.text(
+            "SELECT 1 FROM pg_policies WHERE tablename = 'cash_custody_handoffs' "
+            "AND policyname = 'tenant_isolation_cash_custody_handoffs'"
+        )).first()
+        if not policy_exists:
+            op.execute('''CREATE POLICY "tenant_isolation_cash_custody_handoffs" ON "cash_custody_handoffs"
+                USING (hotel_id = NULLIF(current_setting('app.hotel_id', true), '')::integer)
+                WITH CHECK (hotel_id = NULLIF(current_setting('app.hotel_id', true), '')::integer)''')
 
 
 def downgrade() -> None:
