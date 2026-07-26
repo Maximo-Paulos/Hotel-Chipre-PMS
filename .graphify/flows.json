@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-26T03:06:10.532Z",
+  "generatedAt": "2026-07-26T03:57:18.091Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -2386,6 +2386,28 @@
       "fileCount": 1,
       "files": [
         "app/services/analytics_warehouse.py"
+      ],
+      "criticality": 0.285,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_tenant_context_reapply_tenant_context_on_connection",
+      "name": "reapply_tenant_context_on_connection",
+      "entryPoint": "services_tenant_context_reapply_tenant_context_on_connection",
+      "entryPointId": "services_tenant_context_reapply_tenant_context_on_connection",
+      "path": [
+        "services_tenant_context_reapply_tenant_context_on_connection",
+        "services_tenant_context_apply_setting"
+      ],
+      "qualifiedPath": [
+        "services_tenant_context_reapply_tenant_context_on_connection",
+        "services_tenant_context_apply_setting"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/services/tenant_context.py"
       ],
       "criticality": 0.285,
       "warnings": []
@@ -15479,16 +15501,18 @@
       "entryPointId": "versions_20260725_repair_cash_handoff_schema_upgrade",
       "path": [
         "versions_20260725_repair_cash_handoff_schema_upgrade",
+        "versions_20260725_repair_cash_handoff_schema_add_constraint_if_missing",
         "versions_20260725_repair_cash_handoff_schema_has_fk",
         "versions_20260725_repair_cash_handoff_schema_has_unique"
       ],
       "qualifiedPath": [
         "versions_20260725_repair_cash_handoff_schema_upgrade",
+        "versions_20260725_repair_cash_handoff_schema_add_constraint_if_missing",
         "versions_20260725_repair_cash_handoff_schema_has_fk",
         "versions_20260725_repair_cash_handoff_schema_has_unique"
       ],
       "depth": 1,
-      "nodeCount": 3,
+      "nodeCount": 4,
       "fileCount": 1,
       "files": [
         "alembic/versions/20260725_repair_cash_handoff_schema.py"

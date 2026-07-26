@@ -10,6 +10,7 @@ from app.database import Base
 import app.models  # noqa
 from app.models.hotel_config import HotelConfiguration
 from app.dependencies.auth import AuthContext
+from app.services.permission_service import PERMISSION_CONFIG_MANAGE, resolve, set_override
 
 
 def get_db_override_target():
@@ -101,3 +102,55 @@ def test_config_rejects_invalid_timezone(ctx):
     client, db = ctx
     r = client.patch("/api/config/", json={"hotel_timezone": "Not/A_Real_Zone"})
     assert r.status_code == 422
+
+
+# C5: config:manage is a delegable permission (SettingsPermissionsPage), so
+# the /api/config endpoints must respect a role override, not just the
+# owner/co_owner base roles.
+
+
+def test_config_manage_permission_defaults(ctx):
+    client, db = ctx
+    assert resolve(db, 1, "owner", PERMISSION_CONFIG_MANAGE) is True
+    assert resolve(db, 1, "co_owner", PERMISSION_CONFIG_MANAGE) is True
+    assert resolve(db, 1, "manager", PERMISSION_CONFIG_MANAGE) is False
+    assert resolve(db, 1, "receptionist", PERMISSION_CONFIG_MANAGE) is False
+    assert resolve(db, 1, "housekeeping", PERMISSION_CONFIG_MANAGE) is False
+
+
+def _override_role(role: str):
+    def override_auth_context():
+        return AuthContext(
+            hotel_id=1,
+            user_id=2,
+            user_email=f"{role}@test.com",
+            user_role=role,
+            is_verified=True,
+            permissions=set(),
+        )
+
+    return override_auth_context
+
+
+def test_manager_without_config_manage_permission_is_denied(ctx):
+    client, db = ctx
+    fastapi_app.dependency_overrides[get_auth_context_target()] = _override_role("manager")
+
+    assert client.get("/api/config/").status_code == 403
+    assert client.patch("/api/config/", json={"receptionist_view_future_days": 5}).status_code == 403
+    assert client.get("/api/config/email/status").status_code == 403
+
+
+def test_manager_with_config_manage_override_can_access_without_base_role(ctx):
+    client, db = ctx
+    set_override(db, 1, "manager", PERMISSION_CONFIG_MANAGE, True, user_id=None)
+    fastapi_app.dependency_overrides[get_auth_context_target()] = _override_role("manager")
+
+    r = client.get("/api/config/")
+    assert r.status_code == 200
+
+    r = client.patch("/api/config/", json={"receptionist_view_future_days": 5})
+    assert r.status_code == 200
+    assert r.json()["receptionist_view_future_days"] == 5
+
+    assert client.get("/api/config/email/status").status_code == 200
