@@ -67,6 +67,9 @@ export const listLowStockItems = (session?: SessionLike) =>
 export const createStockItem = (payload: StockItemCreate, session?: SessionLike) =>
   apiFetch<StockItem>("/api/stock/items", { method: "POST", data: payload, session });
 
+export const deleteStockItem = (itemId: number, session?: SessionLike) =>
+  apiFetch<void>(`/api/stock/items/${itemId}`, { method: "DELETE", session });
+
 export const listStockLocations = (session?: SessionLike) =>
   apiFetch<StockLocation[]>("/api/stock/locations", { session });
 

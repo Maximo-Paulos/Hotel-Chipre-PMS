@@ -296,6 +296,7 @@ test("owner completes guided stock movements through the UI", async ({ page }) =
   await page.getByRole("button", { name: `Registrar ingreso de ${itemName}`, exact: true }).click();
   await expect(movementForm.getByRole("heading", { name: "Registrar Ingreso", exact: true })).toBeVisible();
   await movementForm.getByLabel("Item").selectOption({ label: itemName });
+  await movementForm.getByText("Opciones avanzadas", { exact: true }).click();
   await movementForm.getByLabel("Ubicacion").selectOption({ label: `Lencería ${suffix}` });
   await movementForm.getByLabel("Cantidad").fill("10");
   await movementForm.getByLabel("Motivo").fill("Compra inicial");
@@ -532,6 +533,7 @@ test("owner operates waitlist, housekeeping, laundry and daily reports", async (
 
   await page.getByRole("button", { name: `Registrar ingreso de ${stockItemName}`, exact: true }).click();
   const movementForm = page.locator("#stock-movement-form");
+  await movementForm.getByText("Opciones avanzadas", { exact: true }).click();
   await movementForm.getByLabel("Ubicacion").selectOption({ label: stockLocationName });
   await movementForm.getByLabel("Cantidad").fill("10");
   await movementForm.getByLabel("Motivo").fill("Stock inicial ropa blanca E2E");

@@ -52,6 +52,7 @@ test("housekeeping sends a laundry remito on a vendor set up by the owner", asyn
 
   await page.getByRole("button", { name: `Registrar ingreso de ${itemName}`, exact: true }).click();
   const movementForm = page.locator("#stock-movement-form");
+  await movementForm.getByText("Opciones avanzadas", { exact: true }).click();
   await movementForm.getByLabel("Ubicacion").selectOption({ label: locationName });
   await movementForm.getByLabel("Cantidad").fill("8");
   await movementForm.getByLabel("Motivo").fill("Stock inicial QA housekeeping");

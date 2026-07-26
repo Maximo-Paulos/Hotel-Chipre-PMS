@@ -5,6 +5,7 @@ import {
   createStockItem,
   createStockLocation,
   createStockMovement,
+  deleteStockItem,
   getCurrentStock,
   listLowStockItems,
   listStockMovements,
@@ -217,6 +218,24 @@ export function StockPage() {
     }
   });
 
+  const deleteItemMutation = useMutation({
+    mutationFn: (itemId: number) => deleteStockItem(itemId, session),
+    onSuccess: () => {
+      invalidateStock();
+      setMessage("Item eliminado.");
+    }
+  });
+
+  const handleDeleteItem = async (item: { id: number; name: string }) => {
+    if (!window.confirm(`¿Eliminar "${item.name}" del inventario? Esta acción no se puede deshacer.`)) return;
+    setMessage(null);
+    try {
+      await deleteItemMutation.mutateAsync(item.id);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "No se pudo eliminar el item.");
+    }
+  };
+
   const createLocationMutation = useMutation({
     mutationFn: () => createStockLocation({ name: locationForm.name }, session),
     onSuccess: () => {
@@ -350,6 +369,15 @@ export function StockPage() {
                       Registrar egreso
                     </button>
                   </div>
+                  <button
+                    type="button"
+                    aria-label={`Eliminar ${item.name}`}
+                    disabled={deleteItemMutation.isPending}
+                    className="mt-2 min-h-11 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-50 disabled:opacity-60"
+                    onClick={() => handleDeleteItem(item)}
+                  >
+                    Eliminar
+                  </button>
                 </div>
               );
             })}
@@ -452,21 +480,6 @@ export function StockPage() {
                 )}
               </div>
             )}
-            <label className="space-y-1 text-sm">
-              <span className="text-slate-600">Ubicacion</span>
-              <select
-                value={movementForm.location_id}
-                onChange={(event) => setMovementForm((current) => ({ ...current, location_id: event.target.value }))}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2"
-              >
-                <option value="">Sin ubicacion</option>
-                {locations.map((location) => (
-                  <option key={location.id} value={location.id}>
-                    {location.name}
-                  </option>
-                ))}
-              </select>
-            </label>
             <div>
               <label className="space-y-1 text-sm">
                 <span className="text-slate-600">Cantidad</span>
@@ -491,28 +504,53 @@ export function StockPage() {
                 className="w-full rounded-lg border border-slate-300 px-3 py-2"
               />
             </label>
-            <label className="space-y-1 text-sm">
-              <span className="text-slate-600">Reserva asociada (opcional)</span>
-              <input
-                value={reservationSearch}
-                onChange={(event) => setReservationSearch(event.target.value)}
-                placeholder="Buscar huésped o código"
-                className="w-full rounded-lg border border-slate-300 px-3 py-2"
-              />
-              <select
-                value={movementForm.reservation_id}
-                onChange={(event) => setMovementForm((current) => ({ ...current, reservation_id: event.target.value }))}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2"
-              >
-                <option value="">Sin reserva asociada</option>
-                {filteredReservations.map((reservation) => (
-                  <option key={reservation.id} value={reservation.id}>
-                    {reservationLabel(reservation)}
-                  </option>
-                ))}
-              </select>
-              {reservationsQuery.isFetching && <span className="text-xs text-slate-500">Buscando reservas...</span>}
-            </label>
+            {/* Ubicacion y reserva son opcionales en el backend para el caso comun
+                (insumos generales: se compra -> sube, se usa -> baja). Se ocultan
+                por default para no pesar como obligatorias; el caso puntual
+                (ej: minibar de una habitacion, o vincular a una estadia) sigue
+                disponible al abrir "Opciones avanzadas". */}
+            <details className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+              <summary className="cursor-pointer text-sm font-medium text-slate-600">Opciones avanzadas</summary>
+              <div className="mt-3 space-y-4">
+                <label className="space-y-1 text-sm">
+                  <span className="text-slate-600">Ubicacion</span>
+                  <select
+                    value={movementForm.location_id}
+                    onChange={(event) => setMovementForm((current) => ({ ...current, location_id: event.target.value }))}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                  >
+                    <option value="">Sin ubicacion</option>
+                    {locations.map((location) => (
+                      <option key={location.id} value={location.id}>
+                        {location.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="space-y-1 text-sm">
+                  <span className="text-slate-600">Reserva asociada (opcional)</span>
+                  <input
+                    value={reservationSearch}
+                    onChange={(event) => setReservationSearch(event.target.value)}
+                    placeholder="Buscar huésped o código"
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                  />
+                  <select
+                    value={movementForm.reservation_id}
+                    onChange={(event) => setMovementForm((current) => ({ ...current, reservation_id: event.target.value }))}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                  >
+                    <option value="">Sin reserva asociada</option>
+                    {filteredReservations.map((reservation) => (
+                      <option key={reservation.id} value={reservation.id}>
+                        {reservationLabel(reservation)}
+                      </option>
+                    ))}
+                  </select>
+                  {reservationsQuery.isFetching && <span className="text-xs text-slate-500">Buscando reservas...</span>}
+                </label>
+              </div>
+            </details>
             <button
               type="submit"
               disabled={createMovementMutation.isPending || willGoNegative}

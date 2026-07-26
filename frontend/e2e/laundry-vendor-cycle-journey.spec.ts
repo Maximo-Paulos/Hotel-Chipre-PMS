@@ -47,6 +47,11 @@ test("owner runs the full vendor/remito cycle: pricing, outbound, partial inboun
 
     await page.getByRole("button", { name: `Registrar ingreso de ${itemName}`, exact: true }).click();
     const movementForm = page.locator("#stock-movement-form");
+    // "Opciones avanzadas" is a native <details>: its open state persists across
+    // items in the same session, so only toggle it open on the first iteration.
+    if (!(await movementForm.getByLabel("Ubicacion").isVisible())) {
+      await movementForm.getByText("Opciones avanzadas", { exact: true }).click();
+    }
     await movementForm.getByLabel("Ubicacion").selectOption({ label: locationName });
     await movementForm.getByLabel("Cantidad").fill("10");
     await movementForm.getByLabel("Motivo").fill("Stock inicial QA cycle");

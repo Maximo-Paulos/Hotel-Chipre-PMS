@@ -105,10 +105,13 @@ test("owner runs the full inventory journey: item/location, movements, adjustmen
   const movementForm = page.locator("#stock-movement-form");
   const movementHistory = page.getByRole("region", { name: "Historial reciente", exact: true });
 
-  // --- Ingreso (item 2), con previsualizacion antes de confirmar (item 5) ---
+  // --- Camino rapido por default (D4 parte 1): item -> tipo -> cantidad -> confirmar,
+  // sin tocar "Opciones avanzadas". Ubicacion y reserva quedan colapsadas y no deben
+  // hacer falta para un movimiento simple (item 2, con previsualizacion, item 5).
+  const advancedOptionsToggle = movementForm.getByText("Opciones avanzadas", { exact: true });
   await page.getByRole("button", { name: `Registrar ingreso de ${itemName}`, exact: true }).click();
   await movementForm.getByLabel("Item").selectOption({ label: itemName });
-  await movementForm.getByLabel("Ubicacion").selectOption({ label: locationName });
+  await expect(movementForm.getByLabel("Ubicacion")).toBeHidden();
   await movementForm.getByLabel("Cantidad").fill("10");
   await movementForm.getByLabel("Motivo").fill("Compra inicial QA");
   await expect(movementForm.getByText("Resultado previsto:", { exact: false })).toContainText("10.00 unidad");
@@ -116,10 +119,14 @@ test("owner runs the full inventory journey: item/location, movements, adjustmen
   await expect(page.getByText("Movimiento registrado.", { exact: true })).toBeVisible();
   await expect(movementForm.getByText(/^(?:10|10\.00) unidad$/, { exact: true })).toBeVisible();
 
-  // --- Egreso (item 3) asociado a una reserva buscada por apellido (items 6 y 7) ---
+  // --- Egreso (item 3), abriendo "Opciones avanzadas" para vincular a una reserva
+  // buscada por apellido (items 6 y 7) -- confirma que el camino avanzado sigue
+  // disponible y funcional cuando se lo necesita.
   await page.getByRole("button", { name: `Registrar egreso de ${itemName}`, exact: true }).click();
   await movementForm.getByLabel("Cantidad").fill("4");
   await movementForm.getByLabel("Motivo").fill("Consumo huésped QA");
+  await advancedOptionsToggle.click();
+  await movementForm.getByLabel("Ubicacion").selectOption({ label: locationName });
   const reservationSearchInput = movementForm.getByPlaceholder("Buscar huésped o código");
   await reservationSearchInput.fill(guestLastName);
   const reservationSelect = movementForm.locator("select").filter({ hasText: "Sin reserva asociada" });
@@ -183,4 +190,16 @@ test("owner runs the full inventory journey: item/location, movements, adjustmen
     .locator("div.rounded-xl.border.border-slate-200.bg-white.p-4.shadow-sm")
     .filter({ hasText: itemName });
   await expect(itemCard.getByText("Bajo", { exact: true })).toBeVisible();
+
+  // --- Eliminar item (item 10, D4 parte 3): boton "Eliminar" pide confirmacion,
+  // mismo patron (window.confirm) que el resto de la app usa para acciones
+  // destructivas (ej: revertir movimientos de habitacion en ReservationsPage).
+  page.once("dialog", (dialog) => dialog.dismiss());
+  await itemCard.getByRole("button", { name: `Eliminar ${itemName}`, exact: true }).click();
+  await expect(page.getByRole("heading", { name: itemName, exact: true })).toBeVisible();
+
+  page.once("dialog", (dialog) => dialog.accept());
+  await itemCard.getByRole("button", { name: `Eliminar ${itemName}`, exact: true }).click();
+  await expect(page.getByText("Item eliminado.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: itemName, exact: true })).toHaveCount(0);
 });
