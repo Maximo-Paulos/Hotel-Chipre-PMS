@@ -107,28 +107,30 @@ for (const persona of personas) {
   });
 }
 
-// Creating a laundry batch requires owner/co_owner/manager (see require_roles on
-// POST /api/laundry/batches); housekeeping can only list batches, add items and
-// change status. The "Crear lote" form was shown to housekeeping regardless and
-// always failed on submit.
-test("housekeeping sees laundry batch status/item controls but not batch creation", async ({ page }) => {
+// D2 (Via D lavanderia): laundry:manage_vendors is owner/co_owner/manager
+// only (vendor setup + pricing); housekeeping only holds
+// laundry:operate_remitos (create/list remitos, see balance). The "Nuevo
+// lavadero" panel was shown to everyone regardless and its POST always
+// 403'd for housekeeping.
+test("housekeeping can create remitos but not manage laundry vendors", async ({ page }) => {
   const housekeeping = personas.find((persona) => persona.label === "housekeeping")!;
   await login(page, housekeeping);
   await page.goto("/operacion/lavanderia");
 
   const main = page.locator("main");
   await expect(main.getByRole("heading", { name: "Lavanderia", exact: true })).toBeVisible();
-  await expect(main.getByRole("button", { name: "Crear lote" })).toHaveCount(0);
+  await expect(main.getByRole("button", { name: "Crear lavadero" })).toHaveCount(0);
+  await expect(main.getByRole("button", { name: "Guardar remito" })).toBeVisible();
 });
 
-test("manager keeps laundry batch creation", async ({ page }) => {
+test("manager keeps laundry vendor management", async ({ page }) => {
   const manager = personas.find((persona) => persona.label === "manager")!;
   await login(page, manager);
   await page.goto("/operacion/lavanderia");
 
   const main = page.locator("main");
   await expect(main.getByRole("heading", { name: "Lavanderia", exact: true })).toBeVisible();
-  await expect(main.getByRole("button", { name: "Crear lote" })).toBeVisible();
+  await expect(main.getByRole("button", { name: "Crear lavadero" })).toBeVisible();
 });
 
 // PERMISSION_STOCK_ADJUST is owner/co_owner only; manager has PERMISSION_STOCK_OPERATE

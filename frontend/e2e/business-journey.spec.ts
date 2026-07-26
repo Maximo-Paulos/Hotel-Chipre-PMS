@@ -512,33 +512,64 @@ test("owner operates waitlist, housekeeping, laundry and daily reports", async (
   await housekeepingCard.locator("select").selectOption("cleaning");
   await expect(housekeepingCard).toContainText("Limpieza");
 
+  // D2 (Via D lavanderia): vendor + remito flow replaced the old
+  // LaundryBatch/LaundryItem lifecycle UI entirely (D0 confirmed no open
+  // batches in production). Create a vendor, give it a price, register an
+  // opening stock at a house location, then send an outbound remito and
+  // confirm it lands in the vendor balance.
+  await navigateFromShell(page, "/operacion/stock");
+  const stockLocationName = `Deposito blancos ${suffix}`;
+  const stockItemName = `Sabanas E2E ${suffix}`;
+  const locationForm = page.locator("form").filter({ hasText: "Nueva ubicacion" });
+  await locationForm.getByLabel("Nombre").fill(stockLocationName);
+  await locationForm.getByRole("button", { name: "Crear ubicacion", exact: true }).click();
+  await expect(page.getByText("Ubicacion creada.", { exact: true })).toBeVisible();
+
+  const itemForm = page.locator("form").filter({ hasText: "Alta de stock" });
+  await itemForm.getByLabel("Nombre").fill(stockItemName);
+  await itemForm.getByRole("button", { name: "Crear item", exact: true }).click();
+  await expect(page.getByRole("heading", { name: stockItemName, exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: `Registrar ingreso de ${stockItemName}`, exact: true }).click();
+  const movementForm = page.locator("#stock-movement-form");
+  await movementForm.getByLabel("Ubicacion").selectOption({ label: stockLocationName });
+  await movementForm.getByLabel("Cantidad").fill("10");
+  await movementForm.getByLabel("Motivo").fill("Stock inicial ropa blanca E2E");
+  await movementForm.getByRole("button", { name: "Registrar Ingreso", exact: true }).click();
+  await expect(page.getByText("Movimiento registrado.", { exact: true })).toBeVisible();
+
   await navigateFromShell(page, "/operacion/lavanderia");
-  const laundryBatchForm = page.locator("form").filter({ hasText: "Nuevo lote" });
-  await laundryBatchForm.getByLabel("Notas").fill(`Lote operativo ${suffix}`);
-  await laundryBatchForm.getByRole("button", { name: "Crear lote", exact: true }).click();
-  await expect(page.getByText("Lote de lavanderia creado.", { exact: true })).toBeVisible();
+  const vendorName = `Lavadero E2E ${suffix}`;
+  const vendorForm = page.locator("form").filter({ hasText: "Nuevo lavadero" });
+  await vendorForm.getByLabel("Nombre").fill(vendorName);
+  await vendorForm.getByRole("button", { name: "Crear lavadero", exact: true }).click();
+  await expect(page.getByText(`Lavadero "${vendorName}" creado.`, { exact: true })).toBeVisible();
 
-  const laundryDetail = page.locator("section").filter({ hasText: "Detalle" }).last();
-  const laundryItemForm = laundryDetail.locator("form");
-  await expect(laundryItemForm.getByLabel("Tipo de item")).toBeVisible();
-  await laundryItemForm.getByLabel("Tipo de item").fill("Sábanas E2E");
-  await laundryItemForm.getByLabel("Cantidad").fill("4");
-  await laundryItemForm.getByLabel("Habitacion").selectOption({ label: "Hab. 102" });
-  await laundryItemForm.getByRole("button", { name: "Agregar item", exact: true }).click();
-  await expect(page.getByText("Item agregado al lote.", { exact: true })).toBeVisible();
-  await expect(laundryDetail).toContainText("Sábanas E2E");
-  const laundryCard = page.getByRole("button").filter({ hasText: `Lote operativo ${suffix}` });
-  await expect(laundryCard).toContainText("Recolectado");
+  const priceForm = page.locator("form").filter({ hasText: "Guardar precio" });
+  await priceForm.getByLabel("Ítem").selectOption({ label: stockItemName });
+  await priceForm.getByLabel("Precio por unidad").fill("200");
+  await priceForm.getByRole("button", { name: "Guardar precio", exact: true }).click();
+  await expect(page.getByText("Precio guardado.", { exact: true })).toBeVisible();
 
-  for (const [nextLabel, confirmation] of [
-    ["Marcar Enviado", "Enviado"],
-    ["Marcar Recibido", "Recibido"],
-    ["Marcar Cerrado", "Cerrado"]
-  ] as const) {
-    await page.getByText(nextLabel, { exact: true }).click();
-    await expect(page.getByText("Estado de lavanderia actualizado.", { exact: true })).toBeVisible();
-    await expect(laundryCard).toContainText(confirmation);
-  }
+  const remitoForm = page.locator("form").filter({ hasText: "Nuevo remito" });
+  await remitoForm.getByRole("button", { name: "Salida (se lleva sucia)", exact: true }).click();
+  await remitoForm.getByLabel("Lavadero").selectOption({ label: vendorName });
+  await remitoForm.getByLabel("Ubicación casa (origen/destino en el hotel)").selectOption({ label: stockLocationName });
+  await remitoForm.getByLabel("N° de remito (papel)").fill(`R-${suffix}`);
+  const remitoLineForm = remitoForm.locator("div").filter({ hasText: "Líneas" }).last();
+  await remitoLineForm.getByLabel("Ítem").selectOption({ label: stockItemName });
+  await remitoLineForm.getByLabel("Cant.").fill("4");
+  await remitoLineForm.getByRole("button", { name: "Agregar línea", exact: true }).click();
+  await expect(remitoForm).toContainText(`${stockItemName} × 4`);
+  await expect(remitoForm.getByText(/Total estimado:\s*\$\s*800/)).toBeVisible();
+  await remitoForm.getByRole("button", { name: "Guardar remito", exact: true }).click();
+  await expect(page.getByText(`Remito R-${suffix} guardado.`, { exact: true })).toBeVisible();
+
+  const vendorBalance = page
+    .locator("div.rounded-lg.border.border-slate-200.bg-slate-50.p-3")
+    .filter({ hasText: vendorName });
+  await expect(vendorBalance).toContainText(stockItemName);
+  await expect(vendorBalance).toContainText("4");
 
   await navigateFromShell(page, "/reportes");
   await expect(page.getByRole("heading", { name: "Reportes", exact: true })).toBeVisible();
