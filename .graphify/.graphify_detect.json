@@ -314,6 +314,7 @@
       "frontend/e2e/business-journey.spec.ts",
       "frontend/e2e/guest-companion-journey.spec.ts",
       "frontend/e2e/guest-pagination.spec.ts",
+      "frontend/e2e/guest-search-typeahead.spec.ts",
       "frontend/e2e/housekeeping-laundry-journey.spec.ts",
       "frontend/e2e/integrations-status.spec.ts",
       "frontend/e2e/laundry-vendor-cycle-journey.spec.ts",
@@ -843,10 +844,10 @@
     ],
     "video": []
   },
-  "total_files": 834,
-  "total_words": 575951,
+  "total_files": 835,
+  "total_words": 577678,
   "needs_graph": true,
-  "warning": "Large corpus: 834 files · ~575,951 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
+  "warning": "Large corpus: 835 files · ~577,678 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
   "skipped_sensitive": [
     "alembic/versions/20260408_security_tokens.py",
     "alembic/versions/20260725_user_token_version.py",
@@ -861,7 +862,7 @@
   "graphifyignore_patterns": 60,
   "git": {
     "source_owner": "git",
-    "source_hash": "a5ee7bedf274b9797bdbfa74307582c4b3ff2608",
+    "source_hash": "194af4daf80fd4b3e539150a8a071b7a029fd386",
     "branches": [
       "claude/feature/pms-roles-housekeeping-qa",
       "codex/feature/agent-ops-knowledge",
@@ -869,7 +870,9 @@
       "codex/feature/trusted-qa-bootstrap",
       "codex/fix-render-postgres-enum-values",
       "main",
-      "worktree-agent-a945788514ece683f"
+      "worktree-agent-a945788514ece683f",
+      "worktree-agent-aa90c760fab5d7651",
+      "worktree-agent-accdf065d7f106429"
     ],
     "max_commits": 200,
     "active_within_days": 30
@@ -880,9 +883,9 @@
     "source": "cli",
     "root": ".",
     "git_root": ".",
-    "head": "a5ee7bedf274b9797bdbfa74307582c4b3ff2608",
+    "head": "194af4daf80fd4b3e539150a8a071b7a029fd386",
     "candidate_count": null,
-    "included_count": 834,
+    "included_count": 835,
     "excluded_untracked_count": 0,
     "excluded_ignored_count": 0,
     "excluded_sensitive_count": 9,

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-26T21:54:04.201Z",
+  "generatedAt": "2026-07-26T22:25:52.852Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -10616,6 +10616,28 @@
       "fileCount": 1,
       "files": [
         "frontend/src/components/RateCalendarGrid.tsx"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:components_guestquickcreatepanel_guestsummarycard",
+      "name": "GuestSummaryCard",
+      "entryPoint": "components_guestquickcreatepanel_guestsummarycard",
+      "entryPointId": "components_guestquickcreatepanel_guestsummarycard",
+      "path": [
+        "components_guestquickcreatepanel_guestsummarycard",
+        "components_guestquickcreatepanel_guestfullname"
+      ],
+      "qualifiedPath": [
+        "components_guestquickcreatepanel_guestsummarycard",
+        "components_guestquickcreatepanel_guestfullname"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/components/GuestQuickCreatePanel.tsx"
       ],
       "criticality": 0.16,
       "warnings": []
