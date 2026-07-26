@@ -34,9 +34,16 @@ def upgrade() -> None:
     # revision -- see 20260612_audit_log_and_transaction_fk for the same
     # pattern.
 
-    # Unique constraint on reservations so FK (hotel_id, id) works in payment tables
+    # Unique constraint on reservations so FK (hotel_id, id) works in payment tables.
+    # Some environments got this via 20260626_repair_reservation_unique_constraint's
+    # Postgres path, which creates it as a plain `CREATE UNIQUE INDEX` rather than a
+    # named constraint -- inspector.get_unique_constraints() only sees pg_constraint
+    # rows (contype='u'), not unique indexes, so that path is invisible to it. Check
+    # both, or a same-named ADD CONSTRAINT fails with DuplicateTable (confirmed
+    # against a real drifted PostgreSQL instance).
     reservations_unique = {uc["name"] for uc in inspector.get_unique_constraints("reservations")}
-    if "uq_reservation_hotel_id_id" not in reservations_unique:
+    reservations_indexes = {ix["name"] for ix in inspector.get_indexes("reservations")}
+    if "uq_reservation_hotel_id_id" not in reservations_unique | reservations_indexes:
         if dialect_name == "sqlite":
             with op.batch_alter_table("reservations", recreate="always") as batch_op:
                 batch_op.create_unique_constraint("uq_reservation_hotel_id_id", ["hotel_id", "id"])
