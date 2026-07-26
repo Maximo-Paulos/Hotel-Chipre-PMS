@@ -119,7 +119,7 @@ export function StockPage() {
   const stockQueries = useQueries({
     queries: items.map((item) => ({
       queryKey: ["stock-current", session.hotelId, item.id],
-      queryFn: () => getCurrentStock(item.id, session),
+      queryFn: () => getCurrentStock(item.id, {}, session),
       enabled,
       staleTime: 15 * 1000
     }))

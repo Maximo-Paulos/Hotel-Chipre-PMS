@@ -85,5 +85,11 @@ export const listStockMovements = (
   return apiFetch<StockMovement[]>(`/api/stock/movements?${params.toString()}`, { session });
 };
 
-export const getCurrentStock = (itemId: number, session?: SessionLike) =>
-  apiFetch<CurrentStock>(`/api/stock/items/${itemId}/current`, { session });
+export const getCurrentStock = (
+  itemId: number,
+  { locationId }: { locationId?: number } = {},
+  session?: SessionLike
+) => {
+  const query = locationId ? `?location_id=${locationId}` : "";
+  return apiFetch<CurrentStock>(`/api/stock/items/${itemId}/current${query}`, { session });
+};
