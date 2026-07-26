@@ -13,7 +13,7 @@ import { ApiError, hasValidSession } from "../api/client";
 import { useCrossTabSync } from "../sync/crossTabSync";
 
 import { HotelSelector } from "./HotelSelector";
-import { UserBadge } from "./UserBadge";
+import { UserBadge, roleLabels } from "./UserBadge";
 
 type NavItem = {
   label: string;
@@ -101,9 +101,18 @@ const ACTIVE_SUBSCRIPTION_STATUSES = ["active", "trialing", "demo", "comped"];
 export function AppShell() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { session } = useSession();
+  const { session, setRole } = useSession();
   const isLoggedIn = hasValidSession(session);
   const isVerified = Boolean(session.isVerified);
+  // C4: `role` here drives the "Cambiar vista" preview only (which nav items
+  // show, which /settings sub-routes redirect away) -- it has no security
+  // implication by itself: every route it reveals is a client-side link or
+  // redirect, and the backend independently authorizes every real request
+  // off `session.baseRole` via the JWT/HotelMembership, never off this
+  // value. Pages that gate an actual mutation or a sensitive data fetch
+  // (permissions matrix, API keys, WhatsApp secrets, stock adjustments,
+  // check-in override, inviting/revoking users) read `session.baseRole`
+  // instead -- see UserBadge/session.tsx and those pages' own comments.
   const role = session.role;
   const { reservationId: drawerReservationId, closeReservation } = useReservationDrawer();
 
@@ -177,6 +186,24 @@ export function AppShell() {
         <span className="text-slate-200">Hotel ID {session.hotelId ?? "-"}</span>
         <span className="min-w-0 break-all text-slate-200">Usuario {session.email || session.userId || "Sin sesion"}</span>
       </div>
+
+      {session.role && session.baseRole && session.role !== session.baseRole && (
+        <div
+          className="border-b border-sky-200 bg-sky-50 px-6 py-2 text-sm text-sky-900"
+          data-testid="viewing-as-banner"
+        >
+          Viendo como {roleLabels[session.role]} — es solo una previsualizacion, tus permisos reales siguen siendo
+          los de {roleLabels[session.baseRole]}.{" "}
+          <button
+            className="font-semibold underline"
+            onClick={() => setRole(session.baseRole ?? null)}
+            type="button"
+            data-testid="reset-role-btn"
+          >
+            Volver a mi rol
+          </button>
+        </div>
+      )}
 
       {(writeBlocked || inactiveSubscription) && (
         <div className="border-b border-amber-200 bg-amber-50 px-6 py-2 text-sm text-amber-900">

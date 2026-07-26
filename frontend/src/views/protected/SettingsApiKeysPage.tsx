@@ -36,7 +36,9 @@ export function SettingsApiKeysPage() {
   const [form, setForm] = useState<IssueHotelApiKeyPayload>(emptyForm);
   const [issuedKey, setIssuedKey] = useState<HotelApiKeyIssued | null>(null);
 
-  const canManage = ["owner", "co_owner"].includes(session.role ?? "");
+  // C4: reads baseRole -- gates fetching and issuing real API secrets. Must
+  // reflect the real user, not the "Cambiar vista" preview role.
+  const canManage = ["owner", "co_owner"].includes(session.baseRole ?? "");
   const keysQuery = useQuery({
     queryKey: ["api-keys", session.hotelId],
     enabled: hasValidSession(session) && canManage,

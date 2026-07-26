@@ -47,7 +47,10 @@ const getPermissionCodes = (data?: PermissionMatrixResponse) => {
 export function SettingsPermissionsPage() {
   const { session } = useSession();
   const qc = useQueryClient();
-  const canManage = ["owner", "co_owner"].includes(session.role ?? "");
+  // C4: reads baseRole -- this gates both the permission-matrix fetch and
+  // its edit UI, the most security-sensitive page in the app. Must reflect
+  // the real user, not the "Cambiar vista" preview role.
+  const canManage = ["owner", "co_owner"].includes(session.baseRole ?? "");
 
   const matrixQuery = useQuery({
     queryKey: ["permissions-matrix", session.hotelId],

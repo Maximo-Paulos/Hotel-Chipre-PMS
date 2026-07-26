@@ -74,7 +74,9 @@ export function StockPage() {
   // PERMISSION_STOCK_ADJUST is owner/co_owner only (see
   // _ensure_adjustment_permission in app/api/stock.py); manager only has
   // PERMISSION_STOCK_OPERATE (in/out movements).
-  const canAdjustStock = ["owner", "co_owner"].includes(session.role ?? "");
+  // C4: reads baseRole, not the "Cambiar vista" preview role -- this hides a
+  // real inventory-correcting action, so it must reflect the real user.
+  const canAdjustStock = ["owner", "co_owner"].includes(session.baseRole ?? "");
   const availableMovementModeOptions = useMemo(
     () => (canAdjustStock ? movementModeOptions : movementModeOptions.filter((option) => option.type !== "adjustment")),
     [canAdjustStock]

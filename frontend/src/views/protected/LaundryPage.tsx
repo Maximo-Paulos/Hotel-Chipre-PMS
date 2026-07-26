@@ -30,6 +30,10 @@ import { startOfCurrentMonthIso, startOfCurrentWeekIso, todayIso } from "../../u
 // "en el lavadero ahora" and "limpio disponible en el hotel" are both just
 // current_stock() narrowed to different location_id values -- see the two
 // panels near the bottom of this file.
+// C4: both take session.role (not baseRole) by design -- they only ever
+// hide buttons the backend would reject anyway (the page's own data fetches
+// are gated on hasValidSession only, not on these), so previewing "what a
+// housekeeping user sees here" via "Cambiar vista" is the switcher's job.
 const canManageVendors = (role: string | null) => ["owner", "co_owner", "manager"].includes(role ?? "");
 const canOperateRemitos = (role: string | null) =>
   ["owner", "co_owner", "manager", "housekeeping"].includes(role ?? "");

@@ -43,6 +43,10 @@ export function RoomsPage() {
   // (see require_roles in app/api/rooms.py and PERMISSION_ROOM_BLOCK). Reception
   // and housekeeping must see room state as read-only instead of controls that
   // always fail with a permission error.
+  // C4: intentionally reads session.role (not baseRole) -- these controls
+  // only ever hide a button the backend would reject anyway (no data fetch
+  // it gates), so letting an owner preview "what a receptionist sees here"
+  // via "Cambiar vista" is exactly the switcher's job, not a security gap.
   const canManageRooms = ["owner", "co_owner", "manager"].includes(session.role ?? "");
   const { roomsQuery, categoriesQuery, updateStatusMutation } = useRooms();
   const { blocksQuery, createBlockMutation, resolveBlockMutation } = useRoomBlocks();

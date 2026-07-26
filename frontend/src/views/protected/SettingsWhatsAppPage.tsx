@@ -23,7 +23,10 @@ export function SettingsWhatsAppPage() {
   });
   const [keyName, setKeyName] = useState("WhatsApp bot");
   const [issuedSecret, setIssuedSecret] = useState<string | null>(null);
-  const canManage = ["owner", "co_owner"].includes(session.role ?? "");
+  // C4: reads baseRole -- gates fetching real WhatsApp/webhook credentials
+  // and issuing bot API keys. Must reflect the real user, not the "Cambiar
+  // vista" preview role.
+  const canManage = ["owner", "co_owner"].includes(session.baseRole ?? "");
 
   const settingsQuery = useQuery({
     queryKey: ["whatsapp-settings", session.hotelId],

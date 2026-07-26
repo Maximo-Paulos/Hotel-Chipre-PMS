@@ -4,7 +4,9 @@ import { useNavigate } from "react-router-dom";
 import { normalizeRole, useSession } from "../state/session";
 import type { SessionState } from "../state/session";
 
-const roleLabels: Record<NonNullable<SessionState["role"]>, string> = {
+// Exported for AppShell's "Viendo como ..." banner so both places show the
+// same label for a given role instead of drifting apart.
+export const roleLabels: Record<NonNullable<SessionState["role"]>, string> = {
   owner: "Dueño",
   co_owner: "Co-dueño",
   manager: "Manager",

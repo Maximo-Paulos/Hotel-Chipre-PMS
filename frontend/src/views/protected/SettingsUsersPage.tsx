@@ -44,7 +44,10 @@ export function SettingsUsersPage() {
   const [inviteForm, setInviteForm] = useState<InvitePayload>({ email: "", role: "manager" });
   const [inviteLink, setInviteLink] = useState<string | null>(null);
 
-  const canManage = ["owner", "co_owner"].includes(session.role ?? "");
+  // C4: reads baseRole -- gates inviting/revoking hotel users and changing
+  // their roles, i.e. who can access this hotel account at all. Must
+  // reflect the real user, not the "Cambiar vista" preview role.
+  const canManage = ["owner", "co_owner"].includes(session.baseRole ?? "");
 
   if (!hasValidSession(session)) {
     return <p className="text-sm text-slate-600">Iniciá sesión con un hotel activo para administrar usuarios.</p>;

@@ -197,7 +197,11 @@ export function GuestsPage() {
 
   const activeTags = tagsQuery.data ?? quickProfileQuery.data?.active_tags ?? [];
   const hasProhibido = activeTags.some(isProhibidoTag);
-  const canOverrideProhibido = ["owner", "co_owner", "manager"].includes(session.role ?? "");
+  // C4: real permission gate (bypasses a legal/compliance block on check-in),
+  // reads baseRole -- not the "Cambiar vista" preview role -- so previewing
+  // as a lower role can't hide it from the real owner/manager, and a
+  // manipulated localStorage role can't reveal it to someone who isn't.
+  const canOverrideProhibido = ["owner", "co_owner", "manager"].includes(session.baseRole ?? "");
   const companions = selectedGuest?.companions ?? [];
   const lastStays = quickProfileQuery.data?.last_stays ?? [];
 
