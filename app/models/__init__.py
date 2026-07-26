@@ -84,6 +84,7 @@ from app.models.audit_log import AuditLog, AuditActionEnum
 from app.models.security_audit_log import SecurityAuditLog
 from app.models.permission import Permission, RolePermissionDefault, HotelPermissionOverride
 from app.models.laundry import LaundryBatch, LaundryItem
+from app.models.laundry_vendor import LaundryVendor, LaundryVendorPrice, LaundryRemito, LaundryRemitoLine
 from app.models.stock import StockItem, StockLocation, StockMovement
 from app.models.voucher import HotelVoucher, VoucherRedemption, VoucherStatusEnum
 from app.models.refund import RefundRequest, RefundPathEnum, RefundStatusEnum

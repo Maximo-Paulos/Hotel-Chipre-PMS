@@ -115,6 +115,13 @@ TENANT_TABLES: tuple[str, ...] = (
     "voucher_redemptions",
     "billing_adjustments",
     "payment_webhook_events",
+    # Added by 795e124adaad (after this baseline migration in the chain) --
+    # that migration owns enabling RLS for these, same pattern as
+    # payment_proof_blobs above.
+    "laundry_vendors",
+    "laundry_vendor_prices",
+    "laundry_remitos",
+    "laundry_remito_lines",
 )
 
 
