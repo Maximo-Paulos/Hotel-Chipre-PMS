@@ -1,10 +1,30 @@
-from pydantic import BaseModel, EmailStr, Field
+import email_validator
+from pydantic import BaseModel, Field, field_validator
+
+from app.config import is_test_mode
 
 
 class RegisterRequest(BaseModel):
-    email: EmailStr
+    email: str
     password: str = Field(min_length=6)
     role: str | None = "owner"
+
+    @field_validator("email")
+    @classmethod
+    def _validate_email(cls, value: str) -> str:
+        # Same syntax validation EmailStr uses (email-validator, no DNS
+        # deliverability check either way), except reserved test TLDs like
+        # ".test" are allowed only in pytest/E2E so synthetic addresses used
+        # by automated tests don't get rejected as "special-use" domains.
+        try:
+            validated = email_validator.validate_email(
+                value,
+                check_deliverability=False,
+                test_environment=is_test_mode(),
+            )
+        except email_validator.EmailNotValidError as exc:
+            raise ValueError(str(exc)) from exc
+        return validated.normalized
 
 
 class LoginRequest(BaseModel):

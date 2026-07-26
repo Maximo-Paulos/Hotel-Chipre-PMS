@@ -358,6 +358,43 @@ def test_register_rejects_malformed_email(client_and_db, monkeypatch):
     assert db.query(User).filter(User.email == "not-an-email-at-all").first() is None
 
 
+def test_register_rejects_reserved_test_tld_outside_test_mode(client_and_db, monkeypatch):
+    """".test" is an RFC 2606 reserved TLD email-validator blocks as
+    special-use by default (regardless of DNS deliverability checks, which
+    are already disabled here). Outside test mode this must stay rejected --
+    a real production signup with a garbage/reserved domain is not a valid
+    owner account."""
+    client, db, _session_factory = client_and_db
+    _configure_resend(monkeypatch, [])
+    monkeypatch.delenv("TESTING", raising=False)
+    monkeypatch.delenv("APP_ENV", raising=False)
+
+    response = client.post(
+        "/api/auth/register",
+        json={"email": "owner@example.test", "password": "Demo123!"},
+    )
+    assert response.status_code == 422, response.text
+    assert db.query(User).filter(User.email == "owner@example.test").first() is None
+
+
+def test_register_accepts_reserved_test_tld_in_test_mode(client_and_db, monkeypatch):
+    """The isolated Playwright E2E backend boots with APP_ENV=test and its
+    specs register synthetic owners like "qa-onboarding-<ts>@example.test".
+    email-validator has a `test_environment` flag made exactly for this (RFC
+    2606 reserved TLDs used in automated tests); registration must succeed
+    when APP_ENV=test without ever touching DNS/deliverability checks."""
+    client, db, _session_factory = client_and_db
+    _configure_resend(monkeypatch, [])
+    monkeypatch.setenv("APP_ENV", "test")
+
+    response = client.post(
+        "/api/auth/register",
+        json={"email": "owner@example.test", "password": "Demo123!"},
+    )
+    assert response.status_code == 201, response.text
+    assert db.query(User).filter(User.email == "owner@example.test").first() is not None
+
+
 def test_reset_password_revokes_previously_issued_tokens(client_and_db, fixed_code_patch, monkeypatch):
     """
     JWTs are stateless with no server-side blacklist, so a password reset -

@@ -197,6 +197,14 @@ def is_testing_mode() -> bool:
     return _normalized_env_value(os.getenv("TESTING")) in {"1", "true", "yes", "on"}
 
 
+def is_test_mode() -> bool:
+    """True for pytest (TESTING=1) and the isolated Playwright E2E backend
+    (APP_ENV=test, set by frontend/playwright.config.ts). Used only to allow
+    RFC 2606 reserved TLDs (.test, .invalid, .localhost, ...) in synthetic
+    email addresses during automated testing -- never in production."""
+    return is_testing_mode() or _normalized_env_value(os.getenv("APP_ENV")) == "test"
+
+
 def is_production_mode(settings: Settings | None = None) -> bool:
     runtime_settings = settings or get_settings()
     env = _normalized_env_value(runtime_settings.APP_ENV or os.getenv("ENVIRONMENT") or os.getenv("APP_ENV"))

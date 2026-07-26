@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-26T01:01:45.900Z",
+  "generatedAt": "2026-07-26T01:35:38.361Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -13353,20 +13353,22 @@
       "warnings": []
     },
     {
-      "id": "flow:app_config_is_testing_mode",
-      "name": "is_testing_mode",
-      "entryPoint": "app_config_is_testing_mode",
-      "entryPointId": "app_config_is_testing_mode",
+      "id": "flow:app_config_is_test_mode",
+      "name": "is_test_mode",
+      "entryPoint": "app_config_is_test_mode",
+      "entryPointId": "app_config_is_test_mode",
       "path": [
+        "app_config_is_test_mode",
         "app_config_is_testing_mode",
         "app_config_normalized_env_value"
       ],
       "qualifiedPath": [
+        "app_config_is_test_mode",
         "app_config_is_testing_mode",
         "app_config_normalized_env_value"
       ],
       "depth": 1,
-      "nodeCount": 2,
+      "nodeCount": 3,
       "fileCount": 1,
       "files": [
         "app/config.py"
