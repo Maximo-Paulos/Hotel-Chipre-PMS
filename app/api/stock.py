@@ -10,8 +10,9 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies.auth import AuthContext, require_permission
+from app.dependencies.auth import AuthContext, require_any_permission, require_permission
 from app.services.permission_service import (
+    PERMISSION_LAUNDRY_OPERATE_REMITOS,
     PERMISSION_STOCK_ADJUST,
     PERMISSION_STOCK_OPERATE,
     audit_permission_denied,
@@ -130,7 +131,11 @@ def create_item(
 @router.get("/items", response_model=list[StockItemRead])
 def list_items(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_OPERATE)),
+    # D2 (laundry vendors): a remito line picks a StockItem the same way it
+    # picks a StockLocation above -- same require_any_permission reasoning.
+    context: AuthContext = Depends(
+        require_any_permission(PERMISSION_STOCK_OPERATE, PERMISSION_LAUNDRY_OPERATE_REMITOS)
+    ),
 ):
     return list_stock_items(db, hotel_id=context.hotel_id)
 
@@ -205,7 +210,12 @@ def create_stock_location(
 @router.get("/locations", response_model=list[StockLocationRead])
 def list_stock_locations(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_OPERATE)),
+    # D2 (laundry vendors): housekeeping holds laundry:operate_remitos but not
+    # stock:operate, and still needs this list to pick a house StockLocation
+    # when filing a remito -- see frontend/src/views/protected/LaundryPage.tsx.
+    context: AuthContext = Depends(
+        require_any_permission(PERMISSION_STOCK_OPERATE, PERMISSION_LAUNDRY_OPERATE_REMITOS)
+    ),
 ):
     return list_locations(db, hotel_id=context.hotel_id)
 
@@ -292,11 +302,15 @@ def list_movements(
 @router.get("/items/{item_id}/current")
 def get_current_stock(
     item_id: int,
+    # Optional narrowing to one StockLocation -- e.g. D2 (laundry vendors)
+    # uses this to show "clean linen at the hotel" vs the hotel-wide total,
+    # which never changes for a transfer (see current_stock() docstring).
+    location_id: Optional[int] = None,
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_STOCK_OPERATE)),
 ):
     try:
-        quantity = current_stock(db, hotel_id=context.hotel_id, item_id=item_id)
+        quantity = current_stock(db, hotel_id=context.hotel_id, item_id=item_id, location_id=location_id)
     except StockError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     return {"item_id": item_id, "quantity": quantity}

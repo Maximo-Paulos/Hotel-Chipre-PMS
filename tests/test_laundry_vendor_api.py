@@ -111,6 +111,29 @@ def test_housekeeping_can_operate_remitos_but_not_manage_vendors():
         denied_vendor_create = client.post("/api/laundry/vendors", json={"name": "No deberia poder"})
         assert denied_vendor_create.status_code == 403
 
+        # D2: housekeeping has to pick a house StockLocation on the remito
+        # form, so GET /api/stock/locations must accept
+        # laundry:operate_remitos even without stock:operate (see
+        # require_any_permission in app/api/stock.py) -- it 403'd here before
+        # that fix, which stalled the remito form on a real hotel.
+        locations_read = client.get("/api/stock/locations")
+        assert locations_read.status_code == 200
+        # The vendor's own auto-created StockLocation ("Lavadero HK") is also
+        # listed here -- listing itself is not laundry-specific, only this
+        # test's assertion cares that the house location is reachable too.
+        assert house.id in [loc["id"] for loc in locations_read.json()]
+        # Write endpoints on the same router stay stock:operate-only.
+        denied_location_create = client.post("/api/stock/locations", json={"name": "No deberia poder"})
+        assert denied_location_create.status_code == 403
+
+        # Same reasoning for GET /api/stock/items (choosing the remito line's
+        # item).
+        items_read = client.get("/api/stock/items")
+        assert items_read.status_code == 200
+        assert item.id in [i["id"] for i in items_read.json()]
+        denied_item_create = client.post("/api/stock/items", json={"name": "No deberia poder", "unit": "unit"})
+        assert denied_item_create.status_code == 403
+
         remito_payload = {
             "vendor_id": vendor_id,
             "direction": "outbound",
@@ -132,6 +155,19 @@ def test_housekeeping_can_operate_remitos_but_not_manage_vendors():
         # Spend is a financial report gated by manage_vendors, not operate_remitos.
         spend_denied = client.get(f"/api/laundry/vendors/{vendor_id}/spend")
         assert spend_denied.status_code == 403
+
+        # D2's "limpio disponible en el hotel" view narrows GET .../current by
+        # location_id (stock:operate, not a laundry permission -- switch back
+        # to owner). The 10 units moved in at the house dropped to 6 there (4
+        # went "out" to the vendor via the remito above), while the
+        # hotel-wide total (no location_id) still shows the unmoved 10 -- a
+        # transfer nets to zero hotel-wide.
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner", user_id=1)
+        house_current = client.get(f"/api/stock/items/{item.id}/current?location_id={house.id}")
+        assert house_current.status_code == 200
+        assert Decimal(str(house_current.json()["quantity"])) == Decimal("6.00")
+        hotel_wide_current = client.get(f"/api/stock/items/{item.id}/current")
+        assert Decimal(str(hotel_wide_current.json()["quantity"])) == Decimal("10.00")
     finally:
         _teardown(db, engine)
 

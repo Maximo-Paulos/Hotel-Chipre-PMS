@@ -182,6 +182,42 @@ def require_permission(permission: str):
     return dependency
 
 
+def require_any_permission(*permissions: str):
+    """
+    Like require_permission, but grants access if the caller holds ANY one of
+    the given permissions -- for a resource genuinely shared by two otherwise
+    separate capabilities (e.g. GET /api/stock/locations: needed by both
+    stock:operate, general inventory, and laundry:operate_remitos, picking a
+    house StockLocation for a remito). Audits a denial once, against the
+    first permission in the list, so the log still points at the intended
+    primary capability.
+    """
+
+    def dependency(
+        db: Session = Depends(get_db),
+        context: AuthContext = Depends(get_auth_context),
+    ) -> AuthContext:
+        from app.services.permission_service import audit_permission_denied, resolve
+
+        perms = context.permissions or set()
+        perms.update(permissions)
+        context.permissions = perms
+        if not context.is_verified:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Verifica tu email para usar el sistema")
+        if not any(resolve(db, context.hotel_id, context.user_role, permission) for permission in permissions):
+            audit_permission_denied(
+                db,
+                hotel_id=context.hotel_id,
+                user_id=context.user_id,
+                role=context.user_role,
+                permission_code=permissions[0],
+            )
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tenes permisos para esta accion")
+        return context
+
+    return dependency
+
+
 def require_roles(*roles: str):
     """
     Dependency to enforce that the current user has one of the allowed roles in the current hotel.
