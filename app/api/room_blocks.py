@@ -7,7 +7,10 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.dependencies.auth import AuthContext, get_auth_context, require_permission
 from app.models.room_block import RoomBlockReasonEnum
-from app.services.permission_service import PERMISSION_ROOM_BLOCK
+from app.services.permission_service import (
+    PERMISSION_ROOM_BLOCK_CREATE,
+    PERMISSION_ROOM_BLOCK_RELEASE,
+)
 from app.services.room_block_service import (
     ProtectedReservationConflictError,
     RoomBlockError,
@@ -51,7 +54,7 @@ class RoomBlockRead(BaseModel):
 def create_room_block(
     data: RoomBlockCreate,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_ROOM_BLOCK)),
+    context: AuthContext = Depends(require_permission(PERMISSION_ROOM_BLOCK_CREATE)),
 ):
     try:
         block = create_block(
@@ -106,7 +109,7 @@ def get_room_block(
 def resolve_room_block(
     block_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_ROOM_BLOCK)),
+    context: AuthContext = Depends(require_permission(PERMISSION_ROOM_BLOCK_RELEASE)),
 ):
     try:
         block = resolve_block(

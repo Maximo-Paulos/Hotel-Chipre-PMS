@@ -100,11 +100,20 @@ def _seed_room(db, hotel_id: int = 1) -> Room:
 
 
 def test_room_block_permission_defaults(db):
-    assert resolve(db, 1, "owner", "room:block") is True
-    assert resolve(db, 1, "co_owner", "room:block") is True
-    assert resolve(db, 1, "manager", "room:block") is True
-    assert resolve(db, 1, "receptionist", "room:block") is False
-    assert resolve(db, 1, "housekeeping", "room:block") is False
+    # room_blocks.py gates create/release separately (room_block:create /
+    # room_block:release) -- receptionist may create a block but not release
+    # one by default, matching BRM §14.1's intent that front-desk can take a
+    # room out of service but only a manager+ clears it back in.
+    assert resolve(db, 1, "owner", "room_block:create") is True
+    assert resolve(db, 1, "owner", "room_block:release") is True
+    assert resolve(db, 1, "co_owner", "room_block:create") is True
+    assert resolve(db, 1, "co_owner", "room_block:release") is True
+    assert resolve(db, 1, "manager", "room_block:create") is True
+    assert resolve(db, 1, "manager", "room_block:release") is True
+    assert resolve(db, 1, "receptionist", "room_block:create") is True
+    assert resolve(db, 1, "receptionist", "room_block:release") is False
+    assert resolve(db, 1, "housekeeping", "room_block:create") is False
+    assert resolve(db, 1, "housekeeping", "room_block:release") is False
 
 
 def test_create_and_resolve_room_block_api(client):
@@ -138,10 +147,31 @@ def test_create_and_resolve_room_block_api(client):
     assert resolve_response.json()["resolved_by_user_id"] == 123
 
 
-def test_receptionist_cannot_create_room_block_by_default(client):
+def test_receptionist_can_create_but_not_release_room_block_by_default(client):
     test_client, db, app = client
     room = _seed_room(db, hotel_id=1)
     app.dependency_overrides[get_auth_context] = _override_auth(1, "receptionist")
+
+    create_response = test_client.post(
+        "/api/room-blocks/",
+        json={
+            "room_id": room.id,
+            "starts_at": "2026-07-01",
+            "ends_at": "2026-07-05",
+            "reason_code": "maintenance",
+        },
+    )
+    assert create_response.status_code == 201
+    block_id = create_response.json()["id"]
+
+    release_response = test_client.post(f"/api/room-blocks/{block_id}/resolve")
+    assert release_response.status_code == 403
+
+
+def test_housekeeping_cannot_create_room_block_by_default(client):
+    test_client, db, app = client
+    room = _seed_room(db, hotel_id=1)
+    app.dependency_overrides[get_auth_context] = _override_auth(1, "housekeeping")
 
     response = test_client.post(
         "/api/room-blocks/",

@@ -28,7 +28,6 @@ const permissionLabels: Record<string, string> = {
   "reservation:create": "Crear reservas",
   "reservation:room_move": "Mover reservas",
   "checkin:perform": "Check-in",
-  "room:block": "Bloquear habitaciones",
   "company:manage": "Companies",
   "cash:operate": "Operar caja",
   "cash:approve_difference": "Aprobar diferencias",

@@ -62,7 +62,6 @@ PERMISSION_RESERVATION_CHARGE = "reservation:charge"
 PERMISSION_RESERVATION_ROOM_MOVE = "reservation:room_move"
 PERMISSION_RESERVATION_MANUAL_RATE = "reservation:manual_rate"
 PERMISSION_CHECKIN_PERFORM = "checkin:perform"
-PERMISSION_ROOM_BLOCK = "room:block"
 PERMISSION_ROOM_BLOCK_CREATE = "room_block:create"
 PERMISSION_ROOM_BLOCK_RELEASE = "room_block:release"
 PERMISSION_COMPANY_MANAGE = "company:manage"
@@ -91,7 +90,6 @@ PERMISSION_DEFINITIONS: dict[str, str] = {
     PERMISSION_RESERVATION_ROOM_MOVE: "Move reservations between rooms",
     PERMISSION_RESERVATION_MANUAL_RATE: "Set a manual rate that overrides the automatic Tarifas quote on a new reservation",
     PERMISSION_CHECKIN_PERFORM: "Perform guest check-in",
-    PERMISSION_ROOM_BLOCK: "Create and resolve room blocks",
     PERMISSION_ROOM_BLOCK_CREATE: "Create room blocks (BRM §14.1)",
     PERMISSION_ROOM_BLOCK_RELEASE: "Release/resolve room blocks (BRM §14.1)",
     PERMISSION_COMPANY_MANAGE: "Manage companies and company reservation documents",
@@ -120,7 +118,6 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
         PERMISSION_RESERVATION_ROOM_MOVE: True,
         PERMISSION_RESERVATION_MANUAL_RATE: False,
         PERMISSION_CHECKIN_PERFORM: True,
-        PERMISSION_ROOM_BLOCK: True,
         PERMISSION_ROOM_BLOCK_CREATE: True,
         PERMISSION_ROOM_BLOCK_RELEASE: True,
         PERMISSION_COMPANY_MANAGE: True,
@@ -145,7 +142,6 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
         PERMISSION_RESERVATION_ROOM_MOVE: False,
         PERMISSION_RESERVATION_MANUAL_RATE: False,
         PERMISSION_CHECKIN_PERFORM: True,
-        PERMISSION_ROOM_BLOCK: False,
         PERMISSION_ROOM_BLOCK_CREATE: True,
         PERMISSION_ROOM_BLOCK_RELEASE: False,
         PERMISSION_COMPANY_MANAGE: False,
@@ -167,7 +163,6 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
         PERMISSION_RESERVATION_CHARGE: False,
         PERMISSION_RESERVATION_ROOM_MOVE: False,
         PERMISSION_CHECKIN_PERFORM: False,
-        PERMISSION_ROOM_BLOCK: False,
         PERMISSION_ROOM_BLOCK_CREATE: False,
         PERMISSION_ROOM_BLOCK_RELEASE: False,
         PERMISSION_COMPANY_MANAGE: False,
