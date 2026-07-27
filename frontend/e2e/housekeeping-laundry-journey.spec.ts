@@ -39,19 +39,28 @@ test("housekeeping sends a laundry remito on a vendor set up by the owner", asyn
 
   await login(page, owner);
 
+  // D (stock/lavanderia separation): ropa blanca ahora se da de alta desde
+  // LaundryPage ("Nuevo tipo de ropa blanca"), no desde el formulario
+  // generico de StockPage (que crea kind="supply").
+  await page.goto("/operacion/lavanderia");
+  const linenItemForm = page.locator("form").filter({ hasText: "Nuevo tipo de ropa blanca" });
+  await linenItemForm.getByLabel("Nombre").fill(itemName);
+  await linenItemForm.getByRole("button", { name: "Crear tipo de ropa blanca", exact: true }).click();
+  await expect(page.getByText("Tipo de ropa blanca creado.", { exact: true })).toBeVisible();
+
   await page.goto("/operacion/stock");
   const locationForm = page.locator("form").filter({ hasText: "Nueva ubicacion" });
   await locationForm.getByLabel("Nombre").fill(locationName);
   await locationForm.getByRole("button", { name: "Crear ubicacion", exact: true }).click();
   await expect(page.getByText("Ubicacion creada.", { exact: true })).toBeVisible();
 
-  const itemForm = page.locator("form").filter({ hasText: "Alta de stock" });
-  await itemForm.getByLabel("Nombre").fill(itemName);
-  await itemForm.getByRole("button", { name: "Crear item", exact: true }).click();
-  await expect(page.getByRole("heading", { name: itemName, exact: true })).toBeVisible();
-
-  await page.getByRole("button", { name: `Registrar ingreso de ${itemName}`, exact: true }).click();
+  // "Registrar movimiento" sigue operando sobre cualquier item (ambos
+  // kinds) -- es la unica forma de cargar un saldo inicial de ropa blanca
+  // que no pasa todavia por ningun remito. La ropa blanca no aparece en la
+  // grilla de items (solo insumos "supply"), asi que se elige desde el
+  // desplegable del formulario de movimiento en vez del atajo por tarjeta.
   const movementForm = page.locator("#stock-movement-form");
+  await movementForm.getByLabel("Item").selectOption({ label: itemName });
   await movementForm.getByText("Opciones avanzadas", { exact: true }).click();
   await movementForm.getByLabel("Ubicacion").selectOption({ label: locationName });
   await movementForm.getByLabel("Cantidad").fill("8");

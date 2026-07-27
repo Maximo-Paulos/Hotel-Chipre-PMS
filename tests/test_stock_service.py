@@ -8,6 +8,7 @@ from app.services.stock_service import (
     create_location,
     create_stock_item,
     current_stock,
+    delete_stock_item,
     list_stock_movements,
     list_stock_items,
     low_stock_items,
@@ -359,3 +360,56 @@ def test_low_stock_items_are_hotel_scoped(db):
 
     assert [stock_item.id for stock_item in low_stock_items(db, hotel_id=1)] == [item.id]
     assert low_stock_items(db, hotel_id=2) == []
+
+
+def test_stock_item_name_can_be_reused_after_delete(db):
+    """Owner-reported bug: deleting an item ("producto que ya no se usa") is
+    a soft delete, so a plain per-hotel unique-name constraint kept the name
+    reserved forever. Recreating a replacement item under the same name
+    ("producto que cambio") must succeed, not raise an unhandled 500."""
+    _seed_hotels(db)
+    item = create_stock_item(db, hotel_id=1, name="Detergente", unit="unidad")
+    db.commit()
+
+    delete_stock_item(db, hotel_id=1, item_id=item.id)
+    db.commit()
+
+    replacement = create_stock_item(db, hotel_id=1, name="Detergente", unit="unidad")
+    db.commit()
+
+    assert replacement.id != item.id
+    assert [stock_item.id for stock_item in list_stock_items(db, hotel_id=1)] == [replacement.id]
+
+
+def test_stock_item_active_duplicate_name_raises_clean_error(db):
+    """A real (non-deleted) duplicate must still be rejected -- with a clean
+    StockError, not a raw IntegrityError leaking out as a 500."""
+    _seed_hotels(db)
+    create_stock_item(db, hotel_id=1, name="Detergente", unit="unidad")
+    db.commit()
+
+    with pytest.raises(StockError, match="Detergente"):
+        create_stock_item(db, hotel_id=1, name="Detergente", unit="unidad")
+
+    # The session must still be usable after the failed insert (SAVEPOINT
+    # rollback, not a whole-transaction rollback).
+    assert len(list_stock_items(db, hotel_id=1)) == 1
+
+
+def test_stock_item_kind_defaults_to_supply_and_filters(db):
+    """D (stock/lavanderia separation): StockPage only ever wants
+    kind='supply' (bolsas, detergentes, jabon); LaundryPage only wants
+    kind='linen' (ropa blanca)."""
+    _seed_hotels(db)
+    supply = create_stock_item(db, hotel_id=1, name="Bolsas de residuos", unit="unidad")
+    linen = create_stock_item(db, hotel_id=1, name="Sabanas", unit="unidad", kind="linen")
+    db.commit()
+
+    assert supply.kind == "supply"
+    assert linen.kind == "linen"
+    assert [i.id for i in list_stock_items(db, hotel_id=1, kind="supply")] == [supply.id]
+    assert [i.id for i in list_stock_items(db, hotel_id=1, kind="linen")] == [linen.id]
+    assert {i.id for i in list_stock_items(db, hotel_id=1)} == {supply.id, linen.id}
+
+    with pytest.raises(StockError):
+        create_stock_item(db, hotel_id=1, name="Invalido", unit="unidad", kind="not-a-kind")

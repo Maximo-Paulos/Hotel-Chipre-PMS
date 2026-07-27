@@ -1,9 +1,9 @@
 # Alembic head
 
-Generado: 2026-07-23T14:36:55.258883+00:00
-Commit: `d25c542`
+Generado: 2026-07-27T23:25:15.526663+00:00
+Commit: `531bfbf`
 
 ```text
-20260626_repair_reservation_unique_constraint (head)
+20260727_stock_kind_fix (head)
 ```
 Fuente: `alembic.ini` y `alembic/versions/`.

@@ -4,6 +4,11 @@ export type StockMovementType = "in" | "out" | "adjustment" | "adjustment_out";
 
 export type DecimalValue = string | number;
 
+// "supply" (insumo general: bolsas, detergentes, jabon -- StockPage) vs
+// "linen" (ropa blanca de lavanderia -- LaundryPage). Same StockItem table,
+// filtered by which page asks for it -- see GET /api/stock/items?kind=.
+export type StockItemKind = "supply" | "linen";
+
 export type StockItem = {
   id: number;
   hotel_id: number;
@@ -12,6 +17,7 @@ export type StockItem = {
   unit: string;
   min_quantity?: DecimalValue | null;
   active: boolean;
+  kind: StockItemKind;
 };
 
 export type StockLocation = {
@@ -39,6 +45,9 @@ export type StockItemCreate = {
   unit: string;
   min_quantity?: DecimalValue | null;
   active?: boolean;
+  // Omit on StockPage (defaults to "supply" server-side); LaundryPage's own
+  // item form always sends "linen" explicitly.
+  kind?: StockItemKind;
 };
 
 export type StockLocationCreate = {
@@ -80,7 +89,13 @@ export type StockConsumptionReport = {
   items: StockConsumptionItem[];
 };
 
-export const listStockItems = (session?: SessionLike) => apiFetch<StockItem[]>("/api/stock/items", { session });
+export const listStockItems = (
+  { kind }: { kind?: StockItemKind } = {},
+  session?: SessionLike
+) => {
+  const query = kind ? `?kind=${kind}` : "";
+  return apiFetch<StockItem[]>(`/api/stock/items${query}`, { session });
+};
 
 export const listLowStockItems = (session?: SessionLike) =>
   apiFetch<StockItem[]>("/api/stock/items/low-stock", { session });

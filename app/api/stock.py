@@ -3,7 +3,7 @@ FastAPI routes for stock and inventory operations.
 """
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict
@@ -53,12 +53,18 @@ def _ensure_adjustment_permission(db: Session, context: AuthContext) -> None:
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tenes permisos para ajustar stock")
 
 
+StockItemKind = Literal["supply", "linen"]
+
+
 class StockItemCreate(BaseModel):
     name: str
     sku: Optional[str] = None
     unit: str
     min_quantity: Optional[Decimal] = None
     active: bool = True
+    # StockPage never sends this (always "supply", the default) -- only
+    # LaundryPage's own item-creation form sends "linen". See list_items(kind=).
+    kind: StockItemKind = "supply"
 
 
 class StockItemUpdate(BaseModel):
@@ -79,6 +85,7 @@ class StockItemRead(BaseModel):
     unit: str
     min_quantity: Optional[Decimal] = None
     active: bool
+    kind: StockItemKind
 
 
 class StockLocationCreate(BaseModel):
@@ -142,7 +149,10 @@ def create_item(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_STOCK_OPERATE)),
 ):
-    item = create_stock_item(db, hotel_id=context.hotel_id, **data.model_dump())
+    try:
+        item = create_stock_item(db, hotel_id=context.hotel_id, **data.model_dump())
+    except StockError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
     db.commit()
     db.refresh(item)
     return item
@@ -150,6 +160,9 @@ def create_item(
 
 @router.get("/items", response_model=list[StockItemRead])
 def list_items(
+    # StockPage asks for kind=supply, LaundryPage asks for kind=linen; omit
+    # to get the old undifferentiated hotel-wide list (back-compat).
+    kind: Optional[StockItemKind] = None,
     db: Session = Depends(get_db),
     # D2 (laundry vendors): a remito line picks a StockItem the same way it
     # picks a StockLocation above -- same require_any_permission reasoning.
@@ -157,7 +170,7 @@ def list_items(
         require_any_permission(PERMISSION_STOCK_OPERATE, PERMISSION_LAUNDRY_OPERATE_REMITOS)
     ),
 ):
-    return list_stock_items(db, hotel_id=context.hotel_id)
+    return list_stock_items(db, hotel_id=context.hotel_id, kind=kind)
 
 
 @router.get("/items/low-stock", response_model=list[StockItemRead])
