@@ -33,6 +33,7 @@ from app.models.pricing import CategoryPricing
 from app.models.operations import ReservationStatusHistory
 from app.schemas.reservation import ReservationCreate, ReservationUpdate
 from app.services.financial_ledger import billing_adjustment_totals_by_reservation, completed_paid_amounts_by_reservation
+from app.services.analytics_facts import touch_reservation_fact_window
 from app.services.pricing_policy_service import PricingPolicyError, StayPricingQuote, quote_rate_plan_stay
 from app.services.pricing_service import build_pricing_revision, get_price_for_date
 from app.services.quote_token_service import QuoteTokenError, verify_quote_token
@@ -117,6 +118,15 @@ def _invalidate_availability_cache(hotel_id: int | None) -> None:
         invalidate_hotel_operational_caches(hotel_id)
     except Exception as exc:  # pragma: no cover - defensive cache isolation
         logger.debug("reservation.availability_cache_invalidation_failed", extra={"hotel_id": hotel_id, "error": str(exc)})
+
+
+def _touch_facts(db: Session, hotel_id: int | None, date_from: date | None, date_to: date | None) -> None:
+    """Keep FactReservationDaily/FactRoomOccupancyDaily in sync with a
+    reservation write, called at the same sites as _invalidate_availability_cache.
+    """
+    if hotel_id is None or date_from is None or date_to is None:
+        return
+    touch_reservation_fact_window(db, hotel_id=hotel_id, date_from=date_from, date_to=date_to)
 
 
 def _resolve_hotel_id(
@@ -891,6 +901,7 @@ def create_reservation(db: Session, data: ReservationCreate, hotel_id: Optional[
     db.add(reservation)
     db.flush()
     _invalidate_availability_cache(hotel_id)
+    _touch_facts(db, hotel_id, reservation.check_in_date, reservation.check_out_date)
     return reservation
 
 
@@ -981,6 +992,7 @@ def transition_reservation_status(
     )
     db.flush()
     _invalidate_availability_cache(reservation.hotel_id)
+    _touch_facts(db, reservation.hotel_id, reservation.check_in_date, reservation.check_out_date)
     return reservation
 
 
@@ -1173,6 +1185,8 @@ def update_reservation_fields(
 
     update_data = data.model_dump(exclude_unset=True)
     hotel_id = _resolve_hotel_id(hotel_id, room=reservation.room if hasattr(reservation, "room") else None)
+    original_check_in = reservation.check_in_date
+    original_check_out = reservation.check_out_date
 
     new_ci = update_data.get("check_in_date", reservation.check_in_date)
     new_co = update_data.get("check_out_date", reservation.check_out_date)
@@ -1263,6 +1277,15 @@ def update_reservation_fields(
     reservation.version = (reservation.version or 0) + 1
     db.flush()
     _invalidate_availability_cache(hotel_id)
+    # Touch the union of old+new stay range: a date/room change can move a
+    # reservation out of a window that was already materialized, and the
+    # narrow self-heal on read only fires for windows with zero rows.
+    _touch_facts(
+        db,
+        hotel_id,
+        min(original_check_in, reservation.check_in_date),
+        max(original_check_out, reservation.check_out_date),
+    )
     return reservation
 
 
@@ -1318,6 +1341,7 @@ def mark_reservation_no_show(
     reservation.version = (reservation.version or 0) + 1
     db.flush()
     _invalidate_availability_cache(hotel_id)
+    _touch_facts(db, hotel_id, reservation.check_in_date, reservation.check_out_date)
     return reservation
 
 
