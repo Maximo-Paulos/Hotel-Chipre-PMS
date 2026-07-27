@@ -9,17 +9,25 @@ primitives this builds on.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+import calendar
+from datetime import date, datetime, time, timezone
 from decimal import Decimal
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.hotel_config import HotelConfiguration
-from app.models.laundry_vendor import LaundryRemito, LaundryRemitoLine, LaundryVendor, LaundryVendorPrice
+from app.models.laundry_vendor import (
+    LaundryRemito,
+    LaundryRemitoLine,
+    LaundryVendor,
+    LaundryVendorPrice,
+    LaundryVendorSettlement,
+)
 from app.services import stock_service
 
 DIRECTIONS = {"outbound", "inbound"}
+QUARTER_MONTHS = {1: (1, 3), 2: (4, 6), 3: (7, 9), 4: (10, 12)}
 
 
 class LaundryVendorError(ValueError):
@@ -325,6 +333,96 @@ def vendor_spend(
             }
         )
     return {"total": total, "by_item": by_item}
+
+
+def _quarter_bounds(year: int, quarter: int) -> tuple[date, date]:
+    start_month, end_month = QUARTER_MONTHS[quarter]
+    period_start = date(year, start_month, 1)
+    period_end = date(year, end_month, calendar.monthrange(year, end_month)[1])
+    return period_start, period_end
+
+
+def vendor_settlements(db: Session, *, hotel_id: int, vendor_id: int, year: int) -> list[dict]:
+    """The 4 calendar quarters of a year for one vendor, cost computed live.
+
+    Reuses vendor_spend (which already sums unit_price_snapshot, never the
+    live vendor price) per quarter instead of storing a total, so a remito
+    loaded late with a retroactive date never leaves a stale number behind.
+    """
+
+    _get_vendor(db, hotel_id=hotel_id, vendor_id=vendor_id)
+    existing_by_start = {
+        settlement.period_start: settlement
+        for settlement in db.query(LaundryVendorSettlement)
+        .filter(LaundryVendorSettlement.hotel_id == hotel_id, LaundryVendorSettlement.vendor_id == vendor_id)
+        .all()
+    }
+
+    results = []
+    for quarter in (1, 2, 3, 4):
+        period_start, period_end = _quarter_bounds(year, quarter)
+        spend = vendor_spend(
+            db,
+            hotel_id=hotel_id,
+            vendor_id=vendor_id,
+            date_from=datetime.combine(period_start, time.min, tzinfo=timezone.utc),
+            date_to=datetime.combine(period_end, time.max, tzinfo=timezone.utc),
+        )
+        settlement = existing_by_start.get(period_start)
+        results.append(
+            {
+                "period_start": period_start,
+                "period_end": period_end,
+                "total_amount": spend["total"],
+                "by_item": spend["by_item"],
+                "paid": settlement.paid if settlement is not None else False,
+                "paid_at": settlement.paid_at if settlement is not None else None,
+                "notes": settlement.notes if settlement is not None else None,
+            }
+        )
+    return results
+
+
+def mark_vendor_settlement_paid(
+    db: Session,
+    *,
+    hotel_id: int,
+    vendor_id: int,
+    period_start: date,
+    paid: bool,
+    notes: str | None = None,
+    actor_user_id: int | None = None,
+) -> LaundryVendorSettlement:
+    """Upsert the paid/not-paid mark for one quarter. Visual alert only -- never blocks anything."""
+
+    _get_vendor(db, hotel_id=hotel_id, vendor_id=vendor_id)
+    quarter = (period_start.month - 1) // 3 + 1
+    expected_start, period_end = _quarter_bounds(period_start.year, quarter)
+    if period_start != expected_start:
+        raise LaundryVendorError("period_start must be the first day of a calendar quarter")
+
+    settlement = (
+        db.query(LaundryVendorSettlement)
+        .filter(
+            LaundryVendorSettlement.hotel_id == hotel_id,
+            LaundryVendorSettlement.vendor_id == vendor_id,
+            LaundryVendorSettlement.period_start == period_start,
+        )
+        .one_or_none()
+    )
+    if settlement is None:
+        settlement = LaundryVendorSettlement(
+            hotel_id=hotel_id, vendor_id=vendor_id, period_start=period_start, period_end=period_end
+        )
+        db.add(settlement)
+
+    settlement.paid = paid
+    settlement.paid_at = datetime.now(timezone.utc) if paid else None
+    settlement.paid_by_user_id = actor_user_id if paid else None
+    if notes is not None:
+        settlement.notes = notes
+    db.flush()
+    return settlement
 
 
 def _get_vendor(db: Session, *, hotel_id: int, vendor_id: int) -> LaundryVendor:

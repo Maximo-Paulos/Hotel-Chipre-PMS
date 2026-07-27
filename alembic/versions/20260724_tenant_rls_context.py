@@ -122,6 +122,9 @@ TENANT_TABLES: tuple[str, ...] = (
     "laundry_vendor_prices",
     "laundry_remitos",
     "laundry_remito_lines",
+    # Added by e2c4a9f7b3d1 (after this baseline migration in the chain) --
+    # that migration owns enabling RLS for this table, same pattern above.
+    "laundry_vendor_settlements",
 )
 
 

@@ -156,3 +156,33 @@ export const getLaundryVendorSpend = (
     session
   });
 };
+
+// Liquidacion trimestral (owner's "cuanto anotamos vs cuanto factura el
+// lavadero" cross-check). total_amount is computed server-side from each
+// remito line's frozen unit_price_snapshot, never today's live vendor price
+// -- see vendor_settlements in app/services/laundry_vendor_service.py.
+export type LaundryVendorSettlementQuarter = {
+  period_start: string;
+  period_end: string;
+  total_amount: DecimalValue;
+  by_item: LaundryVendorSpendLine[];
+  paid: boolean;
+  paid_at?: string | null;
+  notes?: string | null;
+};
+
+export const getLaundryVendorSettlements = (vendorId: number, year: number, session?: SessionLike) =>
+  apiFetch<LaundryVendorSettlementQuarter[]>(`/api/laundry/vendors/${vendorId}/settlements?year=${year}`, {
+    session
+  });
+
+export const markLaundryVendorSettlementPaid = (
+  vendorId: number,
+  periodStart: string,
+  payload: { paid: boolean; notes?: string | null },
+  session?: SessionLike
+) =>
+  apiFetch<LaundryVendorSettlementQuarter>(
+    `/api/laundry/vendors/${vendorId}/settlements/${periodStart}/mark-paid`,
+    { method: "POST", data: payload, session }
+  );

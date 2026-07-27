@@ -203,6 +203,89 @@ def test_remito_rejects_insufficient_house_stock_via_api():
         _teardown(db, engine)
 
 
+def test_settlements_default_unpaid_and_can_be_marked_paid_with_notes():
+    client, db, engine = _client_with_db()
+    try:
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner")
+        vendor_id = client.post("/api/laundry/vendors", json={"name": "Lavadero Liquidacion"}).json()["id"]
+
+        item = create_stock_item(db, hotel_id=1, name="Sabanas", sku=None, unit="unit", min_quantity=None, active=True)
+        house = create_location(db, hotel_id=1, name="Deposito casa")
+        db.flush()
+        register_movement(
+            db, hotel_id=1, item_id=item.id, location_id=house.id, movement_type="in",
+            quantity=Decimal("20.00"), reason="opening balance", reservation_id=None, created_by_user_id=None,
+        )
+        db.commit()
+        client.post(
+            f"/api/laundry/vendors/{vendor_id}/prices",
+            json={"stock_item_id": item.id, "unit_price": "100.00"},
+        )
+        client.post(
+            "/api/laundry/remitos",
+            json={
+                "vendor_id": vendor_id,
+                "direction": "outbound",
+                "remito_number": "R-SETTLE-1",
+                "remito_date": datetime(2026, 7, 5, tzinfo=timezone.utc).isoformat(),
+                "house_location_id": house.id,
+                "lines": [{"stock_item_id": item.id, "quantity": "10.00"}],
+            },
+        )
+
+        # Receptionist cannot see the financial settlement report.
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "receptionist")
+        forbidden = client.get(f"/api/laundry/vendors/{vendor_id}/settlements?year=2026")
+        assert forbidden.status_code == 403
+
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner")
+        quarters = client.get(f"/api/laundry/vendors/{vendor_id}/settlements?year=2026").json()
+        assert len(quarters) == 4
+        q3 = next(q for q in quarters if q["period_start"] == "2026-07-01")
+        assert q3["total_amount"] == "1000.00"
+        assert q3["paid"] is False
+
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "receptionist")
+        assert client.post(
+            f"/api/laundry/vendors/{vendor_id}/settlements/2026-07-01/mark-paid", json={"paid": True}
+        ).status_code == 403
+
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner")
+        marked = client.post(
+            f"/api/laundry/vendors/{vendor_id}/settlements/2026-07-01/mark-paid",
+            json={"paid": True, "notes": "Coincide con factura"},
+        )
+        assert marked.status_code == 200
+        assert marked.json()["paid"] is True
+        assert marked.json()["notes"] == "Coincide con factura"
+        assert marked.json()["total_amount"] == "1000.00"
+
+        invalid = client.post(
+            f"/api/laundry/vendors/{vendor_id}/settlements/2026-07-15/mark-paid", json={"paid": True}
+        )
+        assert invalid.status_code == 400
+    finally:
+        _teardown(db, engine)
+
+
+def test_settlements_are_hotel_scoped_across_the_api():
+    client, db, engine = _client_with_db()
+    try:
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(2, "owner")
+        vendor_h2 = client.post("/api/laundry/vendors", json={"name": "Lavadero H2 Liquidacion"}).json()["id"]
+
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner")
+        cross_read = client.get(f"/api/laundry/vendors/{vendor_h2}/settlements?year=2026")
+        assert cross_read.status_code == 404
+
+        cross_mark = client.post(
+            f"/api/laundry/vendors/{vendor_h2}/settlements/2026-01-01/mark-paid", json={"paid": True}
+        )
+        assert cross_mark.status_code == 400
+    finally:
+        _teardown(db, engine)
+
+
 def test_vendors_and_balance_are_hotel_scoped_across_the_api():
     client, db, engine = _client_with_db()
     try:

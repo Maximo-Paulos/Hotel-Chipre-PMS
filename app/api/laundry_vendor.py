@@ -5,7 +5,7 @@ Separate router from app/api/laundry.py (legacy LaundryBatch/LaundryItem
 lifecycle, kept as read-only history -- see memory checkpoint
 20260725-235929) to avoid mixing the two models in one file.
 """
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
@@ -23,9 +23,11 @@ from app.services.laundry_vendor_service import (
     list_remitos,
     list_vendor_prices,
     list_vendors,
+    mark_vendor_settlement_paid,
     set_vendor_price,
     update_vendor,
     vendor_balance,
+    vendor_settlements,
     vendor_spend,
 )
 from app.services.permission_service import (
@@ -141,6 +143,21 @@ class VendorSpendLine(BaseModel):
 class VendorSpendRead(BaseModel):
     total: Decimal
     by_item: list[VendorSpendLine]
+
+
+class SettlementQuarterRead(BaseModel):
+    period_start: date
+    period_end: date
+    total_amount: Decimal
+    by_item: list[VendorSpendLine]
+    paid: bool
+    paid_at: Optional[datetime] = None
+    notes: Optional[str] = None
+
+
+class SettlementMarkPaid(BaseModel):
+    paid: bool
+    notes: Optional[str] = None
 
 
 @router.post("/vendors", response_model=VendorRead, status_code=status.HTTP_201_CREATED)
@@ -277,3 +294,44 @@ def get_laundry_vendor_spend(
         return vendor_spend(db, hotel_id=context.hotel_id, vendor_id=vendor_id, date_from=date_from, date_to=date_to)
     except LaundryVendorError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+
+
+@router.get("/vendors/{vendor_id}/settlements", response_model=list[SettlementQuarterRead])
+def get_laundry_vendor_settlements(
+    vendor_id: int,
+    year: int,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_LAUNDRY_MANAGE_VENDORS)),
+):
+    try:
+        return vendor_settlements(db, hotel_id=context.hotel_id, vendor_id=vendor_id, year=year)
+    except LaundryVendorError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@router.post("/vendors/{vendor_id}/settlements/{period_start}/mark-paid", response_model=SettlementQuarterRead)
+def mark_laundry_vendor_settlement_paid(
+    vendor_id: int,
+    period_start: date,
+    data: SettlementMarkPaid,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_LAUNDRY_MANAGE_VENDORS)),
+):
+    try:
+        mark_vendor_settlement_paid(
+            db,
+            hotel_id=context.hotel_id,
+            vendor_id=vendor_id,
+            period_start=period_start,
+            paid=data.paid,
+            notes=data.notes,
+            actor_user_id=context.user_id,
+        )
+        db.commit()
+        # Re-read through the same live-total path used for the list endpoint
+        # so the response always mirrors what GET .../settlements returns.
+        quarters = vendor_settlements(db, hotel_id=context.hotel_id, vendor_id=vendor_id, year=period_start.year)
+    except LaundryVendorError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
+    return next(q for q in quarters if q["period_start"] == period_start)

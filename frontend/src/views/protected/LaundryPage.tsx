@@ -1,18 +1,21 @@
 import { useMemo, useState } from "react";
-import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 
 import {
   createLaundryRemito,
   createLaundryVendor,
   getLaundryVendorBalance,
+  getLaundryVendorSettlements,
   getLaundryVendorSpend,
   listLaundryRemitos,
   listLaundryVendorPrices,
   listLaundryVendors,
+  markLaundryVendorSettlementPaid,
   setLaundryVendorPrice,
   updateLaundryVendor,
   type LaundryRemitoLineCreate,
   type LaundryVendor,
+  type LaundryVendorSettlementQuarter,
   type RemitoDirection
 } from "../../api/laundryVendor";
 import { getCurrentStock, listStockItems, listStockLocations, type StockItem } from "../../api/stock";
@@ -75,6 +78,7 @@ export function LaundryPage() {
   const [remitoError, setRemitoError] = useState<string | null>(null);
   const [houseStockLocationId, setHouseStockLocationId] = useState<string>("");
   const [spendRange, setSpendRange] = useState(() => ({ from: startOfCurrentMonthIso(), to: todayIso() }));
+  const [settlementYear, setSettlementYear] = useState(() => new Date().getFullYear());
 
   const vendorsQuery = useQuery({
     queryKey: ["laundry-vendors", session.hotelId],
@@ -127,6 +131,18 @@ export function LaundryPage() {
     staleTime: 15 * 1000
   });
   const selectedVendorPrices = useMemo(() => pricesQuery.data ?? [], [pricesQuery.data]);
+
+  // Liquidacion trimestral: totals are computed live server-side from each
+  // remito's frozen unit_price_snapshot (see vendor_settlements), so this
+  // never disagrees with the spend report above -- it's the same numbers,
+  // grouped by calendar quarter with an owner-only paid/not-paid mark on top.
+  const settlementsQuery = useQuery({
+    queryKey: ["laundry-vendor-settlements", session.hotelId, selectedVendorId, settlementYear],
+    queryFn: () => getLaundryVendorSettlements(selectedVendorId as number, settlementYear, session),
+    enabled: enabled && manageVendors && selectedVendorId !== null,
+    staleTime: 15 * 1000
+  });
+  const settlementQuarters = useMemo(() => settlementsQuery.data ?? [], [settlementsQuery.data]);
 
   // Prices for the vendor picked in the remito form (may differ from
   // selectedVendorId, which drives the admin panel above).
@@ -238,6 +254,16 @@ export function LaundryPage() {
       if (selectedVendorId) invalidatePrices(selectedVendorId);
       setPriceForm(emptyPriceForm);
       setMessage("Precio guardado.");
+    }
+  });
+
+  const markSettlementMutation = useMutation({
+    mutationFn: ({ periodStart, paid, notes }: { periodStart: string; paid: boolean; notes?: string | null }) =>
+      markLaundryVendorSettlementPaid(selectedVendorId as number, periodStart, { paid, notes }, session),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["laundry-vendor-settlements", session.hotelId, selectedVendorId]
+      });
     }
   });
 
@@ -574,6 +600,18 @@ export function LaundryPage() {
         </section>
       )}
 
+      {manageVendors && (
+        <SettlementSection
+          selectedVendor={selectedVendor}
+          year={settlementYear}
+          onYearChange={setSettlementYear}
+          quarters={settlementQuarters}
+          query={settlementsQuery}
+          onMark={(periodStart, paid, notes) => markSettlementMutation.mutate({ periodStart, paid, notes })}
+          marking={markSettlementMutation.isPending}
+        />
+      )}
+
       {operateRemitos && (
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_420px]">
           <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -891,6 +929,159 @@ function VendorCard({
       >
         {vendor.active ? "Marcar inactivo" : "Reactivar"}
       </button>
+    </div>
+  );
+}
+
+const QUARTER_LABELS: Record<string, string> = {
+  "01": "T1 (ene-mar)",
+  "04": "T2 (abr-jun)",
+  "07": "T3 (jul-sep)",
+  "10": "T4 (oct-dic)"
+};
+
+function quarterLabel(periodStart: string) {
+  const month = periodStart.slice(5, 7);
+  return QUARTER_LABELS[month] ?? periodStart;
+}
+
+// D-liquidacion: "lo que nosotros anotamos, trimestre a trimestre" para
+// comparar contra la factura real del lavadero. total_amount reusa
+// exactamente el mismo calculo que el reporte de gasto de arriba (suma de
+// unit_price_snapshot, nunca el precio vigente) -- ver
+// vendor_settlements en app/services/laundry_vendor_service.py. El estado
+// pagado/no pagado es solo una alerta visual: nunca bloquea nada.
+function SettlementSection({
+  selectedVendor,
+  year,
+  onYearChange,
+  quarters,
+  query,
+  onMark,
+  marking
+}: {
+  selectedVendor: LaundryVendor | null;
+  year: number;
+  onYearChange: (year: number) => void;
+  quarters: LaundryVendorSettlementQuarter[];
+  query: UseQueryResult<LaundryVendorSettlementQuarter[]>;
+  onMark: (periodStart: string, paid: boolean, notes?: string | null) => void;
+  marking: boolean;
+}) {
+  return (
+    <section
+      aria-labelledby="laundry-settlement-title"
+      className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+    >
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-xs uppercase tracking-wide text-slate-500">Reporte</p>
+          <h2 id="laundry-settlement-title" className="text-lg font-semibold text-slate-900">
+            Liquidación por trimestre {selectedVendor ? `· ${selectedVendor.name}` : ""}
+          </h2>
+          <p className="text-sm text-slate-600">
+            Lo que anotamos nosotros, trimestre a trimestre, para comparar contra la factura real del lavadero.
+          </p>
+        </div>
+        <label className="space-y-1 text-sm">
+          <span className="text-slate-600">Año</span>
+          <input
+            type="number"
+            value={year}
+            onChange={(event) => onYearChange(Number(event.target.value) || year)}
+            className="w-28 rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          />
+        </label>
+      </div>
+
+      {!selectedVendor && (
+        <p className="text-xs text-slate-500">Elegí un lavadero arriba para ver su liquidación trimestral.</p>
+      )}
+      {selectedVendor && query.isFetching && <p className="text-xs text-slate-500">Actualizando...</p>}
+      {selectedVendor && query.isError && (
+        <p className="text-xs text-rose-700">No se pudo cargar la liquidación de este lavadero.</p>
+      )}
+
+      {selectedVendor && (
+        <div className="space-y-3">
+          {quarters.map((quarter) => (
+            <SettlementQuarterRow
+              key={quarter.period_start}
+              quarter={quarter}
+              onMark={onMark}
+              marking={marking}
+            />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function SettlementQuarterRow({
+  quarter,
+  onMark,
+  marking
+}: {
+  quarter: LaundryVendorSettlementQuarter;
+  onMark: (periodStart: string, paid: boolean, notes?: string | null) => void;
+  marking: boolean;
+}) {
+  const [notesDraft, setNotesDraft] = useState(quarter.notes ?? "");
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="text-sm font-semibold text-slate-900">
+            {quarterLabel(quarter.period_start)} · {quarter.period_start} a {quarter.period_end}
+          </p>
+          <p className="text-sm text-slate-700">Total anotado: {formatMoney(quarter.total_amount)}</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => onMark(quarter.period_start, !quarter.paid)}
+          disabled={marking}
+          className={`min-h-11 rounded-full px-3 py-1.5 text-xs font-semibold disabled:opacity-60 ${
+            quarter.paid ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-200" : "bg-amber-100 text-amber-800 hover:bg-amber-200"
+          }`}
+        >
+          {quarter.paid ? "Pagado" : "No pagado"}
+        </button>
+      </div>
+
+      {quarter.by_item.length > 0 && (
+        <ul className="mt-2 space-y-1 text-xs text-slate-700">
+          {quarter.by_item.map((line) => (
+            <li key={line.stock_item_id} className="flex justify-between gap-2">
+              <span>
+                {line.stock_item_name} × {line.quantity}
+              </span>
+              <span className="font-semibold">{formatMoney(line.subtotal)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-end">
+        <label className="flex-1 space-y-1 text-xs font-semibold text-slate-600">
+          Notas (diferencias con la factura real)
+          <textarea
+            value={notesDraft}
+            onChange={(event) => setNotesDraft(event.target.value)}
+            rows={1}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal"
+          />
+        </label>
+        <button
+          type="button"
+          onClick={() => onMark(quarter.period_start, quarter.paid, notesDraft)}
+          disabled={marking}
+          className="min-h-11 shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+        >
+          Guardar nota
+        </button>
+      </div>
     </div>
   );
 }

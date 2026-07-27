@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 
 import pytest
@@ -10,8 +10,10 @@ from app.services.laundry_vendor_service import (
     create_vendor,
     list_remitos,
     list_vendor_prices,
+    mark_vendor_settlement_paid,
     set_vendor_price,
     vendor_balance,
+    vendor_settlements,
     vendor_spend,
 )
 from app.services.stock_service import StockError, create_location, create_stock_item, current_stock, register_movement
@@ -261,6 +263,138 @@ def test_vendor_spend_sums_outbound_lines_in_period(db):
         date_from=datetime(2026, 7, 10, tzinfo=timezone.utc), date_to=datetime(2026, 7, 20, tzinfo=timezone.utc),
     )
     assert narrow_spend["total"] == Decimal("600.00")
+
+
+def test_remito_price_snapshot_is_frozen_when_vendor_price_changes_later(db):
+    """Owner's core requirement: a remito's cost is fixed at creation time.
+
+    The bill is "100 sabanas at $100 this month, 50 at $200 next month" --
+    never "recompute everything at today's price". unit_price_snapshot on
+    LaundryRemitoLine is what makes that true: it is copied once at remito
+    creation (see create_remito) and never touched again, even when the
+    vendor's current LaundryVendorPrice.unit_price changes afterwards.
+    """
+    _seed_hotels(db)
+    item = create_stock_item(db, hotel_id=1, name="Sabana", sku=None, unit="unit", min_quantity=None, active=True)
+    house = create_location(db, hotel_id=1, name="Deposito casa")
+    vendor = create_vendor(db, hotel_id=1, name="Lavadero Congelado")
+    db.flush()
+    _seed_house_stock(db, hotel_id=1, item=item, house_location=house, quantity=Decimal("100.00"))
+    db.commit()
+
+    set_vendor_price(db, hotel_id=1, vendor_id=vendor.id, stock_item_id=item.id, unit_price=Decimal("100.00"))
+    db.commit()
+
+    first_remito = create_remito(
+        db, hotel_id=1, vendor_id=vendor.id, direction="outbound", remito_number="R-JUL",
+        remito_date=datetime(2026, 7, 1, tzinfo=timezone.utc), house_location_id=house.id,
+        lines=[{"stock_item_id": item.id, "quantity": Decimal("10.00")}], actor_user_id=None,
+    )
+    db.commit()
+    first_line = first_remito.lines[0]
+    assert first_line.unit_price_snapshot == Decimal("100.00")
+
+    # Price hike takes effect for the vendor going forward.
+    set_vendor_price(db, hotel_id=1, vendor_id=vendor.id, stock_item_id=item.id, unit_price=Decimal("200.00"))
+    db.commit()
+
+    second_remito = create_remito(
+        db, hotel_id=1, vendor_id=vendor.id, direction="outbound", remito_number="R-AUG",
+        remito_date=datetime(2026, 8, 1, tzinfo=timezone.utc), house_location_id=house.id,
+        lines=[{"stock_item_id": item.id, "quantity": Decimal("5.00")}], actor_user_id=None,
+    )
+    db.commit()
+    assert second_remito.lines[0].unit_price_snapshot == Decimal("200.00")
+
+    # The first remito must be untouched by the later price change.
+    db.refresh(first_line)
+    assert first_line.unit_price_snapshot == Decimal("100.00")
+
+
+def test_vendor_settlements_groups_by_calendar_quarter_and_defaults_unpaid(db):
+    _seed_hotels(db)
+    item = create_stock_item(db, hotel_id=1, name="Sabanas", sku=None, unit="unit", min_quantity=None, active=True)
+    house = create_location(db, hotel_id=1, name="Deposito casa")
+    vendor = create_vendor(db, hotel_id=1, name="Lavadero Trimestre")
+    db.flush()
+    _seed_house_stock(db, hotel_id=1, item=item, house_location=house, quantity=Decimal("100.00"))
+    db.commit()
+
+    set_vendor_price(db, hotel_id=1, vendor_id=vendor.id, stock_item_id=item.id, unit_price=Decimal("100.00"))
+    db.commit()
+    create_remito(
+        db, hotel_id=1, vendor_id=vendor.id, direction="outbound", remito_number="R-Q1",
+        remito_date=datetime(2026, 2, 10, tzinfo=timezone.utc), house_location_id=house.id,
+        lines=[{"stock_item_id": item.id, "quantity": Decimal("10.00")}], actor_user_id=None,
+    )
+    db.commit()
+
+    set_vendor_price(db, hotel_id=1, vendor_id=vendor.id, stock_item_id=item.id, unit_price=Decimal("200.00"))
+    db.commit()
+    create_remito(
+        db, hotel_id=1, vendor_id=vendor.id, direction="outbound", remito_number="R-Q3",
+        remito_date=datetime(2026, 7, 15, tzinfo=timezone.utc), house_location_id=house.id,
+        lines=[{"stock_item_id": item.id, "quantity": Decimal("5.00")}], actor_user_id=None,
+    )
+    db.commit()
+
+    quarters = vendor_settlements(db, hotel_id=1, vendor_id=vendor.id, year=2026)
+    assert [q["period_start"] for q in quarters] == [
+        date(2026, 1, 1), date(2026, 4, 1), date(2026, 7, 1), date(2026, 10, 1)
+    ]
+    assert quarters[0]["total_amount"] == Decimal("1000.00")  # 10 * 100 (Q1's own snapshot)
+    assert quarters[1]["total_amount"] == Decimal("0.00")
+    assert quarters[2]["total_amount"] == Decimal("1000.00")  # 5 * 200 (Q3's own snapshot)
+    assert quarters[3]["total_amount"] == Decimal("0.00")
+    # Nobody has marked anything paid yet -- default is "not paid", no row persisted.
+    assert all(q["paid"] is False for q in quarters)
+
+
+def test_mark_vendor_settlement_paid_upserts_and_is_visual_only(db):
+    _seed_hotels(db)
+    vendor = create_vendor(db, hotel_id=1, name="Lavadero Pago")
+    db.commit()
+
+    mark_vendor_settlement_paid(
+        db, hotel_id=1, vendor_id=vendor.id, period_start=date(2026, 7, 1), paid=True,
+        notes="Coincide con la factura de julio", actor_user_id=None,
+    )
+    db.commit()
+
+    quarters = vendor_settlements(db, hotel_id=1, vendor_id=vendor.id, year=2026)
+    q3 = quarters[2]
+    assert q3["paid"] is True
+    assert q3["paid_at"] is not None
+    assert q3["notes"] == "Coincide con la factura de julio"
+
+    # Toggle back to unpaid -- paid_at clears, notes about the discrepancy stay.
+    mark_vendor_settlement_paid(db, hotel_id=1, vendor_id=vendor.id, period_start=date(2026, 7, 1), paid=False)
+    db.commit()
+    quarters = vendor_settlements(db, hotel_id=1, vendor_id=vendor.id, year=2026)
+    q3 = quarters[2]
+    assert q3["paid"] is False
+    assert q3["paid_at"] is None
+    assert q3["notes"] == "Coincide con la factura de julio"
+
+
+def test_mark_vendor_settlement_paid_rejects_a_non_quarter_start_date(db):
+    _seed_hotels(db)
+    vendor = create_vendor(db, hotel_id=1, name="Lavadero Fecha Invalida")
+    db.commit()
+
+    with pytest.raises(LaundryVendorError, match="first day of a calendar quarter"):
+        mark_vendor_settlement_paid(db, hotel_id=1, vendor_id=vendor.id, period_start=date(2026, 7, 15), paid=True)
+
+
+def test_vendor_settlements_are_hotel_scoped(db):
+    _seed_hotels(db)
+    vendor1 = create_vendor(db, hotel_id=1, name="Lavadero H1 Trimestre")
+    db.commit()
+
+    with pytest.raises(LaundryVendorError):
+        vendor_settlements(db, hotel_id=2, vendor_id=vendor1.id, year=2026)
+    with pytest.raises(LaundryVendorError):
+        mark_vendor_settlement_paid(db, hotel_id=2, vendor_id=vendor1.id, period_start=date(2026, 7, 1), paid=True)
 
 
 def test_vendors_and_remitos_are_hotel_scoped(db):

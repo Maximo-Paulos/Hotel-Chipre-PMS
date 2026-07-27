@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-26T22:54:32.126Z",
+  "generatedAt": "2026-07-27T23:11:53.712Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -4189,46 +4189,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_reservation_operations_service_extend_reservation_stay",
-      "name": "extend_reservation_stay",
-      "entryPoint": "services_reservation_operations_service_extend_reservation_stay",
-      "entryPointId": "services_reservation_operations_service_extend_reservation_stay",
-      "path": [
-        "services_reservation_operations_service_extend_reservation_stay",
-        "services_reservation_operations_service_extension_amount",
-        "services_reservation_operations_service_invalidate_availability_cache",
-        "services_reservation_operations_service_reservationextensionresult",
-        "services_reservation_operations_service_reservationoperationserror",
-        "services_reservation_operations_service_resolve_extension_conflict",
-        "services_reservation_operations_service_available_room_for_conflict",
-        "services_reservation_operations_service_extension_conflicts",
-        "services_reservation_operations_service_is_auto_assignable_future_reservation",
-        "services_reservation_operations_service_reservation_has_payment_or_deposit",
-        "services_reservation_operations_service_has_transactions"
-      ],
-      "qualifiedPath": [
-        "services_reservation_operations_service_extend_reservation_stay",
-        "services_reservation_operations_service_extension_amount",
-        "services_reservation_operations_service_invalidate_availability_cache",
-        "services_reservation_operations_service_reservationextensionresult",
-        "services_reservation_operations_service_reservationoperationserror",
-        "services_reservation_operations_service_resolve_extension_conflict",
-        "services_reservation_operations_service_available_room_for_conflict",
-        "services_reservation_operations_service_extension_conflicts",
-        "services_reservation_operations_service_is_auto_assignable_future_reservation",
-        "services_reservation_operations_service_reservation_has_payment_or_deposit",
-        "services_reservation_operations_service_has_transactions"
-      ],
-      "depth": 3,
-      "nodeCount": 11,
-      "fileCount": 1,
-      "files": [
-        "app/services/reservation_operations_service.py"
-      ],
-      "criticality": 0.2255,
-      "warnings": []
-    },
-    {
       "id": "flow:services_gemma_orchestrator_gemmaorchestrator_send_message",
       "name": ".send_message",
       "entryPoint": "services_gemma_orchestrator_gemmaorchestrator_send_message",
@@ -4397,32 +4357,6 @@
       "warnings": []
     },
     {
-      "id": "flow:api_blocks_create_room_block",
-      "name": "create_room_block",
-      "entryPoint": "api_blocks_create_room_block",
-      "entryPointId": "api_blocks_create_room_block",
-      "path": [
-        "api_blocks_create_room_block",
-        "api_blocks_exclusive_end",
-        "api_blocks_existing_user_id",
-        "api_blocks_validate_block_dates"
-      ],
-      "qualifiedPath": [
-        "api_blocks_create_room_block",
-        "api_blocks_exclusive_end",
-        "api_blocks_existing_user_id",
-        "api_blocks_validate_block_dates"
-      ],
-      "depth": 1,
-      "nodeCount": 4,
-      "fileCount": 1,
-      "files": [
-        "app/api/blocks.py"
-      ],
-      "criticality": 0.2225,
-      "warnings": []
-    },
-    {
       "id": "flow:api_users_invite_user",
       "name": "invite_user",
       "entryPoint": "api_users_invite_user",
@@ -4444,84 +4378,6 @@
       "fileCount": 1,
       "files": [
         "app/api/users.py"
-      ],
-      "criticality": 0.2225,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_reservation_service_mark_reservation_no_show",
-      "name": "mark_reservation_no_show",
-      "entryPoint": "services_reservation_service_mark_reservation_no_show",
-      "entryPointId": "services_reservation_service_mark_reservation_no_show",
-      "path": [
-        "services_reservation_service_mark_reservation_no_show",
-        "services_reservation_service_assert_reservation_version",
-        "services_reservation_service_invalidate_availability_cache",
-        "services_reservation_service_reservationerror"
-      ],
-      "qualifiedPath": [
-        "services_reservation_service_mark_reservation_no_show",
-        "services_reservation_service_assert_reservation_version",
-        "services_reservation_service_invalidate_availability_cache",
-        "services_reservation_service_reservationerror"
-      ],
-      "depth": 1,
-      "nodeCount": 4,
-      "fileCount": 1,
-      "files": [
-        "app/services/reservation_service.py"
-      ],
-      "criticality": 0.2225,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_reservation_operations_service_move_reservation_room",
-      "name": "move_reservation_room",
-      "entryPoint": "services_reservation_operations_service_move_reservation_room",
-      "entryPointId": "services_reservation_operations_service_move_reservation_room",
-      "path": [
-        "services_reservation_operations_service_move_reservation_room",
-        "services_reservation_operations_service_invalidate_availability_cache",
-        "services_reservation_operations_service_reservationoperationserror",
-        "services_reservation_operations_service_roommoveresult"
-      ],
-      "qualifiedPath": [
-        "services_reservation_operations_service_move_reservation_room",
-        "services_reservation_operations_service_invalidate_availability_cache",
-        "services_reservation_operations_service_reservationoperationserror",
-        "services_reservation_operations_service_roommoveresult"
-      ],
-      "depth": 1,
-      "nodeCount": 4,
-      "fileCount": 1,
-      "files": [
-        "app/services/reservation_operations_service.py"
-      ],
-      "criticality": 0.2225,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_reservation_service_transition_reservation_status",
-      "name": "transition_reservation_status",
-      "entryPoint": "services_reservation_service_transition_reservation_status",
-      "entryPointId": "services_reservation_service_transition_reservation_status",
-      "path": [
-        "services_reservation_service_transition_reservation_status",
-        "services_reservation_service_invalidate_availability_cache",
-        "services_reservation_service_reservationerror",
-        "services_reservation_service_resolve_hotel_id"
-      ],
-      "qualifiedPath": [
-        "services_reservation_service_transition_reservation_status",
-        "services_reservation_service_invalidate_availability_cache",
-        "services_reservation_service_reservationerror",
-        "services_reservation_service_resolve_hotel_id"
-      ],
-      "depth": 1,
-      "nodeCount": 4,
-      "fileCount": 1,
-      "files": [
-        "app/services/reservation_service.py"
       ],
       "criticality": 0.2225,
       "warnings": []
@@ -4584,6 +4440,48 @@
         "tests/postgres_test_safety.py"
       ],
       "criticality": 0.2225,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_reservation_operations_service_extend_reservation_stay",
+      "name": "extend_reservation_stay",
+      "entryPoint": "services_reservation_operations_service_extend_reservation_stay",
+      "entryPointId": "services_reservation_operations_service_extend_reservation_stay",
+      "path": [
+        "services_reservation_operations_service_extend_reservation_stay",
+        "services_reservation_operations_service_extension_amount",
+        "services_reservation_operations_service_invalidate_availability_cache",
+        "services_reservation_operations_service_reservationextensionresult",
+        "services_reservation_operations_service_reservationoperationserror",
+        "services_reservation_operations_service_resolve_extension_conflict",
+        "services_reservation_operations_service_touch_facts",
+        "services_reservation_operations_service_available_room_for_conflict",
+        "services_reservation_operations_service_extension_conflicts",
+        "services_reservation_operations_service_is_auto_assignable_future_reservation",
+        "services_reservation_operations_service_reservation_has_payment_or_deposit",
+        "services_reservation_operations_service_has_transactions"
+      ],
+      "qualifiedPath": [
+        "services_reservation_operations_service_extend_reservation_stay",
+        "services_reservation_operations_service_extension_amount",
+        "services_reservation_operations_service_invalidate_availability_cache",
+        "services_reservation_operations_service_reservationextensionresult",
+        "services_reservation_operations_service_reservationoperationserror",
+        "services_reservation_operations_service_resolve_extension_conflict",
+        "services_reservation_operations_service_touch_facts",
+        "services_reservation_operations_service_available_room_for_conflict",
+        "services_reservation_operations_service_extension_conflicts",
+        "services_reservation_operations_service_is_auto_assignable_future_reservation",
+        "services_reservation_operations_service_reservation_has_payment_or_deposit",
+        "services_reservation_operations_service_has_transactions"
+      ],
+      "depth": 3,
+      "nodeCount": 12,
+      "fileCount": 1,
+      "files": [
+        "app/services/reservation_operations_service.py"
+      ],
+      "criticality": 0.2217,
       "warnings": []
     },
     {
@@ -4789,80 +4687,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_reservation_service_create_reservation",
-      "name": "create_reservation",
-      "entryPoint": "services_reservation_service_create_reservation",
-      "entryPointId": "services_reservation_service_create_reservation",
-      "path": [
-        "services_reservation_service_create_reservation",
-        "services_reservation_service_apply_corporate_pricing",
-        "services_reservation_service_apply_custom_deposit_amount",
-        "services_reservation_service_apply_manual_total_override",
-        "services_reservation_service_calculate_reservation_pricing",
-        "services_reservation_service_check_room_availability",
-        "services_reservation_service_find_available_rooms",
-        "services_reservation_service_generate_confirmation_code",
-        "services_reservation_service_invalidate_availability_cache",
-        "services_reservation_service_normalize_pricing_payment_method",
-        "services_reservation_service_reservationerror",
-        "services_reservation_service_resolve_creation_channel_code",
-        "services_reservation_service_resolve_hotel_id",
-        "services_reservation_service_resolve_reservation_company",
-        "services_reservation_service_validate_manual_telephonic_guest_requirements",
-        "services_reservation_service_validate_quote_token_for_reservation",
-        "services_reservation_service_validate_reservation_occupancy",
-        "services_reservation_service_with_pricing_revision",
-        "services_reservation_service_pricing_with_total",
-        "services_reservation_service_daily_rate_pricing_result",
-        "services_reservation_service_pricing_result_from_quote",
-        "services_reservation_service_resolve_reservation_commercial_context",
-        "services_reservation_service_reservation_channel_indicator",
-        "services_reservation_service_is_manual_or_telephonic_reservation",
-        "services_reservation_service_compute_deposit_amount",
-        "services_reservation_service_calendar_pricing_source",
-        "services_reservation_service_get_hotel_default_currency",
-        "services_reservation_service_reservationpricingresult"
-      ],
-      "qualifiedPath": [
-        "services_reservation_service_create_reservation",
-        "services_reservation_service_apply_corporate_pricing",
-        "services_reservation_service_apply_custom_deposit_amount",
-        "services_reservation_service_apply_manual_total_override",
-        "services_reservation_service_calculate_reservation_pricing",
-        "services_reservation_service_check_room_availability",
-        "services_reservation_service_find_available_rooms",
-        "services_reservation_service_generate_confirmation_code",
-        "services_reservation_service_invalidate_availability_cache",
-        "services_reservation_service_normalize_pricing_payment_method",
-        "services_reservation_service_reservationerror",
-        "services_reservation_service_resolve_creation_channel_code",
-        "services_reservation_service_resolve_hotel_id",
-        "services_reservation_service_resolve_reservation_company",
-        "services_reservation_service_validate_manual_telephonic_guest_requirements",
-        "services_reservation_service_validate_quote_token_for_reservation",
-        "services_reservation_service_validate_reservation_occupancy",
-        "services_reservation_service_with_pricing_revision",
-        "services_reservation_service_pricing_with_total",
-        "services_reservation_service_daily_rate_pricing_result",
-        "services_reservation_service_pricing_result_from_quote",
-        "services_reservation_service_resolve_reservation_commercial_context",
-        "services_reservation_service_reservation_channel_indicator",
-        "services_reservation_service_is_manual_or_telephonic_reservation",
-        "services_reservation_service_compute_deposit_amount",
-        "services_reservation_service_calendar_pricing_source",
-        "services_reservation_service_get_hotel_default_currency",
-        "services_reservation_service_reservationpricingresult"
-      ],
-      "depth": 3,
-      "nodeCount": 28,
-      "fileCount": 1,
-      "files": [
-        "app/services/reservation_service.py"
-      ],
-      "criticality": 0.2157,
-      "warnings": []
-    },
-    {
       "id": "flow:api_movement_groups_revert_movement_group",
       "name": "revert_movement_group",
       "entryPoint": "api_movement_groups_revert_movement_group",
@@ -4932,6 +4756,82 @@
         "app/services/domain_events.py"
       ],
       "criticality": 0.2155,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_reservation_service_create_reservation",
+      "name": "create_reservation",
+      "entryPoint": "services_reservation_service_create_reservation",
+      "entryPointId": "services_reservation_service_create_reservation",
+      "path": [
+        "services_reservation_service_create_reservation",
+        "services_reservation_service_apply_corporate_pricing",
+        "services_reservation_service_apply_custom_deposit_amount",
+        "services_reservation_service_apply_manual_total_override",
+        "services_reservation_service_calculate_reservation_pricing",
+        "services_reservation_service_check_room_availability",
+        "services_reservation_service_find_available_rooms",
+        "services_reservation_service_generate_confirmation_code",
+        "services_reservation_service_invalidate_availability_cache",
+        "services_reservation_service_normalize_pricing_payment_method",
+        "services_reservation_service_reservationerror",
+        "services_reservation_service_resolve_creation_channel_code",
+        "services_reservation_service_resolve_hotel_id",
+        "services_reservation_service_resolve_reservation_company",
+        "services_reservation_service_touch_facts",
+        "services_reservation_service_validate_manual_telephonic_guest_requirements",
+        "services_reservation_service_validate_quote_token_for_reservation",
+        "services_reservation_service_validate_reservation_occupancy",
+        "services_reservation_service_with_pricing_revision",
+        "services_reservation_service_pricing_with_total",
+        "services_reservation_service_daily_rate_pricing_result",
+        "services_reservation_service_pricing_result_from_quote",
+        "services_reservation_service_resolve_reservation_commercial_context",
+        "services_reservation_service_reservation_channel_indicator",
+        "services_reservation_service_is_manual_or_telephonic_reservation",
+        "services_reservation_service_compute_deposit_amount",
+        "services_reservation_service_calendar_pricing_source",
+        "services_reservation_service_get_hotel_default_currency",
+        "services_reservation_service_reservationpricingresult"
+      ],
+      "qualifiedPath": [
+        "services_reservation_service_create_reservation",
+        "services_reservation_service_apply_corporate_pricing",
+        "services_reservation_service_apply_custom_deposit_amount",
+        "services_reservation_service_apply_manual_total_override",
+        "services_reservation_service_calculate_reservation_pricing",
+        "services_reservation_service_check_room_availability",
+        "services_reservation_service_find_available_rooms",
+        "services_reservation_service_generate_confirmation_code",
+        "services_reservation_service_invalidate_availability_cache",
+        "services_reservation_service_normalize_pricing_payment_method",
+        "services_reservation_service_reservationerror",
+        "services_reservation_service_resolve_creation_channel_code",
+        "services_reservation_service_resolve_hotel_id",
+        "services_reservation_service_resolve_reservation_company",
+        "services_reservation_service_touch_facts",
+        "services_reservation_service_validate_manual_telephonic_guest_requirements",
+        "services_reservation_service_validate_quote_token_for_reservation",
+        "services_reservation_service_validate_reservation_occupancy",
+        "services_reservation_service_with_pricing_revision",
+        "services_reservation_service_pricing_with_total",
+        "services_reservation_service_daily_rate_pricing_result",
+        "services_reservation_service_pricing_result_from_quote",
+        "services_reservation_service_resolve_reservation_commercial_context",
+        "services_reservation_service_reservation_channel_indicator",
+        "services_reservation_service_is_manual_or_telephonic_reservation",
+        "services_reservation_service_compute_deposit_amount",
+        "services_reservation_service_calendar_pricing_source",
+        "services_reservation_service_get_hotel_default_currency",
+        "services_reservation_service_reservationpricingresult"
+      ],
+      "depth": 3,
+      "nodeCount": 29,
+      "fileCount": 1,
+      "files": [
+        "app/services/reservation_service.py"
+      ],
+      "criticality": 0.2145,
       "warnings": []
     },
     {
@@ -5183,56 +5083,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_reservation_service_update_reservation_fields",
-      "name": "update_reservation_fields",
-      "entryPoint": "services_reservation_service_update_reservation_fields",
-      "entryPointId": "services_reservation_service_update_reservation_fields",
-      "path": [
-        "services_reservation_service_update_reservation_fields",
-        "services_reservation_service_apply_pricing_result_to_reservation",
-        "services_reservation_service_calculate_reservation_pricing",
-        "services_reservation_service_check_room_availability",
-        "services_reservation_service_invalidate_availability_cache",
-        "services_reservation_service_reservationerror",
-        "services_reservation_service_resolve_hotel_id",
-        "services_reservation_service_validate_reservation_occupancy",
-        "services_reservation_service_daily_rate_pricing_result",
-        "services_reservation_service_normalize_pricing_payment_method",
-        "services_reservation_service_pricing_result_from_quote",
-        "services_reservation_service_resolve_reservation_commercial_context",
-        "services_reservation_service_calendar_pricing_source",
-        "services_reservation_service_compute_deposit_amount",
-        "services_reservation_service_get_hotel_default_currency",
-        "services_reservation_service_reservationpricingresult"
-      ],
-      "qualifiedPath": [
-        "services_reservation_service_update_reservation_fields",
-        "services_reservation_service_apply_pricing_result_to_reservation",
-        "services_reservation_service_calculate_reservation_pricing",
-        "services_reservation_service_check_room_availability",
-        "services_reservation_service_invalidate_availability_cache",
-        "services_reservation_service_reservationerror",
-        "services_reservation_service_resolve_hotel_id",
-        "services_reservation_service_validate_reservation_occupancy",
-        "services_reservation_service_daily_rate_pricing_result",
-        "services_reservation_service_normalize_pricing_payment_method",
-        "services_reservation_service_pricing_result_from_quote",
-        "services_reservation_service_resolve_reservation_commercial_context",
-        "services_reservation_service_calendar_pricing_source",
-        "services_reservation_service_compute_deposit_amount",
-        "services_reservation_service_get_hotel_default_currency",
-        "services_reservation_service_reservationpricingresult"
-      ],
-      "depth": 3,
-      "nodeCount": 16,
-      "fileCount": 1,
-      "files": [
-        "app/services/reservation_service.py"
-      ],
-      "criticality": 0.2113,
-      "warnings": []
-    },
-    {
       "id": "flow:services_payment_link_test_service_list_payment_link_tests",
       "name": "list_payment_link_tests",
       "entryPoint": "services_payment_link_test_service_list_payment_link_tests",
@@ -5415,6 +5265,90 @@
       "warnings": []
     },
     {
+      "id": "flow:services_reservation_service_mark_reservation_no_show",
+      "name": "mark_reservation_no_show",
+      "entryPoint": "services_reservation_service_mark_reservation_no_show",
+      "entryPointId": "services_reservation_service_mark_reservation_no_show",
+      "path": [
+        "services_reservation_service_mark_reservation_no_show",
+        "services_reservation_service_assert_reservation_version",
+        "services_reservation_service_invalidate_availability_cache",
+        "services_reservation_service_reservationerror",
+        "services_reservation_service_touch_facts"
+      ],
+      "qualifiedPath": [
+        "services_reservation_service_mark_reservation_no_show",
+        "services_reservation_service_assert_reservation_version",
+        "services_reservation_service_invalidate_availability_cache",
+        "services_reservation_service_reservationerror",
+        "services_reservation_service_touch_facts"
+      ],
+      "depth": 1,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "app/services/reservation_service.py"
+      ],
+      "criticality": 0.21,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_reservation_operations_service_move_reservation_room",
+      "name": "move_reservation_room",
+      "entryPoint": "services_reservation_operations_service_move_reservation_room",
+      "entryPointId": "services_reservation_operations_service_move_reservation_room",
+      "path": [
+        "services_reservation_operations_service_move_reservation_room",
+        "services_reservation_operations_service_invalidate_availability_cache",
+        "services_reservation_operations_service_reservationoperationserror",
+        "services_reservation_operations_service_roommoveresult",
+        "services_reservation_operations_service_touch_facts"
+      ],
+      "qualifiedPath": [
+        "services_reservation_operations_service_move_reservation_room",
+        "services_reservation_operations_service_invalidate_availability_cache",
+        "services_reservation_operations_service_reservationoperationserror",
+        "services_reservation_operations_service_roommoveresult",
+        "services_reservation_operations_service_touch_facts"
+      ],
+      "depth": 1,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "app/services/reservation_operations_service.py"
+      ],
+      "criticality": 0.21,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_reservation_service_transition_reservation_status",
+      "name": "transition_reservation_status",
+      "entryPoint": "services_reservation_service_transition_reservation_status",
+      "entryPointId": "services_reservation_service_transition_reservation_status",
+      "path": [
+        "services_reservation_service_transition_reservation_status",
+        "services_reservation_service_invalidate_availability_cache",
+        "services_reservation_service_reservationerror",
+        "services_reservation_service_resolve_hotel_id",
+        "services_reservation_service_touch_facts"
+      ],
+      "qualifiedPath": [
+        "services_reservation_service_transition_reservation_status",
+        "services_reservation_service_invalidate_availability_cache",
+        "services_reservation_service_reservationerror",
+        "services_reservation_service_resolve_hotel_id",
+        "services_reservation_service_touch_facts"
+      ],
+      "depth": 1,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "app/services/reservation_service.py"
+      ],
+      "criticality": 0.21,
+      "warnings": []
+    },
+    {
       "id": "flow:services_analytics_service_update_company",
       "name": "update_company",
       "entryPoint": "services_analytics_service_update_company",
@@ -5440,6 +5374,58 @@
         "app/services/analytics_service.py"
       ],
       "criticality": 0.21,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_reservation_service_update_reservation_fields",
+      "name": "update_reservation_fields",
+      "entryPoint": "services_reservation_service_update_reservation_fields",
+      "entryPointId": "services_reservation_service_update_reservation_fields",
+      "path": [
+        "services_reservation_service_update_reservation_fields",
+        "services_reservation_service_apply_pricing_result_to_reservation",
+        "services_reservation_service_calculate_reservation_pricing",
+        "services_reservation_service_check_room_availability",
+        "services_reservation_service_invalidate_availability_cache",
+        "services_reservation_service_reservationerror",
+        "services_reservation_service_resolve_hotel_id",
+        "services_reservation_service_touch_facts",
+        "services_reservation_service_validate_reservation_occupancy",
+        "services_reservation_service_daily_rate_pricing_result",
+        "services_reservation_service_normalize_pricing_payment_method",
+        "services_reservation_service_pricing_result_from_quote",
+        "services_reservation_service_resolve_reservation_commercial_context",
+        "services_reservation_service_calendar_pricing_source",
+        "services_reservation_service_compute_deposit_amount",
+        "services_reservation_service_get_hotel_default_currency",
+        "services_reservation_service_reservationpricingresult"
+      ],
+      "qualifiedPath": [
+        "services_reservation_service_update_reservation_fields",
+        "services_reservation_service_apply_pricing_result_to_reservation",
+        "services_reservation_service_calculate_reservation_pricing",
+        "services_reservation_service_check_room_availability",
+        "services_reservation_service_invalidate_availability_cache",
+        "services_reservation_service_reservationerror",
+        "services_reservation_service_resolve_hotel_id",
+        "services_reservation_service_touch_facts",
+        "services_reservation_service_validate_reservation_occupancy",
+        "services_reservation_service_daily_rate_pricing_result",
+        "services_reservation_service_normalize_pricing_payment_method",
+        "services_reservation_service_pricing_result_from_quote",
+        "services_reservation_service_resolve_reservation_commercial_context",
+        "services_reservation_service_calendar_pricing_source",
+        "services_reservation_service_compute_deposit_amount",
+        "services_reservation_service_get_hotel_default_currency",
+        "services_reservation_service_reservationpricingresult"
+      ],
+      "depth": 3,
+      "nodeCount": 17,
+      "fileCount": 1,
+      "files": [
+        "app/services/reservation_service.py"
+      ],
+      "criticality": 0.2094,
       "warnings": []
     },
     {
@@ -6329,6 +6315,7 @@
         "services_analytics_service_group_rows",
         "services_analytics_service_money_str",
         "services_analytics_service_sum_money",
+        "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_money"
       ],
       "qualifiedPath": [
@@ -6345,10 +6332,11 @@
         "services_analytics_service_group_rows",
         "services_analytics_service_money_str",
         "services_analytics_service_sum_money",
+        "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_money"
       ],
       "depth": 3,
-      "nodeCount": 14,
+      "nodeCount": 15,
       "fileCount": 1,
       "files": [
         "app/services/analytics_service.py"
@@ -6421,6 +6409,7 @@
         "services_analytics_service_group_rows",
         "services_analytics_service_money_str",
         "services_analytics_service_sum_money",
+        "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_money"
       ],
       "qualifiedPath": [
@@ -6437,10 +6426,11 @@
         "services_analytics_service_group_rows",
         "services_analytics_service_money_str",
         "services_analytics_service_sum_money",
+        "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_money"
       ],
       "depth": 3,
-      "nodeCount": 14,
+      "nodeCount": 15,
       "fileCount": 1,
       "files": [
         "app/services/analytics_service.py"
@@ -6985,54 +6975,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_analytics_facts_refresh_fact_room_occupancy_daily",
-      "name": "refresh_fact_room_occupancy_daily",
-      "entryPoint": "services_analytics_facts_refresh_fact_room_occupancy_daily",
-      "entryPointId": "services_analytics_facts_refresh_fact_room_occupancy_daily",
-      "path": [
-        "services_analytics_facts_refresh_fact_room_occupancy_daily",
-        "services_analytics_facts_date_range",
-        "services_analytics_facts_factrefreshresult",
-        "services_analytics_facts_occupied_nightly_fact_map",
-        "services_analytics_facts_room_state_events_map",
-        "services_analytics_facts_reservation_dates_in_window",
-        "services_analytics_facts_reservation_monetary_totals",
-        "services_analytics_facts_reservation_row_kind",
-        "services_analytics_facts_resolve_no_show_policy",
-        "services_analytics_facts_event_overlaps_date",
-        "services_analytics_facts_room_event_priority",
-        "services_analytics_facts_room_event_status",
-        "services_analytics_facts_currency_pair",
-        "services_analytics_facts_decimal_or_none",
-        "services_analytics_facts_decimal_or_zero"
-      ],
-      "qualifiedPath": [
-        "services_analytics_facts_refresh_fact_room_occupancy_daily",
-        "services_analytics_facts_date_range",
-        "services_analytics_facts_factrefreshresult",
-        "services_analytics_facts_occupied_nightly_fact_map",
-        "services_analytics_facts_room_state_events_map",
-        "services_analytics_facts_reservation_dates_in_window",
-        "services_analytics_facts_reservation_monetary_totals",
-        "services_analytics_facts_reservation_row_kind",
-        "services_analytics_facts_resolve_no_show_policy",
-        "services_analytics_facts_event_overlaps_date",
-        "services_analytics_facts_room_event_priority",
-        "services_analytics_facts_room_event_status",
-        "services_analytics_facts_currency_pair",
-        "services_analytics_facts_decimal_or_none",
-        "services_analytics_facts_decimal_or_zero"
-      ],
-      "depth": 3,
-      "nodeCount": 15,
-      "fileCount": 1,
-      "files": [
-        "app/services/analytics_facts.py"
-      ],
-      "criticality": 0.18,
-      "warnings": []
-    },
-    {
       "id": "flow:services_tenant_context_set_tenant_context",
       "name": "set_tenant_context",
       "entryPoint": "services_tenant_context_set_tenant_context",
@@ -7058,6 +7000,58 @@
       "fileCount": 1,
       "files": [
         "app/services/tenant_context.py"
+      ],
+      "criticality": 0.18,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_analytics_facts_touch_reservation_fact_window",
+      "name": "touch_reservation_fact_window",
+      "entryPoint": "services_analytics_facts_touch_reservation_fact_window",
+      "entryPointId": "services_analytics_facts_touch_reservation_fact_window",
+      "path": [
+        "services_analytics_facts_touch_reservation_fact_window",
+        "services_analytics_facts_refresh_fact_reservation_daily",
+        "services_analytics_facts_refresh_fact_room_occupancy_daily",
+        "services_analytics_facts_factrefreshresult",
+        "services_analytics_facts_reservation_dates_in_window",
+        "services_analytics_facts_reservation_monetary_totals",
+        "services_analytics_facts_reservation_row_kind",
+        "services_analytics_facts_resolve_no_show_policy",
+        "services_analytics_facts_date_range",
+        "services_analytics_facts_occupied_nightly_fact_map",
+        "services_analytics_facts_room_state_events_map",
+        "services_analytics_facts_currency_pair",
+        "services_analytics_facts_decimal_or_none",
+        "services_analytics_facts_decimal_or_zero",
+        "services_analytics_facts_event_overlaps_date",
+        "services_analytics_facts_room_event_priority",
+        "services_analytics_facts_room_event_status"
+      ],
+      "qualifiedPath": [
+        "services_analytics_facts_touch_reservation_fact_window",
+        "services_analytics_facts_refresh_fact_reservation_daily",
+        "services_analytics_facts_refresh_fact_room_occupancy_daily",
+        "services_analytics_facts_factrefreshresult",
+        "services_analytics_facts_reservation_dates_in_window",
+        "services_analytics_facts_reservation_monetary_totals",
+        "services_analytics_facts_reservation_row_kind",
+        "services_analytics_facts_resolve_no_show_policy",
+        "services_analytics_facts_date_range",
+        "services_analytics_facts_occupied_nightly_fact_map",
+        "services_analytics_facts_room_state_events_map",
+        "services_analytics_facts_currency_pair",
+        "services_analytics_facts_decimal_or_none",
+        "services_analytics_facts_decimal_or_zero",
+        "services_analytics_facts_event_overlaps_date",
+        "services_analytics_facts_room_event_priority",
+        "services_analytics_facts_room_event_status"
+      ],
+      "depth": 3,
+      "nodeCount": 17,
+      "fileCount": 1,
+      "files": [
+        "app/services/analytics_facts.py"
       ],
       "criticality": 0.18,
       "warnings": []
@@ -7284,6 +7278,7 @@
       "path": [
         "services_analytics_service_build_category_detail_payload",
         "services_analytics_service_analytics_window",
+        "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_facts_data_as_of",
         "services_analytics_service_money_str",
         "services_analytics_service_now",
@@ -7295,6 +7290,7 @@
       "qualifiedPath": [
         "services_analytics_service_build_category_detail_payload",
         "services_analytics_service_analytics_window",
+        "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_facts_data_as_of",
         "services_analytics_service_money_str",
         "services_analytics_service_now",
@@ -7304,7 +7300,7 @@
         "services_analytics_service_money"
       ],
       "depth": 2,
-      "nodeCount": 9,
+      "nodeCount": 10,
       "fileCount": 1,
       "files": [
         "app/services/analytics_service.py"
@@ -7333,6 +7329,7 @@
         "services_analytics_service_utc_date_range",
         "services_analytics_service_group_rows",
         "services_analytics_service_money_str",
+        "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_money"
       ],
       "qualifiedPath": [
@@ -7351,10 +7348,11 @@
         "services_analytics_service_utc_date_range",
         "services_analytics_service_group_rows",
         "services_analytics_service_money_str",
+        "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_money"
       ],
       "depth": 2,
-      "nodeCount": 16,
+      "nodeCount": 17,
       "fileCount": 1,
       "files": [
         "app/services/analytics_service.py"
@@ -7379,6 +7377,7 @@
         "services_analytics_service_comparison_read",
         "services_analytics_service_datewindow",
         "services_analytics_service_utc_date_range",
+        "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_money"
       ],
       "qualifiedPath": [
@@ -7393,10 +7392,11 @@
         "services_analytics_service_comparison_read",
         "services_analytics_service_datewindow",
         "services_analytics_service_utc_date_range",
+        "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_money"
       ],
       "depth": 2,
-      "nodeCount": 12,
+      "nodeCount": 13,
       "fileCount": 1,
       "files": [
         "app/services/analytics_service.py"
@@ -7412,6 +7412,7 @@
       "path": [
         "services_analytics_service_build_room_detail_payload",
         "services_analytics_service_analytics_window",
+        "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_facts_data_as_of",
         "services_analytics_service_fetch_room_state_events",
         "services_analytics_service_money_str",
@@ -7425,6 +7426,7 @@
       "qualifiedPath": [
         "services_analytics_service_build_room_detail_payload",
         "services_analytics_service_analytics_window",
+        "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_facts_data_as_of",
         "services_analytics_service_fetch_room_state_events",
         "services_analytics_service_money_str",
@@ -7436,7 +7438,7 @@
         "services_analytics_service_money"
       ],
       "depth": 2,
-      "nodeCount": 11,
+      "nodeCount": 12,
       "fileCount": 1,
       "files": [
         "app/services/analytics_service.py"
@@ -7484,6 +7486,7 @@
         "services_analytics_service_money_str",
         "services_analytics_service_room_lookup_map",
         "services_analytics_service_sum_money",
+        "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_money"
       ],
       "qualifiedPath": [
@@ -7493,10 +7496,11 @@
         "services_analytics_service_money_str",
         "services_analytics_service_room_lookup_map",
         "services_analytics_service_sum_money",
+        "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_money"
       ],
       "depth": 2,
-      "nodeCount": 7,
+      "nodeCount": 8,
       "fileCount": 1,
       "files": [
         "app/services/analytics_service.py"
@@ -7524,6 +7528,7 @@
         "services_analytics_service_comparison_read",
         "services_analytics_service_datewindow",
         "services_analytics_service_utc_date_range",
+        "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_money"
       ],
       "qualifiedPath": [
@@ -7541,10 +7546,11 @@
         "services_analytics_service_comparison_read",
         "services_analytics_service_datewindow",
         "services_analytics_service_utc_date_range",
+        "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_money"
       ],
       "depth": 2,
-      "nodeCount": 15,
+      "nodeCount": 16,
       "fileCount": 1,
       "files": [
         "app/services/analytics_service.py"
@@ -7565,6 +7571,7 @@
         "services_analytics_service_now",
         "services_analytics_service_sum_money",
         "services_analytics_service_utc_date_range",
+        "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_money_str",
         "services_analytics_service_money",
         "services_analytics_service_comparison_read",
@@ -7578,13 +7585,14 @@
         "services_analytics_service_now",
         "services_analytics_service_sum_money",
         "services_analytics_service_utc_date_range",
+        "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_money_str",
         "services_analytics_service_money",
         "services_analytics_service_comparison_read",
         "services_analytics_service_datewindow"
       ],
       "depth": 2,
-      "nodeCount": 11,
+      "nodeCount": 12,
       "fileCount": 1,
       "files": [
         "app/services/analytics_service.py"
@@ -8481,32 +8489,6 @@
       "warnings": []
     },
     {
-      "id": "flow:api_blocks_list_room_blocks",
-      "name": "list_room_blocks",
-      "entryPoint": "api_blocks_list_room_blocks",
-      "entryPointId": "api_blocks_list_room_blocks",
-      "path": [
-        "api_blocks_list_room_blocks",
-        "api_blocks_read_block",
-        "api_blocks_inclusive_end",
-        "api_blocks_roomblockread"
-      ],
-      "qualifiedPath": [
-        "api_blocks_list_room_blocks",
-        "api_blocks_read_block",
-        "api_blocks_inclusive_end",
-        "api_blocks_roomblockread"
-      ],
-      "depth": 2,
-      "nodeCount": 4,
-      "fileCount": 1,
-      "files": [
-        "app/api/blocks.py"
-      ],
-      "criticality": 0.17,
-      "warnings": []
-    },
-    {
       "id": "flow:scripts_repair_cash_handoff_schema_main",
       "name": "main",
       "entryPoint": "scripts_repair_cash_handoff_schema_main",
@@ -8742,42 +8724,6 @@
       "fileCount": 1,
       "files": [
         "app/services/reservation_operations_service.py"
-      ],
-      "criticality": 0.17,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_analytics_facts_refresh_fact_reservation_daily",
-      "name": "refresh_fact_reservation_daily",
-      "entryPoint": "services_analytics_facts_refresh_fact_reservation_daily",
-      "entryPointId": "services_analytics_facts_refresh_fact_reservation_daily",
-      "path": [
-        "services_analytics_facts_refresh_fact_reservation_daily",
-        "services_analytics_facts_factrefreshresult",
-        "services_analytics_facts_reservation_dates_in_window",
-        "services_analytics_facts_reservation_monetary_totals",
-        "services_analytics_facts_reservation_row_kind",
-        "services_analytics_facts_resolve_no_show_policy",
-        "services_analytics_facts_currency_pair",
-        "services_analytics_facts_decimal_or_none",
-        "services_analytics_facts_decimal_or_zero"
-      ],
-      "qualifiedPath": [
-        "services_analytics_facts_refresh_fact_reservation_daily",
-        "services_analytics_facts_factrefreshresult",
-        "services_analytics_facts_reservation_dates_in_window",
-        "services_analytics_facts_reservation_monetary_totals",
-        "services_analytics_facts_reservation_row_kind",
-        "services_analytics_facts_resolve_no_show_policy",
-        "services_analytics_facts_currency_pair",
-        "services_analytics_facts_decimal_or_none",
-        "services_analytics_facts_decimal_or_zero"
-      ],
-      "depth": 2,
-      "nodeCount": 9,
-      "fileCount": 1,
-      "files": [
-        "app/services/analytics_facts.py"
       ],
       "criticality": 0.17,
       "warnings": []
@@ -10967,6 +10913,28 @@
       "warnings": []
     },
     {
+      "id": "flow:protected_laundrypage_settlementquarterrow",
+      "name": "SettlementQuarterRow",
+      "entryPoint": "protected_laundrypage_settlementquarterrow",
+      "entryPointId": "protected_laundrypage_settlementquarterrow",
+      "path": [
+        "protected_laundrypage_settlementquarterrow",
+        "protected_laundrypage_quarterlabel"
+      ],
+      "qualifiedPath": [
+        "protected_laundrypage_settlementquarterrow",
+        "protected_laundrypage_quarterlabel"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/views/protected/LaundryPage.tsx"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:analytics_analyticspages_ultraguard",
       "name": "UltraGuard",
       "entryPoint": "analytics_analyticspages_ultraguard",
@@ -11827,16 +11795,18 @@
         "services_reservation_operations_service_change_reservation_dates",
         "services_reservation_operations_service_has_transactions",
         "services_reservation_operations_service_reservationdatechangeresult",
-        "services_reservation_operations_service_reservationoperationserror"
+        "services_reservation_operations_service_reservationoperationserror",
+        "services_reservation_operations_service_touch_facts"
       ],
       "qualifiedPath": [
         "services_reservation_operations_service_change_reservation_dates",
         "services_reservation_operations_service_has_transactions",
         "services_reservation_operations_service_reservationdatechangeresult",
-        "services_reservation_operations_service_reservationoperationserror"
+        "services_reservation_operations_service_reservationoperationserror",
+        "services_reservation_operations_service_touch_facts"
       ],
       "depth": 1,
-      "nodeCount": 4,
+      "nodeCount": 5,
       "fileCount": 1,
       "files": [
         "app/services/reservation_operations_service.py"
@@ -13169,6 +13139,7 @@
       "entryPointId": "services_analytics_service_get_company_fact_detail",
       "path": [
         "services_analytics_service_get_company_fact_detail",
+        "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_facts_data_as_of",
         "services_analytics_service_get_company_or_404",
         "services_analytics_service_metric_card",
@@ -13178,6 +13149,7 @@
       ],
       "qualifiedPath": [
         "services_analytics_service_get_company_fact_detail",
+        "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_facts_data_as_of",
         "services_analytics_service_get_company_or_404",
         "services_analytics_service_metric_card",
@@ -13186,7 +13158,7 @@
         "services_analytics_service_serialize_company"
       ],
       "depth": 1,
-      "nodeCount": 7,
+      "nodeCount": 8,
       "fileCount": 1,
       "files": [
         "app/services/analytics_service.py"
@@ -14009,6 +13981,30 @@
       "warnings": []
     },
     {
+      "id": "flow:services_laundry_vendor_service_mark_vendor_settlement_paid",
+      "name": "mark_vendor_settlement_paid",
+      "entryPoint": "services_laundry_vendor_service_mark_vendor_settlement_paid",
+      "entryPointId": "services_laundry_vendor_service_mark_vendor_settlement_paid",
+      "path": [
+        "services_laundry_vendor_service_mark_vendor_settlement_paid",
+        "services_laundry_vendor_service_laundryvendorerror",
+        "services_laundry_vendor_service_quarter_bounds"
+      ],
+      "qualifiedPath": [
+        "services_laundry_vendor_service_mark_vendor_settlement_paid",
+        "services_laundry_vendor_service_laundryvendorerror",
+        "services_laundry_vendor_service_quarter_bounds"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/services/laundry_vendor_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:api_payment_links_mercadopago_payment_link_webhook",
       "name": "mercadopago_payment_link_webhook",
       "entryPoint": "api_payment_links_mercadopago_payment_link_webhook",
@@ -14558,28 +14554,6 @@
       "fileCount": 1,
       "files": [
         "app/api/reservations.py"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
-      "id": "flow:api_blocks_release_room_block",
-      "name": "release_room_block",
-      "entryPoint": "api_blocks_release_room_block",
-      "entryPointId": "api_blocks_release_room_block",
-      "path": [
-        "api_blocks_release_room_block",
-        "api_blocks_existing_user_id"
-      ],
-      "qualifiedPath": [
-        "api_blocks_release_room_block",
-        "api_blocks_existing_user_id"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "app/api/blocks.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -16080,6 +16054,30 @@
       "fileCount": 1,
       "files": [
         "frontend/src/hooks/useRooms.ts"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_laundry_vendor_service_vendor_settlements",
+      "name": "vendor_settlements",
+      "entryPoint": "services_laundry_vendor_service_vendor_settlements",
+      "entryPointId": "services_laundry_vendor_service_vendor_settlements",
+      "path": [
+        "services_laundry_vendor_service_vendor_settlements",
+        "services_laundry_vendor_service_quarter_bounds",
+        "services_laundry_vendor_service_vendor_spend"
+      ],
+      "qualifiedPath": [
+        "services_laundry_vendor_service_vendor_settlements",
+        "services_laundry_vendor_service_quarter_bounds",
+        "services_laundry_vendor_service_vendor_spend"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/services/laundry_vendor_service.py"
       ],
       "criticality": 0.16,
       "warnings": []

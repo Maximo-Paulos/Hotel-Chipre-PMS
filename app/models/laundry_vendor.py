@@ -20,6 +20,7 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     Column,
+    Date,
     DateTime,
     ForeignKey,
     ForeignKeyConstraint,
@@ -184,4 +185,46 @@ class LaundryRemitoLine(Base):
         ),
         Index("ix_laundry_remito_lines_hotel_id", "hotel_id"),
         Index("ix_laundry_remito_lines_remito_id", "remito_id"),
+    )
+
+
+class LaundryVendorSettlement(Base):
+    """Owner's paid/not-paid mark for one vendor's calendar quarter.
+
+    A row only exists once someone has toggled a quarter's paid state --
+    the quarter total itself is never stored here (see vendor_settlements in
+    laundry_vendor_service.py, which sums LaundryRemitoLine.unit_price_snapshot
+    on the fly so a late-dated remito never leaves a stale precomputed total).
+    A quarter with no row is simply "not paid" by default.
+    """
+
+    __tablename__ = "laundry_vendor_settlements"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    hotel_id = Column(
+        Integer, ForeignKey("hotel_configuration.id", name="fk_laundry_vendor_settlements_hotel_id"), nullable=False
+    )
+    vendor_id = Column(Integer, nullable=False)
+    period_start = Column(Date, nullable=False)
+    period_end = Column(Date, nullable=False)
+    paid = Column(Boolean, nullable=False, server_default="0")
+    paid_at = Column(DateTime, nullable=True)
+    paid_by_user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="SET NULL", name="fk_laundry_vendor_settlements_paid_by_user_id"),
+        nullable=True,
+    )
+    notes = Column(Text, nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "hotel_id", "vendor_id", "period_start", name="uq_laundry_vendor_settlements_hotel_vendor_period"
+        ),
+        ForeignKeyConstraint(
+            ["hotel_id", "vendor_id"],
+            ["laundry_vendors.hotel_id", "laundry_vendors.id"],
+            name="fk_laundry_vendor_settlements_hotel_vendor",
+            ondelete="CASCADE",
+        ),
+        Index("ix_laundry_vendor_settlements_hotel_id", "hotel_id"),
     )
