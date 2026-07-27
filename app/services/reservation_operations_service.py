@@ -35,6 +35,7 @@ from app.models.room import Room, RoomCategory
 from app.models.transaction import Transaction
 from app.services import audit_log_service
 from app.services.allocation_policy_service import record_manual_override_feedback
+from app.services.analytics_facts import touch_reservation_fact_window
 from app.schemas.payment_link import PaymentLinkCreate
 from app.schemas.reservation import ReservationCreate, ReservationUpdate
 from app.schemas.transaction import PaymentRequest
@@ -66,6 +67,15 @@ def _invalidate_availability_cache(hotel_id: int) -> None:
         invalidate_hotel_operational_caches(hotel_id)
     except Exception:
         pass
+
+
+def _touch_facts(db: Session, hotel_id: int, date_from: date, date_to: date) -> None:
+    """Same convention as _invalidate_availability_cache: these orchestration
+    functions mutate reservation dates/room/total_amount directly instead of
+    going through create_reservation/update_reservation_fields (which already
+    carry this hook), so they need their own call.
+    """
+    touch_reservation_fact_window(db, hotel_id=hotel_id, date_from=date_from, date_to=date_to)
 
 
 def _hotel_default_currency(db: Session, hotel_id: int) -> str:
@@ -466,6 +476,8 @@ def change_reservation_dates(
         raise ReservationOperationsError("Check-out must be after check-in")
     if check_in_date < date.today():
         raise ReservationOperationsError("No se puede cambiar la fecha de check-in a una fecha en el pasado")
+    original_check_in = reservation.check_in_date
+    original_check_out = reservation.check_out_date
     if reservation.status in (
         ReservationStatusEnum.CHECKED_IN,
         ReservationStatusEnum.CHECKED_OUT,
@@ -500,6 +512,11 @@ def change_reservation_dates(
             )
         )
         db.flush()
+        # create_reservation() below only touches the *new* reservation's
+        # window; this one is now cancelled and must disappear from its
+        # original window's facts immediately (revenue was previously
+        # counted there).
+        _touch_facts(db, hotel_id, original_check_in, original_check_out)
         new_reservation = create_reservation(
             db,
             ReservationCreate(
@@ -564,6 +581,16 @@ def change_reservation_dates(
         status_transitioned = True
     reservation.notes = ((reservation.notes or "") + f"\n[DATE CHANGE] {reason or 'Date changed with payments preserved'}").strip()
     db.flush()
+    # update_reservation_fields() already touched the union of old/new dates,
+    # but a keep_current_total override (or the FULLY_PAID transition above)
+    # changes revenue/status *after* that touch ran -- re-touch with the
+    # final values so the fact rows don't lag behind this request.
+    _touch_facts(
+        db,
+        hotel_id,
+        min(original_check_in, reservation.check_in_date),
+        max(original_check_out, reservation.check_out_date),
+    )
     return ReservationDateChangeResult(
         original_reservation=reservation,
         reservation=reservation,
@@ -674,6 +701,7 @@ def extend_reservation_stay(
         raise ReservationOperationsError("Accion de pago de extension invalida")
 
     original_status = reservation.status
+    original_check_out = reservation.check_out_date
     reservation.check_out_date = new_checkout_date
     reservation.total_amount = (Decimal(str(reservation.total_amount or 0)) + amount).quantize(Decimal("0.01"))
     reservation.subtotal_amount = (Decimal(str(reservation.subtotal_amount or 0)) + amount).quantize(Decimal("0.01"))
@@ -695,6 +723,7 @@ def extend_reservation_stay(
 
     db.flush()
     _invalidate_availability_cache(hotel_id)
+    _touch_facts(db, hotel_id, reservation.check_in_date, max(original_check_out, reservation.check_out_date))
     return ReservationExtensionResult(
         reservation=reservation,
         extension_amount=amount,
@@ -790,6 +819,7 @@ def move_reservation_room(
     db.add(event)
     db.flush()
     _invalidate_availability_cache(hotel_id)
+    _touch_facts(db, hotel_id, reservation.check_in_date, reservation.check_out_date)
     record_manual_override_feedback(
         db,
         hotel_id=hotel_id,

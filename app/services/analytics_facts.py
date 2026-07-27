@@ -6,6 +6,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.analytics import (
@@ -361,6 +362,42 @@ def refresh_fact_room_occupancy_daily(
         deleted=deleted,
         inserted=inserted,
     )
+
+
+def touch_reservation_fact_window(
+    db: Session,
+    *,
+    hotel_id: int,
+    date_from: date,
+    date_to: date,
+) -> None:
+    """Write-time hook: re-derive both fact tables for a narrow window right
+    when the source data that feeds them changes (reservation created/moved/
+    cancelled/no-show'd), instead of waiting for the next Analytics read to
+    self-heal an empty range (_ensure_facts_materialized in
+    analytics_service.py). That self-heal only fires the FIRST time a window
+    is ever read and is kept as-is -- it's the safety net for rows loaded by
+    scripts/migrations that never call this hook.
+
+    Reuses the existing idempotent refresh_fact_* functions (delete+rebuild
+    only inside [date_from, date_to]) so a single reservation write stays
+    cheap regardless of how wide an open Analytics dashboard window is --
+    call sites pass just the affected reservation's stay range, not whatever
+    range a report happens to be showing.
+
+    Runs inside a SAVEPOINT so a lost race against another write touching an
+    overlapping window (rare for a small single-property hotel) rolls back
+    only this fact refresh, never the reservation/payment write that
+    triggered it -- the next Analytics read self-heals the window anyway.
+    """
+    if date_to < date_from:
+        return
+    try:
+        with db.begin_nested():
+            refresh_fact_reservation_daily(db, hotel_id=hotel_id, date_from=date_from, date_to=date_to)
+            refresh_fact_room_occupancy_daily(db, hotel_id=hotel_id, date_from=date_from, date_to=date_to)
+    except IntegrityError:
+        pass
 
 
 def calculate_pickup_30d(

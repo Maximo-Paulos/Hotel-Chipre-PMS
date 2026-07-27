@@ -226,5 +226,150 @@ def test_celery_tasks_are_registered():
     from app.tasks.celery_app import celery_app
 
     assert "analytics.detect_no_shows" in celery_app.tasks
-    assert "analytics.refresh_fact_reservation_daily" in celery_app.tasks
-    assert "analytics.refresh_fact_room_occupancy_daily" in celery_app.tasks
+
+
+# ── Write-time incremental fact touch (no read/self-heal involved) ──
+#
+# These reproduce the owner's actual ask: fact rows must reflect a new
+# reservation/edit/cancellation *immediately*, without waiting for anyone to
+# hit an /api/analytics/* endpoint first. None of these tests call
+# _ensure_facts_materialized, refresh_fact_*, or any analytics builder --
+# they only call the reservation-mutating service functions and then read
+# FactReservationDaily/FactRoomOccupancyDaily directly.
+
+from app.schemas.reservation import ReservationCreate, ReservationUpdate
+from app.services.reservation_service import (
+    create_reservation,
+    mark_reservation_no_show,
+    transition_reservation_status,
+    update_reservation_fields,
+)
+
+
+def test_create_reservation_materializes_fact_rows_immediately(db, hotel_config, sample_guest, sample_categories, sample_rooms):
+    assert db.query(FactReservationDaily).count() == 0
+
+    data = ReservationCreate(
+        guest_id=sample_guest.id,
+        category_id=sample_categories[0].id,
+        room_id=sample_rooms[0].id,
+        check_in_date=date(2026, 6, 1),
+        check_out_date=date(2026, 6, 3),
+    )
+    reservation = create_reservation(db, data, hotel_id=hotel_config.id)
+
+    rows = (
+        db.query(FactReservationDaily)
+        .filter(FactReservationDaily.reservation_id == reservation.id)
+        .order_by(FactReservationDaily.stay_date.asc())
+        .all()
+    )
+    assert [row.stay_date for row in rows] == [date(2026, 6, 1), date(2026, 6, 2)]
+    assert all(row.row_kind.value == "occupied" for row in rows)
+    assert sum(float(row.revenue_gross_ars) for row in rows) == pytest.approx(float(reservation.total_amount))
+
+
+def test_cancel_reservation_removes_fact_rows_immediately(db, hotel_config, sample_guest, sample_categories, sample_rooms):
+    data = ReservationCreate(
+        guest_id=sample_guest.id,
+        category_id=sample_categories[0].id,
+        room_id=sample_rooms[0].id,
+        check_in_date=date(2026, 6, 1),
+        check_out_date=date(2026, 6, 3),
+    )
+    reservation = create_reservation(db, data, hotel_id=hotel_config.id)
+    assert db.query(FactReservationDaily).filter(FactReservationDaily.reservation_id == reservation.id).count() == 2
+
+    transition_reservation_status(db, reservation, ReservationStatusEnum.CANCELLED, hotel_config.id, reason_code="cancelled_by_user")
+
+    # refresh_fact_reservation_daily excludes CANCELLED reservations entirely
+    # -- a cancellation must zero out its revenue in the fact table right
+    # away, not just on the next Analytics read.
+    assert db.query(FactReservationDaily).filter(FactReservationDaily.reservation_id == reservation.id).count() == 0
+
+
+def test_update_reservation_fields_date_move_touches_old_and_new_windows(db, hotel_config, sample_guest, sample_categories, sample_rooms):
+    data = ReservationCreate(
+        guest_id=sample_guest.id,
+        category_id=sample_categories[0].id,
+        room_id=sample_rooms[0].id,
+        check_in_date=date(2026, 6, 1),
+        check_out_date=date(2026, 6, 3),
+    )
+    reservation = create_reservation(db, data, hotel_id=hotel_config.id)
+    assert {
+        row.stay_date
+        for row in db.query(FactReservationDaily).filter(FactReservationDaily.reservation_id == reservation.id).all()
+    } == {date(2026, 6, 1), date(2026, 6, 2)}
+
+    update_reservation_fields(
+        db,
+        reservation,
+        ReservationUpdate(check_in_date=date(2026, 7, 10), check_out_date=date(2026, 7, 12)),
+        hotel_id=hotel_config.id,
+        client_version=reservation.version,
+    )
+
+    # Old June window must no longer carry this reservation's revenue...
+    assert db.query(FactReservationDaily).filter(
+        FactReservationDaily.reservation_id == reservation.id,
+        FactReservationDaily.stay_date < date(2026, 7, 1),
+    ).count() == 0
+    # ...and the new July window must already have it, without any read.
+    assert {
+        row.stay_date
+        for row in db.query(FactReservationDaily).filter(FactReservationDaily.reservation_id == reservation.id).all()
+    } == {date(2026, 7, 10), date(2026, 7, 11)}
+
+
+def test_mark_reservation_no_show_flips_fact_row_kind_immediately(db, hotel_config, sample_guest, sample_categories, sample_rooms):
+    data = ReservationCreate(
+        guest_id=sample_guest.id,
+        category_id=sample_categories[0].id,
+        room_id=sample_rooms[0].id,
+        check_in_date=date(2026, 6, 1),
+        check_out_date=date(2026, 6, 3),
+    )
+    reservation = create_reservation(db, data, hotel_id=hotel_config.id)
+    reservation.status = ReservationStatusEnum.FULLY_PAID  # satisfies no_show precondition path used in prod
+    db.flush()
+
+    mark_reservation_no_show(db, reservation, hotel_id=hotel_config.id, client_version=reservation.version)
+
+    rows = db.query(FactReservationDaily).filter(FactReservationDaily.reservation_id == reservation.id).all()
+    assert len(rows) == 2
+    assert all(row.row_kind.value == "no_show_chargeable" for row in rows)
+
+
+def test_move_reservation_room_moves_occupancy_fact_rows_immediately(db, hotel_config, sample_guest, sample_categories, sample_rooms):
+    from app.services.reservation_operations_service import move_reservation_room
+
+    data = ReservationCreate(
+        guest_id=sample_guest.id,
+        category_id=sample_categories[0].id,
+        room_id=sample_rooms[0].id,
+        check_in_date=date(2026, 6, 1),
+        check_out_date=date(2026, 6, 3),
+    )
+    reservation = create_reservation(db, data, hotel_id=hotel_config.id)
+    old_room_id = sample_rooms[0].id
+    new_room_id = sample_rooms[1].id
+    assert db.query(FactRoomOccupancyDaily).filter(
+        FactRoomOccupancyDaily.room_id == old_room_id, FactRoomOccupancyDaily.is_occupied.is_(True)
+    ).count() == 2
+
+    move_reservation_room(
+        db,
+        reservation=reservation,
+        to_room_id=new_room_id,
+        hotel_id=hotel_config.id,
+        reason_code="guest_request",
+        price_action="keep",
+    )
+
+    assert db.query(FactRoomOccupancyDaily).filter(
+        FactRoomOccupancyDaily.room_id == old_room_id, FactRoomOccupancyDaily.is_occupied.is_(True)
+    ).count() == 0
+    assert db.query(FactRoomOccupancyDaily).filter(
+        FactRoomOccupancyDaily.room_id == new_room_id, FactRoomOccupancyDaily.is_occupied.is_(True)
+    ).count() == 2
