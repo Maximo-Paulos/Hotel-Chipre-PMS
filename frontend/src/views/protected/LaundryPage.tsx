@@ -18,7 +18,7 @@ import {
   type LaundryVendorSettlementQuarter,
   type RemitoDirection
 } from "../../api/laundryVendor";
-import { getCurrentStock, listStockItems, listStockLocations, type StockItem } from "../../api/stock";
+import { createStockItem, getCurrentStock, listStockItems, listStockLocations, type StockItem } from "../../api/stock";
 import { hasValidSession } from "../../api/client";
 import { useGuardedMutation } from "../../hooks/useGuardedMutation";
 import { useSession } from "../../state/session";
@@ -49,6 +49,7 @@ const dayEndIso = (day: string) => new Date(`${day}T23:59:59.999`).toISOString()
 
 const emptyVendorForm = { name: "", contact_phone: "", contact_email: "" };
 const emptyPriceForm = { stock_item_id: "", unit_price: "" };
+const emptyLinenItemForm = { name: "", unit: "unidad" };
 
 type LineDraft = { stock_item_id: number; item_name: string; unit: string; quantity: string };
 
@@ -72,6 +73,7 @@ export function LaundryPage() {
   const [selectedVendorId, setSelectedVendorId] = useState<number | null>(null);
   const [vendorForm, setVendorForm] = useState(emptyVendorForm);
   const [priceForm, setPriceForm] = useState(emptyPriceForm);
+  const [linenItemForm, setLinenItemForm] = useState(emptyLinenItemForm);
   const [remitoForm, setRemitoForm] = useState(emptyRemitoForm);
   const [lines, setLines] = useState<LineDraft[]>([]);
   const [lineDraft, setLineDraft] = useState({ stock_item_id: "", quantity: "1" });
@@ -86,9 +88,11 @@ export function LaundryPage() {
     enabled,
     staleTime: 30 * 1000
   });
+  // LaundryPage only ever deals with ropa blanca (kind="linen") -- general
+  // supplies (bolsas, detergentes, jabon) live in StockPage instead.
   const itemsQuery = useQuery({
-    queryKey: ["stock-items", session.hotelId],
-    queryFn: () => listStockItems(session),
+    queryKey: ["stock-items", session.hotelId, "linen"],
+    queryFn: () => listStockItems({ kind: "linen" }, session),
     enabled,
     staleTime: 30 * 1000
   });
@@ -243,6 +247,20 @@ export function LaundryPage() {
     }
   });
 
+  // D (stock/lavanderia separation): LaundryPage used to reuse StockPage's
+  // generic item form for new ropa blanca (e.g. "toallas de piscina" nuevas)
+  // -- now that kind separates the two lists, it needs its own create-item
+  // form so a new linen type never has to be added from StockPage.
+  const createLinenItemMutation = useMutation({
+    mutationFn: () =>
+      createStockItem({ name: linenItemForm.name, unit: linenItemForm.unit, kind: "linen" }, session),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["stock-items", session.hotelId] });
+      setLinenItemForm(emptyLinenItemForm);
+      setMessage("Tipo de ropa blanca creado.");
+    }
+  });
+
   const setPriceMutation = useMutation({
     mutationFn: () =>
       setLaundryVendorPrice(
@@ -325,6 +343,16 @@ export function LaundryPage() {
       await setPriceMutation.mutateAsync();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "No se pudo guardar el precio.");
+    }
+  };
+
+  const handleCreateLinenItem = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setMessage(null);
+    try {
+      await createLinenItemMutation.mutateAsync();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "No se pudo crear el tipo de ropa blanca.");
     }
   };
 
@@ -511,6 +539,60 @@ export function LaundryPage() {
                 <p className="text-xs text-slate-500">Elegí un lavadero para editar sus precios.</p>
               )}
             </div>
+          </div>
+        </section>
+      )}
+
+      {manageVendors && (
+        <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div>
+            <p className="text-xs uppercase tracking-wide text-slate-500">Ropa blanca</p>
+            <h2 className="text-lg font-semibold text-slate-900">Tipos de ropa blanca ({items.length})</h2>
+            <p className="text-sm text-slate-600">
+              Sabanas, toallas, fundas: separado del stock general de insumos (bolsas, detergentes, jabon), que se
+              administra en Stock.
+            </p>
+          </div>
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+            <ul className="grid gap-2 sm:grid-cols-2">
+              {items.map((item) => (
+                <li key={item.id} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                  {item.name} <span className="text-xs text-slate-500">({item.unit})</span>
+                </li>
+              ))}
+              {!itemsQuery.isLoading && items.length === 0 && (
+                <li className="text-xs text-slate-500 sm:col-span-2">Todavía no hay tipos de ropa blanca cargados.</li>
+              )}
+            </ul>
+            <form className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4" onSubmit={handleCreateLinenItem}>
+              <p className="text-sm font-semibold text-slate-700">Nuevo tipo de ropa blanca</p>
+              <label className="space-y-1 text-sm">
+                <span className="text-slate-600">Nombre</span>
+                <input
+                  value={linenItemForm.name}
+                  onChange={(event) => setLinenItemForm((current) => ({ ...current, name: event.target.value }))}
+                  placeholder="Toallas de piscina"
+                  required
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                />
+              </label>
+              <label className="space-y-1 text-sm">
+                <span className="text-slate-600">Unidad</span>
+                <input
+                  value={linenItemForm.unit}
+                  onChange={(event) => setLinenItemForm((current) => ({ ...current, unit: event.target.value }))}
+                  required
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                />
+              </label>
+              <button
+                type="submit"
+                disabled={createLinenItemMutation.isPending}
+                className="min-h-11 w-full rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
+              >
+                Crear tipo de ropa blanca
+              </button>
+            </form>
           </div>
         </section>
       )}

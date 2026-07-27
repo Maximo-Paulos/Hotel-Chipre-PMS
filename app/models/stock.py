@@ -16,6 +16,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import relationship
 
@@ -32,13 +33,34 @@ class StockItem(Base):
     unit = Column(String(40), nullable=False)
     min_quantity = Column(Numeric(12, 2), nullable=True)
     active = Column(Boolean, nullable=False, server_default="1")
+    # "supply" (bolsas, detergentes, jabon -- StockPage) vs "linen" (ropa
+    # blanca administrada desde LaundryPage/laundry_vendor_prices). Same
+    # table on purpose (both are still stock items with movements/locations),
+    # separated only by which screen lists/creates them -- see
+    # app/api/stock.py list_items(kind=) and migration
+    # 20260727_stock_item_kind_and_soft_delete_unique_fix.
+    kind = Column(String(20), nullable=False, server_default="supply")
     deleted_at = Column(DateTime, nullable=True)
     deleted_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     movements = relationship("StockMovement", back_populates="item", lazy="selectin")
 
     __table_args__ = (
-        UniqueConstraint("hotel_id", "name", name="uq_stock_items_hotel_name"),
+        CheckConstraint("kind IN ('supply', 'linen')", name="ck_stock_items_kind_valid"),
+        # Partial (not plain) unique index: a soft-deleted item must not keep
+        # blocking the name forever -- otherwise "delete a discontinued
+        # product, then add its replacement under the same name" (the
+        # owner's exact reported use case) fails with an unhandled 500 on
+        # the *create* call, which looks indistinguishable from "delete is
+        # broken". See migration 20260727_stock_item_kind_and_soft_delete_unique_fix.
+        Index(
+            "uq_stock_items_hotel_name_active",
+            "hotel_id",
+            "name",
+            unique=True,
+            sqlite_where=text("deleted_at IS NULL"),
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
         UniqueConstraint("hotel_id", "id", name="uq_stock_items_hotel_id_id"),
         Index("ix_stock_items_hotel_id", "hotel_id"),
     )
@@ -56,7 +78,15 @@ class StockLocation(Base):
     movements = relationship("StockMovement", back_populates="location", lazy="selectin")
 
     __table_args__ = (
-        UniqueConstraint("hotel_id", "name", name="uq_stock_locations_hotel_name"),
+        # Same soft-delete-aware uniqueness fix as StockItem above.
+        Index(
+            "uq_stock_locations_hotel_name_active",
+            "hotel_id",
+            "name",
+            unique=True,
+            sqlite_where=text("deleted_at IS NULL"),
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
         UniqueConstraint("hotel_id", "id", name="uq_stock_locations_hotel_id_id"),
         Index("ix_stock_locations_hotel_id", "hotel_id"),
     )

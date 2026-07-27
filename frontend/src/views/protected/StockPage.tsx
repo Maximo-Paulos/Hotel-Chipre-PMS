@@ -20,6 +20,7 @@ import {
 } from "../../api/stock";
 import { listReservations, type Reservation } from "../../api/reservations";
 import { hasValidSession } from "../../api/client";
+import ConfirmDialog from "../../components/ConfirmDialog";
 import { useGuardedMutation } from "../../hooks/useGuardedMutation";
 import { useSession } from "../../state/session";
 import { startOfCurrentMonthIso, startOfCurrentWeekIso, todayIso } from "../../utils/date";
@@ -88,15 +89,23 @@ export function StockPage() {
   const [adjustmentDirection, setAdjustmentDirection] = useState<"increase" | "decrease">("increase");
   const [reservationSearch, setReservationSearch] = useState("");
   const [message, setMessage] = useState<string | null>(null);
+  const [itemPendingDelete, setItemPendingDelete] = useState<{ id: number; name: string } | null>(null);
   // D5 (Via D): "cuanto se consumio de cada item" por periodo, con variacion
   // % contra el periodo anterior de igual largo (calculado en el backend).
   const [consumptionGroupBy, setConsumptionGroupBy] = useState<StockConsumptionGroupBy>("week");
   const [consumptionRange, setConsumptionRange] = useState(() => ({ from: startOfCurrentWeekIso(), to: todayIso() }));
   const enabled = hasValidSession(session);
 
+  // Fetches every item (both kinds): "Registrar movimiento" below is a
+  // generic inventory-ledger tool (ingreso/egreso/ajuste) with no linen
+  // equivalent elsewhere, so it must still be able to target a linen item
+  // (e.g. registering an opening balance for new sheets before they ever go
+  // through a laundry remito). Only the catalog grid/stat below (supplyItems)
+  // is scoped to kind="supply" -- see the owner's "separá ropa blanca de
+  // insumos" request, which was about the product *catalog*, not the ledger.
   const itemsQuery = useQuery({
     queryKey: ["stock-items", session.hotelId],
-    queryFn: () => listStockItems(session),
+    queryFn: () => listStockItems({}, session),
     enabled,
     staleTime: 30 * 1000
   });
@@ -133,8 +142,15 @@ export function StockPage() {
   });
 
   const items = useMemo(() => itemsQuery.data ?? [], [itemsQuery.data]);
+  // The catalog grid/stat/badges below only ever show general supplies
+  // (bolsas, detergentes, jabon) -- ropa blanca (kind="linen") is catalogued
+  // in LaundryPage instead, even though it can still receive a movement here.
+  const supplyItems = useMemo(() => items.filter((item) => item.kind === "supply"), [items]);
   const locations = useMemo(() => locationsQuery.data ?? [], [locationsQuery.data]);
-  const lowStock = useMemo(() => lowStockQuery.data ?? [], [lowStockQuery.data]);
+  const lowStock = useMemo(
+    () => (lowStockQuery.data ?? []).filter((item) => item.kind === "supply"),
+    [lowStockQuery.data]
+  );
   const reservations = useMemo(() => reservationsQuery.data ?? [], [reservationsQuery.data]);
 
   const stockQueries = useQueries({
@@ -247,8 +263,10 @@ export function StockPage() {
     }
   });
 
-  const handleDeleteItem = async (item: { id: number; name: string }) => {
-    if (!window.confirm(`¿Eliminar "${item.name}" del inventario? Esta acción no se puede deshacer.`)) return;
+  const confirmDeleteItem = async () => {
+    if (!itemPendingDelete) return;
+    const item = itemPendingDelete;
+    setItemPendingDelete(null);
     setMessage(null);
     try {
       await deleteItemMutation.mutateAsync(item.id);
@@ -335,7 +353,7 @@ export function StockPage() {
       {message ? <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">{message}</div> : null}
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <StatusBadge label="Items" value={items.length} className="bg-slate-100 text-slate-700" />
+        <StatusBadge label="Items" value={supplyItems.length} className="bg-slate-100 text-slate-700" />
         <StatusBadge label="Ubicaciones" value={locations.length} className="bg-sky-100 text-sky-800" />
         <StatusBadge label="Bajo stock" value={lowStock.length} className="bg-rose-100 text-rose-800" />
       </div>
@@ -344,12 +362,12 @@ export function StockPage() {
         <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <div>
             <p className="text-xs uppercase tracking-wide text-slate-500">Inventario</p>
-            <h2 className="text-lg font-semibold text-slate-900">Items ({items.length})</h2>
+            <h2 className="text-lg font-semibold text-slate-900">Items ({supplyItems.length})</h2>
             {itemsQuery.error && <p className="text-xs text-rose-700">No se pudo cargar: {(itemsQuery.error as Error).message}</p>}
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
-            {items.map((item) => {
+            {supplyItems.map((item) => {
               const current = currentByItemId.get(item.id) ?? "...";
               const isLow = lowStock.some((lowItem) => lowItem.id === item.id);
               return (
@@ -395,14 +413,14 @@ export function StockPage() {
                     aria-label={`Eliminar ${item.name}`}
                     disabled={deleteItemMutation.isPending}
                     className="mt-2 min-h-11 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-50 disabled:opacity-60"
-                    onClick={() => handleDeleteItem(item)}
+                    onClick={() => setItemPendingDelete({ id: item.id, name: item.name })}
                   >
                     Eliminar
                   </button>
                 </div>
               );
             })}
-            {!itemsQuery.isLoading && items.length === 0 && (
+            {!itemsQuery.isLoading && supplyItems.length === 0 && (
               <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-600">
                 No hay items de stock cargados.
               </div>
@@ -674,6 +692,19 @@ export function StockPage() {
         groupBy={consumptionGroupBy}
         onGroupByChange={setConsumptionGroupBy}
         query={consumptionReportQuery}
+      />
+
+      <ConfirmDialog
+        open={itemPendingDelete !== null}
+        title="Eliminar item de stock"
+        message={
+          itemPendingDelete
+            ? `¿Eliminar "${itemPendingDelete.name}" del inventario? Esta acción no se puede deshacer.`
+            : ""
+        }
+        confirmLabel="Eliminar"
+        onConfirm={confirmDeleteItem}
+        onCancel={() => setItemPendingDelete(null)}
       />
     </div>
   );

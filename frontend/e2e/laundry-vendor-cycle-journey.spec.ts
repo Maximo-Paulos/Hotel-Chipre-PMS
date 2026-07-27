@@ -32,6 +32,17 @@ test("owner runs the full vendor/remito cycle: pricing, outbound, partial inboun
 
   await login(page);
 
+  // D (stock/lavanderia separation): la ropa blanca se da de alta desde
+  // LaundryPage ("Nuevo tipo de ropa blanca", kind="linen"), no desde el
+  // formulario generico de StockPage (que crea kind="supply").
+  await page.goto("/operacion/lavanderia");
+  const linenItemForm = page.locator("form").filter({ hasText: "Nuevo tipo de ropa blanca" });
+  for (const itemName of [sheetsName, towelsName]) {
+    await linenItemForm.getByLabel("Nombre").fill(itemName);
+    await linenItemForm.getByRole("button", { name: "Crear tipo de ropa blanca", exact: true }).click();
+    await expect(page.getByText("Tipo de ropa blanca creado.", { exact: true })).toBeVisible();
+  }
+
   // --- Stock inicial: dos items, 10 unidades de cada uno en la ubicacion casa ---
   await page.goto("/operacion/stock");
   const locationForm = page.locator("form").filter({ hasText: "Nueva ubicacion" });
@@ -40,13 +51,11 @@ test("owner runs the full vendor/remito cycle: pricing, outbound, partial inboun
   await expect(page.getByText("Ubicacion creada.", { exact: true })).toBeVisible();
 
   for (const itemName of [sheetsName, towelsName]) {
-    const itemForm = page.locator("form").filter({ hasText: "Alta de stock" });
-    await itemForm.getByLabel("Nombre").fill(itemName);
-    await itemForm.getByRole("button", { name: "Crear item", exact: true }).click();
-    await expect(page.getByRole("heading", { name: itemName, exact: true })).toBeVisible();
-
-    await page.getByRole("button", { name: `Registrar ingreso de ${itemName}`, exact: true }).click();
+    // La ropa blanca no aparece en la grilla de items de StockPage (solo
+    // insumos "supply"); "Registrar movimiento" sigue operando sobre
+    // cualquier item, elegido desde el desplegable.
     const movementForm = page.locator("#stock-movement-form");
+    await movementForm.getByLabel("Item").selectOption({ label: itemName });
     // "Opciones avanzadas" is a native <details>: its open state persists across
     // items in the same session, so only toggle it open on the first iteration.
     if (!(await movementForm.getByLabel("Ubicacion").isVisible())) {

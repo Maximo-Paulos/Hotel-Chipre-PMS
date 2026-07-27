@@ -203,15 +203,19 @@ test("owner runs the full inventory journey: item/location, movements, adjustmen
   const consumptionRow = consumptionSection.locator("tbody tr").filter({ hasText: itemName });
   await expect(consumptionRow).toContainText("8.00 unidad");
 
-  // --- Eliminar item (item 10, D4 parte 3): boton "Eliminar" pide confirmacion,
-  // mismo patron (window.confirm) que el resto de la app usa para acciones
-  // destructivas (ej: revertir movimientos de habitacion en ReservationsPage).
-  page.once("dialog", (dialog) => dialog.dismiss());
+  // --- Eliminar item (item 10, D4 parte 3): boton "Eliminar" pide confirmacion
+  // via un modal propio (no window.confirm -- algunos navegadores embebidos
+  // moviles no renderizan dialogos JS nativos, ver ConfirmDialog.tsx).
+  const confirmDialog = page.getByRole("alertdialog", { name: "Eliminar item de stock" });
   await itemCard.getByRole("button", { name: `Eliminar ${itemName}`, exact: true }).click();
+  await expect(confirmDialog).toBeVisible();
+  await confirmDialog.getByRole("button", { name: "Cancelar", exact: true }).click();
+  await expect(confirmDialog).toBeHidden();
   await expect(page.getByRole("heading", { name: itemName, exact: true })).toBeVisible();
 
-  page.once("dialog", (dialog) => dialog.accept());
   await itemCard.getByRole("button", { name: `Eliminar ${itemName}`, exact: true }).click();
+  await expect(confirmDialog).toBeVisible();
+  await confirmDialog.getByRole("button", { name: "Eliminar", exact: true }).click();
   await expect(page.getByText("Item eliminado.", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: itemName, exact: true })).toHaveCount(0);
 });
