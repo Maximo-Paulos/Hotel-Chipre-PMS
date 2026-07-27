@@ -165,8 +165,11 @@ export default function ManualOtaReservationModal({ open, onClose }: ManualOtaRe
   };
 
   return (
-    <div data-testid="manual-ota-modal" className="fixed inset-0 z-30 flex items-center justify-center bg-slate-900/40 px-4 py-6">
-      <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl border border-slate-200 bg-white p-6 shadow-xl">
+    <div
+      data-testid="manual-ota-modal"
+      className="fixed inset-0 z-30 flex animate-fade-in items-center justify-center bg-slate-900/40 px-4 py-6"
+    >
+      <div className="w-full max-w-2xl max-h-[90vh] animate-scale-in overflow-y-auto rounded-xl border border-slate-200 bg-white p-6 shadow-xl">
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-xs uppercase tracking-wide text-slate-500">OTA</p>

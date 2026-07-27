@@ -735,7 +735,7 @@ function StockConsumptionReportSection({
               onGroupByChange("week");
               onRangeChange({ from: startOfCurrentWeekIso(), to: todayIso() });
             }}
-            className={`min-h-9 rounded-lg border px-3 py-1.5 text-xs font-semibold hover:bg-slate-50 ${
+            className={`min-h-11 rounded-lg border px-3 py-1.5 text-xs font-semibold hover:bg-slate-50 ${
               groupBy === "week" ? "border-brand-300 bg-brand-50 text-brand-700" : "border-slate-200 bg-white text-slate-700"
             }`}
           >
@@ -747,7 +747,7 @@ function StockConsumptionReportSection({
               onGroupByChange("month");
               onRangeChange({ from: startOfCurrentMonthIso(), to: todayIso() });
             }}
-            className={`min-h-9 rounded-lg border px-3 py-1.5 text-xs font-semibold hover:bg-slate-50 ${
+            className={`min-h-11 rounded-lg border px-3 py-1.5 text-xs font-semibold hover:bg-slate-50 ${
               groupBy === "month" ? "border-brand-300 bg-brand-50 text-brand-700" : "border-slate-200 bg-white text-slate-700"
             }`}
           >
