@@ -49,13 +49,18 @@ async function login(page: Page, persona: Persona) {
 }
 
 async function operationalNavigation(page: Page): Promise<Locator> {
-  const mobileNavigation = page.locator('nav[aria-label="Navegación móvil"]');
-
-  if (await mobileNavigation.isVisible()) {
-    return mobileNavigation;
+  const asideNav = page.locator("aside nav");
+  if (await asideNav.isVisible().catch(() => false)) {
+    return asideNav;
   }
 
-  return page.locator("aside nav");
+  // B7: on mobile the whole nav lives inside a slide-over panel opened via
+  // the hamburger button -- open it before returning its nav locator.
+  const menuButton = page.getByTestId("mobile-menu-button");
+  if (await menuButton.isVisible().catch(() => false)) {
+    await menuButton.click();
+  }
+  return page.locator('nav[aria-label="Navegación móvil"]');
 }
 
 for (const persona of personas) {

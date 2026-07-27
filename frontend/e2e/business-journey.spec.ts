@@ -47,12 +47,23 @@ async function revealCollapsedNavLink(link: Locator) {
 
 async function navigateFromShell(page: Page, path: string) {
   const desktopLink = page.locator(`aside nav a[href="${path}"]`);
-  const mobileLink = page.locator(`nav[aria-label="Navegación móvil"] a[href="${path}"]`);
   await revealCollapsedNavLink(desktopLink);
-  const link = (await desktopLink.isVisible().catch(() => false)) ? desktopLink : mobileLink;
-  await expect(link).toHaveCount(1);
-  await expect(link).toBeVisible();
-  await link.click();
+  if (await desktopLink.isVisible().catch(() => false)) {
+    await expect(desktopLink).toHaveCount(1);
+    await desktopLink.click();
+    await expect(page).toHaveURL(new RegExp(`${path.replaceAll("/", "\\/")}$`));
+    return;
+  }
+  // B7: on mobile the whole nav lives inside a slide-over panel opened via
+  // the hamburger button -- open it before looking for the link.
+  const menuButton = page.getByTestId("mobile-menu-button");
+  if (await menuButton.isVisible().catch(() => false)) {
+    await menuButton.click();
+  }
+  const mobileLink = page.locator(`nav[aria-label="Navegación móvil"] a[href="${path}"]`);
+  await expect(mobileLink).toHaveCount(1);
+  await expect(mobileLink).toBeVisible();
+  await mobileLink.click();
   await expect(page).toHaveURL(new RegExp(`${path.replaceAll("/", "\\/")}$`));
 }
 
