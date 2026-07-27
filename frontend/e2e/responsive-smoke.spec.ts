@@ -11,11 +11,24 @@ async function login(page: Page) {
   await page.waitForURL("**/dashboard", { timeout: 15_000 });
 }
 
+// B7: mobile nav collapsed from two competing mechanisms (horizontal-scroll
+// pill row + a separate native <details> disclosure) into one menu button
+// that opens a slide-over panel. The panel unmounts when closed (same
+// pattern as ReservationDetailDrawer), so any locator inside it needs the
+// menu opened first.
+async function openMobileMenu(page: Page) {
+  await page.getByTestId("mobile-menu-button").click();
+  await expect(page.getByRole("dialog", { name: "Menú de navegación" })).toBeVisible();
+}
+
 test.describe("Responsive mobile smoke", () => {
   test("dashboard fits an iPhone viewport and exposes operational navigation", async ({ page }) => {
     await login(page);
 
     await expect(page.getByTestId("dashboard-mobile-reservations")).toBeVisible();
+    await expect(page.getByTestId("mobile-menu-button")).toBeVisible();
+
+    await openMobileMenu(page);
     await expect(page.locator('nav[aria-label="Navegación móvil"] a[href="/reservas"]')).toBeVisible();
     await expect(
       page.getByRole("option", {
@@ -43,16 +56,71 @@ test.describe("Responsive mobile smoke", () => {
   test("mobile navigation reaches reservations", async ({ page }) => {
     await login(page);
 
+    await openMobileMenu(page);
     const reservationsLink = page.locator('nav[aria-label="Navegación móvil"] a[href="/reservas"]');
     await reservationsLink.click();
     await expect(page).toHaveURL(/\/reservas$/);
     await expect(page.locator("main").getByRole("heading", { name: "Reservas", exact: true })).toBeVisible();
+    // Navigating closes the panel automatically (route change effect) --
+    // confirm it's gone instead of stacking on top of the next page.
+    await expect(page.getByRole("dialog", { name: "Menú de navegación" })).toBeHidden();
+  });
+
+  test("mobile menu replaces the old two-mechanism nav and reaches sections in every group", async ({ page }) => {
+    await login(page);
+    await page.setViewportSize({ width: 375, height: 812 });
+
+    // The old "Mas opciones" native <details> text link is gone.
+    await expect(page.getByText("Más opciones", { exact: true })).toHaveCount(0);
+
+    // Tap 1: a daily-nav item (flat, always visible).
+    await openMobileMenu(page);
+    await page.locator('nav[aria-label="Navegación móvil"] a[href="/huespedes"]').click();
+    await expect(page).toHaveURL(/\/huespedes$/);
+
+    // Tap 2: an item from the "Analitica" group.
+    await openMobileMenu(page);
+    await page.locator('nav[aria-label="Analitica"] a[href="/analytics"]').click();
+    await expect(page).toHaveURL(/\/analytics$/);
+
+    // Tap 3: an item from the "Configuracion" group.
+    await openMobileMenu(page);
+    await page.locator('nav[aria-label="Configuracion"] a[href="/settings/hotel"]').click();
+    await expect(page).toHaveURL(/\/settings\/hotel$/);
+
+    // The panel exposes every daily link plus every grouped section, not
+    // just the 5 that used to fit the horizontal-scroll bar.
+    await openMobileMenu(page);
+    for (const href of ["/operacion/planilla", "/reservas", "/huespedes", "/habitaciones", "/caja"]) {
+      await expect(page.locator(`nav[aria-label="Navegación móvil"] a[href="${href}"]`)).toBeVisible();
+    }
+    for (const group of ["Analitica", "Mas operacion", "Configuracion"]) {
+      await expect(page.locator(`nav[aria-label="${group}"]`)).toBeVisible();
+    }
+
+    const layout = await page.evaluate(() => ({
+      viewportWidth: window.innerWidth,
+      documentScrollWidth: document.documentElement.scrollWidth,
+      bodyScrollWidth: document.body.scrollWidth
+    }));
+    expect(layout.documentScrollWidth, "mobile menu open causes document horizontal overflow").toBeLessThanOrEqual(
+      layout.viewportWidth
+    );
+    expect(layout.bodyScrollWidth, "mobile menu open causes body horizontal overflow").toBeLessThanOrEqual(
+      layout.viewportWidth
+    );
   });
 
   test("critical mobile controls provide 44px touch targets", async ({ page }) => {
     await login(page);
     await page.setViewportSize({ width: 375, height: 812 });
 
+    await expect(page.getByTestId("mobile-menu-button")).toBeVisible();
+    const menuButtonBox = await page.getByTestId("mobile-menu-button").boundingBox();
+    expect(menuButtonBox?.width).toBeGreaterThanOrEqual(44);
+    expect(menuButtonBox?.height).toBeGreaterThanOrEqual(44);
+
+    await openMobileMenu(page);
     const mobileNavigationTargets = await page.locator('nav[aria-label="Navegación móvil"] a').evaluateAll((nodes) =>
       nodes
         .map((node) => {
@@ -149,4 +217,5 @@ test.describe("Responsive mobile smoke", () => {
       expect(layout.bodyScrollWidth, `${path} has body horizontal overflow`).toBeLessThanOrEqual(layout.viewportWidth);
     }
   });
+
 });

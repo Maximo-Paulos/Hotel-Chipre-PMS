@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useMemo } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import cx from "clsx";
 import { Link, NavLink, Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 
@@ -115,6 +115,11 @@ export function AppShell() {
   // instead -- see UserBadge/session.tsx and those pages' own comments.
   const role = session.role;
   const { reservationId: drawerReservationId, closeReservation } = useReservationDrawer();
+  // The owner's phone-in-hand complaint (B7) was two competing mobile nav
+  // mechanisms at once (a horizontal-scroll pill row + a separate native
+  // <details> "Mas opciones" text link that doesn't read as a menu). One
+  // recognizable menu button + one slide-over panel replaces both.
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useCrossTabSync();
 
@@ -125,6 +130,10 @@ export function AppShell() {
   useEffect(() => {
     if (!isLoggedIn) navigate("/login", { replace: true });
   }, [isLoggedIn, navigate]);
+
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [location.pathname]);
 
   useEffect(() => {
     if (isLoggedIn && !isVerified && location.pathname !== "/verify-email") {
@@ -304,25 +313,76 @@ export function AppShell() {
 
         <div className="flex min-h-screen min-w-0 flex-1 flex-col">
           <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur">
-            <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex min-w-0 items-center gap-3">
-                <Link to="/dashboard" className="flex min-h-11 shrink-0 items-center gap-2 text-lg font-semibold text-slate-900 md:hidden">
-                  <img
-                    src="/brand/logo-avatar.png"
-                    alt="Hotel Chipre PMS"
-                    className="h-9 w-9 rounded-full border border-slate-200 object-cover"
-                  />
-                  <span className="leading-tight">Hotel Chipre PMS</span>
-                </Link>
-                <nav aria-label="Navegación móvil" className="flex min-w-0 max-w-full flex-1 items-center gap-2 overflow-x-auto overscroll-x-contain md:hidden">
+            {/* B7 mobile: logo + a single recognizable menu button. No
+                horizontal scroll, no second nav row competing for space --
+                everything (daily links, grouped sections, search, hotel
+                selector, user badge) lives in the slide-over panel below. */}
+            <div className="flex items-center justify-between gap-3 px-4 py-3 md:hidden">
+              <Link to="/dashboard" className="flex min-h-11 shrink-0 items-center text-slate-900">
+                <img
+                  src="/brand/logo-avatar.png"
+                  alt="Hotel Chipre PMS"
+                  className="h-9 w-9 rounded-full border border-slate-200 object-cover"
+                />
+              </Link>
+              <button
+                type="button"
+                onClick={() => setMobileMenuOpen(true)}
+                aria-label="Abrir menú"
+                aria-haspopup="true"
+                aria-expanded={mobileMenuOpen}
+                aria-controls="mobile-menu-panel"
+                data-testid="mobile-menu-button"
+                className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="h-5 w-5" aria-hidden="true">
+                  <line x1="4" y1="6" x2="20" y2="6" />
+                  <line x1="4" y1="12" x2="20" y2="12" />
+                  <line x1="4" y1="18" x2="20" y2="18" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="hidden px-4 py-3 md:flex md:items-center md:justify-end md:gap-3">
+              <ReservationGlobalSearch />
+              <HotelSelector />
+              <UserBadge />
+            </div>
+          </header>
+
+          {mobileMenuOpen && (
+            <div
+              className="fixed inset-0 z-50 flex md:hidden"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Menú de navegación"
+            >
+              <div className="flex-1 animate-fade-in bg-black/30" onClick={() => setMobileMenuOpen(false)} />
+              <div
+                id="mobile-menu-panel"
+                className="flex h-full w-full max-w-xs animate-slide-in-right flex-col overflow-y-auto border-l border-slate-200 bg-white shadow-xl"
+              >
+                <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
+                  <span className="text-sm font-semibold text-slate-900">Menú</span>
+                  <button
+                    type="button"
+                    onClick={() => setMobileMenuOpen(false)}
+                    aria-label="Cerrar menú"
+                    className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-xl leading-none text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                  >
+                    ×
+                  </button>
+                </div>
+
+                <nav aria-label="Navegación móvil" className="flex flex-col gap-1 px-3 py-3">
                   {visibleDailyNav.map((item) => (
                     <NavLink
                       key={item.to}
                       to={item.to}
                       className={({ isActive }) =>
                         cx(
-                          "inline-flex min-h-11 shrink-0 items-center rounded-full px-3 py-1 text-xs font-semibold",
-                          isActive ? "bg-brand-100 text-brand-800" : "bg-slate-100 text-slate-600",
+                          "flex min-h-11 items-center rounded-lg px-3 py-2 text-sm font-medium",
+                          isActive ? "bg-brand-50 text-brand-700" : "text-slate-700 hover:bg-slate-100",
                         )
                       }
                     >
@@ -330,49 +390,35 @@ export function AppShell() {
                     </NavLink>
                   ))}
                 </nav>
-              </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <ReservationGlobalSearch />
-                <HotelSelector />
-                <UserBadge />
+
+                {visibleNavSections.map((section) => (
+                  <nav key={section.title} aria-label={section.title} className="flex flex-col gap-1 border-t border-slate-100 px-3 py-3">
+                    <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">{section.title}</p>
+                    {section.items.map((item) => (
+                      <NavLink
+                        key={item.to}
+                        to={item.to}
+                        className={({ isActive }) =>
+                          cx(
+                            "flex min-h-11 items-center rounded-lg px-3 py-2 text-sm font-medium",
+                            isActive ? "bg-brand-50 text-brand-700" : "text-slate-700 hover:bg-slate-100",
+                          )
+                        }
+                      >
+                        {item.label}
+                      </NavLink>
+                    ))}
+                  </nav>
+                ))}
+
+                <div className="flex flex-col gap-3 border-t border-slate-100 px-3 py-3">
+                  <ReservationGlobalSearch />
+                  <HotelSelector />
+                  <UserBadge />
+                </div>
               </div>
             </div>
-
-            {/* B6.1 mobile: the 5 daily links above stay a horizontal-scroll
-                bar (usable at 5 items, unlike the old 29). Everything else
-                sits behind one native disclosure instead of widening that
-                scroll bar further. */}
-            {visibleNavSections.length > 0 && (
-              <details className="border-t border-slate-100 px-4 py-2 md:hidden">
-                <summary className="flex min-h-11 cursor-pointer select-none items-center text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Más opciones
-                </summary>
-                <nav aria-label="Más navegación móvil" className="mt-2 flex flex-col gap-4">
-                  {visibleNavSections.map((section) => (
-                    <div key={section.title}>
-                      <p className="px-1 text-xs uppercase tracking-wide text-slate-400">{section.title}</p>
-                      <div className="mt-1 flex flex-col gap-1">
-                        {section.items.map((item) => (
-                          <NavLink
-                            key={item.to}
-                            to={item.to}
-                            className={({ isActive }) =>
-                              cx(
-                                "flex min-h-11 items-center rounded-lg px-3 py-2 text-sm font-medium",
-                                isActive ? "bg-brand-50 text-brand-700" : "text-slate-700 hover:bg-slate-100",
-                              )
-                            }
-                          >
-                            {item.label}
-                          </NavLink>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </nav>
-              </details>
-            )}
-          </header>
+          )}
 
           <main className="min-w-0 flex-1 px-4 py-8 sm:px-8">
             <div className="mx-auto max-w-6xl min-w-0">
