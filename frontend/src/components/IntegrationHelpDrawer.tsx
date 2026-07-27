@@ -15,8 +15,8 @@ export function IntegrationHelpDrawer({ provider, open, onClose }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex">
-      <div className="flex-1 bg-black/30" onClick={onClose} />
-      <div className="w-full max-w-lg bg-white shadow-xl border-l border-slate-200 flex flex-col">
+      <div className="flex-1 animate-fade-in bg-black/30" onClick={onClose} />
+      <div className="w-full max-w-lg animate-slide-in-right bg-white shadow-xl border-l border-slate-200 flex flex-col">
         <div className="flex items-start justify-between border-b px-4 py-3">
           <div>
             <h3 className="text-lg font-semibold text-slate-900">{help ? help.title : "Guía de conexión"}</h3>

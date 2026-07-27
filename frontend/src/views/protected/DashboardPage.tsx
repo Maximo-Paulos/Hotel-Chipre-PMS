@@ -1,31 +1,18 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
 
-import { type ReservationStatus } from "../../api/reservations";
 import { usePendingReservationActions, useReservations } from "../../hooks/useReservations";
 import { useReservationDrawer } from "../../hooks/useReservationDrawer";
 import { useRooms } from "../../hooks/useRooms";
 import { formatMoney, resolveSingleCurrencyCode } from "../../utils/currency";
 import { todayIso } from "../../utils/date";
-
-const statusClass = (status: ReservationStatus) => {
-  switch (status) {
-    case "checked_in":
-      return "bg-emerald-100 text-emerald-800";
-    case "checked_out":
-      return "bg-sky-100 text-sky-800";
-    case "fully_paid":
-      return "bg-slate-100 text-slate-800";
-    case "pre_check_in":
-      return "bg-teal-100 text-teal-800";
-    case "deposit_paid":
-      return "bg-amber-100 text-amber-800";
-    case "pending":
-      return "bg-slate-100 text-slate-700";
-    default:
-      return "bg-rose-100 text-rose-800";
-  }
-};
+// Single source of truth for reservation status colors/labels (also used by
+// ReservationsPage, the detail drawer, the global search and the occupancy
+// grid). The dashboard used to keep its own copy with different colors and
+// no Spanish label, so the same "fully_paid" reservation showed as a plain
+// grey "fully_paid" pill here but a green "Pago completo" pill everywhere
+// else -- fixed by reusing the shared config instead of re-deriving it.
+import { reservationStatusConfig } from "../../utils/reservationStatus";
 
 const monthRangeIso = (base: Date) => {
   const pad = (part: number) => String(part).padStart(2, "0");
@@ -195,8 +182,10 @@ export function DashboardPage() {
                       {reservation.check_in_date} - {reservation.check_out_date}
                     </td>
                     <td className="px-4 py-2">
-                      <span className={`rounded-full px-2 py-1 text-xs font-semibold ${statusClass(reservation.status)}`}>
-                        {reservation.status}
+                      <span
+                        className={`rounded-full px-2 py-1 text-xs font-semibold ${reservationStatusConfig[reservation.status]?.className ?? "bg-slate-100 text-slate-800"}`}
+                      >
+                        {reservationStatusConfig[reservation.status]?.label ?? reservation.status}
                       </span>
                     </td>
                     <td className="px-4 py-2 text-right font-semibold text-slate-900">
@@ -228,8 +217,10 @@ export function DashboardPage() {
                     </button>
                     <p className="mt-1 break-words text-sm text-slate-600">{reservationGuestLabel(reservation)}</p>
                   </div>
-                  <span className={`shrink-0 rounded-full px-2 py-1 text-xs font-semibold ${statusClass(reservation.status)}`}>
-                    {reservation.status}
+                  <span
+                    className={`shrink-0 rounded-full px-2 py-1 text-xs font-semibold ${reservationStatusConfig[reservation.status]?.className ?? "bg-slate-100 text-slate-800"}`}
+                  >
+                    {reservationStatusConfig[reservation.status]?.label ?? reservation.status}
                   </span>
                 </div>
                 <dl className="mt-3 grid grid-cols-2 gap-3 text-xs">

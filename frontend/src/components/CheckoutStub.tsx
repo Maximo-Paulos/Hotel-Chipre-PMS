@@ -13,8 +13,8 @@ export function CheckoutStub({ open, plan, onClose }: CheckoutStubProps) {
     plan.price_month != null && plan.price_month >= 0 ? `$${plan.price_month}/mes` : "A medida (contacto humano)";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4 py-6">
-      <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white shadow-2xl">
+    <div className="fixed inset-0 z-50 flex animate-fade-in items-center justify-center bg-slate-900/50 px-4 py-6">
+      <div className="w-full max-w-lg animate-scale-in rounded-2xl border border-slate-200 bg-white shadow-2xl">
         <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-5 py-4">
           <div>
             <p className="text-xs uppercase tracking-wide text-brand-700">Checkout en preparación</p>
