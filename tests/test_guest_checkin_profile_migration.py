@@ -19,8 +19,14 @@ def test_guest_checkin_profile_migration_up_down_up_on_sqlite():
         up1 = _run([sys.executable, "-m", "alembic", "upgrade", "head"], env, cwd)
         assert up1.returncode == 0, f"upgrade head failed:\n{up1.stderr}"
 
-        down = _run([sys.executable, "-m", "alembic", "downgrade", "-1"], env, cwd)
-        assert down.returncode == 0, f"downgrade -1 failed:\n{down.stderr}"
+        # "-1" is only unambiguous on a linear chain. Head can be a merge
+        # revision (two branches reconciled into one), where alembic can't
+        # infer which single parent "-1" means -- so this targets the
+        # revision immediately before this migration explicitly instead.
+        down = _run(
+            [sys.executable, "-m", "alembic", "downgrade", "20260725_res_hotel_room_dates_idx"], env, cwd
+        )
+        assert down.returncode == 0, f"downgrade failed:\n{down.stderr}"
 
         up2 = _run([sys.executable, "-m", "alembic", "upgrade", "head"], env, cwd)
         assert up2.returncode == 0, f"re-upgrade head failed:\n{up2.stderr}"
