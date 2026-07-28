@@ -108,3 +108,33 @@ def test_stock_item_unit_cost_is_exposed_on_create_and_update():
         assert updated.json()["unit_cost"] == "15.00"
     finally:
         _teardown(db, engine)
+
+
+def test_stock_item_full_edit_updates_name_sku_unit_and_min_quantity():
+    """Owner: "editar el producto por las dudas" -- PATCH already accepted
+    every field (StockItemUpdate), the frontend just never sent them. This
+    guards the API contract the new full-edit modal (StockPage.tsx) relies on."""
+    client, db, engine = _client_with_db()
+    try:
+        created = client.post(
+            "/api/stock/items",
+            json={"name": "Sabanas", "sku": "SAB-1", "unit": "unidad", "min_quantity": "5"},
+        )
+        assert created.status_code == 201
+        item_id = created.json()["id"]
+
+        updated = client.patch(
+            f"/api/stock/items/{item_id}",
+            json={"name": "Sabanas King", "sku": "SAB-1-K", "unit": "juego", "min_quantity": "2"},
+        )
+        assert updated.status_code == 200
+        body = updated.json()
+        assert body["name"] == "Sabanas King"
+        assert body["sku"] == "SAB-1-K"
+        assert body["unit"] == "juego"
+        assert body["min_quantity"] == "2.00"
+
+        listed = client.get("/api/stock/items")
+        assert listed.json()[0]["name"] == "Sabanas King"
+    finally:
+        _teardown(db, engine)
