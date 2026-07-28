@@ -19,11 +19,6 @@ class StockError(ValueError):
     """Raised when a stock operation is invalid."""
 
 
-# StockPage (general supplies: bolsas, detergentes, jabon) vs LaundryPage
-# (ropa blanca de lavanderia) -- see app/models/stock.py StockItem.kind.
-VALID_STOCK_ITEM_KINDS = {"supply", "linen"}
-
-
 # "adjustment" raises stock (physical count found more than expected);
 # "adjustment_out" lowers it (found less / breakage). Both require the
 # stock:adjust permission, unlike plain "in"/"out" (see app/api/stock.py).
@@ -37,13 +32,13 @@ _OUTBOUND_MOVEMENT_TYPES = {"out", "adjustment_out"}
 CONSUMPTION_GROUP_BY_VALUES = {"week", "month"}
 
 
-def list_stock_items(db: Session, *, hotel_id: int, kind: str | None = None) -> list[StockItem]:
-    query = db.query(StockItem).filter(StockItem.hotel_id == hotel_id, StockItem.deleted_at.is_(None))
-    if kind is not None:
-        if kind not in VALID_STOCK_ITEM_KINDS:
-            raise StockError("Invalid stock item kind")
-        query = query.filter(StockItem.kind == kind)
-    return query.order_by(StockItem.id.asc()).all()
+def list_stock_items(db: Session, *, hotel_id: int) -> list[StockItem]:
+    return (
+        db.query(StockItem)
+        .filter(StockItem.hotel_id == hotel_id, StockItem.deleted_at.is_(None))
+        .order_by(StockItem.id.asc())
+        .all()
+    )
 
 
 def create_stock_item(
@@ -55,10 +50,8 @@ def create_stock_item(
     unit: str,
     min_quantity: Decimal | None = None,
     active: bool = True,
-    kind: str = "supply",
+    unit_cost: Decimal | None = None,
 ) -> StockItem:
-    if kind not in VALID_STOCK_ITEM_KINDS:
-        raise StockError("Invalid stock item kind")
     item = StockItem(
         hotel_id=hotel_id,
         name=name,
@@ -66,7 +59,7 @@ def create_stock_item(
         unit=unit,
         min_quantity=min_quantity,
         active=active,
-        kind=kind,
+        unit_cost=unit_cost,
     )
     try:
         # SAVEPOINT so a duplicate-name failure only undoes this insert, not
@@ -81,7 +74,7 @@ def create_stock_item(
 
 def update_stock_item(db: Session, *, hotel_id: int, item_id: int, **changes) -> StockItem:
     item = _get_item(db, hotel_id=hotel_id, item_id=item_id)
-    for field in ("name", "sku", "unit", "min_quantity", "active"):
+    for field in ("name", "sku", "unit", "min_quantity", "active", "unit_cost"):
         if field in changes:
             setattr(item, field, changes[field])
     db.flush()

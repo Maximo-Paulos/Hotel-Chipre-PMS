@@ -1,9 +1,13 @@
 """
-FastAPI routes for outsourced laundry vendors, pricing and remitos.
+FastAPI routes for outsourced laundry vendors, pricing, remitos and the
+linen (ropa blanca) item/location catalog that backs them.
 
 Separate router from app/api/laundry.py (legacy LaundryBatch/LaundryItem
 lifecycle, kept as read-only history -- see memory checkpoint
-20260725-235929) to avoid mixing the two models in one file.
+20260725-235929) to avoid mixing the two models in one file. Also separate
+from app/api/stock.py: linen items/locations/movements are their own tables
+(app/models/linen.py), not StockItem/StockLocation/StockMovement -- the
+owner explicitly rejected a shared table split by a ``kind`` flag.
 """
 from datetime import date, datetime
 from decimal import Decimal
@@ -14,7 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies.auth import AuthContext, require_permission
+from app.dependencies.auth import AuthContext, require_any_permission, require_permission
 from app.services.laundry_vendor_service import (
     LaundryVendorError,
     create_remito,
@@ -30,11 +34,20 @@ from app.services.laundry_vendor_service import (
     vendor_settlements,
     vendor_spend,
 )
+from app.services.linen_service import (
+    LinenError,
+    create_linen_item,
+    create_location as create_linen_location,
+    current_stock as current_linen_stock,
+    delete_linen_item,
+    list_linen_items,
+    list_locations as list_linen_locations,
+    register_movement as register_linen_movement,
+)
 from app.services.permission_service import (
     PERMISSION_LAUNDRY_MANAGE_VENDORS,
     PERMISSION_LAUNDRY_OPERATE_REMITOS,
 )
-from app.services.stock_service import StockError
 
 router = APIRouter(prefix="/api/laundry", tags=["Laundry Vendors"])
 
@@ -59,7 +72,7 @@ class VendorRead(BaseModel):
     id: int
     hotel_id: int
     name: str
-    stock_location_id: int
+    linen_location_id: int
     contact_phone: Optional[str] = None
     contact_email: Optional[str] = None
     active: bool
@@ -67,7 +80,7 @@ class VendorRead(BaseModel):
 
 
 class VendorPriceUpsert(BaseModel):
-    stock_item_id: int
+    linen_item_id: int
     unit_price: Decimal
     currency_code: Optional[str] = None
 
@@ -77,14 +90,14 @@ class VendorPriceRead(BaseModel):
 
     id: int
     vendor_id: int
-    stock_item_id: int
+    linen_item_id: int
     unit_price: Decimal
     currency_code: str
     updated_at: datetime
 
 
 class RemitoLineIn(BaseModel):
-    stock_item_id: int
+    linen_item_id: int
     quantity: Decimal
 
 
@@ -102,7 +115,7 @@ class RemitoLineRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    stock_item_id: int
+    linen_item_id: int
     quantity: Decimal
     unit_price_snapshot: Optional[Decimal] = None
 
@@ -128,14 +141,14 @@ class RemitoCreateResponse(BaseModel):
 
 
 class VendorBalanceLine(BaseModel):
-    stock_item_id: int
-    stock_item_name: str
+    linen_item_id: int
+    linen_item_name: str
     quantity: Decimal
 
 
 class VendorSpendLine(BaseModel):
-    stock_item_id: int
-    stock_item_name: str
+    linen_item_id: int
+    linen_item_name: str
     quantity: Decimal
     subtotal: Decimal
 
@@ -158,6 +171,168 @@ class SettlementQuarterRead(BaseModel):
 class SettlementMarkPaid(BaseModel):
     paid: bool
     notes: Optional[str] = None
+
+
+class LinenItemCreate(BaseModel):
+    name: str
+    unit: str
+    min_quantity: Optional[Decimal] = None
+    active: bool = True
+
+
+class LinenItemRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    hotel_id: int
+    name: str
+    unit: str
+    min_quantity: Optional[Decimal] = None
+    active: bool
+
+
+class LinenLocationCreate(BaseModel):
+    name: str
+
+
+class LinenLocationRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    hotel_id: int
+    name: str
+
+
+class LinenMovementCreate(BaseModel):
+    linen_item_id: int
+    location_id: Optional[int] = None
+    movement_type: str
+    quantity: Decimal
+    reason: Optional[str] = None
+
+
+class LinenMovementRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    hotel_id: int
+    item_id: int
+    location_id: Optional[int] = None
+    movement_type: str
+    quantity: Decimal
+    reason: Optional[str] = None
+    created_by_user_id: Optional[int] = None
+    created_at: datetime
+
+
+@router.get("/items", response_model=list[LinenItemRead])
+def list_laundry_linen_items(
+    db: Session = Depends(get_db),
+    # Both the vendor/price admin panel and the day-to-day remito form need
+    # this list -- see require_any_permission's docstring for the same
+    # reasoning previously applied to GET /api/stock/items.
+    context: AuthContext = Depends(
+        require_any_permission(PERMISSION_LAUNDRY_MANAGE_VENDORS, PERMISSION_LAUNDRY_OPERATE_REMITOS)
+    ),
+):
+    return list_linen_items(db, hotel_id=context.hotel_id)
+
+
+@router.post("/items", response_model=LinenItemRead, status_code=status.HTTP_201_CREATED)
+def create_laundry_linen_item(
+    data: LinenItemCreate,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_LAUNDRY_MANAGE_VENDORS)),
+):
+    try:
+        item = create_linen_item(db, hotel_id=context.hotel_id, **data.model_dump())
+    except LinenError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+@router.delete("/items/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_laundry_linen_item(
+    item_id: int,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_LAUNDRY_MANAGE_VENDORS)),
+):
+    try:
+        delete_linen_item(db, hotel_id=context.hotel_id, item_id=item_id, deleted_by_user_id=context.user_id)
+    except LinenError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    db.commit()
+    return None
+
+
+@router.get("/items/{item_id}/current")
+def get_current_laundry_linen_stock(
+    item_id: int,
+    location_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(
+        require_any_permission(PERMISSION_LAUNDRY_MANAGE_VENDORS, PERMISSION_LAUNDRY_OPERATE_REMITOS)
+    ),
+):
+    try:
+        quantity = current_linen_stock(db, hotel_id=context.hotel_id, item_id=item_id, location_id=location_id)
+    except LinenError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    return {"item_id": item_id, "quantity": quantity}
+
+
+@router.get("/locations", response_model=list[LinenLocationRead])
+def list_laundry_linen_locations(
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(
+        require_any_permission(PERMISSION_LAUNDRY_MANAGE_VENDORS, PERMISSION_LAUNDRY_OPERATE_REMITOS)
+    ),
+):
+    return list_linen_locations(db, hotel_id=context.hotel_id)
+
+
+@router.post("/locations", response_model=LinenLocationRead, status_code=status.HTTP_201_CREATED)
+def create_laundry_linen_location(
+    data: LinenLocationCreate,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_LAUNDRY_MANAGE_VENDORS)),
+):
+    try:
+        location = create_linen_location(db, hotel_id=context.hotel_id, name=data.name)
+    except LinenError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    db.commit()
+    db.refresh(location)
+    return location
+
+
+@router.post("/movements", response_model=LinenMovementRead, status_code=status.HTTP_201_CREATED)
+def create_laundry_linen_movement(
+    data: LinenMovementCreate,
+    db: Session = Depends(get_db),
+    # Loading an opening balance (or correcting one) is an inventory-admin
+    # action, same trust level as creating the item/vendor itself -- not
+    # exposed to housekeeping's day-to-day operate_remitos permission.
+    context: AuthContext = Depends(require_permission(PERMISSION_LAUNDRY_MANAGE_VENDORS)),
+):
+    try:
+        movement = register_linen_movement(
+            db,
+            hotel_id=context.hotel_id,
+            item_id=data.linen_item_id,
+            location_id=data.location_id,
+            movement_type=data.movement_type,
+            quantity=data.quantity,
+            reason=data.reason,
+            created_by_user_id=context.user_id,
+        )
+    except LinenError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    db.commit()
+    db.refresh(movement)
+    return movement
 
 
 @router.post("/vendors", response_model=VendorRead, status_code=status.HTTP_201_CREATED)
@@ -207,7 +382,7 @@ def upsert_laundry_vendor_price(
 ):
     try:
         price = set_vendor_price(db, hotel_id=context.hotel_id, vendor_id=vendor_id, **data.model_dump())
-    except (LaundryVendorError, StockError) as exc:
+    except (LaundryVendorError, LinenError) as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     db.commit()
     db.refresh(price)
@@ -245,12 +420,12 @@ def create_laundry_remito(
             notes=data.notes,
             actor_user_id=context.user_id,
         )
-    except (LaundryVendorError, StockError) as exc:
+    except (LaundryVendorError, LinenError) as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     db.commit()
     db.refresh(remito)
     warnings = [
-        f"No hay precio configurado para el item {line.stock_item_id}"
+        f"No hay precio configurado para el item {line.linen_item_id}"
         for line in remito.lines
         if line.unit_price_snapshot is None
     ]

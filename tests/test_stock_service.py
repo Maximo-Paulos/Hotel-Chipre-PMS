@@ -13,6 +13,7 @@ from app.services.stock_service import (
     list_stock_items,
     low_stock_items,
     register_movement,
+    update_stock_item,
 )
 
 
@@ -396,20 +397,18 @@ def test_stock_item_active_duplicate_name_raises_clean_error(db):
     assert len(list_stock_items(db, hotel_id=1)) == 1
 
 
-def test_stock_item_kind_defaults_to_supply_and_filters(db):
-    """D (stock/lavanderia separation): StockPage only ever wants
-    kind='supply' (bolsas, detergentes, jabon); LaundryPage only wants
-    kind='linen' (ropa blanca)."""
+def test_stock_item_unit_cost_is_optional_and_updatable(db):
+    """Owner: "quiero que se pueda poner en las cosas de stock... el costo
+    por unidad" -- general supplies only (linen has its own per-vendor price,
+    see LaundryVendorPrice)."""
     _seed_hotels(db)
-    supply = create_stock_item(db, hotel_id=1, name="Bolsas de residuos", unit="unidad")
-    linen = create_stock_item(db, hotel_id=1, name="Sabanas", unit="unidad", kind="linen")
+    no_cost = create_stock_item(db, hotel_id=1, name="Jabon", unit="unidad")
+    assert no_cost.unit_cost is None
+
+    priced = create_stock_item(db, hotel_id=1, name="Bolsas chicas", unit="unidad", unit_cost=Decimal("12.50"))
     db.commit()
+    assert priced.unit_cost == Decimal("12.50")
 
-    assert supply.kind == "supply"
-    assert linen.kind == "linen"
-    assert [i.id for i in list_stock_items(db, hotel_id=1, kind="supply")] == [supply.id]
-    assert [i.id for i in list_stock_items(db, hotel_id=1, kind="linen")] == [linen.id]
-    assert {i.id for i in list_stock_items(db, hotel_id=1)} == {supply.id, linen.id}
-
-    with pytest.raises(StockError):
-        create_stock_item(db, hotel_id=1, name="Invalido", unit="unidad", kind="not-a-kind")
+    updated = update_stock_item(db, hotel_id=1, item_id=priced.id, unit_cost=Decimal("15.00"))
+    db.commit()
+    assert updated.unit_cost == Decimal("15.00")

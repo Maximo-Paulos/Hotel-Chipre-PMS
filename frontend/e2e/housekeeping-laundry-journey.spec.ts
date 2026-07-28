@@ -39,33 +39,28 @@ test("housekeeping sends a laundry remito on a vendor set up by the owner", asyn
 
   await login(page, owner);
 
-  // D (stock/lavanderia separation): ropa blanca ahora se da de alta desde
-  // LaundryPage ("Nuevo tipo de ropa blanca"), no desde el formulario
-  // generico de StockPage (que crea kind="supply").
+  // D (stock/lavanderia separation, split real): ropa blanca vive en su
+  // propia tabla/API (linen_items/linen_locations/linen_movements) -- alta
+  // de item, ubicacion y carga de stock inicial se hacen todas desde
+  // LaundryPage ahora, StockPage ya no puede targetear un item de linen.
   await page.goto("/operacion/lavanderia");
   const linenItemForm = page.locator("form").filter({ hasText: "Nuevo tipo de ropa blanca" });
   await linenItemForm.getByLabel("Nombre").fill(itemName);
   await linenItemForm.getByRole("button", { name: "Crear tipo de ropa blanca", exact: true }).click();
   await expect(page.getByText("Tipo de ropa blanca creado.", { exact: true })).toBeVisible();
 
-  await page.goto("/operacion/stock");
-  const locationForm = page.locator("form").filter({ hasText: "Nueva ubicacion" });
-  await locationForm.getByLabel("Nombre").fill(locationName);
-  await locationForm.getByRole("button", { name: "Crear ubicacion", exact: true }).click();
-  await expect(page.getByText("Ubicacion creada.", { exact: true })).toBeVisible();
+  const linenLocationForm = page.locator("form").filter({ hasText: "Nueva ubicación" });
+  await linenLocationForm.getByLabel("Nombre").fill(locationName);
+  await linenLocationForm.getByRole("button", { name: "Crear ubicación", exact: true }).click();
+  await expect(page.getByText("Ubicacion de lavanderia creada.", { exact: true })).toBeVisible();
 
-  // "Registrar movimiento" sigue operando sobre cualquier item (ambos
-  // kinds) -- es la unica forma de cargar un saldo inicial de ropa blanca
-  // que no pasa todavia por ningun remito. La ropa blanca no aparece en la
-  // grilla de items (solo insumos "supply"), asi que se elige desde el
-  // desplegable del formulario de movimiento en vez del atajo por tarjeta.
-  const movementForm = page.locator("#stock-movement-form");
-  await movementForm.getByLabel("Item").selectOption({ label: itemName });
-  await movementForm.getByText("Opciones avanzadas", { exact: true }).click();
-  await movementForm.getByLabel("Ubicacion").selectOption({ label: locationName });
+  const movementForm = page.locator("form").filter({ hasText: "Registrar movimiento" });
+  await movementForm.getByLabel("Ítem").selectOption({ label: itemName });
+  await movementForm.getByLabel("Ubicación").selectOption({ label: locationName });
+  await movementForm.getByRole("button", { name: "Ingreso", exact: true }).click();
   await movementForm.getByLabel("Cantidad").fill("8");
   await movementForm.getByLabel("Motivo").fill("Stock inicial QA housekeeping");
-  await movementForm.getByRole("button", { name: "Registrar Ingreso", exact: true }).click();
+  await movementForm.getByRole("button", { name: "Registrar movimiento", exact: true }).click();
   await expect(page.getByText("Movimiento registrado.", { exact: true })).toBeVisible();
 
   await page.goto("/operacion/lavanderia");

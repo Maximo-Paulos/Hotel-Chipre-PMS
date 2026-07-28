@@ -3,16 +3,17 @@ import type { DecimalValue } from "./stock";
 
 // D2 (Via D lavanderia): client for the D1 backend -- see
 // app/api/laundry_vendor.py for the exact request/response contracts this
-// mirrors. A remito is a transfer between the hotel's own StockLocation and
+// mirrors. A remito is a transfer between the hotel's own LinenLocation and
 // the vendor's dedicated one (created automatically with the vendor), not a
-// new kind of business event.
+// new kind of business event. Linen items/locations are their own tables
+// (see api/linen.ts), physically separate from general stock.
 export type RemitoDirection = "outbound" | "inbound";
 
 export type LaundryVendor = {
   id: number;
   hotel_id: number;
   name: string;
-  stock_location_id: number;
+  linen_location_id: number;
   contact_phone?: string | null;
   contact_email?: string | null;
   active: boolean;
@@ -31,21 +32,21 @@ export type LaundryVendorUpdate = Partial<LaundryVendorCreate>;
 export type LaundryVendorPrice = {
   id: number;
   vendor_id: number;
-  stock_item_id: number;
+  linen_item_id: number;
   unit_price: DecimalValue;
   currency_code: string;
   updated_at: string;
 };
 
 export type LaundryVendorPriceUpsert = {
-  stock_item_id: number;
+  linen_item_id: number;
   unit_price: DecimalValue;
   currency_code?: string | null;
 };
 
 export type LaundryRemitoLine = {
   id: number;
-  stock_item_id: number;
+  linen_item_id: number;
   quantity: DecimalValue;
   unit_price_snapshot?: DecimalValue | null;
 };
@@ -64,7 +65,7 @@ export type LaundryRemito = {
 };
 
 export type LaundryRemitoLineCreate = {
-  stock_item_id: number;
+  linen_item_id: number;
   quantity: DecimalValue;
 };
 
@@ -84,14 +85,14 @@ export type LaundryRemitoCreateResponse = {
 };
 
 export type LaundryVendorBalanceLine = {
-  stock_item_id: number;
-  stock_item_name: string;
+  linen_item_id: number;
+  linen_item_name: string;
   quantity: DecimalValue;
 };
 
 export type LaundryVendorSpendLine = {
-  stock_item_id: number;
-  stock_item_name: string;
+  linen_item_id: number;
+  linen_item_name: string;
   quantity: DecimalValue;
   subtotal: DecimalValue;
 };

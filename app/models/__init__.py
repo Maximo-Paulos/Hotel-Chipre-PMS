@@ -86,6 +86,7 @@ from app.models.permission import Permission, RolePermissionDefault, HotelPermis
 from app.models.laundry import LaundryBatch, LaundryItem
 from app.models.laundry_vendor import LaundryVendor, LaundryVendorPrice, LaundryRemito, LaundryRemitoLine
 from app.models.stock import StockItem, StockLocation, StockMovement
+from app.models.linen import LinenItem, LinenLocation, LinenMovement
 from app.models.voucher import HotelVoucher, VoucherRedemption, VoucherStatusEnum
 from app.models.refund import RefundRequest, RefundPathEnum, RefundStatusEnum
 from app.models.pending_action import (
@@ -235,6 +236,9 @@ __all__ = [
     "StockItem",
     "StockLocation",
     "StockMovement",
+    "LinenItem",
+    "LinenLocation",
+    "LinenMovement",
     "HotelVoucher",
     "VoucherRedemption",
     "VoucherStatusEnum",

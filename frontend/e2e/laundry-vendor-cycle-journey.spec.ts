@@ -32,9 +32,10 @@ test("owner runs the full vendor/remito cycle: pricing, outbound, partial inboun
 
   await login(page);
 
-  // D (stock/lavanderia separation): la ropa blanca se da de alta desde
-  // LaundryPage ("Nuevo tipo de ropa blanca", kind="linen"), no desde el
-  // formulario generico de StockPage (que crea kind="supply").
+  // D (stock/lavanderia separation, split real): ropa blanca vive en su
+  // propia tabla/API (linen_items/linen_locations/linen_movements) --
+  // alta de item, ubicacion y carga de stock inicial se hacen todas desde
+  // LaundryPage, StockPage ya no puede targetear un item de linen.
   await page.goto("/operacion/lavanderia");
   const linenItemForm = page.locator("form").filter({ hasText: "Nuevo tipo de ropa blanca" });
   for (const itemName of [sheetsName, towelsName]) {
@@ -44,27 +45,19 @@ test("owner runs the full vendor/remito cycle: pricing, outbound, partial inboun
   }
 
   // --- Stock inicial: dos items, 10 unidades de cada uno en la ubicacion casa ---
-  await page.goto("/operacion/stock");
-  const locationForm = page.locator("form").filter({ hasText: "Nueva ubicacion" });
-  await locationForm.getByLabel("Nombre").fill(locationName);
-  await locationForm.getByRole("button", { name: "Crear ubicacion", exact: true }).click();
-  await expect(page.getByText("Ubicacion creada.", { exact: true })).toBeVisible();
+  const linenLocationForm = page.locator("form").filter({ hasText: "Nueva ubicación" });
+  await linenLocationForm.getByLabel("Nombre").fill(locationName);
+  await linenLocationForm.getByRole("button", { name: "Crear ubicación", exact: true }).click();
+  await expect(page.getByText("Ubicacion de lavanderia creada.", { exact: true })).toBeVisible();
 
+  const linenMovementForm = page.locator("form").filter({ hasText: "Registrar movimiento" });
   for (const itemName of [sheetsName, towelsName]) {
-    // La ropa blanca no aparece en la grilla de items de StockPage (solo
-    // insumos "supply"); "Registrar movimiento" sigue operando sobre
-    // cualquier item, elegido desde el desplegable.
-    const movementForm = page.locator("#stock-movement-form");
-    await movementForm.getByLabel("Item").selectOption({ label: itemName });
-    // "Opciones avanzadas" is a native <details>: its open state persists across
-    // items in the same session, so only toggle it open on the first iteration.
-    if (!(await movementForm.getByLabel("Ubicacion").isVisible())) {
-      await movementForm.getByText("Opciones avanzadas", { exact: true }).click();
-    }
-    await movementForm.getByLabel("Ubicacion").selectOption({ label: locationName });
-    await movementForm.getByLabel("Cantidad").fill("10");
-    await movementForm.getByLabel("Motivo").fill("Stock inicial QA cycle");
-    await movementForm.getByRole("button", { name: "Registrar Ingreso", exact: true }).click();
+    await linenMovementForm.getByLabel("Ítem").selectOption({ label: itemName });
+    await linenMovementForm.getByLabel("Ubicación").selectOption({ label: locationName });
+    await linenMovementForm.getByRole("button", { name: "Ingreso", exact: true }).click();
+    await linenMovementForm.getByLabel("Cantidad").fill("10");
+    await linenMovementForm.getByLabel("Motivo").fill("Stock inicial QA cycle");
+    await linenMovementForm.getByRole("button", { name: "Registrar movimiento", exact: true }).click();
     await expect(page.getByText("Movimiento registrado.", { exact: true })).toBeVisible();
   }
 
