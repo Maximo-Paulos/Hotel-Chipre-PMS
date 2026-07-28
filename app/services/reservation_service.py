@@ -287,6 +287,60 @@ def calculate_reservation_pricing(
     )
 
 
+def _pricing_result_for_explicit_total(
+    db: Session,
+    *,
+    hotel_id: int,
+    category: RoomCategory,
+    check_in: date,
+    check_out: date,
+    sellable_product_id: int | None,
+    rate_plan_id: int | None,
+    tax_policy_id: int | None,
+) -> ReservationPricingResult:
+    """Placeholder pricing for reservations that carry an explicit
+    total_amount (manual/OTA load, corporate negotiated rate). Deliberately
+    does NOT call quote_rate_plan_stay: an operator-typed price already
+    fixes the total, so a commercial policy restriction that would
+    legitimately reject an auto-quote (channel scope, missing price for the
+    occupancy, min-stay, etc.) must never block the reservation. Only the
+    cheap/pure lookups (_resolve_reservation_commercial_context) run, to
+    keep sellable_product_id/rate_plan_id/tax_policy_id traceable on the
+    reservation; the actual amounts are filled in right after by
+    _apply_manual_total_override / _apply_corporate_pricing.
+    """
+    nights = (check_out - check_in).days
+    if nights <= 0:
+        raise ReservationError("Check-out date must be after check-in date")
+
+    sellable_product, rate_plan, tax_policy = _resolve_reservation_commercial_context(
+        db,
+        hotel_id=hotel_id,
+        category=category,
+        sellable_product_id=sellable_product_id,
+        rate_plan_id=rate_plan_id,
+        tax_policy_id=tax_policy_id,
+    )
+    return ReservationPricingResult(
+        nights=nights,
+        nightly_rate=0.0,
+        total_amount=0.0,
+        deposit_amount=0.0,
+        subtotal_amount=0.0,
+        tax_amount=0.0,
+        fee_amount=0.0,
+        commission_amount=0.0,
+        net_amount=0.0,
+        currency_code=_get_hotel_default_currency(db, hotel_id=hotel_id),
+        fx_rate_snapshot=None,
+        pricing_source="explicit_total_pending_override",
+        sellable_product_id=sellable_product.id if sellable_product else None,
+        rate_plan_id=rate_plan.id if rate_plan else None,
+        tax_policy_id=tax_policy.id if tax_policy else None,
+        pricing_snapshot=None,
+    )
+
+
 def _daily_rate_pricing_result(
     db: Session,
     *,
@@ -743,34 +797,57 @@ def create_reservation(db: Session, data: ReservationCreate, hotel_id: Optional[
     company = _resolve_reservation_company(db, hotel_id=hotel_id, company_id=data.company_id)
     channel_code = _resolve_creation_channel_code(data)
 
-    pricing = calculate_reservation_pricing(
-        db,
-        category_id=data.category_id,
-        check_in=data.check_in_date,
-        check_out=data.check_out_date,
-        hotel_id=hotel_id,
-        sellable_product_id=data.sellable_product_id,
-        rate_plan_id=data.rate_plan_id,
-        tax_policy_id=data.tax_policy_id,
-        pricing_channel_code=data.pricing_channel_code,
-        pricing_payment_method=data.pricing_payment_method,
-        guest_scope=data.guest_scope,
-        target_currency=data.target_currency,
-        occupancy=data.num_adults + data.num_children,
-    )
-    if company is not None:
-        pricing = _apply_corporate_pricing(db, hotel_id=hotel_id, pricing=pricing, company=company, explicit_total=data.total_amount)
-    elif data.total_amount is not None:
-        # B4: manual tarifa on a direct (non-corporate) reservation -- the
-        # same override mechanism corporate accounts already use, just
-        # without requiring a Company record for a one-off negotiated price.
-        pricing = _apply_manual_total_override(
+    if data.total_amount is not None:
+        # Root cause of the "manual OTA load doesn't work" report: an
+        # explicit total_amount (manual/OTA load, corporate negotiated rate)
+        # is an operator-typed price that must never be blocked by a
+        # rate-plan commercial policy restriction (channel scope, missing
+        # occupancy price, min-stay, etc). Skip the auto-quote engine
+        # entirely instead of running it and overriding the result
+        # afterwards -- a PricingPolicyError from quote_rate_plan_stay must
+        # not abort a reservation whose price was already given.
+        pricing = _pricing_result_for_explicit_total(
             db,
             hotel_id=hotel_id,
-            pricing=pricing,
-            total_amount=data.total_amount,
-            target_currency=data.target_currency,
+            category=category,
+            check_in=data.check_in_date,
+            check_out=data.check_out_date,
+            sellable_product_id=data.sellable_product_id,
+            rate_plan_id=data.rate_plan_id,
+            tax_policy_id=data.tax_policy_id,
         )
+        if company is not None:
+            pricing = _apply_corporate_pricing(db, hotel_id=hotel_id, pricing=pricing, company=company, explicit_total=data.total_amount)
+        else:
+            # B4: manual tarifa on a direct (non-corporate) reservation --
+            # the same override mechanism corporate accounts already use,
+            # just without requiring a Company record for a one-off
+            # negotiated price.
+            pricing = _apply_manual_total_override(
+                db,
+                hotel_id=hotel_id,
+                pricing=pricing,
+                total_amount=data.total_amount,
+                target_currency=data.target_currency,
+            )
+    else:
+        pricing = calculate_reservation_pricing(
+            db,
+            category_id=data.category_id,
+            check_in=data.check_in_date,
+            check_out=data.check_out_date,
+            hotel_id=hotel_id,
+            sellable_product_id=data.sellable_product_id,
+            rate_plan_id=data.rate_plan_id,
+            tax_policy_id=data.tax_policy_id,
+            pricing_channel_code=data.pricing_channel_code,
+            pricing_payment_method=data.pricing_payment_method,
+            guest_scope=data.guest_scope,
+            target_currency=data.target_currency,
+            occupancy=data.num_adults + data.num_children,
+        )
+        if company is not None:
+            pricing = _apply_corporate_pricing(db, hotel_id=hotel_id, pricing=pricing, company=company, explicit_total=None)
     pricing = _apply_custom_deposit_amount(pricing, data.deposit_amount)
     pricing_revision = build_pricing_revision(
         db,

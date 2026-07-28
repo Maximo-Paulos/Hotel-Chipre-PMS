@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
+from decimal import Decimal
 
 import pytest
 from fastapi.testclient import TestClient
@@ -187,6 +188,83 @@ def test_manual_ota_total_amount_and_currency_label_applied(db):
     assert updated.id == reservation.id
     assert updated.total_amount == 300
     assert updated.currency_code == "ARS"
+
+
+def test_manual_ota_total_amount_bypasses_rate_plan_policy_restriction(db):
+    """Root-cause repro for the owner's report: a category with a RatePlan
+    that is only priced for the "direct" sales channel. Loading a manual
+    Booking.com reservation with an explicit total_amount must NOT go
+    through the rate-plan quoting engine at all -- the operator already
+    typed the negotiated price, so a channel-scope policy restriction that
+    would legitimately reject an auto-quote must not block this manual
+    load."""
+    from app.models.commercial import RatePlan, RatePlanPrice, SellableProduct
+
+    category, room, guest = _seed_hotel(db, hotel_id=1)
+    product = SellableProduct(
+        hotel_id=1,
+        primary_room_category_id=category.id,
+        code="STD_DIRECT_ONLY",
+        name="Standard directa only",
+        min_occupancy=1,
+        max_occupancy=2,
+    )
+    db.add(product)
+    db.flush()
+
+    rate_plan = RatePlan(
+        hotel_id=1,
+        sellable_product_id=product.id,
+        code="DIRECT-ONLY",
+        name="Solo canal directo",
+        currency_code="ARS",
+        is_active=True,
+    )
+    db.add(rate_plan)
+    db.flush()
+    db.add(
+        RatePlanPrice(
+            hotel_id=1,
+            rate_plan_id=rate_plan.id,
+            sales_channel_code="direct",
+            occupancy=2,
+            currency_code="ARS",
+            base_amount=120.0,
+            tax_inclusive=False,
+        )
+    )
+    db.flush()
+
+    # Confirm the auto-quote path really is blocked for the "booking"
+    # channel by this policy restriction (sanity check for the hypothesis,
+    # not the bug itself).
+    from app.services.pricing_policy_service import PricingPolicyError, quote_rate_plan_stay
+
+    with pytest.raises(PricingPolicyError, match="sales channel"):
+        quote_rate_plan_stay(
+            db,
+            hotel_id=1,
+            rate_plan_id=rate_plan.id,
+            check_in=date(2026, 7, 1),
+            check_out=date(2026, 7, 3),
+            occupancy=2,
+            channel_code="booking",
+        )
+
+    payload = _manual_payload(
+        guest_id=guest.id,
+        category_id=category.id,
+        room_id=room.id,
+        channel="booking",
+        external_id="BKG-DIRECT-ONLY",
+    )
+    payload.total_amount = Decimal("250.00")
+
+    reservation = create_or_update_manual_ota_reservation(db, hotel_id=1, data=payload, actor_user_id=7)
+    db.flush()
+
+    assert reservation.total_amount == 250
+    assert reservation.status == ReservationStatusEnum.PENDING
 
 
 def test_no_guarantee_ota_internal_release_does_not_call_provider_cancel(db, monkeypatch):
