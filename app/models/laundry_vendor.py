@@ -1,16 +1,19 @@
 """
 Laundry vendor, pricing and remito (delivery note) models.
 
-An outsourced laundry ("vendor") gets its own StockLocation, so a remito is
-just a transfer of StockMovement pairs between the hotel's "clean" location
-and the vendor's location -- see app/services/laundry_vendor_service.py. This
-is deliberately separate from the legacy app/models/laundry.py
-LaundryBatch/LaundryItem models, which stay in the code as read-only history
-(see memory checkpoint 20260725-235929: no open batches in production).
+An outsourced laundry ("vendor") gets its own LinenLocation, so a remito is
+just a transfer of LinenMovement pairs between the hotel's "clean" location
+and the vendor's location -- see app/services/laundry_vendor_service.py and
+app/models/linen.py (a table physically separate from app/models/stock.py's
+StockItem/StockLocation/StockMovement -- the owner explicitly rejected a
+shared table with a ``kind`` flag). This is deliberately separate from the
+legacy app/models/laundry.py LaundryBatch/LaundryItem models, which stay in
+the code as read-only history (see memory checkpoint 20260725-235929: no
+open batches in production).
 
 Cross-table references use composite (hotel_id, id) foreign keys, matching
-the tenant-hardening convention already used by StockMovement (see
-app/models/stock.py) and enforced by tests/test_tenant_rls_contract.py: a
+the tenant-hardening convention already used by LinenMovement (see
+app/models/linen.py) and enforced by tests/test_tenant_rls_contract.py: a
 scalar FK across two hotel-scoped tables can point at a row belonging to a
 different hotel, a composite FK cannot.
 """
@@ -42,16 +45,16 @@ class LaundryVendor(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     hotel_id = Column(Integer, ForeignKey("hotel_configuration.id", name="fk_laundry_vendors_hotel_id"), nullable=False)
     name = Column(String(150), nullable=False)
-    stock_location_id = Column(Integer, nullable=False)
+    linen_location_id = Column(Integer, nullable=False)
     contact_phone = Column(String(40), nullable=True)
     contact_email = Column(String(150), nullable=True)
     active = Column(Boolean, nullable=False, server_default="1")
     deleted_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
 
-    stock_location = relationship(
-        "StockLocation",
-        primaryjoin="foreign(LaundryVendor.stock_location_id) == StockLocation.id",
+    linen_location = relationship(
+        "LinenLocation",
+        primaryjoin="foreign(LaundryVendor.linen_location_id) == LinenLocation.id",
         viewonly=True,
         lazy="joined",
     )
@@ -63,9 +66,9 @@ class LaundryVendor(Base):
         UniqueConstraint("hotel_id", "name", name="uq_laundry_vendors_hotel_name"),
         UniqueConstraint("hotel_id", "id", name="uq_laundry_vendors_hotel_id_id"),
         ForeignKeyConstraint(
-            ["hotel_id", "stock_location_id"],
-            ["stock_locations.hotel_id", "stock_locations.id"],
-            name="fk_laundry_vendors_hotel_stock_location",
+            ["hotel_id", "linen_location_id"],
+            ["linen_locations.hotel_id", "linen_locations.id"],
+            name="fk_laundry_vendors_hotel_linen_location",
         ),
         Index("ix_laundry_vendors_hotel_id", "hotel_id"),
     )
@@ -77,7 +80,7 @@ class LaundryVendorPrice(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     hotel_id = Column(Integer, ForeignKey("hotel_configuration.id", name="fk_laundry_vendor_prices_hotel_id"), nullable=False)
     vendor_id = Column(Integer, nullable=False)
-    stock_item_id = Column(Integer, nullable=False)
+    linen_item_id = Column(Integer, nullable=False)
     unit_price = Column(Numeric(12, 2), nullable=False)
     currency_code = Column(String(3), nullable=False, server_default="ARS")
     created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
@@ -91,7 +94,7 @@ class LaundryVendorPrice(Base):
     vendor = relationship("LaundryVendor", back_populates="prices")
 
     __table_args__ = (
-        UniqueConstraint("vendor_id", "stock_item_id", name="uq_laundry_vendor_prices_vendor_item"),
+        UniqueConstraint("vendor_id", "linen_item_id", name="uq_laundry_vendor_prices_vendor_item"),
         CheckConstraint("unit_price >= 0", name="ck_laundry_vendor_prices_unit_price_non_negative"),
         ForeignKeyConstraint(
             ["hotel_id", "vendor_id"],
@@ -100,9 +103,9 @@ class LaundryVendorPrice(Base):
             ondelete="CASCADE",
         ),
         ForeignKeyConstraint(
-            ["hotel_id", "stock_item_id"],
-            ["stock_items.hotel_id", "stock_items.id"],
-            name="fk_laundry_vendor_prices_hotel_stock_item",
+            ["hotel_id", "linen_item_id"],
+            ["linen_items.hotel_id", "linen_items.id"],
+            name="fk_laundry_vendor_prices_hotel_linen_item",
         ),
         Index("ix_laundry_vendor_prices_hotel_id", "hotel_id"),
     )
@@ -154,7 +157,7 @@ class LaundryRemitoLine(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     hotel_id = Column(Integer, ForeignKey("hotel_configuration.id", name="fk_laundry_remito_lines_hotel_id"), nullable=False)
     remito_id = Column(Integer, nullable=False)
-    stock_item_id = Column(Integer, nullable=False)
+    linen_item_id = Column(Integer, nullable=False)
     quantity = Column(Numeric(12, 2), nullable=False)
     # Copied from LaundryVendorPrice at creation time so historical cost does
     # not change if the vendor's price is updated later. Null when no price
@@ -163,9 +166,9 @@ class LaundryRemitoLine(Base):
     unit_price_snapshot = Column(Numeric(12, 2), nullable=True)
 
     remito = relationship("LaundryRemito", back_populates="lines")
-    stock_item = relationship(
-        "StockItem",
-        primaryjoin="foreign(LaundryRemitoLine.stock_item_id) == StockItem.id",
+    linen_item = relationship(
+        "LinenItem",
+        primaryjoin="foreign(LaundryRemitoLine.linen_item_id) == LinenItem.id",
         viewonly=True,
         lazy="joined",
     )
@@ -179,9 +182,9 @@ class LaundryRemitoLine(Base):
             ondelete="CASCADE",
         ),
         ForeignKeyConstraint(
-            ["hotel_id", "stock_item_id"],
-            ["stock_items.hotel_id", "stock_items.id"],
-            name="fk_laundry_remito_lines_hotel_stock_item",
+            ["hotel_id", "linen_item_id"],
+            ["linen_items.hotel_id", "linen_items.id"],
+            name="fk_laundry_remito_lines_hotel_linen_item",
         ),
         Index("ix_laundry_remito_lines_hotel_id", "hotel_id"),
         Index("ix_laundry_remito_lines_remito_id", "remito_id"),

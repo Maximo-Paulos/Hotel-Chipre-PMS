@@ -1,6 +1,6 @@
 """API-level coverage for stock items: delete-then-recreate (owner-reported
-bug), the kind filter (StockPage/LaundryPage separation) and tenant
-isolation, following the same harness pattern as tests/test_laundry_vendor_api.py.
+bug), unit_cost and tenant isolation, following the same harness pattern as
+tests/test_laundry_vendor_api.py.
 """
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -91,23 +91,20 @@ def test_duplicate_active_name_returns_clean_409_not_a_500():
         _teardown(db, engine)
 
 
-def test_stock_items_endpoint_filters_by_kind_for_stock_and_laundry_pages():
+def test_stock_item_unit_cost_is_exposed_on_create_and_update():
     client, db, engine = _client_with_db()
     try:
-        supply = client.post("/api/stock/items", json={"name": "Bolsas de residuos", "unit": "unidad"})
-        assert supply.json()["kind"] == "supply"
-        linen = client.post(
-            "/api/stock/items", json={"name": "Sabanas", "unit": "unidad", "kind": "linen"}
+        created = client.post(
+            "/api/stock/items", json={"name": "Bolsas chicas", "unit": "unidad", "unit_cost": "12.50"}
         )
-        assert linen.json()["kind"] == "linen"
+        assert created.status_code == 201
+        assert created.json()["unit_cost"] == "12.50"
 
-        supplies_only = client.get("/api/stock/items", params={"kind": "supply"})
-        assert [row["name"] for row in supplies_only.json()] == ["Bolsas de residuos"]
+        no_cost = client.post("/api/stock/items", json={"name": "Jabon", "unit": "unidad"})
+        assert no_cost.json()["unit_cost"] is None
 
-        linen_only = client.get("/api/stock/items", params={"kind": "linen"})
-        assert [row["name"] for row in linen_only.json()] == ["Sabanas"]
-
-        everything = client.get("/api/stock/items")
-        assert {row["name"] for row in everything.json()} == {"Bolsas de residuos", "Sabanas"}
+        updated = client.patch(f"/api/stock/items/{created.json()['id']}", json={"unit_cost": "15.00"})
+        assert updated.status_code == 200
+        assert updated.json()["unit_cost"] == "15.00"
     finally:
         _teardown(db, engine)

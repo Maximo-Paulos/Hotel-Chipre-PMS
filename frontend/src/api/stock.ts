@@ -4,11 +4,6 @@ export type StockMovementType = "in" | "out" | "adjustment" | "adjustment_out";
 
 export type DecimalValue = string | number;
 
-// "supply" (insumo general: bolsas, detergentes, jabon -- StockPage) vs
-// "linen" (ropa blanca de lavanderia -- LaundryPage). Same StockItem table,
-// filtered by which page asks for it -- see GET /api/stock/items?kind=.
-export type StockItemKind = "supply" | "linen";
-
 export type StockItem = {
   id: number;
   hotel_id: number;
@@ -17,7 +12,8 @@ export type StockItem = {
   unit: string;
   min_quantity?: DecimalValue | null;
   active: boolean;
-  kind: StockItemKind;
+  // ARS, same as the rest of Stock. See app/models/stock.py StockItem.unit_cost.
+  unit_cost?: DecimalValue | null;
 };
 
 export type StockLocation = {
@@ -45,10 +41,10 @@ export type StockItemCreate = {
   unit: string;
   min_quantity?: DecimalValue | null;
   active?: boolean;
-  // Omit on StockPage (defaults to "supply" server-side); LaundryPage's own
-  // item form always sends "linen" explicitly.
-  kind?: StockItemKind;
+  unit_cost?: DecimalValue | null;
 };
+
+export type StockItemUpdate = Partial<StockItemCreate>;
 
 export type StockLocationCreate = {
   name: string;
@@ -89,19 +85,17 @@ export type StockConsumptionReport = {
   items: StockConsumptionItem[];
 };
 
-export const listStockItems = (
-  { kind }: { kind?: StockItemKind } = {},
-  session?: SessionLike
-) => {
-  const query = kind ? `?kind=${kind}` : "";
-  return apiFetch<StockItem[]>(`/api/stock/items${query}`, { session });
-};
+export const listStockItems = (session?: SessionLike) =>
+  apiFetch<StockItem[]>("/api/stock/items", { session });
 
 export const listLowStockItems = (session?: SessionLike) =>
   apiFetch<StockItem[]>("/api/stock/items/low-stock", { session });
 
 export const createStockItem = (payload: StockItemCreate, session?: SessionLike) =>
   apiFetch<StockItem>("/api/stock/items", { method: "POST", data: payload, session });
+
+export const updateStockItem = (itemId: number, payload: StockItemUpdate, session?: SessionLike) =>
+  apiFetch<StockItem>(`/api/stock/items/${itemId}`, { method: "PATCH", data: payload, session });
 
 export const deleteStockItem = (itemId: number, session?: SessionLike) =>
   apiFetch<void>(`/api/stock/items/${itemId}`, { method: "DELETE", session });

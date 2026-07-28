@@ -13551,6 +13551,520 @@
         }
       }
     },
+    "/api/laundry/items": {
+      "get": {
+        "tags": [
+          "Laundry Vendors"
+        ],
+        "summary": "List Laundry Linen Items",
+        "operationId": "list_laundry_linen_items_api_laundry_items_get",
+        "parameters": [
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/LinenItemRead"
+                  },
+                  "title": "Response List Laundry Linen Items Api Laundry Items Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Laundry Vendors"
+        ],
+        "summary": "Create Laundry Linen Item",
+        "operationId": "create_laundry_linen_item_api_laundry_items_post",
+        "parameters": [
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LinenItemCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinenItemRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/laundry/items/{item_id}": {
+      "delete": {
+        "tags": [
+          "Laundry Vendors"
+        ],
+        "summary": "Delete Laundry Linen Item",
+        "operationId": "delete_laundry_linen_item_api_laundry_items__item_id__delete",
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Item Id"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/laundry/items/{item_id}/current": {
+      "get": {
+        "tags": [
+          "Laundry Vendors"
+        ],
+        "summary": "Get Current Laundry Linen Stock",
+        "operationId": "get_current_laundry_linen_stock_api_laundry_items__item_id__current_get",
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Item Id"
+            }
+          },
+          {
+            "name": "location_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Location Id"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/laundry/locations": {
+      "get": {
+        "tags": [
+          "Laundry Vendors"
+        ],
+        "summary": "List Laundry Linen Locations",
+        "operationId": "list_laundry_linen_locations_api_laundry_locations_get",
+        "parameters": [
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/LinenLocationRead"
+                  },
+                  "title": "Response List Laundry Linen Locations Api Laundry Locations Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Laundry Vendors"
+        ],
+        "summary": "Create Laundry Linen Location",
+        "operationId": "create_laundry_linen_location_api_laundry_locations_post",
+        "parameters": [
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LinenLocationCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinenLocationRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/laundry/movements": {
+      "post": {
+        "tags": [
+          "Laundry Vendors"
+        ],
+        "summary": "Create Laundry Linen Movement",
+        "operationId": "create_laundry_linen_movement_api_laundry_movements_post",
+        "parameters": [
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LinenMovementCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinenMovementRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/laundry/vendors": {
       "post": {
         "tags": [
@@ -14315,6 +14829,187 @@
         }
       }
     },
+    "/api/laundry/vendors/{vendor_id}/settlements": {
+      "get": {
+        "tags": [
+          "Laundry Vendors"
+        ],
+        "summary": "Get Laundry Vendor Settlements",
+        "operationId": "get_laundry_vendor_settlements_api_laundry_vendors__vendor_id__settlements_get",
+        "parameters": [
+          {
+            "name": "vendor_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Vendor Id"
+            }
+          },
+          {
+            "name": "year",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Year"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SettlementQuarterRead"
+                  },
+                  "title": "Response Get Laundry Vendor Settlements Api Laundry Vendors  Vendor Id  Settlements Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/laundry/vendors/{vendor_id}/settlements/{period_start}/mark-paid": {
+      "post": {
+        "tags": [
+          "Laundry Vendors"
+        ],
+        "summary": "Mark Laundry Vendor Settlement Paid",
+        "operationId": "mark_laundry_vendor_settlement_paid_api_laundry_vendors__vendor_id__settlements__period_start__mark_paid_post",
+        "parameters": [
+          {
+            "name": "vendor_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Vendor Id"
+            }
+          },
+          {
+            "name": "period_start",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "Period Start"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettlementMarkPaid"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettlementQuarterRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/stock/items": {
       "post": {
         "tags": [
@@ -14396,26 +15091,6 @@
         "summary": "List Items",
         "operationId": "list_items_api_stock_items_get",
         "parameters": [
-          {
-            "name": "kind",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "enum": [
-                    "supply",
-                    "linen"
-                  ],
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Kind"
-            }
-          },
           {
             "name": "x-hotel-id",
             "in": "header",
@@ -34234,6 +34909,247 @@
         ],
         "title": "LaundryStatusUpdate"
       },
+      "LinenItemCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "unit": {
+            "type": "string",
+            "title": "Unit"
+          },
+          "min_quantity": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Quantity"
+          },
+          "active": {
+            "type": "boolean",
+            "title": "Active",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "unit"
+        ],
+        "title": "LinenItemCreate"
+      },
+      "LinenItemRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "hotel_id": {
+            "type": "integer",
+            "title": "Hotel Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "unit": {
+            "type": "string",
+            "title": "Unit"
+          },
+          "min_quantity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Quantity"
+          },
+          "active": {
+            "type": "boolean",
+            "title": "Active"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "hotel_id",
+          "name",
+          "unit",
+          "active"
+        ],
+        "title": "LinenItemRead"
+      },
+      "LinenLocationCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "LinenLocationCreate"
+      },
+      "LinenLocationRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "hotel_id": {
+            "type": "integer",
+            "title": "Hotel Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "hotel_id",
+          "name"
+        ],
+        "title": "LinenLocationRead"
+      },
+      "LinenMovementCreate": {
+        "properties": {
+          "linen_item_id": {
+            "type": "integer",
+            "title": "Linen Item Id"
+          },
+          "location_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Id"
+          },
+          "movement_type": {
+            "type": "string",
+            "title": "Movement Type"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "linen_item_id",
+          "movement_type",
+          "quantity"
+        ],
+        "title": "LinenMovementCreate"
+      },
+      "LinenMovementRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "hotel_id": {
+            "type": "integer",
+            "title": "Hotel Id"
+          },
+          "item_id": {
+            "type": "integer",
+            "title": "Item Id"
+          },
+          "location_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Id"
+          },
+          "movement_type": {
+            "type": "string",
+            "title": "Movement Type"
+          },
+          "quantity": {
+            "type": "string",
+            "title": "Quantity"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "created_by_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By User Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "hotel_id",
+          "item_id",
+          "movement_type",
+          "quantity",
+          "created_at"
+        ],
+        "title": "LinenMovementRead"
+      },
       "LoginRequest": {
         "properties": {
           "email": {
@@ -39296,9 +40212,9 @@
       },
       "RemitoLineIn": {
         "properties": {
-          "stock_item_id": {
+          "linen_item_id": {
             "type": "integer",
-            "title": "Stock Item Id"
+            "title": "Linen Item Id"
           },
           "quantity": {
             "anyOf": [
@@ -39314,7 +40230,7 @@
         },
         "type": "object",
         "required": [
-          "stock_item_id",
+          "linen_item_id",
           "quantity"
         ],
         "title": "RemitoLineIn"
@@ -39325,9 +40241,9 @@
             "type": "integer",
             "title": "Id"
           },
-          "stock_item_id": {
+          "linen_item_id": {
             "type": "integer",
-            "title": "Stock Item Id"
+            "title": "Linen Item Id"
           },
           "quantity": {
             "type": "string",
@@ -39348,7 +40264,7 @@
         "type": "object",
         "required": [
           "id",
-          "stock_item_id",
+          "linen_item_id",
           "quantity"
         ],
         "title": "RemitoLineRead"
@@ -42908,6 +43824,91 @@
         "type": "object",
         "title": "SellableProductUpdate"
       },
+      "SettlementMarkPaid": {
+        "properties": {
+          "paid": {
+            "type": "boolean",
+            "title": "Paid"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "paid"
+        ],
+        "title": "SettlementMarkPaid"
+      },
+      "SettlementQuarterRead": {
+        "properties": {
+          "period_start": {
+            "type": "string",
+            "format": "date",
+            "title": "Period Start"
+          },
+          "period_end": {
+            "type": "string",
+            "format": "date",
+            "title": "Period End"
+          },
+          "total_amount": {
+            "type": "string",
+            "title": "Total Amount"
+          },
+          "by_item": {
+            "items": {
+              "$ref": "#/components/schemas/VendorSpendLine"
+            },
+            "type": "array",
+            "title": "By Item"
+          },
+          "paid": {
+            "type": "boolean",
+            "title": "Paid"
+          },
+          "paid_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paid At"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "period_start",
+          "period_end",
+          "total_amount",
+          "by_item",
+          "paid"
+        ],
+        "title": "SettlementQuarterRead"
+      },
       "SolverMetricRead": {
         "properties": {
           "metric_key": {
@@ -43127,14 +44128,19 @@
             "title": "Active",
             "default": true
           },
-          "kind": {
-            "type": "string",
-            "enum": [
-              "supply",
-              "linen"
+          "unit_cost": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
             ],
-            "title": "Kind",
-            "default": "supply"
+            "title": "Unit Cost"
           }
         },
         "type": "object",
@@ -43188,13 +44194,16 @@
             "type": "boolean",
             "title": "Active"
           },
-          "kind": {
-            "type": "string",
-            "enum": [
-              "supply",
-              "linen"
+          "unit_cost": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
             ],
-            "title": "Kind"
+            "title": "Unit Cost"
           }
         },
         "type": "object",
@@ -43203,8 +44212,7 @@
           "hotel_id",
           "name",
           "unit",
-          "active",
-          "kind"
+          "active"
         ],
         "title": "StockItemRead"
       },
@@ -43267,6 +44275,20 @@
               }
             ],
             "title": "Active"
+          },
+          "unit_cost": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Cost"
           }
         },
         "type": "object",
@@ -44151,13 +45173,13 @@
       },
       "VendorBalanceLine": {
         "properties": {
-          "stock_item_id": {
+          "linen_item_id": {
             "type": "integer",
-            "title": "Stock Item Id"
+            "title": "Linen Item Id"
           },
-          "stock_item_name": {
+          "linen_item_name": {
             "type": "string",
-            "title": "Stock Item Name"
+            "title": "Linen Item Name"
           },
           "quantity": {
             "type": "string",
@@ -44166,8 +45188,8 @@
         },
         "type": "object",
         "required": [
-          "stock_item_id",
-          "stock_item_name",
+          "linen_item_id",
+          "linen_item_name",
           "quantity"
         ],
         "title": "VendorBalanceLine"
@@ -44222,9 +45244,9 @@
             "type": "integer",
             "title": "Vendor Id"
           },
-          "stock_item_id": {
+          "linen_item_id": {
             "type": "integer",
-            "title": "Stock Item Id"
+            "title": "Linen Item Id"
           },
           "unit_price": {
             "type": "string",
@@ -44244,7 +45266,7 @@
         "required": [
           "id",
           "vendor_id",
-          "stock_item_id",
+          "linen_item_id",
           "unit_price",
           "currency_code",
           "updated_at"
@@ -44253,9 +45275,9 @@
       },
       "VendorPriceUpsert": {
         "properties": {
-          "stock_item_id": {
+          "linen_item_id": {
             "type": "integer",
-            "title": "Stock Item Id"
+            "title": "Linen Item Id"
           },
           "unit_price": {
             "anyOf": [
@@ -44282,7 +45304,7 @@
         },
         "type": "object",
         "required": [
-          "stock_item_id",
+          "linen_item_id",
           "unit_price"
         ],
         "title": "VendorPriceUpsert"
@@ -44301,9 +45323,9 @@
             "type": "string",
             "title": "Name"
           },
-          "stock_location_id": {
+          "linen_location_id": {
             "type": "integer",
-            "title": "Stock Location Id"
+            "title": "Linen Location Id"
           },
           "contact_phone": {
             "anyOf": [
@@ -44342,7 +45364,7 @@
           "id",
           "hotel_id",
           "name",
-          "stock_location_id",
+          "linen_location_id",
           "active",
           "created_at"
         ],
@@ -44350,13 +45372,13 @@
       },
       "VendorSpendLine": {
         "properties": {
-          "stock_item_id": {
+          "linen_item_id": {
             "type": "integer",
-            "title": "Stock Item Id"
+            "title": "Linen Item Id"
           },
-          "stock_item_name": {
+          "linen_item_name": {
             "type": "string",
-            "title": "Stock Item Name"
+            "title": "Linen Item Name"
           },
           "quantity": {
             "type": "string",
@@ -44369,8 +45391,8 @@
         },
         "type": "object",
         "required": [
-          "stock_item_id",
-          "stock_item_name",
+          "linen_item_id",
+          "linen_item_name",
           "quantity",
           "subtotal"
         ],

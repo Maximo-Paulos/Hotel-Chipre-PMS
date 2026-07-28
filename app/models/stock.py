@@ -33,20 +33,17 @@ class StockItem(Base):
     unit = Column(String(40), nullable=False)
     min_quantity = Column(Numeric(12, 2), nullable=True)
     active = Column(Boolean, nullable=False, server_default="1")
-    # "supply" (bolsas, detergentes, jabon -- StockPage) vs "linen" (ropa
-    # blanca administrada desde LaundryPage/laundry_vendor_prices). Same
-    # table on purpose (both are still stock items with movements/locations),
-    # separated only by which screen lists/creates them -- see
-    # app/api/stock.py list_items(kind=) and migration
-    # 20260727_stock_item_kind_and_soft_delete_unique_fix.
-    kind = Column(String(20), nullable=False, server_default="supply")
+    # ARS (same currency convention as the rest of Stock -- unlike laundry's
+    # per-vendor LaundryVendorPrice, general supplies have a single cost, not
+    # a price negotiated per counterparty). Nullable: most items never need
+    # it tracked.
+    unit_cost = Column(Numeric(12, 2), nullable=True)
     deleted_at = Column(DateTime, nullable=True)
     deleted_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     movements = relationship("StockMovement", back_populates="item", lazy="selectin")
 
     __table_args__ = (
-        CheckConstraint("kind IN ('supply', 'linen')", name="ck_stock_items_kind_valid"),
         # Partial (not plain) unique index: a soft-deleted item must not keep
         # blocking the name forever -- otherwise "delete a discontinued
         # product, then add its replacement under the same name" (the

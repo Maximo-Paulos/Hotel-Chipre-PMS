@@ -3,16 +3,15 @@ FastAPI routes for stock and inventory operations.
 """
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Literal, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies.auth import AuthContext, require_any_permission, require_permission
+from app.dependencies.auth import AuthContext, require_permission
 from app.services.permission_service import (
-    PERMISSION_LAUNDRY_OPERATE_REMITOS,
     PERMISSION_STOCK_ADJUST,
     PERMISSION_STOCK_OPERATE,
     audit_permission_denied,
@@ -53,18 +52,14 @@ def _ensure_adjustment_permission(db: Session, context: AuthContext) -> None:
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tenes permisos para ajustar stock")
 
 
-StockItemKind = Literal["supply", "linen"]
-
-
 class StockItemCreate(BaseModel):
     name: str
     sku: Optional[str] = None
     unit: str
     min_quantity: Optional[Decimal] = None
     active: bool = True
-    # StockPage never sends this (always "supply", the default) -- only
-    # LaundryPage's own item-creation form sends "linen". See list_items(kind=).
-    kind: StockItemKind = "supply"
+    # ARS, same as the rest of Stock -- see app/models/stock.py StockItem.unit_cost.
+    unit_cost: Optional[Decimal] = None
 
 
 class StockItemUpdate(BaseModel):
@@ -73,6 +68,7 @@ class StockItemUpdate(BaseModel):
     unit: Optional[str] = None
     min_quantity: Optional[Decimal] = None
     active: Optional[bool] = None
+    unit_cost: Optional[Decimal] = None
 
 
 class StockItemRead(BaseModel):
@@ -85,7 +81,7 @@ class StockItemRead(BaseModel):
     unit: str
     min_quantity: Optional[Decimal] = None
     active: bool
-    kind: StockItemKind
+    unit_cost: Optional[Decimal] = None
 
 
 class StockLocationCreate(BaseModel):
@@ -160,17 +156,10 @@ def create_item(
 
 @router.get("/items", response_model=list[StockItemRead])
 def list_items(
-    # StockPage asks for kind=supply, LaundryPage asks for kind=linen; omit
-    # to get the old undifferentiated hotel-wide list (back-compat).
-    kind: Optional[StockItemKind] = None,
     db: Session = Depends(get_db),
-    # D2 (laundry vendors): a remito line picks a StockItem the same way it
-    # picks a StockLocation above -- same require_any_permission reasoning.
-    context: AuthContext = Depends(
-        require_any_permission(PERMISSION_STOCK_OPERATE, PERMISSION_LAUNDRY_OPERATE_REMITOS)
-    ),
+    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_OPERATE)),
 ):
-    return list_stock_items(db, hotel_id=context.hotel_id, kind=kind)
+    return list_stock_items(db, hotel_id=context.hotel_id)
 
 
 @router.get("/items/low-stock", response_model=list[StockItemRead])
@@ -243,12 +232,7 @@ def create_stock_location(
 @router.get("/locations", response_model=list[StockLocationRead])
 def list_stock_locations(
     db: Session = Depends(get_db),
-    # D2 (laundry vendors): housekeeping holds laundry:operate_remitos but not
-    # stock:operate, and still needs this list to pick a house StockLocation
-    # when filing a remito -- see frontend/src/views/protected/LaundryPage.tsx.
-    context: AuthContext = Depends(
-        require_any_permission(PERMISSION_STOCK_OPERATE, PERMISSION_LAUNDRY_OPERATE_REMITOS)
-    ),
+    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_OPERATE)),
 ):
     return list_locations(db, hotel_id=context.hotel_id)
 

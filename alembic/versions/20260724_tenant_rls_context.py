@@ -125,6 +125,14 @@ TENANT_TABLES: tuple[str, ...] = (
     # Added by e2c4a9f7b3d1 (after this baseline migration in the chain) --
     # that migration owns enabling RLS for this table, same pattern above.
     "laundry_vendor_settlements",
+    # Added by 20260727_linen_split (after this baseline migration in the
+    # chain) -- that migration owns enabling RLS for these, same pattern
+    # above. Physically separate tables from stock_items/stock_locations/
+    # stock_movements (see app/models/linen.py) -- the owner explicitly
+    # rejected a shared table split by a StockItem.kind flag.
+    "linen_items",
+    "linen_locations",
+    "linen_movements",
 )
 
 

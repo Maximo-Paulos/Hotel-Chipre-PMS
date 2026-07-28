@@ -12,12 +12,14 @@ import {
   listStockMovements,
   listStockItems,
   listStockLocations,
+  updateStockItem,
   type StockConsumptionGroupBy,
   type StockConsumptionReport,
   type StockMovement,
   type StockMovementCreate,
   type StockMovementType
 } from "../../api/stock";
+import { formatMoney } from "../../utils/currency";
 import { listReservations, type Reservation } from "../../api/reservations";
 import { hasValidSession } from "../../api/client";
 import ConfirmDialog from "../../components/ConfirmDialog";
@@ -54,6 +56,7 @@ const emptyItemForm = {
   sku: "",
   unit: "unidad",
   min_quantity: "",
+  unit_cost: "",
   active: true
 };
 
@@ -96,16 +99,12 @@ export function StockPage() {
   const [consumptionRange, setConsumptionRange] = useState(() => ({ from: startOfCurrentWeekIso(), to: todayIso() }));
   const enabled = hasValidSession(session);
 
-  // Fetches every item (both kinds): "Registrar movimiento" below is a
-  // generic inventory-ledger tool (ingreso/egreso/ajuste) with no linen
-  // equivalent elsewhere, so it must still be able to target a linen item
-  // (e.g. registering an opening balance for new sheets before they ever go
-  // through a laundry remito). Only the catalog grid/stat below (supplyItems)
-  // is scoped to kind="supply" -- see the owner's "separá ropa blanca de
-  // insumos" request, which was about the product *catalog*, not the ledger.
+  // Stock general (insumos: bolsas, detergentes, jabon) -- ropa blanca de
+  // lavanderia vive en su propia tabla/API (linen_items, ver
+  // api/linen.ts y LaundryPage.tsx), no aca.
   const itemsQuery = useQuery({
     queryKey: ["stock-items", session.hotelId],
-    queryFn: () => listStockItems({}, session),
+    queryFn: () => listStockItems(session),
     enabled,
     staleTime: 30 * 1000
   });
@@ -142,15 +141,8 @@ export function StockPage() {
   });
 
   const items = useMemo(() => itemsQuery.data ?? [], [itemsQuery.data]);
-  // The catalog grid/stat/badges below only ever show general supplies
-  // (bolsas, detergentes, jabon) -- ropa blanca (kind="linen") is catalogued
-  // in LaundryPage instead, even though it can still receive a movement here.
-  const supplyItems = useMemo(() => items.filter((item) => item.kind === "supply"), [items]);
   const locations = useMemo(() => locationsQuery.data ?? [], [locationsQuery.data]);
-  const lowStock = useMemo(
-    () => (lowStockQuery.data ?? []).filter((item) => item.kind === "supply"),
-    [lowStockQuery.data]
-  );
+  const lowStock = useMemo(() => lowStockQuery.data ?? [], [lowStockQuery.data]);
   const reservations = useMemo(() => reservationsQuery.data ?? [], [reservationsQuery.data]);
 
   const stockQueries = useQueries({
@@ -244,6 +236,7 @@ export function StockPage() {
           sku: itemForm.sku || null,
           unit: itemForm.unit,
           min_quantity: itemForm.min_quantity || null,
+          unit_cost: itemForm.unit_cost || null,
           active: itemForm.active
         },
         session
@@ -252,6 +245,18 @@ export function StockPage() {
       invalidateStock();
       setItemForm(emptyItemForm);
       setMessage("Item de stock creado.");
+    }
+  });
+
+  // Owner: "quiero que se pueda poner en las cosas de stock... el costo por
+  // unidad" -- inline edit on each card instead of a separate full item-edit
+  // form, since unit_cost is the only field that needs changing after creation.
+  const updateItemCostMutation = useMutation({
+    mutationFn: ({ itemId, unitCost }: { itemId: number; unitCost: string }) =>
+      updateStockItem(itemId, { unit_cost: unitCost || null }, session),
+    onSuccess: () => {
+      invalidateStock();
+      setMessage("Costo por unidad actualizado.");
     }
   });
 
@@ -353,7 +358,7 @@ export function StockPage() {
       {message ? <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">{message}</div> : null}
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <StatusBadge label="Items" value={supplyItems.length} className="bg-slate-100 text-slate-700" />
+        <StatusBadge label="Items" value={items.length} className="bg-slate-100 text-slate-700" />
         <StatusBadge label="Ubicaciones" value={locations.length} className="bg-sky-100 text-sky-800" />
         <StatusBadge label="Bajo stock" value={lowStock.length} className="bg-rose-100 text-rose-800" />
       </div>
@@ -362,12 +367,12 @@ export function StockPage() {
         <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <div>
             <p className="text-xs uppercase tracking-wide text-slate-500">Inventario</p>
-            <h2 className="text-lg font-semibold text-slate-900">Items ({supplyItems.length})</h2>
+            <h2 className="text-lg font-semibold text-slate-900">Items ({items.length})</h2>
             {itemsQuery.error && <p className="text-xs text-rose-700">No se pudo cargar: {(itemsQuery.error as Error).message}</p>}
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
-            {supplyItems.map((item) => {
+            {items.map((item) => {
               const current = currentByItemId.get(item.id) ?? "...";
               const isLow = lowStock.some((lowItem) => lowItem.id === item.id);
               return (
@@ -384,11 +389,18 @@ export function StockPage() {
                       {isLow ? "Bajo" : "OK"}
                     </span>
                   </div>
-                  <div className="mt-4 rounded-lg bg-slate-50 px-3 py-2">
-                    <p className="text-xs uppercase tracking-wide text-slate-500">Stock actual</p>
-                    <p className="text-xl font-semibold text-slate-900">
-                      {current} <span className="text-sm font-normal text-slate-500">{item.unit}</span>
-                    </p>
+                  <div className="mt-4 grid grid-cols-2 gap-2">
+                    <div className="rounded-lg bg-slate-50 px-3 py-2">
+                      <p className="text-xs uppercase tracking-wide text-slate-500">Stock actual</p>
+                      <p className="text-xl font-semibold text-slate-900">
+                        {current} <span className="text-sm font-normal text-slate-500">{item.unit}</span>
+                      </p>
+                    </div>
+                    <UnitCostField
+                      unitCost={item.unit_cost ?? null}
+                      onSave={(unitCost) => updateItemCostMutation.mutate({ itemId: item.id, unitCost })}
+                      saving={updateItemCostMutation.isPending}
+                    />
                   </div>
                   <div className="mt-3 flex gap-2">
                     <button
@@ -420,7 +432,7 @@ export function StockPage() {
                 </div>
               );
             })}
-            {!itemsQuery.isLoading && supplyItems.length === 0 && (
+            {!itemsQuery.isLoading && items.length === 0 && (
               <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-600">
                 No hay items de stock cargados.
               </div>
@@ -641,17 +653,30 @@ export function StockPage() {
                 />
               </label>
             </div>
-            <label className="space-y-1 text-sm">
-              <span className="text-slate-600">Minimo</span>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={itemForm.min_quantity}
-                onChange={(event) => setItemForm((current) => ({ ...current, min_quantity: event.target.value }))}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2"
-              />
-            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="space-y-1 text-sm">
+                <span className="text-slate-600">Minimo</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={itemForm.min_quantity}
+                  onChange={(event) => setItemForm((current) => ({ ...current, min_quantity: event.target.value }))}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                />
+              </label>
+              <label className="space-y-1 text-sm">
+                <span className="text-slate-600">Costo por unidad</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={itemForm.unit_cost}
+                  onChange={(event) => setItemForm((current) => ({ ...current, unit_cost: event.target.value }))}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                />
+              </label>
+            </div>
             <button
               type="submit"
               disabled={createItemMutation.isPending}
@@ -718,6 +743,74 @@ function StatusBadge({ label, value, className }: { label: string; value: number
         <span className={`rounded-full px-2 py-1 text-xs font-semibold ${className}`}>{value}</span>
       </div>
     </div>
+  );
+}
+
+// Owner: "quiero que se pueda poner en las cosas de stock... el costo por
+// unidad" -- shown next to "Stock actual" on each card, editable inline
+// (click to open a small input) instead of a full separate edit form.
+function UnitCostField({
+  unitCost,
+  onSave,
+  saving
+}: {
+  unitCost: string | number | null;
+  onSave: (unitCost: string) => void;
+  saving: boolean;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(unitCost !== null ? String(unitCost) : "");
+
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          setDraft(unitCost !== null ? String(unitCost) : "");
+          setEditing(true);
+        }}
+        className="rounded-lg bg-slate-50 px-3 py-2 text-left hover:bg-slate-100"
+      >
+        <p className="text-xs uppercase tracking-wide text-slate-500">Costo por unidad</p>
+        <p className="text-xl font-semibold text-slate-900">
+          {unitCost !== null ? formatMoney(unitCost) : <span className="text-sm font-normal text-slate-400">Sin costo</span>}
+        </p>
+      </button>
+    );
+  }
+
+  return (
+    <form
+      className="rounded-lg bg-slate-50 px-3 py-2"
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSave(draft);
+        setEditing(false);
+      }}
+    >
+      <label className="block text-xs uppercase tracking-wide text-slate-500" htmlFor="unit-cost-draft">
+        Costo por unidad
+      </label>
+      <div className="mt-1 flex items-center gap-1">
+        <input
+          id="unit-cost-draft"
+          type="number"
+          min="0"
+          step="0.01"
+          autoFocus
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          className="w-full rounded-lg border border-slate-300 px-2 py-1 text-sm"
+        />
+        <button
+          type="submit"
+          disabled={saving}
+          className="min-h-8 shrink-0 rounded-lg border border-brand-200 bg-brand-600 px-2 py-1 text-xs font-semibold text-white disabled:opacity-60"
+        >
+          OK
+        </button>
+      </div>
+    </form>
   );
 }
 

@@ -18,7 +18,16 @@ import {
   type LaundryVendorSettlementQuarter,
   type RemitoDirection
 } from "../../api/laundryVendor";
-import { createStockItem, getCurrentStock, listStockItems, listStockLocations, type StockItem } from "../../api/stock";
+import {
+  createLinenItem,
+  createLinenLocation,
+  createLinenMovement,
+  getCurrentLinenStock,
+  listLinenItems,
+  listLinenLocations,
+  type LinenItem
+} from "../../api/linen";
+import type { StockMovementType } from "../../api/stock";
 import { hasValidSession } from "../../api/client";
 import { useGuardedMutation } from "../../hooks/useGuardedMutation";
 import { useSession } from "../../state/session";
@@ -29,7 +38,7 @@ import { startOfCurrentMonthIso, startOfCurrentWeekIso, todayIso } from "../../u
 // entirely -- D0 confirmed no open batches in production, so there is no
 // read-only legacy view to keep around (see memory checkpoint
 // 20260726-002247 for the D1 backend this consumes). A remito is a transfer
-// between the hotel's own StockLocation and the vendor's dedicated one, so
+// between the hotel's own LinenLocation and the vendor's dedicated one, so
 // "en el lavadero ahora" and "limpio disponible en el hotel" are both just
 // current_stock() narrowed to different location_id values -- see the two
 // panels near the bottom of this file.
@@ -48,10 +57,12 @@ const dayStartIso = (day: string) => new Date(`${day}T00:00:00`).toISOString();
 const dayEndIso = (day: string) => new Date(`${day}T23:59:59.999`).toISOString();
 
 const emptyVendorForm = { name: "", contact_phone: "", contact_email: "" };
-const emptyPriceForm = { stock_item_id: "", unit_price: "" };
+const emptyPriceForm = { linen_item_id: "", unit_price: "" };
 const emptyLinenItemForm = { name: "", unit: "unidad" };
+const emptyLinenLocationForm = { name: "" };
+const emptyMovementForm = { linen_item_id: "", location_id: "", movement_type: "in" as StockMovementType, quantity: "1", reason: "" };
 
-type LineDraft = { stock_item_id: number; item_name: string; unit: string; quantity: string };
+type LineDraft = { linen_item_id: number; item_name: string; unit: string; quantity: string };
 
 const emptyRemitoForm = () => ({
   direction: "outbound" as RemitoDirection,
@@ -74,9 +85,11 @@ export function LaundryPage() {
   const [vendorForm, setVendorForm] = useState(emptyVendorForm);
   const [priceForm, setPriceForm] = useState(emptyPriceForm);
   const [linenItemForm, setLinenItemForm] = useState(emptyLinenItemForm);
+  const [linenLocationForm, setLinenLocationForm] = useState(emptyLinenLocationForm);
+  const [movementForm, setMovementForm] = useState(emptyMovementForm);
   const [remitoForm, setRemitoForm] = useState(emptyRemitoForm);
   const [lines, setLines] = useState<LineDraft[]>([]);
-  const [lineDraft, setLineDraft] = useState({ stock_item_id: "", quantity: "1" });
+  const [lineDraft, setLineDraft] = useState({ linen_item_id: "", quantity: "1" });
   const [remitoError, setRemitoError] = useState<string | null>(null);
   const [houseStockLocationId, setHouseStockLocationId] = useState<string>("");
   const [spendRange, setSpendRange] = useState(() => ({ from: startOfCurrentMonthIso(), to: todayIso() }));
@@ -88,17 +101,17 @@ export function LaundryPage() {
     enabled,
     staleTime: 30 * 1000
   });
-  // LaundryPage only ever deals with ropa blanca (kind="linen") -- general
-  // supplies (bolsas, detergentes, jabon) live in StockPage instead.
+  // LaundryPage's own linen_items/linen_locations tables -- physically
+  // separate from StockPage's general supplies (see api/linen.ts).
   const itemsQuery = useQuery({
-    queryKey: ["stock-items", session.hotelId, "linen"],
-    queryFn: () => listStockItems({ kind: "linen" }, session),
+    queryKey: ["linen-items", session.hotelId],
+    queryFn: () => listLinenItems(session),
     enabled,
     staleTime: 30 * 1000
   });
   const locationsQuery = useQuery({
-    queryKey: ["stock-locations", session.hotelId],
-    queryFn: () => listStockLocations(session),
+    queryKey: ["linen-locations", session.hotelId],
+    queryFn: () => listLinenLocations(session),
     enabled,
     staleTime: 60 * 1000
   });
@@ -117,11 +130,11 @@ export function LaundryPage() {
   const itemById = useMemo(() => new Map(items.map((item) => [item.id, item])), [items]);
   const vendorById = useMemo(() => new Map(vendors.map((vendor) => [vendor.id, vendor])), [vendors]);
 
-  // Vendor StockLocations are administrative (created automatically with the
+  // Vendor LinenLocations are administrative (created automatically with the
   // vendor to represent "what's physically at that laundry") -- exclude them
   // from any selector meant to pick a real hotel storage location, so they
   // don't get mixed with places like "Deposito" or "Recepcion".
-  const vendorLocationIds = useMemo(() => new Set(vendors.map((vendor) => vendor.stock_location_id)), [vendors]);
+  const vendorLocationIds = useMemo(() => new Set(vendors.map((vendor) => vendor.linen_location_id)), [vendors]);
   const houseLocations = useMemo(
     () => locations.filter((location) => !vendorLocationIds.has(location.id)),
     [locations, vendorLocationIds]
@@ -160,7 +173,7 @@ export function LaundryPage() {
   const remitoVendorPriceByItem = useMemo(() => {
     const map = new Map<number, { unit_price: string; currency_code: string }>();
     (remitoVendorPricesQuery.data ?? []).forEach((price) =>
-      map.set(price.stock_item_id, { unit_price: String(price.unit_price), currency_code: price.currency_code })
+      map.set(price.linen_item_id, { unit_price: String(price.unit_price), currency_code: price.currency_code })
     );
     return map;
   }, [remitoVendorPricesQuery.data]);
@@ -202,9 +215,13 @@ export function LaundryPage() {
 
   const houseStockQueries = useQueries({
     queries: items.map((item) => ({
-      queryKey: ["stock-current", session.hotelId, item.id, houseStockLocationId || "hotel-wide"],
+      queryKey: ["linen-current", session.hotelId, item.id, houseStockLocationId || "hotel-wide"],
       queryFn: () =>
-        getCurrentStock(item.id, houseStockLocationId ? { locationId: Number(houseStockLocationId) } : {}, session),
+        getCurrentLinenStock(
+          item.id,
+          houseStockLocationId ? { locationId: Number(houseStockLocationId) } : {},
+          session
+        ),
       enabled: enabled && Boolean(houseStockLocationId),
       staleTime: 15 * 1000
     }))
@@ -213,11 +230,17 @@ export function LaundryPage() {
   const invalidateVendors = () => queryClient.invalidateQueries({ queryKey: ["laundry-vendors", session.hotelId] });
   const invalidatePrices = (vendorId: number) =>
     queryClient.invalidateQueries({ queryKey: ["laundry-vendor-prices", session.hotelId, vendorId] });
+  const invalidateLinenItems = () => queryClient.invalidateQueries({ queryKey: ["linen-items", session.hotelId] });
+  const invalidateLinenLocations = () =>
+    queryClient.invalidateQueries({ queryKey: ["linen-locations", session.hotelId] });
   const invalidateAfterRemito = () => {
     queryClient.invalidateQueries({ queryKey: ["laundry-remitos", session.hotelId] });
     queryClient.invalidateQueries({ queryKey: ["laundry-vendor-balance", session.hotelId] });
     queryClient.invalidateQueries({ queryKey: ["laundry-vendor-spend", session.hotelId] });
-    queryClient.invalidateQueries({ queryKey: ["stock-current", session.hotelId] });
+    queryClient.invalidateQueries({ queryKey: ["linen-current", session.hotelId] });
+  };
+  const invalidateAfterMovement = () => {
+    queryClient.invalidateQueries({ queryKey: ["linen-current", session.hotelId] });
   };
 
   const createVendorMutation = useMutation({
@@ -247,17 +270,46 @@ export function LaundryPage() {
     }
   });
 
-  // D (stock/lavanderia separation): LaundryPage used to reuse StockPage's
-  // generic item form for new ropa blanca (e.g. "toallas de piscina" nuevas)
-  // -- now that kind separates the two lists, it needs its own create-item
-  // form so a new linen type never has to be added from StockPage.
+  // D (stock/lavanderia separation, real split): linen_items is its own
+  // table now (see api/linen.ts) -- this form is the only way to add a new
+  // linen type, there is no StockPage equivalent to fall back on.
   const createLinenItemMutation = useMutation({
-    mutationFn: () =>
-      createStockItem({ name: linenItemForm.name, unit: linenItemForm.unit, kind: "linen" }, session),
+    mutationFn: () => createLinenItem({ name: linenItemForm.name, unit: linenItemForm.unit }, session),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["stock-items", session.hotelId] });
+      invalidateLinenItems();
       setLinenItemForm(emptyLinenItemForm);
       setMessage("Tipo de ropa blanca creado.");
+    }
+  });
+
+  const createLinenLocationMutation = useMutation({
+    mutationFn: () => createLinenLocation({ name: linenLocationForm.name }, session),
+    onSuccess: () => {
+      invalidateLinenLocations();
+      setLinenLocationForm(emptyLinenLocationForm);
+      setMessage("Ubicacion de lavanderia creada.");
+    }
+  });
+
+  // Replaces the old workaround of loading an opening balance for a new
+  // linen type through StockPage's generic movement form -- linen_items is
+  // its own table now, so StockPage's form can no longer target it at all.
+  const createLinenMovementMutation = useMutation({
+    mutationFn: () =>
+      createLinenMovement(
+        {
+          linen_item_id: Number(movementForm.linen_item_id),
+          location_id: movementForm.location_id ? Number(movementForm.location_id) : null,
+          movement_type: movementForm.movement_type,
+          quantity: movementForm.quantity,
+          reason: movementForm.reason || null
+        },
+        session
+      ),
+    onSuccess: () => {
+      invalidateAfterMovement();
+      setMovementForm(emptyMovementForm);
+      setMessage("Movimiento registrado.");
     }
   });
 
@@ -265,7 +317,7 @@ export function LaundryPage() {
     mutationFn: () =>
       setLaundryVendorPrice(
         selectedVendorId as number,
-        { stock_item_id: Number(priceForm.stock_item_id), unit_price: priceForm.unit_price },
+        { linen_item_id: Number(priceForm.linen_item_id), unit_price: priceForm.unit_price },
         session
       ),
     onSuccess: () => {
@@ -298,7 +350,7 @@ export function LaundryPage() {
           house_location_id: Number(remitoForm.house_location_id),
           notes: remitoForm.notes || null,
           lines: lines.map<LaundryRemitoLineCreate>((line) => ({
-            stock_item_id: line.stock_item_id,
+            linen_item_id: line.linen_item_id,
             quantity: line.quantity
           }))
         },
@@ -356,23 +408,45 @@ export function LaundryPage() {
     }
   };
 
+  const handleCreateLinenLocation = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setMessage(null);
+    try {
+      await createLinenLocationMutation.mutateAsync();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "No se pudo crear la ubicacion.");
+    }
+  };
+
+  // Opening balance / correction for a linen item -- linen_items has no
+  // StockPage equivalent to fall back on anymore (see linen_service.py).
+  const handleCreateLinenMovement = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setMessage(null);
+    try {
+      await createLinenMovementMutation.mutateAsync();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "No se pudo registrar el movimiento.");
+    }
+  };
+
   const addLine = () => {
-    const itemId = Number(lineDraft.stock_item_id);
+    const itemId = Number(lineDraft.linen_item_id);
     const item = itemById.get(itemId);
     const quantity = Number(lineDraft.quantity);
     if (!item || !Number.isFinite(quantity) || quantity <= 0) return;
     setLines((current) => {
-      const withoutItem = current.filter((line) => line.stock_item_id !== itemId);
-      return [...withoutItem, { stock_item_id: itemId, item_name: item.name, unit: item.unit, quantity: lineDraft.quantity }];
+      const withoutItem = current.filter((line) => line.linen_item_id !== itemId);
+      return [...withoutItem, { linen_item_id: itemId, item_name: item.name, unit: item.unit, quantity: lineDraft.quantity }];
     });
-    setLineDraft({ stock_item_id: "", quantity: "1" });
+    setLineDraft({ linen_item_id: "", quantity: "1" });
   };
 
-  const removeLine = (itemId: number) => setLines((current) => current.filter((line) => line.stock_item_id !== itemId));
+  const removeLine = (itemId: number) => setLines((current) => current.filter((line) => line.linen_item_id !== itemId));
 
   const remitoTotal = useMemo(() => {
     return lines.reduce((sum, line) => {
-      const price = remitoVendorPriceByItem.get(line.stock_item_id);
+      const price = remitoVendorPriceByItem.get(line.linen_item_id);
       if (!price) return sum;
       return sum + Number(price.unit_price) * Number(line.quantity || 0);
     }, 0);
@@ -396,7 +470,7 @@ export function LaundryPage() {
     }
   };
 
-  const itemsAvailableToAdd = items.filter((item) => !lines.some((line) => line.stock_item_id === item.id));
+  const itemsAvailableToAdd = items.filter((item) => !lines.some((line) => line.linen_item_id === item.id));
 
   return (
     <div className="space-y-6">
@@ -483,10 +557,10 @@ export function LaundryPage() {
                   <p className="text-sm font-semibold text-slate-700">Precios de {selectedVendor.name}</p>
                   <ul className="space-y-1 text-sm">
                     {selectedVendorPrices.map((price) => {
-                      const item = itemById.get(price.stock_item_id);
+                      const item = itemById.get(price.linen_item_id);
                       return (
                         <li key={price.id} className="flex items-center justify-between rounded-lg bg-white px-3 py-2 shadow-sm">
-                          <span>{item?.name ?? `Ítem #${price.stock_item_id}`}</span>
+                          <span>{item?.name ?? `Ítem #${price.linen_item_id}`}</span>
                           <span className="font-semibold text-slate-900">
                             {formatMoney(price.unit_price, price.currency_code)}
                           </span>
@@ -501,8 +575,8 @@ export function LaundryPage() {
                     <label className="space-y-1 text-xs font-semibold text-slate-600">
                       Ítem
                       <select
-                        value={priceForm.stock_item_id}
-                        onChange={(event) => setPriceForm((current) => ({ ...current, stock_item_id: event.target.value }))}
+                        value={priceForm.linen_item_id}
+                        onChange={(event) => setPriceForm((current) => ({ ...current, linen_item_id: event.target.value }))}
                         required
                         className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
                       >
@@ -599,6 +673,140 @@ export function LaundryPage() {
 
       {manageVendors && (
         <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div>
+            <p className="text-xs uppercase tracking-wide text-slate-500">Ropa blanca</p>
+            <h2 className="text-lg font-semibold text-slate-900">Ubicaciones y movimientos ({houseLocations.length})</h2>
+            <p className="text-sm text-slate-600">
+              Depositos propios del hotel para ropa blanca (ej. "Deposito de blancos") y carga de saldo inicial o
+              correcciones de inventario -- separado de las ubicaciones de Stock general.
+            </p>
+          </div>
+          <div className="grid gap-4 lg:grid-cols-3">
+            <ul className="grid gap-2">
+              {houseLocations.map((location) => (
+                <li key={location.id} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                  {location.name}
+                </li>
+              ))}
+              {!locationsQuery.isLoading && houseLocations.length === 0 && (
+                <li className="text-xs text-slate-500">Todavía no hay ubicaciones cargadas.</li>
+              )}
+            </ul>
+            <form className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4" onSubmit={handleCreateLinenLocation}>
+              <p className="text-sm font-semibold text-slate-700">Nueva ubicación</p>
+              <label className="space-y-1 text-sm">
+                <span className="text-slate-600">Nombre</span>
+                <input
+                  value={linenLocationForm.name}
+                  onChange={(event) => setLinenLocationForm({ name: event.target.value })}
+                  placeholder="Deposito de blancos"
+                  required
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                />
+              </label>
+              <button
+                type="submit"
+                disabled={createLinenLocationMutation.isPending}
+                className="min-h-11 w-full rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
+              >
+                Crear ubicación
+              </button>
+            </form>
+            <form className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4" onSubmit={handleCreateLinenMovement}>
+              <p className="text-sm font-semibold text-slate-700">Registrar movimiento</p>
+              <label className="space-y-1 text-sm">
+                <span className="text-slate-600">Ítem</span>
+                <select
+                  value={movementForm.linen_item_id}
+                  onChange={(event) => setMovementForm((current) => ({ ...current, linen_item_id: event.target.value }))}
+                  required
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                >
+                  <option value="">Seleccionar</option>
+                  {items.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="space-y-1 text-sm">
+                <span className="text-slate-600">Ubicación</span>
+                <select
+                  value={movementForm.location_id}
+                  onChange={(event) => setMovementForm((current) => ({ ...current, location_id: event.target.value }))}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                >
+                  <option value="">Sin ubicación</option>
+                  {houseLocations.map((location) => (
+                    <option key={location.id} value={location.id}>
+                      {location.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="grid grid-cols-2 gap-2" role="group" aria-label="Dirección del movimiento">
+                <button
+                  type="button"
+                  aria-pressed={movementForm.movement_type === "in"}
+                  onClick={() => setMovementForm((current) => ({ ...current, movement_type: "in" }))}
+                  className={`min-h-11 rounded-lg border px-3 py-2 text-xs font-semibold ${
+                    movementForm.movement_type === "in"
+                      ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+                      : "border-slate-200 bg-white text-slate-700"
+                  }`}
+                >
+                  Ingreso
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={movementForm.movement_type === "out"}
+                  onClick={() => setMovementForm((current) => ({ ...current, movement_type: "out" }))}
+                  className={`min-h-11 rounded-lg border px-3 py-2 text-xs font-semibold ${
+                    movementForm.movement_type === "out"
+                      ? "border-rose-300 bg-rose-50 text-rose-800"
+                      : "border-slate-200 bg-white text-slate-700"
+                  }`}
+                >
+                  Egreso
+                </button>
+              </div>
+              <label className="space-y-1 text-sm">
+                <span className="text-slate-600">Cantidad</span>
+                <input
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={movementForm.quantity}
+                  onChange={(event) => setMovementForm((current) => ({ ...current, quantity: event.target.value }))}
+                  required
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                />
+              </label>
+              <label className="space-y-1 text-sm">
+                <span className="text-slate-600">Motivo</span>
+                <input
+                  value={movementForm.reason}
+                  onChange={(event) => setMovementForm((current) => ({ ...current, reason: event.target.value }))}
+                  placeholder="Stock inicial, conteo fisico"
+                  required
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                />
+              </label>
+              <button
+                type="submit"
+                disabled={createLinenMovementMutation.isPending}
+                className="min-h-11 w-full rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
+              >
+                Registrar movimiento
+              </button>
+            </form>
+          </div>
+        </section>
+      )}
+
+      {manageVendors && (
+        <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <p className="text-xs uppercase tracking-wide text-slate-500">Reporte</p>
@@ -665,9 +873,9 @@ export function LaundryPage() {
                   ) : (
                     <ul className="mt-2 space-y-1 text-xs text-slate-700">
                       {byItem.map((line) => (
-                        <li key={line.stock_item_id} className="flex justify-between gap-2">
+                        <li key={line.linen_item_id} className="flex justify-between gap-2">
                           <span>
-                            {line.stock_item_name} × {line.quantity}
+                            {line.linen_item_name} × {line.quantity}
                           </span>
                           <span className="font-semibold">{formatMoney(line.subtotal)}</span>
                         </li>
@@ -721,7 +929,7 @@ export function LaundryPage() {
                     <ul className="mt-2 space-y-1">
                       {remito.lines.map((line) => (
                         <li key={line.id} className="text-xs text-slate-600">
-                          {itemById.get(line.stock_item_id)?.name ?? `Ítem #${line.stock_item_id}`}: {line.quantity}
+                          {itemById.get(line.linen_item_id)?.name ?? `Ítem #${line.linen_item_id}`}: {line.quantity}
                         </li>
                       ))}
                     </ul>
@@ -751,8 +959,8 @@ export function LaundryPage() {
                       ) : (
                         <ul className="mt-1 space-y-1 text-xs text-slate-700">
                           {balance.map((line) => (
-                            <li key={line.stock_item_id} className="flex justify-between">
-                              <span>{line.stock_item_name}</span>
+                            <li key={line.linen_item_id} className="flex justify-between">
+                              <span>{line.linen_item_name}</span>
                               <span className="font-semibold">{line.quantity}</span>
                             </li>
                           ))}
@@ -861,10 +1069,10 @@ export function LaundryPage() {
                 {lines.length > 0 && (
                   <ul className="space-y-1">
                     {lines.map((line) => {
-                      const price = remitoVendorPriceByItem.get(line.stock_item_id);
+                      const price = remitoVendorPriceByItem.get(line.linen_item_id);
                       const subtotal = price ? Number(price.unit_price) * Number(line.quantity || 0) : null;
                       return (
-                        <li key={line.stock_item_id} className="flex items-center justify-between gap-2 rounded-md bg-white px-3 py-2 text-sm shadow-sm">
+                        <li key={line.linen_item_id} className="flex items-center justify-between gap-2 rounded-md bg-white px-3 py-2 text-sm shadow-sm">
                           <span>
                             {line.item_name} × {line.quantity} {line.unit}
                           </span>
@@ -874,7 +1082,7 @@ export function LaundryPage() {
                             </span>
                             <button
                               type="button"
-                              onClick={() => removeLine(line.stock_item_id)}
+                              onClick={() => removeLine(line.linen_item_id)}
                               aria-label={`Quitar ${line.item_name}`}
                               className="text-xs font-semibold text-rose-700 hover:underline"
                             >
@@ -890,12 +1098,12 @@ export function LaundryPage() {
                   <label className="space-y-1 text-xs font-semibold text-slate-600">
                     Ítem
                     <select
-                      value={lineDraft.stock_item_id}
-                      onChange={(event) => setLineDraft((current) => ({ ...current, stock_item_id: event.target.value }))}
+                      value={lineDraft.linen_item_id}
+                      onChange={(event) => setLineDraft((current) => ({ ...current, linen_item_id: event.target.value }))}
                       className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
                     >
                       <option value="">Seleccionar</option>
-                      {itemsAvailableToAdd.map((item: StockItem) => (
+                      {itemsAvailableToAdd.map((item: LinenItem) => (
                         <option key={item.id} value={item.id}>
                           {item.name}
                         </option>
@@ -916,7 +1124,7 @@ export function LaundryPage() {
                   <button
                     type="button"
                     onClick={addLine}
-                    disabled={!lineDraft.stock_item_id}
+                    disabled={!lineDraft.linen_item_id}
                     className="min-h-11 rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-xs font-semibold text-brand-700 hover:bg-brand-100 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     Agregar línea
@@ -1135,9 +1343,9 @@ function SettlementQuarterRow({
       {quarter.by_item.length > 0 && (
         <ul className="mt-2 space-y-1 text-xs text-slate-700">
           {quarter.by_item.map((line) => (
-            <li key={line.stock_item_id} className="flex justify-between gap-2">
+            <li key={line.linen_item_id} className="flex justify-between gap-2">
               <span>
-                {line.stock_item_name} × {line.quantity}
+                {line.linen_item_name} × {line.quantity}
               </span>
               <span className="font-semibold">{formatMoney(line.subtotal)}</span>
             </li>
@@ -1169,7 +1377,7 @@ function SettlementQuarterRow({
 }
 
 // "Limpio disponible en el hotel": current_stock() narrowed to whichever
-// hotel StockLocation the operator picks (e.g. "Deposito de blancos"). This
+// hotel LinenLocation the operator picks (e.g. "Deposito de blancos"). This
 // lives here (not on StockPage) because it's the number that answers "¿me
 // alcanza para mandar este remito?" right before creating one -- the general
 // StockPage keeps the hotel-wide total, which never moves on a transfer.
@@ -1181,7 +1389,7 @@ function HouseStockPanel({
   stockQueries
 }: {
   locations: Array<{ id: number; name: string }>;
-  items: StockItem[];
+  items: LinenItem[];
   selectedLocationId: string;
   onSelectLocation: (value: string) => void;
   stockQueries: Array<{ data?: { quantity: string | number } }>;

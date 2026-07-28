@@ -1,11 +1,12 @@
 """
 Outsourced laundry vendors: vendor/price catalog + remito transfers.
 
-A remito is not a new kind of business event -- it is a StockMovement
-transfer between two StockLocations (the hotel's "clean linen" location,
+A remito is not a new kind of business event -- it is a LinenMovement
+transfer between two LinenLocations (the hotel's "clean linen" location,
 chosen explicitly per remito by the caller, and the vendor's own location).
-See app/services/stock_service.py for the underlying movement/balance
-primitives this builds on.
+See app/services/linen_service.py for the underlying movement/balance
+primitives this builds on (a table set physically separate from
+app/services/stock_service.py's general-supplies inventory).
 """
 from __future__ import annotations
 
@@ -24,7 +25,7 @@ from app.models.laundry_vendor import (
     LaundryVendorPrice,
     LaundryVendorSettlement,
 )
-from app.services import stock_service
+from app.services import linen_service
 
 DIRECTIONS = {"outbound", "inbound"}
 QUARTER_MONTHS = {1: (1, 3), 2: (4, 6), 3: (7, 9), 4: (10, 12)}
@@ -43,13 +44,13 @@ def create_vendor(
     contact_email: str | None = None,
     active: bool = True,
 ) -> LaundryVendor:
-    """Create a vendor and its dedicated StockLocation in one transaction."""
+    """Create a vendor and its dedicated LinenLocation in one transaction."""
 
-    location = stock_service.create_location(db, hotel_id=hotel_id, name=f"Lavadero - {name}")
+    location = linen_service.create_location(db, hotel_id=hotel_id, name=f"Lavadero - {name}")
     vendor = LaundryVendor(
         hotel_id=hotel_id,
         name=name,
-        stock_location_id=location.id,
+        linen_location_id=location.id,
         contact_phone=contact_phone,
         contact_email=contact_email,
         active=active,
@@ -86,7 +87,7 @@ def set_vendor_price(
     *,
     hotel_id: int,
     vendor_id: int,
-    stock_item_id: int,
+    linen_item_id: int,
     unit_price: Decimal,
     currency_code: str | None = None,
 ) -> LaundryVendorPrice:
@@ -95,11 +96,11 @@ def set_vendor_price(
     if unit_price < 0:
         raise LaundryVendorError("Unit price cannot be negative")
     _get_vendor(db, hotel_id=hotel_id, vendor_id=vendor_id)
-    stock_service.get_stock_item(db, hotel_id=hotel_id, item_id=stock_item_id)
+    linen_service.get_linen_item(db, hotel_id=hotel_id, item_id=linen_item_id)
 
     price = (
         db.query(LaundryVendorPrice)
-        .filter(LaundryVendorPrice.vendor_id == vendor_id, LaundryVendorPrice.stock_item_id == stock_item_id)
+        .filter(LaundryVendorPrice.vendor_id == vendor_id, LaundryVendorPrice.linen_item_id == linen_item_id)
         .one_or_none()
     )
     if currency_code is None:
@@ -109,7 +110,7 @@ def set_vendor_price(
         price = LaundryVendorPrice(
             hotel_id=hotel_id,
             vendor_id=vendor_id,
-            stock_item_id=stock_item_id,
+            linen_item_id=linen_item_id,
             unit_price=unit_price,
             currency_code=currency_code,
         )
@@ -145,7 +146,7 @@ def create_remito(
     notes: str | None = None,
     actor_user_id: int | None = None,
 ) -> LaundryRemito:
-    """Record a remito as a pair of StockMovements per line.
+    """Record a remito as a pair of LinenMovements per line.
 
     outbound: house_location -> vendor_location (dirty linen leaves the hotel)
     inbound:  vendor_location -> house_location (clean linen comes back)
@@ -162,12 +163,12 @@ def create_remito(
         raise LaundryVendorError("A remito needs at least one line")
 
     vendor = _get_vendor(db, hotel_id=hotel_id, vendor_id=vendor_id)
-    stock_service.get_location(db, hotel_id=hotel_id, location_id=house_location_id)
+    linen_service.get_location(db, hotel_id=hotel_id, location_id=house_location_id)
 
     if direction == "outbound":
-        source_location_id, dest_location_id = house_location_id, vendor.stock_location_id
+        source_location_id, dest_location_id = house_location_id, vendor.linen_location_id
     else:
-        source_location_id, dest_location_id = vendor.stock_location_id, house_location_id
+        source_location_id, dest_location_id = vendor.linen_location_id, house_location_id
 
     try:
         remito = LaundryRemito(
@@ -183,14 +184,14 @@ def create_remito(
         db.flush()
 
         for line in lines:
-            stock_item_id = line["stock_item_id"]
+            linen_item_id = line["linen_item_id"]
             quantity = line["quantity"]
             if quantity <= 0:
                 raise LaundryVendorError("Remito line quantity must be positive")
 
-            item = stock_service.get_stock_item(db, hotel_id=hotel_id, item_id=stock_item_id)
-            available = stock_service.current_stock(
-                db, hotel_id=hotel_id, item_id=stock_item_id, location_id=source_location_id
+            item = linen_service.get_linen_item(db, hotel_id=hotel_id, item_id=linen_item_id)
+            available = linen_service.current_stock(
+                db, hotel_id=hotel_id, item_id=linen_item_id, location_id=source_location_id
             )
             if quantity > available:
                 raise LaundryVendorError(
@@ -198,20 +199,20 @@ def create_remito(
                 )
 
             movement_reason = f"Laundry remito {remito_number} ({direction})"
-            stock_service.register_movement(
+            linen_service.register_movement(
                 db,
                 hotel_id=hotel_id,
-                item_id=stock_item_id,
+                item_id=linen_item_id,
                 location_id=source_location_id,
                 movement_type="out",
                 quantity=quantity,
                 reason=movement_reason,
                 created_by_user_id=actor_user_id,
             )
-            stock_service.register_movement(
+            linen_service.register_movement(
                 db,
                 hotel_id=hotel_id,
-                item_id=stock_item_id,
+                item_id=linen_item_id,
                 location_id=dest_location_id,
                 movement_type="in",
                 quantity=quantity,
@@ -223,7 +224,7 @@ def create_remito(
                 db.query(LaundryVendorPrice)
                 .filter(
                     LaundryVendorPrice.vendor_id == vendor_id,
-                    LaundryVendorPrice.stock_item_id == stock_item_id,
+                    LaundryVendorPrice.linen_item_id == linen_item_id,
                 )
                 .one_or_none()
             )
@@ -231,7 +232,7 @@ def create_remito(
                 LaundryRemitoLine(
                     hotel_id=hotel_id,
                     remito_id=remito.id,
-                    stock_item_id=stock_item_id,
+                    linen_item_id=linen_item_id,
                     quantity=quantity,
                     unit_price_snapshot=price.unit_price if price is not None else None,
                 )
@@ -267,7 +268,7 @@ def vendor_balance(db: Session, *, hotel_id: int, vendor_id: int) -> list[dict]:
 
     vendor = _get_vendor(db, hotel_id=hotel_id, vendor_id=vendor_id)
     item_ids = (
-        db.query(LaundryRemitoLine.stock_item_id)
+        db.query(LaundryRemitoLine.linen_item_id)
         .join(LaundryRemito, LaundryRemito.id == LaundryRemitoLine.remito_id)
         .filter(LaundryRemito.hotel_id == hotel_id, LaundryRemito.vendor_id == vendor_id)
         .distinct()
@@ -275,11 +276,11 @@ def vendor_balance(db: Session, *, hotel_id: int, vendor_id: int) -> list[dict]:
     )
     balances = []
     for (item_id,) in item_ids:
-        item = stock_service.get_stock_item(db, hotel_id=hotel_id, item_id=item_id)
-        quantity = stock_service.current_stock(
-            db, hotel_id=hotel_id, item_id=item_id, location_id=vendor.stock_location_id
+        item = linen_service.get_linen_item(db, hotel_id=hotel_id, item_id=item_id)
+        quantity = linen_service.current_stock(
+            db, hotel_id=hotel_id, item_id=item_id, location_id=vendor.linen_location_id
         )
-        balances.append({"stock_item_id": item.id, "stock_item_name": item.name, "quantity": quantity})
+        balances.append({"linen_item_id": item.id, "linen_item_name": item.name, "quantity": quantity})
     return balances
 
 
@@ -302,7 +303,7 @@ def vendor_spend(
     _get_vendor(db, hotel_id=hotel_id, vendor_id=vendor_id)
     query = (
         db.query(
-            LaundryRemitoLine.stock_item_id,
+            LaundryRemitoLine.linen_item_id,
             func.coalesce(func.sum(LaundryRemitoLine.quantity * LaundryRemitoLine.unit_price_snapshot), 0),
             func.coalesce(func.sum(LaundryRemitoLine.quantity), 0),
         )
@@ -320,14 +321,14 @@ def vendor_spend(
 
     by_item = []
     total = Decimal("0.00")
-    for stock_item_id, subtotal, quantity in query.group_by(LaundryRemitoLine.stock_item_id).all():
-        item = stock_service.get_stock_item(db, hotel_id=hotel_id, item_id=stock_item_id)
+    for linen_item_id, subtotal, quantity in query.group_by(LaundryRemitoLine.linen_item_id).all():
+        item = linen_service.get_linen_item(db, hotel_id=hotel_id, item_id=linen_item_id)
         subtotal = Decimal(subtotal).quantize(Decimal("0.01"))
         total += subtotal
         by_item.append(
             {
-                "stock_item_id": item.id,
-                "stock_item_name": item.name,
+                "linen_item_id": item.id,
+                "linen_item_name": item.name,
                 "quantity": Decimal(quantity).quantize(Decimal("0.01")),
                 "subtotal": subtotal,
             }

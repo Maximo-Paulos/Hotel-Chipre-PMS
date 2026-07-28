@@ -1,7 +1,8 @@
 """
-API-level coverage for outsourced laundry vendors/remitos (D1):
-permission gating (manage_vendors vs operate_remitos) and cross-hotel
-isolation, following the same harness pattern as tests/test_permissions_api.py.
+API-level coverage for outsourced laundry vendors/remitos (D1) and the linen
+item/location catalog that backs them (post-split): permission gating
+(manage_vendors vs operate_remitos) and cross-hotel isolation, following the
+same harness pattern as tests/test_permissions_api.py.
 """
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -15,7 +16,7 @@ from app.database import Base, get_db
 from app.dependencies.auth import AuthContext, get_auth_context
 from app.main import app as fastapi_app
 from app.models.hotel_config import HotelConfiguration
-from app.services.stock_service import create_location, create_stock_item, register_movement
+from app.services.linen_service import create_linen_item, create_location, register_movement
 
 
 def _override_auth(hotel_id: int, role: str, user_id: int = 10):
@@ -78,14 +79,68 @@ def test_owner_can_manage_vendors_and_receptionist_cannot():
         forbidden = client.post("/api/laundry/vendors", json={"name": "Lavadero denegado"})
         assert forbidden.status_code == 403
 
-        item = create_stock_item(db, hotel_id=1, name="Sabanas", sku=None, unit="unit", min_quantity=None, active=True)
+        item = create_linen_item(db, hotel_id=1, name="Sabanas", unit="unit", min_quantity=None, active=True)
         db.commit()
 
         forbidden_price = client.post(
             f"/api/laundry/vendors/{vendor_id}/prices",
-            json={"stock_item_id": item.id, "unit_price": "100.00"},
+            json={"linen_item_id": item.id, "unit_price": "100.00"},
         )
         assert forbidden_price.status_code == 403
+    finally:
+        _teardown(db, engine)
+
+
+def test_owner_can_manage_linen_items_and_receptionist_cannot():
+    client, db, engine = _client_with_db()
+    try:
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner")
+        created = client.post("/api/laundry/items", json={"name": "Sabanas", "unit": "unidad"})
+        assert created.status_code == 201
+        item_id = created.json()["id"]
+
+        listed = client.get("/api/laundry/items")
+        assert listed.status_code == 200
+        assert item_id in [row["id"] for row in listed.json()]
+
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "receptionist")
+        denied_create = client.post("/api/laundry/items", json={"name": "No deberia poder", "unit": "unidad"})
+        assert denied_create.status_code == 403
+        denied_delete = client.delete(f"/api/laundry/items/{item_id}")
+        assert denied_delete.status_code == 403
+
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner")
+        deleted = client.delete(f"/api/laundry/items/{item_id}")
+        assert deleted.status_code == 204
+        listed_after = client.get("/api/laundry/items")
+        assert item_id not in [row["id"] for row in listed_after.json()]
+    finally:
+        _teardown(db, engine)
+
+
+def test_owner_can_register_a_linen_movement_and_load_an_opening_balance():
+    client, db, engine = _client_with_db()
+    try:
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner")
+        item_id = client.post("/api/laundry/items", json={"name": "Sabanas", "unit": "unidad"}).json()["id"]
+        location_id = client.post("/api/laundry/locations", json={"name": "Deposito casa"}).json()["id"]
+
+        movement = client.post(
+            "/api/laundry/movements",
+            json={"linen_item_id": item_id, "location_id": location_id, "movement_type": "in", "quantity": "8.00"},
+        )
+        assert movement.status_code == 201
+
+        current = client.get(f"/api/laundry/items/{item_id}/current", params={"location_id": location_id})
+        assert current.status_code == 200
+        assert Decimal(str(current.json()["quantity"])) == Decimal("8.00")
+
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "receptionist")
+        denied = client.post(
+            "/api/laundry/movements",
+            json={"linen_item_id": item_id, "location_id": location_id, "movement_type": "in", "quantity": "1.00"},
+        )
+        assert denied.status_code == 403
     finally:
         _teardown(db, engine)
 
@@ -97,7 +152,7 @@ def test_housekeeping_can_operate_remitos_but_not_manage_vendors():
         vendor_resp = client.post("/api/laundry/vendors", json={"name": "Lavadero HK"})
         vendor_id = vendor_resp.json()["id"]
 
-        item = create_stock_item(db, hotel_id=1, name="Sabanas", sku=None, unit="unit", min_quantity=None, active=True)
+        item = create_linen_item(db, hotel_id=1, name="Sabanas", unit="unit", min_quantity=None, active=True)
         house = create_location(db, hotel_id=1, name="Deposito casa")
         db.flush()
         register_movement(
@@ -111,27 +166,27 @@ def test_housekeeping_can_operate_remitos_but_not_manage_vendors():
         denied_vendor_create = client.post("/api/laundry/vendors", json={"name": "No deberia poder"})
         assert denied_vendor_create.status_code == 403
 
-        # D2: housekeeping has to pick a house StockLocation on the remito
-        # form, so GET /api/stock/locations must accept
-        # laundry:operate_remitos even without stock:operate (see
-        # require_any_permission in app/api/stock.py) -- it 403'd here before
-        # that fix, which stalled the remito form on a real hotel.
-        locations_read = client.get("/api/stock/locations")
+        # D2 (now D: linen split): housekeeping has to pick a house
+        # LinenLocation on the remito form, so GET /api/laundry/locations
+        # must accept laundry:operate_remitos even without
+        # laundry:manage_vendors -- see require_any_permission in
+        # app/api/laundry_vendor.py.
+        locations_read = client.get("/api/laundry/locations")
         assert locations_read.status_code == 200
-        # The vendor's own auto-created StockLocation ("Lavadero HK") is also
-        # listed here -- listing itself is not laundry-specific, only this
+        # The vendor's own auto-created LinenLocation ("Lavadero HK") is also
+        # listed here -- listing itself is not remito-specific, only this
         # test's assertion cares that the house location is reachable too.
         assert house.id in [loc["id"] for loc in locations_read.json()]
-        # Write endpoints on the same router stay stock:operate-only.
-        denied_location_create = client.post("/api/stock/locations", json={"name": "No deberia poder"})
+        # Write endpoints on the same router stay manage_vendors-only.
+        denied_location_create = client.post("/api/laundry/locations", json={"name": "No deberia poder"})
         assert denied_location_create.status_code == 403
 
-        # Same reasoning for GET /api/stock/items (choosing the remito line's
-        # item).
-        items_read = client.get("/api/stock/items")
+        # Same reasoning for GET /api/laundry/items (choosing the remito
+        # line's item).
+        items_read = client.get("/api/laundry/items")
         assert items_read.status_code == 200
         assert item.id in [i["id"] for i in items_read.json()]
-        denied_item_create = client.post("/api/stock/items", json={"name": "No deberia poder", "unit": "unit"})
+        denied_item_create = client.post("/api/laundry/items", json={"name": "No deberia poder", "unit": "unit"})
         assert denied_item_create.status_code == 403
 
         remito_payload = {
@@ -140,7 +195,7 @@ def test_housekeeping_can_operate_remitos_but_not_manage_vendors():
             "remito_number": "R-HK-1",
             "remito_date": datetime(2026, 7, 1, tzinfo=timezone.utc).isoformat(),
             "house_location_id": house.id,
-            "lines": [{"stock_item_id": item.id, "quantity": "4.00"}],
+            "lines": [{"linen_item_id": item.id, "quantity": "4.00"}],
         }
         created = client.post("/api/laundry/remitos", json=remito_payload)
         assert created.status_code == 201
@@ -156,17 +211,19 @@ def test_housekeeping_can_operate_remitos_but_not_manage_vendors():
         spend_denied = client.get(f"/api/laundry/vendors/{vendor_id}/spend")
         assert spend_denied.status_code == 403
 
-        # D2's "limpio disponible en el hotel" view narrows GET .../current by
-        # location_id (stock:operate, not a laundry permission -- switch back
-        # to owner). The 10 units moved in at the house dropped to 6 there (4
-        # went "out" to the vendor via the remito above), while the
-        # hotel-wide total (no location_id) still shows the unmoved 10 -- a
-        # transfer nets to zero hotel-wide.
+        # "limpio disponible en el hotel" narrows GET .../current by
+        # location_id -- gated the same as the item/location lists above, so
+        # housekeeping itself can already reach it (switch back to owner only
+        # to keep this assertion about the numbers, not permissions). The 10
+        # units moved in at the house dropped to 6 there (4 went "out" to the
+        # vendor via the remito above), while the hotel-wide total (no
+        # location_id) still shows the unmoved 10 -- a transfer nets to zero
+        # hotel-wide.
         fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner", user_id=1)
-        house_current = client.get(f"/api/stock/items/{item.id}/current?location_id={house.id}")
+        house_current = client.get(f"/api/laundry/items/{item.id}/current?location_id={house.id}")
         assert house_current.status_code == 200
         assert Decimal(str(house_current.json()["quantity"])) == Decimal("6.00")
-        hotel_wide_current = client.get(f"/api/stock/items/{item.id}/current")
+        hotel_wide_current = client.get(f"/api/laundry/items/{item.id}/current")
         assert Decimal(str(hotel_wide_current.json()["quantity"])) == Decimal("10.00")
     finally:
         _teardown(db, engine)
@@ -178,7 +235,7 @@ def test_remito_rejects_insufficient_house_stock_via_api():
         fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner")
         vendor_id = client.post("/api/laundry/vendors", json={"name": "Lavadero Insuf"}).json()["id"]
 
-        item = create_stock_item(db, hotel_id=1, name="Toallas", sku=None, unit="unit", min_quantity=None, active=True)
+        item = create_linen_item(db, hotel_id=1, name="Toallas", unit="unit", min_quantity=None, active=True)
         house = create_location(db, hotel_id=1, name="Deposito casa")
         db.flush()
         db.commit()
@@ -191,7 +248,7 @@ def test_remito_rejects_insufficient_house_stock_via_api():
                 "remito_number": "R-FAIL",
                 "remito_date": datetime(2026, 7, 1, tzinfo=timezone.utc).isoformat(),
                 "house_location_id": house.id,
-                "lines": [{"stock_item_id": item.id, "quantity": "5.00"}],
+                "lines": [{"linen_item_id": item.id, "quantity": "5.00"}],
             },
         )
         assert response.status_code == 400
@@ -209,7 +266,7 @@ def test_settlements_default_unpaid_and_can_be_marked_paid_with_notes():
         fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner")
         vendor_id = client.post("/api/laundry/vendors", json={"name": "Lavadero Liquidacion"}).json()["id"]
 
-        item = create_stock_item(db, hotel_id=1, name="Sabanas", sku=None, unit="unit", min_quantity=None, active=True)
+        item = create_linen_item(db, hotel_id=1, name="Sabanas", unit="unit", min_quantity=None, active=True)
         house = create_location(db, hotel_id=1, name="Deposito casa")
         db.flush()
         register_movement(
@@ -219,7 +276,7 @@ def test_settlements_default_unpaid_and_can_be_marked_paid_with_notes():
         db.commit()
         client.post(
             f"/api/laundry/vendors/{vendor_id}/prices",
-            json={"stock_item_id": item.id, "unit_price": "100.00"},
+            json={"linen_item_id": item.id, "unit_price": "100.00"},
         )
         client.post(
             "/api/laundry/remitos",
@@ -229,7 +286,7 @@ def test_settlements_default_unpaid_and_can_be_marked_paid_with_notes():
                 "remito_number": "R-SETTLE-1",
                 "remito_date": datetime(2026, 7, 5, tzinfo=timezone.utc).isoformat(),
                 "house_location_id": house.id,
-                "lines": [{"stock_item_id": item.id, "quantity": "10.00"}],
+                "lines": [{"linen_item_id": item.id, "quantity": "10.00"}],
             },
         )
 
@@ -305,5 +362,25 @@ def test_vendors_and_balance_are_hotel_scoped_across_the_api():
 
         cross_update = client.patch(f"/api/laundry/vendors/{vendor_h2}", json={"name": "Hijack"})
         assert cross_update.status_code == 404
+    finally:
+        _teardown(db, engine)
+
+
+def test_linen_items_and_locations_are_hotel_scoped():
+    client, db, engine = _client_with_db()
+    try:
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(2, "owner")
+        item_h2 = create_linen_item(db, hotel_id=2, name="Sabanas H2", unit="unit")
+        location_h2 = create_location(db, hotel_id=2, name="Deposito H2")
+        db.commit()
+
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner")
+        items = client.get("/api/laundry/items").json()
+        assert item_h2.id not in [row["id"] for row in items]
+        locations = client.get("/api/laundry/locations").json()
+        assert location_h2.id not in [row["id"] for row in locations]
+
+        cross_delete = client.delete(f"/api/laundry/items/{item_h2.id}")
+        assert cross_delete.status_code == 404
     finally:
         _teardown(db, engine)
