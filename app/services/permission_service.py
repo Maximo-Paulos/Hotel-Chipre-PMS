@@ -106,7 +106,14 @@ PERMISSION_DEFINITIONS: dict[str, str] = {
 
 DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
     ROLE_OWNER: {code: True for code in PERMISSION_DEFINITIONS},
-    ROLE_CO_OWNER: {code: True for code in PERMISSION_DEFINITIONS},
+    # Owner explicitly asked that only the owner -- not even co_owner -- can
+    # override a reservation's price; everyone else must use the Tarifas
+    # rate calendar. Every other code stays the same blanket True co_owner
+    # already had.
+    ROLE_CO_OWNER: {
+        **{code: True for code in PERMISSION_DEFINITIONS},
+        PERMISSION_RESERVATION_MANUAL_RATE: False,
+    },
     ROLE_MANAGER: {
         PERMISSION_CONFIG_MANAGE: False,
         PERMISSION_PERMISSION_MANAGE: False,

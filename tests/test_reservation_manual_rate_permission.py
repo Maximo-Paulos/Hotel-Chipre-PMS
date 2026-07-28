@@ -110,6 +110,25 @@ def test_receptionist_cannot_set_manual_total_amount():
         _cleanup_client(db, engine)
 
 
+def test_co_owner_cannot_set_manual_total_amount_by_default():
+    """Owner explicitly asked that only the owner -- not even co_owner --
+    override a reservation's price; everyone else must use Tarifas."""
+    client, db, engine = _build_client()
+    try:
+        hotel_id = 506
+        guest_id, category_id = _seed_bookable_state(db, hotel_id)
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(hotel_id, "co_owner")
+
+        response = client.post(
+            "/api/reservations/",
+            json=_payload(guest_id, category_id, total_amount=250.0),
+        )
+
+        assert response.status_code == 403, response.text
+    finally:
+        _cleanup_client(db, engine)
+
+
 def test_manager_cannot_set_manual_total_amount_by_default():
     client, db, engine = _build_client()
     try:
