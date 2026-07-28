@@ -143,24 +143,36 @@ def safe_create_audit_log(
     payload_before: dict[str, Any] | str | None = None,
     payload_after: dict[str, Any] | str | None = None,
 ) -> AuditLog | None:
+    """Best-effort audit log: a failure here must never discard the caller's
+    real, already-flushed change (production incident 2026-07-28 -- a stray
+    NOT NULL column left over on audit_logs from an old schema made every
+    insert here fail, and the plain db.rollback() that used to run on that
+    failure wiped out the caller's pending stock-item soft-delete in the same
+    session, so DELETE /api/stock/items/{id} returned 204 while the item was
+    never actually deleted). Runs inside a SAVEPOINT so any failure here rolls
+    back only this audit row, never the caller's outer transaction.
+    """
+    audit_action = action if isinstance(action, AuditActionEnum) else AuditActionEnum(action)
     try:
-        return create_audit_log(
-            db,
-            hotel_id=hotel_id,
-            table_name=table_name,
-            record_id=record_id,
-            action=action,
-            actor_user_id=actor_user_id,
-            payload_before=payload_before,
-            payload_after=payload_after,
-        )
+        with db.begin_nested():
+            audit_log = queue_audit_log(
+                db,
+                hotel_id=hotel_id,
+                table_name=table_name,
+                record_id=record_id,
+                action=audit_action,
+                actor_user_id=actor_user_id,
+                payload_before=payload_before,
+                payload_after=payload_after,
+            )
+            db.flush()
+        return audit_log
     except Exception:
-        db.rollback()
         logger.exception(
             "Audit logging failed table=%s record_id=%s action=%s hotel_id=%s",
             table_name,
             record_id,
-            action.value if isinstance(action, AuditActionEnum) else action,
+            audit_action.value,
             hotel_id,
         )
         return None

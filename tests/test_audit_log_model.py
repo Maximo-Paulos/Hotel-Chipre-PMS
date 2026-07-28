@@ -15,6 +15,7 @@ import json
 from datetime import datetime, timezone
 
 import pytest
+import sqlalchemy as sa
 
 from app.database import Base
 from app.models.audit_log import AuditActionEnum, AuditLog
@@ -194,3 +195,46 @@ def test_transaction_hotel_id_has_fk_constraint():
     assert fks, "transactions.hotel_id must have a FK to hotel_configuration.id"
     targets = {fk.target_fullname for fk in fks}
     assert "hotel_configuration.id" in targets
+
+
+# ---------------------------------------------------------------------------
+# Production incident 2026-07-28: a failed audit_logs insert must never
+# discard the caller's real, already-flushed change in the same session.
+# ---------------------------------------------------------------------------
+
+def test_failed_audit_log_insert_does_not_roll_back_callers_change(db):
+    """Reproduces the DELETE /api/stock/items/{id} incident: a stray NOT
+    NULL column on audit_logs (left over from old schema drift in
+    production, see alembic ebd2db08c7d0) made every audit insert fail. The
+    old safe_create_audit_log() called db.rollback() on that failure, which
+    -- sharing the same session/transaction as the caller -- also wiped out
+    the item's already-flushed soft-delete, so the API returned 204 while
+    the item was never actually deleted. Forces the exact same failure mode
+    here (an extra NOT NULL column with no default) and asserts the item's
+    delete survives the commit regardless.
+    """
+    from app.models.hotel_config import HotelConfiguration
+    from app.services import stock_service
+
+    db.add(HotelConfiguration(id=601, hotel_name="Audit Incident Hotel", subscription_active=True))
+    db.flush()
+    item = stock_service.create_stock_item(db, hotel_id=601, name="Bolsas", unit="unidad")
+    db.commit()
+
+    # Simulate the production schema drift: an extra NOT NULL column with no
+    # default that the AuditLog model never populates. audit_logs has zero
+    # rows at this point (create_stock_item doesn't audit-log), so SQLite
+    # accepts NOT NULL with no DEFAULT here, same as the real stray column.
+    db.execute(sa.text("ALTER TABLE audit_logs ADD COLUMN resource_type VARCHAR(100) NOT NULL"))
+    db.commit()
+
+    stock_service.delete_stock_item(db, hotel_id=601, item_id=item.id, deleted_by_user_id=None)
+    db.commit()
+
+    db.expire_all()
+    reloaded = db.get(type(item), item.id)
+    assert reloaded.deleted_at is not None, (
+        "Item must actually be soft-deleted even though the audit log insert "
+        "failed on the stray column -- the audit failure must not roll back "
+        "the caller's real change"
+    )
