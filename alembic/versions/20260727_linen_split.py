@@ -60,9 +60,8 @@ def upgrade() -> None:
     op.add_column("laundry_vendor_prices", sa.Column("linen_item_id", sa.Integer(), nullable=True))
     op.add_column("laundry_remito_lines", sa.Column("linen_item_id", sa.Integer(), nullable=True))
 
-    _migrate_linen_data(bind)
+    _migrate_linen_data(bind, dialect)
 
-    _finalize_laundry_vendor_columns(dialect)
     _drop_kind_column(dialect)
 
     if dialect == "postgresql":
@@ -168,7 +167,7 @@ def _create_linen_tables(dialect: str) -> None:
     op.create_index("ix_linen_movements_hotel_id", "linen_movements", ["hotel_id"], unique=False)
 
 
-def _migrate_linen_data(bind) -> None:
+def _migrate_linen_data(bind, dialect: str) -> None:
     metadata = sa.MetaData()
     stock_items_t = sa.Table("stock_items", metadata, autoload_with=bind)
     stock_locations_t = sa.Table("stock_locations", metadata, autoload_with=bind)
@@ -306,6 +305,19 @@ def _migrate_linen_data(bind) -> None:
             laundry_remito_lines_t.update().values(linen_item_id=laundry_remito_lines_t.c.stock_item_id)
         )
 
+        # --- 4b. Finalize laundry_vendors/laundry_vendor_prices/
+        # laundry_remito_lines BEFORE deleting anything below: production
+        # incident 2026-07-28 -- this used to run after step 5, so the *old*
+        # stock_location_id/stock_item_id FK constraints (still pointing at
+        # stock_locations/stock_items) were still live when step 5 tried to
+        # delete a row a real laundry_vendors/laundry_vendor_prices row still
+        # referenced, and Postgres correctly rejected it with
+        # ForeignKeyViolation. Finalizing here drops those old columns (and
+        # their FKs) together with the data copy, so by the time step 5 runs
+        # nothing old-side references the rows being deleted. SQLite doesn't
+        # enforce FKs by default, which is why this never failed locally.
+        _finalize_laundry_vendor_columns(dialect)
+
         # --- 5. Delete migrated rows: movements first (FK), then
         # linen-exclusive locations, then the items. Shared locations and
         # non-linen items/movements are left untouched in stock_*. ----------
@@ -333,6 +345,7 @@ def _migrate_linen_data(bind) -> None:
         bind.execute(
             laundry_remito_lines_t.update().values(linen_item_id=laundry_remito_lines_t.c.stock_item_id)
         )
+        _finalize_laundry_vendor_columns(dialect)
 
 
 def _finalize_laundry_vendor_columns(dialect: str) -> None:
