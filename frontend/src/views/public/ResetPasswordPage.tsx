@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 
 import { ApiError } from "../../api/client";
 import { Seo } from "../../components/Seo";
+import { PasswordInput } from "../../components/PasswordInput";
 import { requestPasswordReset, resetPassword } from "../../api/auth";
 import { normalizeRole, useSession } from "../../state/session";
 
@@ -154,24 +155,22 @@ export function ResetPasswordPage() {
           <form className="space-y-4" onSubmit={handleSave}>
             <label className="text-sm font-medium text-slate-700">
               Nueva contraseña
-              <input
-                type="password"
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 shadow-sm focus:border-brand-500 focus:ring-brand-500"
-                placeholder="Mínimo 6 caracteres"
+              <PasswordInput
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={setPassword}
+                placeholder="Mínimo 6 caracteres"
                 required
+                autoComplete="new-password"
               />
             </label>
             <label className="text-sm font-medium text-slate-700">
               Confirmar contraseña
-              <input
-                type="password"
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 shadow-sm focus:border-brand-500 focus:ring-brand-500"
-                placeholder="Repite la nueva contraseña"
+              <PasswordInput
                 value={confirm}
-                onChange={(e) => setConfirm(e.target.value)}
+                onChange={setConfirm}
+                placeholder="Repite la nueva contraseña"
                 required
+                autoComplete="new-password"
               />
             </label>
             <button

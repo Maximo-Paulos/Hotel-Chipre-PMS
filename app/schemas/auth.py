@@ -32,6 +32,10 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class GoogleAuthRequest(BaseModel):
+    id_token: str = Field(min_length=1)
+
+
 class RequestCode(BaseModel):
     email: str
 

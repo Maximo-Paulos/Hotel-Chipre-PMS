@@ -29,7 +29,7 @@ from app.schemas.onboarding import (
 )
 from app.schemas.room import RoomCategoryCreate
 from app.services import onboarding_service
-from app.services.security import hash_password
+from app.services.security import hash_password, verify_password
 
 
 @dataclass
@@ -468,3 +468,97 @@ def test_self_registration_cannot_grant_platform_admin_role(client_and_db, fixed
         headers={"Authorization": f"Bearer {token}"},
     )
     assert forged_admin_action.status_code == 403, forged_admin_action.text
+
+
+def _fake_google_claims(email: str, email_verified: bool = True) -> dict:
+    return {"email": email, "email_verified": email_verified, "sub": "google-sub-123", "name": "Test User"}
+
+
+def test_google_login_returns_503_when_not_configured(client_and_db, monkeypatch):
+    client, _db, _session_factory = client_and_db
+    monkeypatch.delenv("GOOGLE_CLIENT_ID", raising=False)
+    get_settings.cache_clear()
+
+    response = client.post("/api/auth/google", json={"id_token": "whatever"})
+    assert response.status_code == 503, response.text
+
+
+def test_google_login_creates_new_user_when_email_unknown(client_and_db, monkeypatch):
+    client, db, _session_factory = client_and_db
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "test-client-id.apps.googleusercontent.com")
+    get_settings.cache_clear()
+
+    with patch(
+        "app.api.auth.google_id_token.verify_oauth2_token",
+        return_value=_fake_google_claims("newgoogleuser@example.com"),
+    ) as mocked_verify:
+        response = client.post("/api/auth/google", json={"id_token": "fake-jwt-from-google"})
+
+    assert response.status_code == 200, response.text
+    mocked_verify.assert_called_once()
+    _, _, audience = mocked_verify.call_args.args
+    assert audience == "test-client-id.apps.googleusercontent.com"
+
+    body = response.json()
+    assert body["user"]["email"] == "newgoogleuser@example.com"
+    assert body["user"]["is_verified"] is True
+    assert body["requires_verification"] is False
+
+    stored_user = db.query(User).filter(User.email == "newgoogleuser@example.com").first()
+    assert stored_user is not None
+    assert stored_user.role == "owner"
+    assert stored_user.is_verified is True
+    # Random unguessable password_hash was set, never handed to the client.
+    assert stored_user.password_hash
+    assert not verify_password("", stored_user.password_hash)
+
+
+def test_google_login_logs_in_existing_password_user(client_and_db, fixed_code_patch, monkeypatch):
+    client, db, _session_factory = client_and_db
+    _configure_resend(monkeypatch, [])
+    register = _register_owner(client, "existinguser@example.com")
+    assert register["user"]["is_verified"] is False
+
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "test-client-id.apps.googleusercontent.com")
+    get_settings.cache_clear()
+
+    with patch(
+        "app.api.auth.google_id_token.verify_oauth2_token",
+        return_value=_fake_google_claims("existinguser@example.com"),
+    ):
+        response = client.post("/api/auth/google", json={"id_token": "fake-jwt-from-google"})
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["user"]["email"] == "existinguser@example.com"
+
+    users_with_email = db.query(User).filter(User.email == "existinguser@example.com").all()
+    assert len(users_with_email) == 1
+
+
+def test_google_login_rejects_unverified_google_email(client_and_db, monkeypatch):
+    client, _db, _session_factory = client_and_db
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "test-client-id.apps.googleusercontent.com")
+    get_settings.cache_clear()
+
+    with patch(
+        "app.api.auth.google_id_token.verify_oauth2_token",
+        return_value=_fake_google_claims("unverified@example.com", email_verified=False),
+    ):
+        response = client.post("/api/auth/google", json={"id_token": "fake-jwt-from-google"})
+
+    assert response.status_code == 401, response.text
+
+
+def test_google_login_rejects_invalid_token(client_and_db, monkeypatch):
+    client, _db, _session_factory = client_and_db
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "test-client-id.apps.googleusercontent.com")
+    get_settings.cache_clear()
+
+    with patch(
+        "app.api.auth.google_id_token.verify_oauth2_token",
+        side_effect=ValueError("Token used too early"),
+    ):
+        response = client.post("/api/auth/google", json={"id_token": "garbage"})
+
+    assert response.status_code == 401, response.text

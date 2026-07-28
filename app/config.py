@@ -136,6 +136,11 @@ class Settings(BaseSettings):
     # Relative to the process working dir (repo root); override with an absolute path in prod.
     ANALYTICS_EXPORTS_DIR: str = "./var/exports/analytics"
 
+    # "Sign in with Google" (Google Identity Services ID-token flow). Only a
+    # Client ID is needed -- no secret -- because the frontend gets a signed
+    # JWT straight from Google and the backend just verifies its signature.
+    GOOGLE_CLIENT_ID: str = ""
+
     # Auth
     JWT_SECRET: str = "change-me"
     ACCESS_TOKEN_SECRET: str = ""
