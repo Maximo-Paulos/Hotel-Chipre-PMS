@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from google.auth.transport import requests as google_requests
+from google.oauth2 import id_token as google_id_token
 from sqlalchemy.orm import Session
 
 from app.adapters.memory_tokens import token_store
@@ -21,6 +23,7 @@ from app.database import get_db
 from app.models.user import User
 from app.schemas.auth import (
     AuthResponse,
+    GoogleAuthRequest,
     LoginRequest,
     RegisterRequest,
     RequestCode,
@@ -220,6 +223,63 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
     db.commit()
     login_limiter.reset(key, db=db)
     db.commit()
+    return _build_auth_response(db, user)
+
+
+@router.post("/google", response_model=AuthResponse)
+def google_login(payload: GoogleAuthRequest, db: Session = Depends(get_db)):
+    """
+    "Sign in with Google" via Google Identity Services' ID-token flow: the
+    frontend never talks to our backend during the OAuth dance, it just hands
+    us the signed JWT Google issued. We verify that signature against
+    GOOGLE_CLIENT_ID (env var, public, same value as frontend's
+    VITE_GOOGLE_CLIENT_ID -- no client secret exists or is needed for this
+    flow). Google Cloud Console: create an OAuth Client ID (type "Web
+    application") with authorized JavaScript origins for the real app
+    domains (no redirect URI needed, this flow doesn't use one).
+    """
+    settings = get_settings()
+    client_id = getattr(settings, "GOOGLE_CLIENT_ID", "") or ""
+    if not client_id:
+        raise HTTPException(status_code=503, detail="Login con Google no esta configurado")
+
+    try:
+        claims = google_id_token.verify_oauth2_token(
+            payload.id_token, google_requests.Request(), client_id
+        )
+    except ValueError:
+        raise HTTPException(status_code=401, detail="Token de Google invalido")
+
+    if not claims.get("email_verified"):
+        raise HTTPException(status_code=401, detail="El email de Google no esta verificado")
+
+    email = (claims.get("email") or "").lower()
+    if not email:
+        raise HTTPException(status_code=401, detail="Token de Google invalido")
+
+    user = db.query(User).filter(User.email.ilike(email)).first()
+    if not user:
+        # New account, same shape as register(): owner role, hotel seeded.
+        # password_hash is NOT NULL but this account has no usable password
+        # yet (random, never handed out) -- "Olvide mi contrasena" is the
+        # only way in without Google until the user sets one.
+        user = User(
+            email=email,
+            password_hash=hash_password(secrets.token_urlsafe(32)),
+            role="owner",
+            is_verified=True,  # Google already verified this email
+        )
+        db.add(user)
+        db.flush()
+        get_or_create_hotel_for_owner(db, user.email)
+
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="Usuario deshabilitado")
+
+    user.last_login = datetime.now(timezone.utc)
+    db.add(user)
+    db.commit()
+    db.refresh(user)
     return _build_auth_response(db, user)
 
 

@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 
 import { ApiError } from "../../api/client";
 import { Seo } from "../../components/Seo";
+import { PasswordInput } from "../../components/PasswordInput";
 import { register, requestVerification } from "../../api/auth";
 import { normalizeRole, useSession } from "../../state/session";
 import { storePendingOwner } from "../../state/pendingOwner";
@@ -124,13 +125,12 @@ export function RegisterOwnerPage() {
           </label>
           <label className="text-sm font-medium text-slate-700">
             Contraseña
-            <input
-              type="password"
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 shadow-sm focus:border-brand-500 focus:ring-brand-500"
-              placeholder="Mínimo 6 caracteres"
+            <PasswordInput
               value={form.password}
-              onChange={(e) => handleChange("password", e.target.value)}
+              onChange={(value) => handleChange("password", value)}
+              placeholder="Mínimo 6 caracteres"
               required
+              autoComplete="new-password"
             />
           </label>
           {error && <p className="col-span-2 rounded-md bg-rose-50 p-3 text-rose-700">{error}</p>}

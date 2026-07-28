@@ -30,6 +30,12 @@ export const login = (email: string, password: string) =>
     data: { email, password }
   });
 
+export const loginWithGoogle = (idToken: string) =>
+  apiFetch<AuthResponse>("/api/auth/google", {
+    method: "POST",
+    data: { id_token: idToken }
+  });
+
 export const requestVerification = (email: string) =>
   apiFetch<{ sent: boolean; code?: string }>("/api/auth/request-verify", {
     method: "POST",
