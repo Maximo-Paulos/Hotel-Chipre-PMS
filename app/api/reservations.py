@@ -226,11 +226,13 @@ def create_or_update_manual_ota(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_CREATE)),
 ):
+    if data.total_amount is not None:
+        _ensure_manual_rate_permission(db, context)
     config = db.get(HotelConfiguration, context.hotel_id)
     if config and not config.subscription_active:
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail="SuscripciÃ³n inactiva. ReactivÃ¡ el plan para crear nuevas reservas.",
+            detail="Suscripción inactiva. Reactivá el plan para crear nuevas reservas.",
         )
     try:
         reservation = create_or_update_manual_ota_reservation(
