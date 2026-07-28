@@ -26,6 +26,10 @@ class ManualOTAReservationCreate(BaseModel):
     guest_scope: str = Field(default="all", max_length=30)
     target_currency: str | None = Field(default=None, min_length=3, max_length=3)
     total_amount: Decimal | None = Field(default=None, ge=0)
+    # Two independently-typed prices the receptionist can quote the guest
+    # (not a conversion of one into the other -- see Reservation model).
+    quoted_amount_ars: Decimal | None = Field(default=None, ge=0)
+    quoted_amount_usd: Decimal | None = Field(default=None, ge=0)
     amount_paid: Decimal | None = Field(default=None, ge=0)
     payment_collection_model: str = Field(default="hotel_collect", max_length=40)
     settlement_status: str | None = Field(default=None, max_length=40)

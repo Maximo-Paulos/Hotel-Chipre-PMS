@@ -71,6 +71,8 @@ class ReservationRead(BaseModel):
     net_amount: float = 0.0
     currency_code: str = "ARS"
     fx_rate_snapshot: Optional[float] = None
+    quoted_amount_ars: Optional[float] = None
+    quoted_amount_usd: Optional[float] = None
     status: ReservationStatusEnum
     source: ReservationSourceEnum
     source_provider_code: Optional[str] = None

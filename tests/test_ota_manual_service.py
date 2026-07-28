@@ -190,6 +190,47 @@ def test_manual_ota_total_amount_and_currency_label_applied(db):
     assert updated.currency_code == "ARS"
 
 
+def test_manual_ota_dual_quoted_amounts_saved_independently_of_canonical_total(db):
+    """The receptionist can type TWO independent prices (ARS and USD) for a
+    manual OTA reservation so they can answer "cuánto en pesos"/"cuánto en
+    dólares" without doing FX math -- these are not a conversion of each
+    other and are separate from total_amount/currency_code (the canonical
+    billing amount, unrelated to this feature and untouched by it)."""
+    category, room, guest = _seed_hotel(db, hotel_id=1)
+    payload = _manual_payload(guest_id=guest.id, category_id=category.id, room_id=room.id, external_id="BKG-DUAL")
+    payload.total_amount = Decimal("250000.00")
+    payload.target_currency = "ars"
+    payload.quoted_amount_ars = Decimal("250000.00")
+    payload.quoted_amount_usd = Decimal("210.50")
+
+    reservation = create_or_update_manual_ota_reservation(db, hotel_id=1, data=payload, actor_user_id=7)
+    db.flush()
+
+    assert reservation.total_amount == Decimal("250000.00")
+    assert reservation.currency_code == "ARS"
+    assert reservation.quoted_amount_ars == Decimal("250000.00")
+    assert reservation.quoted_amount_usd == Decimal("210.50")
+
+    from app.api.reservations import _to_read
+
+    body = _to_read(reservation).model_dump()
+    assert body["quoted_amount_ars"] == 250000.0
+    assert body["quoted_amount_usd"] == 210.5
+
+    # A correction on a duplicate submission (update path) must persist too,
+    # and providing only one of the two must not clobber the other.
+    updated_payload = _manual_payload(
+        guest_id=guest.id, category_id=category.id, room_id=room.id, external_id="BKG-DUAL"
+    )
+    updated_payload.quoted_amount_usd = Decimal("215.00")
+    updated = create_or_update_manual_ota_reservation(db, hotel_id=1, data=updated_payload, actor_user_id=7)
+    db.flush()
+
+    assert updated.id == reservation.id
+    assert updated.quoted_amount_usd == Decimal("215.00")
+    assert updated.quoted_amount_ars == Decimal("250000.00")
+
+
 def test_manual_ota_total_amount_bypasses_rate_plan_policy_restriction(db):
     """Root-cause repro for the owner's report: a category with a RatePlan
     that is only priced for the "direct" sales channel. Loading a manual

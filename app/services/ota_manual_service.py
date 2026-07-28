@@ -327,6 +327,14 @@ def _apply_manual_amounts(reservation: Reservation, data: ManualOTAReservationCr
         reservation.total_amount = data.total_amount
         reservation.subtotal_amount = data.total_amount
         reservation.net_amount = data.total_amount
+    # Two independently-typed prices the receptionist can quote the guest
+    # ("cuánto en pesos" / "cuánto en dólares") -- NOT a conversion of one
+    # into the other, and NOT the canonical billing amount (that stays
+    # total_amount/currency_code above, untouched by these two fields).
+    if data.quoted_amount_ars is not None:
+        reservation.quoted_amount_ars = data.quoted_amount_ars
+    if data.quoted_amount_usd is not None:
+        reservation.quoted_amount_usd = data.quoted_amount_usd
     if data.target_currency:
         # Labels the reservation with the currency the operator entered the
         # total in. This does NOT run a live FX conversion (that mechanism is

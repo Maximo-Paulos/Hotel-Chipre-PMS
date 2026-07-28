@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-27T23:11:53.712Z",
+  "generatedAt": "2026-07-28T00:00:24.981Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -4774,6 +4774,7 @@
         "services_reservation_service_generate_confirmation_code",
         "services_reservation_service_invalidate_availability_cache",
         "services_reservation_service_normalize_pricing_payment_method",
+        "services_reservation_service_pricing_result_for_explicit_total",
         "services_reservation_service_reservationerror",
         "services_reservation_service_resolve_creation_channel_code",
         "services_reservation_service_resolve_hotel_id",
@@ -4787,12 +4788,12 @@
         "services_reservation_service_daily_rate_pricing_result",
         "services_reservation_service_pricing_result_from_quote",
         "services_reservation_service_resolve_reservation_commercial_context",
+        "services_reservation_service_get_hotel_default_currency",
+        "services_reservation_service_reservationpricingresult",
         "services_reservation_service_reservation_channel_indicator",
         "services_reservation_service_is_manual_or_telephonic_reservation",
         "services_reservation_service_compute_deposit_amount",
-        "services_reservation_service_calendar_pricing_source",
-        "services_reservation_service_get_hotel_default_currency",
-        "services_reservation_service_reservationpricingresult"
+        "services_reservation_service_calendar_pricing_source"
       ],
       "qualifiedPath": [
         "services_reservation_service_create_reservation",
@@ -4805,6 +4806,7 @@
         "services_reservation_service_generate_confirmation_code",
         "services_reservation_service_invalidate_availability_cache",
         "services_reservation_service_normalize_pricing_payment_method",
+        "services_reservation_service_pricing_result_for_explicit_total",
         "services_reservation_service_reservationerror",
         "services_reservation_service_resolve_creation_channel_code",
         "services_reservation_service_resolve_hotel_id",
@@ -4818,20 +4820,20 @@
         "services_reservation_service_daily_rate_pricing_result",
         "services_reservation_service_pricing_result_from_quote",
         "services_reservation_service_resolve_reservation_commercial_context",
+        "services_reservation_service_get_hotel_default_currency",
+        "services_reservation_service_reservationpricingresult",
         "services_reservation_service_reservation_channel_indicator",
         "services_reservation_service_is_manual_or_telephonic_reservation",
         "services_reservation_service_compute_deposit_amount",
-        "services_reservation_service_calendar_pricing_source",
-        "services_reservation_service_get_hotel_default_currency",
-        "services_reservation_service_reservationpricingresult"
+        "services_reservation_service_calendar_pricing_source"
       ],
       "depth": 3,
-      "nodeCount": 29,
+      "nodeCount": 30,
       "fileCount": 1,
       "files": [
         "app/services/reservation_service.py"
       ],
-      "criticality": 0.2145,
+      "criticality": 0.2133,
       "warnings": []
     },
     {
@@ -12259,6 +12261,28 @@
       "warnings": []
     },
     {
+      "id": "flow:services_stock_service_create_stock_item",
+      "name": "create_stock_item",
+      "entryPoint": "services_stock_service_create_stock_item",
+      "entryPointId": "services_stock_service_create_stock_item",
+      "path": [
+        "services_stock_service_create_stock_item",
+        "services_stock_service_stockerror"
+      ],
+      "qualifiedPath": [
+        "services_stock_service_create_stock_item",
+        "services_stock_service_stockerror"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/services/stock_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:services_analytics_exports_create_xlsx_export_job",
       "name": "create_xlsx_export_job",
       "entryPoint": "services_analytics_exports_create_xlsx_export_job",
@@ -13722,6 +13746,28 @@
       "fileCount": 1,
       "files": [
         "app/api/reservations.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_stock_service_list_stock_items",
+      "name": "list_stock_items",
+      "entryPoint": "services_stock_service_list_stock_items",
+      "entryPointId": "services_stock_service_list_stock_items",
+      "path": [
+        "services_stock_service_list_stock_items",
+        "services_stock_service_stockerror"
+      ],
+      "qualifiedPath": [
+        "services_stock_service_list_stock_items",
+        "services_stock_service_stockerror"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/services/stock_service.py"
       ],
       "criticality": 0.16,
       "warnings": []

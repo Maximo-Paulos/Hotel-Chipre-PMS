@@ -5,7 +5,7 @@ import { useCategories } from "../hooks/useCategories";
 import { useGuestCreate } from "../hooks/useGuests";
 import { useReservationMutations } from "../hooks/useReservations";
 import { useRooms } from "../hooks/useRooms";
-import { normalizeCurrencyCode } from "../utils/currency";
+import { formatMoney, normalizeCurrencyCode } from "../utils/currency";
 import { addDaysIso, todayIso } from "../utils/date";
 
 import GuestQuickCreatePanel, { emptyQuickGuestForm, hasQuickGuestFormData, type QuickGuestFormValues } from "./GuestQuickCreatePanel";
@@ -33,8 +33,16 @@ type FormState = {
   num_children: string;
   channel: string;
   external_id: string;
-  total_amount: string;
-  target_currency: "ARS" | "USD";
+  // Two independent prices the operator types by hand -- NOT a converter.
+  // The OTA's negotiated price in ARS and in USD can each differ from the
+  // official FX rate, so both are entered separately and stored separately
+  // (Reservation.quoted_amount_ars/usd). At least one is required to save
+  // the canonical total_amount/currency_code (used everywhere else in the
+  // system): if both are filled, ARS is the canonical one by default,
+  // since this hotel operates in ARS and that is the safer default absent
+  // a reliable signal for which currency the guest will actually pay in.
+  amount_ars: string;
+  amount_usd: string;
   amount_paid: string;
 };
 
@@ -47,8 +55,8 @@ const emptyFormState = (): FormState => ({
   num_children: "0",
   channel: "booking",
   external_id: "",
-  total_amount: "",
-  target_currency: "ARS",
+  amount_ars: "",
+  amount_usd: "",
   amount_paid: ""
 });
 
@@ -130,9 +138,14 @@ export default function ManualOtaReservationModal({ open, onClose }: ManualOtaRe
       setError("El ID externo (código de la reserva en la OTA) es obligatorio.");
       return;
     }
-    const totalAmount = form.total_amount.trim() === "" ? null : Number(form.total_amount);
-    if (totalAmount !== null && (!Number.isFinite(totalAmount) || totalAmount < 0)) {
-      setError("Ingresá un monto total válido.");
+    const amountArs = form.amount_ars.trim() === "" ? null : Number(form.amount_ars);
+    if (amountArs !== null && (!Number.isFinite(amountArs) || amountArs < 0)) {
+      setError("Ingresá un monto en pesos válido.");
+      return;
+    }
+    const amountUsd = form.amount_usd.trim() === "" ? null : Number(form.amount_usd);
+    if (amountUsd !== null && (!Number.isFinite(amountUsd) || amountUsd < 0)) {
+      setError("Ingresá un monto en dólares válido.");
       return;
     }
     const amountPaid = form.amount_paid.trim() === "" ? null : Number(form.amount_paid);
@@ -140,6 +153,13 @@ export default function ManualOtaReservationModal({ open, onClose }: ManualOtaRe
       setError("Ingresá un monto ya cobrado válido.");
       return;
     }
+
+    // ARS/USD are independent, hand-typed prices (no conversion between
+    // them). The canonical total_amount/currency_code used for billing
+    // elsewhere in the system is taken from whichever the operator filled
+    // in; if both are filled, ARS wins by default (see FormState comment).
+    const totalAmount = amountArs !== null ? amountArs : amountUsd;
+    const targetCurrency = amountArs !== null ? "ARS" : amountUsd !== null ? "USD" : null;
 
     createManualOtaMutation.mutate(
       {
@@ -153,7 +173,9 @@ export default function ManualOtaReservationModal({ open, onClose }: ManualOtaRe
         channel: form.channel as "booking" | "expedia" | "despegar" | "other_ota",
         external_id: form.external_id.trim(),
         total_amount: totalAmount,
-        target_currency: totalAmount !== null ? form.target_currency : null,
+        target_currency: targetCurrency,
+        quoted_amount_ars: amountArs,
+        quoted_amount_usd: amountUsd,
         amount_paid: amountPaid
       },
       {
@@ -197,9 +219,27 @@ export default function ManualOtaReservationModal({ open, onClose }: ManualOtaRe
             <p className="mt-1 text-xs text-emerald-800">
               Si el canal + ID externo ya existían, se actualizó esa reserva en vez de crear una nueva.
             </p>
+            {(created.quoted_amount_ars != null || created.quoted_amount_usd != null) && (
+              <div className="mt-2 rounded-md border border-emerald-200 bg-white p-2">
+                <p className="text-xs font-semibold text-emerald-900">Montos para informar al huésped</p>
+                <p className="mt-1 text-xs text-emerald-800">
+                  Son dos precios cargados a mano, no una conversión entre sí.
+                </p>
+                <div className="mt-1 grid grid-cols-2 gap-2">
+                  <p>
+                    <span className="text-xs text-slate-500">En pesos: </span>
+                    {created.quoted_amount_ars != null ? formatMoney(created.quoted_amount_ars, "ARS") : "—"}
+                  </p>
+                  <p>
+                    <span className="text-xs text-slate-500">En dólares: </span>
+                    {created.quoted_amount_usd != null ? formatMoney(created.quoted_amount_usd, "USD") : "—"}
+                  </p>
+                </div>
+              </div>
+            )}
             {created.fx_rate_snapshot ? (
               <p className="mt-1">
-                Cotización usada: 1 {form.target_currency} = {created.fx_rate_snapshot.toLocaleString("es-AR")} ARS.
+                Cotización usada: 1 {normalizeCurrencyCode(created.currency_code)} = {created.fx_rate_snapshot.toLocaleString("es-AR")} ARS.
               </p>
             ) : (
               <p className="mt-1 text-xs text-emerald-800">
@@ -340,28 +380,35 @@ export default function ManualOtaReservationModal({ open, onClose }: ManualOtaRe
             </div>
 
             <div className="rounded-lg bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700">Montos</div>
+            <p className="-mt-2 text-xs text-slate-500">
+              Cargá los dos precios que la OTA te dio por separado (no es un conversor): así el recepcionista puede
+              responder "cuánto en pesos" o "cuánto en dólares" al huésped. Con al menos uno alcanza para guardar la
+              reserva.
+            </p>
             <div className="grid gap-3 sm:grid-cols-3">
               <label className="text-xs font-semibold text-slate-600">
-                Monto total
+                Monto en pesos (ARS)
                 <input
                   type="number"
                   min={0}
                   step="0.01"
-                  value={form.total_amount}
-                  onChange={(e) => setForm((prev) => ({ ...prev, total_amount: e.target.value }))}
+                  value={form.amount_ars}
+                  onChange={(e) => setForm((prev) => ({ ...prev, amount_ars: e.target.value }))}
+                  placeholder="0.00"
                   className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
                 />
               </label>
               <label className="text-xs font-semibold text-slate-600">
-                Moneda
-                <select
-                  value={form.target_currency}
-                  onChange={(e) => setForm((prev) => ({ ...prev, target_currency: e.target.value as "ARS" | "USD" }))}
+                Monto en dólares (USD)
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={form.amount_usd}
+                  onChange={(e) => setForm((prev) => ({ ...prev, amount_usd: e.target.value }))}
+                  placeholder="0.00"
                   className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
-                >
-                  <option value="ARS">ARS</option>
-                  <option value="USD">USD</option>
-                </select>
+                />
               </label>
               <label className="text-xs font-semibold text-slate-600">
                 Ya cobrado

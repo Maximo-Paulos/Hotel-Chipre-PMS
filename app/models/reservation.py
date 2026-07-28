@@ -210,6 +210,15 @@ class Reservation(Base):
     currency_code = Column(String(3), nullable=False, default="ARS")
     fx_rate_snapshot = Column(Float, nullable=True)
 
+    # Two independently-entered "quotable" amounts for manual OTA loads --
+    # NOT a conversion of one into the other (the OTA's negotiated price in
+    # ARS and in USD can differ from the official FX rate). Separate from
+    # total_amount/currency_code, which stay the canonical billing amount
+    # used everywhere else in the system. So the receptionist can answer
+    # "how much in pesos" / "how much in dollars" without doing math.
+    quoted_amount_ars = Column(Numeric(12, 2), nullable=True)
+    quoted_amount_usd = Column(Numeric(12, 2), nullable=True)
+
     # Status
     status = Column(
         Enum(

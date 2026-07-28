@@ -46,6 +46,12 @@ export type Reservation = {
   net_amount?: number;
   currency_code?: string;
   fx_rate_snapshot?: number | null;
+  // Two independently-typed prices for manual OTA loads (NOT a conversion
+  // of one into the other) so the receptionist can quote either currency
+  // to the guest. Separate from total_amount/currency_code, which remain
+  // the canonical billing amount.
+  quoted_amount_ars?: number | null;
+  quoted_amount_usd?: number | null;
   allocation_status?: string;
   allocation_locked?: boolean;
   requires_manual_review?: boolean;
@@ -355,6 +361,10 @@ export type ManualOtaReservationPayload = {
   external_confirmation_code?: string | null;
   target_currency?: string | null;
   total_amount?: number | null;
+  // Two independent prices the operator types by hand (ARS and USD), not a
+  // conversion of one into the other -- see Reservation.quoted_amount_ars/usd.
+  quoted_amount_ars?: number | null;
+  quoted_amount_usd?: number | null;
   amount_paid?: number | null;
 };
 

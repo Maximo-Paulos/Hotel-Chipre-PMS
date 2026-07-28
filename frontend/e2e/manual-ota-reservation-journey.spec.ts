@@ -69,8 +69,9 @@ test("cargar reserva de Booking en USD, ver conversion y reenviar el mismo ID ex
 
   await form.locator("label").filter({ hasText: "Canal" }).locator("select").selectOption("booking");
   await form.locator("label").filter({ hasText: "ID externo" }).locator("input").fill(externalId);
-  await form.locator("label").filter({ hasText: "Monto total" }).locator("input").fill("250");
-  await form.locator("label").filter({ hasText: /^Moneda/ }).locator("select").selectOption("USD");
+  // Two independent prices, not a currency converter -- only USD filled
+  // here so the canonical total_amount/currency_code ends up in USD.
+  await form.locator("label").filter({ hasText: "Monto en dólares" }).locator("input").fill("250");
   await form.locator("label").filter({ hasText: "Ya cobrado" }).locator("input").fill("100");
 
   await form.getByRole("button", { name: "Guardar reserva de OTA", exact: true }).click();
@@ -98,8 +99,9 @@ test("cargar reserva de Booking en USD, ver conversion y reenviar el mismo ID ex
   await form.locator("label").filter({ hasText: "Check-out" }).locator('input[type="date"]').fill(checkOut);
   await form.locator("label").filter({ hasText: "Canal" }).locator("select").selectOption("booking");
   await form.locator("label").filter({ hasText: "ID externo" }).locator("input").fill(externalId);
-  await form.locator("label").filter({ hasText: "Monto total" }).locator("input").fill("300");
-  await form.locator("label").filter({ hasText: /^Moneda/ }).locator("select").selectOption("ARS");
+  // Only ARS filled this time -- the resubmission corrects the canonical
+  // currency to ARS (upsert path).
+  await form.locator("label").filter({ hasText: "Monto en pesos" }).locator("input").fill("300");
 
   await form.getByRole("button", { name: "Guardar reserva de OTA", exact: true }).click();
   await expect(successPanel).toContainText("guardada en ARS", { timeout: 10_000 });

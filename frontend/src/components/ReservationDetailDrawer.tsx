@@ -437,6 +437,28 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                 ) : (
                   <p className="mt-2 text-rose-700">No se pudo cargar el resumen financiero.</p>
                 )}
+                {(reservation.quoted_amount_ars != null || reservation.quoted_amount_usd != null) && (
+                  <div className="mt-3 rounded-md border border-slate-200 bg-white p-2">
+                    <p className="text-xs font-semibold text-slate-700">Montos para informar al huésped</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Cargados a mano por la OTA, no son una conversión entre sí.
+                    </p>
+                    <div className="mt-1 grid grid-cols-2 gap-2">
+                      <div>
+                        <p className="text-xs text-slate-500">En pesos</p>
+                        <p className="font-semibold">
+                          {reservation.quoted_amount_ars != null ? formatMoney(reservation.quoted_amount_ars, "ARS") : "—"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500">En dólares</p>
+                        <p className="font-semibold">
+                          {reservation.quoted_amount_usd != null ? formatMoney(reservation.quoted_amount_usd, "USD") : "—"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </section>
 
               {reservation.status !== "cancelled" && reservation.status !== "checked_out" && (
