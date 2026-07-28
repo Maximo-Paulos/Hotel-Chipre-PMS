@@ -203,19 +203,42 @@ test("owner runs the full inventory journey: item/location, movements, adjustmen
   const consumptionRow = consumptionSection.locator("tbody tr").filter({ hasText: itemName });
   await expect(consumptionRow).toContainText("8.00 unidad");
 
+  // --- Editar item completo (owner: "editar el producto por las dudas"):
+  // nombre, SKU, unidad y minimo, no solo el costo por unidad (ese ya tenia
+  // su propio campo inline, UnitCostField). Bajar el minimo de 5 a 2 tambien
+  // prueba que el cambio se aplico de verdad: el stock actual (4) pasa de
+  // "Bajo" a "OK".
+  const editedItemName = `${itemName} editado`;
+  const editModal = page.getByRole("dialog", { name: "Editar item de stock" });
+  await itemCard.getByRole("button", { name: `Editar ${itemName}`, exact: true }).click();
+  await expect(editModal).toBeVisible();
+  await editModal.locator("input").nth(0).fill(editedItemName);
+  await editModal.locator("input").nth(1).fill(`QA-EDITED-${suffix}`);
+  await editModal.locator("input").nth(2).fill("paquete");
+  await editModal.locator("input").nth(3).fill("2");
+  await editModal.getByRole("button", { name: "Guardar", exact: true }).click();
+  await expect(page.getByText("Item actualizado.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: editedItemName, exact: true })).toBeVisible();
+  const editedItemCard = page
+    .locator("div.rounded-xl.border.border-slate-200.bg-white.p-4.shadow-sm")
+    .filter({ hasText: editedItemName });
+  await expect(editedItemCard.getByText("QA-EDITED-" + suffix, { exact: true })).toBeVisible();
+  await expect(editedItemCard.getByText(/^4(?:\.00)? paquete$/, { exact: true })).toBeVisible();
+  await expect(editedItemCard.getByText("OK", { exact: true })).toBeVisible();
+
   // --- Eliminar item (item 10, D4 parte 3): boton "Eliminar" pide confirmacion
   // via un modal propio (no window.confirm -- algunos navegadores embebidos
   // moviles no renderizan dialogos JS nativos, ver ConfirmDialog.tsx).
   const confirmDialog = page.getByRole("alertdialog", { name: "Eliminar item de stock" });
-  await itemCard.getByRole("button", { name: `Eliminar ${itemName}`, exact: true }).click();
+  await editedItemCard.getByRole("button", { name: `Eliminar ${editedItemName}`, exact: true }).click();
   await expect(confirmDialog).toBeVisible();
   await confirmDialog.getByRole("button", { name: "Cancelar", exact: true }).click();
   await expect(confirmDialog).toBeHidden();
-  await expect(page.getByRole("heading", { name: itemName, exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: editedItemName, exact: true })).toBeVisible();
 
-  await itemCard.getByRole("button", { name: `Eliminar ${itemName}`, exact: true }).click();
+  await editedItemCard.getByRole("button", { name: `Eliminar ${editedItemName}`, exact: true }).click();
   await expect(confirmDialog).toBeVisible();
   await confirmDialog.getByRole("button", { name: "Eliminar", exact: true }).click();
   await expect(page.getByText("Item eliminado.", { exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: itemName, exact: true })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: editedItemName, exact: true })).toHaveCount(0);
 });

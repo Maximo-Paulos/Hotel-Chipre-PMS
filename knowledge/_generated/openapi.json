@@ -35325,6 +35325,36 @@
             ],
             "title": "Total Amount"
           },
+          "quoted_amount_ars": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quoted Amount Ars"
+          },
+          "quoted_amount_usd": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quoted Amount Usd"
+          },
           "amount_paid": {
             "anyOf": [
               {
@@ -38930,6 +38960,28 @@
             ],
             "title": "Fx Rate Snapshot"
           },
+          "quoted_amount_ars": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quoted Amount Ars"
+          },
+          "quoted_amount_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quoted Amount Usd"
+          },
           "status": {
             "$ref": "#/components/schemas/ReservationStatusEnum"
           },
@@ -41690,6 +41742,28 @@
               }
             ],
             "title": "Fx Rate Snapshot"
+          },
+          "quoted_amount_ars": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quoted Amount Ars"
+          },
+          "quoted_amount_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quoted Amount Usd"
           },
           "status": {
             "$ref": "#/components/schemas/ReservationStatusEnum"
@@ -45161,6 +45235,13 @@
           "type": {
             "type": "string",
             "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
           }
         },
         "type": "object",
@@ -46607,6 +46688,28 @@
               }
             ],
             "title": "Fx Rate Snapshot"
+          },
+          "quoted_amount_ars": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quoted Amount Ars"
+          },
+          "quoted_amount_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quoted Amount Usd"
           },
           "status": {
             "$ref": "#/components/schemas/ReservationStatusEnum"

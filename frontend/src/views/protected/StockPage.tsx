@@ -15,6 +15,8 @@ import {
   updateStockItem,
   type StockConsumptionGroupBy,
   type StockConsumptionReport,
+  type StockItem,
+  type StockItemUpdate,
   type StockMovement,
   type StockMovementCreate,
   type StockMovementType
@@ -93,6 +95,13 @@ export function StockPage() {
   const [reservationSearch, setReservationSearch] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [itemPendingDelete, setItemPendingDelete] = useState<{ id: number; name: string } | null>(null);
+  // Owner: "editar el producto por las dudas" -- unit_cost already has its
+  // own inline field (UnitCostField); this covers the rest (name/sku/unit/
+  // minimo), which the backend already accepted via PATCH but the UI never
+  // exposed. Modal instead of another inline field per card: four fields is
+  // too much for a card without cramming it, same tradeoff ManualOtaReservationModal
+  // already made for a multi-field form.
+  const [itemBeingEdited, setItemBeingEdited] = useState<StockItem | null>(null);
   // D5 (Via D): "cuanto se consumio de cada item" por periodo, con variacion
   // % contra el periodo anterior de igual largo (calculado en el backend).
   const [consumptionGroupBy, setConsumptionGroupBy] = useState<StockConsumptionGroupBy>("week");
@@ -260,6 +269,16 @@ export function StockPage() {
     }
   });
 
+  const updateItemMutation = useMutation({
+    mutationFn: ({ itemId, changes }: { itemId: number; changes: StockItemUpdate }) =>
+      updateStockItem(itemId, changes, session),
+    onSuccess: () => {
+      invalidateStock();
+      setItemBeingEdited(null);
+      setMessage("Item actualizado.");
+    }
+  });
+
   const deleteItemMutation = useMutation({
     mutationFn: (itemId: number) => deleteStockItem(itemId, session),
     onSuccess: () => {
@@ -420,15 +439,25 @@ export function StockPage() {
                       Registrar egreso
                     </button>
                   </div>
-                  <button
-                    type="button"
-                    aria-label={`Eliminar ${item.name}`}
-                    disabled={deleteItemMutation.isPending}
-                    className="mt-2 min-h-11 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-50 disabled:opacity-60"
-                    onClick={() => setItemPendingDelete({ id: item.id, name: item.name })}
-                  >
-                    Eliminar
-                  </button>
+                  <div className="mt-2 flex gap-2">
+                    <button
+                      type="button"
+                      aria-label={`Editar ${item.name}`}
+                      className="min-h-11 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                      onClick={() => setItemBeingEdited(item)}
+                    >
+                      Editar
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Eliminar ${item.name}`}
+                      disabled={deleteItemMutation.isPending}
+                      className="min-h-11 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-50 disabled:opacity-60"
+                      onClick={() => setItemPendingDelete({ id: item.id, name: item.name })}
+                    >
+                      Eliminar
+                    </button>
+                  </div>
                 </div>
               );
             })}
@@ -731,6 +760,131 @@ export function StockPage() {
         onConfirm={confirmDeleteItem}
         onCancel={() => setItemPendingDelete(null)}
       />
+
+      <EditStockItemModal
+        item={itemBeingEdited}
+        saving={updateItemMutation.isPending}
+        onSave={(changes) => itemBeingEdited && updateItemMutation.mutate({ itemId: itemBeingEdited.id, changes })}
+        onCancel={() => setItemBeingEdited(null)}
+      />
+    </div>
+  );
+}
+
+// Owner: "editar el producto por las dudas" -- name/sku/unit/minimo, the
+// fields PATCH /api/stock/items/{id} already accepted but no UI ever sent.
+// unit_cost keeps its own inline field (UnitCostField) since that is the one
+// field owners change often; this modal is for the rest.
+function EditStockItemModal({
+  item,
+  saving,
+  onSave,
+  onCancel
+}: {
+  item: StockItem | null;
+  saving: boolean;
+  onSave: (changes: StockItemUpdate) => void;
+  onCancel: () => void;
+}) {
+  const [form, setForm] = useState({ name: "", sku: "", unit: "", min_quantity: "" });
+
+  // Re-seed the draft from the item that was just opened -- item identity
+  // (id) changes each time "Editar" is clicked on a different card.
+  const [openItemId, setOpenItemId] = useState<number | null>(null);
+  if (item && item.id !== openItemId) {
+    setOpenItemId(item.id);
+    setForm({
+      name: item.name,
+      sku: item.sku ?? "",
+      unit: item.unit,
+      min_quantity: item.min_quantity != null ? String(item.min_quantity) : ""
+    });
+  } else if (!item && openItemId !== null) {
+    setOpenItemId(null);
+  }
+
+  if (!item) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-40 flex animate-fade-in items-center justify-center bg-slate-900/40 px-4 py-6"
+      onClick={onCancel}
+    >
+      <form
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="edit-stock-item-title"
+        className="w-full max-w-sm animate-scale-in rounded-xl border border-slate-200 bg-white p-5 shadow-xl"
+        onClick={(event) => event.stopPropagation()}
+        onSubmit={(event) => {
+          event.preventDefault();
+          onSave({
+            name: form.name,
+            sku: form.sku || null,
+            unit: form.unit,
+            min_quantity: form.min_quantity || null
+          });
+        }}
+      >
+        <h2 id="edit-stock-item-title" className="text-base font-semibold text-slate-900">
+          Editar item de stock
+        </h2>
+        <div className="mt-4 space-y-3">
+          <label className="block text-sm">
+            <span className="block text-xs uppercase tracking-wide text-slate-500">Nombre</span>
+            <input
+              required
+              value={form.name}
+              onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
+              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            />
+          </label>
+          <label className="block text-sm">
+            <span className="block text-xs uppercase tracking-wide text-slate-500">SKU</span>
+            <input
+              value={form.sku}
+              onChange={(event) => setForm((current) => ({ ...current, sku: event.target.value }))}
+              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            />
+          </label>
+          <label className="block text-sm">
+            <span className="block text-xs uppercase tracking-wide text-slate-500">Unidad</span>
+            <input
+              required
+              value={form.unit}
+              onChange={(event) => setForm((current) => ({ ...current, unit: event.target.value }))}
+              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            />
+          </label>
+          <label className="block text-sm">
+            <span className="block text-xs uppercase tracking-wide text-slate-500">Minimo</span>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={form.min_quantity}
+              onChange={(event) => setForm((current) => ({ ...current, min_quantity: event.target.value }))}
+              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            />
+          </label>
+        </div>
+        <div className="mt-5 flex gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="min-h-11 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            disabled={saving}
+            className="min-h-11 flex-1 rounded-lg border border-brand-600 bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
+          >
+            Guardar
+          </button>
+        </div>
+      </form>
     </div>
   );
 }
