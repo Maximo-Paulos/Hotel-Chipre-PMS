@@ -382,10 +382,10 @@ def test_gemma_chat_uses_local_runtime_when_available():
     orchestrator = _StubGemmaOrchestrator()
     client, db, engine = _build_client(orchestrator=orchestrator)
     try:
-        db.add(User(id=22, email="manager22@test.com", password_hash="hash", is_active=True, is_verified=True, role="manager"))
+        db.add(User(id=22, email="manager22@test.com", password_hash="hash", is_active=True, is_verified=True, role="owner"))
         db.add(HotelConfiguration(id=1, hotel_name="Hotel Runtime", subscription_active=True))
         db.commit()
-        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "manager", user_id=22)
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner", user_id=22)
 
         response = client.post(
             "/api/gemma/chat/message",
@@ -403,10 +403,10 @@ def test_gemma_runtime_status_endpoint_uses_orchestrator_probe():
     orchestrator = _StubGemmaOrchestrator()
     client, db, engine = _build_client(orchestrator=orchestrator)
     try:
-        db.add(User(id=24, email="manager24@test.com", password_hash="hash", is_active=True, is_verified=True, role="manager"))
+        db.add(User(id=24, email="manager24@test.com", password_hash="hash", is_active=True, is_verified=True, role="owner"))
         db.add(HotelConfiguration(id=1, hotel_name="Hotel Runtime Status", subscription_active=True))
         db.commit()
-        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "manager", user_id=24)
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner", user_id=24)
 
         response = client.get("/api/gemma/chat/runtime-status")
         assert response.status_code == 200, response.text
@@ -423,10 +423,10 @@ def test_gemma_chat_falls_back_cleanly_when_local_runtime_times_out():
     orchestrator = _TimeoutGemmaOrchestrator()
     client, db, engine = _build_client(orchestrator=orchestrator)
     try:
-        db.add(User(id=23, email="manager23@test.com", password_hash="hash", is_active=True, is_verified=True, role="manager"))
+        db.add(User(id=23, email="manager23@test.com", password_hash="hash", is_active=True, is_verified=True, role="owner"))
         db.add(HotelConfiguration(id=1, hotel_name="Hotel Runtime Timeout", subscription_active=True))
         db.commit()
-        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "manager", user_id=23)
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner", user_id=23)
 
         response = client.post(
             "/api/gemma/chat/message",

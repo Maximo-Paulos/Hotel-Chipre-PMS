@@ -1,6 +1,8 @@
 from datetime import date
 from decimal import Decimal
 
+import pytest
+
 from app.models.guest import Guest
 from app.models.hotel_config import HotelConfiguration
 from app.models.payment import Payment, PaymentLink, PaymentWebhookEvent
@@ -9,6 +11,15 @@ from app.models.room import RoomCategory
 from app.models.transaction import Transaction, TransactionStatusEnum
 from app.services.payment_link_service import balance_due_from_transactions
 from app.services.payment_webhook_service import ingest_webhook
+from app.config import get_settings
+
+
+@pytest.fixture(autouse=True)
+def _enable_inbound_provider_events(monkeypatch):
+    monkeypatch.setenv("INBOUND_PROVIDER_EVENTS_ENABLED", "true")
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
 
 
 def _reservation(db, hotel_id: int = 1) -> Reservation:
@@ -50,6 +61,9 @@ def _link(db, reservation: Reservation) -> PaymentLink:
         requested_amount=Decimal("100.00"),
         recipient_email="webhook@example.com",
         status="pending",
+        execution_mode="provider",
+        payable=True,
+        external_checkout_url="https://mp.test/checkout/plink-test",
         external_reference="signed-ref",
     )
     db.add(link)

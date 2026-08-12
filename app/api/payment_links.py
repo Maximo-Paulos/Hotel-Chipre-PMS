@@ -1,9 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import get_db
-from app.dependencies.auth import AuthContext, require_roles
+from app.dependencies.auth import AuthContext, require_permission
 from app.schemas.payment_link import PaymentLinkCancel, PaymentLinkCreate, PaymentLinkRead
 from app.services.payment_link_service import (
     PaymentLinkError,
@@ -14,23 +14,39 @@ from app.services.payment_link_service import (
 )
 from app.services.payment_link_test_service import PaymentLinkTestError, validate_mercadopago_webhook_signature
 from app.services.payment_webhook_service import PaymentWebhookError, ingest_webhook
+from app.services.external_effects_policy import (
+    InboundProviderEventsDisabled,
+    require_inbound_provider_events,
+)
+from app.services.permission_service import PERMISSION_CASH_OPERATE
 
 router = APIRouter(tags=["Payment Links"])
 
 
 def _authorized_context() -> AuthContext:
-    return Depends(require_roles("owner", "co_owner", "manager", "receptionist"))
+    return Depends(require_permission(PERMISSION_CASH_OPERATE))
 
 
 @router.post("/api/payment-links", response_model=PaymentLinkRead, status_code=status.HTTP_201_CREATED)
 @router.post("/payment-links", response_model=PaymentLinkRead, status_code=status.HTTP_201_CREATED)
 def create_payment_link(
     payload: PaymentLinkCreate,
+    idempotency_key: str | None = Header(
+        default=None,
+        alias="Idempotency-Key",
+        min_length=8,
+        max_length=100,
+    ),
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "receptionist")),
+    context: AuthContext = Depends(require_permission(PERMISSION_CASH_OPERATE)),
 ):
     try:
-        link = create_link(db, context.hotel_id, payload)
+        link = create_link(
+            db,
+            context.hotel_id,
+            payload,
+            idempotency_key=idempotency_key,
+        )
         db.commit()
         db.refresh(link)
         return link
@@ -44,7 +60,7 @@ def create_payment_link(
 def list_payment_links(
     reservation_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "receptionist")),
+    context: AuthContext = Depends(require_permission(PERMISSION_CASH_OPERATE)),
 ):
     return list_links_for_reservation(db, context.hotel_id, reservation_id)
 
@@ -55,7 +71,7 @@ def cancel_payment_link(
     link_id: int,
     payload: PaymentLinkCancel | None = None,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "receptionist")),
+    context: AuthContext = Depends(require_permission(PERMISSION_CASH_OPERATE)),
 ):
     try:
         link = cancel_link(db, context.hotel_id, link_id, reason=payload.reason if payload else None)
@@ -68,6 +84,13 @@ def cancel_payment_link(
 
 
 async def _mercadopago_webhook_impl(request: Request, db: Session) -> dict:
+    try:
+        # This must stay before request.json(), secret lookup, and every DB
+        # mutation. A disabled callback lane is intentionally content-agnostic.
+        require_inbound_provider_events("Mercado Pago")
+    except InboundProviderEventsDisabled as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+
     payload = {}
     try:
         payload = await request.json()

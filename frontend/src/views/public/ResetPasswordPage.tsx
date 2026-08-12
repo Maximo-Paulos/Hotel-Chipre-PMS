@@ -70,6 +70,7 @@ export function ResetPasswordPage() {
         hotelIds: res.hotel_ids?.length ? res.hotel_ids : [res.hotel_id],
         role: normalizeRole(res.user.role),
         baseRole: normalizeRole(res.user.role),
+        permissions: res.permissions ?? res.user.permissions ?? null,
         accessToken: res.access_token,
         isVerified: res.user.is_verified
       });

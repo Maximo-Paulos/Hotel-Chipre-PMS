@@ -11,8 +11,10 @@ import logging
 import hashlib
 import hmac
 from typing import Any, Callable, Optional
+from urllib.parse import urlencode, urlparse
 from uuid import uuid4
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -20,7 +22,15 @@ from app.models.payment import Payment, PaymentLink
 from app.models.reservation import Reservation
 from app.models.transaction import Transaction, TransactionStatusEnum, TransactionTypeEnum
 from app.schemas.payment_link import PaymentLinkCreate
-from app.services.payment_service import calculate_payment_surcharge
+from app.services.external_effects_policy import (
+    ExternalEffectsDisabled,
+    external_connections_enabled,
+    require_external_connections,
+)
+from app.services.payment_service import (
+    calculate_base_amount_before_surcharge,
+    calculate_payment_surcharge,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +52,11 @@ def _create_mercadopago_preference(db: Session, hotel_id: int, link: PaymentLink
     """Default production MP gateway: builds a checkout preference and returns the
     checkout URL + preference id. Reuses the same MP integration token + preference
     shape as the test tooling (payment_link_test_service)."""
-    # Imported lazily so the test gateway never pulls in requests / network code.
+    # The policy check intentionally precedes imports, credential lookup/decryption,
+    # and construction of a network client.
+    require_external_connections("Mercado Pago payment-link creation")
+
+    # Imported lazily so the local-only path never pulls in network code.
     from app.services.payment_link_test_service import _mercadopago_access_token  # noqa: PLC0415
     import requests  # noqa: PLC0415
 
@@ -65,9 +79,25 @@ def _create_mercadopago_preference(db: Session, hotel_id: int, link: PaymentLink
         preference_payload["expires"] = True
         preference_payload["expiration_date_to"] = link.expires_at.isoformat()
 
+    settings = get_settings()
+    webhook_base = settings.APP_BASE_URL.rstrip("/")
+    if _is_safe_provider_url(webhook_base):
+        preference_payload["notification_url"] = (
+            f"{webhook_base}/api/payment-links/mercadopago/webhook?"
+            + urlencode({"external_reference": link.external_reference or ""})
+        )
+
+    provider_idempotency_key = hashlib.sha256(
+        (link.idempotency_key or link.external_reference or link.link_code).encode("utf-8")
+    ).hexdigest()
+
     response = requests.post(
         "https://api.mercadopago.com/checkout/preferences",
-        headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"},
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json",
+            "X-Idempotency-Key": provider_idempotency_key,
+        },
         json=preference_payload,
         timeout=20,
     )
@@ -103,6 +133,14 @@ def _money(value) -> Decimal:
     return Decimal(str(value or "0")).quantize(Decimal("0.01"))
 
 
+def _is_safe_provider_url(value: str | None) -> bool:
+    try:
+        parsed = urlparse((value or "").strip())
+    except ValueError:
+        return False
+    return parsed.scheme == "https" and bool(parsed.hostname) and not parsed.username and not parsed.password
+
+
 def _signing_secret() -> str:
     settings = get_settings()
     return getattr(settings, "SIGNED_TOKEN_SECRET", None) or settings.JWT_SECRET or "change-me"
@@ -136,6 +174,7 @@ def _get_reservation_for_hotel(db: Session, hotel_id: int, reservation_id: int) 
     reservation = (
         db.query(Reservation)
         .filter(Reservation.id == reservation_id, Reservation.hotel_id == hotel_id)
+        .with_for_update()
         .first()
     )
     if not reservation:
@@ -151,6 +190,85 @@ def _unique_link_code(db: Session) -> str:
     raise PaymentLinkError("No se pudo generar un codigo unico de link")
 
 
+def _normalized_idempotency_key(value: str | None) -> str | None:
+    normalized = (value or "").strip()
+    if not normalized:
+        return None
+    if len(normalized) < 8 or len(normalized) > 100:
+        raise PaymentLinkError("Idempotency-Key debe tener entre 8 y 100 caracteres")
+    return normalized
+
+
+def _find_idempotent_link(db: Session, hotel_id: int, idempotency_key: str | None) -> PaymentLink | None:
+    if idempotency_key is None:
+        return None
+    return (
+        db.query(PaymentLink)
+        .filter(
+            PaymentLink.hotel_id == hotel_id,
+            PaymentLink.idempotency_key == idempotency_key,
+        )
+        .first()
+    )
+
+
+def _validate_idempotent_replay(
+    link: PaymentLink,
+    *,
+    reservation_id: int,
+    provider: str,
+    requested_amount: Decimal,
+    currency: str,
+    recipient_email: str,
+) -> PaymentLink:
+    same_request = (
+        link.reservation_id == reservation_id
+        and link.provider == provider
+        and _money(link.requested_amount) == _money(requested_amount)
+        and link.currency == currency
+        and link.recipient_email == recipient_email
+    )
+    if not same_request:
+        raise PaymentLinkError("Idempotency-Key ya fue usado con otro pedido de link")
+    return link
+
+
+def _available_provider_balance(
+    db: Session,
+    *,
+    hotel_id: int,
+    reservation: Reservation,
+    provider: str,
+) -> Decimal:
+    from app.services.financial_ledger import operational_balance_due  # noqa: PLC0415
+
+    balance = _money(operational_balance_due(db, hotel_id=hotel_id, reservation=reservation))
+    active_links = (
+        db.query(PaymentLink)
+        .filter(
+            PaymentLink.hotel_id == hotel_id,
+            PaymentLink.reservation_id == reservation.id,
+            PaymentLink.execution_mode == "provider",
+            PaymentLink.payable.is_(True),
+            PaymentLink.status.in_(["active", "pending", "partially_paid"]),
+        )
+        .all()
+    )
+    reserved = Decimal("0.00")
+    for active_link in active_links:
+        provider_outstanding = max(
+            Decimal("0.00"),
+            _money(active_link.requested_amount) - _money(active_link.collected_amount),
+        )
+        reserved += calculate_base_amount_before_surcharge(
+            db,
+            hotel_id=hotel_id,
+            payment_method=active_link.provider or provider,
+            final_amount=provider_outstanding,
+        )
+    return max(Decimal("0.00"), balance - reserved).quantize(Decimal("0.01"))
+
+
 def create_link(
     db: Session,
     hotel_id: int,
@@ -159,18 +277,55 @@ def create_link(
     mp_gateway: Optional[MpGateway] = None,
     delivery_channel: Optional[str] = None,
     email_delivery: Optional[EmailDelivery] = None,
+    idempotency_key: str | None = None,
 ) -> PaymentLink:
     reservation = _get_reservation_for_hotel(db, hotel_id, payload.reservation_id)
     provider = payload.provider or "mercado_pago"
     if provider != "mercado_pago":
         raise PaymentLinkError("Solo mercado_pago esta habilitado para links de pago")
 
+    currency = (payload.currency or reservation.currency_code or "ARS").strip().upper()
+    recipient_email = str(payload.recipient_email).strip().lower()
     surcharge_info = calculate_payment_surcharge(
         db,
         hotel_id=hotel_id,
         payment_method=provider,
         base_amount=payload.requested_amount,
     )
+    normalized_idempotency_key = _normalized_idempotency_key(idempotency_key)
+    existing = _find_idempotent_link(db, hotel_id, normalized_idempotency_key)
+    if existing is not None:
+        return _validate_idempotent_replay(
+            existing,
+            reservation_id=reservation.id,
+            provider=provider,
+            requested_amount=surcharge_info["final_amount"],
+            currency=currency,
+            recipient_email=recipient_email,
+        )
+
+    provider_mode_requested = external_connections_enabled()
+    if provider_mode_requested:
+        if normalized_idempotency_key is None:
+            raise PaymentLinkError(
+                "Idempotency-Key es obligatorio para crear un link con proveedor"
+            )
+        reservation_currency = (reservation.currency_code or "ARS").strip().upper()
+        if currency != reservation_currency:
+            raise PaymentLinkError(
+                f"La moneda del link ({currency}) debe coincidir con la reserva ({reservation_currency})"
+            )
+        available_balance = _available_provider_balance(
+            db,
+            hotel_id=hotel_id,
+            reservation=reservation,
+            provider=provider,
+        )
+        if _money(payload.requested_amount) > available_balance + Decimal("0.01"):
+            raise PaymentLinkError(
+                f"El monto del link excede el saldo disponible ({available_balance:.2f} {currency})"
+            )
+
     link_code = _unique_link_code(db)
     link = PaymentLink(
         hotel_id=hotel_id,
@@ -179,39 +334,77 @@ def create_link(
         link_code=link_code,
         requested_amount=surcharge_info["final_amount"],
         collected_amount=Decimal("0.00"),
-        currency=payload.currency or reservation.currency_code or "ARS",
-        recipient_email=str(payload.recipient_email).strip().lower(),
+        currency=currency,
+        recipient_email=recipient_email,
         recipient_name=(payload.recipient_name or "").strip() or None,
         recipient_phone=(payload.recipient_phone or "").strip() or None,
         title=(payload.title or "").strip() or "Pago de Reserva",
         description=(payload.description or "").strip() or None,
         status="pending",
+        execution_mode="local_only",
+        payable=False,
+        idempotency_key=normalized_idempotency_key,
         external_reference=sign_external_reference(hotel_id, link_code),
         expires_at=payload.expires_at,
     )
-    db.add(link)
-    db.flush()
+    if normalized_idempotency_key is None:
+        db.add(link)
+        db.flush()
+    else:
+        try:
+            with db.begin_nested():
+                db.add(link)
+                db.flush()
+        except IntegrityError:
+            concurrent = _find_idempotent_link(db, hotel_id, normalized_idempotency_key)
+            if concurrent is None:
+                raise
+            return _validate_idempotent_replay(
+                concurrent,
+                reservation_id=reservation.id,
+                provider=provider,
+                requested_amount=surcharge_info["final_amount"],
+                currency=currency,
+                recipient_email=recipient_email,
+            )
 
-    # §12.2: in production, fill external_checkout_url + preference id by creating a
-    # real Mercado Pago preference. Best-effort: if MP is not connected / fails, the
-    # link is still created (with last_error recorded) so the operator can retry.
-    gateway = mp_gateway or _create_mercadopago_preference
-    try:
-        result = gateway(db, hotel_id, link)
-        link.external_checkout_url = result.get("checkout_url")
-        preference_id = result.get("preference_id")
-        link.gateway_response = {
-            **(result.get("raw") or {}),
-            "preference_id": preference_id,
-        }
-        link.last_error = None
-    except Exception as exc:  # noqa: BLE001 - best-effort gateway
-        logger.warning("payment-link MP preference failed link=%s: %s", link.link_code, exc)
-        link.last_error = f"No se pudo crear la preferencia de pago: {exc}"
-    db.flush()
+    if provider_mode_requested:
+        gateway = mp_gateway or _create_mercadopago_preference
+        try:
+            # Re-check at the actual sink so a changed/reloaded policy cannot
+            # race the earlier decision.
+            require_external_connections("Mercado Pago payment-link creation")
+            result = gateway(db, hotel_id, link)
+            checkout_url = str(result.get("checkout_url") or "").strip()
+            preference_id = str(result.get("preference_id") or "").strip()
+            if not _is_safe_provider_url(checkout_url) or not preference_id:
+                raise PaymentLinkError("Mercado Pago no devolvio una preferencia pagable valida")
+            link.external_checkout_url = checkout_url
+            link.execution_mode = "provider"
+            link.payable = True
+            link.gateway_response = {
+                **(result.get("raw") or {}),
+                "preference_id": preference_id,
+            }
+            link.last_error = None
+        except Exception as exc:  # noqa: BLE001 - persist a safe local artifact
+            logger.warning(
+                "payment-link MP preference failed link=%s error_type=%s",
+                link.link_code,
+                type(exc).__name__,
+            )
+            link.external_checkout_url = None
+            link.execution_mode = "local_only"
+            link.payable = False
+            link.last_error = "No se pudo crear la preferencia de pago con el proveedor."
+        db.flush()
 
     if delivery_channel:
-        deliver_link(db, hotel_id, link, channel=delivery_channel, email_delivery=email_delivery)
+        if link.payable:
+            deliver_link(db, hotel_id, link, channel=delivery_channel, email_delivery=email_delivery)
+        else:
+            link.last_error = link.last_error or "El artefacto local_only no se puede enviar como link pagable"
+            db.flush()
 
     return link
 
@@ -238,6 +431,12 @@ def deliver_link(
     A delivery failure never raises: the link stays created, the error is recorded.
     """
     normalized = (channel or "").strip().lower()
+    if link.execution_mode != "provider" or not link.payable or not link.external_checkout_url:
+        raise PaymentLinkError("El artefacto local_only no es pagable ni se puede enviar al huesped")
+    try:
+        require_external_connections(f"payment-link {normalized} delivery")
+    except ExternalEffectsDisabled as exc:
+        raise PaymentLinkError(str(exc)) from exc
     if normalized == "email":
         deliver = email_delivery or _default_email_delivery
         try:
@@ -251,13 +450,17 @@ def deliver_link(
             }
             link.last_error = None
         except Exception as exc:  # noqa: BLE001 - best-effort delivery
-            logger.warning("payment-link email delivery failed link=%s: %s", link.link_code, exc)
+            logger.warning(
+                "payment-link email delivery failed link=%s error_type=%s",
+                link.link_code,
+                type(exc).__name__,
+            )
             link.gateway_response = {
                 **(link.gateway_response or {}),
                 "delivery_channel": "email",
                 "delivery_status": "failed",
             }
-            link.last_error = f"No se pudo enviar el link por email: {exc}"
+            link.last_error = "No se pudo enviar el link por email."
     elif normalized in {"whatsapp", "sms"}:
         # No provider wired yet (§12.2 future): record intent as pending, do not fail.
         link.gateway_response = {
@@ -289,6 +492,7 @@ def cancel_link(db: Session, hotel_id: int, link_id: int, reason: str | None = N
     if link.status == "completed":
         raise PaymentLinkError("No se puede cancelar un link ya completado")
     link.status = "cancelled"
+    link.payable = False
     link.cancelled_at = datetime.now(timezone.utc)
     if reason:
         # No dedicated column; record the operator reason in last_error for traceability.
@@ -308,6 +512,7 @@ def cancel_active_links_for_reservation(
     for link in links:
         if link.status in {"pending", "partially_paid"}:
             link.status = "cancelled"
+            link.payable = False
             link.cancelled_at = datetime.now(timezone.utc)
             if reason:
                 link.last_error = f"cancelled: {reason}"
@@ -323,6 +528,7 @@ def expire_link(db: Session, hotel_id: int, link_id: int) -> PaymentLink:
         raise PaymentLinkError("Link de pago no encontrado para este hotel")
     if link.status not in {"completed", "cancelled"}:
         link.status = "expired"
+        link.payable = False
     db.flush()
     return link
 
@@ -340,8 +546,10 @@ def refresh_link_collection(db: Session, link: PaymentLink) -> PaymentLink:
     link.last_payment_at = max(completed_dates) if completed_dates else None
     if link.collected_amount >= _money(link.requested_amount):
         link.status = "completed"
+        link.payable = False
     elif link.collected_amount > Decimal("0.00"):
         link.status = "partially_paid"
+        link.payable = link.execution_mode == "provider" and bool(link.external_checkout_url)
     elif link.status not in {"cancelled", "expired"}:
         link.status = "pending"
     db.flush()

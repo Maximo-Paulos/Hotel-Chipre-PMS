@@ -140,6 +140,22 @@ class RemitoCreateResponse(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+def _housekeeping_remito(remito) -> RemitoRead:
+    """Remove vendor billing snapshots and free text from an HK response."""
+
+    safe = RemitoRead.model_validate(remito)
+    return safe.model_copy(
+        update={
+            "notes": None,
+            "created_by_user_id": None,
+            "lines": [
+                line.model_copy(update={"unit_price_snapshot": None})
+                for line in safe.lines
+            ],
+        }
+    )
+
+
 class VendorBalanceLine(BaseModel):
     linen_item_id: int
     linen_item_name: str
@@ -352,7 +368,18 @@ def list_laundry_vendors(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_LAUNDRY_OPERATE_REMITOS)),
 ):
-    return list_vendors(db, hotel_id=context.hotel_id)
+    vendors = list_vendors(db, hotel_id=context.hotel_id)
+    if context.user_role != "housekeeping":
+        return vendors
+    # Housekeeping needs the vendor id/name/location to create a remito, not
+    # the vendor contact directory. Materialize schemas so ORM attributes are
+    # never serialized before the redaction is applied.
+    return [
+        VendorRead.model_validate(vendor).model_copy(
+            update={"contact_phone": None, "contact_email": None}
+        )
+        for vendor in vendors
+    ]
 
 
 @router.patch("/vendors/{vendor_id}", response_model=VendorRead)
@@ -393,7 +420,7 @@ def upsert_laundry_vendor_price(
 def list_laundry_vendor_prices(
     vendor_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_LAUNDRY_OPERATE_REMITOS)),
+    context: AuthContext = Depends(require_permission(PERMISSION_LAUNDRY_MANAGE_VENDORS)),
 ):
     try:
         return list_vendor_prices(db, hotel_id=context.hotel_id, vendor_id=vendor_id)
@@ -429,7 +456,8 @@ def create_laundry_remito(
         for line in remito.lines
         if line.unit_price_snapshot is None
     ]
-    return {"remito": remito, "warnings": warnings}
+    safe_remito = _housekeeping_remito(remito) if context.user_role == "housekeeping" else remito
+    return {"remito": safe_remito, "warnings": warnings}
 
 
 @router.get("/remitos", response_model=list[RemitoRead])
@@ -440,9 +468,12 @@ def list_laundry_remitos(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_LAUNDRY_OPERATE_REMITOS)),
 ):
-    return list_remitos(
+    remitos = list_remitos(
         db, hotel_id=context.hotel_id, vendor_id=vendor_id, date_from=date_from, date_to=date_to
     )
+    if context.user_role == "housekeeping":
+        return [_housekeeping_remito(remito) for remito in remitos]
+    return remitos
 
 
 @router.get("/vendors/{vendor_id}/balance", response_model=list[VendorBalanceLine])

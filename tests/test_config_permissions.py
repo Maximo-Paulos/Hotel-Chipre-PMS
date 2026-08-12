@@ -141,16 +141,12 @@ def test_manager_without_config_manage_permission_is_denied(ctx):
     assert client.get("/api/config/email/status").status_code == 403
 
 
-def test_manager_with_config_manage_override_can_access_without_base_role(ctx):
+def test_manager_cannot_cross_config_manage_security_ceiling(ctx):
     client, db = ctx
-    set_override(db, 1, "manager", PERMISSION_CONFIG_MANAGE, True, user_id=None)
+    with pytest.raises(ValueError, match="techo de seguridad"):
+        set_override(db, 1, "manager", PERMISSION_CONFIG_MANAGE, True, user_id=None)
     fastapi_app.dependency_overrides[get_auth_context_target()] = _override_role("manager")
 
-    r = client.get("/api/config/")
-    assert r.status_code == 200
-
-    r = client.patch("/api/config/", json={"receptionist_view_future_days": 5})
-    assert r.status_code == 200
-    assert r.json()["receptionist_view_future_days"] == 5
-
-    assert client.get("/api/config/email/status").status_code == 200
+    assert client.get("/api/config/").status_code == 403
+    assert client.patch("/api/config/", json={"receptionist_view_future_days": 5}).status_code == 403
+    assert client.get("/api/config/email/status").status_code == 403

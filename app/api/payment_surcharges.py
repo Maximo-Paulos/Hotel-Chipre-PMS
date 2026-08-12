@@ -16,10 +16,14 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies.auth import AuthContext, require_roles
+from app.dependencies.auth import AuthContext, require_permission
 from app.models.audit_log import AuditActionEnum
 from app.models.payment_surcharge import PaymentSurcharge, PaymentSurchargeTypeEnum
 from app.services import audit_log_service
+from app.services.permission_service import (
+    PERMISSION_CASH_OPERATE,
+    PERMISSION_REPORTS_FINANCIAL_VIEW,
+)
 
 router = APIRouter(prefix="/api/payment-surcharges", tags=["Payment Surcharges"])
 
@@ -70,7 +74,7 @@ def _get_surcharge_or_404(db: Session, surcharge_id: int, hotel_id: int) -> Paym
 @router.get("/", response_model=list[PaymentSurchargeRead], include_in_schema=False)
 def list_payment_surcharges(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "receptionist")),
+    context: AuthContext = Depends(require_permission(PERMISSION_CASH_OPERATE)),
 ) -> list[PaymentSurchargeRead]:
     surcharges = (
         db.query(PaymentSurcharge)
@@ -89,7 +93,7 @@ def list_payment_surcharges(
 def create_payment_surcharge(
     payload: PaymentSurchargeCreate,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
 ) -> PaymentSurchargeRead:
     existing = (
         db.query(PaymentSurcharge)
@@ -137,7 +141,7 @@ def update_payment_surcharge(
     surcharge_id: int,
     payload: PaymentSurchargeUpdate,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
 ) -> PaymentSurchargeRead:
     surcharge = _get_surcharge_or_404(db, surcharge_id, context.hotel_id)
     before = audit_log_service.model_snapshot(surcharge)
@@ -172,7 +176,7 @@ def update_payment_surcharge(
 def deactivate_payment_surcharge(
     surcharge_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
 ) -> PaymentSurchargeRead:
     surcharge = _get_surcharge_or_404(db, surcharge_id, context.hotel_id)
     before = audit_log_service.model_snapshot(surcharge)

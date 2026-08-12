@@ -1,0 +1,1024 @@
+{
+  "schema_version": 1,
+  "catalog_type": "production-labelled-shared-sandbox-operational",
+  "release_gate_eligible": false,
+  "origins": {
+    "site": "https://hotels-pms.com",
+    "app": "https://app.hotels-pms.com",
+    "api": "https://api.hotels-pms.com"
+  },
+  "default_mutation_policy": "synthetic-tagged",
+  "status_values": [
+    "PASS",
+    "FAIL",
+    "BLOCKED",
+    "NOT_APPLICABLE"
+  ],
+  "cases": [
+    {
+      "operational_case_id": "ops-marketing-home",
+      "source_case_ids": [
+        "marketing-home"
+      ],
+      "area": "marketing",
+      "paths": [
+        "/"
+      ],
+      "personas": [
+        "anonymous"
+      ],
+      "device_profiles": [
+        "desktop-chrome-current",
+        "mobile-chrome-emulation-390x844"
+      ],
+      "mutation_policy": "read-only",
+      "expected_operational_observation": "La portada publica funciona sin exponer datos del PMS."
+    },
+    {
+      "operational_case_id": "ops-marketing-pricing",
+      "source_case_ids": [
+        "marketing-pricing"
+      ],
+      "area": "marketing",
+      "paths": [
+        "/precios"
+      ],
+      "personas": [
+        "anonymous"
+      ],
+      "device_profiles": [
+        "desktop-chrome-current",
+        "mobile-chrome-emulation-390x844"
+      ],
+      "mutation_policy": "read-only",
+      "expected_operational_observation": "Precios muestra contenido y destinos intencionales."
+    },
+    {
+      "operational_case_id": "ops-marketing-functions",
+      "source_case_ids": [
+        "marketing-functions"
+      ],
+      "area": "marketing",
+      "paths": [
+        "/funciones"
+      ],
+      "personas": [
+        "anonymous"
+      ],
+      "device_profiles": [
+        "desktop-chrome-current",
+        "mobile-chrome-emulation-390x844"
+      ],
+      "mutation_policy": "read-only",
+      "expected_operational_observation": "Funciones mantiene navegacion util y accesible."
+    },
+    {
+      "operational_case_id": "ops-marketing-pms-hotelero",
+      "source_case_ids": [
+        "marketing-pms-hotelero"
+      ],
+      "area": "marketing",
+      "paths": [
+        "/pms-hotelero"
+      ],
+      "personas": [
+        "anonymous"
+      ],
+      "device_profiles": [
+        "desktop-chrome-current",
+        "mobile-chrome-emulation-390x844"
+      ],
+      "mutation_policy": "read-only",
+      "expected_operational_observation": "La pagina SEO de PMS hotelero es util y navegable."
+    },
+    {
+      "operational_case_id": "ops-marketing-software-hoteles",
+      "source_case_ids": [
+        "marketing-software-hoteles"
+      ],
+      "area": "marketing",
+      "paths": [
+        "/software-para-hoteles"
+      ],
+      "personas": [
+        "anonymous"
+      ],
+      "device_profiles": [
+        "desktop-chrome-current",
+        "mobile-chrome-emulation-390x844"
+      ],
+      "mutation_policy": "read-only",
+      "expected_operational_observation": "La pagina SEO de software hotelero es util y navegable."
+    },
+    {
+      "operational_case_id": "ops-marketing-faq",
+      "source_case_ids": [
+        "marketing-faq"
+      ],
+      "area": "marketing",
+      "paths": [
+        "/faq"
+      ],
+      "personas": [
+        "anonymous"
+      ],
+      "device_profiles": [
+        "desktop-chrome-current",
+        "mobile-chrome-emulation-390x844"
+      ],
+      "mutation_policy": "read-only",
+      "expected_operational_observation": "FAQ funciona con mouse, teclado y viewport estrecho."
+    },
+    {
+      "operational_case_id": "ops-auth-owner-registration-contract",
+      "source_case_ids": [
+        "auth-owner-registration-contract"
+      ],
+      "area": "auth",
+      "paths": [
+        "/register-owner",
+        "/verify-email"
+      ],
+      "personas": [
+        "anonymous"
+      ],
+      "device_profiles": [
+        "desktop-chrome-current",
+        "mobile-chrome-emulation-390x844"
+      ],
+      "mutation_policy": "synthetic-tagged",
+      "expected_operational_observation": "El alta valida datos y completa verificacion solo con outbox local."
+    },
+    {
+      "operational_case_id": "ops-auth-recovery-contract",
+      "source_case_ids": [
+        "auth-recovery-contract"
+      ],
+      "area": "auth",
+      "paths": [
+        "/forgot-password",
+        "/reset-password"
+      ],
+      "personas": [
+        "anonymous"
+      ],
+      "device_profiles": [
+        "desktop-chrome-current",
+        "mobile-chrome-emulation-390x844"
+      ],
+      "mutation_policy": "synthetic-tagged",
+      "expected_operational_observation": "La recuperacion es segura y su recorrido positivo usa solo outbox local."
+    },
+    {
+      "operational_case_id": "ops-auth-login",
+      "source_case_ids": [
+        "auth-login"
+      ],
+      "area": "auth",
+      "paths": [
+        "/login"
+      ],
+      "personas": [
+        "owner",
+        "co_owner",
+        "manager",
+        "reception",
+        "housekeeping"
+      ],
+      "device_profiles": [
+        "desktop-chrome-current",
+        "mobile-chrome-emulation-390x844"
+      ],
+      "mutation_policy": "synthetic-tagged",
+      "expected_operational_observation": "Cada persona inicia y cierra sesion; credenciales invalidas fallan de forma segura."
+    },
+    {
+      "operational_case_id": "ops-auth-invitation",
+      "source_case_ids": [
+        "auth-invitation"
+      ],
+      "area": "auth",
+      "paths": [
+        "/invitations/accept",
+        "/accept-invitation"
+      ],
+      "personas": [
+        "owner",
+        "co_owner",
+        "manager",
+        "reception",
+        "housekeeping"
+      ],
+      "device_profiles": [
+        "desktop-chrome-current",
+        "mobile-chrome-emulation-390x844"
+      ],
+      "mutation_policy": "synthetic-tagged",
+      "expected_operational_observation": "Invitaciones respetan jerarquia y muestran estados validos, vencidos e invalidos."
+    },
+    {
+      "operational_case_id": "ops-onboarding",
+      "source_case_ids": [
+        "onboarding"
+      ],
+      "area": "onboarding",
+      "paths": [
+        "/onboarding"
+      ],
+      "personas": [
+        "owner",
+        "co_owner",
+        "manager",
+        "reception",
+        "housekeeping"
+      ],
+      "device_profiles": [
+        "desktop-chrome-current",
+        "mobile-chrome-emulation-390x844"
+      ],
+      "mutation_policy": "synthetic-tagged",
+      "expected_operational_observation": "Solo roles autorizados completan o retoman onboarding sintetico."
+    },
+    {
+      "operational_case_id": "ops-routing-host-contract",
+      "source_case_ids": [
+        "routing-host-contract"
+      ],
+      "area": "routing",
+      "paths": [
+        "/",
+        "catch-all",
+        "query/hash/back"
+      ],
+      "personas": [
+        "owner",
+        "co_owner",
+        "manager",
+        "reception",
+        "housekeeping"
+      ],
+      "device_profiles": [
+        "desktop-chrome-current",
+        "mobile-chrome-emulation-390x844"
+      ],
+      "mutation_policy": "synthetic-tagged",
+      "expected_operational_observation": "Hosts, deep links, query, hash, recarga y catch-all preservan el destino correcto."
+    },
+    {
+      "operational_case_id": "ops-dashboard-permissions",
+      "source_case_ids": [
+        "dashboard-permissions"
+      ],
+      "area": "dashboard",
+      "paths": [
+        "/dashboard"
+      ],
+      "personas": [
+        "owner",
+        "co_owner",
+        "manager",
+        "reception",
+        "housekeeping"
+      ],
+      "device_profiles": [
+        "desktop-chrome-current",
+        "mobile-chrome-emulation-390x844"
+      ],
+      "mutation_policy": "synthetic-tagged",
+      "expected_operational_observation": "Dashboard solo expone informacion permitida para la persona."
+    },
+    {
+      "operational_case_id": "ops-guests",
+      "source_case_ids": [
+        "guests"
+      ],
+      "area": "operations",
+      "paths": [
+        "/huespedes"
+      ],
+      "personas": [
+        "owner",
+        "co_owner",
+        "manager",
+        "reception",
+        "housekeeping"
+      ],
+      "device_profiles": [
+        "desktop-chrome-current",
+        "mobile-chrome-emulation-390x844"
+      ],
+      "mutation_policy": "synthetic-tagged",
+      "expected_operational_observation": "Huespedes y acompanantes quedan aislados; housekeeping no accede a PII."
+    },
+    {
+      "operational_case_id": "ops-reservations",
+      "source_case_ids": [
+        "reservations"
+      ],
+      "area": "operations",
+      "paths": [
+        "/reservas"
+      ],
+      "personas": [
+        "owner",
+        "co_owner",
+        "manager",
+        "reception",
+        "housekeeping"
+      ],
+      "device_profiles": [
+        "desktop-chrome-current",
+        "mobile-chrome-emulation-390x844"
+      ],
+      "mutation_policy": "synthetic-tagged",
+      "expected_operational_observation": "El ciclo de reserva persiste, evita solapamientos y respeta permisos."
+    },
+    {
+      "operational_case_id": "ops-occupancy-planning",
+      "source_case_ids": [
+        "occupancy-planning"
+      ],
+      "area": "operations",
+      "paths": [
+        "/operacion/planilla"
+      ],
+      "personas": [
+        "owner",
+        "co_owner",
+        "manager",
+        "reception",
+        "housekeeping"
+      ],
+      "device_profiles": [
+        "desktop-chrome-current",
+        "mobile-chrome-emulation-390x844"
+      ],
+      "mutation_policy": "synthetic-tagged",
+      "expected_operational_observation": "Planilla, disponibilidad, habitacion y reserva permanecen reconciliadas."
+    },
+    {
+      "operational_case_id": "ops-rooms",
+      "source_case_ids": [
+        "rooms"
+      ],
+      "area": "operations",
+      "paths": [
+        "/habitaciones"
+      ],
+      "personas": [
+        "owner",
+        "co_owner",
+        "manager",
+        "reception",
+        "housekeeping"
+      ],
+      "device_profiles": [
+        "desktop-chrome-current",
+        "mobile-chrome-emulation-390x844"
+      ],
+      "mutation_policy": "synthetic-tagged",
+      "expected_operational_observation": "Estados y bloqueos muestran solo controles autorizados; limpieza no reasigna reservas."
+    },
+    {
+      "operational_case_id": "ops-cash-register",
+      "source_case_ids": [
+        "cash-register"
+      ],
+      "area": "finance",
+      "paths": [
+        "/caja"
+      ],
+      "personas": [
+        "owner",
+        "co_owner",
+        "manager",
+        "reception",
+        "housekeeping"
+      ],
+      "device_profiles": [
+        "desktop-chrome-current",
+        "mobile-chrome-emulation-390x844"
+      ],
+      "mutation_policy": "synthetic-tagged",
+      "expected_operational_observation": "Caja conserva trazabilidad y deniega housekeeping."
+    },
+    {
+      "operational_case_id": "ops-reports",
+      "source_case_ids": [
+        "reports"
+      ],
+      "area": "reports",
+      "paths": [
+        "/reportes"
+      ],
+      "personas": [
+        "owner",
+        "co_owner",
+        "manager",
+        "reception",
+        "housekeeping"
+      ],
+      "device_profiles": [
+        "desktop-chrome-current",
+        "mobile-chrome-emulation-390x844"
+      ],
+      "mutation_policy": "synthetic-tagged",
+      "expected_operational_observation": "Manager ve solo operacion; owner y co-owner pueden ver finanzas."
+    },
+    {
+      "operational_case_id": "ops-waitlist",
+      "source_case_ids": [
+        "waitlist"
+      ],
+      "area": "operations",
+      "paths": [
+        "/operacion/lista-espera"
+      ],
+      "personas": [
+        "owner",
+        "co_owner",
+        "manager",
+        "reception",
+        "housekeeping"
+      ],
+      "device_profiles": [
+        "desktop-chrome-current",
+        "mobile-chrome-emulation-390x844"
+      ],
+      "mutation_policy": "synthetic-tagged",
+      "expected_operational_observation": "Lista de espera promociona una vez y respeta alcance hotelero."
+    },
+    {
+      "operational_case_id": "ops-laundry",
+      "source_case_ids": [
+        "laundry"
+      ],
+      "area": "operations",
+      "paths": [
+        "/operacion/lavanderia"
+      ],
+      "personas": [
+        "owner",
+        "co_owner",
+        "manager",
+        "reception",
+        "housekeeping"
+      ],
+      "device_profiles": [
+        "desktop-chrome-current",
+        "mobile-chrome-emulation-390x844"
+      ],
+      "mutation_policy": "synthetic-tagged",
+      "expected_operational_observation": "Lavanderia conserva cantidades y permite housekeeping sin exponer otros modulos."
+    },
+    {
+      "operational_case_id": "ops-stock",
+      "source_case_ids": [
+        "stock"
+      ],
+      "area": "operations",
+      "paths": [
+        "/operacion/stock"
+      ],
+      "personas": [
+        "owner",
+        "co_owner",
+        "manager",
+        "reception",
+        "housekeeping"
+      ],
+      "device_profiles": [
+        "desktop-chrome-current",
+        "mobile-chrome-emulation-390x844"
+      ],
+      "mutation_policy": "synthetic-tagged",
+      "expected_operational_observation": "Owner y co-owner ajustan; manager opera; reception y housekeeping no acceden."
+    },
+    {
+      "operational_case_id": "ops-rate-calendar",
+      "source_case_ids": [
+        "rate-calendar"
+      ],
+      "area": "operations",
+      "paths": [
+        "/operacion/tarifas"
+      ],
+      "personas": [
+        "owner",
+        "co_owner",
+        "manager",
+        "reception",
+        "housekeeping"
+      ],
+      "device_profiles": [
+        "desktop-chrome-current",
+        "mobile-chrome-emulation-390x844"
+      ],
+      "mutation_policy": "synthetic-tagged",
+      "expected_operational_observation": "Tarifas valida cambios y solo autoriza roles operativos superiores."
+    },
+    {
+      "operational_case_id": "ops-analytics",
+      "source_case_ids": [
+        "analytics"
+      ],
+      "area": "analytics",
+      "paths": [
+        "/analytics"
+      ],
+      "personas": [
+        "owner",
+        "co_owner",
+        "manager",
+        "reception",
+        "housekeeping"
+      ],
+      "device_profiles": [
+        "desktop-chrome-current",
+        "mobile-chrome-emulation-390x844"
+      ],
+      "mutation_policy": "synthetic-tagged",
+      "expected_operational_observation": "Analytics muestra fuentes claras y datos permitidos."
+    },
+    {
+      "operational_case_id": "ops-analytics-subroutes",
+      "source_case_ids": [
+        "analytics-subroutes"
+      ],
+      "area": "analytics",
+      "paths": [
+        "/analytics/rooms",
+        "/analytics/segments",
+        "/analytics/channels",
+        "/analytics/operations",
+        "/analytics/ai-chat",
+        "/analytics/rooms/:roomId",
+        "/analytics/categories/:categoryId",
+        "/analytics/companies/:companyId"
+      ],
+      "personas": [
+        "owner",
+        "co_owner",
+        "manager",
+        "reception",
+        "housekeeping"
+      ],
+      "device_profiles": [
+        "desktop-chrome-current",
+        "mobile-chrome-emulation-390x844"
+      ],
+      "mutation_policy": "synthetic-tagged",
+      "expected_operational_observation": "Subrutas de analytics son navegables y la IA desactivada falla de forma clara."
+    },
+    {
+      "operational_case_id": "ops-room-state-events",
+      "source_case_ids": [
+        "room-state-events"
+      ],
+      "area": "operations",
+      "paths": [
+        "/operacion/room-state-events"
+      ],
+      "personas": [
+        "owner",
+        "co_owner",
+        "manager",
+        "reception",
+        "housekeeping"
+      ],
+      "device_profiles": [
+        "desktop-chrome-current",
+        "mobile-chrome-emulation-390x844"
+      ],
+      "mutation_policy": "synthetic-tagged",
+      "expected_operational_observation": "Eventos de habitacion son trazables, filtrables y aislados."
+    },
+    {
+      "operational_case_id": "ops-realtime-cross-tab",
+      "source_case_ids": [
+        "realtime-cross-tab"
+      ],
+      "area": "realtime",
+      "paths": [
+        "/api/events/stream",
+        "/operacion/planilla"
+      ],
+      "personas": [
+        "owner",
+        "co_owner",
+        "manager",
+        "reception",
+        "housekeeping"
+      ],
+      "device_profiles": [
+        "desktop-chrome-current",
+        "mobile-chrome-emulation-390x844"
+      ],
+      "mutation_policy": "synthetic-tagged",
+      "expected_operational_observation": "Una mutacion invalida solo el hotel correcto y no emite PII."
+    },
+    {
+      "operational_case_id": "ops-warehouse-reconciliation",
+      "source_case_ids": [
+        "warehouse-reconciliation"
+      ],
+      "area": "analytics",
+      "paths": [
+        "/analytics",
+        "/health/datastores"
+      ],
+      "personas": [
+        "owner",
+        "co_owner",
+        "manager"
+      ],
+      "device_profiles": [
+        "desktop-chrome-current",
+        "mobile-chrome-emulation-390x844"
+      ],
+      "mutation_policy": "synthetic-tagged",
+      "expected_operational_observation": "El warehouse declara su lag y nunca oculta una divergencia con PostgreSQL."
+    },
+    {
+      "operational_case_id": "ops-tenant-composite-integrity",
+      "source_case_ids": [
+        "tenant-composite-integrity"
+      ],
+      "area": "security",
+      "paths": [
+        "PostgreSQL core domain writes"
+      ],
+      "personas": [
+        "owner",
+        "co_owner",
+        "manager",
+        "reception",
+        "housekeeping"
+      ],
+      "device_profiles": [
+        "desktop-chrome-current",
+        "mobile-chrome-emulation-390x844"
+      ],
+      "mutation_policy": "synthetic-tagged",
+      "expected_operational_observation": "IDs validos de otro hotel no pueden asociarse ni filtrarse al hotel actual."
+    },
+    {
+      "operational_case_id": "ops-mobile-apple-critical",
+      "source_case_ids": [
+        "mobile-apple-critical"
+      ],
+      "area": "responsive",
+      "paths": [
+        "/reservas",
+        "/caja",
+        "/operacion/stock",
+        "/reportes"
+      ],
+      "personas": [
+        "owner",
+        "co_owner",
+        "manager",
+        "reception",
+        "housekeeping"
+      ],
+      "device_profiles": [
+        "desktop-chrome-current",
+        "mobile-chrome-emulation-390x844"
+      ],
+      "mutation_policy": "synthetic-tagged",
+      "expected_operational_observation": "Operaciones criticas funcionan en viewports Apple sin confirmaciones accidentales."
+    },
+    {
+      "operational_case_id": "ops-settings-users",
+      "source_case_ids": [
+        "settings-users"
+      ],
+      "area": "settings",
+      "paths": [
+        "/settings/users"
+      ],
+      "personas": [
+        "owner",
+        "co_owner"
+      ],
+      "device_profiles": [
+        "desktop-chrome-current",
+        "mobile-chrome-emulation-390x844"
+      ],
+      "mutation_policy": "synthetic-tagged",
+      "expected_operational_observation": "Owner y co-owner administran usuarios dentro de su jerarquia."
+    },
+    {
+      "operational_case_id": "ops-settings-permissions",
+      "source_case_ids": [
+        "settings-permissions"
+      ],
+      "area": "settings",
+      "paths": [
+        "/settings/permissions"
+      ],
+      "personas": [
+        "owner",
+        "co_owner"
+      ],
+      "device_profiles": [
+        "desktop-chrome-current",
+        "mobile-chrome-emulation-390x844"
+      ],
+      "mutation_policy": "synthetic-tagged",
+      "expected_operational_observation": "Permisos efectivos coinciden en API, navegacion y controles."
+    },
+    {
+      "operational_case_id": "ops-settings-api-keys",
+      "source_case_ids": [
+        "settings-api-keys"
+      ],
+      "area": "settings",
+      "paths": [
+        "/settings/api-keys"
+      ],
+      "personas": [
+        "owner",
+        "co_owner",
+        "manager",
+        "reception",
+        "housekeeping"
+      ],
+      "device_profiles": [
+        "desktop-chrome-current",
+        "mobile-chrome-emulation-390x844"
+      ],
+      "mutation_policy": "synthetic-tagged",
+      "expected_operational_observation": "Claves se muestran una vez, quedan enmascaradas y exigen proposito."
+    },
+    {
+      "operational_case_id": "ops-settings-connections",
+      "source_case_ids": [
+        "settings-connections"
+      ],
+      "area": "settings",
+      "paths": [
+        "/settings/connections"
+      ],
+      "personas": [
+        "owner",
+        "co_owner",
+        "manager",
+        "reception",
+        "housekeeping"
+      ],
+      "device_profiles": [
+        "desktop-chrome-current",
+        "mobile-chrome-emulation-390x844"
+      ],
+      "mutation_policy": "synthetic-tagged",
+      "expected_operational_observation": "Conexiones desactivadas no leen credenciales ni llaman proveedores."
+    },
+    {
+      "operational_case_id": "ops-settings-whatsapp",
+      "source_case_ids": [
+        "settings-whatsapp"
+      ],
+      "area": "settings",
+      "paths": [
+        "/settings/whatsapp"
+      ],
+      "personas": [
+        "owner",
+        "co_owner",
+        "manager",
+        "reception",
+        "housekeeping"
+      ],
+      "device_profiles": [
+        "desktop-chrome-current",
+        "mobile-chrome-emulation-390x844"
+      ],
+      "mutation_policy": "synthetic-tagged",
+      "expected_operational_observation": "WhatsApp no confirma pagos sin evidencia autentica del proveedor."
+    },
+    {
+      "operational_case_id": "ops-settings-hotel",
+      "source_case_ids": [
+        "settings-hotel"
+      ],
+      "area": "settings",
+      "paths": [
+        "/settings",
+        "/settings/hotel"
+      ],
+      "personas": [
+        "owner",
+        "co_owner",
+        "manager",
+        "reception",
+        "housekeeping"
+      ],
+      "device_profiles": [
+        "desktop-chrome-current",
+        "mobile-chrome-emulation-390x844"
+      ],
+      "mutation_policy": "synthetic-tagged",
+      "expected_operational_observation": "Configuracion hotelera valida, guarda y persiste solo para roles autorizados."
+    },
+    {
+      "operational_case_id": "ops-settings-security",
+      "source_case_ids": [
+        "settings-security"
+      ],
+      "area": "settings",
+      "paths": [
+        "/settings/security"
+      ],
+      "personas": [
+        "owner",
+        "co_owner",
+        "manager",
+        "reception",
+        "housekeeping"
+      ],
+      "device_profiles": [
+        "desktop-chrome-current",
+        "mobile-chrome-emulation-390x844"
+      ],
+      "mutation_policy": "synthetic-tagged",
+      "expected_operational_observation": "Seguridad muestra datos reales redactados y permite revocar sesiones propias."
+    },
+    {
+      "operational_case_id": "ops-settings-subscription",
+      "source_case_ids": [
+        "settings-subscription"
+      ],
+      "area": "settings",
+      "paths": [
+        "/settings/subscription"
+      ],
+      "personas": [
+        "owner",
+        "co_owner",
+        "manager",
+        "reception",
+        "housekeeping"
+      ],
+      "device_profiles": [
+        "desktop-chrome-current",
+        "mobile-chrome-emulation-390x844"
+      ],
+      "mutation_policy": "synthetic-tagged",
+      "expected_operational_observation": "Suscripcion muestra estado real sin checkout externo."
+    },
+    {
+      "operational_case_id": "ops-settings-assistant",
+      "source_case_ids": [
+        "settings-assistant"
+      ],
+      "area": "settings",
+      "paths": [
+        "/settings/assistant"
+      ],
+      "personas": [
+        "owner",
+        "co_owner",
+        "manager",
+        "reception",
+        "housekeeping"
+      ],
+      "device_profiles": [
+        "desktop-chrome-current",
+        "mobile-chrome-emulation-390x844"
+      ],
+      "mutation_policy": "synthetic-tagged",
+      "expected_operational_observation": "El asistente desactivado no llama modelos y explica el estado."
+    },
+    {
+      "operational_case_id": "ops-settings-tests",
+      "source_case_ids": [
+        "settings-tests"
+      ],
+      "area": "settings",
+      "paths": [
+        "/settings/tests"
+      ],
+      "personas": [
+        "owner",
+        "co_owner",
+        "manager",
+        "reception",
+        "housekeeping"
+      ],
+      "device_profiles": [
+        "desktop-chrome-current",
+        "mobile-chrome-emulation-390x844"
+      ],
+      "mutation_policy": "synthetic-tagged",
+      "expected_operational_observation": "Las pruebas de integracion crean solo borradores locales no pagables."
+    },
+    {
+      "operational_case_id": "ops-settings-companies",
+      "source_case_ids": [
+        "settings-companies"
+      ],
+      "area": "settings",
+      "paths": [
+        "/settings/companies"
+      ],
+      "personas": [
+        "owner",
+        "co_owner",
+        "manager",
+        "reception",
+        "housekeeping"
+      ],
+      "device_profiles": [
+        "desktop-chrome-current",
+        "mobile-chrome-emulation-390x844"
+      ],
+      "mutation_policy": "synthetic-tagged",
+      "expected_operational_observation": "Empresas y documentos son operables por owner, co-owner y manager dentro del hotel."
+    },
+    {
+      "operational_case_id": "ops-public-api-key-contract",
+      "source_case_ids": [
+        "public-api-key-contract"
+      ],
+      "area": "security",
+      "paths": [
+        "Public booking and WhatsApp API"
+      ],
+      "personas": [
+        "owner",
+        "co_owner",
+        "manager",
+        "reception",
+        "housekeeping"
+      ],
+      "device_profiles": [
+        "desktop-chrome-current",
+        "mobile-chrome-emulation-390x844"
+      ],
+      "mutation_policy": "synthetic-tagged",
+      "expected_operational_observation": "Cada API publica exige proposito, hotel y operacion correctos."
+    },
+    {
+      "operational_case_id": "ops-scale-capacity-gate",
+      "source_case_ids": [
+        "scale-capacity-gate"
+      ],
+      "area": "capacity",
+      "paths": [
+        "isolated preview API"
+      ],
+      "personas": [
+        "master-admin"
+      ],
+      "device_profiles": [
+        "desktop-chrome-current",
+        "mobile-chrome-emulation-390x844"
+      ],
+      "mutation_policy": "read-only",
+      "expected_operational_observation": "Capacidad solo se mide en infraestructura aislada y nunca en dominios compartidos."
+    },
+    {
+      "operational_case_id": "ops-master-admin-login",
+      "source_case_ids": [
+        "master-admin-login"
+      ],
+      "area": "master-admin",
+      "paths": [
+        "/adminpmsmaster/login"
+      ],
+      "personas": [
+        "master-admin"
+      ],
+      "device_profiles": [
+        "desktop-chrome-current",
+        "mobile-chrome-emulation-390x844"
+      ],
+      "mutation_policy": "synthetic-tagged",
+      "expected_operational_observation": "Master-admin autentica en un limite separado y auditable."
+    },
+    {
+      "operational_case_id": "ops-master-admin-pages",
+      "source_case_ids": [
+        "master-admin-pages"
+      ],
+      "area": "master-admin",
+      "paths": [
+        "/adminpmsmaster/dashboard",
+        "/adminpmsmaster/billing",
+        "/adminpmsmaster/email",
+        "/adminpmsmaster/stripe",
+        "/adminpmsmaster/audit"
+      ],
+      "personas": [
+        "master-admin"
+      ],
+      "device_profiles": [
+        "desktop-chrome-current",
+        "mobile-chrome-emulation-390x844"
+      ],
+      "mutation_policy": "synthetic-tagged",
+      "expected_operational_observation": "Panel master funciona sin ejecutar email, Stripe ni billing externo."
+    }
+  ]
+}

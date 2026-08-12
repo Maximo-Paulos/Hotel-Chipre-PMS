@@ -98,27 +98,6 @@ class WhatsAppPaymentLinkCreate(BaseModel):
         return PaymentLinkCreate(**self.model_dump())
 
 
-class WhatsAppPaymentConfirmation(BaseModel):
-    payment_link_id: int
-    provider: str = "mercado_pago"
-    webhook_id: str = Field(..., min_length=1, max_length=200)
-    payment_id: str = Field(..., min_length=1, max_length=200)
-    status: str = Field(default="approved", min_length=1, max_length=40)
-    amount: Decimal = Field(..., gt=Decimal("0"))
-    currency: str = Field(default="ARS", min_length=3, max_length=3)
-    raw_payload: dict[str, Any] = Field(default_factory=dict)
-
-    @field_validator("provider")
-    @classmethod
-    def normalize_provider(cls, value: str) -> str:
-        return (value or "mercado_pago").strip().lower()
-
-    @field_validator("currency")
-    @classmethod
-    def normalize_confirmation_currency(cls, value: str) -> str:
-        return value.strip().upper()
-
-
 class WhatsAppPaymentConfirmationResponse(BaseModel):
     status: str
     duplicate: bool

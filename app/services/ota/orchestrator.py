@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.models.ota_core import OTAConnection, OTAProvider, OTASyncEvent, OTASyncJob
 from app.services.ota.contracts import OTAAdapterContext, OTAOperationResult, OTAProviderAdapter
+from app.services.external_effects_policy import require_external_connections
 
 
 class OTAOrchestratorError(Exception):
@@ -33,6 +34,8 @@ class OTAOrchestratorService:
         return adapter
 
     def build_context(self, db: Session, connection_id: int) -> OTAAdapterContext:
+        # Before loading provider auth_config_encrypted into process memory.
+        require_external_connections("OTA adapter context loading")
         connection = db.get(OTAConnection, connection_id)
         if connection is None:
             raise OTAOrchestratorError(f"OTA connection {connection_id} not found")
@@ -104,6 +107,8 @@ class OTAOrchestratorService:
         return event
 
     def verify_connection(self, db: Session, connection_id: int) -> OTAOperationResult:
+        # Before queries, credential loading, job persistence, or adapter calls.
+        require_external_connections("OTA connection verification")
         connection = db.get(OTAConnection, connection_id)
         if connection is None:
             raise OTAOrchestratorError(f"OTA connection {connection_id} not found")

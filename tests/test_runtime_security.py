@@ -4,6 +4,9 @@ from app.config import Settings, get_settings, validate_runtime_security
 def test_validate_runtime_security_rejects_default_production_secrets():
     settings = Settings(
         APP_ENV="production",
+        EXTERNAL_EFFECTS_ENABLED=True,
+        INBOUND_PROVIDER_EVENTS_ENABLED=True,
+        GOOGLE_LOGIN_ENABLED=False,
         JWT_SECRET="change-me",
         MASTER_ADMIN_PIN="1234",
         APP_BASE_URL="http://localhost:8040",
@@ -33,6 +36,9 @@ def test_validate_runtime_security_rejects_missing_mp_webhook_when_mp_configured
     """MERCADOPAGO_WEBHOOK_SECRET is required only when MP_ACCESS_TOKEN is set."""
     settings = Settings(
         APP_ENV="production",
+        EXTERNAL_EFFECTS_ENABLED=True,
+        INBOUND_PROVIDER_EVENTS_ENABLED=True,
+        GOOGLE_LOGIN_ENABLED=False,
         JWT_SECRET="super-secret-value-for-production-1234567890",
         MASTER_ADMIN_PIN="654321",
         APP_BASE_URL="https://hotel-chipre.example.com",
@@ -59,12 +65,20 @@ def test_validate_runtime_security_ignores_incomplete_optional_integrations():
     """Partial integration env vars should not block production startup."""
     settings = Settings(
         APP_ENV="production",
+        EXTERNAL_EFFECTS_ENABLED=False,
+        INBOUND_PROVIDER_EVENTS_ENABLED=False,
+        GOOGLE_LOGIN_ENABLED=False,
+        CONNECTIONS_ENABLED=False,
+        AI_ENABLED=False,
+        AI_PROVIDER="disabled",
+        GEMMA_ENABLED=False,
+        GEMMA_PROVIDER="disabled",
         JWT_SECRET="super-secret-value-for-production-1234567890",
         MASTER_ADMIN_PIN="654321",
         APP_BASE_URL="https://hotel-chipre.example.com",
         DISTRIBUTED_LOCK_REQUIRED=True,
         INTEGRATIONS_ENCRYPTION_KEY="fRb9jE74bWw5gAKpNwZrl_uCWhsx2Nl7fNL1jK5vLG8=",
-        EMAIL_PROVIDER="resend",
+        EMAIL_PROVIDER="null",
         RESEND_API_KEY="re_test_key",
         SYSTEM_EMAIL_FROM="Hotel Chipre PMS <noreply@auth.hotels-pms.com>",
         SYSTEM_EMAIL_REPLY_TO="hotelxpms@gmail.com",
@@ -84,6 +98,9 @@ def test_validate_runtime_security_rejects_localhost_redirect_when_service_confi
     """OAuth redirect URIs are only validated when the corresponding service credentials are set."""
     settings = Settings(
         APP_ENV="production",
+        EXTERNAL_EFFECTS_ENABLED=True,
+        INBOUND_PROVIDER_EVENTS_ENABLED=False,
+        GOOGLE_LOGIN_ENABLED=False,
         JWT_SECRET="super-secret-value-for-production-1234567890",
         MASTER_ADMIN_PIN="654321",
         APP_BASE_URL="https://hotel-chipre.example.com",
@@ -109,12 +126,20 @@ def test_validate_runtime_security_rejects_localhost_redirect_when_service_confi
 def test_validate_runtime_security_accepts_strong_production_settings():
     settings = Settings(
         APP_ENV="production",
+        EXTERNAL_EFFECTS_ENABLED=False,
+        INBOUND_PROVIDER_EVENTS_ENABLED=False,
+        GOOGLE_LOGIN_ENABLED=False,
+        CONNECTIONS_ENABLED=False,
+        AI_ENABLED=False,
+        AI_PROVIDER="disabled",
+        GEMMA_ENABLED=False,
+        GEMMA_PROVIDER="disabled",
         JWT_SECRET="super-secret-value-for-production-1234567890",
         MASTER_ADMIN_PIN="654321",
         APP_BASE_URL="https://hotel-chipre.example.com",
         DISTRIBUTED_LOCK_REQUIRED=True,
         INTEGRATIONS_ENCRYPTION_KEY="fRb9jE74bWw5gAKpNwZrl_uCWhsx2Nl7fNL1jK5vLG8=",
-        EMAIL_PROVIDER="resend",
+        EMAIL_PROVIDER="null",
         RESEND_API_KEY="re_test_key",
         SYSTEM_EMAIL_FROM="Hotel Chipre PMS <noreply@auth.hotels-pms.com>",
         SYSTEM_EMAIL_REPLY_TO="hotelxpms@gmail.com",
@@ -126,6 +151,69 @@ def test_validate_runtime_security_accepts_strong_production_settings():
 
     validate_runtime_security(settings)
     get_settings.cache_clear()
+
+
+def test_validate_runtime_security_rejects_unsafe_production_sandbox_profile():
+    base = {
+        "APP_ENV": "production",
+        "EXTERNAL_EFFECTS_ENABLED": False,
+        "INBOUND_PROVIDER_EVENTS_ENABLED": False,
+        "GOOGLE_LOGIN_ENABLED": False,
+        "CONNECTIONS_ENABLED": False,
+        "AI_ENABLED": False,
+        "AI_PROVIDER": "disabled",
+        "GEMMA_ENABLED": False,
+        "GEMMA_PROVIDER": "disabled",
+        "PAYPAL_MODE": "sandbox",
+        "EMAIL_PROVIDER": "null",
+        "JWT_SECRET": "super-secret-value-for-production-1234567890",
+        "MASTER_ADMIN_PIN": "654321",
+        "APP_BASE_URL": "https://hotel-chipre.example.com",
+        "DISTRIBUTED_LOCK_REQUIRED": True,
+        "INTEGRATIONS_ENCRYPTION_KEY": "fRb9jE74bWw5gAKpNwZrl_uCWhsx2Nl7fNL1jK5vLG8=",
+    }
+    unsafe = {
+        "INBOUND_PROVIDER_EVENTS_ENABLED": True,
+        "GOOGLE_LOGIN_ENABLED": True,
+        "CONNECTIONS_ENABLED": True,
+        "AI_ENABLED": None,
+        "AI_PROVIDER": "openai",
+        "GEMMA_ENABLED": True,
+        "GEMMA_PROVIDER": "google_gemini_api",
+        "PAYPAL_MODE": "live",
+        "EMAIL_PROVIDER": "resend",
+    }
+
+    for field, value in unsafe.items():
+        settings = Settings(**{**base, field: value})
+        try:
+            validate_runtime_security(settings)
+        except RuntimeError as exc:
+            assert field in str(exc)
+        else:
+            raise AssertionError(f"Production sandbox must reject {field}={value!r}")
+
+
+def test_validate_runtime_security_requires_explicit_external_policy_flags():
+    settings = Settings(
+        APP_ENV="production",
+        JWT_SECRET="super-secret-value-for-production-1234567890",
+        MASTER_ADMIN_PIN="654321",
+        APP_BASE_URL="https://hotel-chipre.example.com",
+        DISTRIBUTED_LOCK_REQUIRED=True,
+        INTEGRATIONS_ENCRYPTION_KEY="fRb9jE74bWw5gAKpNwZrl_uCWhsx2Nl7fNL1jK5vLG8=",
+        EMAIL_PROVIDER="null",
+    )
+
+    try:
+        validate_runtime_security(settings)
+    except RuntimeError as exc:
+        message = str(exc)
+        assert "EXTERNAL_EFFECTS_ENABLED" in message
+        assert "INBOUND_PROVIDER_EVENTS_ENABLED" in message
+        assert "GOOGLE_LOGIN_ENABLED" in message
+    else:
+        raise AssertionError("Production must reject an implicit external-effect policy")
 
 
 def test_validate_runtime_security_rejects_weak_master_admin_password_in_production():

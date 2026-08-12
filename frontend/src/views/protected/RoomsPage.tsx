@@ -6,6 +6,7 @@ import { type RoomStatus } from "../../api/rooms";
 import { roomBlockReasonLabel, roomBlockReasonOptions, useRoomBlocks } from "../../hooks/useRoomBlocks";
 import { useSubscriptionStatus } from "../../hooks/useSubscription";
 import { roomStatusLabel, useRooms } from "../../hooks/useRooms";
+import { useEffectivePermissions } from "../../hooks/usePermissions";
 import { useSession } from "../../state/session";
 import { todayIso } from "../../utils/date";
 
@@ -17,7 +18,8 @@ const statusColors: Record<RoomStatus, string> = {
   blocked: "bg-slate-200 text-slate-700"
 };
 
-const statusOptions: RoomStatus[] = ["available", "occupied", "cleaning"];
+const statusOptions: RoomStatus[] = ["available", "occupied", "cleaning", "maintenance", "blocked"];
+const cleaningStatusOptions: RoomStatus[] = ["available", "cleaning"];
 
 type BlockFormValues = {
   room_id: string;
@@ -39,17 +41,16 @@ const emptyBlockForm = (): BlockFormValues => ({
 
 export function RoomsPage() {
   const { session } = useSession();
-  // Only owner/co_owner/manager can PATCH room status or manage room blocks
-  // (see require_roles in app/api/rooms.py and PERMISSION_ROOM_BLOCK). Reception
-  // and housekeeping must see room state as read-only instead of controls that
-  // always fail with a permission error.
-  // C4: intentionally reads session.role (not baseRole) -- these controls
-  // only ever hide a button the backend would reject anyway (no data fetch
-  // it gates), so letting an owner preview "what a receptionist sees here"
-  // via "Cambiar vista" is exactly the switcher's job, not a security gap.
-  const canManageRooms = ["owner", "co_owner", "manager"].includes(session.role ?? "");
-  const { roomsQuery, categoriesQuery, updateStatusMutation } = useRooms();
-  const { blocksQuery, createBlockMutation, resolveBlockMutation } = useRoomBlocks();
+  const { hasPermission } = useEffectivePermissions();
+  const isHousekeeping = session.baseRole === "housekeeping";
+  const canManageRoomStatus = ["owner", "co_owner", "manager"].includes(session.baseRole ?? "");
+  const canToggleCleaningStatus = hasPermission("room:cleaning_status");
+  const canCreateBlocks = hasPermission("room_block:create");
+  const canReleaseBlocks = hasPermission("room_block:release");
+  const { roomsQuery, categoriesQuery, updateStatusMutation, updateCleaningStatusMutation } = useRooms({
+    includeCategories: !isHousekeeping
+  });
+  const { blocksQuery, createBlockMutation, resolveBlockMutation } = useRoomBlocks({ enabled: !isHousekeeping });
   const rooms = useMemo(() => roomsQuery.data || [], [roomsQuery.data]);
   const categories = useMemo(() => categoriesQuery.data || [], [categoriesQuery.data]);
   const activeBlocks = useMemo(() => blocksQuery.data || [], [blocksQuery.data]);
@@ -58,7 +59,7 @@ export function RoomsPage() {
   const [pendingBlockId, setPendingBlockId] = useState<number | null>(null);
   const [blockForm, setBlockForm] = useState<BlockFormValues>(() => emptyBlockForm());
   const [blockMessage, setBlockMessage] = useState<string | null>(null);
-  const { data: subscription } = useSubscriptionStatus();
+  const { data: subscription } = useSubscriptionStatus({ enabled: !isHousekeeping });
 
   const writeBlocked = subscription?.can_write === false;
   const inactiveSubscription = subscription && subscription.status !== "active";
@@ -99,19 +100,23 @@ export function RoomsPage() {
   }, [rooms]);
 
   const handleStatusUpdate = (roomId: number, status: RoomStatus) => {
-    if (actionsBlocked) return;
+    if (actionsBlocked || (!canManageRoomStatus && !canToggleCleaningStatus)) return;
     setRoomStatusError(null);
     setPendingRoom(roomId);
-    updateStatusMutation.mutate(
-      { roomId, status },
-      {
-        onError: (error: unknown) => {
-          const detail = error instanceof Error ? error.message : "No se pudo actualizar el estado de la habitación.";
-          setRoomStatusError({ roomId, message: detail });
-        },
-        onSettled: () => setPendingRoom(null)
-      }
-    );
+    const mutationOptions = {
+      onError: (error: unknown) => {
+        const detail = error instanceof Error ? error.message : "No se pudo actualizar el estado de la habitación.";
+        setRoomStatusError({ roomId, message: detail });
+      },
+      onSettled: () => setPendingRoom(null)
+    };
+    if (canManageRoomStatus) {
+      updateStatusMutation.mutate({ roomId, status }, mutationOptions);
+    } else if (status === "available" || status === "cleaning") {
+      updateCleaningStatusMutation.mutate({ roomId, status }, mutationOptions);
+    } else {
+      setPendingRoom(null);
+    }
   };
 
   const handleBlockFormChange = <Field extends keyof BlockFormValues>(field: Field, value: BlockFormValues[Field]) => {
@@ -120,7 +125,7 @@ export function RoomsPage() {
 
   const handleCreateBlock = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (actionsBlocked) return;
+    if (actionsBlocked || !canCreateBlocks) return;
     setBlockMessage(null);
 
     const roomId = Number(blockForm.room_id);
@@ -152,7 +157,7 @@ export function RoomsPage() {
   };
 
   const handleResolveBlock = async (blockId: number) => {
-    if (actionsBlocked) return;
+    if (actionsBlocked || !canReleaseBlocks) return;
     setPendingBlockId(blockId);
     setBlockMessage(null);
     try {
@@ -204,6 +209,10 @@ export function RoomsPage() {
         <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {rooms.map((room) => {
             const category = categoryById.get(room.category_id);
+            const canChangeThisStatus =
+              canManageRoomStatus ||
+              (canToggleCleaningStatus && cleaningStatusOptions.includes(room.status));
+            const availableStatuses = canManageRoomStatus ? statusOptions : cleaningStatusOptions;
             return (
               <div key={room.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="flex items-start justify-between">
@@ -213,36 +222,42 @@ export function RoomsPage() {
                     <p className="text-xs text-slate-500">
                       Piso {room.floor} · {category?.code || room.category?.code || "sin código"}
                     </p>
-                    <p className="text-xs text-slate-600">
+                    {!isHousekeeping && <p className="text-xs text-slate-600">
                       Tarifa hoy:{" "}
                       <span className="font-semibold text-slate-800">
                         ${formatRate(category?.current_rate ?? category?.base_price_per_night ?? room.category?.base_price_per_night)}
                       </span>
                       /noche
-                    </p>
+                    </p>}
                   </div>
                   <span className={`rounded-full px-2 py-1 text-xs font-semibold ${statusColors[room.status]}`}>
                     {roomStatusLabel[room.status]}
                   </span>
                 </div>
                 <p className="mt-3 text-sm text-slate-700">{room.notes || "Sin notas"}</p>
-                {canManageRooms ? (
+                {canChangeThisStatus ? (
                   <div className="mt-4 text-xs text-slate-600">
+                    <label htmlFor={`room-status-${room.id}`} className="mb-1 block font-semibold text-slate-600">
+                      Estado operativo
+                    </label>
                     <select
+                      id={`room-status-${room.id}`}
+                      aria-label={`Estado de habitación ${room.room_number}`}
                       value={room.status}
                       onChange={(e) => handleStatusUpdate(room.id, e.target.value as RoomStatus)}
                       className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-brand-400 focus:outline-none disabled:bg-slate-50"
-                      disabled={actionsBlocked || (pendingRoom === room.id && updateStatusMutation.isPending)}
+                      disabled={actionsBlocked || (pendingRoom === room.id && (updateStatusMutation.isPending || updateCleaningStatusMutation.isPending))}
                     >
-                      {statusOptions.map((status) => (
+                      {availableStatuses.map((status) => (
                         <option key={status} value={status}>
                           {roomStatusLabel[status]}
                         </option>
                       ))}
-                      <option value="maintenance">Mantenimiento</option>
-                      <option value="blocked">Bloqueada</option>
                     </select>
-                    {pendingRoom === room.id && updateStatusMutation.isPending && (
+                    {!canManageRoomStatus && canToggleCleaningStatus && (
+                      <p className="mt-1 text-[11px] text-slate-500">Housekeeping sólo puede alternar Limpieza y Libre.</p>
+                    )}
+                    {pendingRoom === room.id && (updateStatusMutation.isPending || updateCleaningStatusMutation.isPending) && (
                       <p className="mt-2 text-xs text-slate-500">Guardando...</p>
                     )}
                     {roomStatusError?.roomId === room.id && (
@@ -265,7 +280,7 @@ export function RoomsPage() {
         </div>
       </div>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      {!isHousekeeping && <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <p className="text-xs uppercase tracking-wide text-slate-500">Bloqueos</p>
@@ -276,7 +291,7 @@ export function RoomsPage() {
           {blocksQuery.isFetching && <p className="text-xs text-slate-500">Actualizando bloqueos...</p>}
         </div>
 
-        {canManageRooms && (
+        {canCreateBlocks && (
         <form className="mt-4 grid gap-4 rounded-lg border border-slate-200 bg-slate-50 p-4 lg:grid-cols-6" onSubmit={handleCreateBlock}>
           <label className="space-y-1 text-sm lg:col-span-1">
             <span className="text-slate-600">Habitación</span>
@@ -391,7 +406,7 @@ export function RoomsPage() {
                     <h3 className="text-base font-semibold text-slate-900">{roomBlockReasonLabel[block.reason_code]}</h3>
                     <p className="text-xs text-slate-500">{formatBlockDates(block.starts_at, block.ends_at, block.is_indefinite)}</p>
                   </div>
-                  {canManageRooms && (
+                  {canReleaseBlocks && (
                     <button
                       type="button"
                       onClick={() => handleResolveBlock(block.id)}
@@ -412,7 +427,7 @@ export function RoomsPage() {
             </div>
           )}
         </div>
-      </section>
+      </section>}
     </div>
   );
 }

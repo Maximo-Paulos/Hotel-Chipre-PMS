@@ -30,6 +30,15 @@ export type PermissionOverrideResponse = {
   updated_at?: string | null;
 };
 
+export type EffectivePermissionsResponse = {
+  hotel_id: number;
+  role: PermissionRole;
+  permissions: string[];
+};
+
+export const fetchEffectivePermissions = (session?: SessionLike) =>
+  apiFetch<EffectivePermissionsResponse>("/api/permissions/effective", { session });
+
 export const fetchPermissionMatrix = (session?: SessionLike) =>
   apiFetch<PermissionMatrixResponse>("/api/permissions/matrix", { session });
 

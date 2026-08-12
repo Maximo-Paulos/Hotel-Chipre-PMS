@@ -1,8 +1,8 @@
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
 import { buildAuthHeaders } from "../api/client";
 
-type Role = "owner" | "co_owner" | "manager" | "housekeeping" | "receptionist";
+export type Role = "owner" | "co_owner" | "manager" | "housekeeping" | "receptionist";
 
 export type SessionState = {
   userId: string | null;
@@ -11,6 +11,7 @@ export type SessionState = {
   hotelIds?: number[] | null;
   role: Role | null;
   baseRole?: Role | null;
+  permissions?: string[] | null;
   accessToken?: string | null;
   isVerified?: boolean;
 };
@@ -21,6 +22,7 @@ type SessionContextValue = {
   logout: () => void;
   setHotelId: (hotelId: number | null) => void;
   setRole: (role: SessionState["role"]) => void;
+  setPermissions: (permissions: string[], role?: Role | null) => void;
   authHeaders: Record<string, string>;
 };
 
@@ -32,6 +34,7 @@ const EMPTY_SESSION: SessionState = {
   hotelIds: null,
   role: null,
   baseRole: null,
+  permissions: null,
   accessToken: null,
   isVerified: false
 };
@@ -57,6 +60,9 @@ export const normalizeRole = (role?: string | null): Role | null => {
   return null;
 };
 
+export const defaultPathForRole = (role: Role | null | undefined) =>
+  role === "housekeeping" ? "/habitaciones" : "/dashboard";
+
 const loadSession = (): SessionState => {
   if (typeof localStorage === "undefined") return EMPTY_SESSION;
   try {
@@ -76,6 +82,9 @@ const loadSession = (): SessionState => {
       accessToken,
       role: normalizeRole(parsed.role as string | null | undefined),
       baseRole: normalizeRole((parsed.baseRole ?? parsed.role) as string | null | undefined),
+      permissions: Array.isArray(parsed.permissions)
+        ? parsed.permissions.filter((permission): permission is string => typeof permission === "string")
+        : null,
     };
   } catch {
     return EMPTY_SESSION;
@@ -115,6 +124,10 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         (partial.role as Role | null | undefined) ??
         prev.baseRole ??
         null,
+      permissions:
+        partial.permissions !== undefined
+          ? Array.from(new Set((partial.permissions ?? []).filter((permission) => typeof permission === "string"))).sort()
+          : prev.permissions ?? null,
       accessToken: partial.accessToken ?? prev.accessToken ?? null,
       isVerified: partial.isVerified ?? prev.isVerified ?? false,
       hotelIds: partial.hotelIds?.length
@@ -130,16 +143,42 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   };
 
   const setHotelId = (hotelId: number | null) =>
-    setSession((prev) => ({
-      ...prev,
-      hotelId: safeHotelId(hotelId),
-      hotelIds: safeHotelId(hotelId) ? [safeHotelId(hotelId) as number] : prev.hotelIds ?? null
-    }));
+    setSession((prev) => {
+      const nextHotelId = safeHotelId(hotelId);
+      if (!nextHotelId) return prev;
+
+      const authorizedHotelIds = (prev.hotelIds ?? [])
+        .map((id) => safeHotelId(id))
+        .filter((id): id is number => id !== null);
+      if (authorizedHotelIds.length > 0 && !authorizedHotelIds.includes(nextHotelId)) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        hotelId: nextHotelId,
+        // The login response is the source of truth for memberships. Keep the
+        // complete authorized list so switching once does not erase every
+        // other hotel from the selector.
+        hotelIds: prev.hotelIds?.length ? prev.hotelIds : [nextHotelId],
+        permissions: nextHotelId === prev.hotelId ? prev.permissions ?? null : null
+      };
+    });
   const setRole = (role: SessionState["role"]) => setSession((prev) => ({ ...prev, role }));
+  const setPermissions = useCallback((permissions: string[], role?: Role | null) =>
+    setSession((prev) => {
+      const wasPreviewing = Boolean(prev.role && prev.baseRole && prev.role !== prev.baseRole);
+      return {
+        ...prev,
+        role: role && !wasPreviewing ? role : prev.role,
+        baseRole: role ?? prev.baseRole,
+        permissions: Array.from(new Set(permissions.filter((permission) => typeof permission === "string"))).sort()
+      };
+    }), []);
 
   const authHeaders = useMemo(() => buildAuthHeaders(session), [session]);
 
-  const value: SessionContextValue = { session, login, logout, setHotelId, setRole, authHeaders };
+  const value: SessionContextValue = { session, login, logout, setHotelId, setRole, setPermissions, authHeaders };
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }

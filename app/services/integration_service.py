@@ -12,6 +12,10 @@ from sqlalchemy import select
 
 from app.config import get_settings, is_production_mode
 from app.models.integration import IntegrationCatalog, IntegrationConnection, IntegrationEvent
+from app.services.external_effects_policy import (
+    external_connections_enabled,
+    require_external_connections,
+)
 
 GOOGLE_IDENTITY_SCOPES = ["openid", "email", "profile"]
 GMAIL_SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send"
@@ -98,6 +102,7 @@ def list_catalog_with_status(db: Session, hotel_id: int) -> tuple[List[Integrati
 
 
 def get_provider_connection_payload(db: Session, hotel_id: int, provider: str) -> Dict[str, Any]:
+    require_external_connections(f"{provider} credential access")
     seed_catalog(db)
     integration = (
         db.execute(select(IntegrationCatalog).where(IntegrationCatalog.provider == provider))
@@ -123,6 +128,7 @@ def get_provider_connection_payload(db: Session, hotel_id: int, provider: str) -
 
 
 def get_connection_payload(db: Session, hotel_id: int, provider: str) -> Dict[str, Any]:
+    require_external_connections(f"{provider} credential access")
     seed_catalog(db)
     connection = (
         db.execute(
@@ -205,6 +211,7 @@ def _mercadopago_error_message(response: requests.Response) -> str:
 
 
 def validate_mercadopago_credentials(payload: Dict[str, Any]) -> Dict[str, Any]:
+    require_external_connections("Mercado Pago credential validation")
     access_token = str(payload.get("access_token") or "").strip()
     if not access_token:
         raise ValueError("Ingresa un access_token de Mercado Pago para conectar este hotel.")
@@ -229,6 +236,7 @@ def validate_mercadopago_credentials(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _google_userinfo(access_token: str) -> Dict[str, Any]:
+    require_external_connections("Google account validation")
     response = requests.get(
         "https://openidconnect.googleapis.com/v1/userinfo",
         headers={"Authorization": f"Bearer {access_token}"},
@@ -240,6 +248,7 @@ def _google_userinfo(access_token: str) -> Dict[str, Any]:
 
 
 def refresh_gmail_access_token(payload: Dict[str, Any]) -> Dict[str, Any]:
+    require_external_connections("Gmail token refresh")
     refresh_token = str(payload.get("refresh_token") or "").strip()
     if not refresh_token:
         raise ValueError(
@@ -270,6 +279,7 @@ def refresh_gmail_access_token(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def validate_gmail_credentials(payload: Dict[str, Any]) -> Dict[str, Any]:
+    require_external_connections("Gmail credential validation")
     normalized = dict(payload or {})
     access_token = str(normalized.get("access_token") or "").strip()
     if not access_token and normalized.get("token"):
@@ -324,6 +334,7 @@ def ensure_provider_payload(
     *,
     require_connected: bool = True,
 ) -> Dict[str, Any]:
+    require_external_connections(f"{provider} credential access")
     connection = get_connection_record(db, hotel_id, provider)
     if not connection:
         if require_connected:
@@ -363,6 +374,8 @@ def _account_label_from_payload(payload: Dict[str, Any]) -> Optional[str]:
 
 
 def connection_account_label(connection: IntegrationConnection) -> Optional[str]:
+    if not external_connections_enabled():
+        return None
     return _account_label_from_payload(decrypt_payload(connection.auth_payload))
 
 
@@ -371,6 +384,8 @@ def verify_connection_health(
     hotel_id: int,
     integration_id: int,
 ) -> tuple[IntegrationConnection, str]:
+    # Before the connection query and, critically, before auth_payload decrypt.
+    require_external_connections("integration connection health check")
     seed_catalog(db)
     connection = (
         db.execute(
@@ -533,6 +548,7 @@ def build_redirect_url(
     *,
     state: Optional[str] = None,
 ) -> str:
+    require_external_connections(f"{integration.provider} OAuth authorization")
     settings = get_settings()
     if integration.provider == "mercadopago":
         if not settings.MERCADOPAGO_CLIENT_ID or not settings.MERCADOPAGO_CLIENT_SECRET:
@@ -591,6 +607,8 @@ def build_redirect_url(
 
 
 def exchange_token(provider: str, code: str) -> Dict[str, Any]:
+    # Keep before settings credential access and provider traffic.
+    require_external_connections(f"{provider} OAuth token exchange")
     settings = get_settings()
     if provider == "mercadopago":
         resp = requests.post(

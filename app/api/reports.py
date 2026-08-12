@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from app.database import get_db
-from app.dependencies.auth import AuthContext, require_permission, require_roles
+from app.dependencies.auth import AuthContext, require_permission
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.transaction import Transaction, TransactionStatusEnum, PaymentMethodEnum
 from app.models.room import Room, RoomCategory
@@ -24,8 +24,14 @@ from app.services.operational_report_service import (
     nightly_summary as build_nightly_summary,
     nightly_summary_email_body,
     operational_report_recipients,
+    redact_daily_report_financials,
+    redact_nightly_summary_financials,
 )
-from app.services.permission_service import PERMISSION_REPORTS_VIEW
+from app.services.permission_service import (
+    PERMISSION_REPORTS_FINANCIAL_VIEW,
+    PERMISSION_REPORTS_OPERATIONAL_VIEW,
+    resolve,
+)
 
 router = APIRouter(prefix="/api/reports", tags=["Reports"])
 
@@ -34,29 +40,35 @@ router = APIRouter(prefix="/api/reports", tags=["Reports"])
 def operational_daily_report(
     report_date: date = Query(default=None, description="Date for the report (defaults to today)"),
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_VIEW)),
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_OPERATIONAL_VIEW)),
 ):
     if report_date is None:
         report_date = date.today()
-    return build_daily_operational_report(db, context.hotel_id, report_date)
+    report = build_daily_operational_report(db, context.hotel_id, report_date)
+    if resolve(db, context.hotel_id, context.user_role, PERMISSION_REPORTS_FINANCIAL_VIEW):
+        return report
+    return redact_daily_report_financials(report)
 
 
 @router.get("/operational/alerts", response_model=NightlyOperationalSummaryRead)
 def operational_alerts(
     report_date: date = Query(default=None, description="Date for alerts (defaults to today)"),
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_VIEW)),
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_OPERATIONAL_VIEW)),
 ):
     if report_date is None:
         report_date = date.today()
-    return build_nightly_summary(db, context.hotel_id, report_date)
+    summary = build_nightly_summary(db, context.hotel_id, report_date)
+    if resolve(db, context.hotel_id, context.user_role, PERMISSION_REPORTS_FINANCIAL_VIEW):
+        return summary
+    return redact_nightly_summary_financials(summary)
 
 
 @router.post("/operational/nightly-summary/trigger", response_model=OperationalReportDeliveryRead)
 def trigger_nightly_summary_delivery(
     report_date: date = Query(default=None, description="Date for the nightly summary (defaults to today)"),
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_VIEW)),
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_OPERATIONAL_VIEW)),
 ):
     if report_date is None:
         report_date = date.today()
@@ -76,12 +88,22 @@ def trigger_nightly_summary_delivery(
     except HotelOutboundEmailError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
-    return OperationalReportDeliveryRead(
+    response = OperationalReportDeliveryRead(
         delivered=True,
         channel=result.channel,
         sender_email=result.sender_email,
         provider_message_id=result.provider_message_id,
         recipients=recipients,
+    )
+    if resolve(db, context.hotel_id, context.user_role, PERMISSION_REPORTS_FINANCIAL_VIEW):
+        return response
+    return response.model_copy(
+        update={
+            "channel": None,
+            "sender_email": None,
+            "provider_message_id": None,
+            "recipients": [],
+        }
     )
 
 
@@ -89,7 +111,7 @@ def trigger_nightly_summary_delivery(
 def daily_report(
     report_date: date = Query(default=None, description="Date for the report (defaults to today)"),
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
 ):
     """
     Night Audit / Daily Report.
@@ -222,7 +244,7 @@ def occupancy_report(
     start_date: date = Query(default=None),
     end_date: date = Query(default=None),
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_OPERATIONAL_VIEW)),
 ):
     """Occupancy report for a date range (default: last 30 days)."""
     if start_date is None:
@@ -272,7 +294,7 @@ def revenue_report(
     start_date: date = Query(default=None),
     end_date: date = Query(default=None),
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
 ):
     """Revenue report for a date range."""
     if start_date is None:

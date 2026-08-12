@@ -58,9 +58,15 @@ export function useGuestUpdate() {
   return useMutation({
     mutationFn: ({ guestId, payload }: { guestId: number; payload: GuestUpdatePayload }) =>
       updateGuest(guestId, payload, session),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["guests", session.hotelId] });
-      queryClient.invalidateQueries({ queryKey: ["guest", session.hotelId, variables.guestId] });
+    onSuccess: async (_, variables) => {
+      // Keep the mutation pending until the refreshed guest data is rendered.
+      // GuestsPage resets its form feedback when the selected record changes;
+      // awaiting these invalidations prevents a successful save message from
+      // being immediately cleared by the background list refresh.
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["guests", session.hotelId] }),
+        queryClient.invalidateQueries({ queryKey: ["guest", session.hotelId, variables.guestId] })
+      ]);
     }
   });
 }

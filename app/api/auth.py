@@ -41,8 +41,13 @@ from app.master_admin.email_provider import MasterEmailConnectionError
 from app.services import onboarding_service
 from app.services.hotel_service import get_or_create_hotel_for_owner, get_memberships_for_user
 from app.services.security import create_access_token, hash_password, verify_password
-from app.dependencies.auth import get_current_user
+from app.dependencies.auth import AuthContext, get_auth_context
 from app.config import get_settings
+from app.services.external_effects_policy import (
+    GoogleLoginDisabled,
+    require_google_login,
+)
+from app.services.permission_service import get_effective_permissions
 
 router = APIRouter(prefix="/api/auth", tags=["Auth"])
 LOGGER = logging.getLogger(__name__)
@@ -103,6 +108,11 @@ def _build_auth_response(db: Session, user: User, requested_hotel_id: int | None
         raise HTTPException(status_code=403, detail="No tenes acceso al hotel solicitado")
     hotel_id = requested_hotel_id if requested_hotel_id is not None else _pick_default_hotel_id(db, hotel_ids)
     active_membership = memberships_by_hotel[hotel_id]
+    effective_permissions = get_effective_permissions(
+        db,
+        hotel_id=hotel_id,
+        role=active_membership.role,
+    )
     token = create_access_token(
         subject=user.id,
         extra={
@@ -123,7 +133,9 @@ def _build_auth_response(db: Session, user: User, requested_hotel_id: int | None
             role=active_membership.role,
             is_verified=user.is_verified,
             is_active=user.is_active,
+            permissions=effective_permissions,
         ),
+        permissions=effective_permissions,
         requires_verification=not user.is_verified,
         hotel_ids=hotel_ids,
     )
@@ -238,6 +250,13 @@ def google_login(payload: GoogleAuthRequest, db: Session = Depends(get_db)):
     application") with authorized JavaScript origins for the real app
     domains (no redirect URI needed, this flow doesn't use one).
     """
+    try:
+        # Before constructing Google's request transport, verifying the token,
+        # querying a user, or creating an account.
+        require_google_login()
+    except GoogleLoginDisabled as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
     settings = get_settings()
     client_id = getattr(settings, "GOOGLE_CLIENT_ID", "") or ""
     if not client_id:
@@ -371,15 +390,22 @@ def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db))
 
 @router.get("/me", response_model=UserInfo)
 def me(
-    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    context: AuthContext = Depends(get_auth_context),
 ):
-    memberships = get_memberships_for_user(db, current_user.id)
-    active_membership = next((m for m in memberships if m.status == "active"), None)
+    current_user = db.get(User, context.user_id)
+    if current_user is None:
+        raise HTTPException(status_code=401, detail="Usuario no valido")
+    effective_permissions = get_effective_permissions(
+        db,
+        hotel_id=context.hotel_id,
+        role=context.user_role,
+    )
     return UserInfo(
         id=current_user.id,
         email=current_user.email,
-        role=active_membership.role if active_membership else (current_user.role or "owner"),
+        role=context.user_role or (current_user.role or "owner"),
         is_verified=current_user.is_verified,
         is_active=current_user.is_active,
+        permissions=effective_permissions,
     )

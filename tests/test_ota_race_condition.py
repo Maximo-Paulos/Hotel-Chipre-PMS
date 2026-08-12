@@ -3,6 +3,7 @@ Tests for OTA Integration — Race condition handling and webhook processing.
 """
 import pytest
 from datetime import date
+from app.config import get_settings
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.guest import Guest
 from app.models.reservation import Reservation, ReservationStatusEnum
@@ -11,6 +12,14 @@ from app.models.hotel_config import HotelConfiguration
 from app.services.ota_service import OTAIntegrationService, OTAError
 from app.services.reservation_service import create_reservation, ReservationError
 from app.schemas.reservation import ReservationCreate
+
+
+@pytest.fixture(autouse=True)
+def _enable_mocked_inbound_events(monkeypatch):
+    monkeypatch.setenv("INBOUND_PROVIDER_EVENTS_ENABLED", "true")
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
 
 
 class TestBookingWebhook:

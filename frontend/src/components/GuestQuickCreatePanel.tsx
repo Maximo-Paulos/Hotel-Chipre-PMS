@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { hasValidSession } from "../api/client";
 import { listGuests, type Guest, type GuestPayload } from "../api/guests";
 import { useGuest, useGuestCreate } from "../hooks/useGuests";
+import { useEffectivePermissions } from "../hooks/usePermissions";
 import { useSession } from "../state/session";
 
 // Shared "buscar huésped existente (por nombre/DNI) o alta rápida" sub-form.
@@ -118,6 +119,9 @@ export default function GuestQuickCreatePanel({
   onError
 }: GuestQuickCreatePanelProps) {
   const { session } = useSession();
+  const { hasPermission } = useEffectivePermissions();
+  const canViewGuests = hasPermission("guest:view");
+  const canCreateGuests = hasPermission("guest:create");
   const guestMutation = useGuestCreate();
 
   const [query, setQuery] = useState("");
@@ -132,7 +136,7 @@ export default function GuestQuickCreatePanel({
   }, [query]);
 
   const searchEnabled =
-    hasValidSession(session) && !guestIdDisabled && !guestId && debouncedQuery.length >= GUEST_SEARCH_MIN_LENGTH;
+    hasValidSession(session) && canViewGuests && !guestIdDisabled && !guestId && debouncedQuery.length >= GUEST_SEARCH_MIN_LENGTH;
 
   const searchQuery = useQuery({
     queryKey: ["guest-search", session.hotelId, debouncedQuery],
@@ -145,7 +149,7 @@ export default function GuestQuickCreatePanel({
   // reservation being edited) and any case where guestId is already set but
   // this component never fetched the full Guest object itself -- fetch it
   // by id so the card can show a name instead of a raw number.
-  const needsFetch = Boolean(guestId) && !selectedGuest;
+  const needsFetch = canViewGuests && Boolean(guestId) && !selectedGuest;
   const fetchedGuestQuery = useGuest(needsFetch ? Number(guestId) : undefined);
   const confirmedGuest = selectedGuest ?? (needsFetch ? fetchedGuestQuery.data ?? null : null);
 
@@ -170,6 +174,7 @@ export default function GuestQuickCreatePanel({
   };
 
   const handleCreateGuest = () => {
+    if (!canCreateGuests) return;
     guestMutation.mutate(
       {
         first_name: form.first_name.trim(),
@@ -230,7 +235,7 @@ export default function GuestQuickCreatePanel({
             </button>
           </div>
         </div>
-      ) : showQuickCreate && !guestIdDisabled ? (
+      ) : showQuickCreate && canCreateGuests && !guestIdDisabled ? (
         <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
           <div className="flex items-center justify-between">
             <div>
@@ -348,7 +353,7 @@ export default function GuestQuickCreatePanel({
             ) : (
               <p className="text-xs text-slate-500">No se encontraron huéspedes para "{debouncedQuery}".</p>
             ))}
-          {!guestIdDisabled && (
+          {!guestIdDisabled && canCreateGuests && (
             <button
               type="button"
               onClick={() => setShowQuickCreate(true)}
@@ -357,6 +362,9 @@ export default function GuestQuickCreatePanel({
             >
               ¿No lo encontrás? Crear huésped nuevo
             </button>
+          )}
+          {!canViewGuests && !canCreateGuests && (
+            <p className="text-xs text-slate-500">No tenés permisos para consultar ni crear huéspedes.</p>
           )}
         </div>
       )}

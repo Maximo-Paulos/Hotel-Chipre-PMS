@@ -13,6 +13,10 @@ import httpx
 from app.tasks.celery_app import celery_app
 from app.config import get_settings
 from app.services.tenant_context import set_tenant_hotel_context
+from app.services.external_effects_policy import (
+    external_connections_enabled,
+    require_external_connections,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +48,11 @@ def push_availability_update(
         end_date_str: End of the date range (ISO format).
         database_url: Optional DB URL override for testing.
     """
+    if not external_connections_enabled():
+        return {
+            "status": "skipped",
+            "reason": "OTA outbound effects disabled by EXTERNAL_EFFECTS_ENABLED",
+        }
     try:
         from app.database import get_engine, Base
         from sqlalchemy.orm import sessionmaker
@@ -115,6 +124,8 @@ def _push_to_booking(availability: list[dict], category_id: int) -> dict:
     In production, this would use the Booking.com XML/JSON API.
     This implementation shows the complete request structure.
     """
+    # Before reading credentials or constructing a network client.
+    require_external_connections("Booking.com availability push")
     settings = get_settings()
 
     # Build Booking.com availability XML/JSON payload
@@ -153,6 +164,8 @@ def _push_to_expedia(availability: list[dict], category_id: int) -> dict:
     In production, this would use the Expedia Product API.
     This implementation shows the complete request structure.
     """
+    # Before reading credentials or constructing a network client.
+    require_external_connections("Expedia availability push")
     settings = get_settings()
 
     payload = {
@@ -197,6 +210,11 @@ def sync_all_availability(self, days_ahead: int = 90, database_url: Optional[str
     Full sync: push availability for ALL categories for the next N days.
     Typically run as a periodic task (e.g., every 15 minutes).
     """
+    if not external_connections_enabled():
+        return {
+            "status": "skipped",
+            "reason": "OTA outbound effects disabled by EXTERNAL_EFFECTS_ENABLED",
+        }
     try:
         from app.database import get_engine
         from sqlalchemy.orm import sessionmaker

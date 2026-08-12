@@ -22,7 +22,7 @@ def client_with_db():
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
-    ctx = {"hotel_id": 1, "role": "manager"}
+    ctx = {"hotel_id": 1, "role": "receptionist"}
 
     def override_get_db():
         try:
@@ -31,7 +31,13 @@ def client_with_db():
             pass
 
     def override_auth():
-        return AuthContext(hotel_id=ctx["hotel_id"], user_id=1, user_email="manager@test.com", user_role=ctx["role"], is_verified=True)
+        return AuthContext(
+            hotel_id=ctx["hotel_id"],
+            user_id=1,
+            user_email="receptionist@test.com",
+            user_role=ctx["role"],
+            is_verified=True,
+        )
 
     fastapi_app.dependency_overrides[get_db] = override_get_db
     fastapi_app.dependency_overrides[get_auth_context] = override_auth
@@ -112,3 +118,17 @@ def test_payment_links_api_cross_hotel_isolation(client_with_db):
     assert listed.json() == []
     cancelled = client.post(f"/api/payment-links/{link_id}/cancel", json={"reason": "wrong_hotel"})
     assert cancelled.status_code == 404
+
+
+def test_payment_links_api_rejects_manager_without_cash_operate(client_with_db):
+    client, db, ctx = client_with_db
+    reservation = _reservation(db, 1, "API-MANAGER-DENIED")
+    ctx["role"] = "manager"
+
+    response = client.post(
+        "/api/payment-links",
+        json={"reservation_id": reservation.id, "requested_amount": "25.00"},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "No tenes permisos para esta accion"

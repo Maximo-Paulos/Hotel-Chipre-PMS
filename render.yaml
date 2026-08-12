@@ -25,6 +25,14 @@ services:
     envVars:
       - key: APP_ENV
         value: production
+      - key: EXTERNAL_EFFECTS_ENABLED
+        value: "false"
+      - key: INBOUND_PROVIDER_EVENTS_ENABLED
+        value: "false"
+      - key: CONNECTIONS_ENABLED
+        value: "false"
+      - key: GOOGLE_LOGIN_ENABLED
+        value: "false"
       - key: DATABASE_URL
         sync: false   # set manually in Render dashboard (Supabase connection string)
       - key: JWT_SECRET
@@ -52,7 +60,7 @@ services:
       - key: PAYPAL_WEBHOOK_ID
         sync: false
       - key: EMAIL_PROVIDER
-        value: resend
+        value: "null"
       - key: RESEND_API_KEY
         sync: false   # set in Render dashboard; required when EMAIL_PROVIDER=resend
       - key: SYSTEM_EMAIL_FROM
@@ -61,8 +69,14 @@ services:
         sync: false   # set in Render dashboard; required when EMAIL_PROVIDER=resend
       - key: GEMMA_ENABLED
         value: "false"
+      - key: GEMMA_PROVIDER
+        value: disabled
       - key: AI_ENABLED
         value: "false"
+      - key: AI_PROVIDER
+        value: disabled
+      - key: PAYPAL_MODE
+        value: sandbox
       - key: ANALYTICS_EXPORTS_DIR
         value: /var/exports/analytics
       - key: REDIS_URL
@@ -116,6 +130,26 @@ services:
     envVars:
       - key: APP_ENV
         value: production
+      - key: EXTERNAL_EFFECTS_ENABLED
+        value: "false"
+      - key: INBOUND_PROVIDER_EVENTS_ENABLED
+        value: "false"
+      - key: CONNECTIONS_ENABLED
+        value: "false"
+      - key: GOOGLE_LOGIN_ENABLED
+        value: "false"
+      - key: EMAIL_PROVIDER
+        value: "null"
+      - key: AI_ENABLED
+        value: "false"
+      - key: AI_PROVIDER
+        value: disabled
+      - key: GEMMA_ENABLED
+        value: "false"
+      - key: GEMMA_PROVIDER
+        value: disabled
+      - key: PAYPAL_MODE
+        value: sandbox
       - key: DATABASE_URL
         sync: false
       - key: REDIS_URL
@@ -161,6 +195,26 @@ services:
     envVars:
       - key: APP_ENV
         value: production
+      - key: EXTERNAL_EFFECTS_ENABLED
+        value: "false"
+      - key: INBOUND_PROVIDER_EVENTS_ENABLED
+        value: "false"
+      - key: CONNECTIONS_ENABLED
+        value: "false"
+      - key: GOOGLE_LOGIN_ENABLED
+        value: "false"
+      - key: EMAIL_PROVIDER
+        value: "null"
+      - key: AI_ENABLED
+        value: "false"
+      - key: AI_PROVIDER
+        value: disabled
+      - key: GEMMA_ENABLED
+        value: "false"
+      - key: GEMMA_PROVIDER
+        value: disabled
+      - key: PAYPAL_MODE
+        value: sandbox
       - key: DATABASE_URL
         sync: false
       - key: REDIS_URL

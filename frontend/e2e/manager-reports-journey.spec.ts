@@ -30,7 +30,7 @@ async function login(page: Page) {
   await expect(page.getByTestId("session-role")).toHaveText("Manager");
 }
 
-test("manager reads a daily report whose arrivals and pending balance match a reservation just created", async ({
+test("manager reads the operational arrival without receiving the reservation's financial balance", async ({
   page
 }) => {
   const suffix = Date.now().toString();
@@ -96,6 +96,8 @@ test("manager reads a daily report whose arrivals and pending balance match a re
   await page.goto("/reportes");
   await expect(page.getByRole("heading", { name: "Reportes", exact: true })).toBeVisible();
   await expect(page.getByText("Llegadas del dia", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("financial-report")).toHaveCount(0);
+  await expect(page.getByText(/Pagos pendientes/)).toHaveCount(0);
 
   // `section` filtered by text also matches the outer grid wrapper (which
   // contains every card, including Alertas -- which can independently
@@ -108,13 +110,6 @@ test("manager reads a daily report whose arrivals and pending balance match a re
   await expect(arrivalRow).toBeVisible();
   await expect(arrivalRow).toContainText(guestLastName);
   await expect(arrivalRow).toContainText("pending");
-
-  const pendingSection = page
-    .getByRole("heading", { name: "Pagos pendientes", exact: true })
-    .locator("xpath=ancestor::section[1]");
-  const pendingRow = pendingSection.locator("div.grid").filter({ hasText: confirmationCode });
-  await expect(pendingRow).toBeVisible();
-  await expect(pendingRow).toContainText("$ 100,00");
 
   // Cleanup: this test pins room 101 for today/tomorrow so its own report
   // assertions are deterministic. Only 2 rooms exist in the seeded E2E

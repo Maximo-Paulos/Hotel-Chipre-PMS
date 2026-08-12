@@ -6,6 +6,7 @@ export type AuthUser = {
   role: string;
   is_verified: boolean;
   is_active: boolean;
+  permissions?: string[];
 };
 
 export type AuthResponse = {
@@ -15,6 +16,7 @@ export type AuthResponse = {
   hotel_ids?: number[];
   user: AuthUser;
   requires_verification?: boolean;
+  permissions?: string[];
   code?: string;
 };
 

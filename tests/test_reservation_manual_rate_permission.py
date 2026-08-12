@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from datetime import date
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -195,21 +196,12 @@ def test_receptionist_can_still_create_reservation_without_manual_rate():
         _cleanup_client(db, engine)
 
 
-def test_manager_can_set_manual_total_amount_with_explicit_override():
+def test_manager_cannot_cross_manual_rate_security_ceiling():
     client, db, engine = _build_client()
     try:
         hotel_id = 505
-        guest_id, category_id = _seed_bookable_state(db, hotel_id)
-        set_override(db, hotel_id, "manager", "reservation:manual_rate", True, user_id=1)
-        db.commit()
-        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(hotel_id, "manager")
-
-        response = client.post(
-            "/api/reservations/",
-            json=_payload(guest_id, category_id, total_amount=300.0),
-        )
-
-        assert response.status_code == 201, response.text
-        assert response.json()["total_amount"] == 300.0
+        _seed_bookable_state(db, hotel_id)
+        with pytest.raises(ValueError, match="techo de seguridad"):
+            set_override(db, hotel_id, "manager", "reservation:manual_rate", True, user_id=1)
     finally:
         _cleanup_client(db, engine)

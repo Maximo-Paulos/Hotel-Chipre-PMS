@@ -4,6 +4,7 @@ type Persona = {
   label: string;
   email: string;
   password: string;
+  landingPath: string;
   allowedPath: string;
   allowedHeading: RegExp;
   forbiddenNavPaths: string[];
@@ -14,6 +15,7 @@ const personas: Persona[] = [
     label: "manager",
     email: process.env.E2E_MANAGER_EMAIL || "manager@e2e.com",
     password: process.env.E2E_MANAGER_PASSWORD || "E2eManager1234!",
+    landingPath: "/dashboard",
     allowedPath: "/reportes",
     allowedHeading: /^Reportes$/,
     forbiddenNavPaths: ["/settings/hotel", "/settings/users"]
@@ -22,6 +24,7 @@ const personas: Persona[] = [
     label: "receptionist",
     email: process.env.E2E_RECEPTIONIST_EMAIL || "receptionist@e2e.com",
     password: process.env.E2E_RECEPTIONIST_PASSWORD || "E2eReception1234!",
+    landingPath: "/dashboard",
     allowedPath: "/caja",
     allowedHeading: /^Caja$/,
     forbiddenNavPaths: ["/reportes", "/settings/hotel", "/operacion/stock"]
@@ -30,6 +33,7 @@ const personas: Persona[] = [
     label: "housekeeping",
     email: process.env.E2E_HOUSEKEEPING_EMAIL || "housekeeping@e2e.com",
     password: process.env.E2E_HOUSEKEEPING_PASSWORD || "E2eHousekeeping1234!",
+    landingPath: "/habitaciones",
     allowedPath: "/operacion/lavanderia",
     allowedHeading: /^Lavanderia$/,
     forbiddenNavPaths: ["/caja", "/reportes", "/operacion/stock", "/settings/hotel"]
@@ -41,11 +45,15 @@ async function login(page: Page, persona: Persona) {
   await page.locator('input[type="email"]').fill(persona.email);
   await page.locator('input[type="password"]').fill(persona.password);
   await page.getByTestId("login-submit").click();
-  await page.waitForURL("**/dashboard", { timeout: 20_000 });
+  await page.waitForURL(`**${persona.landingPath}`, { timeout: 20_000 });
   await expect(page.getByText(`Usuario ${persona.email}`)).toBeVisible();
-  await expect(page.getByTestId("session-role")).toHaveText(
-    persona.label === "receptionist" ? "Recepción" : persona.label === "housekeeping" ? "Housekeeping" : "Manager"
-  );
+  const roleLabel: Record<string, string> = {
+    owner: "Dueño",
+    manager: "Manager",
+    receptionist: "Recepción",
+    housekeeping: "Housekeeping"
+  };
+  await expect(page.getByTestId("session-role")).toHaveText(roleLabel[persona.label]);
 }
 
 async function operationalNavigation(page: Page): Promise<Locator> {
@@ -86,13 +94,10 @@ for (const persona of personas) {
   });
 }
 
-// The "Habitaciones" nav link is shown to every operational role, but the backend
-// only lets owner/co_owner/manager mutate room status or room blocks
-// (require_roles / PERMISSION_ROOM_BLOCK). Reception and housekeeping must not be
-// offered controls that always fail; they should see room state as read-only.
+// State transitions and room blocks are independent capabilities: manager can
+// change every state and manage blocks; reception can create blocks but cannot
+// change state; housekeeping can only alternate Libre/Limpieza.
 for (const persona of personas) {
-  const canManageRooms = persona.label === "manager";
-
   test(`${persona.label} room controls on /habitaciones match its permission`, async ({ page }) => {
     await login(page, persona);
     await page.goto("/habitaciones");
@@ -102,15 +107,109 @@ for (const persona of personas) {
     await expect(main.getByRole("heading", { name: "Habitaciones", exact: true })).toBeVisible();
     await expect(main.locator("p", { hasText: "Hab. 101" })).toBeVisible();
 
-    if (canManageRooms) {
-      await expect(main.locator("select").first()).toBeVisible();
+    const roomStatusSelects = main.locator('select[aria-label^="Estado de habitación"]');
+    if (persona.label === "manager") {
+      await expect(roomStatusSelects.first()).toBeVisible();
+      await expect(roomStatusSelects.first().locator("option")).toHaveCount(5);
+      await expect(main.getByRole("button", { name: /Crear bloqueo/ })).toBeVisible();
+    } else if (persona.label === "receptionist") {
+      await expect(roomStatusSelects).toHaveCount(0);
       await expect(main.getByRole("button", { name: /Crear bloqueo/ })).toBeVisible();
     } else {
-      await expect(main.locator("select")).toHaveCount(0);
+      await expect(roomStatusSelects.first()).toBeVisible();
+      await expect(roomStatusSelects.first().locator("option")).toHaveCount(2);
+      await expect(roomStatusSelects.first().locator('option[value="available"]')).toHaveText("Libre");
+      await expect(roomStatusSelects.first().locator('option[value="cleaning"]')).toHaveText("Limpieza");
       await expect(main.getByRole("button", { name: /Crear bloqueo/ })).toHaveCount(0);
+      await expect(main.getByText("Tarifa hoy:", { exact: false })).toHaveCount(0);
     }
   });
 }
+
+test("receptionist can edit guest data and manage tags", async ({ page }) => {
+  const receptionist = personas.find((persona) => persona.label === "receptionist")!;
+  await login(page, receptionist);
+  await page.goto("/huespedes");
+
+  await expect(page.getByRole("heading", { name: "Ficha de huéspedes", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Huesped E2E", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Guardar huésped", exact: true }).click();
+  await expect(page.getByText("Huésped guardado.", { exact: true })).toBeVisible();
+
+  const tagSection = page
+    .getByRole("heading", { name: "Alertas y segmentación", exact: true })
+    .locator("xpath=ancestor::section[1]");
+  const tagNote = `QA recepción ${Date.now()}`;
+  await tagSection.getByLabel("Etiqueta").selectOption("otro");
+  await tagSection.getByLabel("Nota").fill(tagNote);
+  await tagSection.getByRole("button", { name: "Agregar", exact: true }).click();
+  await expect(page.getByText("Etiqueta agregada.", { exact: true })).toBeVisible();
+  const tagPill = tagSection.locator("div").filter({ hasText: tagNote }).last();
+  await expect(tagPill).toBeVisible();
+  await tagPill.getByRole("button", { name: "Resolver", exact: true }).click();
+  await expect(page.getByText("Etiqueta resuelta.", { exact: true })).toBeVisible();
+});
+
+test("housekeeping stays inside rooms and laundry without loading restricted data surfaces", async ({ page }) => {
+  const housekeeping = personas.find((persona) => persona.label === "housekeeping")!;
+  const requestedPaths: string[] = [];
+  page.on("request", (request) => requestedPaths.push(new URL(request.url()).pathname));
+
+  await login(page, housekeeping);
+  await expect(page.getByRole("heading", { name: "Habitaciones", exact: true })).toBeVisible();
+
+  const navigation = await operationalNavigation(page);
+  await expect(navigation.locator('a[href="/operacion/lavanderia"]')).toHaveCount(1);
+  const navPaths = await navigation.locator("a[href]").evaluateAll((links) =>
+    links.map((link) => link.getAttribute("href")).filter((href): href is string => Boolean(href))
+  );
+  expect(navPaths.sort()).toEqual(["/habitaciones", "/operacion/lavanderia"].sort());
+
+  for (const forbiddenPath of ["/dashboard", "/huespedes", "/caja", "/reportes", "/operacion/stock", "/settings/security"]) {
+    await page.goto(forbiddenPath);
+    await expect(page).toHaveURL(/\/habitaciones$/);
+  }
+
+  expect(requestedPaths.some((path) => path.startsWith("/api/onboarding"))).toBe(false);
+  expect(requestedPaths.some((path) => path.startsWith("/api/subscription"))).toBe(false);
+  expect(requestedPaths.some((path) => path === "/api/rooms/categories")).toBe(false);
+  expect(requestedPaths.some((path) => path.startsWith("/api/room-blocks"))).toBe(false);
+  expect(requestedPaths.some((path) => path.startsWith("/api/guests"))).toBe(false);
+  expect(requestedPaths.some((path) => path.startsWith("/api/reports"))).toBe(false);
+  expect(requestedPaths.some((path) => path.startsWith("/api/stock"))).toBe(false);
+  expect(requestedPaths.some((path) => path.startsWith("/api/cash"))).toBe(false);
+  await expect(page.getByText("guest@e2e.com", { exact: false })).toHaveCount(0);
+});
+
+test("manager receives operational reports without requesting or rendering financial reports", async ({ page }) => {
+  const manager = personas.find((persona) => persona.label === "manager")!;
+  const revenueRequests: string[] = [];
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname === "/api/reports/revenue") revenueRequests.push(request.url());
+  });
+
+  await login(page, manager);
+  await page.goto("/reportes");
+  await expect(page.getByText("Llegadas del dia", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("financial-report")).toHaveCount(0);
+  await expect(page.getByText(/Pagos pendientes/)).toHaveCount(0);
+  expect(revenueRequests).toHaveLength(0);
+});
+
+test("owner receives the financial report", async ({ page }) => {
+  const owner: Persona = {
+    label: "owner",
+    email: process.env.E2E_OWNER_EMAIL || "owner@e2e.com",
+    password: process.env.E2E_OWNER_PASSWORD || "E2ePass1234!",
+    landingPath: "/dashboard",
+    allowedPath: "/reportes",
+    allowedHeading: /^Reportes$/,
+    forbiddenNavPaths: []
+  };
+  await login(page, owner);
+  await page.goto("/reportes");
+  await expect(page.getByTestId("financial-report")).toBeVisible();
+});
 
 // D2 (Via D lavanderia): laundry:manage_vendors is owner/co_owner/manager
 // only (vendor setup + pricing); housekeeping only holds

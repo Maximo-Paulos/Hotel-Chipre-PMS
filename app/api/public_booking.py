@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies.api_key_auth import PublicAPIContext, get_public_api_context
+from app.dependencies.api_key_auth import PublicAPIContext, require_web_engine_api_context
 from app.models.reservation import (
     Reservation,
     ReservationChannelCodeEnum,
@@ -42,7 +42,7 @@ def public_availability(
     check_in_date: date = Query(...),
     check_out_date: date = Query(...),
     db: Session = Depends(get_db),
-    context: PublicAPIContext = Depends(get_public_api_context),
+    context: PublicAPIContext = Depends(require_web_engine_api_context),
 ):
     try:
         available = find_available_rooms(
@@ -68,7 +68,7 @@ def public_availability(
 @router.get("/rate/categories", response_model=list[PublicCategoryRead])
 def public_categories(
     db: Session = Depends(get_db),
-    context: PublicAPIContext = Depends(get_public_api_context),
+    context: PublicAPIContext = Depends(require_web_engine_api_context),
 ):
     return (
         db.query(RoomCategory)
@@ -86,7 +86,7 @@ def public_rate_quote(
     check_out_date: date = Query(...),
     occupancy: int = Query(1, gt=0),
     db: Session = Depends(get_db),
-    context: PublicAPIContext = Depends(get_public_api_context),
+    context: PublicAPIContext = Depends(require_web_engine_api_context),
 ):
     try:
         return build_reservation_quote(
@@ -106,7 +106,7 @@ def public_rate_quote(
 def public_create_reservation(
     payload: PublicReservationCreate,
     db: Session = Depends(get_db),
-    context: PublicAPIContext = Depends(get_public_api_context),
+    context: PublicAPIContext = Depends(require_web_engine_api_context),
 ):
     if not payload.quote_token:
         raise HTTPException(status_code=400, detail="Se requiere una cotización vigente para crear la reserva.")
@@ -162,7 +162,7 @@ def _serialize_reservation_status(reservation: Reservation) -> PublicReservation
 def public_reservation_status_by_code(
     confirmation_code: str,
     db: Session = Depends(get_db),
-    context: PublicAPIContext = Depends(get_public_api_context),
+    context: PublicAPIContext = Depends(require_web_engine_api_context),
 ):
     """Read-only reservation/payment status by confirmation code (v72 §16).
 
@@ -185,7 +185,7 @@ def public_reservation_status_by_code(
 def public_reservation_status(
     reservation_id: int,
     db: Session = Depends(get_db),
-    context: PublicAPIContext = Depends(get_public_api_context),
+    context: PublicAPIContext = Depends(require_web_engine_api_context),
 ):
     """Read-only reservation/payment status by id (v72 §16).
 
@@ -210,7 +210,7 @@ def public_reservation_status(
 def public_create_payment_link(
     payload: PublicPaymentLinkCreate,
     db: Session = Depends(get_db),
-    context: PublicAPIContext = Depends(get_public_api_context),
+    context: PublicAPIContext = Depends(require_web_engine_api_context),
 ):
     try:
         link = create_link(db, context.hotel_id, payload.to_payment_link_create())

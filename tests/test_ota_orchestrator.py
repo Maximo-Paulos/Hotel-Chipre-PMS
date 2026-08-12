@@ -3,6 +3,9 @@ from __future__ import annotations
 import json
 from datetime import date
 
+import pytest
+
+from app.config import get_settings
 from app.models.hotel_config import HotelConfiguration
 from app.models.ota_core import OTAConnection, OTAProvider, OTASyncEvent, OTASyncJob
 from app.services.ota.contracts import (
@@ -12,6 +15,15 @@ from app.services.ota.contracts import (
     OTAProviderAdapter,
 )
 from app.services.ota.orchestrator import OTAOrchestratorError, OTAOrchestratorService
+
+
+@pytest.fixture(autouse=True)
+def _enable_mocked_external_effects(monkeypatch):
+    monkeypatch.setenv("EXTERNAL_EFFECTS_ENABLED", "true")
+    monkeypatch.setenv("CONNECTIONS_ENABLED", "true")
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
 
 
 class FakeBookingAdapter(OTAProviderAdapter):

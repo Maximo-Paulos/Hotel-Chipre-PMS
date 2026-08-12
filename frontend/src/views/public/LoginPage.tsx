@@ -7,7 +7,7 @@ import { GoogleSignInButton } from "../../components/GoogleSignInButton";
 import { PasswordInput } from "../../components/PasswordInput";
 import { login as loginApi, loginWithGoogle, type AuthResponse } from "../../api/auth";
 import { getOnboardingStatus } from "../../api/onboarding";
-import { normalizeRole, useSession, type SessionState } from "../../state/session";
+import { defaultPathForRole, normalizeRole, useSession, type SessionState } from "../../state/session";
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -32,13 +32,15 @@ export function LoginPage() {
     if (!res.hotel_id) {
       throw new ApiError(500, "La respuesta de autenticación no devolvió un hotel válido.");
     }
+    const authenticatedRole = normalizeRole(res.user.role);
     const nextSession: Partial<SessionState> = {
       userId: res.user.email,
       email: res.user.email,
       hotelId: res.hotel_id,
       hotelIds: res.hotel_ids?.length ? res.hotel_ids : [res.hotel_id],
-      role: normalizeRole(res.user.role),
-      baseRole: normalizeRole(res.user.role),
+      role: authenticatedRole,
+      baseRole: authenticatedRole,
+      permissions: res.permissions ?? res.user.permissions ?? null,
       accessToken: res.access_token,
       isVerified: res.user.is_verified
     };
@@ -49,8 +51,15 @@ export function LoginPage() {
       return;
     }
 
-    const status = await getOnboardingStatus(nextSession);
-    navigate(status.completed ? "/dashboard" : "/onboarding", { replace: true });
+    if (authenticatedRole === "owner" || authenticatedRole === "co_owner") {
+      const status = await getOnboardingStatus(nextSession);
+      navigate(status.completed ? defaultPathForRole(authenticatedRole) : "/onboarding", { replace: true });
+      return;
+    }
+
+    // Onboarding contains hotel configuration and is owner/co-owner-only.
+    // Operational users must not fetch it merely to decide their landing page.
+    navigate(defaultPathForRole(authenticatedRole), { replace: true });
   };
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {

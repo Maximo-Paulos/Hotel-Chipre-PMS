@@ -1,11 +1,22 @@
 from __future__ import annotations
 
+import pytest
+
+from app.config import get_settings
 from app.models.guest import Guest
 from app.models.ota import OTAReservationMapping, OTASyncStatusEnum
 from app.models.ota_core import OTAReservationLifecycleEnum, OTAReservationLink
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.services.ota_service import OTAIntegrationService
 from app.services.reservation_service import transition_reservation_status
+
+
+@pytest.fixture(autouse=True)
+def _enable_mocked_inbound_events(monkeypatch):
+    monkeypatch.setenv("INBOUND_PROVIDER_EVENTS_ENABLED", "true")
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
 
 
 def _booking_payload(**overrides):

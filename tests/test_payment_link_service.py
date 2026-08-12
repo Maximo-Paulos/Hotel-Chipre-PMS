@@ -21,6 +21,19 @@ from app.services.payment_link_test_service import (
     PaymentLinkTestError,
     validate_mercadopago_webhook_signature,
 )
+from app.config import get_settings
+
+
+def _enable_external_effects(monkeypatch):
+    monkeypatch.setenv("EXTERNAL_EFFECTS_ENABLED", "true")
+    monkeypatch.setenv("CONNECTIONS_ENABLED", "true")
+    get_settings.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def _clear_external_effect_settings_cache():
+    yield
+    get_settings.cache_clear()
 
 
 def _reservation(db, hotel_id: int, code: str = "RL-1") -> Reservation:
@@ -75,6 +88,31 @@ def test_create_payment_link_persists_link_without_transaction(db):
     assert db.query(Transaction).count() == 0
 
 
+def test_connections_flag_closed_forces_local_only_before_gateway(db, monkeypatch):
+    monkeypatch.setenv("EXTERNAL_EFFECTS_ENABLED", "true")
+    monkeypatch.setenv("CONNECTIONS_ENABLED", "false")
+    get_settings.cache_clear()
+    reservation = _reservation(db, 1)
+
+    def unexpected_gateway(*args, **kwargs):
+        raise AssertionError("provider gateway must not be called")
+
+    link = create_link(
+        db,
+        1,
+        PaymentLinkCreate(
+            reservation_id=reservation.id,
+            requested_amount=Decimal("75.50"),
+            recipient_email="guest@example.com",
+        ),
+        mp_gateway=unexpected_gateway,
+    )
+
+    assert link.execution_mode == "local_only"
+    assert link.payable is False
+    assert link.external_checkout_url is None
+
+
 def test_cross_hotel_isolation_for_payment_link_service(db):
     reservation_a = _reservation(db, 1, "RL-A")
     reservation_b = _reservation(db, 2, "RL-B")
@@ -101,9 +139,10 @@ def _fake_mp_gateway(checkout="https://mp.example/checkout/abc", preference_id="
     return gateway
 
 
-def test_create_link_fills_checkout_url_with_mocked_mp(db):
+def test_create_link_fills_checkout_url_with_mocked_mp(db, monkeypatch):
     # §12.2 ITEM A: production link creates a (mocked) MP preference and persists
     # external_checkout_url + preference id.
+    _enable_external_effects(monkeypatch)
     reservation = _reservation(db, 1)
 
     link = create_link(
@@ -115,6 +154,7 @@ def test_create_link_fills_checkout_url_with_mocked_mp(db):
             recipient_email="guest@example.com",
         ),
         mp_gateway=_fake_mp_gateway(),
+        idempotency_key="payment-link-create-1",
     )
 
     assert link.external_checkout_url == "https://mp.example/checkout/abc"
@@ -122,8 +162,9 @@ def test_create_link_fills_checkout_url_with_mocked_mp(db):
     assert link.last_error is None
 
 
-def test_create_link_best_effort_when_gateway_fails(db):
+def test_create_link_best_effort_when_gateway_fails(db, monkeypatch):
     # No MP connection / failing gateway must NOT block link creation.
+    _enable_external_effects(monkeypatch)
     reservation = _reservation(db, 1)
 
     def boom(db, hotel_id, link):
@@ -138,6 +179,7 @@ def test_create_link_best_effort_when_gateway_fails(db):
             recipient_email="guest@example.com",
         ),
         mp_gateway=boom,
+        idempotency_key="payment-link-failure-1",
     )
 
     assert link.id is not None
@@ -145,8 +187,9 @@ def test_create_link_best_effort_when_gateway_fails(db):
     assert "No se pudo crear la preferencia" in (link.last_error or "")
 
 
-def test_deliver_link_email_records_channel(db):
+def test_deliver_link_email_records_channel(db, monkeypatch):
     # §12.2 ITEM B: email delivery (mocked) fires and records the channel.
+    _enable_external_effects(monkeypatch)
     reservation = _reservation(db, 1)
     sent = {}
 
@@ -165,6 +208,7 @@ def test_deliver_link_email_records_channel(db):
         mp_gateway=_fake_mp_gateway(),
         delivery_channel="email",
         email_delivery=fake_email,
+        idempotency_key="payment-link-email-1",
     )
 
     assert sent["to"] == "guest@example.com"
@@ -172,7 +216,8 @@ def test_deliver_link_email_records_channel(db):
     assert link.gateway_response.get("delivery_status") == "sent"
 
 
-def test_deliver_link_email_best_effort_on_failure(db):
+def test_deliver_link_email_best_effort_on_failure(db, monkeypatch):
+    _enable_external_effects(monkeypatch)
     reservation = _reservation(db, 1)
     link = create_link(
         db,
@@ -183,6 +228,7 @@ def test_deliver_link_email_best_effort_on_failure(db):
             recipient_email="guest@example.com",
         ),
         mp_gateway=_fake_mp_gateway(),
+        idempotency_key="payment-link-email-failure-1",
     )
 
     def boom_email(db, hotel_id, link):
@@ -193,7 +239,8 @@ def test_deliver_link_email_best_effort_on_failure(db):
     assert link.sent_via_email is False
 
 
-def test_deliver_link_whatsapp_stub_pending(db):
+def test_deliver_link_whatsapp_stub_pending(db, monkeypatch):
+    _enable_external_effects(monkeypatch)
     reservation = _reservation(db, 1)
     link = create_link(
         db,
@@ -204,11 +251,71 @@ def test_deliver_link_whatsapp_stub_pending(db):
             recipient_email="guest@example.com",
         ),
         mp_gateway=_fake_mp_gateway(),
+        idempotency_key="payment-link-whatsapp-1",
     )
 
     deliver_link(db, 1, link, channel="whatsapp")
     assert link.gateway_response.get("delivery_channel") == "whatsapp"
     assert link.gateway_response.get("delivery_status") == "pending"
+
+
+def test_provider_link_requires_idempotency_key_before_gateway(db, monkeypatch):
+    _enable_external_effects(monkeypatch)
+    reservation = _reservation(db, 1)
+    gateway_called = False
+
+    def unexpected_gateway(db, hotel_id, link):
+        nonlocal gateway_called
+        gateway_called = True
+        raise AssertionError("gateway must not be called without idempotency")
+
+    with pytest.raises(PaymentLinkError, match="Idempotency-Key es obligatorio"):
+        create_link(
+            db,
+            1,
+            PaymentLinkCreate(
+                reservation_id=reservation.id,
+                requested_amount=Decimal("50.00"),
+                recipient_email="guest@example.com",
+            ),
+            mp_gateway=unexpected_gateway,
+        )
+
+    assert gateway_called is False
+
+
+def test_provider_link_replays_same_idempotency_key_without_second_gateway(db, monkeypatch):
+    _enable_external_effects(monkeypatch)
+    reservation = _reservation(db, 1)
+    calls = 0
+
+    def gateway(db, hotel_id, link):
+        nonlocal calls
+        calls += 1
+        return _fake_mp_gateway()(db, hotel_id, link)
+
+    payload = PaymentLinkCreate(
+        reservation_id=reservation.id,
+        requested_amount=Decimal("50.00"),
+        recipient_email="guest@example.com",
+    )
+    first = create_link(
+        db,
+        1,
+        payload,
+        mp_gateway=gateway,
+        idempotency_key="provider-replay-key",
+    )
+    replay = create_link(
+        db,
+        1,
+        payload,
+        mp_gateway=gateway,
+        idempotency_key="provider-replay-key",
+    )
+
+    assert replay.id == first.id
+    assert calls == 1
 
 
 def test_mercadopago_webhook_signature_rejects_when_secret_is_unconfigured():

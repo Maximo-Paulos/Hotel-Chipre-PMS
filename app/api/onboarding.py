@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies.auth import AuthContext, get_auth_context, require_roles
+from app.dependencies.auth import AuthContext, require_roles
 from app.schemas.onboarding import (
     CategoriesPayload,
     DepositPolicyPayload,
@@ -28,7 +28,7 @@ router = APIRouter(prefix="/api/onboarding", tags=["Onboarding"])
 @router.get("/status", response_model=OnboardingStatus)
 def onboarding_status(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(get_auth_context),
+    context: AuthContext = Depends(require_roles("owner", "co_owner")),
 ):
     return onboarding_service.get_status(db, hotel_id=context.hotel_id, actor_role=context.user_role)
 

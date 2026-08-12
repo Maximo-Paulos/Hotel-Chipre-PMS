@@ -1,9 +1,20 @@
 from __future__ import annotations
 
+import pytest
+
+from app.config import get_settings
 from app.models.commercial import ProductRoomCompatibility, SellableProduct
 from app.models.room import RoomStatusEnum
 from app.models.ota_core import OTAReservationLink
 from app.services.ota_service import OTAIntegrationService
+
+
+@pytest.fixture(autouse=True)
+def _enable_mocked_inbound_events(monkeypatch):
+    monkeypatch.setenv("INBOUND_PROVIDER_EVENTS_ENABLED", "true")
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
 
 
 def test_booking_webhook_populates_foundation_ota_link(db, sample_rooms, sample_categories, hotel_config):

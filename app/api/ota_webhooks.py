@@ -1,16 +1,25 @@
 """
 FastAPI Webhook endpoints for OTA integrations.
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import TypeAdapter, ValidationError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.services.ota_service import OTAIntegrationService, OTAError, OTAAuthError
+from app.services.external_effects_policy import (
+    InboundProviderEventsDisabled,
+    require_inbound_provider_events,
+)
 
 router = APIRouter(prefix="/api/webhooks", tags=["OTA Webhooks"])
 
 
 def _handle_ota_webhook(provider: str, hotel_id: int, webhook_secret: str, payload: dict, db: Session):
+    try:
+        require_inbound_provider_events(provider)
+    except InboundProviderEventsDisabled as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
     try:
         if provider == "booking":
             mapping = OTAIntegrationService.process_booking_webhook(db, hotel_id, webhook_secret, payload)
@@ -35,21 +44,36 @@ def _handle_ota_webhook(provider: str, hotel_id: int, webhook_secret: str, paylo
 
 
 @router.post("/booking/{hotel_id}/{webhook_secret}")
-def booking_webhook(hotel_id: int, webhook_secret: str, payload: dict, db: Session = Depends(get_db)):
+async def booking_webhook(hotel_id: int, webhook_secret: str, request: Request, db: Session = Depends(get_db)):
     """Receive reservation notifications from Booking.com."""
+    payload = await _guarded_json_payload("booking", request)
     return _handle_ota_webhook("booking", hotel_id, webhook_secret, payload, db)
 
 
 @router.post("/expedia/{hotel_id}/{webhook_secret}")
-def expedia_webhook(hotel_id: int, webhook_secret: str, payload: dict, db: Session = Depends(get_db)):
+async def expedia_webhook(hotel_id: int, webhook_secret: str, request: Request, db: Session = Depends(get_db)):
     """Receive reservation notifications from Expedia."""
+    payload = await _guarded_json_payload("expedia", request)
     return _handle_ota_webhook("expedia", hotel_id, webhook_secret, payload, db)
 
 
 @router.post("/despegar/{hotel_id}/{webhook_secret}")
-def despegar_webhook(hotel_id: int, webhook_secret: str, payload: dict, db: Session = Depends(get_db)):
+async def despegar_webhook(hotel_id: int, webhook_secret: str, request: Request, db: Session = Depends(get_db)):
     """Receive reservation notifications from Despegar."""
+    payload = await _guarded_json_payload("despegar", request)
     return _handle_ota_webhook("despegar", hotel_id, webhook_secret, payload, db)
+
+
+async def _guarded_json_payload(provider: str, request: Request) -> dict:
+    try:
+        # Deliberately before request.json(): disabled callbacks do not parse input.
+        require_inbound_provider_events(provider)
+    except InboundProviderEventsDisabled as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+    try:
+        return TypeAdapter(dict).validate_python(await request.json())
+    except (ValidationError, ValueError) as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Payload OTA invalido") from exc
 
 
 @router.post("/booking")

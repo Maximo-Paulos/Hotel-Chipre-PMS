@@ -8,6 +8,10 @@ from typing import Iterable
 import requests
 
 from app.config import get_settings
+from app.services.external_effects_policy import (
+    ExternalEffectsDisabled,
+    require_external_connections,
+)
 
 LOGGER = logging.getLogger("app.services.email.providers")
 
@@ -68,6 +72,12 @@ class ResendEmailProvider(EmailProvider):
         )
 
     def send(self, to: Iterable[str] | str, subject: str, body: str) -> dict[str, object]:
+        # Before reading provider credentials into request headers or touching
+        # the network.
+        try:
+            require_external_connections("Resend system email")
+        except ExternalEffectsDisabled as exc:
+            raise EmailProviderError(str(exc)) from exc
         if not self.configured:
             raise EmailProviderError(
                 "Resend no esta configurado. Definí EMAIL_PROVIDER=resend, RESEND_API_KEY, SYSTEM_EMAIL_FROM y SYSTEM_EMAIL_REPLY_TO."

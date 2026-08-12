@@ -114,7 +114,7 @@ def test_allocation_policy_api_exposes_active_policy_and_versions():
         _cleanup_client(db, engine)
 
 
-def test_allocation_policy_api_suggestions_are_scoped_and_manager_is_read_only():
+def test_allocation_policy_api_suggestions_are_scoped_and_manager_has_no_access():
     client, db, engine = _build_client()
     try:
         db.add_all(
@@ -153,10 +153,16 @@ def test_allocation_policy_api_suggestions_are_scoped_and_manager_is_read_only()
         assert list_h2.status_code == 200, list_h2.text
         assert [item["input_summary"] for item in list_h2.json()] == ["Hotel 2 quiere priorizar exact match"]
 
-        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "manager")
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner")
         list_h1 = client.get("/api/allocation/policy/suggestions")
         assert list_h1.status_code == 200, list_h1.text
         assert [item["input_summary"] for item in list_h1.json()] == ["Hotel prioriza evitar huecos de una noche"]
+
+        # Allocation policy config is "sensitive configuration" -- manager's
+        # ceiling excludes config:manage, so it's denied read as well as write.
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "manager")
+        denied_read = client.get("/api/allocation/policy/suggestions")
+        assert denied_read.status_code == 403, denied_read.text
 
         denied = client.post(
             "/api/allocation/policy/suggestions",
@@ -400,7 +406,7 @@ def test_allocation_policy_api_exposes_latest_run_details():
             horizon_end=date(2026, 4, 25),
         )
         db.commit()
-        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "manager")
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner")
 
         latest_resp = client.get("/api/allocation/policy/runs/latest")
         assert latest_resp.status_code == 200, latest_resp.text

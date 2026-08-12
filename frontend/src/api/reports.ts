@@ -86,6 +86,35 @@ export type NightlyOperationalSummary = {
   alerts: OperationalAlert[];
 };
 
+export type OccupancyReport = {
+  start_date: string;
+  end_date: string;
+  total_rooms: number;
+  average_occupancy: number;
+  daily: Array<{
+    date: string;
+    occupied: number;
+    available: number;
+    rate: number;
+  }>;
+};
+
+export type RevenueReport = {
+  start_date: string;
+  end_date: string;
+  collected: {
+    total: number;
+    by_method: Record<string, number>;
+    by_day: Record<string, number>;
+    transactions_count: number;
+  };
+  expected: {
+    total: number;
+    pending: number;
+    reservations_count: number;
+  };
+};
+
 export const getDailyOperationalReport = (reportDate: string, session?: SessionLike) =>
   apiFetch<DailyOperationalReport>(
     `/api/reports/operational/daily?report_date=${encodeURIComponent(reportDate)}`,
@@ -95,5 +124,17 @@ export const getDailyOperationalReport = (reportDate: string, session?: SessionL
 export const getOperationalAlerts = (reportDate: string, session?: SessionLike) =>
   apiFetch<NightlyOperationalSummary>(
     `/api/reports/operational/alerts?report_date=${encodeURIComponent(reportDate)}`,
+    { session }
+  );
+
+export const getOccupancyReport = (startDate: string, endDate: string, session?: SessionLike) =>
+  apiFetch<OccupancyReport>(
+    `/api/reports/occupancy?start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}`,
+    { session }
+  );
+
+export const getRevenueReport = (startDate: string, endDate: string, session?: SessionLike) =>
+  apiFetch<RevenueReport>(
+    `/api/reports/revenue?start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}`,
     { session }
   );

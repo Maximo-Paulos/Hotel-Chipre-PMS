@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-28T20:08:10.699Z",
+  "generatedAt": "2026-08-12T21:47:21.026Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -168,6 +168,38 @@
       "fileCount": 1,
       "files": [
         "app/dependencies/auth.py"
+      ],
+      "criticality": 0.43,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_permission_service_get_effective_permissions",
+      "name": "get_effective_permissions",
+      "entryPoint": "services_permission_service_get_effective_permissions",
+      "entryPointId": "services_permission_service_get_effective_permissions",
+      "path": [
+        "services_permission_service_get_effective_permissions",
+        "services_permission_service_get_matrix",
+        "services_permission_service_can_role_hold_permission",
+        "services_permission_service_ensure_permission_matrix_seeded",
+        "services_permission_service_seed_default_permissions",
+        "services_permission_service_engine_key",
+        "services_permission_service_insert_if_missing"
+      ],
+      "qualifiedPath": [
+        "services_permission_service_get_effective_permissions",
+        "services_permission_service_get_matrix",
+        "services_permission_service_can_role_hold_permission",
+        "services_permission_service_ensure_permission_matrix_seeded",
+        "services_permission_service_seed_default_permissions",
+        "services_permission_service_engine_key",
+        "services_permission_service_insert_if_missing"
+      ],
+      "depth": 3,
+      "nodeCount": 7,
+      "fileCount": 1,
+      "files": [
+        "app/services/permission_service.py"
       ],
       "criticality": 0.43,
       "warnings": []
@@ -495,29 +527,53 @@
       "warnings": []
     },
     {
-      "id": "flow:services_permission_service_get_matrix",
-      "name": "get_matrix",
-      "entryPoint": "services_permission_service_get_matrix",
-      "entryPointId": "services_permission_service_get_matrix",
+      "id": "flow:api_auth_google_login",
+      "name": "google_login",
+      "entryPoint": "api_auth_google_login",
+      "entryPointId": "api_auth_google_login",
       "path": [
-        "services_permission_service_get_matrix",
-        "services_permission_service_ensure_permission_matrix_seeded",
-        "services_permission_service_seed_default_permissions",
-        "services_permission_service_engine_key",
-        "services_permission_service_insert_if_missing"
+        "api_auth_google_login",
+        "api_auth_build_auth_response",
+        "api_auth_pick_default_hotel_id"
       ],
       "qualifiedPath": [
-        "services_permission_service_get_matrix",
-        "services_permission_service_ensure_permission_matrix_seeded",
-        "services_permission_service_seed_default_permissions",
-        "services_permission_service_engine_key",
-        "services_permission_service_insert_if_missing"
+        "api_auth_google_login",
+        "api_auth_build_auth_response",
+        "api_auth_pick_default_hotel_id"
+      ],
+      "depth": 2,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/api/auth.py"
+      ],
+      "criticality": 0.42,
+      "warnings": []
+    },
+    {
+      "id": "flow:agent_ops_build_shared_sandbox_bootstrap_sql_main",
+      "name": "main",
+      "entryPoint": "agent_ops_build_shared_sandbox_bootstrap_sql_main",
+      "entryPointId": "agent_ops_build_shared_sandbox_bootstrap_sql_main",
+      "path": [
+        "agent_ops_build_shared_sandbox_bootstrap_sql_main",
+        "agent_ops_build_shared_sandbox_bootstrap_sql_build_sql",
+        "agent_ops_build_shared_sandbox_bootstrap_sql_load_env",
+        "agent_ops_build_shared_sandbox_bootstrap_sql_sharedsandboxbootstraperror",
+        "agent_ops_build_shared_sandbox_bootstrap_sql_literal"
+      ],
+      "qualifiedPath": [
+        "agent_ops_build_shared_sandbox_bootstrap_sql_main",
+        "agent_ops_build_shared_sandbox_bootstrap_sql_build_sql",
+        "agent_ops_build_shared_sandbox_bootstrap_sql_load_env",
+        "agent_ops_build_shared_sandbox_bootstrap_sql_sharedsandboxbootstraperror",
+        "agent_ops_build_shared_sandbox_bootstrap_sql_literal"
       ],
       "depth": 2,
       "nodeCount": 5,
       "fileCount": 1,
       "files": [
-        "app/services/permission_service.py"
+        "scripts/agent_ops/build_shared_sandbox_bootstrap_sql.py"
       ],
       "criticality": 0.42,
       "warnings": []
@@ -637,6 +693,7 @@
       "entryPointId": "services_permission_service_resolve",
       "path": [
         "services_permission_service_resolve",
+        "services_permission_service_can_role_hold_permission",
         "services_permission_service_ensure_permission_matrix_seeded",
         "services_permission_service_seed_default_permissions",
         "services_permission_service_engine_key",
@@ -644,13 +701,14 @@
       ],
       "qualifiedPath": [
         "services_permission_service_resolve",
+        "services_permission_service_can_role_hold_permission",
         "services_permission_service_ensure_permission_matrix_seeded",
         "services_permission_service_seed_default_permissions",
         "services_permission_service_engine_key",
         "services_permission_service_insert_if_missing"
       ],
       "depth": 2,
-      "nodeCount": 5,
+      "nodeCount": 6,
       "fileCount": 1,
       "files": [
         "app/services/permission_service.py"
@@ -697,6 +755,7 @@
       "entryPointId": "services_permission_service_set_override",
       "path": [
         "services_permission_service_set_override",
+        "services_permission_service_can_role_hold_permission",
         "services_permission_service_ensure_permission_matrix_seeded",
         "services_permission_service_seed_default_permissions",
         "services_permission_service_engine_key",
@@ -704,13 +763,14 @@
       ],
       "qualifiedPath": [
         "services_permission_service_set_override",
+        "services_permission_service_can_role_hold_permission",
         "services_permission_service_ensure_permission_matrix_seeded",
         "services_permission_service_seed_default_permissions",
         "services_permission_service_engine_key",
         "services_permission_service_insert_if_missing"
       ],
       "depth": 2,
-      "nodeCount": 5,
+      "nodeCount": 6,
       "fileCount": 1,
       "files": [
         "app/services/permission_service.py"
@@ -1517,6 +1577,28 @@
       "warnings": []
     },
     {
+      "id": "flow:hooks_usepermissions_useeffectivepermissions",
+      "name": "useEffectivePermissions",
+      "entryPoint": "hooks_usepermissions_useeffectivepermissions",
+      "entryPointId": "hooks_usepermissions_useeffectivepermissions",
+      "path": [
+        "hooks_usepermissions_useeffectivepermissions",
+        "hooks_usepermissions_effectivepermissionskey"
+      ],
+      "qualifiedPath": [
+        "hooks_usepermissions_useeffectivepermissions",
+        "hooks_usepermissions_effectivepermissionskey"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/hooks/usePermissions.ts"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
       "id": "flow:services_payment_webhook_service_validate_mercadopago_webhook_signature",
       "name": "validate_mercadopago_webhook_signature",
       "entryPoint": "services_payment_webhook_service_validate_mercadopago_webhook_signature",
@@ -1712,6 +1794,38 @@
         "app/services/hotel_api_key_service.py"
       ],
       "criticality": 0.3267,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_external_effects_policy_require_google_login",
+      "name": "require_google_login",
+      "entryPoint": "services_external_effects_policy_require_google_login",
+      "entryPointId": "services_external_effects_policy_require_google_login",
+      "path": [
+        "services_external_effects_policy_require_google_login",
+        "services_external_effects_policy_google_login_enabled",
+        "services_external_effects_policy_googlelogindisabled",
+        "services_external_effects_policy_require_external_connections",
+        "services_external_effects_policy_externaleffectsdisabled",
+        "services_external_effects_policy_require_external_effects",
+        "services_external_effects_policy_external_effects_enabled"
+      ],
+      "qualifiedPath": [
+        "services_external_effects_policy_require_google_login",
+        "services_external_effects_policy_google_login_enabled",
+        "services_external_effects_policy_googlelogindisabled",
+        "services_external_effects_policy_require_external_connections",
+        "services_external_effects_policy_externaleffectsdisabled",
+        "services_external_effects_policy_require_external_effects",
+        "services_external_effects_policy_external_effects_enabled"
+      ],
+      "depth": 3,
+      "nodeCount": 7,
+      "fileCount": 1,
+      "files": [
+        "app/services/external_effects_policy.py"
+      ],
+      "criticality": 0.3229,
       "warnings": []
     },
     {
@@ -2461,6 +2575,28 @@
       "warnings": []
     },
     {
+      "id": "flow:api_settings_security_revoke_current_user_sessions",
+      "name": "revoke_current_user_sessions",
+      "entryPoint": "api_settings_security_revoke_current_user_sessions",
+      "entryPointId": "api_settings_security_revoke_current_user_sessions",
+      "path": [
+        "api_settings_security_revoke_current_user_sessions",
+        "api_settings_security_current_user"
+      ],
+      "qualifiedPath": [
+        "api_settings_security_revoke_current_user_sessions",
+        "api_settings_security_current_user"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/settings_security.py"
+      ],
+      "criticality": 0.285,
+      "warnings": []
+    },
+    {
       "id": "flow:services_allocation_runtime_service_run_persisted_allocation",
       "name": "run_persisted_allocation",
       "entryPoint": "services_allocation_runtime_service_run_persisted_allocation",
@@ -2674,40 +2810,6 @@
         "frontend/src/api/client.ts"
       ],
       "criticality": 0.2809,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_payment_link_service_create_link",
-      "name": "create_link",
-      "entryPoint": "services_payment_link_service_create_link",
-      "entryPointId": "services_payment_link_service_create_link",
-      "path": [
-        "services_payment_link_service_create_link",
-        "services_payment_link_service_deliver_link",
-        "services_payment_link_service_get_reservation_for_hotel",
-        "services_payment_link_service_paymentlinkerror",
-        "services_payment_link_service_sign_external_reference",
-        "services_payment_link_service_unique_link_code",
-        "services_payment_link_service_signature",
-        "services_payment_link_service_signing_secret"
-      ],
-      "qualifiedPath": [
-        "services_payment_link_service_create_link",
-        "services_payment_link_service_deliver_link",
-        "services_payment_link_service_get_reservation_for_hotel",
-        "services_payment_link_service_paymentlinkerror",
-        "services_payment_link_service_sign_external_reference",
-        "services_payment_link_service_unique_link_code",
-        "services_payment_link_service_signature",
-        "services_payment_link_service_signing_secret"
-      ],
-      "depth": 3,
-      "nodeCount": 8,
-      "fileCount": 1,
-      "files": [
-        "app/services/payment_link_service.py"
-      ],
-      "criticality": 0.2738,
       "warnings": []
     },
     {
@@ -3053,6 +3155,30 @@
       "warnings": []
     },
     {
+      "id": "flow:frontend_build_meta_buildmetaplugin",
+      "name": "buildMetaPlugin",
+      "entryPoint": "frontend_build_meta_buildmetaplugin",
+      "entryPointId": "frontend_build_meta_buildmetaplugin",
+      "path": [
+        "frontend_build_meta_buildmetaplugin",
+        "frontend_build_meta_resolvecodesha",
+        "frontend_build_meta_validatedsha"
+      ],
+      "qualifiedPath": [
+        "frontend_build_meta_buildmetaplugin",
+        "frontend_build_meta_resolvecodesha",
+        "frontend_build_meta_validatedsha"
+      ],
+      "depth": 2,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "frontend/build-meta.mjs"
+      ],
+      "criticality": 0.2533,
+      "warnings": []
+    },
+    {
       "id": "flow:db_cassandra_cassandra_healthcheck",
       "name": "cassandra_healthcheck",
       "entryPoint": "db_cassandra_cassandra_healthcheck",
@@ -3173,30 +3299,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_audit_log_service_queue_audit_log",
-      "name": "queue_audit_log",
-      "entryPoint": "services_audit_log_service_queue_audit_log",
-      "entryPointId": "services_audit_log_service_queue_audit_log",
-      "path": [
-        "services_audit_log_service_queue_audit_log",
-        "services_audit_log_service_payload_json",
-        "services_audit_log_service_sanitize_audit_payload"
-      ],
-      "qualifiedPath": [
-        "services_audit_log_service_queue_audit_log",
-        "services_audit_log_service_payload_json",
-        "services_audit_log_service_sanitize_audit_payload"
-      ],
-      "depth": 2,
-      "nodeCount": 3,
-      "fileCount": 1,
-      "files": [
-        "app/services/audit_log_service.py"
-      ],
-      "criticality": 0.2533,
-      "warnings": []
-    },
-    {
       "id": "flow:services_email_service_send_reset_password_email",
       "name": "send_reset_password_email",
       "entryPoint": "services_email_service_send_reset_password_email",
@@ -3242,6 +3344,52 @@
         "frontend/src/hooks/useReservations.ts"
       ],
       "criticality": 0.2533,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_payment_link_service_create_link",
+      "name": "create_link",
+      "entryPoint": "services_payment_link_service_create_link",
+      "entryPointId": "services_payment_link_service_create_link",
+      "path": [
+        "services_payment_link_service_create_link",
+        "services_payment_link_service_available_provider_balance",
+        "services_payment_link_service_deliver_link",
+        "services_payment_link_service_find_idempotent_link",
+        "services_payment_link_service_get_reservation_for_hotel",
+        "services_payment_link_service_is_safe_provider_url",
+        "services_payment_link_service_money",
+        "services_payment_link_service_normalized_idempotency_key",
+        "services_payment_link_service_paymentlinkerror",
+        "services_payment_link_service_sign_external_reference",
+        "services_payment_link_service_unique_link_code",
+        "services_payment_link_service_validate_idempotent_replay",
+        "services_payment_link_service_signature",
+        "services_payment_link_service_signing_secret"
+      ],
+      "qualifiedPath": [
+        "services_payment_link_service_create_link",
+        "services_payment_link_service_available_provider_balance",
+        "services_payment_link_service_deliver_link",
+        "services_payment_link_service_find_idempotent_link",
+        "services_payment_link_service_get_reservation_for_hotel",
+        "services_payment_link_service_is_safe_provider_url",
+        "services_payment_link_service_money",
+        "services_payment_link_service_normalized_idempotency_key",
+        "services_payment_link_service_paymentlinkerror",
+        "services_payment_link_service_sign_external_reference",
+        "services_payment_link_service_unique_link_code",
+        "services_payment_link_service_validate_idempotent_replay",
+        "services_payment_link_service_signature",
+        "services_payment_link_service_signing_secret"
+      ],
+      "depth": 3,
+      "nodeCount": 14,
+      "fileCount": 1,
+      "files": [
+        "app/services/payment_link_service.py"
+      ],
+      "criticality": 0.2514,
       "warnings": []
     },
     {
@@ -3456,32 +3604,6 @@
         "app/services/tenant_context.py"
       ],
       "criticality": 0.2433,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_audit_log_service_safe_create_audit_log",
-      "name": "safe_create_audit_log",
-      "entryPoint": "services_audit_log_service_safe_create_audit_log",
-      "entryPointId": "services_audit_log_service_safe_create_audit_log",
-      "path": [
-        "services_audit_log_service_safe_create_audit_log",
-        "services_audit_log_service_create_audit_log",
-        "services_audit_log_service_payload_json",
-        "services_audit_log_service_sanitize_audit_payload"
-      ],
-      "qualifiedPath": [
-        "services_audit_log_service_safe_create_audit_log",
-        "services_audit_log_service_create_audit_log",
-        "services_audit_log_service_payload_json",
-        "services_audit_log_service_sanitize_audit_payload"
-      ],
-      "depth": 3,
-      "nodeCount": 4,
-      "fileCount": 1,
-      "files": [
-        "app/services/audit_log_service.py"
-      ],
-      "criticality": 0.2425,
       "warnings": []
     },
     {
@@ -3887,6 +4009,34 @@
       "warnings": []
     },
     {
+      "id": "flow:services_audit_log_service_safe_create_audit_log",
+      "name": "safe_create_audit_log",
+      "entryPoint": "services_audit_log_service_safe_create_audit_log",
+      "entryPointId": "services_audit_log_service_safe_create_audit_log",
+      "path": [
+        "services_audit_log_service_safe_create_audit_log",
+        "services_audit_log_service_create_audit_log",
+        "services_audit_log_service_queue_audit_log",
+        "services_audit_log_service_payload_json",
+        "services_audit_log_service_sanitize_audit_payload"
+      ],
+      "qualifiedPath": [
+        "services_audit_log_service_safe_create_audit_log",
+        "services_audit_log_service_create_audit_log",
+        "services_audit_log_service_queue_audit_log",
+        "services_audit_log_service_payload_json",
+        "services_audit_log_service_sanitize_audit_payload"
+      ],
+      "depth": 3,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "app/services/audit_log_service.py"
+      ],
+      "criticality": 0.23,
+      "warnings": []
+    },
+    {
       "id": "flow:app_config_validate_runtime_security",
       "name": "validate_runtime_security",
       "entryPoint": "app_config_validate_runtime_security",
@@ -3900,11 +4050,11 @@
         "app_config_is_production_mode",
         "app_config_is_public_https_url",
         "app_config_mercadopago_is_active",
+        "app_config_normalized_env_value",
         "app_config_paypal_is_active",
         "app_config_resend_is_active",
         "app_config_validate_preview_qa_security",
-        "app_config_settings",
-        "app_config_normalized_env_value"
+        "app_config_settings"
       ],
       "qualifiedPath": [
         "app_config_validate_runtime_security",
@@ -3915,11 +4065,11 @@
         "app_config_is_production_mode",
         "app_config_is_public_https_url",
         "app_config_mercadopago_is_active",
+        "app_config_normalized_env_value",
         "app_config_paypal_is_active",
         "app_config_resend_is_active",
         "app_config_validate_preview_qa_security",
-        "app_config_settings",
-        "app_config_normalized_env_value"
+        "app_config_settings"
       ],
       "depth": 2,
       "nodeCount": 13,
@@ -5043,6 +5193,40 @@
       "warnings": []
     },
     {
+      "id": "flow:agent_ops_operational_qa_main",
+      "name": "main",
+      "entryPoint": "agent_ops_operational_qa_main",
+      "entryPointId": "agent_ops_operational_qa_main",
+      "path": [
+        "agent_ops_operational_qa_main",
+        "agent_ops_operational_qa_initialize",
+        "agent_ops_operational_qa_validate",
+        "agent_ops_operational_qa_catalog",
+        "agent_ops_operational_qa_operationalqaerror",
+        "agent_ops_operational_qa_utc_now",
+        "agent_ops_operational_qa_write",
+        "agent_ops_operational_qa_json_bytes"
+      ],
+      "qualifiedPath": [
+        "agent_ops_operational_qa_main",
+        "agent_ops_operational_qa_initialize",
+        "agent_ops_operational_qa_validate",
+        "agent_ops_operational_qa_catalog",
+        "agent_ops_operational_qa_operationalqaerror",
+        "agent_ops_operational_qa_utc_now",
+        "agent_ops_operational_qa_write",
+        "agent_ops_operational_qa_json_bytes"
+      ],
+      "depth": 3,
+      "nodeCount": 8,
+      "fileCount": 1,
+      "files": [
+        "scripts/agent_ops/operational_qa.py"
+      ],
+      "criticality": 0.2113,
+      "warnings": []
+    },
+    {
       "id": "flow:services_analytics_exports_render_export_csv",
       "name": "render_export_csv",
       "entryPoint": "services_analytics_exports_render_export_csv",
@@ -5609,46 +5793,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_payment_link_test_service_refresh_mercadopago_payment_link_test_by_reference",
-      "name": "refresh_mercadopago_payment_link_test_by_reference",
-      "entryPoint": "services_payment_link_test_service_refresh_mercadopago_payment_link_test_by_reference",
-      "entryPointId": "services_payment_link_test_service_refresh_mercadopago_payment_link_test_by_reference",
-      "path": [
-        "services_payment_link_test_service_refresh_mercadopago_payment_link_test_by_reference",
-        "services_payment_link_test_service_refresh_mercadopago_payment_link_test",
-        "services_payment_link_test_service_apply_terminal_dates",
-        "services_payment_link_test_service_ensure_utc",
-        "services_payment_link_test_service_friendly_mercadopago_error",
-        "services_payment_link_test_service_mercadopago_access_token",
-        "services_payment_link_test_service_paymentlinktesterror",
-        "services_payment_link_test_service_status_from_payment_payload",
-        "services_payment_link_test_service_parse_provider_datetime",
-        "services_payment_link_test_service_money",
-        "services_payment_link_test_service_status_from_payment"
-      ],
-      "qualifiedPath": [
-        "services_payment_link_test_service_refresh_mercadopago_payment_link_test_by_reference",
-        "services_payment_link_test_service_refresh_mercadopago_payment_link_test",
-        "services_payment_link_test_service_apply_terminal_dates",
-        "services_payment_link_test_service_ensure_utc",
-        "services_payment_link_test_service_friendly_mercadopago_error",
-        "services_payment_link_test_service_mercadopago_access_token",
-        "services_payment_link_test_service_paymentlinktesterror",
-        "services_payment_link_test_service_status_from_payment_payload",
-        "services_payment_link_test_service_parse_provider_datetime",
-        "services_payment_link_test_service_money",
-        "services_payment_link_test_service_status_from_payment"
-      ],
-      "depth": 3,
-      "nodeCount": 11,
-      "fileCount": 1,
-      "files": [
-        "app/services/payment_link_test_service.py"
-      ],
-      "criticality": 0.2027,
-      "warnings": []
-    },
-    {
       "id": "flow:ota_orchestrator_otaorchestratorservice_verify_connection",
       "name": ".verify_connection",
       "entryPoint": "ota_orchestrator_otaorchestratorservice_verify_connection",
@@ -6054,6 +6198,46 @@
       "fileCount": 1,
       "files": [
         "app/services/analytics_ai_providers.py"
+      ],
+      "criticality": 0.1927,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_payment_link_test_service_refresh_mercadopago_payment_link_test_by_reference",
+      "name": "refresh_mercadopago_payment_link_test_by_reference",
+      "entryPoint": "services_payment_link_test_service_refresh_mercadopago_payment_link_test_by_reference",
+      "entryPointId": "services_payment_link_test_service_refresh_mercadopago_payment_link_test_by_reference",
+      "path": [
+        "services_payment_link_test_service_refresh_mercadopago_payment_link_test_by_reference",
+        "services_payment_link_test_service_apply_terminal_dates",
+        "services_payment_link_test_service_money",
+        "services_payment_link_test_service_paymentlinktesterror",
+        "services_payment_link_test_service_refresh_mercadopago_payment_link_test",
+        "services_payment_link_test_service_status_from_payment_payload",
+        "services_payment_link_test_service_parse_provider_datetime",
+        "services_payment_link_test_service_ensure_utc",
+        "services_payment_link_test_service_friendly_mercadopago_error",
+        "services_payment_link_test_service_mercadopago_access_token",
+        "services_payment_link_test_service_status_from_payment"
+      ],
+      "qualifiedPath": [
+        "services_payment_link_test_service_refresh_mercadopago_payment_link_test_by_reference",
+        "services_payment_link_test_service_apply_terminal_dates",
+        "services_payment_link_test_service_money",
+        "services_payment_link_test_service_paymentlinktesterror",
+        "services_payment_link_test_service_refresh_mercadopago_payment_link_test",
+        "services_payment_link_test_service_status_from_payment_payload",
+        "services_payment_link_test_service_parse_provider_datetime",
+        "services_payment_link_test_service_ensure_utc",
+        "services_payment_link_test_service_friendly_mercadopago_error",
+        "services_payment_link_test_service_mercadopago_access_token",
+        "services_payment_link_test_service_status_from_payment"
+      ],
+      "depth": 2,
+      "nodeCount": 11,
+      "fileCount": 1,
+      "files": [
+        "app/services/payment_link_test_service.py"
       ],
       "criticality": 0.1927,
       "warnings": []
@@ -11305,14 +11489,16 @@
       "entryPointId": "api_ota_webhooks_booking_webhook",
       "path": [
         "api_ota_webhooks_booking_webhook",
+        "api_ota_webhooks_guarded_json_payload",
         "api_ota_webhooks_handle_ota_webhook"
       ],
       "qualifiedPath": [
         "api_ota_webhooks_booking_webhook",
+        "api_ota_webhooks_guarded_json_payload",
         "api_ota_webhooks_handle_ota_webhook"
       ],
       "depth": 1,
-      "nodeCount": 2,
+      "nodeCount": 3,
       "fileCount": 1,
       "files": [
         "app/api/ota_webhooks.py"
@@ -12199,6 +12385,28 @@
       "warnings": []
     },
     {
+      "id": "flow:api_laundry_vendor_create_laundry_remito",
+      "name": "create_laundry_remito",
+      "entryPoint": "api_laundry_vendor_create_laundry_remito",
+      "entryPointId": "api_laundry_vendor_create_laundry_remito",
+      "path": [
+        "api_laundry_vendor_create_laundry_remito",
+        "api_laundry_vendor_housekeeping_remito"
+      ],
+      "qualifiedPath": [
+        "api_laundry_vendor_create_laundry_remito",
+        "api_laundry_vendor_housekeeping_remito"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/laundry_vendor.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:services_linen_service_create_linen_item",
       "name": "create_linen_item",
       "entryPoint": "services_linen_service_create_linen_item",
@@ -12249,14 +12457,16 @@
       "entryPointId": "services_payment_link_service_create_mercadopago_preference",
       "path": [
         "services_payment_link_service_create_mercadopago_preference",
+        "services_payment_link_service_is_safe_provider_url",
         "services_payment_link_service_paymentlinkerror"
       ],
       "qualifiedPath": [
         "services_payment_link_service_create_mercadopago_preference",
+        "services_payment_link_service_is_safe_provider_url",
         "services_payment_link_service_paymentlinkerror"
       ],
       "depth": 1,
-      "nodeCount": 2,
+      "nodeCount": 3,
       "fileCount": 1,
       "files": [
         "app/services/payment_link_service.py"
@@ -12507,14 +12717,16 @@
       "entryPointId": "api_ota_webhooks_despegar_webhook",
       "path": [
         "api_ota_webhooks_despegar_webhook",
+        "api_ota_webhooks_guarded_json_payload",
         "api_ota_webhooks_handle_ota_webhook"
       ],
       "qualifiedPath": [
         "api_ota_webhooks_despegar_webhook",
+        "api_ota_webhooks_guarded_json_payload",
         "api_ota_webhooks_handle_ota_webhook"
       ],
       "depth": 1,
-      "nodeCount": 2,
+      "nodeCount": 3,
       "fileCount": 1,
       "files": [
         "app/api/ota_webhooks.py"
@@ -12855,14 +13067,16 @@
       "entryPointId": "api_ota_webhooks_expedia_webhook",
       "path": [
         "api_ota_webhooks_expedia_webhook",
+        "api_ota_webhooks_guarded_json_payload",
         "api_ota_webhooks_handle_ota_webhook"
       ],
       "qualifiedPath": [
         "api_ota_webhooks_expedia_webhook",
+        "api_ota_webhooks_guarded_json_payload",
         "api_ota_webhooks_handle_ota_webhook"
       ],
       "depth": 1,
-      "nodeCount": 2,
+      "nodeCount": 3,
       "fileCount": 1,
       "files": [
         "app/api/ota_webhooks.py"
@@ -13559,6 +13773,28 @@
       "warnings": []
     },
     {
+      "id": "flow:api_rooms_get_room",
+      "name": "get_room",
+      "entryPoint": "api_rooms_get_room",
+      "entryPointId": "api_rooms_get_room",
+      "path": [
+        "api_rooms_get_room",
+        "api_rooms_housekeeping_room"
+      ],
+      "qualifiedPath": [
+        "api_rooms_get_room",
+        "api_rooms_housekeeping_room"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/rooms.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:api_fx_rates_get_single_rate",
       "name": "get_single_rate",
       "entryPoint": "api_fx_rates_get_single_rate",
@@ -13827,6 +14063,28 @@
       "warnings": []
     },
     {
+      "id": "flow:api_laundry_vendor_list_laundry_remitos",
+      "name": "list_laundry_remitos",
+      "entryPoint": "api_laundry_vendor_list_laundry_remitos",
+      "entryPointId": "api_laundry_vendor_list_laundry_remitos",
+      "path": [
+        "api_laundry_vendor_list_laundry_remitos",
+        "api_laundry_vendor_housekeeping_remito"
+      ],
+      "qualifiedPath": [
+        "api_laundry_vendor_list_laundry_remitos",
+        "api_laundry_vendor_housekeeping_remito"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/laundry_vendor.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:services_allocation_policy_service_list_policy_versions",
       "name": "list_policy_versions",
       "entryPoint": "services_allocation_policy_service_list_policy_versions",
@@ -13866,6 +14124,28 @@
       "fileCount": 1,
       "files": [
         "app/api/reservations.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_rooms_list_rooms",
+      "name": "list_rooms",
+      "entryPoint": "api_rooms_list_rooms",
+      "entryPointId": "api_rooms_list_rooms",
+      "path": [
+        "api_rooms_list_rooms",
+        "api_rooms_housekeeping_room"
+      ],
+      "qualifiedPath": [
+        "api_rooms_list_rooms",
+        "api_rooms_housekeeping_room"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/rooms.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -14022,6 +14302,32 @@
       "fileCount": 1,
       "files": [
         "scripts/agent_ops/normalize_graphify_portability.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:agent_ops_normalize_qa_catalog_main",
+      "name": "main",
+      "entryPoint": "agent_ops_normalize_qa_catalog_main",
+      "entryPointId": "agent_ops_normalize_qa_catalog_main",
+      "path": [
+        "agent_ops_normalize_qa_catalog_main",
+        "agent_ops_normalize_qa_catalog_archive_historical",
+        "agent_ops_normalize_qa_catalog_build_cases",
+        "agent_ops_normalize_qa_catalog_write_json"
+      ],
+      "qualifiedPath": [
+        "agent_ops_normalize_qa_catalog_main",
+        "agent_ops_normalize_qa_catalog_archive_historical",
+        "agent_ops_normalize_qa_catalog_build_cases",
+        "agent_ops_normalize_qa_catalog_write_json"
+      ],
+      "depth": 1,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "scripts/agent_ops/normalize_qa_catalog.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -14517,6 +14823,28 @@
       "warnings": []
     },
     {
+      "id": "flow:api_settings_security_recent_security_events",
+      "name": "recent_security_events",
+      "entryPoint": "api_settings_security_recent_security_events",
+      "entryPointId": "api_settings_security_recent_security_events",
+      "path": [
+        "api_settings_security_recent_security_events",
+        "api_settings_security_safe_resource_id"
+      ],
+      "qualifiedPath": [
+        "api_settings_security_recent_security_events",
+        "api_settings_security_safe_resource_id"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/settings_security.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:services_analytics_service_record_hotel_audit_event",
       "name": "record_hotel_audit_event",
       "entryPoint": "services_analytics_service_record_hotel_audit_event",
@@ -14786,6 +15114,30 @@
       "fileCount": 1,
       "files": [
         "app/main.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_external_effects_policy_require_inbound_provider_events",
+      "name": "require_inbound_provider_events",
+      "entryPoint": "services_external_effects_policy_require_inbound_provider_events",
+      "entryPointId": "services_external_effects_policy_require_inbound_provider_events",
+      "path": [
+        "services_external_effects_policy_require_inbound_provider_events",
+        "services_external_effects_policy_inbound_provider_events_enabled",
+        "services_external_effects_policy_inboundprovidereventsdisabled"
+      ],
+      "qualifiedPath": [
+        "services_external_effects_policy_require_inbound_provider_events",
+        "services_external_effects_policy_inbound_provider_events_enabled",
+        "services_external_effects_policy_inboundprovidereventsdisabled"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/services/external_effects_policy.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -15177,6 +15529,28 @@
       "warnings": []
     },
     {
+      "id": "flow:api_settings_security_security_overview",
+      "name": "security_overview",
+      "entryPoint": "api_settings_security_security_overview",
+      "entryPointId": "api_settings_security_security_overview",
+      "path": [
+        "api_settings_security_security_overview",
+        "api_settings_security_current_user"
+      ],
+      "qualifiedPath": [
+        "api_settings_security_security_overview",
+        "api_settings_security_current_user"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/settings_security.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:api_demo_seed_demo",
       "name": "seed_demo",
       "entryPoint": "api_demo_seed_demo",
@@ -15452,6 +15826,28 @@
       "fileCount": 1,
       "files": [
         "app/api/payment_surcharges.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_rooms_update_room_cleaning_status",
+      "name": "update_room_cleaning_status",
+      "entryPoint": "api_rooms_update_room_cleaning_status",
+      "entryPointId": "api_rooms_update_room_cleaning_status",
+      "path": [
+        "api_rooms_update_room_cleaning_status",
+        "api_rooms_housekeeping_room"
+      ],
+      "qualifiedPath": [
+        "api_rooms_update_room_cleaning_status",
+        "api_rooms_housekeeping_room"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/rooms.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -15987,6 +16383,28 @@
       "warnings": []
     },
     {
+      "id": "flow:hooks_usereports_useoccupancyreport",
+      "name": "useOccupancyReport",
+      "entryPoint": "hooks_usereports_useoccupancyreport",
+      "entryPointId": "hooks_usereports_useoccupancyreport",
+      "path": [
+        "hooks_usereports_useoccupancyreport",
+        "hooks_usereports_occupancykey"
+      ],
+      "qualifiedPath": [
+        "hooks_usereports_useoccupancyreport",
+        "hooks_usereports_occupancykey"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/hooks/useReports.ts"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:hooks_useonboardingstatus_useonboardingstatus",
       "name": "useOnboardingStatus",
       "entryPoint": "hooks_useonboardingstatus_useonboardingstatus",
@@ -16202,6 +16620,28 @@
       "fileCount": 1,
       "files": [
         "frontend/src/hooks/useReservations.ts"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:hooks_usereports_userevenuereport",
+      "name": "useRevenueReport",
+      "entryPoint": "hooks_usereports_userevenuereport",
+      "entryPointId": "hooks_usereports_userevenuereport",
+      "path": [
+        "hooks_usereports_userevenuereport",
+        "hooks_usereports_revenuekey"
+      ],
+      "qualifiedPath": [
+        "hooks_usereports_userevenuereport",
+        "hooks_usereports_revenuekey"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/hooks/useReports.ts"
       ],
       "criticality": 0.16,
       "warnings": []

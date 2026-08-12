@@ -15,6 +15,12 @@ from app.models.payment_link_test import PaymentLinkTest
 from app.schemas.payment_link_test import PaymentLinkTestCreate
 from app.services.hotel_outbound_email_service import HotelOutboundEmailError, ensure_hotel_gmail_ready, send_hotel_email
 from app.services.integration_service import get_connection_payload
+from app.services.external_effects_policy import (
+    ExternalEffectsDisabled,
+    InboundProviderEventsDisabled,
+    require_external_connections,
+    require_inbound_provider_events,
+)
 
 
 class PaymentLinkTestError(Exception):
@@ -29,6 +35,11 @@ def _validate_email(email: str) -> str:
 
 
 def _mercadopago_access_token(db: Session, hotel_id: int) -> str:
+    # Keep this before get_connection_payload(), which decrypts credentials.
+    try:
+        require_external_connections("Mercado Pago payment-link test")
+    except ExternalEffectsDisabled as exc:
+        raise PaymentLinkTestError(str(exc)) from exc
     try:
         payload = get_connection_payload(db, hotel_id, "mercadopago")
     except ValueError as exc:
@@ -241,6 +252,12 @@ def _apply_terminal_dates(record: PaymentLinkTest, status: str, payment: dict[st
 
 
 def create_mercadopago_payment_link_test(db: Session, hotel_id: int, payload: PaymentLinkTestCreate) -> PaymentLinkTest:
+    # No record, credential decryption, Gmail validation, or provider traffic
+    # may happen unless the operator explicitly opened the outbound lane.
+    try:
+        require_external_connections("Mercado Pago payment-link test creation")
+    except ExternalEffectsDisabled as exc:
+        raise PaymentLinkTestError(str(exc)) from exc
     access_token = _mercadopago_access_token(db, hotel_id)
     recipient_email = _validate_email(payload.recipient_email)
     try:
@@ -276,7 +293,11 @@ def create_mercadopago_payment_link_test(db: Session, hotel_id: int, payload: Pa
 
     response = requests.post(
         "https://api.mercadopago.com/checkout/preferences",
-        headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"},
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json",
+            "X-Idempotency-Key": hashlib.sha256(external_reference.encode("utf-8")).hexdigest(),
+        },
         json=preference_payload,
         timeout=20,
     )
@@ -331,7 +352,6 @@ def create_mercadopago_payment_link_test(db: Session, hotel_id: int, payload: Pa
 
 
 def list_payment_link_tests(db: Session, hotel_id: int, provider: str = "mercadopago") -> list[PaymentLinkTest]:
-    sync_pending_payment_link_tests(db, hotel_id, provider=provider)
     return (
         db.query(PaymentLinkTest)
         .filter(PaymentLinkTest.hotel_id == hotel_id, PaymentLinkTest.provider == provider)
@@ -341,71 +361,23 @@ def list_payment_link_tests(db: Session, hotel_id: int, provider: str = "mercado
 
 
 def refresh_mercadopago_payment_link_test(db: Session, hotel_id: int, test_id: int) -> PaymentLinkTest:
-    record = (
-        db.query(PaymentLinkTest)
-        .filter(PaymentLinkTest.id == test_id, PaymentLinkTest.hotel_id == hotel_id, PaymentLinkTest.provider == "mercadopago")
-        .first()
+    # Polling provider state is intentionally unsupported. Status changes arrive
+    # through the signed callback lane when that lane is explicitly enabled.
+    raise PaymentLinkTestError(
+        "La consulta externa de estado esta deshabilitada; espera un webhook firmado del proveedor."
     )
-    if not record:
-        raise PaymentLinkTestError("Prueba no encontrada para este hotel.")
-
-    access_token = _mercadopago_access_token(db, hotel_id)
-    response = requests.get(
-        "https://api.mercadopago.com/v1/payments/search",
-        headers={"Authorization": f"Bearer {access_token}"},
-        params={"external_reference": record.external_reference, "sort": "date_created", "criteria": "desc"},
-        timeout=20,
-    )
-    if not response.ok:
-        try:
-            detail = response.json()
-        except Exception:
-            detail = response.text
-        raise PaymentLinkTestError(
-            f"No se pudo consultar el estado en Mercado Pago: {_friendly_mercadopago_error(detail, response.status_code)}"
-        )
-
-    data = response.json()
-    results = data.get("results") or []
-    record.last_checked_at = datetime.now(timezone.utc)
-
-    if not results:
-        expires_at = _ensure_utc(record.expires_at)
-        if record.cancelled_at:
-            record.status = "cancelled"
-            record.external_status = "cancelled_by_user"
-        elif expires_at and expires_at <= datetime.now(timezone.utc):
-            record.status = "expired"
-            record.external_status = "expired"
-        else:
-            record.status = "pending"
-            record.external_status = "waiting_payment"
-        record.last_error = None
-        record.refunded_amount = None
-        if record.status != "approved":
-            record.paid_at = None
-        record.refunded_at = None
-        record.gateway_response = data
-        db.flush()
-        return record
-
-    payment = results[0]
-    record.external_status = payment.get("status_detail") or payment.get("status")
-    record.external_payment_id = str(payment.get("id")) if payment.get("id") else None
-    record.status, record.refunded_amount = _status_from_payment_payload(payment, record)
-    record.gateway_response = payment
-    record.last_error = None
-    _apply_terminal_dates(record, record.status, payment)
-
-    db.flush()
-    return record
 
 
 def refresh_mercadopago_payment_link_test_by_reference(
     db: Session,
     external_reference: str,
     hotel_id: int | None = None,
+    payload: dict[str, Any] | None = None,
 ) -> PaymentLinkTest | None:
+    try:
+        require_inbound_provider_events("Mercado Pago")
+    except InboundProviderEventsDisabled as exc:
+        raise PaymentLinkTestError(str(exc)) from exc
     query = db.query(PaymentLinkTest).filter(
         PaymentLinkTest.external_reference == external_reference,
         PaymentLinkTest.provider == "mercadopago",
@@ -415,7 +387,32 @@ def refresh_mercadopago_payment_link_test_by_reference(
     record = query.first()
     if not record:
         return None
-    return refresh_mercadopago_payment_link_test(db, record.hotel_id, record.id)
+
+    # Never poll the provider from a callback. Persist only fields delivered in
+    # the already signature-verified event and reject financial mismatches.
+    event = payload if isinstance(payload, dict) else {}
+    data = event.get("data") if isinstance(event.get("data"), dict) else {}
+    payment = {**event, **data}
+    incoming_currency = str(payment.get("currency_id") or payment.get("currency") or "").strip().upper()
+    if incoming_currency and incoming_currency != record.currency.upper():
+        raise PaymentLinkTestError("La moneda del webhook no coincide con el link de prueba.")
+    incoming_amount = payment.get("transaction_amount") or payment.get("amount")
+    if incoming_amount not in (None, "") and abs(_money(incoming_amount) - _money(record.amount)) > 0.01:
+        raise PaymentLinkTestError("El monto del webhook no coincide con el link de prueba.")
+
+    record.last_checked_at = datetime.now(timezone.utc)
+    record.external_payment_id = str(payment.get("id") or "").strip() or record.external_payment_id
+    provider_status = payment.get("status")
+    if provider_status:
+        record.external_status = str(payment.get("status_detail") or provider_status)
+        record.status, record.refunded_amount = _status_from_payment_payload(payment, record)
+        _apply_terminal_dates(record, record.status, payment)
+    else:
+        record.external_status = "signed_callback_received"
+    record.gateway_response = event
+    record.last_error = None
+    db.flush()
+    return record
 
 
 def sync_pending_payment_link_tests(
@@ -424,35 +421,8 @@ def sync_pending_payment_link_tests(
     provider: str = "mercadopago",
     stale_after_seconds: int = 20,
 ) -> None:
-    if provider != "mercadopago":
-        return
-
-    now = datetime.now(timezone.utc)
-    stale_before = now - timedelta(seconds=stale_after_seconds)
-    syncable_tests = (
-        db.query(PaymentLinkTest)
-        .filter(
-            PaymentLinkTest.hotel_id == hotel_id,
-            PaymentLinkTest.provider == provider,
-            PaymentLinkTest.status.in_(["pending", "approved", "partially_refunded"]),
-        )
-        .order_by(PaymentLinkTest.created_at.desc())
-        .all()
-    )
-
-    for test in syncable_tests:
-        last_checked_at = _ensure_utc(test.last_checked_at)
-        if last_checked_at and last_checked_at > stale_before:
-            continue
-        try:
-            refresh_mercadopago_payment_link_test(db, hotel_id, test.id)
-        except PaymentLinkTestError as exc:
-            test.last_error = str(exc)
-            test.last_checked_at = now
-        except Exception as exc:
-            test.last_error = f"No se pudo sincronizar automaticamente: {exc}"
-            test.last_checked_at = now
-    db.flush()
+    # Backward-compatible no-op: listing tests must never poll a provider.
+    return None
 
 
 def cancel_mercadopago_payment_link_test(db: Session, hotel_id: int, test_id: int) -> PaymentLinkTest:
@@ -465,33 +435,16 @@ def cancel_mercadopago_payment_link_test(db: Session, hotel_id: int, test_id: in
         raise PaymentLinkTestError("Prueba no encontrada para este hotel.")
     if record.status in {"cancelled", "expired"}:
         raise PaymentLinkTestError("Este link ya no esta activo.")
-    if not record.preference_id:
-        raise PaymentLinkTestError("Este link no tiene una preferencia valida para cancelar.")
-
-    access_token = _mercadopago_access_token(db, hotel_id)
+    # Cancellation is local only. We deliberately do not decrypt credentials or
+    # invoke the provider cancellation API; this preserves the credential record
+    # while making the PMS artifact visibly terminal.
     now = datetime.now(timezone.utc)
-    response = requests.put(
-        f"https://api.mercadopago.com/checkout/preferences/{record.preference_id}",
-        headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"},
-        json={
-            "expires": True,
-            "expiration_date_from": (now - timedelta(minutes=5)).isoformat(),
-            "expiration_date_to": now.isoformat(),
-        },
-        timeout=20,
-    )
-    if not response.ok:
-        try:
-            detail = response.json()
-        except Exception:
-            detail = response.text
-        raise PaymentLinkTestError(
-            f"No se pudo cancelar el link en Mercado Pago: {_friendly_mercadopago_error(detail, response.status_code)}"
-        )
-
     record.cancelled_at = now
     record.expires_at = now
-    record.gateway_response = response.json()
+    record.gateway_response = {
+        **(record.gateway_response or {}),
+        "local_cancellation": True,
+    }
     record.last_error = None
     if record.status == "pending":
         record.status = "cancelled"

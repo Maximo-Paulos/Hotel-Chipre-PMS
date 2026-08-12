@@ -13,6 +13,10 @@ from app.models.hotel_config import HotelConfiguration
 from app.models.hotel_membership import HotelMembership
 from app.services.security import hash_password, decode_signed_token
 from app.dependencies.auth import AuthContext
+from app.services.permission_service import (
+    PERMISSION_REPORTS_FINANCIAL_VIEW,
+    PERMISSION_REPORTS_OPERATIONAL_VIEW,
+)
 
 
 def get_db_override_target():
@@ -115,6 +119,9 @@ def test_invite_returns_token_and_accepts(owner_ctx):
     assert accept.status_code == 200
     accept_body = accept.json()
     assert accept_body["user"]["is_verified"] is True
+    assert PERMISSION_REPORTS_OPERATIONAL_VIEW in accept_body["permissions"]
+    assert PERMISSION_REPORTS_FINANCIAL_VIEW not in accept_body["permissions"]
+    assert accept_body["user"]["permissions"] == accept_body["permissions"]
     invited_user = db.query(User).filter(User.email == "guest@test.com").first()
     invited_membership = (
         db.query(HotelMembership)
@@ -201,3 +208,50 @@ def test_owner_cannot_assign_owner_or_revoke_self(owner_ctx):
 
     revoke_self = client.delete(f"/api/users/{ctx['user_id']}")
     assert revoke_self.status_code == 400
+
+
+def test_owner_and_co_owner_can_assign_receptionist(owner_ctx):
+    client, db, ctx = owner_ctx
+
+    owner_invite = client.post(
+        "/api/users/invite",
+        json={"email": "reception-owner@test.com", "role": "receptionist"},
+    )
+    assert owner_invite.status_code == 201, owner_invite.text
+    assert owner_invite.json()["user"]["role"] == "receptionist"
+
+    co_owner = User(
+        email="co-reception@test.com",
+        password_hash=hash_password("pw"),
+        role="co_owner",
+        is_verified=True,
+    )
+    db.add(co_owner)
+    db.flush()
+    db.add(
+        HotelMembership(
+            hotel_id=ctx["hotel_id"],
+            user_id=co_owner.id,
+            role="co_owner",
+            status="active",
+        )
+    )
+    db.commit()
+
+    def override_auth_context_co_owner():
+        return AuthContext(
+            hotel_id=ctx["hotel_id"],
+            user_id=co_owner.id,
+            user_email=co_owner.email,
+            user_role="co_owner",
+            is_verified=True,
+            permissions=set(),
+        )
+
+    fastapi_app.dependency_overrides[get_auth_context_target()] = override_auth_context_co_owner
+    co_owner_invite = client.post(
+        "/api/users/invite",
+        json={"email": "reception-co@test.com", "role": "receptionist"},
+    )
+    assert co_owner_invite.status_code == 201, co_owner_invite.text
+    assert co_owner_invite.json()["user"]["role"] == "receptionist"

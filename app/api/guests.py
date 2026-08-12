@@ -14,7 +14,7 @@ from app.models.guest import Guest, GuestCompanion, DocumentTypeEnum
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.schemas.guest import GuestCreate, GuestRead, GuestUpdate, GuestCompanionCreate, GuestCompanionRead
 from app.schemas.guest_tag import GuestRatingUpdate, GuestTagCreate, GuestTagRead
-from app.dependencies.auth import get_auth_context, AuthContext, require_permission
+from app.dependencies.auth import AuthContext, require_permission
 from app.services.guest_service import (
     GuestCreatePayload,
     GuestServiceError,
@@ -28,7 +28,13 @@ from app.services.guest_service import (
 )
 from app.models.audit_log import AuditActionEnum
 from app.services import audit_log_service
-from app.services.permission_service import PERMISSION_GUEST_EDIT, PERMISSION_GUEST_EXPORT, PERMISSION_GUEST_TAGS
+from app.services.permission_service import (
+    PERMISSION_GUEST_CREATE,
+    PERMISSION_GUEST_EDIT,
+    PERMISSION_GUEST_EXPORT,
+    PERMISSION_GUEST_TAGS,
+    PERMISSION_GUEST_VIEW,
+)
 
 router = APIRouter(prefix="/api/guests", tags=["Guests"])
 
@@ -68,7 +74,7 @@ def _build_guest_ledger_csv(rows: list[dict[str, object]]) -> str:
 def create_guest(
     data: GuestCreate,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(get_auth_context),
+    context: AuthContext = Depends(require_permission(PERMISSION_GUEST_CREATE)),
 ):
     companions_data = data.companions
     guest_dict = data.model_dump(exclude={"companions"})
@@ -120,7 +126,7 @@ def list_guests(
     limit: int = Query(50, ge=1, le=200),
     search: str = "",
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(get_auth_context),
+    context: AuthContext = Depends(require_permission(PERMISSION_GUEST_VIEW)),
 ):
     query = db.query(Guest).filter(Guest.hotel_id == context.hotel_id)
     if search:
@@ -141,7 +147,7 @@ def search_guest_records(
     q: str,
     limit: int = 20,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(get_auth_context),
+    context: AuthContext = Depends(require_permission(PERMISSION_GUEST_VIEW)),
 ):
     return search_guests(db, context.hotel_id, q, limit=limit)
 
@@ -202,7 +208,7 @@ def export_guest_ledger(
 def get_guest(
     guest_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(get_auth_context),
+    context: AuthContext = Depends(require_permission(PERMISSION_GUEST_VIEW)),
 ):
     guest = db.query(Guest).filter(Guest.id == guest_id, Guest.hotel_id == context.hotel_id).first()
     if not guest:
@@ -216,7 +222,7 @@ def get_guest_quick_profile(
     offset: int = 0,
     limit: int = 5,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(get_auth_context),
+    context: AuthContext = Depends(require_permission(PERMISSION_GUEST_VIEW)),
 ):
     try:
         profile = quick_profile(
@@ -245,7 +251,7 @@ def get_guest_quick_profile(
 def get_guest_tags(
     guest_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(get_auth_context),
+    context: AuthContext = Depends(require_permission(PERMISSION_GUEST_VIEW)),
 ):
     try:
         return list_active_tags(db, hotel_id=context.hotel_id, guest_id=guest_id)
@@ -356,7 +362,7 @@ def add_companions(
     guest_id: int,
     companions: list[GuestCompanionCreate],
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(get_auth_context),
+    context: AuthContext = Depends(require_permission(PERMISSION_GUEST_EDIT)),
 ):
     """Add new companions to an existing guest."""
     guest = db.query(Guest).filter(Guest.id == guest_id, Guest.hotel_id == context.hotel_id).first()

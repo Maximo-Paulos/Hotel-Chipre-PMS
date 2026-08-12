@@ -18,12 +18,12 @@ const housekeeping = {
   password: process.env.E2E_HOUSEKEEPING_PASSWORD || "E2eHousekeeping1234!"
 };
 
-async function login(page: Page, credentials: { email: string; password: string }) {
+async function login(page: Page, credentials: { email: string; password: string }, landingPath: string) {
   await page.goto("/login");
   await page.locator('input[type="email"]').fill(credentials.email);
   await page.locator('input[type="password"]').fill(credentials.password);
   await page.getByTestId("login-submit").click();
-  await page.waitForURL("**/dashboard", { timeout: 20_000 });
+  await page.waitForURL(`**${landingPath}`, { timeout: 20_000 });
 }
 
 async function logout(page: Page) {
@@ -37,7 +37,7 @@ test("housekeeping sends a laundry remito on a vendor set up by the owner", asyn
   const locationName = `QA HK Deposito ${suffix}`;
   const itemName = `QA HK Toallas ${suffix}`;
 
-  await login(page, owner);
+  await login(page, owner, "/dashboard");
 
   // D (stock/lavanderia separation, split real): ropa blanca vive en su
   // propia tabla/API (linen_items/linen_locations/linen_movements) -- alta
@@ -70,7 +70,7 @@ test("housekeeping sends a laundry remito on a vendor set up by the owner", asyn
   await expect(page.getByText(`Lavadero "${vendorName}" creado.`, { exact: true })).toBeVisible();
   await logout(page);
 
-  await login(page, housekeeping);
+  await login(page, housekeeping, "/habitaciones");
   await expect(page.getByTestId("session-role")).toHaveText("Housekeeping");
   await page.goto("/operacion/lavanderia");
 

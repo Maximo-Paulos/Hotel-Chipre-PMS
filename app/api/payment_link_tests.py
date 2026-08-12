@@ -14,6 +14,10 @@ from app.services.payment_link_test_service import (
     refresh_mercadopago_payment_link_test_by_reference,
     validate_mercadopago_webhook_signature,
 )
+from app.services.external_effects_policy import (
+    InboundProviderEventsDisabled,
+    require_inbound_provider_events,
+)
 
 router = APIRouter(prefix="/api/payment-link-tests", tags=["Payment Link Tests"])
 
@@ -63,7 +67,7 @@ def refresh_test(
         return test
     except PaymentLinkTestError as exc:
         db.rollback()
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
     except Exception as exc:
         db.rollback()
         raise HTTPException(status_code=502, detail=f"No se pudo refrescar el estado del pago: {exc}")
@@ -94,6 +98,12 @@ async def mercadopago_webhook(
     request: Request,
     db: Session = Depends(get_db),
 ):
+    try:
+        # Keep before request body parsing, secret lookup, queries, and writes.
+        require_inbound_provider_events("Mercado Pago")
+    except InboundProviderEventsDisabled as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+
     settings = get_settings()
     external_reference = request.query_params.get("external_reference")
     hotel_id = request.query_params.get("hotel_id")
@@ -132,6 +142,7 @@ async def mercadopago_webhook(
             db,
             str(external_reference),
             hotel_id=int(hotel_id) if hotel_id and hotel_id.isdigit() else None,
+            payload=payload,
         )
         db.commit()
     except PaymentLinkTestError as exc:

@@ -39,12 +39,15 @@ MAX_QA_DURATION = timedelta(hours=24)
 REQUIRED_RESULT_FIELDS = {
     "persona",
     "case_id",
+    "device",
     "status",
     "preview_url",
     "precondition",
     "human_action",
     "expected",
     "observed",
+    "severity",
+    "screenshot",
     "evidence",
     "code_sha",
 }
@@ -309,8 +312,8 @@ def validate_evidence_bundle(
         if origin:
             allowed_preview_origins.add(origin)
 
-    expected_pairs: set[tuple[str, str]] = set()
-    expected_text: dict[tuple[str, str], str] = {}
+    expected_triplets: set[tuple[str, str, str]] = set()
+    expected_text: dict[tuple[str, str, str], str] = {}
     for index, case in enumerate(cases):
         if not isinstance(case, dict) or not isinstance(case.get("id"), str):
             fail(errors, f"regression catalog case {index} is malformed")
@@ -319,12 +322,21 @@ def validate_evidence_bundle(
         if not isinstance(personas, list) or not all(isinstance(persona, str) for persona in personas):
             fail(errors, f"regression catalog case {case['id']} personas are malformed")
             continue
+        devices = case.get("devices")
+        if (
+            not isinstance(devices, list)
+            or not devices
+            or not all(isinstance(device, str) and device for device in devices)
+        ):
+            fail(errors, f"regression catalog case {case['id']} devices are malformed")
+            continue
         for persona in personas:
-            pair = (case["id"], persona)
-            expected_pairs.add(pair)
-            expected_text[pair] = str(case.get("expected", ""))
+            for device in devices:
+                triplet = (case["id"], persona, device)
+                expected_triplets.add(triplet)
+                expected_text[triplet] = str(case.get("expected", ""))
 
-    observed_pairs: set[tuple[str, str]] = set()
+    observed_triplets: set[tuple[str, str, str]] = set()
     results = summary.get("results")
     if not isinstance(results, list):
         fail(errors, "results must be an array")
@@ -340,36 +352,40 @@ def validate_evidence_bundle(
             continue
         case_id = result.get("case_id")
         persona = result.get("persona")
-        if not isinstance(case_id, str) or not isinstance(persona, str):
-            fail(errors, f"result {index} case_id and persona must be strings")
+        device = result.get("device")
+        if not all(isinstance(value, str) and value for value in (case_id, persona, device)):
+            fail(errors, f"result {index} case_id, persona and device must be strings")
             continue
-        pair = (case_id, persona)
-        if pair not in expected_pairs:
-            fail(errors, f"result {index} is not a catalog persona/case row")
-        if pair in observed_pairs:
-            fail(errors, f"duplicate catalog row: {case_id}/{persona}")
-        observed_pairs.add(pair)
+        triplet = (case_id, persona, device)
+        if triplet not in expected_triplets:
+            fail(errors, f"result {index} is not a catalog case/persona/device row")
+        if triplet in observed_triplets:
+            fail(errors, f"duplicate catalog row: {case_id}/{persona}/{device}")
+        observed_triplets.add(triplet)
         if result.get("status") != "passed":
-            fail(errors, f"{case_id} for {persona} is not passed: {result.get('status')}")
+            fail(errors, f"{case_id} for {persona}/{device} is not passed: {result.get('status')}")
         if result.get("code_sha") != code_sha:
             fail(errors, f"{case_id} has mismatched result SHA")
-        if pair in expected_text and result.get("expected") != expected_text[pair]:
-            fail(errors, f"{case_id} for {persona} weakens or changes the catalog expectation")
+        if triplet in expected_text and result.get("expected") != expected_text[triplet]:
+            fail(errors, f"{case_id} for {persona}/{device} weakens or changes the catalog expectation")
         for field in ("precondition", "human_action", "observed"):
             if not isinstance(result.get(field), str) or not result[field].strip():
                 fail(errors, f"result {index}.{field} must be non-empty")
         row_origin = preview_origin(result.get("preview_url"), f"result {index}.preview_url", errors)
         if row_origin and row_origin not in allowed_preview_origins:
-            fail(errors, f"{case_id} for {persona} points at an unverified preview origin")
+            fail(errors, f"{case_id} for {persona}/{device} points at an unverified preview origin")
         evidence_reference = result.get("evidence")
         if not isinstance(evidence_reference, str) or not HASH_RE.fullmatch(evidence_reference):
             fail(errors, f"{case_id} for {persona} evidence must be sha256:<64 lowercase hex>")
-    missing_pairs = expected_pairs - observed_pairs
-    if missing_pairs:
+    missing_triplets = expected_triplets - observed_triplets
+    if missing_triplets:
         fail(
             errors,
             "missing catalog coverage: "
-            + ", ".join(f"{case}/{persona}" for case, persona in sorted(missing_pairs)),
+            + ", ".join(
+                f"{case}/{persona}/{device}"
+                for case, persona, device in sorted(missing_triplets)
+            ),
         )
 
     exclusions = summary.get("external_exclusions")

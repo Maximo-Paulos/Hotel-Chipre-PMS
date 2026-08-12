@@ -12,6 +12,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 import app.models  # noqa: F401
+from app.config import get_settings
 from app.database import Base
 from app.models.guest import Guest
 from app.models.hotel_config import HotelConfiguration
@@ -106,6 +107,9 @@ def _make_reservation(db, hotel_id: int, *, check_in: date, check_out: date) -> 
 # ── ÍTEM A: §15.1 scheduler tasks ──────────────────────────────────────────
 
 def test_send_morning_reports_iterates_active_hotels(db_session, monkeypatch):
+    monkeypatch.setenv("EXTERNAL_EFFECTS_ENABLED", "true")
+    monkeypatch.setenv("CONNECTIONS_ENABLED", "true")
+    get_settings.cache_clear()
     _make_hotel(db_session, 1)
     _make_hotel(db_session, 2)
     _make_hotel(db_session, 3, active=False)  # inactive: must be skipped
@@ -139,6 +143,9 @@ def test_send_morning_reports_iterates_active_hotels(db_session, monkeypatch):
 
 
 def test_one_hotel_failure_does_not_abort_the_rest(db_session, monkeypatch):
+    monkeypatch.setenv("EXTERNAL_EFFECTS_ENABLED", "true")
+    monkeypatch.setenv("CONNECTIONS_ENABLED", "true")
+    get_settings.cache_clear()
     _make_hotel(db_session, 1)
     _make_hotel(db_session, 2)
     db_session.commit()
@@ -171,6 +178,23 @@ def test_one_hotel_failure_does_not_abort_the_rest(db_session, monkeypatch):
     assert sorted(seen) == [1, 2]  # hotel 2 still attempted after hotel 1 failed
     assert result["sent"] == 1
     assert result["failed"] == 1
+
+
+def test_scheduled_reports_fail_before_engine_when_external_lane_is_closed(monkeypatch):
+    monkeypatch.setenv("EXTERNAL_EFFECTS_ENABLED", "false")
+    monkeypatch.setenv("CONNECTIONS_ENABLED", "false")
+    get_settings.cache_clear()
+
+    import app.tasks.report_tasks as rt
+
+    def unexpected_engine(*args, **kwargs):
+        raise AssertionError("database engine must not be opened")
+
+    monkeypatch.setattr(rt, "get_engine", unexpected_engine)
+    with pytest.raises(RuntimeError, match="EXTERNAL_EFFECTS_ENABLED"):
+        rt._run_scheduled_reports("morning", report_date=date(2026, 6, 25))
+
+    get_settings.cache_clear()
 
 
 # ── ÍTEM B: §13.3 manual-review routing ────────────────────────────────────

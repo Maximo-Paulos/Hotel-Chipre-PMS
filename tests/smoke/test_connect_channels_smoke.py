@@ -1,6 +1,21 @@
 from __future__ import annotations
 
+import pytest
+
+from app.config import get_settings
 from tests.smoke.helpers import register_owner
+
+
+@pytest.fixture(autouse=True)
+def _enable_mocked_external_effects(monkeypatch):
+    # This smoke test exercises the real connect/upsert flow (no live OTA
+    # call happens for a local credential upsert), not the sandbox gate --
+    # see app.services.external_effects_policy for the fail-closed default.
+    monkeypatch.setenv("EXTERNAL_EFFECTS_ENABLED", "true")
+    monkeypatch.setenv("CONNECTIONS_ENABLED", "true")
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
 
 
 def test_connect_channels_upsert_is_idempotent(client):

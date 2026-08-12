@@ -10,7 +10,10 @@ from pathlib import Path
 import pytest
 
 from scripts.agent_ops.provision_qa_bootstrap import ProvisionError, provision
-from scripts.agent_ops.qa_bootstrap_contract import BOOTSTRAP_CONFIGURATION_VERSION
+from scripts.agent_ops.qa_bootstrap_contract import (
+    BOOTSTRAP_CONFIGURATION_VERSION,
+    bootstrap_configuration_fingerprint,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -28,6 +31,9 @@ def manifest() -> dict:
     identity = "\x1f".join((project_ref, DB_HOST, str(DB_PORT), DB_USER)).encode()
     evidence["database"]["connection_fingerprint"] = (
         "sha256:" + hashlib.sha256(identity).hexdigest()
+    )
+    evidence["configuration"]["bootstrap_configuration_fingerprint"] = (
+        bootstrap_configuration_fingerprint(FakeRender(evidence).env)
     )
     return evidence
 
@@ -107,6 +113,9 @@ class FakeRender:
             "APP_BASE_URL": evidence["api_origin"],
             "APP_ENV": "preview",
             "CONNECTIONS_ENABLED": "false",
+            "EXTERNAL_EFFECTS_ENABLED": "false",
+            "GOOGLE_LOGIN_ENABLED": "false",
+            "INBOUND_PROVIDER_EVENTS_ENABLED": "false",
             "CORS_ORIGINS": evidence["app_url"],
             "DATABASE_URL": (
                 f"postgresql+psycopg2://{DB_USER}:synthetic-secret@"
@@ -144,6 +153,8 @@ class FakeRender:
             "QA_MASTER_ADMIN_PIN": "830527",
             "QA_OWNER_EMAIL": "owner@qa.example.test",
             "QA_OWNER_PASSWORD": "OwnerQaPass001!",
+            "QA_CO_OWNER_EMAIL": "co-owner@qa.example.test",
+            "QA_CO_OWNER_PASSWORD": "CoOwnerQaPass006!",
             "QA_PROVIDER_EVIDENCE_PUBLIC_KEY": "qa-ed25519-public-key",
             "QA_RECEPTION_EMAIL": "reception@qa.example.test",
             "QA_RECEPTION_PASSWORD": "ReceptionQaPass003!",

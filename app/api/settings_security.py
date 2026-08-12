@@ -1,0 +1,137 @@
+"""Tenant-scoped security overview and current-user session revocation."""
+
+from datetime import datetime, timedelta, timezone
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import Session
+
+from app.config import get_settings
+from app.database import get_db
+from app.dependencies.auth import AuthContext, require_roles
+from app.models.hotel_membership import HotelMembership
+from app.models.security_audit_log import SecurityAuditLog
+from app.models.user import User
+from app.schemas.settings_security import (
+    RevokeAllSessionsResponse,
+    SecurityCurrentUserRead,
+    SecurityEventRead,
+    SecurityEventsRead,
+    SecurityOverviewRead,
+)
+
+
+router = APIRouter(prefix="/api/settings/security", tags=["Settings Security"])
+_SECURITY_ROLES = ("owner", "co_owner")
+
+
+def _current_user(db: Session, context: AuthContext) -> User:
+    user = db.get(User, context.user_id)
+    if user is None or not user.is_active:
+        raise HTTPException(status_code=401, detail="Usuario no valido")
+    return user
+
+
+def _safe_resource_id(event: SecurityAuditLog) -> str | None:
+    """Keep useful internal references while never exposing free-form details."""
+
+    if event.resource_type in {
+        "permission",
+        "permission_override",
+        "reservation",
+        "company_document",
+        "room_movement_group",
+    }:
+        return event.resource_id
+    return None
+
+
+@router.get("/overview", response_model=SecurityOverviewRead)
+def security_overview(
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_roles(*_SECURITY_ROLES)),
+):
+    user = _current_user(db, context)
+    since = datetime.now(timezone.utc) - timedelta(hours=24)
+    membership_scope = db.query(HotelMembership).filter(
+        HotelMembership.hotel_id == context.hotel_id
+    )
+    event_scope = db.query(SecurityAuditLog).filter(
+        SecurityAuditLog.hotel_id == context.hotel_id,
+        SecurityAuditLog.created_at >= since,
+    )
+    settings = get_settings()
+    return SecurityOverviewRead(
+        hotel_id=context.hotel_id,
+        session_timeout_minutes=int(getattr(settings, "JWT_EXPIRES_MINUTES", 60)),
+        active_members=membership_scope.filter(HotelMembership.status == "active").count(),
+        pending_invitations=membership_scope.filter(HotelMembership.status == "invited").count(),
+        security_events_24h=event_scope.count(),
+        permission_denials_24h=event_scope.filter(
+            SecurityAuditLog.action == "permission.denied"
+        ).count(),
+        current_user=SecurityCurrentUserRead(
+            id=user.id,
+            email=user.email,
+            role=context.user_role or user.role,
+            last_login=user.last_login,
+            token_version=user.token_version or 0,
+        ),
+    )
+
+
+@router.get("/events", response_model=SecurityEventsRead)
+def recent_security_events(
+    limit: int = Query(default=20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_roles(*_SECURITY_ROLES)),
+):
+    rows = (
+        db.query(SecurityAuditLog)
+        .filter(SecurityAuditLog.hotel_id == context.hotel_id)
+        .order_by(SecurityAuditLog.created_at.desc(), SecurityAuditLog.id.desc())
+        .limit(limit)
+        .all()
+    )
+    return SecurityEventsRead(
+        hotel_id=context.hotel_id,
+        events=[
+            SecurityEventRead(
+                id=row.id,
+                action=row.action,
+                actor_user_id=row.user_id,
+                resource_type=row.resource_type,
+                resource_id=_safe_resource_id(row),
+                created_at=row.created_at,
+            )
+            for row in rows
+        ],
+    )
+
+
+@router.post("/revoke-all", response_model=RevokeAllSessionsResponse)
+def revoke_current_user_sessions(
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_roles(*_SECURITY_ROLES)),
+):
+    """Invalidate every access token previously issued to the caller."""
+
+    user = _current_user(db, context)
+    user.token_version = (user.token_version or 0) + 1
+    db.add(
+        SecurityAuditLog(
+            hotel_id=context.hotel_id,
+            user_id=user.id,
+            action="security.sessions.revoked_all",
+            resource_type="user_session",
+            resource_id=None,
+            details=None,
+        )
+    )
+    db.commit()
+    db.refresh(user)
+    return RevokeAllSessionsResponse(
+        revoked=True,
+        user_id=user.id,
+        token_version=user.token_version,
+        reauthentication_required=True,
+    )

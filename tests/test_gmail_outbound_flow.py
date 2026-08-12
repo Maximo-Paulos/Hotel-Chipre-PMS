@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from urllib.parse import parse_qs, urlparse
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -19,6 +20,16 @@ from app.services.hotel_outbound_email_service import send_hotel_email
 from app.services.integration_service import build_redirect_url, encrypt_payload, validate_gmail_credentials
 from app.dependencies.auth import AuthContext
 from app.services.security import hash_password
+from app.config import get_settings
+
+
+@pytest.fixture(autouse=True)
+def _enable_mocked_integrations(monkeypatch):
+    monkeypatch.setenv("EXTERNAL_EFFECTS_ENABLED", "true")
+    monkeypatch.setenv("CONNECTIONS_ENABLED", "true")
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
 
 
 def _integration_client():

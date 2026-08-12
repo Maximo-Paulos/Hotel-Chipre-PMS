@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import { hasValidSession } from "../../api/client";
 import {
@@ -15,6 +15,7 @@ import {
   type GuestUpdatePayload
 } from "../../api/guests";
 import { GUEST_PAGE_SIZE, useGuestCompanionAdd, useGuestUpdate, useGuests } from "../../hooks/useGuests";
+import { useEffectivePermissions } from "../../hooks/usePermissions";
 import { useReservationDrawer } from "../../hooks/useReservationDrawer";
 import { useSession } from "../../state/session";
 
@@ -84,6 +85,11 @@ const isProhibidoTag = (tag: GuestTag) => tag.tag_type === "prohibido_alojar";
 
 export function GuestsPage() {
   const { session } = useSession();
+  const { hasPermission } = useEffectivePermissions();
+  const canEditGuest = hasPermission("guest:edit");
+  const canManageTags = hasPermission("guest:tags");
+  const canCheckIn = hasPermission("checkin:perform");
+  const canOverrideProhibido = hasPermission("checkin:override_prohibido");
   const { openReservation } = useReservationDrawer();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
@@ -99,6 +105,7 @@ export function GuestsPage() {
   const [companionMessage, setCompanionMessage] = useState<string | null>(null);
   const [tagMessage, setTagMessage] = useState<string | null>(null);
   const [checkInMessage, setCheckInMessage] = useState<string | null>(null);
+  const initializedGuestIdRef = useRef<number | null>(null);
   const guestsQuery = useGuests(search, page);
   const updateGuestMutation = useGuestUpdate();
   const addCompanionMutation = useGuestCompanionAdd();
@@ -165,12 +172,20 @@ export function GuestsPage() {
 
   useEffect(() => {
     if (!selectedGuest) {
+      initializedGuestIdRef.current = null;
       setSelectedGuestId(null);
       setFormValues(emptyForm);
       setCompanionValues(emptyCompanion);
       setTagValues(emptyTagForm);
       return;
     }
+
+    // Query invalidation replaces the selected guest object even when the
+    // operator is still editing the same record. Reinitialize only when the
+    // selected identity changes so save/tag feedback is not erased by a
+    // successful background refresh.
+    if (initializedGuestIdRef.current === selectedGuest.id) return;
+    initializedGuestIdRef.current = selectedGuest.id;
 
     setSelectedGuestId(selectedGuest.id);
     setFormValues({
@@ -197,11 +212,6 @@ export function GuestsPage() {
 
   const activeTags = tagsQuery.data ?? quickProfileQuery.data?.active_tags ?? [];
   const hasProhibido = activeTags.some(isProhibidoTag);
-  // C4: real permission gate (bypasses a legal/compliance block on check-in),
-  // reads baseRole -- not the "Cambiar vista" preview role -- so previewing
-  // as a lower role can't hide it from the real owner/manager, and a
-  // manipulated localStorage role can't reveal it to someone who isn't.
-  const canOverrideProhibido = ["owner", "co_owner", "manager"].includes(session.baseRole ?? "");
   const companions = selectedGuest?.companions ?? [];
   const lastStays = quickProfileQuery.data?.last_stays ?? [];
 
@@ -215,7 +225,7 @@ export function GuestsPage() {
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!selectedGuestId) return;
+    if (!selectedGuestId || !canEditGuest) return;
     setFormMessage(null);
     try {
       const payload: GuestUpdatePayload = {
@@ -232,7 +242,7 @@ export function GuestsPage() {
 
   const handleCompanionSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!selectedGuestId) return;
+    if (!selectedGuestId || !canEditGuest) return;
     setCompanionMessage(null);
     try {
       const payload: GuestCompanionPayload = {
@@ -250,7 +260,7 @@ export function GuestsPage() {
 
   const handleTagSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!selectedGuestId) return;
+    if (!selectedGuestId || !canManageTags) return;
     setTagMessage(null);
     try {
       await addTagMutation.mutateAsync({
@@ -269,7 +279,7 @@ export function GuestsPage() {
   };
 
   const handleResolveTag = async (tagId: number) => {
-    if (!selectedGuestId) return;
+    if (!selectedGuestId || !canManageTags) return;
     setTagMessage(null);
     try {
       await resolveTagMutation.mutateAsync({ guestId: selectedGuestId, tagId });
@@ -280,6 +290,7 @@ export function GuestsPage() {
   };
 
   const handleCheckIn = async (reservationId: number, override: boolean) => {
+    if (!canCheckIn || (override && !canOverrideProhibido)) return;
     setCheckInMessage(null);
     try {
       await checkInMutation.mutateAsync({ reservationId, override });
@@ -398,7 +409,7 @@ export function GuestsPage() {
                   </span>
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-2">
+                <fieldset disabled={!canEditGuest} className="grid gap-4 md:grid-cols-2 disabled:opacity-70">
                   <label className="space-y-1 text-sm">
                     <span className="text-slate-600">Nombre</span>
                     <input
@@ -496,7 +507,7 @@ export function GuestsPage() {
                       className="w-full rounded-lg border border-slate-300 px-3 py-2"
                     />
                   </label>
-                </div>
+                </fieldset>
 
                 {formMessage ? (
                   <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
@@ -504,7 +515,7 @@ export function GuestsPage() {
                   </div>
                 ) : null}
 
-                <div className="flex justify-end">
+                {canEditGuest ? <div className="flex justify-end">
                   <button
                     type="submit"
                     disabled={updateGuestMutation.isPending}
@@ -512,7 +523,9 @@ export function GuestsPage() {
                   >
                     Guardar huésped
                   </button>
-                </div>
+                </div> : (
+                  <p className="text-xs text-slate-500">Tu permiso permite consultar la ficha, pero no editarla.</p>
+                )}
               </form>
 
               <section className="space-y-4 border-t border-slate-200 pt-4">
@@ -542,14 +555,16 @@ export function GuestsPage() {
                         >
                           <span>{tagLabels[tag.tag_type] ?? tag.tag_type}</span>
                           {tag.note ? <span className="truncate font-normal text-slate-500">- {tag.note}</span> : null}
-                          <button
-                            type="button"
-                            onClick={() => handleResolveTag(tag.id)}
-                            disabled={resolveTagMutation.isPending}
-                            className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] text-slate-600 hover:bg-slate-100 disabled:opacity-60"
-                          >
-                            Resolver
-                          </button>
+                          {canManageTags && (
+                            <button
+                              type="button"
+                              onClick={() => handleResolveTag(tag.id)}
+                              disabled={resolveTagMutation.isPending}
+                              className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] text-slate-600 hover:bg-slate-100 disabled:opacity-60"
+                            >
+                              Resolver
+                            </button>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -558,7 +573,7 @@ export function GuestsPage() {
                   )}
                 </div>
 
-                <form className="grid gap-4 md:grid-cols-[220px_minmax(0,1fr)_180px_auto]" onSubmit={handleTagSubmit}>
+                {canManageTags ? <form className="grid gap-4 md:grid-cols-[220px_minmax(0,1fr)_180px_auto]" onSubmit={handleTagSubmit}>
                   <label className="space-y-1 text-sm">
                     <span className="text-slate-600">Etiqueta</span>
                     <select
@@ -605,7 +620,7 @@ export function GuestsPage() {
                       {tagMessage}
                     </div>
                   ) : null}
-                </form>
+                </form> : null}
               </section>
 
               <section className="space-y-4 border-t border-slate-200 pt-4">
@@ -620,7 +635,7 @@ export function GuestsPage() {
                   ) : lastStays.length > 0 ? (
                     <div className="space-y-2">
                       {lastStays.map((stay) => {
-                        const canCheckIn = canCheckInStatus(String(stay.status));
+                        const canCheckInStay = canCheckInStatus(String(stay.status));
                         return (
                           <div key={stay.reservation_id} className="rounded-md bg-white px-3 py-2 text-sm shadow-sm">
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -641,7 +656,7 @@ export function GuestsPage() {
                                   {stay.room_number ? ` · Hab. ${stay.room_number}` : ""}
                                 </p>
                               </div>
-                              {canCheckIn ? (
+                              {canCheckIn && canCheckInStay ? (
                                 <div className="flex flex-wrap gap-2">
                                   <button
                                     type="button"
@@ -664,7 +679,7 @@ export function GuestsPage() {
                                 </div>
                               ) : null}
                             </div>
-                            {hasProhibido && canCheckIn && !canOverrideProhibido ? (
+                            {hasProhibido && canCheckIn && canCheckInStay && !canOverrideProhibido ? (
                               <p className="mt-2 text-xs font-medium text-red-700">
                                 Solo manager, owner o co-owner pueden autorizar el override.
                               </p>
@@ -719,7 +734,7 @@ export function GuestsPage() {
                   )}
                 </div>
 
-                <form className="grid gap-4 md:grid-cols-2" onSubmit={handleCompanionSubmit}>
+                {canEditGuest ? <form className="grid gap-4 md:grid-cols-2" onSubmit={handleCompanionSubmit}>
                   <label className="space-y-1 text-sm">
                     <span className="text-slate-600">Nombre</span>
                     <input
@@ -800,7 +815,7 @@ export function GuestsPage() {
                       Agregar acompañante
                     </button>
                   </div>
-                </form>
+                </form> : null}
               </section>
             </>
           ) : (

@@ -46,7 +46,9 @@ def fx_client(monkeypatch: pytest.MonkeyPatch):
     db_module.init_db()
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-    auth_state = {"hotel_id": 1, "user_id": 21, "role": "manager"}
+    # FX snapshots are financial config -- manager's ceiling excludes
+    # reports:financial:view, so the fixture uses owner here.
+    auth_state = {"hotel_id": 1, "user_id": 21, "role": "owner"}
 
     def override_get_db():
         db = SessionLocal()

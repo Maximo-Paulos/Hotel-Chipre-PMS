@@ -76,7 +76,7 @@ def availability(
     check_in_date: date | None = None,
     check_out_date: date | None = None,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping")),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
 ):
     """
     Lightweight availability placeholder. When all parameters are provided,
@@ -116,7 +116,7 @@ def price_quote(
     target_currency: str | None = None,
     occupancy: int = Query(1, gt=0),
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping", "receptionist")),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "receptionist")),
 ):
     """
     Calculate pricing for a potential booking without persisting it.
@@ -145,7 +145,7 @@ def price_quote(
 @router.get("/", response_model=list[BookingRead])
 def list_bookings(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping")),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
 ):
     bookings = (
         db.query(Reservation)
@@ -178,7 +178,7 @@ def create_booking(
 def get_booking(
     booking_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping")),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
 ):
     booking = (
         db.query(Reservation)
@@ -228,7 +228,7 @@ def cancel_booking(
 def checkin_booking(
     booking_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping")),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
 ):
     try:
         booking = perform_checkin(db, booking_id, hotel_id=context.hotel_id)
@@ -243,7 +243,7 @@ def checkin_booking(
 def checkout_booking(
     booking_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping")),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
 ):
     try:
         booking = perform_checkout(db, booking_id, hotel_id=context.hotel_id)

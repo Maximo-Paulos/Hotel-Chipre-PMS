@@ -6,6 +6,11 @@ from typing import Optional
 
 import httpx
 
+from app.services.external_effects_policy import (
+    external_connections_enabled,
+    require_external_connections,
+)
+
 logger = logging.getLogger(__name__)
 
 DOLAR_API_BASE = "https://dolarapi.com"
@@ -33,6 +38,8 @@ def _is_cache_fresh() -> bool:
 
 
 async def _get_async(url: str) -> Optional[dict | list]:
+    # The gate intentionally precedes AsyncClient construction and DNS/network.
+    require_external_connections("DolarAPI FX-rate lookup")
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.get(url)
@@ -45,6 +52,11 @@ async def _get_async(url: str) -> Optional[dict | list]:
 
 async def fetch_all_rates() -> dict:
     import asyncio
+
+    if not external_connections_enabled():
+        # A closed sandbox may use an already-populated in-process cache, but it
+        # never refreshes it and never treats stale data as newly fetched.
+        return dict(_cache.get("data") or {})
 
     dollar_task = asyncio.create_task(_get_async(f"{DOLAR_API_BASE}/d%C3%B3lares"))
     other_task = asyncio.create_task(_get_async(f"{DOLAR_API_BASE}/cotizaciones"))
@@ -84,6 +96,9 @@ async def fetch_rate(rate_type: str) -> Optional[dict]:
     if rate_type not in RATE_TYPES:
         logger.warning("Unknown rate_type '%s'; must be one of %s", rate_type, RATE_TYPES)
         return None
+    if not external_connections_enabled():
+        cached = (_cache.get("data") or {}).get(rate_type)
+        return cached if isinstance(cached, dict) else None
     return await _get_async(f"{DOLAR_API_BASE}/d%C3%B3lar/{rate_type}")  # type: ignore[return-value]
 
 
@@ -137,7 +152,13 @@ def get_rate_sync(rate_type: str = "oficial") -> Optional[float]:
         if cached:
             return cached.get("venta")
 
+    if not external_connections_enabled():
+        # Stale cache is the only permitted fallback while the lane is closed.
+        cached = (_cache.get("data") or {}).get(rate_type)
+        return cached.get("venta") if isinstance(cached, dict) else None
+
     try:
+        require_external_connections("DolarAPI FX-rate lookup")
         response = httpx.get(f"{DOLAR_API_BASE}/d%C3%B3lar/{rate_type}", timeout=10.0)
         response.raise_for_status()
         data = response.json()

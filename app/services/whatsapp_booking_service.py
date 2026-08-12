@@ -10,12 +10,10 @@ from app.models.reservation import Reservation, ReservationChannelCodeEnum, Rese
 from app.models.room import RoomCategory
 from app.schemas.reservation import ReservationCreate
 from app.schemas.whatsapp_hooks import (
-    WhatsAppPaymentConfirmation,
     WhatsAppPaymentLinkCreate,
     WhatsAppReservationCreate,
 )
 from app.services.payment_link_service import PaymentLinkError, create_link
-from app.services.payment_webhook_service import PaymentWebhookError, ingest_webhook
 from app.services.reservation_quote_service import build_reservation_quote
 from app.services.reservation_service import (
     ReservationError,
@@ -170,28 +168,3 @@ def generate_payment_link(db: Session, *, hotel_id: int, payload: WhatsAppPaymen
     return link
 
 
-def handle_payment_confirmation(
-    db: Session,
-    *,
-    hotel_id: int,
-    payload: WhatsAppPaymentConfirmation,
-) -> dict[str, Any]:
-    webhook_payload = {
-        **payload.raw_payload,
-        "webhook_id": payload.webhook_id,
-        "payment_id": payload.payment_id,
-        "status": payload.status,
-        "amount": str(payload.amount),
-        "currency": payload.currency,
-    }
-    try:
-        return ingest_webhook(
-            db,
-            hotel_id=hotel_id,
-            provider=payload.provider,
-            webhook_id=payload.webhook_id,
-            payload=webhook_payload,
-            payment_link_id=payload.payment_link_id,
-        )
-    except PaymentWebhookError as exc:
-        raise WhatsAppBookingError(str(exc)) from exc

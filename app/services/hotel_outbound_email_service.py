@@ -16,6 +16,10 @@ from app.services.integration_service import (
     get_connection_record,
     validate_gmail_credentials,
 )
+from app.services.external_effects_policy import (
+    ExternalEffectsDisabled,
+    require_external_connections,
+)
 
 
 class HotelOutboundEmailError(Exception):
@@ -37,6 +41,11 @@ class HotelOutboundSendResult:
 
 
 def ensure_hotel_gmail_ready(db: Session, hotel_id: int) -> HotelOutboundIdentity:
+    # Before querying/loading the encrypted credential record.
+    try:
+        require_external_connections("Gmail hotel email")
+    except ExternalEffectsDisabled as exc:
+        raise HotelOutboundEmailError(str(exc)) from exc
     connection = get_connection_record(db, hotel_id, 'gmail')
     if not connection or connection.status != 'connected' or not connection.auth_payload:
         raise HotelOutboundEmailError(
@@ -97,6 +106,11 @@ def send_hotel_email(
     subject: str,
     body: str,
 ) -> HotelOutboundSendResult:
+    # This stays before readiness checks and credential decryption.
+    try:
+        require_external_connections("Gmail hotel email send")
+    except ExternalEffectsDisabled as exc:
+        raise HotelOutboundEmailError(str(exc)) from exc
     identity = ensure_hotel_gmail_ready(db, hotel_id)
     if isinstance(to, str):
         recipients = [to]

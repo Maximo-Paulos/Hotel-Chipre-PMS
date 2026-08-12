@@ -1,5 +1,10 @@
 # Evidencia QA versionable
 
+Este directorio es exclusivamente para evidencia formal de un preview aislado.
+Una campaña sobre los dominios compartidos etiquetados como producción nunca debe
+escribirse aquí ni presentarse al release gate. Esas campañas usan
+`qa/operational/runs/<run-id>/` y `artifacts/qa-operational/<run-id>/`.
+
 Crear un directorio por tarea con `summary.json`, su hermano
 `validated-preview-manifest.json` y `attestation.json`, siguiendo
 `knowledge/40-delivery/qa-evidence-template.md`. Sólo se versionan resultados
@@ -16,7 +21,7 @@ versiona ni se pasa como argumento. Si se usa un archivo, debe tener permisos
 exclusivos del propietario (`chmod 600`):
 
 ```bash
-.venv/bin/python scripts/agent_ops/qa_evidence_attestation.py \
+.venv312/bin/python scripts/agent_ops/qa_evidence_attestation.py \
   qa/evidence/<task-id>/summary.json \
   --artifact-root artifacts/qa/<task-id> \
   --private-key-file artifacts/qa/keys/qa-evidence-private-key.pem
@@ -25,7 +30,7 @@ exclusivos del propietario (`chmod 600`):
 Validar la firma y el bundle con:
 
 ```bash
-.venv/bin/python scripts/agent_ops/check_qa_evidence.py qa/evidence/<task-id>/summary.json
+.venv312/bin/python scripts/agent_ops/check_qa_evidence.py qa/evidence/<task-id>/summary.json
 ```
 
 La CLI siempre exige `qa/trust/qa-evidence-public-key.pem` y una atestación Ed25519
@@ -36,6 +41,6 @@ La puerta de release selecciona exactamente un `summary.json` modificado por la 
 Si se ejecuta manualmente con varios candidatos, la selección debe ser explícita:
 
 ```bash
-.venv/bin/python scripts/agent_ops/check_release_evidence.py \
+.venv312/bin/python scripts/agent_ops/check_release_evidence.py \
   qa/evidence/<task-id>/summary.json --head HEAD
 ```

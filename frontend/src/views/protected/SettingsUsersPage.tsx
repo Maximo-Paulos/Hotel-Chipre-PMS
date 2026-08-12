@@ -16,6 +16,7 @@ const roleLabels: Record<string, string> = {
   owner: "Owner",
   co_owner: "Co-owner",
   manager: "Manager",
+  receptionist: "Recepción",
   housekeeping: "Housekeeping"
 };
 
@@ -67,17 +68,20 @@ export function SettingsUsersPage() {
           <div className="mt-3 grid gap-3 sm:grid-cols-3">
             <input
               className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+              aria-label="Email de invitación"
               placeholder="email@hotel.com"
               value={inviteForm.email}
               onChange={(e) => setInviteForm((p) => ({ ...p, email: e.target.value }))}
             />
             <select
               className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+              aria-label="Rol de invitación"
               value={inviteForm.role}
               onChange={(e) => setInviteForm((p) => ({ ...p, role: e.target.value as InvitePayload["role"] }))}
             >
               <option value="co_owner">Co-owner</option>
               <option value="manager">Manager</option>
+              <option value="receptionist">Recepción</option>
               <option value="housekeeping">Housekeeping</option>
             </select>
             <button
@@ -142,6 +146,7 @@ export function SettingsUsersPage() {
                     {canManage && session.userId !== u.email ? (
                       <select
                         className="rounded-lg border border-slate-200 px-2 py-1 text-sm"
+                        aria-label={`Rol de ${u.email}`}
                         value={u.role}
                         onChange={(e) =>
                           updateRoleMutation.mutate({ userId: u.id, role: e.target.value as InvitePayload["role"] })
@@ -149,6 +154,7 @@ export function SettingsUsersPage() {
                       >
                         <option value="co_owner">Co-owner</option>
                         <option value="manager">Manager</option>
+                        <option value="receptionist">Recepción</option>
                         <option value="housekeeping">Housekeeping</option>
                       </select>
                     ) : (

@@ -4,12 +4,22 @@ from datetime import datetime, timezone
 
 import pytest
 
+from app.config import get_settings
 from app.models.hotel_config import HotelConfiguration
 from app.models.integration import IntegrationCatalog, IntegrationConnection
 from app.schemas.payment_link_test import PaymentLinkTestCreate
 from app.services.hotel_outbound_email_service import HotelOutboundEmailError, send_hotel_email
 from app.services.integration_service import GMAIL_SEND_SCOPE, encrypt_payload
 from app.services.payment_link_test_service import PaymentLinkTestError, create_mercadopago_payment_link_test
+
+
+@pytest.fixture(autouse=True)
+def _enable_mocked_external_effects(monkeypatch):
+    monkeypatch.setenv("EXTERNAL_EFFECTS_ENABLED", "true")
+    monkeypatch.setenv("CONNECTIONS_ENABLED", "true")
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
 
 
 class _Response:

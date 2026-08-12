@@ -31,6 +31,19 @@ class RoomCategoryRead(RoomCategoryBase):
     current_rate: Optional[float] = None
     model_config = {"from_attributes": True}
 
+
+class RoomCategoryOperationalRead(BaseModel):
+    """Non-financial category metadata safe for housekeeping workflows."""
+
+    id: int
+    name: str
+    code: str
+    description: Optional[str] = None
+    max_occupancy: int
+    amenities: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
 # Updates for editing categories
 class RoomCategoryUpdate(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=100)
@@ -69,6 +82,21 @@ class RoomRead(RoomBase):
     model_config = {"from_attributes": True}
 
 
+class RoomHousekeepingRead(BaseModel):
+    """Room state without rates or free-text notes that may contain PII."""
+
+    id: int
+    room_number: str
+    floor: int
+    category_id: int
+    status: RoomStatusEnum
+    is_active: bool
+    is_accessible: bool = False
+    category: Optional[RoomCategoryOperationalRead] = None
+
+    model_config = {"from_attributes": True}
+
+
 class RoomUpdate(BaseModel):
     room_number: Optional[str] = Field(default=None, min_length=1, max_length=10)
     floor: Optional[int] = Field(default=None, ge=0)
@@ -102,5 +130,5 @@ class CategoryPricingRead(CategoryPricingSchema):
 
 # ── Housekeeping responses ──
 class RoomStatusUpdateResponse(BaseModel):
-    room: RoomRead
+    room: RoomRead | RoomHousekeepingRead
     reallocation: Optional[dict] = None

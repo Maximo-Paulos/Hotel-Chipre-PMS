@@ -5,12 +5,10 @@ import pytest
 
 from app.models.guest import Guest
 from app.models.hotel_config import HotelConfiguration
-from app.models.payment import PaymentLink, PaymentWebhookEvent
+from app.models.payment import PaymentLink
 from app.models.reservation import Reservation, ReservationChannelCodeEnum
 from app.models.room import Room, RoomCategory, RoomStatusEnum
-from app.models.transaction import Transaction
 from app.schemas.whatsapp_hooks import (
-    WhatsAppPaymentConfirmation,
     WhatsAppPaymentLinkCreate,
     WhatsAppReservationCreate,
 )
@@ -18,7 +16,6 @@ from app.services.whatsapp_booking_service import (
     WhatsAppBookingError,
     create_reservation,
     generate_payment_link,
-    handle_payment_confirmation,
 )
 
 
@@ -104,49 +101,6 @@ def test_whatsapp_generate_payment_link_sets_sent_via_whatsapp(db):
     assert link.hotel_id == 1
     assert link.reservation_id == reservation.id
     assert link.sent_via_whatsapp is True
-
-
-def test_whatsapp_payment_confirmation_is_idempotent(db):
-    category, room, guest = _seed_whatsapp_hotel(db, 1)
-    reservation = create_reservation(
-        db,
-        hotel_id=1,
-        payload=WhatsAppReservationCreate(
-            guest_id=guest.id,
-            category_id=category.id,
-            room_id=room.id,
-            check_in_date=date(2026, 9, 1),
-            check_out_date=date(2026, 9, 2),
-            num_adults=1,
-        ),
-    )
-    link = generate_payment_link(
-        db,
-        hotel_id=1,
-        payload=WhatsAppPaymentLinkCreate(
-            reservation_id=reservation.id,
-            requested_amount=Decimal("100.00"),
-            recipient_email="wa-pay@example.com",
-            recipient_phone="+5491111111111",
-        ),
-    )
-    payload = WhatsAppPaymentConfirmation(
-        payment_link_id=link.id,
-        provider="mercado_pago",
-        webhook_id="wa-hook-1",
-        payment_id="wa-payment-1",
-        status="approved",
-        amount=Decimal("100.00"),
-        currency="ARS",
-    )
-
-    first = handle_payment_confirmation(db, hotel_id=1, payload=payload)
-    second = handle_payment_confirmation(db, hotel_id=1, payload=payload)
-
-    assert first["duplicate"] is False
-    assert second["duplicate"] is True
-    assert db.query(PaymentWebhookEvent).filter_by(hotel_id=1).count() == 1
-    assert db.query(Transaction).filter_by(hotel_id=1, reservation_id=reservation.id).count() == 1
 
 
 def test_whatsapp_service_rejects_cross_hotel_reservation_payment_link(db):

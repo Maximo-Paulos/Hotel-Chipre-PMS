@@ -149,7 +149,14 @@ def test_housekeeping_can_operate_remitos_but_not_manage_vendors():
     client, db, engine = _client_with_db()
     try:
         fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner", user_id=1)
-        vendor_resp = client.post("/api/laundry/vendors", json={"name": "Lavadero HK"})
+        vendor_resp = client.post(
+            "/api/laundry/vendors",
+            json={
+                "name": "Lavadero HK",
+                "contact_phone": "+54 11 5555 0101",
+                "contact_email": "private@laundry.example",
+            },
+        )
         vendor_id = vendor_resp.json()["id"]
 
         item = create_linen_item(db, hotel_id=1, name="Sabanas", unit="unit", min_quantity=None, active=True)
@@ -165,6 +172,13 @@ def test_housekeeping_can_operate_remitos_but_not_manage_vendors():
 
         denied_vendor_create = client.post("/api/laundry/vendors", json={"name": "No deberia poder"})
         assert denied_vendor_create.status_code == 403
+
+        vendors_read = client.get("/api/laundry/vendors")
+        assert vendors_read.status_code == 200
+        assert vendors_read.json()[0]["id"] == vendor_id
+        assert vendors_read.json()[0]["contact_phone"] is None
+        assert vendors_read.json()[0]["contact_email"] is None
+        assert "private@laundry.example" not in vendors_read.text
 
         # D2 (now D: linen split): housekeeping has to pick a house
         # LinenLocation on the remito form, so GET /api/laundry/locations

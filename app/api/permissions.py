@@ -11,7 +11,9 @@ from app.services.permission_service import (
     PERMISSION_DEFINITIONS,
     PERMISSION_PERMISSION_MANAGE,
     ROLE_CODES,
+    get_effective_permissions,
     get_matrix,
+    can_role_hold_permission,
     set_override,
 )
 
@@ -24,10 +26,28 @@ class PermissionOverrideRequest(BaseModel):
     allowed: bool
 
 
+@router.get("/effective")
+def read_effective_permissions(
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(get_auth_context),
+):
+    """Expose the server-resolved capabilities used to drive the current UI."""
+
+    return {
+        "hotel_id": context.hotel_id,
+        "role": context.user_role,
+        "permissions": get_effective_permissions(
+            db,
+            hotel_id=context.hotel_id,
+            role=context.user_role,
+        ),
+    }
+
+
 @router.get("/matrix")
 def read_permission_matrix(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(get_auth_context),
+    context: AuthContext = Depends(require_permission(PERMISSION_PERMISSION_MANAGE)),
 ):
     return {"hotel_id": context.hotel_id, "matrix": get_matrix(db, context.hotel_id)}
 
@@ -42,15 +62,26 @@ def update_permission_override(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Rol invalido")
     if payload.permission_code not in PERMISSION_DEFINITIONS:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Permiso invalido")
+    if payload.allowed and not can_role_hold_permission(payload.role, payload.permission_code):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="El permiso excede el techo de seguridad del rol",
+        )
 
-    override = set_override(
-        db,
-        hotel_id=context.hotel_id,
-        role=payload.role,
-        code=payload.permission_code,
-        allowed=payload.allowed,
-        user_id=context.user_id,
-    )
+    try:
+        override = set_override(
+            db,
+            hotel_id=context.hotel_id,
+            role=payload.role,
+            code=payload.permission_code,
+            allowed=payload.allowed,
+            user_id=context.user_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
     db.commit()
     db.refresh(override)
     return {

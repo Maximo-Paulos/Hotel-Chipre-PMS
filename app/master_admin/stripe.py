@@ -11,6 +11,13 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.master_admin.models import MasterStripeSettings
 from app.services.integration_service import decrypt_payload, encrypt_payload
+from app.services.external_effects_policy import (
+    ExternalEffectsDisabled,
+    InboundProviderEventsDisabled,
+    external_connections_enabled,
+    require_external_connections,
+    require_inbound_provider_events,
+)
 
 DEFAULT_TOLERANCE_SECONDS = 300
 SYSTEM_STRIPE_CONFIG_KEY = "system"
@@ -35,6 +42,7 @@ def _webhook_secret(payload: dict[str, object]) -> str:
 
 
 def _validate_stripe_secret(secret_key: str) -> dict[str, object]:
+    require_external_connections("Stripe credential validation")
     response = requests.get(
         "https://api.stripe.com/v1/account",
         headers={"Authorization": f"Bearer {secret_key}"},
@@ -60,6 +68,16 @@ def get_stripe_status(db: Session) -> dict[str, object]:
             "last_checked_at": None,
             "last_error": None,
         }
+    if not external_connections_enabled():
+        return {
+            "configured": bool(row.enabled and row.auth_payload),
+            "enabled": row.enabled,
+            "account_id": row.account_id,
+            "account_name": row.account_name,
+            "webhook_secret_configured": row.webhook_secret_configured,
+            "last_checked_at": row.last_checked_at,
+            "last_error": row.last_error,
+        }
     payload = decrypt_payload(row.auth_payload)
     return {
         "configured": bool(row.enabled and payload and _stripe_secret(payload)),
@@ -78,6 +96,14 @@ def save_stripe_settings(db: Session, payload: dict[str, object]) -> dict[str, o
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Las integraciones externas estan deshabilitadas en este entorno",
         )
+    try:
+        # Before any provider credential is validated or sent to the network.
+        require_external_connections("Stripe connection")
+    except ExternalEffectsDisabled as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
     secret_key = _stripe_secret(payload)
     if not secret_key:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Falta el secret key de Stripe")
@@ -116,6 +142,7 @@ def stripe_secret_configured(db: Session) -> bool:
 
 
 def _webhook_secret_from_db(db: Session) -> str:
+    require_inbound_provider_events("Stripe")
     row = _get_settings_row(db)
     if not row or not row.auth_payload:
         return ""
@@ -129,6 +156,14 @@ def verify_stripe_signature(
     signature_header: str | None,
     tolerance_seconds: int = DEFAULT_TOLERANCE_SECONDS,
 ) -> None:
+    try:
+        # Before DB lookup and encrypted webhook-secret access.
+        require_inbound_provider_events("Stripe")
+    except InboundProviderEventsDisabled as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
     secret = _webhook_secret_from_db(db)
     if not secret:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Stripe webhook secret no configurado en el panel master")

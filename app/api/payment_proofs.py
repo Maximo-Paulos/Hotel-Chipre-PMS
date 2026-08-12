@@ -5,7 +5,7 @@ from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies.auth import AuthContext, require_roles
+from app.dependencies.auth import AuthContext, require_permission
 from app.schemas.payment_proof import PaymentProofCreate, PaymentProofRead, PaymentProofReject
 from app.services.payment_proof_service import (
     PaymentProofError,
@@ -14,6 +14,10 @@ from app.services.payment_proof_service import (
     list_transfer_proofs,
     reject_transfer_proof,
     submit_transfer_proof,
+)
+from app.services.permission_service import (
+    PERMISSION_CASH_OPERATE,
+    PERMISSION_REPORTS_FINANCIAL_VIEW,
 )
 
 
@@ -25,7 +29,7 @@ router = APIRouter(prefix="/api/payment-proofs", tags=["Payment proofs"])
 def submit_proof(
     payload: PaymentProofCreate,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "receptionist")),
+    context: AuthContext = Depends(require_permission(PERMISSION_CASH_OPERATE)),
 ):
     try:
         proof = submit_transfer_proof(
@@ -50,7 +54,7 @@ def submit_proof(
 def list_proofs(
     reservation_id: int | None = None,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "receptionist")),
+    context: AuthContext = Depends(require_permission(PERMISSION_CASH_OPERATE)),
 ):
     return list_transfer_proofs(db, hotel_id=context.hotel_id, reservation_id=reservation_id)
 
@@ -59,7 +63,7 @@ def list_proofs(
 def get_proof_image(
     proof_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "receptionist")),
+    context: AuthContext = Depends(require_permission(PERMISSION_CASH_OPERATE)),
 ):
     try:
         content, content_type, filename = get_transfer_proof_bytes(
@@ -79,7 +83,7 @@ def get_proof_image(
 def approve_proof(
     proof_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
 ):
     try:
         proof = approve_transfer_proof(
@@ -101,7 +105,7 @@ def reject_proof(
     proof_id: int,
     payload: PaymentProofReject,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
 ):
     try:
         proof = reject_transfer_proof(

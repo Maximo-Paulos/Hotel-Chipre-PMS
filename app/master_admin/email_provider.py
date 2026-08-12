@@ -15,6 +15,10 @@ from app.config import get_settings
 from app.services.email.providers import EmailProviderError, get_email_provider
 from app.services.security import decode_signed_token
 from app.config import is_production_mode
+from app.services.external_effects_policy import (
+    ExternalEffectsDisabled,
+    require_external_connections,
+)
 
 
 class MasterEmailConnectionError(RuntimeError):
@@ -119,10 +123,10 @@ def get_system_email_status(db=None) -> SystemEmailStatus:
 
 
 def send_system_email(db, to, subject: str, body: str) -> dict[str, object]:
-    provider = get_email_provider()
     settings = get_settings()
     dev_outbox_path = (getattr(settings, "DEV_EMAIL_OUTBOX_PATH", "") or "").strip()
     if not is_production_mode(settings) and dev_outbox_path:
+        provider = get_email_provider()
         LOGGER.info("Email system using dev no-op delivery provider provider=%s", provider.provider_name)
         sender_email, _ = _sender_parts()
         _record_dev_email(
@@ -140,6 +144,12 @@ def send_system_email(db, to, subject: str, body: str) -> dict[str, object]:
             "reply_to": (settings.SYSTEM_EMAIL_REPLY_TO or "").strip() or None,
             "provider_message_id": None,
         }
+
+    try:
+        require_external_connections("system email send", settings)
+    except ExternalEffectsDisabled as exc:
+        raise MasterEmailConnectionError(str(exc)) from exc
+    provider = get_email_provider(settings)
 
     if provider.provider_name != "resend" or not provider.configured:
         raise MasterEmailConnectionError(_build_unavailable_message())

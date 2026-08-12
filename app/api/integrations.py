@@ -28,6 +28,10 @@ from app.services.integration_service import (
     verify_connection_health,
 )
 from app.services.security import create_signed_token, decode_signed_token
+from app.services.external_effects_policy import (
+    ExternalEffectsDisabled,
+    require_external_connections,
+)
 
 router = APIRouter(prefix="/api/integrations", tags=["Integrations"])
 
@@ -45,6 +49,10 @@ _REQUIRED_CREDENTIAL_KEYS = {
 def _ensure_enabled():
     if not get_settings().CONNECTIONS_ENABLED:
         raise HTTPException(status_code=403, detail="Conexiones deshabilitadas")
+    try:
+        require_external_connections("external integration management")
+    except ExternalEffectsDisabled as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 def _connection_error_message(exc: Exception) -> str:
@@ -136,6 +144,8 @@ def _find_integration(db: Session, hotel_id: int, integration_id: int):
 
 
 def _store_oauth_code(db: Session, hotel_id: int, integration_id: int, provider: str, code: str):
+    # Must precede token exchange and loading/decrypting an existing refresh token.
+    _ensure_enabled()
     try:
         token_payload = exchange_token(provider, code)
         existing = get_connection_record(db, hotel_id, provider)
@@ -172,14 +182,23 @@ def _store_oauth_code(db: Session, hotel_id: int, integration_id: int, provider:
         return conn
     except Exception as exc:
         message = _connection_error_message(exc)
-        conn = upsert_connection(
-            db,
-            hotel_id,
-            integration_id,
-            {"code": code},
-            status="error",
-            last_error=message,
-        )
+        # OAuth authorization codes are short-lived secrets. Never persist the
+        # code, and never replace a previously encrypted refresh token merely
+        # because a reconnect attempt failed.
+        conn = get_connection_record(db, hotel_id, provider)
+        if conn is None:
+            conn = upsert_connection(
+                db,
+                hotel_id,
+                integration_id,
+                {},
+                status="error",
+                last_error=message,
+            )
+        else:
+            conn.status = "error"
+            conn.last_error = message
+            db.flush()
         record_event(
             db,
             conn.id,

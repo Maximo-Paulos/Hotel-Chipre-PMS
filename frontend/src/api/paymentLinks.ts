@@ -10,6 +10,8 @@ export type PaymentLink = {
   currency: string;
   recipient_email: string;
   status: string;
+  execution_mode: "local_only" | "provider";
+  payable: boolean;
   external_checkout_url?: string | null;
   expires_at?: string | null;
   created_at: string;
@@ -31,3 +33,10 @@ export const listPaymentLinks = (reservationId: number, session?: SessionLike) =
 
 export const createPaymentLink = (payload: PaymentLinkCreatePayload, session?: SessionLike) =>
   apiFetch<PaymentLink>("/api/payment-links", { method: "POST", data: payload, session });
+
+export const cancelPaymentLink = (linkId: number, reason = "operator_request", session?: SessionLike) =>
+  apiFetch<PaymentLink>(`/api/payment-links/${linkId}/cancel`, {
+    method: "POST",
+    data: { reason },
+    session
+  });

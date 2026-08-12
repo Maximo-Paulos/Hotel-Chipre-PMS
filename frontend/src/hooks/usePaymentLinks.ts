@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   createPaymentLink,
+  cancelPaymentLink,
   listPaymentLinks,
   type PaymentLink,
   type PaymentLinkCreatePayload
@@ -26,6 +27,15 @@ export function usePaymentLinkCreate(reservationId?: number) {
   const { session } = useSession();
   return useMutation({
     mutationFn: (payload: PaymentLinkCreatePayload) => createPaymentLink(payload, session),
+    onSuccess: () => qc.invalidateQueries({ queryKey: linksKey(session.hotelId, reservationId) })
+  });
+}
+
+export function usePaymentLinkCancel(reservationId?: number) {
+  const qc = useQueryClient();
+  const { session } = useSession();
+  return useMutation({
+    mutationFn: (linkId: number) => cancelPaymentLink(linkId, "operator_request", session),
     onSuccess: () => qc.invalidateQueries({ queryKey: linksKey(session.hotelId, reservationId) })
   });
 }
