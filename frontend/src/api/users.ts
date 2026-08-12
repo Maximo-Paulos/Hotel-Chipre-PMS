@@ -3,7 +3,7 @@ import { type AuthUser as UserInfo } from "./auth";
 
 export type InvitePayload = {
   email: string;
-  role: "owner" | "co_owner" | "manager" | "housekeeping";
+  role: "owner" | "co_owner" | "manager" | "receptionist" | "housekeeping";
   password?: string;
 };
 

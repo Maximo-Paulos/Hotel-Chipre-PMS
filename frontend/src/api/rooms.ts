@@ -57,6 +57,18 @@ export const updateRoomStatus = (roomId: number, status: RoomStatus, notes?: str
     session
   });
 
+export const updateRoomCleaningStatus = (
+  roomId: number,
+  status: "cleaning" | "available",
+  notes?: string,
+  session?: SessionLike
+) =>
+  apiFetch<{ room: Room; reallocation: null }>(`/api/rooms/${roomId}/cleaning-status`, {
+    method: "PATCH",
+    data: { status, notes: notes ?? null },
+    session
+  });
+
 export type RoomAvailabilityResponse =
   | {
       status: "placeholder";

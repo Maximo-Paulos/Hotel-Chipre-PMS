@@ -76,7 +76,7 @@ from app.services.ota_manual_service import (
 )
 from app.services.payment_service import PaymentError
 from app.services.allocation_runtime_service import run_persisted_allocation
-from app.dependencies.auth import get_auth_context, AuthContext, require_roles, require_permission
+from app.dependencies.auth import AuthContext, require_roles, require_permission
 from app.services.permission_service import (
     PERMISSION_RESERVATION_CHARGE,
     PERMISSION_RESERVATION_CREATE,
@@ -261,7 +261,7 @@ def list_reservations(
     limit: int = Query(50, ge=1, le=200),
     order: Literal["recent", "check_in"] = "recent",
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(get_auth_context),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "receptionist")),
 ):
     reservations = list_reservations_service(
         db,
@@ -285,7 +285,7 @@ def list_reservations(
 def list_pending_actions(
     limit: int = 100,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping", "receptionist")),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "receptionist")),
 ):
     safe_limit = max(1, min(limit, 250))
     try:
@@ -304,7 +304,7 @@ def occupancy_grid(
     date_to: date = Query(...),
     db: Session = Depends(get_db),
     context: AuthContext = Depends(
-        require_roles("owner", "co_owner", "manager", "housekeeping", "receptionist")
+        require_roles("owner", "co_owner", "receptionist", "housekeeping")
     ),
 ):
     """B2: planilla de ocupación — rooms x days grid data for one hotel."""
@@ -312,14 +312,37 @@ def occupancy_grid(
         raise HTTPException(status_code=422, detail="date_to must be greater than date_from")
     if (date_to - date_from).days > 92:
         raise HTTPException(status_code=422, detail="Date range cannot exceed 92 days")
-    return get_occupancy_grid(db, hotel_id=context.hotel_id, date_from=date_from, date_to=date_to)
+    grid = get_occupancy_grid(
+        db,
+        hotel_id=context.hotel_id,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    if context.user_role != "housekeeping":
+        return grid
+
+    # Housekeeping needs the room/date occupancy blocks, never guest identity,
+    # confirmation codes, payment balances, or unassigned reservation data.
+    return {
+        **grid,
+        "reservations": [
+            {
+                **reservation,
+                "confirmation_code": "",
+                "guest_name": "",
+                "operational_balance_due": 0.0,
+            }
+            for reservation in grid["reservations"]
+        ],
+        "unassigned": [],
+    }
 
 
 @router.get("/{reservation_id}/operations-summary", response_model=ReservationOperationsSummaryRead)
 def reservation_operations_summary(
     reservation_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping", "receptionist")),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "receptionist")),
 ):
     try:
         return get_reservation_operations_summary(
@@ -358,7 +381,7 @@ def clear_manual_review(
     reservation_id: int,
     payload: ReservationActionResolveRequest,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping")),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
 ):
     try:
         response = clear_reservation_manual_review(
@@ -405,7 +428,7 @@ def register_settlement(
 def get_reservation(
     reservation_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(get_auth_context),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "receptionist")),
 ):
     reservation = get_reservation_by_id(db, reservation_id, context.hotel_id)
     if not reservation:
@@ -421,7 +444,7 @@ def add_reservation_guests(
     reservation_id: int,
     guests: list[GuestCreate],
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(get_auth_context),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "receptionist")),
 ):
     reservation = get_reservation_by_id(db, reservation_id, context.hotel_id)
     if not reservation:
@@ -642,7 +665,7 @@ def mark_no_show(
     reservation_id: int,
     payload: ReservationNoShowRequest,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "receptionist")),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "receptionist")),
 ):
     """Mark a reservation as no-show without automatic charge."""
     r = get_reservation_by_id(db, reservation_id, context.hotel_id)
@@ -1004,7 +1027,7 @@ def preview_ota_rebook_to_direct(
 def recalculate_allocation(
     payload: AllocationRunRequest,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping")),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
 ):
     result = run_persisted_allocation(
         db,

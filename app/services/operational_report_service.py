@@ -330,6 +330,40 @@ def daily_report(db: Session, hotel_id: int, report_date: date) -> DailyOperatio
     )
 
 
+def redact_daily_report_financials(
+    report: DailyOperationalReportRead,
+) -> DailyOperationalReportRead:
+    """Project a daily report onto the manager-safe operational contract."""
+
+    payload = report.model_dump()
+    for group_name in ("arrivals", "departures"):
+        for reservation in payload[group_name]["reservations"]:
+            reservation["total_amount"] = None
+            reservation["amount_paid"] = None
+            reservation["balance_due"] = None
+    for reservation in payload["late_arrivals"]:
+        reservation["total_amount"] = None
+        reservation["amount_paid"] = None
+        reservation["balance_due"] = None
+
+    # Even a debtor count/list is financial information. Managers receive no
+    # pending-payment identities or alerts from the operational report lane.
+    payload["pending_payments"] = {"count": 0, "reservations": []}
+    payload["cash_session"] = {
+        "status": payload["cash_session"]["status"],
+        "session_id": None,
+        "opened_at": None,
+        "opened_by_user_id": None,
+        "currency_code": None,
+    }
+    payload["alerts"] = [
+        {**alert, "cash_session_id": None}
+        for alert in payload["alerts"]
+        if alert["code"] != "pending_payment"
+    ]
+    return DailyOperationalReportRead.model_validate(payload)
+
+
 def nightly_summary(db: Session, hotel_id: int, report_date: date) -> NightlyOperationalSummaryRead:
     report = daily_report(db, hotel_id, report_date)
     return NightlyOperationalSummaryRead(
@@ -344,6 +378,22 @@ def nightly_summary(db: Session, hotel_id: int, report_date: date) -> NightlyOpe
         cash_session_status=report.cash_session.status,
         alerts=report.alerts,
     )
+
+
+def redact_nightly_summary_financials(
+    summary: NightlyOperationalSummaryRead,
+) -> NightlyOperationalSummaryRead:
+    """Remove debtor and cash identifiers from the manager alert payload."""
+
+    payload = summary.model_dump()
+    payload["pending_payment_count"] = 0
+    payload["alerts"] = [
+        {**alert, "cash_session_id": None}
+        for alert in payload["alerts"]
+        if alert["code"] != "pending_payment"
+    ]
+    payload["alert_count"] = len(payload["alerts"])
+    return NightlyOperationalSummaryRead.model_validate(payload)
 
 
 def operational_report_recipients(db: Session, hotel_id: int) -> list[str]:

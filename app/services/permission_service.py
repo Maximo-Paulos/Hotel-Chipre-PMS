@@ -54,6 +54,8 @@ def _insert_if_missing(
 
 PERMISSION_CONFIG_MANAGE = "config:manage"
 PERMISSION_PERMISSION_MANAGE = "permissions:manage"
+PERMISSION_GUEST_VIEW = "guest:view"
+PERMISSION_GUEST_CREATE = "guest:create"
 PERMISSION_GUEST_EDIT = "guest:edit"
 PERMISSION_GUEST_TAGS = "guest:tags"
 PERMISSION_GUEST_EXPORT = "guest:export"
@@ -70,7 +72,12 @@ PERMISSION_CASH_APPROVE_DIFFERENCE = "cash:approve_difference"
 PERMISSION_STOCK_OPERATE = "stock:operate"
 PERMISSION_STOCK_ADJUST = "stock:adjust"
 PERMISSION_CHECKIN_OVERRIDE_PROHIBIDO = "checkin:override_prohibido"
+# Kept as an import-compatible legacy constant. Routes use the split report
+# capabilities below so operational access never implies access to revenue.
 PERMISSION_REPORTS_VIEW = "reports:view"
+PERMISSION_REPORTS_OPERATIONAL_VIEW = "reports:operational:view"
+PERMISSION_REPORTS_FINANCIAL_VIEW = "reports:financial:view"
+PERMISSION_ROOM_CLEANING_STATUS = "room:cleaning_status"
 PERMISSION_APIKEY_MANAGE = "apikey:manage"
 # Vendor/pricing setup is management-trust (billing terms with a third party);
 # day-to-day remito creation/viewing is operational and, like stock:operate,
@@ -82,6 +89,8 @@ PERMISSION_LAUNDRY_OPERATE_REMITOS = "laundry:operate_remitos"
 PERMISSION_DEFINITIONS: dict[str, str] = {
     PERMISSION_CONFIG_MANAGE: "Manage hotel configuration",
     PERMISSION_PERMISSION_MANAGE: "Manage hotel role permission overrides",
+    PERMISSION_GUEST_VIEW: "View guest profile data",
+    PERMISSION_GUEST_CREATE: "Create guest profiles",
     PERMISSION_GUEST_EDIT: "Edit guest profile data",
     PERMISSION_GUEST_TAGS: "Edit guest tags and segmentation",
     PERMISSION_GUEST_EXPORT: "Export guest ledger data",
@@ -98,11 +107,21 @@ PERMISSION_DEFINITIONS: dict[str, str] = {
     PERMISSION_STOCK_OPERATE: "Operate stock items, locations and movements",
     PERMISSION_STOCK_ADJUST: "Authorize stock adjustments",
     PERMISSION_CHECKIN_OVERRIDE_PROHIBIDO: "Override prohibido_alojar check-in blocks",
-    PERMISSION_REPORTS_VIEW: "View operational and financial reports",
+    PERMISSION_REPORTS_OPERATIONAL_VIEW: "View operational reports without financial totals",
+    PERMISSION_REPORTS_FINANCIAL_VIEW: "View financial and revenue reports",
+    PERMISSION_ROOM_CLEANING_STATUS: "Move unoccupied rooms between cleaning and available",
     PERMISSION_APIKEY_MANAGE: "Manage public hotel API keys",
     PERMISSION_LAUNDRY_MANAGE_VENDORS: "Manage laundry vendors and their pricing",
     PERMISSION_LAUNDRY_OPERATE_REMITOS: "Create and view laundry remitos (delivery notes)",
 }
+
+
+def _role_permissions(*allowed_codes: str) -> dict[str, bool]:
+    """Return a complete deny-by-default role row for every known permission."""
+
+    allowed = set(allowed_codes)
+    return {code: code in allowed for code in PERMISSION_DEFINITIONS}
+
 
 DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
     ROLE_OWNER: {code: True for code in PERMISSION_DEFINITIONS},
@@ -110,77 +129,102 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
     # override a reservation's price; everyone else must use the Tarifas
     # rate calendar. Every other code stays the same blanket True co_owner
     # already had.
-    ROLE_CO_OWNER: {
-        **{code: True for code in PERMISSION_DEFINITIONS},
-        PERMISSION_RESERVATION_MANUAL_RATE: False,
-    },
-    ROLE_MANAGER: {
-        PERMISSION_CONFIG_MANAGE: False,
-        PERMISSION_PERMISSION_MANAGE: False,
-        PERMISSION_GUEST_EDIT: True,
-        PERMISSION_GUEST_TAGS: True,
-        PERMISSION_GUEST_EXPORT: True,
-        PERMISSION_RESERVATION_CREATE: True,
-        PERMISSION_RESERVATION_CHARGE: True,
-        PERMISSION_RESERVATION_ROOM_MOVE: True,
-        PERMISSION_RESERVATION_MANUAL_RATE: False,
-        PERMISSION_CHECKIN_PERFORM: True,
-        PERMISSION_ROOM_BLOCK_CREATE: True,
-        PERMISSION_ROOM_BLOCK_RELEASE: True,
-        PERMISSION_COMPANY_MANAGE: True,
-        PERMISSION_CASH_OPERATE: True,
-        PERMISSION_CASH_APPROVE_DIFFERENCE: True,
-        PERMISSION_STOCK_OPERATE: True,
-        PERMISSION_STOCK_ADJUST: False,
-        PERMISSION_CHECKIN_OVERRIDE_PROHIBIDO: True,
-        PERMISSION_REPORTS_VIEW: True,
-        PERMISSION_APIKEY_MANAGE: False,
-        PERMISSION_LAUNDRY_MANAGE_VENDORS: True,
-        PERMISSION_LAUNDRY_OPERATE_REMITOS: True,
-    },
-    ROLE_RECEPTIONIST: {
-        PERMISSION_CONFIG_MANAGE: False,
-        PERMISSION_PERMISSION_MANAGE: False,
-        PERMISSION_GUEST_EDIT: False,
-        PERMISSION_GUEST_TAGS: False,
-        PERMISSION_GUEST_EXPORT: False,
-        PERMISSION_RESERVATION_CREATE: True,
-        PERMISSION_RESERVATION_CHARGE: True,
-        PERMISSION_RESERVATION_ROOM_MOVE: False,
-        PERMISSION_RESERVATION_MANUAL_RATE: False,
-        PERMISSION_CHECKIN_PERFORM: True,
-        PERMISSION_ROOM_BLOCK_CREATE: True,
-        PERMISSION_ROOM_BLOCK_RELEASE: False,
-        PERMISSION_COMPANY_MANAGE: False,
-        PERMISSION_CASH_OPERATE: True,
-        PERMISSION_CASH_APPROVE_DIFFERENCE: False,
-        PERMISSION_CHECKIN_OVERRIDE_PROHIBIDO: False,
-        PERMISSION_REPORTS_VIEW: True,
-        PERMISSION_APIKEY_MANAGE: False,
-        PERMISSION_LAUNDRY_MANAGE_VENDORS: False,
-        PERMISSION_LAUNDRY_OPERATE_REMITOS: False,
-    },
-    ROLE_HOUSEKEEPING: {
-        PERMISSION_CONFIG_MANAGE: False,
-        PERMISSION_PERMISSION_MANAGE: False,
-        PERMISSION_GUEST_EDIT: False,
-        PERMISSION_GUEST_TAGS: False,
-        PERMISSION_GUEST_EXPORT: False,
-        PERMISSION_RESERVATION_CREATE: False,
-        PERMISSION_RESERVATION_CHARGE: False,
-        PERMISSION_RESERVATION_ROOM_MOVE: False,
-        PERMISSION_CHECKIN_PERFORM: False,
-        PERMISSION_ROOM_BLOCK_CREATE: False,
-        PERMISSION_ROOM_BLOCK_RELEASE: False,
-        PERMISSION_COMPANY_MANAGE: False,
-        PERMISSION_CASH_OPERATE: False,
-        PERMISSION_CASH_APPROVE_DIFFERENCE: False,
-        PERMISSION_CHECKIN_OVERRIDE_PROHIBIDO: False,
-        PERMISSION_REPORTS_VIEW: False,
-        PERMISSION_LAUNDRY_MANAGE_VENDORS: False,
-        PERMISSION_LAUNDRY_OPERATE_REMITOS: True,
-    },
+    ROLE_CO_OWNER: _role_permissions(
+        *(
+            code
+            for code in PERMISSION_DEFINITIONS
+            if code != PERMISSION_RESERVATION_MANUAL_RATE
+        )
+    ),
+    ROLE_MANAGER: _role_permissions(
+        PERMISSION_GUEST_VIEW,
+        PERMISSION_GUEST_CREATE,
+        PERMISSION_GUEST_EDIT,
+        PERMISSION_GUEST_TAGS,
+        PERMISSION_GUEST_EXPORT,
+        PERMISSION_RESERVATION_CREATE,
+        PERMISSION_RESERVATION_ROOM_MOVE,
+        PERMISSION_CHECKIN_PERFORM,
+        PERMISSION_ROOM_BLOCK_CREATE,
+        PERMISSION_ROOM_BLOCK_RELEASE,
+        PERMISSION_COMPANY_MANAGE,
+        PERMISSION_STOCK_OPERATE,
+        PERMISSION_CHECKIN_OVERRIDE_PROHIBIDO,
+        PERMISSION_REPORTS_OPERATIONAL_VIEW,
+        PERMISSION_ROOM_CLEANING_STATUS,
+        PERMISSION_LAUNDRY_MANAGE_VENDORS,
+        PERMISSION_LAUNDRY_OPERATE_REMITOS,
+    ),
+    ROLE_RECEPTIONIST: _role_permissions(
+        PERMISSION_GUEST_VIEW,
+        PERMISSION_GUEST_CREATE,
+        PERMISSION_GUEST_EDIT,
+        PERMISSION_GUEST_TAGS,
+        PERMISSION_RESERVATION_CREATE,
+        PERMISSION_RESERVATION_CHARGE,
+        PERMISSION_CHECKIN_PERFORM,
+        PERMISSION_ROOM_BLOCK_CREATE,
+        PERMISSION_CASH_OPERATE,
+    ),
+    ROLE_HOUSEKEEPING: _role_permissions(
+        PERMISSION_ROOM_CLEANING_STATUS,
+        PERMISSION_LAUNDRY_OPERATE_REMITOS,
+    ),
 }
+
+# A hotel can make a role stricter, and can opt into capabilities within its
+# assigned operating lane. It can never turn the configurable matrix into a
+# privilege-escalation path across product security boundaries.
+ROLE_PERMISSION_CEILINGS: dict[str, frozenset[str]] = {
+    ROLE_OWNER: frozenset(PERMISSION_DEFINITIONS),
+    ROLE_CO_OWNER: frozenset(PERMISSION_DEFINITIONS),
+    ROLE_MANAGER: frozenset(
+        {
+            PERMISSION_GUEST_VIEW,
+            PERMISSION_GUEST_CREATE,
+            PERMISSION_GUEST_EDIT,
+            PERMISSION_GUEST_TAGS,
+            PERMISSION_GUEST_EXPORT,
+            PERMISSION_RESERVATION_CREATE,
+            PERMISSION_RESERVATION_ROOM_MOVE,
+            PERMISSION_CHECKIN_PERFORM,
+            PERMISSION_ROOM_BLOCK_CREATE,
+            PERMISSION_ROOM_BLOCK_RELEASE,
+            PERMISSION_COMPANY_MANAGE,
+            PERMISSION_STOCK_OPERATE,
+            PERMISSION_CHECKIN_OVERRIDE_PROHIBIDO,
+            PERMISSION_REPORTS_OPERATIONAL_VIEW,
+            PERMISSION_ROOM_CLEANING_STATUS,
+            PERMISSION_LAUNDRY_MANAGE_VENDORS,
+            PERMISSION_LAUNDRY_OPERATE_REMITOS,
+        }
+    ),
+    ROLE_RECEPTIONIST: frozenset(
+        {
+            PERMISSION_GUEST_VIEW,
+            PERMISSION_GUEST_CREATE,
+            PERMISSION_GUEST_EDIT,
+            PERMISSION_GUEST_TAGS,
+            PERMISSION_RESERVATION_CREATE,
+            PERMISSION_RESERVATION_CHARGE,
+            PERMISSION_CHECKIN_PERFORM,
+            PERMISSION_ROOM_BLOCK_CREATE,
+            PERMISSION_CASH_OPERATE,
+        }
+    ),
+    ROLE_HOUSEKEEPING: frozenset(
+        {
+            PERMISSION_ROOM_CLEANING_STATUS,
+            PERMISSION_LAUNDRY_OPERATE_REMITOS,
+        }
+    ),
+}
+
+
+def can_role_hold_permission(role: str | None, permission_code: str) -> bool:
+    """Return whether a capability is inside the role's immutable ceiling."""
+
+    return permission_code in ROLE_PERMISSION_CEILINGS.get(role or "", frozenset())
 
 
 def seed_default_permissions(db: Session) -> None:
@@ -283,7 +327,7 @@ def reset_permission_seed_cache() -> None:
 def resolve(db: Session, hotel_id: int, role: str | None, permission_code: str) -> bool:
     """Resolve override > default > deny for a hotel role permission."""
 
-    if not role:
+    if not role or not can_role_hold_permission(role, permission_code):
         return False
 
     ensure_permission_matrix_seeded(db)
@@ -320,6 +364,9 @@ def set_override(
     user_id: int | None,
 ) -> HotelPermissionOverride:
     """Create or update a hotel-specific role permission override and audit it."""
+
+    if allowed and not can_role_hold_permission(role, code):
+        raise ValueError("El permiso excede el techo de seguridad del rol")
 
     ensure_permission_matrix_seeded(db)
     override = (
@@ -406,7 +453,12 @@ def get_matrix(db: Session, hotel_id: int) -> dict[str, dict[str, dict[str, obje
         matrix[role] = {}
         for code, description in PERMISSION_DEFINITIONS.items():
             key = (role, code)
-            if key in overrides:
+            if not can_role_hold_permission(role, code):
+                # Fail closed even if a stale/hand-written DB override grants
+                # a capability that the current product role may never hold.
+                allowed = False
+                source = "ceiling"
+            elif key in overrides:
                 allowed = overrides[key]
                 source = "override"
             else:
@@ -418,3 +470,20 @@ def get_matrix(db: Session, hotel_id: int) -> dict[str, dict[str, dict[str, obje
                 "description": description,
             }
     return matrix
+
+
+def get_effective_permissions(
+    db: Session,
+    hotel_id: int,
+    role: str | None,
+) -> list[str]:
+    """Return the sorted, override-aware capabilities for one hotel role."""
+
+    if role not in ROLE_CODES:
+        return []
+    role_matrix = get_matrix(db, hotel_id).get(role, {})
+    return sorted(
+        code
+        for code, permission in role_matrix.items()
+        if bool(permission.get("allowed"))
+    )

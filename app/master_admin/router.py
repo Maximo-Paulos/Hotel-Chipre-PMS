@@ -41,6 +41,10 @@ from .security import (
     set_master_session_cookies,
 )
 from .stripe import clear_stripe_settings, get_stripe_status, save_stripe_settings, verify_stripe_signature
+from app.services.external_effects_policy import (
+    InboundProviderEventsDisabled,
+    require_inbound_provider_events,
+)
 
 router = APIRouter(prefix="/api/master-admin", tags=["Master Admin"])
 
@@ -275,6 +279,14 @@ def stripe_disconnect(request: Request, db: Session = Depends(get_db)):
 
 @router.post("/stripe/webhook")
 async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
+    try:
+        # Before reading/parsing the request or loading the encrypted secret.
+        require_inbound_provider_events("Stripe")
+    except InboundProviderEventsDisabled as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
     body = await request.body()
     signature = request.headers.get("Stripe-Signature")
     verify_stripe_signature(db, body, signature)
@@ -339,4 +351,3 @@ def audit_events(request: Request, db: Session = Depends(get_db)):
             for event in events
         ]
     }
-

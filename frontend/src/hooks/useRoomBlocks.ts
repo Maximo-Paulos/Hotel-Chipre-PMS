@@ -24,14 +24,14 @@ export const roomBlockReasonLabel: Record<RoomBlockReasonCode, string> = {
 
 export const roomBlockReasonOptions = Object.keys(roomBlockReasonLabel) as RoomBlockReasonCode[];
 
-export function useRoomBlocks() {
+export function useRoomBlocks(options?: { enabled?: boolean }) {
   const { session } = useSession();
   const queryClient = useQueryClient();
 
   const blocksQuery = useQuery<RoomBlock[]>({
     queryKey: roomBlocksKey(session.hotelId),
     queryFn: () => listActiveRoomBlocks({}, session),
-    enabled: hasValidSession(session),
+    enabled: hasValidSession(session) && (options?.enabled ?? true),
     staleTime: 1000 * 15
   });
 

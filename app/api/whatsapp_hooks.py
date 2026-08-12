@@ -5,11 +5,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies.api_key_auth import PublicAPIContext, get_public_api_context
+from app.dependencies.api_key_auth import PublicAPIContext, require_whatsapp_api_context
 from app.schemas.whatsapp_hooks import (
     WhatsAppAvailabilityResponse,
     WhatsAppOptionsResponse,
-    WhatsAppPaymentConfirmation,
     WhatsAppPaymentConfirmationResponse,
     WhatsAppPaymentLinkCreate,
     WhatsAppPaymentLinkRead,
@@ -22,7 +21,6 @@ from app.services.whatsapp_booking_service import (
     availability_lookup,
     create_reservation,
     generate_payment_link,
-    handle_payment_confirmation,
     options_with_prices,
     price_quote,
 )
@@ -37,7 +35,7 @@ def whatsapp_availability(
     check_in_date: date = Query(...),
     check_out_date: date = Query(...),
     db: Session = Depends(get_db),
-    context: PublicAPIContext = Depends(get_public_api_context),
+    context: PublicAPIContext = Depends(require_whatsapp_api_context),
 ):
     try:
         return availability_lookup(
@@ -57,7 +55,7 @@ def whatsapp_prices(
     check_in_date: date = Query(...),
     check_out_date: date = Query(...),
     db: Session = Depends(get_db),
-    context: PublicAPIContext = Depends(get_public_api_context),
+    context: PublicAPIContext = Depends(require_whatsapp_api_context),
 ):
     try:
         return price_quote(
@@ -77,7 +75,7 @@ def whatsapp_options(
     check_in_date: date = Query(...),
     check_out_date: date = Query(...),
     db: Session = Depends(get_db),
-    context: PublicAPIContext = Depends(get_public_api_context),
+    context: PublicAPIContext = Depends(require_whatsapp_api_context),
 ):
     return options_with_prices(
         db,
@@ -91,7 +89,7 @@ def whatsapp_options(
 def whatsapp_create_reservation(
     payload: WhatsAppReservationCreate,
     db: Session = Depends(get_db),
-    context: PublicAPIContext = Depends(get_public_api_context),
+    context: PublicAPIContext = Depends(require_whatsapp_api_context),
 ):
     if not payload.quote_token:
         raise HTTPException(status_code=400, detail="Se requiere una cotización vigente para crear la reserva.")
@@ -110,7 +108,7 @@ def whatsapp_create_reservation(
 def whatsapp_generate_payment_link(
     payload: WhatsAppPaymentLinkCreate,
     db: Session = Depends(get_db),
-    context: PublicAPIContext = Depends(get_public_api_context),
+    context: PublicAPIContext = Depends(require_whatsapp_api_context),
 ):
     try:
         link = generate_payment_link(db, hotel_id=context.hotel_id, payload=payload)
@@ -125,14 +123,13 @@ def whatsapp_generate_payment_link(
 @router.post("/payment-confirmation", response_model=WhatsAppPaymentConfirmationResponse)
 @router.post("/payment-confirmations", response_model=WhatsAppPaymentConfirmationResponse)
 def whatsapp_payment_confirmation(
-    payload: WhatsAppPaymentConfirmation,
     db: Session = Depends(get_db),
-    context: PublicAPIContext = Depends(get_public_api_context),
+    context: PublicAPIContext = Depends(require_whatsapp_api_context),
 ):
-    try:
-        result = handle_payment_confirmation(db, hotel_id=context.hotel_id, payload=payload)
-        db.commit()
-        return result
-    except WhatsAppBookingError as exc:
-        db.rollback()
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    # An API key authenticates the WhatsApp bot, not a payment provider. This
+    # route has no provider signature/lookup contract, so client-declared
+    # identifiers, status, amount and currency can never mutate the ledger.
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="Confirmacion deshabilitada; el pago solo se acredita por webhook verificado del proveedor",
+    )

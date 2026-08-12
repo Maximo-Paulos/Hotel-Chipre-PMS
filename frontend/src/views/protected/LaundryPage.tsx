@@ -30,6 +30,7 @@ import {
 import type { StockMovementType } from "../../api/stock";
 import { hasValidSession } from "../../api/client";
 import { useGuardedMutation } from "../../hooks/useGuardedMutation";
+import { useEffectivePermissions } from "../../hooks/usePermissions";
 import { useSession } from "../../state/session";
 import { formatMoney } from "../../utils/currency";
 import { startOfCurrentMonthIso, startOfCurrentWeekIso, todayIso } from "../../utils/date";
@@ -42,14 +43,6 @@ import { startOfCurrentMonthIso, startOfCurrentWeekIso, todayIso } from "../../u
 // "en el lavadero ahora" and "limpio disponible en el hotel" are both just
 // current_stock() narrowed to different location_id values -- see the two
 // panels near the bottom of this file.
-// C4: both take session.role (not baseRole) by design -- they only ever
-// hide buttons the backend would reject anyway (the page's own data fetches
-// are gated on hasValidSession only, not on these), so previewing "what a
-// housekeeping user sees here" via "Cambiar vista" is the switcher's job.
-const canManageVendors = (role: string | null) => ["owner", "co_owner", "manager"].includes(role ?? "");
-const canOperateRemitos = (role: string | null) =>
-  ["owner", "co_owner", "manager", "housekeeping"].includes(role ?? "");
-
 // D3 (Via D lavanderia): "cuanto le pague al lavadero" range presets, using
 // hotel-local (not UTC) dates -- see utils/date.ts (startOfCurrentWeekIso/
 // startOfCurrentMonthIso, shared with the D5 stock consumption report).
@@ -75,10 +68,11 @@ const emptyRemitoForm = () => ({
 
 export function LaundryPage() {
   const { session } = useSession();
+  const { hasPermission } = useEffectivePermissions();
   const queryClient = useQueryClient();
   const enabled = hasValidSession(session);
-  const manageVendors = canManageVendors(session.role);
-  const operateRemitos = canOperateRemitos(session.role);
+  const manageVendors = hasPermission("laundry:manage_vendors");
+  const operateRemitos = hasPermission("laundry:operate_remitos");
 
   const [message, setMessage] = useState<string | null>(null);
   const [selectedVendorId, setSelectedVendorId] = useState<number | null>(null);
@@ -144,7 +138,7 @@ export function LaundryPage() {
   const pricesQuery = useQuery({
     queryKey: ["laundry-vendor-prices", session.hotelId, selectedVendorId],
     queryFn: () => listLaundryVendorPrices(selectedVendorId as number, session),
-    enabled: enabled && selectedVendorId !== null,
+    enabled: enabled && manageVendors && selectedVendorId !== null,
     staleTime: 15 * 1000
   });
   const selectedVendorPrices = useMemo(() => pricesQuery.data ?? [], [pricesQuery.data]);
@@ -167,7 +161,7 @@ export function LaundryPage() {
   const remitoVendorPricesQuery = useQuery({
     queryKey: ["laundry-vendor-prices", session.hotelId, remitoVendorId],
     queryFn: () => listLaundryVendorPrices(remitoVendorId as number, session),
-    enabled: enabled && remitoVendorId !== null,
+    enabled: enabled && manageVendors && remitoVendorId !== null,
     staleTime: 15 * 1000
   });
   const remitoVendorPriceByItem = useMemo(() => {
@@ -1077,9 +1071,11 @@ export function LaundryPage() {
                             {line.item_name} × {line.quantity} {line.unit}
                           </span>
                           <span className="flex items-center gap-2">
-                            <span className="text-xs text-slate-600">
-                              {subtotal !== null ? formatMoney(subtotal, remitoCurrency) : "sin precio"}
-                            </span>
+                            {manageVendors && (
+                              <span className="text-xs text-slate-600">
+                                {subtotal !== null ? formatMoney(subtotal, remitoCurrency) : "sin precio"}
+                              </span>
+                            )}
                             <button
                               type="button"
                               onClick={() => removeLine(line.linen_item_id)}
@@ -1130,7 +1126,7 @@ export function LaundryPage() {
                     Agregar línea
                   </button>
                 </div>
-                {lines.length > 0 && (
+                {manageVendors && lines.length > 0 && (
                   <p className="text-right text-sm font-semibold text-slate-800">
                     Total estimado: {formatMoney(remitoTotal, remitoCurrency)}
                   </p>

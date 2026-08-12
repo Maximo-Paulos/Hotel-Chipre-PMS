@@ -151,18 +151,22 @@ def write_complete_qa_evidence(tmp_path: Path) -> tuple[dict[str, object], Path]
         {
             "persona": persona,
             "case_id": case["id"],
+            "device": device,
             "status": "passed",
             "preview_url": manifest["app_url"],
             "precondition": "datos QA sintéticos disponibles",
             "human_action": "recorrer UI visible",
             "expected": case["expected"],
             "observed": "resultado esperado observado",
+            "severity": "none",
+            "screenshot": None,
             "evidence": "sha256:"
-            + hashlib.sha256(f"{case['id']}/{persona}".encode()).hexdigest(),
+            + hashlib.sha256(f"{case['id']}/{persona}/{device}".encode()).hexdigest(),
             "code_sha": sha,
         }
         for case in catalog["cases"]
         for persona in case["personas"]
+        for device in case["devices"]
     ]
     task_id = "qa-schema-test"
     task_dir = tmp_path / task_id

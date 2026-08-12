@@ -37,7 +37,8 @@ test("owner previewing as Manager sees the honesty banner and keeps owner-only a
   await page.getByTestId("role-switcher").selectOption("manager");
   await page.waitForURL("**/dashboard");
 
-  await expect(page.getByTestId("viewing-as-banner")).toContainText("Viendo como Manager");
+  await expect(page.getByTestId("viewing-as-banner")).toContainText("Vista previa como Manager");
+  await expect(page.getByTestId("viewing-as-banner")).toContainText("no cambia permisos ni identidad");
   await expect(page.getByTestId("session-role")).toHaveText("Manager");
 
   // StockPage's "Ajuste" option is gated on baseRole (owner), not the
@@ -71,17 +72,23 @@ test("a role spoofed directly in localStorage does not unlock baseRole-gated scr
   });
   await page.reload();
 
-  // Cosmetic surface (menu labels) does follow the spoofed role -- that's
-  // the documented, harmless part of the design.
-  await expect(page.getByTestId("session-role")).toHaveText("Dueño");
+  // The label can remain cosmetically spoofed because preview state is local,
+  // but the authenticated base role and effective permission set remain the
+  // security boundary.
+  await expect(page.getByTestId("session-role")).toBeVisible();
 
-  // Real surfaces stay refused, cleanly, with no broken page: the
-  // permission matrix editor never renders for the real receptionist...
+  const sensitiveRequests: string[] = [];
+  page.on("request", (request) => {
+    const path = new URL(request.url()).pathname;
+    if (path === "/api/permissions/matrix" || path.startsWith("/api/stock")) sensitiveRequests.push(path);
+  });
+
+  // Deep-link guards use the authenticated baseRole/effective permissions,
+  // so neither protected page mounts and no sensitive request is issued.
   await page.goto("/settings/permissions");
-  await expect(page.getByText("Solo owner y co-owner pueden editar permisos.")).toBeVisible();
+  await expect(page).toHaveURL(/\/dashboard$/);
 
-  // ...and the stock adjustment action stays hidden too.
   await page.goto("/operacion/stock");
-  const movementGroup = page.getByRole("group", { name: "Acción de inventario" });
-  await expect(movementGroup.getByRole("button", { name: /^Ajuste/ })).toHaveCount(0);
+  await expect(page).toHaveURL(/\/dashboard$/);
+  expect(sensitiveRequests).toHaveLength(0);
 });

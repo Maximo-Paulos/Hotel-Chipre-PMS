@@ -10,6 +10,7 @@ A completed gateway Payment writes exactly one Transaction via payment_service.p
 (the canonical ledger). PaymentLink collection totals are recomputed from completed Payments.
 """
 from datetime import datetime, timezone
+from decimal import Decimal
 import json
 from typing import Any
 
@@ -25,6 +26,7 @@ from app.services.payment_link_test_service import (
     validate_mercadopago_webhook_signature as _validate_signature_or_raise,
 )
 from app.services.payment_service import calculate_base_amount_before_surcharge, process_payment
+from app.services.external_effects_policy import require_inbound_provider_events
 
 
 class PaymentWebhookError(Exception):
@@ -208,7 +210,14 @@ def ingest_webhook(
     payload: dict[str, Any],
     payment_link_id: int | None = None,
 ) -> dict[str, Any]:
+    # Direct service callers get the same fail-closed boundary as HTTP routes.
+    # Keep this before all queries and inserts so a disabled lane cannot persist
+    # even a rejected/ignored provider event.
+    require_inbound_provider_events(provider or "payment provider")
+
     provider = (provider or "mercado_pago").strip().lower()
+    if provider == "mercadopago":
+        provider = "mercado_pago"
 
     # Re-delivery short-circuit: if this (hotel, provider, webhook_id) was already
     # ingested, return before creating/updating any Payment row.
@@ -233,8 +242,28 @@ def ingest_webhook(
         raise PaymentWebhookError("Link de pago no encontrado para el webhook")
 
     external_payment_id = str(_payload_value(payload, "payment_id", "id", "data.id") or webhook_id)
-    amount = _money(_payload_value(payload, "amount", "transaction_amount", "data.amount") or link.requested_amount)
-    currency = str(_payload_value(payload, "currency", "currency_id", "data.currency") or link.currency or "ARS").upper()[:3]
+    link_provider = (link.provider or "").strip().lower()
+    if link_provider == "mercadopago":
+        link_provider = "mercado_pago"
+    if link_provider != provider:
+        raise PaymentWebhookError("El proveedor del evento no coincide con el link de pago")
+    if link.execution_mode != "provider" or not link.external_checkout_url:
+        raise PaymentWebhookError("El artefacto local_only no acepta pagos de proveedor")
+    if link.status in {"cancelled", "expired"}:
+        raise PaymentWebhookError("El link de pago ya no acepta eventos de cobro")
+
+    raw_amount = _payload_value(payload, "amount", "transaction_amount", "data.amount")
+    raw_currency = _payload_value(payload, "currency", "currency_id", "data.currency")
+    if raw_amount in (None, ""):
+        raise PaymentWebhookError("El evento del proveedor no informa el monto cobrado")
+    if raw_currency in (None, ""):
+        raise PaymentWebhookError("El evento del proveedor no informa la moneda")
+    amount = _money(raw_amount)
+    if amount <= Decimal("0.00"):
+        raise PaymentWebhookError("El evento del proveedor informa un monto invalido")
+    currency = str(raw_currency).strip().upper()
+    if currency != str(link.currency or "ARS").strip().upper():
+        raise PaymentWebhookError("La moneda del evento no coincide con el link de pago")
     status = _normalize_status(provider, str(_payload_value(payload, "status", "data.status") or "pending"))
 
     payment = (
@@ -246,6 +275,21 @@ def ingest_webhook(
         )
         .first()
     )
+    if payment is None:
+        if not link.payable:
+            raise PaymentWebhookError("El link de pago no esta habilitado para nuevos cobros")
+        outstanding = max(
+            Decimal("0.00"),
+            _money(link.requested_amount) - _money(link.collected_amount),
+        )
+        if amount > outstanding + Decimal("0.01"):
+            raise PaymentWebhookError("El monto del evento excede el saldo del link de pago")
+    else:
+        if payment.payment_link_id not in {None, link.id} or payment.reservation_id != link.reservation_id:
+            raise PaymentWebhookError("El pago externo ya pertenece a otro link o reserva")
+        if _money(payment.amount) != amount or str(payment.currency or "").strip().upper() != currency:
+            raise PaymentWebhookError("El monto o la moneda de un pago externo idempotente no pueden cambiar")
+
     invalid_transition = False
     if not payment:
         payment = Payment(

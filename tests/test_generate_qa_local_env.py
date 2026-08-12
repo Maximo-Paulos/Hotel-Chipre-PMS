@@ -30,8 +30,8 @@ def test_generates_only_allowed_synthetic_values_with_private_permissions(tmp_pa
     assert stat.S_IMODE(output.stat().st_mode) == 0o600
     assert stored["QA_EMAIL_DOMAIN"] == "qa.hotels-pms.com"
     assert stored["QA_EMAIL_DOMAIN_IS_DEDICATED"] == "true"
-    assert len({stored[key] for key in stored if key.endswith("_EMAIL")}) == 5
-    assert len({stored[key] for key in stored if key.endswith("_PASSWORD")}) == 5
+    assert len({stored[key] for key in stored if key.endswith("_EMAIL")}) == 7
+    assert len({stored[key] for key in stored if key.endswith("_PASSWORD")}) == 7
     assert stored["QA_MASTER_ADMIN_PIN"].isdigit()
     assert len(stored["QA_MASTER_ADMIN_PIN"]) == 6
     assert not any(

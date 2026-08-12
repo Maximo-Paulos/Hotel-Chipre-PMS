@@ -64,6 +64,9 @@ class PaymentLink(Base):
     currency = Column(String(3), nullable=False, default="ARS", server_default="ARS")
     provider = Column(String(30), nullable=False, default="mercado_pago", server_default="mercado_pago")
     status = Column(String(20), nullable=False, default="active", server_default="active", index=True)
+    execution_mode = Column(String(20), nullable=False, default="local_only", server_default="local_only")
+    payable = Column(Boolean, nullable=False, default=False, server_default="0")
+    idempotency_key = Column(String(100), nullable=True)
 
     recipient_email = Column(String(255), nullable=False)
     recipient_name = Column(String(255), nullable=True)
@@ -96,6 +99,14 @@ class PaymentLink(Base):
     __table_args__ = (
         CheckConstraint("requested_amount > 0", name="ck_payment_link_amount_positive"),
         CheckConstraint("collected_amount >= 0", name="ck_payment_link_collected_nonnegative"),
+        CheckConstraint(
+            "execution_mode IN ('local_only', 'provider')",
+            name="ck_payment_link_execution_mode",
+        ),
+        CheckConstraint(
+            "NOT payable OR execution_mode = 'provider'",
+            name="ck_payment_link_payable_provider_mode",
+        ),
         ForeignKeyConstraint(
             ["hotel_id", "reservation_id"],
             ["reservations.hotel_id", "reservations.id"],
@@ -107,6 +118,10 @@ class PaymentLink(Base):
         UniqueConstraint(
             "hotel_id", "provider", "external_reference",
             name="uq_payment_link_external_per_hotel_provider",
+        ),
+        UniqueConstraint(
+            "hotel_id", "idempotency_key",
+            name="uq_payment_link_idempotency_per_hotel",
         ),
     )
 

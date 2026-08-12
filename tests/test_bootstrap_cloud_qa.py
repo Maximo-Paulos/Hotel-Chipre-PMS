@@ -53,6 +53,9 @@ def _bootstrap_values() -> dict[str, str]:
         "APP_ENV": "test",
         "EMAIL_PROVIDER": "null",
         "CONNECTIONS_ENABLED": "false",
+        "EXTERNAL_EFFECTS_ENABLED": "false",
+        "GOOGLE_LOGIN_ENABLED": "false",
+        "INBOUND_PROVIDER_EVENTS_ENABLED": "false",
         "PAYPAL_MODE": "sandbox",
         "AI_ENABLED": "false",
         "AI_PROVIDER": "disabled",
@@ -66,6 +69,8 @@ def _bootstrap_values() -> dict[str, str]:
         "QA_EMAIL_DOMAIN_IS_DEDICATED": "true",
         "QA_OWNER_EMAIL": "owner@qa.example.test",
         "QA_OWNER_PASSWORD": "OwnerQaPass001!",
+        "QA_CO_OWNER_EMAIL": "co-owner@qa.example.test",
+        "QA_CO_OWNER_PASSWORD": "CoOwnerQaPass006!",
         "QA_MANAGER_EMAIL": "manager@qa.example.test",
         "QA_MANAGER_PASSWORD": "ManagerQaPass002!",
         "QA_RECEPTION_EMAIL": "reception@qa.example.test",
@@ -429,7 +434,7 @@ def test_load_config_accepts_provider_verified_manifest_modes(
     config = bootstrap_cloud_qa.load_config(env)
 
     assert config.app_env == "preview"
-    assert len(config.personas) == 4
+    assert len(config.personas) == 5
     assert config.database_role == "postgres"
     assert config.connection_fingerprint == bootstrap_cloud_qa.database_connection_fingerprint(
         env["DATABASE_URL"],
@@ -683,16 +688,17 @@ def test_upsert_is_idempotent_and_creates_all_database_personas(db, tmp_path):
     first = bootstrap_cloud_qa.upsert_qa_data(db, config)
     second = bootstrap_cloud_qa.upsert_qa_data(db, config)
 
-    assert first.users_created == 4
-    assert first.memberships_created == 4
+    assert first.users_created == 5
+    assert first.memberships_created == 5
     assert second.users_created == 0
     assert second.memberships_created == 0
     assert db.query(HotelConfiguration).count() == 1
-    assert db.query(User).count() == 4
-    assert db.query(HotelMembership).count() == 4
+    assert db.query(User).count() == 5
+    assert db.query(HotelMembership).count() == 5
 
     expected_roles = {
         "owner@qa.example.test": "owner",
+        "co-owner@qa.example.test": "co_owner",
         "manager@qa.example.test": "manager",
         "reception@qa.example.test": "receptionist",
         "housekeeping@qa.example.test": "housekeeping",

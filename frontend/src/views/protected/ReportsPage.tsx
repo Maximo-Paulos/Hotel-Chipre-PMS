@@ -2,18 +2,25 @@ import { useMemo, useState } from "react";
 
 import { type OperationalReservationGroup, type OperationalReservationSummary } from "../../api/reports";
 import { ApiError } from "../../api/client";
-import { useDailyOperationalReport, useOperationalAlerts } from "../../hooks/useReports";
+import { useEffectivePermissions } from "../../hooks/usePermissions";
+import { useDailyOperationalReport, useOccupancyReport, useOperationalAlerts, useRevenueReport } from "../../hooks/useReports";
 import { todayIso as today } from "../../utils/date";
 
 const money = (value?: number | string | null) =>
   Number(value ?? 0).toLocaleString("es-AR", { style: "currency", currency: "ARS" });
 
 export function ReportsPage() {
+  const { hasPermission } = useEffectivePermissions();
+  const canViewFinancial = hasPermission("reports:financial:view");
   const [reportDate, setReportDate] = useState(today());
   const reportQuery = useDailyOperationalReport(reportDate);
   const alertsQuery = useOperationalAlerts(reportDate);
+  const occupancyQuery = useOccupancyReport(reportDate, reportDate);
+  const revenueQuery = useRevenueReport(reportDate, reportDate, canViewFinancial);
   const report = reportQuery.data;
   const alerts = alertsQuery.data?.alerts ?? report?.alerts ?? [];
+  const occupancy = occupancyQuery.data?.daily[0];
+  const revenue = revenueQuery.data;
 
   const pendingTotal = useMemo(() => {
     return (report?.pending_payments.reservations ?? []).reduce((total, reservation) => {
@@ -27,7 +34,7 @@ export function ReportsPage() {
         <div>
           <p className="text-xs uppercase tracking-wide text-slate-500">Operacion</p>
           <h1 className="text-2xl font-semibold text-slate-900">Reportes</h1>
-          <p className="text-sm text-slate-600">Reporte diario operativo con pagos pendientes, movimientos del dia, bloqueos y caja.</p>
+          <p className="text-sm text-slate-600">Operación diaria y ocupación; los importes financieros sólo están disponibles para owner y co-owner.</p>
         </div>
         <label className="space-y-1 text-sm">
           <span className="text-slate-600">Fecha</span>
@@ -40,16 +47,18 @@ export function ReportsPage() {
         </label>
       </header>
 
-      {(reportQuery.error || alertsQuery.error) && (
+      {(reportQuery.error || alertsQuery.error || occupancyQuery.error || revenueQuery.error) && (
         <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-3 text-sm text-rose-800" role="alert">
-          <p>{reportsErrorMessage(reportQuery.error || alertsQuery.error)}</p>
+          <p>{reportsErrorMessage(reportQuery.error || alertsQuery.error || occupancyQuery.error || revenueQuery.error)}</p>
           <button
             type="button"
             onClick={() => {
               void reportQuery.refetch();
               void alertsQuery.refetch();
+              void occupancyQuery.refetch();
+              if (canViewFinancial) void revenueQuery.refetch();
             }}
-            disabled={reportQuery.isFetching || alertsQuery.isFetching}
+            disabled={reportQuery.isFetching || alertsQuery.isFetching || occupancyQuery.isFetching || revenueQuery.isFetching}
             className="mt-2 rounded-lg border border-rose-300 bg-white px-3 py-2 font-semibold text-rose-800 hover:bg-rose-100 disabled:opacity-60"
           >
             Reintentar
@@ -64,24 +73,48 @@ export function ReportsPage() {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <Metric label="Llegadas" value={String(report.arrivals.count)} />
             <Metric label="Salidas" value={String(report.departures.count)} />
-            <Metric label="Pagos pendientes" value={money(pendingTotal)} />
+            <Metric label="Ocupación" value={occupancy ? `${occupancy.rate}%` : "—"} />
             <Metric label="Alertas" value={String(alerts.length)} />
           </div>
+
+          {canViewFinancial && revenue && (
+            <section className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 shadow-sm" data-testid="financial-report">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-emerald-700">Finanzas · acceso owner/co-owner</p>
+                <h2 className="text-lg font-semibold text-slate-900">Resumen del día</h2>
+              </div>
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                <Metric label="Cobrado" value={money(revenue.collected.total)} />
+                <Metric label="Esperado" value={money(revenue.expected.total)} />
+                <Metric label="Pendiente" value={money(revenue.expected.pending)} />
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-700">
+                {Object.entries(revenue.collected.by_method).map(([method, amount]) => (
+                  <span key={method} className="rounded-full border border-emerald-200 bg-white px-3 py-1">
+                    {method}: {money(amount)}
+                  </span>
+                ))}
+                {Object.keys(revenue.collected.by_method).length === 0 && <span>Sin cobros registrados.</span>}
+              </div>
+            </section>
+          )}
 
           <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
             <div className="space-y-4">
               <ReservationGroup title="Llegadas del dia" group={report.arrivals} emptyText="No hay llegadas para esta fecha." />
               <ReservationGroup title="Salidas del dia" group={report.departures} emptyText="No hay salidas para esta fecha." />
-              <ReservationGroup
-                title="Pagos pendientes"
-                group={report.pending_payments}
-                emptyText="No hay pagos pendientes en el reporte."
-                showBalance
-              />
+              {canViewFinancial && (
+                <ReservationGroup
+                  title={`Pagos pendientes · ${money(pendingTotal)}`}
+                  group={report.pending_payments}
+                  emptyText="No hay pagos pendientes en el reporte."
+                  showBalance
+                />
+              )}
             </div>
 
             <aside className="space-y-4">
-              <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              {canViewFinancial && <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div>
                   <p className="text-xs uppercase tracking-wide text-slate-500">Caja</p>
                   <h2 className="text-lg font-semibold text-slate-900">Estado operativo</h2>
@@ -95,7 +128,7 @@ export function ReportsPage() {
                     <p className="text-xs text-slate-500">Abierta {new Date(report.cash_session.opened_at).toLocaleString("es-AR")}</p>
                   ) : null}
                 </div>
-              </section>
+              </section>}
 
               <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div>

@@ -18,6 +18,15 @@ from app.services.integration_service import (
 from app.config import get_settings
 
 
+@pytest.fixture(autouse=True)
+def _enable_mocked_external_effects(monkeypatch):
+    monkeypatch.setenv("EXTERNAL_EFFECTS_ENABLED", "true")
+    monkeypatch.setenv("CONNECTIONS_ENABLED", "true")
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
+
+
 class _Response:
     def __init__(self, ok: bool, payload: dict, text: str = ""):
         self.ok = ok

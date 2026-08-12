@@ -57,6 +57,10 @@ def client_with_db(monkeypatch):
 
     from app.config import get_settings
 
+    monkeypatch.setenv("EXTERNAL_EFFECTS_ENABLED", "true")
+    monkeypatch.setenv("CONNECTIONS_ENABLED", "true")
+    monkeypatch.setenv("INBOUND_PROVIDER_EVENTS_ENABLED", "true")
+    get_settings.cache_clear()
     patched_settings = get_settings().model_copy(update={"MERCADOPAGO_WEBHOOK_SECRET": WEBHOOK_SECRET})
     monkeypatch.setattr("app.api.payment_links.get_settings", lambda: patched_settings)
 
@@ -67,6 +71,7 @@ def client_with_db(monkeypatch):
         yield client, db
     finally:
         fastapi_app.dependency_overrides.clear()
+        get_settings.cache_clear()
         db.close()
         engine.dispose()
 
@@ -117,6 +122,7 @@ def _create_link(db, hotel_id: int, reservation_id: int, amount: str):
             recipient_email="qa-webhook@example.com",
         ),
         mp_gateway=_fake_gateway,
+        idempotency_key=f"webhook-link-{hotel_id}-{reservation_id}-{amount}",
     )
     db.commit()
     db.refresh(link)

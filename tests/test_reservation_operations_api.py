@@ -145,7 +145,7 @@ def test_reservation_operations_summary_endpoint_exposes_pending_operational_act
     client, db, engine = _build_client()
     try:
         reservation = _seed_operational_state(db, 1, "H1")
-        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "manager")
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "receptionist")
 
         resp = client.get(f"/api/reservations/{reservation.id}/operations-summary")
         assert resp.status_code == 200, resp.text
@@ -165,7 +165,7 @@ def test_pending_actions_endpoint_is_hotel_scoped():
     try:
         reservation_h1 = _seed_operational_state(db, 1, "H1")
         _seed_operational_state(db, 2, "H2")
-        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "housekeeping")
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "receptionist")
 
         resp = client.get("/api/reservations/actions/pending")
         assert resp.status_code == 200, resp.text
@@ -181,7 +181,7 @@ def test_pending_actions_endpoint_surfaces_payment_errors_as_http_500(monkeypatc
     client, db, engine = _build_client()
     try:
         _seed_operational_state(db, 1, "H1")
-        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "manager")
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "receptionist")
 
         def boom(*_args, **_kwargs):
             raise PaymentError("Reservation 1 already has payments for hotel 2")
@@ -200,7 +200,7 @@ def test_reservations_list_surfaces_serialization_failures_as_http_500(monkeypat
     client, db, engine = _build_client()
     try:
         _seed_operational_state(db, 1, "H1")
-        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "manager")
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "receptionist")
 
         def broken(_reservation):
             raise RuntimeError("boom")

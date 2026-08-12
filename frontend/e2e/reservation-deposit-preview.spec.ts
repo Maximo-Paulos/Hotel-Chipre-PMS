@@ -60,7 +60,7 @@ test("QA- default hotel deposit shown before confirming matches the deposit stor
   await form.getByRole("button", { name: "¿No lo encontrás? Crear huésped nuevo", exact: true }).click();
   await form.getByPlaceholder("Nombre").fill("Huésped");
   await form.getByPlaceholder("Apellido").fill(guestLastName);
-  await form.getByPlaceholder("Email").fill(`${guestLastName.toLowerCase().replaceAll(" ", ".")}@example.test`);
+  await form.getByPlaceholder("Email").fill(`${guestLastName.toLowerCase().replaceAll(" ", ".")}@example.com`);
   await form.getByPlaceholder("Teléfono").fill("1112345678");
   await form.getByLabel("Tipo de documento").selectOption("DNI");
   await form.getByPlaceholder("Documento").fill(`QADEP-${suffix}`);
@@ -114,6 +114,25 @@ test("QA- default hotel deposit shown before confirming matches the deposit stor
   // El monto de seña mostrado ANTES de confirmar tiene que ser exactamente el
   // mismo que terminó grabado en la reserva (mismo formato, mismo valor).
   await expect(depositRequiredCell).toHaveText(previewedDepositText);
+
+  // External effects stay disabled in local QA. Creating a payment-link
+  // request must therefore produce an explicitly local, non-payable artifact:
+  // no fabricated /pay URL, no copy/pay/provider-refresh control, and only a
+  // clearly local cancellation action.
+  const depositRequestPanel = editForm
+    .getByText("Solicitud de seña", { exact: true })
+    .locator("xpath=ancestor::div[contains(@class, 'border-sky-100')][1]");
+  await depositRequestPanel.getByRole("button", { name: "Crear solicitud", exact: true }).click();
+  await expect(
+    page.getByText("Solicitud local creada. No es un link cobrable y no se envió al huésped.", { exact: true })
+  ).toBeVisible();
+  await expect(depositRequestPanel.getByTestId("payment-link-local-only")).toContainText(
+    "Registro local · no cobrable · sin URL ni envío"
+  );
+  await expect(depositRequestPanel.getByRole("button", { name: /Copiar link|Pagar|Actualizar|Refrescar/ })).toHaveCount(0);
+  await expect(depositRequestPanel.locator('a[href*="/pay/"]')).toHaveCount(0);
+  await depositRequestPanel.getByRole("button", { name: "Anular registro local", exact: true }).click();
+  await expect(depositRequestPanel.getByText(/· cancelled/)).toBeVisible();
 
   // Cleanup: this test pins room 101 for localIsoDate(90..92). The WebKit
   // Apple business matrix reruns this exact spec once per device project

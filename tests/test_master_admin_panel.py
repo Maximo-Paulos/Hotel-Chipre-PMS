@@ -25,6 +25,16 @@ from app.models.user import User
 from app.services.security import hash_password
 
 
+@pytest.fixture(autouse=True)
+def _enable_mocked_master_providers(monkeypatch):
+    monkeypatch.setenv("EXTERNAL_EFFECTS_ENABLED", "true")
+    monkeypatch.setenv("INBOUND_PROVIDER_EVENTS_ENABLED", "true")
+    monkeypatch.setenv("CONNECTIONS_ENABLED", "true")
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
+
+
 @dataclass
 class FakeResponse:
     ok: bool

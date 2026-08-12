@@ -54,7 +54,13 @@ def issue_key(
 
 
 def verify_key(db: Session, secret: str, *, hotel_id: int | None = None) -> HotelAPIKey:
-    """Resolve a plaintext key to an active hotel-scoped credential."""
+    """Resolve a plaintext key to an active hotel-scoped credential.
+
+    This function deliberately has no usage side effect. The request
+    dependency records ``last_used_at`` only after purpose and rate-limit
+    authorization succeeds, so a key presented to the wrong product surface
+    never looks like an accepted use.
+    """
 
     raw = (secret or "").strip()
     if not raw:
@@ -73,9 +79,12 @@ def verify_key(db: Session, secret: str, *, hotel_id: int | None = None) -> Hote
             expires_at = expires_at.replace(tzinfo=timezone.utc)
         if expires_at <= now:
             raise HotelAPIKeyError("API key expirada")
-    key.last_used_at = now
-    db.flush()
     return key
+
+
+def record_key_usage(db: Session, key: HotelAPIKey) -> None:
+    key.last_used_at = datetime.now(timezone.utc)
+    db.flush()
 
 
 def revoke_key(

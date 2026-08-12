@@ -19,6 +19,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.config import get_settings
 from app.database import get_engine
+from app.services.external_effects_policy import require_external_connections
 from app.services.tenant_context import set_tenant_hotel_context
 from app.tasks.celery_app import celery_app
 
@@ -84,6 +85,9 @@ def _run_scheduled_reports(
     database_url: Optional[str] = None,
 ) -> dict:
     settings = get_settings()
+    # Must precede engine/session creation, hotel queries and Gmail credential
+    # lookup. A queued stale task is therefore safe even after the lane closes.
+    require_external_connections("scheduled operational report delivery", settings)
     url = database_url or settings.DATABASE_URL
     engine = get_engine(url)
     SessionLocal = sessionmaker(bind=engine)

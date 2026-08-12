@@ -171,7 +171,7 @@ const normalizeStatus = (data: SubscriptionStatus | null | undefined, session: S
   };
 };
 
-export function useSubscriptionStatus() {
+export function useSubscriptionStatus(options?: { enabled?: boolean }) {
   const { session } = useSession();
   return useQuery({
     queryKey: ["subscription", session.hotelId ?? "none"],
@@ -184,7 +184,7 @@ export function useSubscriptionStatus() {
         return buildMockStatus(session);
       }
     },
-    enabled: hasValidSession(session),
+    enabled: hasValidSession(session) && (options?.enabled ?? true),
     staleTime: 60_000,
     placeholderData: () => buildMockStatus(session)
   });

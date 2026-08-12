@@ -57,6 +57,7 @@ class UserInfo(BaseModel):
     role: str
     is_verified: bool
     is_active: bool
+    permissions: list[str] = Field(default_factory=list)
 
     class Config:
         from_attributes = True
@@ -68,6 +69,7 @@ class AuthResponse(BaseModel):
     hotel_id: int
     hotel_ids: list[int] | None = None
     user: UserInfo
+    permissions: list[str] = Field(default_factory=list)
     requires_verification: bool = False
 
 

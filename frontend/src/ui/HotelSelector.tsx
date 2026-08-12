@@ -11,6 +11,7 @@ export function HotelSelector() {
   const queryClient = useQueryClient();
   const { session, setHotelId } = useSession();
   const [value, setValue] = useState(session.hotelId ? String(session.hotelId) : "");
+  const shouldLoadHotelNames = session.baseRole !== "housekeeping";
 
   useEffect(() => {
     setValue(session.hotelId ? String(session.hotelId) : "");
@@ -18,7 +19,7 @@ export function HotelSelector() {
 
   const { data: hotels, isLoading } = useQuery<HotelOption[]>({
     queryKey: ["hotels-list", session.hotelIds?.join(",") || session.hotelId || "none"],
-    enabled: hasValidSession(session),
+    enabled: hasValidSession(session) && shouldLoadHotelNames,
     queryFn: async () => {
       const ids = session.hotelIds?.length ? session.hotelIds : session.hotelId ? [session.hotelId] : [];
       const results: HotelOption[] = [];

@@ -4,7 +4,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ApiError } from "../../api/client";
 import { Seo } from "../../components/Seo";
 import { acceptInvitation, getInvitationInfo } from "../../api/auth";
-import { normalizeRole, useSession } from "../../state/session";
+import { defaultPathForRole, normalizeRole, useSession } from "../../state/session";
 
 export function AcceptInvitationPage() {
   const navigate = useNavigate();
@@ -56,18 +56,20 @@ export function AcceptInvitationPage() {
       if (!res.hotel_id) {
         throw new ApiError(500, "La respuesta de invitación no devolvió un hotel válido.");
       }
+      const acceptedRole = normalizeRole(res.user.role);
       login({
         userId: res.user.email,
         email: res.user.email,
         hotelId: res.hotel_id,
         hotelIds: res.hotel_ids?.length ? res.hotel_ids : [res.hotel_id],
-        role: normalizeRole(res.user.role),
-        baseRole: normalizeRole(res.user.role),
+        role: acceptedRole,
+        baseRole: acceptedRole,
+        permissions: res.permissions ?? res.user.permissions ?? null,
         accessToken: res.access_token,
         isVerified: res.user.is_verified
       });
       setInfo("Cuenta creada. Redirigiendo...");
-      setTimeout(() => navigate("/dashboard"), 800);
+      setTimeout(() => navigate(defaultPathForRole(acceptedRole)), 800);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "No se pudo aceptar la invitación");
     } finally {

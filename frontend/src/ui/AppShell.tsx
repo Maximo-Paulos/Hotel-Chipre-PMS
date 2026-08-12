@@ -6,9 +6,10 @@ import { ReservationDetailDrawer } from "../components/ReservationDetailDrawer";
 import { ReservationGlobalSearch } from "../components/ReservationGlobalSearch";
 import { Seo } from "../components/Seo";
 import { useOnboardingStatus } from "../hooks/useOnboardingStatus";
+import { useEffectivePermissions } from "../hooks/usePermissions";
 import { useReservationDrawer } from "../hooks/useReservationDrawer";
 import { useSubscriptionStatus } from "../hooks/useSubscription";
-import { useSession } from "../state/session";
+import { defaultPathForRole, useSession } from "../state/session";
 import { ApiError, hasValidSession } from "../api/client";
 import { useCrossTabSync } from "../sync/crossTabSync";
 
@@ -19,6 +20,8 @@ type NavItem = {
   label: string;
   to: string;
   requiresRole?: Array<"owner" | "co_owner" | "manager" | "housekeeping" | "receptionist">;
+  requiresAnyPermission?: string[];
+  requiresAllPermissions?: string[];
   minPlan?: "starter" | "pro" | "ultra";
 };
 
@@ -34,11 +37,11 @@ type NavSection = {
 // search away regardless of which menu group it would have lived in, so the
 // menu no longer has to list every route to keep it reachable.
 const dailyNav: NavItem[] = [
-  { label: "Planilla", to: "/operacion/planilla", requiresRole: ["owner", "co_owner", "manager", "housekeeping", "receptionist"] },
-  { label: "Reservas", to: "/reservas" },
-  { label: "Huespedes", to: "/huespedes" },
+  { label: "Planilla", to: "/operacion/planilla", requiresRole: ["owner", "co_owner", "manager", "receptionist"] },
+  { label: "Reservas", to: "/reservas", requiresRole: ["owner", "co_owner", "manager", "receptionist"], requiresAnyPermission: ["reservation:create", "checkin:perform"] },
+  { label: "Huespedes", to: "/huespedes", requiresAnyPermission: ["guest:view"] },
   { label: "Habitaciones", to: "/habitaciones" },
-  { label: "Caja", to: "/caja", requiresRole: ["owner", "co_owner", "manager", "receptionist"] },
+  { label: "Caja", to: "/caja", requiresAnyPermission: ["cash:operate"] },
 ];
 
 // Grouping criterion: "Analitica" is every reporting/dashboard page a manager
@@ -51,25 +54,25 @@ const groupedNav: NavSection[] = [
   {
     title: "Analitica",
     items: [
-      { label: "Resumen", to: "/analytics" },
-      { label: "Habitaciones", to: "/analytics/rooms", minPlan: "pro" },
-      { label: "Segmentos", to: "/analytics/segments", minPlan: "pro" },
-      { label: "Canales", to: "/analytics/channels", minPlan: "pro" },
-      { label: "Operación", to: "/analytics/operations", minPlan: "pro" },
-      { label: "Chat IA", to: "/analytics/ai-chat", minPlan: "ultra" },
-      { label: "Room events", to: "/operacion/room-state-events", minPlan: "pro" }
+      { label: "Resumen", to: "/analytics", requiresRole: ["owner", "co_owner"] },
+      { label: "Habitaciones", to: "/analytics/rooms", requiresRole: ["owner", "co_owner"], minPlan: "pro" },
+      { label: "Segmentos", to: "/analytics/segments", requiresRole: ["owner", "co_owner"], minPlan: "pro" },
+      { label: "Canales", to: "/analytics/channels", requiresRole: ["owner", "co_owner"], minPlan: "pro" },
+      { label: "Operación", to: "/analytics/operations", requiresRole: ["owner", "co_owner", "manager"], requiresAnyPermission: ["reports:operational:view"], minPlan: "pro" },
+      { label: "Chat IA", to: "/analytics/ai-chat", requiresRole: ["owner", "co_owner"], minPlan: "ultra" },
+      { label: "Room events", to: "/operacion/room-state-events", requiresRole: ["owner", "co_owner", "manager"], requiresAnyPermission: ["reports:operational:view"], minPlan: "pro" }
     ]
   },
   {
     title: "Mas operacion",
     items: [
-      { label: "Dashboard", to: "/dashboard" },
-      { label: "Reportes", to: "/reportes", requiresRole: ["owner", "co_owner", "manager"] },
+      { label: "Dashboard", to: "/dashboard", requiresRole: ["owner", "co_owner", "manager", "receptionist"] },
+      { label: "Reportes", to: "/reportes", requiresAnyPermission: ["reports:operational:view"] },
       { label: "Lista de espera", to: "/operacion/lista-espera", requiresRole: ["owner", "co_owner", "manager", "receptionist"] },
-      { label: "Lavanderia", to: "/operacion/lavanderia", requiresRole: ["owner", "co_owner", "manager", "housekeeping"] },
-      { label: "Stock", to: "/operacion/stock", requiresRole: ["owner", "co_owner", "manager"] },
+      { label: "Lavanderia", to: "/operacion/lavanderia", requiresAnyPermission: ["laundry:operate_remitos", "laundry:manage_vendors"] },
+      { label: "Stock", to: "/operacion/stock", requiresAnyPermission: ["stock:operate"] },
       { label: "Tarifas", to: "/operacion/tarifas", requiresRole: ["owner", "co_owner", "manager"] },
-      { label: "Onboarding", to: "/onboarding" },
+      { label: "Onboarding", to: "/onboarding", requiresRole: ["owner", "co_owner"] },
     ],
   },
   {
@@ -79,8 +82,8 @@ const groupedNav: NavSection[] = [
       { label: "Asistente", to: "/settings/assistant", requiresRole: ["owner", "co_owner", "manager"] },
       { label: "Suscripcion", to: "/settings/subscription", requiresRole: ["owner", "co_owner"] },
       { label: "Empresas", to: "/settings/companies", requiresRole: ["owner", "co_owner"], minPlan: "pro" },
-      { label: "API Keys", to: "/settings/api-keys", requiresRole: ["owner", "co_owner"] },
-      { label: "Permisos", to: "/settings/permissions", requiresRole: ["owner", "co_owner"] },
+      { label: "API Keys", to: "/settings/api-keys", requiresRole: ["owner", "co_owner"], requiresAnyPermission: ["apikey:manage"] },
+      { label: "Permisos", to: "/settings/permissions", requiresRole: ["owner", "co_owner"], requiresAnyPermission: ["permissions:manage"] },
       { label: "WhatsApp", to: "/settings/whatsapp", requiresRole: ["owner", "co_owner"] },
       { label: "Conexiones", to: "/settings/connections", requiresRole: ["owner", "co_owner"] },
       { label: "Pruebas", to: "/settings/tests", requiresRole: ["owner", "co_owner"] },
@@ -114,6 +117,10 @@ export function AppShell() {
   // check-in override, inviting/revoking users) read `session.baseRole`
   // instead -- see UserBadge/session.tsx and those pages' own comments.
   const role = session.role;
+  const realRole = session.baseRole ?? session.role;
+  const isHousekeeping = realRole === "housekeeping";
+  const homePath = defaultPathForRole(realRole);
+  const { hasAnyPermission, hasAllPermissions } = useEffectivePermissions();
   const { reservationId: drawerReservationId, closeReservation } = useReservationDrawer();
   // The owner's phone-in-hand complaint (B7) was two competing mobile nav
   // mechanisms at once (a horizontal-scroll pill row + a separate native
@@ -123,8 +130,10 @@ export function AppShell() {
 
   useCrossTabSync();
 
-  const { data: onboarding, isFetching, error } = useOnboardingStatus({ enabled: isLoggedIn && isVerified });
-  const { data: subscription } = useSubscriptionStatus();
+  const { data: onboarding, isFetching, error } = useOnboardingStatus({
+    enabled: isLoggedIn && isVerified && ["owner", "co_owner"].includes(realRole ?? "")
+  });
+  const { data: subscription } = useSubscriptionStatus({ enabled: !isHousekeeping });
   const onboardingError = error as ApiError | undefined;
 
   useEffect(() => {
@@ -161,9 +170,11 @@ export function AppShell() {
     return (items: NavItem[]) =>
       items
         .filter((item) => !item.requiresRole || (role ? item.requiresRole.includes(role) : false))
+        .filter((item) => !item.requiresAnyPermission || hasAnyPermission(item.requiresAnyPermission))
+        .filter((item) => !item.requiresAllPermissions || hasAllPermissions(item.requiresAllPermissions))
         .filter((item) => !item.minPlan || (subscription?.plan ? (planRank[subscription.plan as keyof typeof planRank] ?? 0) >= (planRank[item.minPlan] ?? 0) : false))
         .filter((item) => !(item.to === "/onboarding" && onboarding?.completed));
-  }, [role, onboarding?.completed, subscription?.plan]);
+  }, [role, onboarding?.completed, subscription?.plan, hasAnyPermission, hasAllPermissions]);
 
   const visibleDailyNav = useMemo(() => filterItems(dailyNav), [filterItems]);
 
@@ -178,10 +189,6 @@ export function AppShell() {
   }, [filterItems]);
 
   const path = location.pathname;
-  if (role === "housekeeping" && path.startsWith("/settings")) return <Navigate to="/reservas" replace />;
-  if (role === "manager" && path.startsWith("/settings") && path !== "/settings/assistant") {
-    return <Navigate to="/reservas" replace />;
-  }
   if (onboarding?.completed && path.startsWith("/onboarding")) return <Navigate to="/dashboard" replace />;
 
   if (!isLoggedIn) return <Navigate to="/login" replace />;
@@ -201,7 +208,7 @@ export function AppShell() {
           className="border-b border-sky-200 bg-sky-50 px-6 py-2 text-sm text-sky-900"
           data-testid="viewing-as-banner"
         >
-          Viendo como {roleLabels[session.role]} — es solo una previsualizacion, tus permisos reales siguen siendo
+          Vista previa como {roleLabels[session.role]} — no cambia permisos ni identidad; tus permisos efectivos siguen siendo
           los de {roleLabels[session.baseRole]}.{" "}
           <button
             className="font-semibold underline"
@@ -214,7 +221,7 @@ export function AppShell() {
         </div>
       )}
 
-      {(writeBlocked || inactiveSubscription) && (
+      {!isHousekeeping && (writeBlocked || inactiveSubscription) && (
         <div className="border-b border-amber-200 bg-amber-50 px-6 py-2 text-sm text-amber-900">
           {writeBlocked ? "Suscripcion en modo solo lectura (can_write=false)." : "Suscripcion inactiva."}{" "}
           Plan: {subscription?.plan || "sin plan"} · Habitaciones: {subscription?.rooms_in_use}/{subscription?.room_limit}.{" "}
@@ -224,7 +231,7 @@ export function AppShell() {
         </div>
       )}
 
-      {capBanner && (
+      {!isHousekeeping && capBanner && (
         <div className="border-b border-rose-200 bg-rose-50 px-6 py-2 text-sm text-rose-900">{capBanner}</div>
       )}
 
@@ -254,7 +261,7 @@ export function AppShell() {
       <div className="flex min-h-[calc(100vh-80px)]">
         <aside className="hidden w-72 shrink-0 border-r border-slate-200 bg-white/90 backdrop-blur md:flex md:flex-col">
           <div className="px-5 pb-4 pt-6">
-            <Link to="/dashboard" className="block">
+            <Link to={homePath} className="block">
               <img
                 src="/brand/logo-full.png"
                 alt="Hotel Chipre PMS"
@@ -318,7 +325,7 @@ export function AppShell() {
                 everything (daily links, grouped sections, search, hotel
                 selector, user badge) lives in the slide-over panel below. */}
             <div className="flex items-center justify-between gap-3 px-4 py-3 md:hidden">
-              <Link to="/dashboard" className="flex min-h-11 shrink-0 items-center text-slate-900">
+              <Link to={homePath} className="flex min-h-11 shrink-0 items-center text-slate-900">
                 <img
                   src="/brand/logo-avatar.png"
                   alt="Hotel Chipre PMS"
@@ -344,7 +351,7 @@ export function AppShell() {
             </div>
 
             <div className="hidden px-4 py-3 md:flex md:items-center md:justify-end md:gap-3">
-              <ReservationGlobalSearch />
+              {hasAnyPermission(["reservation:create", "checkin:perform"]) && <ReservationGlobalSearch />}
               <HotelSelector />
               <UserBadge />
             </div>
@@ -412,7 +419,7 @@ export function AppShell() {
                 ))}
 
                 <div className="flex flex-col gap-3 border-t border-slate-100 px-3 py-3">
-                  <ReservationGlobalSearch />
+                  {hasAnyPermission(["reservation:create", "checkin:perform"]) && <ReservationGlobalSearch />}
                   <HotelSelector />
                   <UserBadge />
                 </div>
@@ -430,7 +437,9 @@ export function AppShell() {
         </div>
       </div>
 
-      <ReservationDetailDrawer reservationId={drawerReservationId} onClose={closeReservation} />
+      {hasAnyPermission(["reservation:create", "checkin:perform"]) && (
+        <ReservationDetailDrawer reservationId={drawerReservationId} onClose={closeReservation} />
+      )}
     </div>
   );
 }

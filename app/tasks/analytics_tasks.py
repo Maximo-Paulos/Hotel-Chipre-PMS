@@ -18,6 +18,7 @@ from app.models.room import Room, RoomCategory
 from app.models.stock import StockMovement
 from app.models.transaction import Transaction, TransactionStatusEnum
 from app.services.financial_ledger import signed_transaction_amount
+from app.services.external_effects_policy import require_external_connections
 from app.services.analytics_warehouse import (
     DIM_DATE_TABLE,
     DIM_HOTEL_TABLE,
@@ -453,6 +454,7 @@ def project_reservation_facts_to_clickhouse(
         from datetime import date
         from sqlalchemy.orm import sessionmaker
 
+        require_external_connections("scheduled ClickHouse projection")
         client = get_clickhouse_client()
         if client is None:
             return {"status": "disabled", "hotel_id": hotel_id}
@@ -542,6 +544,7 @@ def project_operational_facts_to_clickhouse(
     try:
         from sqlalchemy.orm import sessionmaker
 
+        require_external_connections("scheduled ClickHouse projection")
         client = get_clickhouse_client()
         if client is None:
             return {"status": "disabled", "hotel_id": hotel_id}
@@ -580,6 +583,9 @@ def _project_all_hotels_window(
 ) -> dict:
     from sqlalchemy.orm import sessionmaker
 
+    # Keep this before the ClickHouse client and PostgreSQL engine. Both the
+    # beat path and a directly queued stale task fail closed.
+    require_external_connections("scheduled ClickHouse projection")
     client = get_clickhouse_client()
     if client is None:
         return {"status": "disabled", "hotels": 0}

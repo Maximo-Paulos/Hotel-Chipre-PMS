@@ -50,12 +50,13 @@ export function UserBadge() {
         </div>
         {(session.baseRole === "owner") && (
           <label className="mt-2 block text-xs text-slate-600">
-            <span className="mr-2 font-semibold text-slate-700">Cambiar vista</span>
+            <span className="mr-2 font-semibold text-slate-700">Vista previa de rol</span>
             <select
               className="h-11 rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 shadow-sm focus:border-brand-400 focus:outline-none"
               value={currentRole ?? ""}
               onChange={handleRoleChange}
               data-testid="role-switcher"
+              aria-description="Solo previsualiza la navegación; no cambia tus permisos efectivos"
             >
               <option value="" disabled>
                 Seleccionar rol
@@ -66,6 +67,7 @@ export function UserBadge() {
               <option value="housekeeping">Housekeeping</option>
               <option value="receptionist">Recepción</option>
             </select>
+            <span className="mt-1 block text-[11px] text-slate-500">No cambia tus permisos efectivos.</span>
           </label>
         )}
       </div>

@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse, Response
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies.auth import AuthContext, require_roles
+from app.dependencies.auth import AuthContext, require_permission
 from app.schemas.analytics import AnalyticsResponseEnvelopeRead, AnalyticsStarterSummaryRead
 from app.schemas.analytics_api import (
     AnalyticsAIConfigRead,
@@ -60,6 +60,11 @@ from app.services.analytics_insights import (
 )
 from app.models.analytics import AnalyticsExportStatusEnum
 from app.services.read_model_cache import get_cached_home_payload, get_cached_starter_summary_payload
+from app.services.permission_service import (
+    PERMISSION_REPORTS_FINANCIAL_VIEW,
+    PERMISSION_REPORTS_OPERATIONAL_VIEW,
+    resolve,
+)
 
 
 router = APIRouter(prefix="/api/analytics", tags=["Analytics"])
@@ -86,7 +91,7 @@ def starter_summary(
     date_from: date | None = Query(default=None),
     date_to: date | None = Query(default=None),
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
 ):
     require_analytics_plan(db, context.hotel_id, "starter")
     return annotate_analytics_payload(
@@ -112,7 +117,7 @@ def analytics_home(
     compare_previous: bool = Query(default=True),
     compare_yoy: bool = Query(default=False),
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
 ):
     require_analytics_plan(db, context.hotel_id, "pro")
     return annotate_analytics_payload(
@@ -144,7 +149,7 @@ def analytics_rooms(
     compare_previous: bool = Query(default=True),
     compare_yoy: bool = Query(default=False),
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
 ):
     require_analytics_plan(db, context.hotel_id, "pro")
     return annotate_analytics_payload(
@@ -169,7 +174,7 @@ def analytics_room_detail(
     compare_previous: bool = Query(default=True),
     compare_yoy: bool = Query(default=False),
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
 ):
     require_analytics_plan(db, context.hotel_id, "pro")
     return annotate_analytics_payload(
@@ -195,7 +200,7 @@ def analytics_category_detail(
     compare_previous: bool = Query(default=True),
     compare_yoy: bool = Query(default=False),
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
 ):
     require_analytics_plan(db, context.hotel_id, "pro")
     return annotate_analytics_payload(
@@ -220,7 +225,7 @@ def analytics_segments(
     compare_previous: bool = Query(default=True),
     compare_yoy: bool = Query(default=False),
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
 ):
     require_analytics_plan(db, context.hotel_id, "pro")
     return annotate_analytics_payload(
@@ -245,7 +250,7 @@ def analytics_company_detail(
     compare_previous: bool = Query(default=True),
     compare_yoy: bool = Query(default=False),
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
 ):
     require_analytics_plan(db, context.hotel_id, "pro")
     window = _analytics_window(
@@ -286,7 +291,7 @@ def analytics_channels(
     compare_previous: bool = Query(default=True),
     compare_yoy: bool = Query(default=False),
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
 ):
     require_analytics_plan(db, context.hotel_id, "pro")
     return annotate_analytics_payload(
@@ -310,10 +315,10 @@ def analytics_operations(
     compare_previous: bool = Query(default=True),
     compare_yoy: bool = Query(default=False),
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_OPERATIONAL_VIEW)),
 ):
     require_analytics_plan(db, context.hotel_id, "pro")
-    return annotate_analytics_payload(
+    payload = annotate_analytics_payload(
         build_operations_payload(
             db,
             hotel_id=context.hotel_id,
@@ -324,13 +329,20 @@ def analytics_operations(
             currency_display=currency_display,
         )
     )
+    if resolve(db, context.hotel_id, context.user_role, PERMISSION_REPORTS_FINANCIAL_VIEW):
+        return payload
+    payload["currency_display"] = None
+    for fact in payload.get("data", {}).get("facts", []):
+        fact.pop("revenue_net_ars", None)
+        fact.pop("margin_operating_ars", None)
+    return payload
 
 
 @router.post("/exports/png")
 def export_analytics_png(
     payload: AnalyticsExportRequest,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
 ):
     require_analytics_plan(db, context.hotel_id, "pro")
     content = render_export_png(db, hotel_id=context.hotel_id, request=payload)
@@ -346,7 +358,7 @@ def export_analytics_png(
 def export_analytics_csv(
     payload: AnalyticsExportRequest,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
 ):
     require_analytics_plan(db, context.hotel_id, "pro")
     content = render_export_csv(db, hotel_id=context.hotel_id, request=payload)
@@ -363,7 +375,7 @@ def export_analytics_xlsx(
     payload: AnalyticsExportRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
 ):
     require_analytics_plan(db, context.hotel_id, "ultra")
     job = create_xlsx_export_job(db, hotel_id=context.hotel_id, user_id=context.user_id or 0, request=payload)
@@ -375,7 +387,7 @@ def export_analytics_xlsx(
 @router.get("/exports", response_model=list[AnalyticsExportJobRead])
 def list_analytics_exports(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
 ):
     require_analytics_plan(db, context.hotel_id, "ultra")
     return list_export_jobs(db, hotel_id=context.hotel_id)
@@ -385,7 +397,7 @@ def list_analytics_exports(
 def get_analytics_export(
     job_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
 ):
     require_analytics_plan(db, context.hotel_id, "ultra")
     return get_export_job_read(db, hotel_id=context.hotel_id, job_id=job_id)
@@ -395,7 +407,7 @@ def get_analytics_export(
 def download_analytics_export(
     job_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
 ):
     require_analytics_plan(db, context.hotel_id, "ultra")
     job = get_export_job_or_404(db, hotel_id=context.hotel_id, job_id=job_id)
@@ -416,7 +428,7 @@ def download_analytics_export(
 @router.get("/alert-settings", response_model=AnalyticsAlertSettingsRead)
 def analytics_alert_settings(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
 ):
     require_analytics_plan(db, context.hotel_id, "ultra")
     result = get_alert_settings(db, hotel_id=context.hotel_id, user_id=context.user_id or 0)
@@ -428,7 +440,7 @@ def analytics_alert_settings(
 def patch_analytics_alert_settings(
     payload: AnalyticsAlertSettingsUpdate,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
 ):
     require_analytics_plan(db, context.hotel_id, "ultra")
     result = patch_alert_settings(db, hotel_id=context.hotel_id, user_id=context.user_id or 0, payload=payload)
@@ -441,7 +453,7 @@ def snooze_analytics_alert(
     alert_code: str,
     payload: AnalyticsAlertSnoozeCreate,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
 ):
     require_analytics_plan(db, context.hotel_id, "ultra")
     result = snooze_alert(db, hotel_id=context.hotel_id, user_id=context.user_id or 0, alert_code=alert_code, payload=payload)
@@ -454,7 +466,7 @@ def unsnooze_analytics_alert(
     alert_code: str,
     scope_key: str = Query(default="global", min_length=1, max_length=120),
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
 ):
     require_analytics_plan(db, context.hotel_id, "ultra")
     result = unsnooze_alert(db, hotel_id=context.hotel_id, user_id=context.user_id or 0, alert_code=alert_code, scope_key=scope_key)
@@ -465,7 +477,7 @@ def unsnooze_analytics_alert(
 @router.get("/ai-config", response_model=AnalyticsAIConfigRead)
 def analytics_ai_config(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
 ):
     require_analytics_plan(db, context.hotel_id, "ultra")
     return get_ai_config(db, context.hotel_id)
@@ -475,7 +487,7 @@ def analytics_ai_config(
 def patch_analytics_ai_config(
     payload: AnalyticsAIConfigUpdate,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
 ):
     require_analytics_plan(db, context.hotel_id, "ultra")
     result = patch_ai_config(db, hotel_id=context.hotel_id, user_id=context.user_id or 0, payload=payload)
@@ -486,7 +498,7 @@ def patch_analytics_ai_config(
 @router.get("/insights/status", response_model=AnalyticsInsightStatusRead)
 def analytics_insights_status(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
 ):
     require_analytics_plan(db, context.hotel_id, "ultra")
     result = get_analytics_ai_status(db, hotel_id=context.hotel_id)
@@ -498,7 +510,7 @@ def analytics_insights_status(
 def analytics_ai_chat(
     payload: AnalyticsAIChatRequest,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
 ):
     require_analytics_plan(db, context.hotel_id, "ultra")
     result = build_analytics_chat_answer(db, hotel_id=context.hotel_id, payload=payload)
@@ -510,7 +522,7 @@ def analytics_ai_chat(
 def analytics_insights_home(
     payload: AnalyticsInsightRequest,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
 ):
     require_analytics_plan(db, context.hotel_id, "ultra")
     result = build_home_insight(db, hotel_id=context.hotel_id, payload=payload)
@@ -522,7 +534,7 @@ def analytics_insights_home(
 def analytics_insights_anomalies(
     payload: AnalyticsInsightRequest,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
 ):
     require_analytics_plan(db, context.hotel_id, "ultra")
     result = build_anomalies_insight(db, hotel_id=context.hotel_id, payload=payload)
@@ -534,7 +546,7 @@ def analytics_insights_anomalies(
 def analytics_insights_pricing(
     payload: AnalyticsInsightRequest,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
 ):
     require_analytics_plan(db, context.hotel_id, "ultra")
     result = build_pricing_insight(db, hotel_id=context.hotel_id, payload=payload)

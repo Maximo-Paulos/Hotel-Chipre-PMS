@@ -112,6 +112,7 @@ _BASELINE_LEASE_ENV_KEYS = {
 }
 _HOTEL_PERSONAS = (
     ("owner", "QA_OWNER", "owner"),
+    ("co-owner", "QA_CO_OWNER", "co_owner"),
     ("manager", "QA_MANAGER", "manager"),
     ("reception", "QA_RECEPTION", "receptionist"),
     ("housekeeping", "QA_HOUSEKEEPING", "housekeeping"),
@@ -905,10 +906,11 @@ def load_config(env: Mapping[str, str] | None = None) -> QABootstrapConfig:
     if len(master_pin) < 6 or not master_pin.isdigit():
         raise QABootstrapError("QA_MASTER_ADMIN_PIN must contain at least 6 digits")
 
-    if len({persona.email for persona in personas} | {master_email}) != 5:
-        raise QABootstrapError("all five QA persona emails must be distinct")
-    if len({persona.password for persona in personas} | {master_password}) != 5:
-        raise QABootstrapError("all five QA persona passwords must be distinct")
+    expected_identity_count = len(personas) + 1
+    if len({persona.email for persona in personas} | {master_email}) != expected_identity_count:
+        raise QABootstrapError("all QA persona emails must be distinct")
+    if len({persona.password for persona in personas} | {master_password}) != expected_identity_count:
+        raise QABootstrapError("all QA persona passwords must be distinct")
 
     runtime_master_email = _required(source, "MASTER_ADMIN_EMAIL").lower()
     runtime_master_password = _required(source, "MASTER_ADMIN_PASSWORD")
@@ -1015,6 +1017,16 @@ def upsert_qa_data(db, config: QABootstrapConfig) -> QABootstrapResult:
     hotel.subscription_active = True
     hotel.default_currency = "ARS"
     hotel.hotel_timezone = "America/Argentina/Buenos_Aires"
+    hotel.enable_cash = True
+    hotel.enable_bank_transfer = True
+    hotel.enable_mercado_pago = False
+    hotel.enable_paypal = False
+    hotel.enable_credit_card = False
+    hotel.enable_debit_card = False
+    hotel.enable_booking_sync = False
+    hotel.enable_expedia_sync = False
+    hotel.ota_autopush_enabled = False
+    hotel.analytics_ai_enabled = False
     policies = hotel.get_extra_policies()
     policies["_qa_bootstrap"] = {
         "isolated": True,
@@ -1139,7 +1151,7 @@ def main(env: Mapping[str, str] | None = None) -> QABootstrapResult:
         result = bootstrap_database(config)
     print(
         f"QA bootstrap complete for run_id={config.run_id}; "
-        "hotel-personas=4; master-admin=runtime-env"
+        "hotel-personas=5; master-admin=runtime-env"
     )
     return result
 

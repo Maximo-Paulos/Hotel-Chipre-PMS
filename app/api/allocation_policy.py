@@ -6,7 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies.auth import AuthContext, require_roles
+from app.dependencies.auth import AuthContext, require_permission, require_roles
+from app.services.permission_service import PERMISSION_CONFIG_MANAGE
 from app.schemas.allocation_policy import (
     AllocationExplanationRead,
     AllocationFeedbackDraftRequest,
@@ -107,7 +108,7 @@ def _serialize_run_details(details) -> AllocationRunDetailRead:
 @router.get("", response_model=ActiveAllocationPolicyRead)
 def get_active_policy(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_CONFIG_MANAGE)),
 ):
     settings = get_active_policy_settings(db, context.hotel_id)
     return ActiveAllocationPolicyRead(
@@ -122,7 +123,7 @@ def get_active_policy(
 def get_policy_versions(
     profile_id: int | None = Query(default=None),
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_CONFIG_MANAGE)),
 ):
     versions = list_policy_versions(db, context.hotel_id, profile_id=profile_id)
     return [_serialize_policy_version(version) for version in versions]
@@ -180,7 +181,7 @@ def get_policy_suggestions(
     profile_id: int | None = Query(default=None),
     status_filter: str | None = Query(default=None, alias="status"),
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_CONFIG_MANAGE)),
 ):
     suggestions = list_policy_suggestions(
         db,
@@ -299,7 +300,7 @@ def create_feedback_draft(
 @router.get("/runs/latest", response_model=AllocationRunDetailRead)
 def get_latest_run(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_CONFIG_MANAGE)),
 ):
     details = get_latest_allocation_run_details(db, hotel_id=context.hotel_id)
     if details is None:
@@ -311,7 +312,7 @@ def get_latest_run(
 def get_run(
     run_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_CONFIG_MANAGE)),
 ):
     details = get_allocation_run_details(db, hotel_id=context.hotel_id, run_id=run_id)
     if details is None:

@@ -30,6 +30,7 @@ from app.models.ota_core import (
 )
 from app.models.hotel_config import HotelConfiguration
 from app.services.ota import NormalizedOTAReservation, get_default_adapter
+from app.services.external_effects_policy import require_inbound_provider_events
 from app.services.reservation_service import (
     create_reservation,
     find_available_rooms,
@@ -993,6 +994,9 @@ class OTAIntegrationService:
         payload: dict,
         external_reservation_id_key: str,
     ) -> OTAReservationMapping:
+        # Direct callers cannot bypass the HTTP edge guard. This precedes the
+        # credential query, signature verification, normalization, and writes.
+        require_inbound_provider_events(provider_code)
         OTAIntegrationService._resolve_webhook_credential(db, hotel_id, provider_code, webhook_secret, payload)
 
         external_reservation_id = payload.get(external_reservation_id_key, "")

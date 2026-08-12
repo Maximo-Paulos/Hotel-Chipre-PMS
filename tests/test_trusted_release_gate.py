@@ -65,18 +65,22 @@ def evidence_bytes() -> tuple[dict, dict, bytes, bytes, datetime]:
         {
             "persona": persona,
             "case_id": case["id"],
+            "device": device,
             "status": "passed",
             "preview_url": manifest["app_url"],
             "precondition": "persona QA sintética activa",
             "human_action": "recorrer la UI visible",
             "expected": case["expected"],
             "observed": "resultado esperado observado",
+            "severity": "none",
+            "screenshot": None,
             "evidence": "sha256:"
-            + hashlib.sha256(f"{case['id']}/{persona}".encode()).hexdigest(),
+            + hashlib.sha256(f"{case['id']}/{persona}/{device}".encode()).hexdigest(),
             "code_sha": manifest["code_sha"],
         }
         for case in catalog["cases"]
         for persona in case["personas"]
+        for device in case["devices"]
     ]
     summary = {
         "task_id": "trusted-release-contract",
@@ -137,7 +141,9 @@ class FakeGitHub:
         artifact_root = tmp_path / "operator-artifacts"
         artifact_root.mkdir()
         for index, result in enumerate(self.summary["results"]):
-            content = f"{result['case_id']}/{result['persona']}".encode()
+            content = (
+                f"{result['case_id']}/{result['persona']}/{result['device']}"
+            ).encode()
             assert result["evidence"] == "sha256:" + hashlib.sha256(content).hexdigest()
             (artifact_root / f"evidence-{index:04d}.bin").write_bytes(content)
         self.attestation = build_attestation(

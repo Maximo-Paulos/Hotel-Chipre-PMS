@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies.auth import AuthContext, require_roles
+from app.dependencies.auth import AuthContext, require_permission
 from app.models.analytics import RoomStateEvent
 from app.schemas.analytics_api import RoomStateEventCreate, RoomStateEventRead
 from app.services.analytics_service import (
@@ -15,6 +15,7 @@ from app.services.analytics_service import (
     require_analytics_plan,
 )
 from app.services.timeseries_projection import project_room_state_event
+from app.services.permission_service import PERMISSION_REPORTS_OPERATIONAL_VIEW
 
 
 router = APIRouter(prefix="/api/room-state-events", tags=["Room State Events"])
@@ -26,7 +27,7 @@ def list_room_state_events(
     date_from: date | None = Query(default=None),
     date_to: date | None = Query(default=None),
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_OPERATIONAL_VIEW)),
 ):
     require_analytics_plan(db, context.hotel_id, "pro")
     query = db.query(RoomStateEvent).filter(RoomStateEvent.hotel_id == context.hotel_id)
@@ -43,7 +44,7 @@ def list_room_state_events(
 def create_room_state_event_route(
     payload: RoomStateEventCreate,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_OPERATIONAL_VIEW)),
 ):
     require_analytics_plan(db, context.hotel_id, "pro")
     event = create_room_state_event(db, hotel_id=context.hotel_id, user_id=context.user_id or 0, payload=payload)
@@ -68,7 +69,7 @@ def create_room_state_event_route(
 def close_room_state_event_route(
     event_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_OPERATIONAL_VIEW)),
 ):
     require_analytics_plan(db, context.hotel_id, "pro")
     event = close_room_state_event(db, hotel_id=context.hotel_id, user_id=context.user_id or 0, event_id=event_id)

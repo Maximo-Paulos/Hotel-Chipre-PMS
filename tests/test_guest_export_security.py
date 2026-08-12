@@ -108,7 +108,7 @@ def guest_export_client():
     engine.dispose()
 
 
-def test_guest_export_permission_defaults_and_override_are_hotel_scoped(db):
+def test_guest_export_permission_ceiling_cannot_be_overridden_for_reception(db):
     _seed_hotel(db, 8101)
     _seed_hotel(db, 8102)
 
@@ -118,9 +118,10 @@ def test_guest_export_permission_defaults_and_override_are_hotel_scoped(db):
     assert resolve(db, 8101, "receptionist", "guest:export") is False
     assert resolve(db, 8101, "housekeeping", "guest:export") is False
 
-    set_override(db, 8101, "receptionist", "guest:export", True, user_id=None)
+    with pytest.raises(ValueError, match="techo de seguridad"):
+        set_override(db, 8101, "receptionist", "guest:export", True, user_id=None)
 
-    assert resolve(db, 8101, "receptionist", "guest:export") is True
+    assert resolve(db, 8101, "receptionist", "guest:export") is False
     assert resolve(db, 8102, "receptionist", "guest:export") is False
 
 

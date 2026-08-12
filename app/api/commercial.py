@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies.auth import AuthContext, require_roles
+from app.dependencies.auth import AuthContext, require_permission, require_roles
 from app.schemas.commercial import (
     FxPolicyCreate,
     FxPolicyRead,
@@ -37,6 +37,7 @@ from app.services.commercial_service import (
     update_sellable_product,
     update_tax_policy,
 )
+from app.services.permission_service import PERMISSION_REPORTS_FINANCIAL_VIEW
 
 router = APIRouter(prefix="/api/commercial", tags=["Commercial Configuration"])
 
@@ -44,7 +45,7 @@ router = APIRouter(prefix="/api/commercial", tags=["Commercial Configuration"])
 @router.get("/products", response_model=list[SellableProductRead])
 def get_sellable_products(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
 ):
     return list_sellable_products(db, hotel_id=context.hotel_id)
 
@@ -83,7 +84,7 @@ def patch_product(
 @router.get("/rate-plans", response_model=list[RatePlanRead])
 def get_rate_plans(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
 ):
     return list_rate_plans(db, hotel_id=context.hotel_id)
 
@@ -122,7 +123,7 @@ def patch_rate_plan(
 @router.get("/tax-policies", response_model=list[TaxPolicyRead])
 def get_tax_policies(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
 ):
     return list_tax_policies(db, hotel_id=context.hotel_id)
 
@@ -161,7 +162,7 @@ def patch_tax_policy(
 @router.get("/fx-policies", response_model=list[FxPolicyRead])
 def get_fx_policies(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
 ):
     return list_fx_policies(db, hotel_id=context.hotel_id)
 

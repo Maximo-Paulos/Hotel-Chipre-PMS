@@ -5,7 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies.auth import AuthContext, get_auth_context, require_permission
+from app.dependencies.auth import AuthContext, require_any_permission, require_permission
 from app.models.room_block import RoomBlockReasonEnum
 from app.services.permission_service import (
     PERMISSION_ROOM_BLOCK_CREATE,
@@ -85,7 +85,9 @@ def list_room_blocks(
     start_date: date | None = None,
     end_date: date | None = None,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(get_auth_context),
+    context: AuthContext = Depends(
+        require_any_permission(PERMISSION_ROOM_BLOCK_CREATE, PERMISSION_ROOM_BLOCK_RELEASE)
+    ),
 ):
     try:
         return list_active_blocks(db, hotel_id=context.hotel_id, start_date=start_date, end_date=end_date)
@@ -97,7 +99,9 @@ def list_room_blocks(
 def get_room_block(
     block_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(get_auth_context),
+    context: AuthContext = Depends(
+        require_any_permission(PERMISSION_ROOM_BLOCK_CREATE, PERMISSION_ROOM_BLOCK_RELEASE)
+    ),
 ):
     try:
         return get_block(db, hotel_id=context.hotel_id, block_id=block_id)

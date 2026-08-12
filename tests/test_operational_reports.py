@@ -156,7 +156,10 @@ def _make_reservation(
 
 
 def test_daily_report_includes_pending_payment_late_arrivals_and_room_blocks(reports_client):
-    client, db, _ctx = reports_client
+    client, db, ctx = reports_client
+    # pending_payments is financial data, redacted from the manager-safe
+    # operational lane -- use owner to assert on the real computed values.
+    ctx["role"] = "owner"
     report_date = date(2026, 6, 13)
     category, rooms = _make_room_set(db, 1, "A")
     pending_guest = _make_guest(db, 1, "pending")
@@ -311,7 +314,10 @@ def test_daily_report_pending_payments_reflect_consumption_charges(reports_clien
     """A fully-paid stay that later gets a consumption charge (BillingAdjustment)
     must show up as a pending payment with the real balance due, matching the
     canonical operational_balance_due helper used elsewhere in the app."""
-    client, db, _ctx = reports_client
+    client, db, ctx = reports_client
+    # pending_payments is financial data, redacted from the manager-safe
+    # operational lane -- use owner to assert on the real computed values.
+    ctx["role"] = "owner"
     report_date = date(2026, 6, 13)
     category, rooms = _make_room_set(db, 1, "C")
     guest = _make_guest(db, 1, "consumption")
@@ -331,11 +337,15 @@ def test_daily_report_pending_payments_reflect_consumption_charges(reports_clien
     db.commit()
 
     # Real journey: charge a consumption via the normal API, not a DB write.
+    # reservation:charge is reception's lane, not manager's -- switch role for
+    # this call, then switch back since the report itself is a manager view.
+    ctx["role"] = "receptionist"
     charge_response = client.post(
         f"/api/reservations/{reservation.id}/charges",
         json={"amount": "50.00", "currency_code": "ARS", "description": "Minibar QA"},
     )
     assert charge_response.status_code == 201, charge_response.text
+    ctx["role"] = "owner"
 
     response = client.get("/api/reports/operational/daily", params={"report_date": report_date.isoformat()})
 

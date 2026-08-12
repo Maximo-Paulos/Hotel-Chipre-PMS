@@ -42,7 +42,10 @@ def client_with_db():
         ]
     )
     db.flush()
-    ctx = {"hotel_id": 1, "role": "manager", "user_id": 50}
+    # Cash register is a reception/finance lane, not a manager permission
+    # (manager's ceiling excludes cash:operate per the role matrix) -- see
+    # ROLE_PERMISSION_CEILINGS in app/services/permission_service.py.
+    ctx = {"hotel_id": 1, "role": "receptionist", "user_id": 50}
 
     def override_get_db():
         try:
@@ -142,7 +145,7 @@ def test_cash_register_api_difference_approval_requires_permission(client_with_d
     )
     assert close.status_code == 403
 
-    ctx["role"] = "manager"
+    ctx["role"] = "owner"
     close = client.post(
         f"/api/cash-register/sessions/{session_id}/close",
         json={"counted_balance": "99.00", "approve_difference": True},

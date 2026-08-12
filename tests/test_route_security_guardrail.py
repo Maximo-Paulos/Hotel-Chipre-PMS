@@ -89,6 +89,8 @@ def _route_has_auth_dependency(route: APIRoute) -> bool:
             return True
         if qualname.startswith("require_platform_admin."):
             return True
+        if qualname.startswith("require_public_api_purpose."):
+            return True
     return False
 
 

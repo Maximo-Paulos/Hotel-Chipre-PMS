@@ -16,10 +16,11 @@ from app.services.checkin_service import (
     CheckInError,
 )
 from app.models.guest import Guest
-from app.dependencies.auth import get_auth_context, AuthContext, require_permission
+from app.dependencies.auth import AuthContext, require_permission
 from app.services.permission_service import (
     PERMISSION_CHECKIN_OVERRIDE_PROHIBIDO,
     PERMISSION_CHECKIN_PERFORM,
+    PERMISSION_GUEST_VIEW,
     audit_permission_denied,
     resolve,
 )
@@ -138,7 +139,7 @@ def checkout(
 def validate_guest(
     guest_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(get_auth_context),
+    context: AuthContext = Depends(require_permission(PERMISSION_GUEST_VIEW)),
 ):
     guest = (
         db.query(Guest)

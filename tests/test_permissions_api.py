@@ -9,6 +9,7 @@ from app.main import app as fastapi_app
 from app.models.security_audit_log import SecurityAuditLog
 from app.models.hotel_config import HotelConfiguration
 from app.services.permission_service import (
+    PERMISSION_GUEST_CREATE,
     PERMISSION_GUEST_EDIT,
     PERMISSION_RESERVATION_CREATE,
     PERMISSION_STOCK_ADJUST,
@@ -59,33 +60,58 @@ def _client_with_db():
     return client, db, engine
 
 
-def test_permissions_matrix_available_to_authenticated_hotel_member():
+def test_permissions_matrix_available_to_permission_manager_only():
     client, db, engine = _client_with_db()
-    fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "manager")
+    fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner")
     try:
         response = client.get("/api/permissions/matrix")
         assert response.status_code == 200
         assert response.json()["matrix"]["manager"][PERMISSION_RESERVATION_CREATE]["allowed"] is True
+
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "manager")
+        assert client.get("/api/permissions/matrix").status_code == 403
+
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "housekeeping")
+        assert client.get("/api/permissions/matrix").status_code == 403
     finally:
         fastapi_app.dependency_overrides.clear()
         db.close()
         engine.dispose()
 
 
-def test_permission_override_allows_receptionist_guest_edit():
+def test_effective_permissions_returns_only_current_role_capabilities():
+    client, db, engine = _client_with_db()
+    fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "receptionist")
+    try:
+        response = client.get("/api/permissions/effective")
+
+        assert response.status_code == 200
+        assert response.json()["hotel_id"] == 1
+        assert response.json()["role"] == "receptionist"
+        assert PERMISSION_GUEST_CREATE in response.json()["permissions"]
+        assert PERMISSION_GUEST_EDIT in response.json()["permissions"]
+        assert PERMISSION_STOCK_ADJUST not in response.json()["permissions"]
+    finally:
+        fastapi_app.dependency_overrides.clear()
+        db.close()
+        engine.dispose()
+
+
+def test_permission_override_can_deny_receptionist_guest_edit():
     client, db, engine = _client_with_db()
     fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner", user_id=99)
     try:
         response = client.put(
             "/api/permissions/override",
-            json={"role": "receptionist", "permission_code": PERMISSION_GUEST_EDIT, "allowed": True},
+            json={"role": "receptionist", "permission_code": PERMISSION_GUEST_EDIT, "allowed": False},
         )
         assert response.status_code == 200
-        assert response.json()["allowed"] is True
+        assert response.json()["allowed"] is False
 
         fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "receptionist")
-        matrix = client.get("/api/permissions/matrix")
-        assert matrix.json()["matrix"]["receptionist"][PERMISSION_GUEST_EDIT]["allowed"] is True
+        effective = client.get("/api/permissions/effective")
+        assert effective.status_code == 200
+        assert PERMISSION_GUEST_EDIT not in effective.json()["permissions"]
     finally:
         fastapi_app.dependency_overrides.clear()
         db.close()
@@ -117,23 +143,46 @@ def test_permission_denied_is_audited():
         engine.dispose()
 
 
+def test_permission_override_rejects_grant_above_role_ceiling():
+    client, db, engine = _client_with_db()
+    fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner", user_id=99)
+    try:
+        response = client.put(
+            "/api/permissions/override",
+            json={
+                "role": "housekeeping",
+                "permission_code": PERMISSION_GUEST_EDIT,
+                "allowed": True,
+            },
+        )
+
+        assert response.status_code == 422
+        assert "techo de seguridad" in response.json()["detail"]
+    finally:
+        fastapi_app.dependency_overrides.clear()
+        db.close()
+        engine.dispose()
+
+
 def test_override_in_hotel_a_does_not_affect_hotel_b():
     client, db, engine = _client_with_db()
     fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner")
     try:
         response = client.put(
             "/api/permissions/override",
-            json={"role": "receptionist", "permission_code": PERMISSION_GUEST_EDIT, "allowed": True},
+            json={"role": "receptionist", "permission_code": PERMISSION_GUEST_EDIT, "allowed": False},
         )
         assert response.status_code == 200
 
         fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "receptionist")
-        hotel_a = client.get("/api/permissions/matrix")
-        assert hotel_a.json()["matrix"]["receptionist"][PERMISSION_GUEST_EDIT]["allowed"] is True
+        hotel_a = client.get("/api/permissions/effective")
+        assert hotel_a.status_code == 200
+        assert PERMISSION_GUEST_EDIT not in hotel_a.json()["permissions"]
 
         fastapi_app.dependency_overrides[get_auth_context] = _override_auth(2, "receptionist")
-        hotel_b = client.get("/api/permissions/matrix")
-        assert hotel_b.json()["matrix"]["receptionist"][PERMISSION_GUEST_EDIT]["allowed"] is False
+        hotel_b = client.get("/api/permissions/effective")
+        assert hotel_b.status_code == 200
+        assert PERMISSION_GUEST_EDIT in hotel_b.json()["permissions"]
     finally:
         fastapi_app.dependency_overrides.clear()
         db.close()

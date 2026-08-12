@@ -10,9 +10,10 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies.auth import AuthContext, require_roles
+from app.dependencies.auth import AuthContext, require_permission, require_roles
 from app.models.fx_rate_snapshot import FxRateSnapshot
 from app.services.fx_service import RATE_TYPES, fetch_all_rates, fetch_rate, get_all_rates_snapshot
+from app.services.permission_service import PERMISSION_REPORTS_FINANCIAL_VIEW
 
 
 router = APIRouter(prefix="/fx", tags=["FX Rates"])
@@ -54,7 +55,7 @@ class FxSnapshotCreateResponse(BaseModel):
 
 @router.get("/rates", response_model=list[FxRateItem], summary="All current FX rates")
 async def get_all_rates(
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
 ):
     try:
         rates = await fetch_all_rates()
@@ -84,7 +85,7 @@ async def get_all_rates(
 
 @router.get("/rates/usd/oficial", response_model=FxRateUsdOficial, summary="Official USD rate shortcut")
 async def get_usd_oficial_rate(
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
 ):
     data = await fetch_rate("oficial")
     if not data:
@@ -102,7 +103,7 @@ async def get_usd_oficial_rate(
 @router.get("/rates/{rate_type}", response_model=FxRateItem, summary="Single USD rate type")
 async def get_single_rate(
     rate_type: str,
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
 ):
     if rate_type not in RATE_TYPES:
         raise HTTPException(
@@ -133,7 +134,7 @@ async def get_single_rate(
 )
 async def create_fx_snapshot(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
 ):
     try:
         snapshot_data = await get_all_rates_snapshot()
@@ -182,7 +183,7 @@ def list_fx_snapshots(
     rate_type: Optional[str] = Query(None, description="Filter by rate type, e.g. oficial"),
     limit: int = Query(200, ge=1, le=1000),
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
 ):
     query = db.query(FxRateSnapshot).filter(
         or_(FxRateSnapshot.hotel_id == context.hotel_id, FxRateSnapshot.hotel_id.is_(None))

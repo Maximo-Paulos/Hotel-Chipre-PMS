@@ -15,8 +15,10 @@ from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.pricing import CategoryPricing
 from app.schemas.room import (
     RoomCreate,
+    RoomHousekeepingRead,
     RoomRead,
     RoomCategoryCreate,
+    RoomCategoryOperationalRead,
     RoomCategoryRead,
     RoomCategoryUpdate,
     CategoryPricingSchema,
@@ -26,7 +28,7 @@ from app.schemas.room import (
 )
 from app.services.reservation_service import ReservationError, find_available_rooms
 from app.services.pricing_service import get_price_for_date
-from app.dependencies.auth import get_auth_context, AuthContext, require_roles
+from app.dependencies.auth import AuthContext, require_permission, require_roles
 from app.services.allocation_runtime_service import run_persisted_allocation
 from app.services.read_model_cache import get_cached_availability_payload, invalidate_hotel_operational_caches
 from app.services.subscription_service import ensure_room_within_limit
@@ -34,6 +36,7 @@ from app.services.analytics_service import record_hotel_audit_event
 from app.services import audit_log_service
 from app.services.timeseries_projection import project_room_state_event
 from app.services.distributed_lock import DistributedLockBusy, DistributedLockUnavailable
+from app.services.permission_service import PERMISSION_ROOM_CLEANING_STATUS
 
 router = APIRouter(prefix="/api/rooms", tags=["Rooms"])
 
@@ -130,18 +133,26 @@ def _attach_current_rate(db: Session, hotel_id: int, category: RoomCategory) -> 
     return category
 
 
-@router.get("/categories", response_model=list[RoomCategoryRead])
+def _housekeeping_room(room: Room) -> RoomHousekeepingRead:
+    """Materialize the safe projection before FastAPI can inspect the ORM."""
+
+    return RoomHousekeepingRead.model_validate(room)
+
+
+@router.get("/categories", response_model=list[RoomCategoryRead | RoomCategoryOperationalRead])
 def list_categories(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping", "receptionist")),
 ):
     categories = db.query(RoomCategory).filter(RoomCategory.hotel_id == context.hotel_id).all()
+    if context.user_role == "housekeeping":
+        return [RoomCategoryOperationalRead.model_validate(category) for category in categories]
     for category in categories:
         _attach_current_rate(db, context.hotel_id, category)
     return categories
 
 
-@router.get("/categories/{category_id}", response_model=RoomCategoryRead)
+@router.get("/categories/{category_id}", response_model=RoomCategoryRead | RoomCategoryOperationalRead)
 def get_category(
     category_id: int,
     db: Session = Depends(get_db),
@@ -154,6 +165,8 @@ def get_category(
     )
     if not category:
         raise HTTPException(status_code=404, detail="Category not found")
+    if context.user_role == "housekeeping":
+        return RoomCategoryOperationalRead.model_validate(category)
     return _attach_current_rate(db, context.hotel_id, category)
 
 
@@ -254,12 +267,15 @@ def create_room(
     return room
 
 
-@router.get("/", response_model=list[RoomRead])
+@router.get("/", response_model=list[RoomRead | RoomHousekeepingRead])
 def list_rooms(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping", "receptionist")),
 ):
-    return db.query(Room).filter(Room.hotel_id == context.hotel_id, Room.deleted_at.is_(None)).all()
+    rooms = db.query(Room).filter(Room.hotel_id == context.hotel_id, Room.deleted_at.is_(None)).all()
+    if context.user_role == "housekeeping":
+        return [_housekeeping_room(room) for room in rooms]
+    return rooms
 
 
 @router.get("/availability")
@@ -268,7 +284,7 @@ def room_availability(
     check_in_date: date | None = None,
     check_out_date: date | None = None,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping", "receptionist")),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "receptionist")),
 ):
     """
     Simple availability helper. Returns a placeholder message if required
@@ -306,7 +322,7 @@ def room_availability(
         raise HTTPException(status_code=400, detail=str(exc))
 
 
-@router.get("/{room_id}", response_model=RoomRead)
+@router.get("/{room_id}", response_model=RoomRead | RoomHousekeepingRead)
 def get_room(
     room_id: int,
     db: Session = Depends(get_db),
@@ -315,6 +331,8 @@ def get_room(
     room = db.query(Room).filter(Room.id == room_id, Room.hotel_id == context.hotel_id, Room.deleted_at.is_(None)).first()
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
+    if context.user_role == "housekeeping":
+        return _housekeeping_room(room)
     return room
 
 
@@ -428,6 +446,94 @@ def update_room_status(
             realloc_result = {"error": str(e)}
     
     return {"room": room, "reallocation": realloc_result}
+
+
+@router.patch("/{room_id}/cleaning-status", response_model=RoomStatusUpdateResponse)
+def update_room_cleaning_status(
+    room_id: int,
+    data: RoomStatusUpdate,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_ROOM_CLEANING_STATUS)),
+):
+    """Apply the narrow housekeeping transition without reallocating guests.
+
+    This endpoint deliberately cannot enter maintenance/blocked/occupied, and
+    cannot touch a room assigned to a non-terminal reservation. Broader room
+    state changes remain on the manager-only status endpoint above.
+    """
+
+    room = (
+        db.query(Room)
+        .filter(
+            Room.id == room_id,
+            Room.hotel_id == context.hotel_id,
+            Room.deleted_at.is_(None),
+        )
+        .first()
+    )
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+
+    allowed_states = {RoomStatusEnum.AVAILABLE, RoomStatusEnum.CLEANING}
+    if room.status not in allowed_states or data.status not in allowed_states or room.status == data.status:
+        raise HTTPException(
+            status_code=422,
+            detail="Solo se permiten transiciones entre cleaning y available",
+        )
+
+    has_active_reservation = (
+        db.query(Reservation.id)
+        .filter(
+            Reservation.hotel_id == context.hotel_id,
+            Reservation.room_id == room.id,
+            Reservation.deleted_at.is_(None),
+            Reservation.status.notin_(
+                [
+                    ReservationStatusEnum.CANCELLED,
+                    ReservationStatusEnum.CHECKED_OUT,
+                    ReservationStatusEnum.NO_SHOW,
+                ]
+            ),
+        )
+        .first()
+        is not None
+    )
+    if has_active_reservation:
+        raise HTTPException(
+            status_code=409,
+            detail="La habitacion tiene una reserva activa y no puede cambiarse desde housekeeping",
+        )
+
+    if data.notes is not None:
+        raise HTTPException(
+            status_code=422,
+            detail="El endpoint de limpieza solo permite cambiar el estado",
+        )
+
+    before = audit_log_service.model_snapshot(room)
+    room.status = data.status
+    db.commit()
+    db.refresh(room)
+    audit_log_service.safe_create_audit_log(
+        db,
+        hotel_id=context.hotel_id,
+        table_name="rooms",
+        record_id=room.id,
+        action=AuditActionEnum.STATUS_CHANGE,
+        actor_user_id=context.user_id,
+        payload_before=before,
+        payload_after=audit_log_service.model_snapshot(room),
+    )
+    invalidate_hotel_operational_caches(context.hotel_id)
+    project_room_state_event(
+        context.hotel_id,
+        room.id,
+        data.status.value,
+        datetime.now(timezone.utc),
+        {"source": "rooms.cleaning_status.patch", "notes": data.notes},
+    )
+    safe_room = _housekeeping_room(room) if context.user_role == "housekeeping" else room
+    return {"room": safe_room, "reallocation": None}
 
 
 class RoomCategoryAssignmentUpdate(BaseModel):
@@ -551,7 +657,7 @@ def housekeeping_summary(
             "category_id": room.category_id,
             "status": status_value,
             "has_guest": is_guest_in,
-            "notes": room.notes,
+            "notes": None if context.user_role == "housekeeping" else room.notes,
         })
     return summary
 

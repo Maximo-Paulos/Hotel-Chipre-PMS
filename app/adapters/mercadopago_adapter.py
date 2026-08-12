@@ -7,6 +7,10 @@ from typing import Optional
 
 from app.schemas.transaction import PaymentGatewayResponse
 from app.config import get_settings
+from app.services.external_effects_policy import (
+    require_external_connections,
+    require_inbound_provider_events,
+)
 
 
 class MercadoPagoAdapter:
@@ -16,6 +20,7 @@ class MercadoPagoAdapter:
     """
 
     def __init__(self, access_token: Optional[str] = None):
+        require_external_connections("Mercado Pago adapter initialization")
         self.access_token = access_token or get_settings().MP_ACCESS_TOKEN
         self._sdk = None
 
@@ -47,6 +52,7 @@ class MercadoPagoAdapter:
         Returns a redirect URL for the customer to complete payment.
         """
         try:
+            require_external_connections("Mercado Pago preference creation")
             sdk = self._get_sdk()
 
             preference_data = {
@@ -95,12 +101,13 @@ class MercadoPagoAdapter:
 
     def process_webhook(self, data: dict) -> PaymentGatewayResponse:
         """
-        Process an IPN (Instant Payment Notification) from MercadoPago.
-        Queries the payment status from the API.
+        Process fields delivered by a Mercado Pago callback without querying
+        the provider. Signature verification belongs at the HTTP boundary.
         """
         try:
-            sdk = self._get_sdk()
-            payment_id = data.get("data", {}).get("id")
+            require_inbound_provider_events("Mercado Pago")
+            event_data = data.get("data") if isinstance(data.get("data"), dict) else {}
+            payment_id = event_data.get("id") or data.get("id")
 
             if not payment_id:
                 return PaymentGatewayResponse(
@@ -108,17 +115,20 @@ class MercadoPagoAdapter:
                     error_message="No payment ID in webhook data",
                 )
 
-            result = sdk.payment().get(payment_id)
-            response = result.get("response", {})
-
-            status = response.get("status", "")
+            status = str(
+                event_data.get("status")
+                or data.get("status")
+                or data.get("action")
+                or data.get("type")
+                or "callback_received"
+            )
             is_approved = status == "approved"
 
             return PaymentGatewayResponse(
                 success=is_approved,
                 external_payment_id=str(payment_id),
                 external_status=status,
-                gateway_response=json.dumps(response),
+                gateway_response=json.dumps(data),
                 error_message=None if is_approved else f"Payment status: {status}",
             )
 

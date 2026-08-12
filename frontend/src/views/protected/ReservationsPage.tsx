@@ -46,7 +46,7 @@ import { usePaymentMutation, usePaymentSummary } from "../../hooks/usePayments";
 import { useCashSessions } from "../../hooks/useCashRegister";
 import { usePaymentSurcharges } from "../../hooks/usePaymentSurcharges";
 import { grossWithSurcharge } from "../../api/paymentSurcharges";
-import { usePaymentLinks, usePaymentLinkCreate } from "../../hooks/usePaymentLinks";
+import { usePaymentLinks, usePaymentLinkCancel, usePaymentLinkCreate } from "../../hooks/usePaymentLinks";
 import { usePaymentProofMutations, usePaymentProofs } from "../../hooks/usePaymentProofs";
 import { fetchPaymentProofImage } from "../../api/paymentProofs";
 import { useHotelConfig } from "../../hooks/useHotelConfig";
@@ -889,6 +889,7 @@ export function ReservationsPage() {
   const editingGuest = useGuest(editing?.guest_id || undefined).data;
   const paymentLinksQuery = usePaymentLinks(editing?.id || undefined);
   const paymentLinkCreate = usePaymentLinkCreate(editing?.id || undefined);
+  const paymentLinkCancel = usePaymentLinkCancel(editing?.id || undefined);
   const paymentProofsQuery = usePaymentProofs(editing?.id || undefined);
   const paymentProofMutations = usePaymentProofMutations(editing?.id || undefined);
   const detailsSummary = detailsSummaryQuery.data;
@@ -1126,7 +1127,13 @@ export function ReservationsPage() {
         title: `Seña reserva ${editing.confirmation_code}`
       },
       {
-        onSuccess: () => showToast("success", "Link de seña generado"),
+        onSuccess: (created) =>
+          showToast(
+            "success",
+            created.execution_mode === "local_only" || !created.payable
+              ? "Solicitud local creada. No es un link cobrable y no se envió al huésped."
+              : "Link de seña generado"
+          ),
         onError: (err: unknown) => showToast("error", err instanceof Error ? err.message : "No se pudo generar el link")
       }
     );
@@ -2546,41 +2553,65 @@ export function ReservationsPage() {
 
                   <div className="mt-3 rounded-lg border border-sky-100 bg-sky-50/60 px-3 py-2 text-xs text-slate-700">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="font-semibold text-slate-800">Link de seña para el huésped</p>
+                      <p className="font-semibold text-slate-800">Solicitud de seña</p>
                       <button
                         type="button"
                         onClick={handleGenerateDepositLink}
                         disabled={paymentLinkCreate.isPending || paymentSummaryQuery.isLoading}
                         className="rounded-lg border border-sky-200 bg-white px-3 py-1 text-xs font-semibold text-sky-700 hover:border-sky-300 disabled:opacity-60"
                       >
-                        {paymentLinkCreate.isPending ? "Generando..." : "Generar link"}
+                        {paymentLinkCreate.isPending ? "Creando..." : "Crear solicitud"}
                       </button>
                     </div>
                     {(paymentLinksQuery.data ?? []).length > 0 ? (
                       <ul className="mt-2 space-y-1">
                         {(paymentLinksQuery.data ?? []).map((lnk) => {
-                          const url = lnk.external_checkout_url || `${window.location.origin}/pay/${lnk.link_code}`;
+                          const payableUrl =
+                            lnk.execution_mode === "provider" && lnk.payable
+                              ? lnk.external_checkout_url
+                              : null;
                           return (
-                            <li key={lnk.id} className="flex items-center justify-between gap-2">
-                              <span className="truncate">
-                                {formatMoney(lnk.requested_amount, lnk.currency)} · {lnk.status}
+                            <li key={lnk.id} className="flex flex-wrap items-center justify-between gap-2" data-testid={`payment-link-${lnk.id}`}>
+                              <span className="min-w-0">
+                                <span className="block truncate">
+                                  {formatMoney(lnk.requested_amount, lnk.currency)} · {lnk.status}
+                                </span>
+                                {!payableUrl && (
+                                  <span className="block text-[11px] font-semibold text-amber-700" data-testid="payment-link-local-only">
+                                    Registro local · no cobrable · sin URL ni envío
+                                  </span>
+                                )}
                               </span>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  navigator.clipboard?.writeText(url);
-                                  showToast("success", "Link copiado");
-                                }}
-                                className="shrink-0 rounded-lg border border-slate-200 px-2 py-1 font-semibold text-slate-700 hover:bg-white"
-                              >
-                                Copiar link
-                              </button>
+                              <span className="flex shrink-0 gap-2">
+                                {payableUrl && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      navigator.clipboard?.writeText(payableUrl);
+                                      showToast("success", "Link copiado");
+                                    }}
+                                    className="rounded-lg border border-slate-200 px-2 py-1 font-semibold text-slate-700 hover:bg-white"
+                                  >
+                                    Copiar link
+                                  </button>
+                                )}
+                                {lnk.status === "pending" && lnk.execution_mode === "local_only" && (
+                                  <button
+                                    type="button"
+                                    onClick={() => paymentLinkCancel.mutate(lnk.id)}
+                                    disabled={paymentLinkCancel.isPending}
+                                    className="rounded-lg border border-slate-200 px-2 py-1 font-semibold text-slate-600 hover:bg-white disabled:opacity-60"
+                                  >
+                                    Anular registro local
+                                  </button>
+                                )}
+                              </span>
                             </li>
                           );
                         })}
                       </ul>
                     ) : (
-                      <p className="mt-1 text-slate-500">Sin links generados. Generá uno para cobrar la seña online (MercadoPago).</p>
+                      <p className="mt-1 text-slate-500">Sin solicitudes creadas. El backend indicará si la solicitud es cobrable o sólo local.</p>
                     )}
                   </div>
 

@@ -46,18 +46,22 @@ def write_bundle(tmp_path: Path) -> tuple[Path, dict, dict, datetime]:
         {
             "persona": persona,
             "case_id": case["id"],
+            "device": device,
             "status": "passed",
             "preview_url": manifest["app_url"],
             "precondition": "persona QA sintética activa",
             "human_action": "recorrer la UI visible",
             "expected": case["expected"],
             "observed": "resultado esperado observado",
+            "severity": "none",
+            "screenshot": None,
             "evidence": "sha256:"
-            + hashlib.sha256(f"{case['id']}/{persona}".encode()).hexdigest(),
+            + hashlib.sha256(f"{case['id']}/{persona}/{device}".encode()).hexdigest(),
             "code_sha": code_sha,
         }
         for case in CATALOG["cases"]
         for persona in case["personas"]
+        for device in case["devices"]
     ]
     summary = {
         "task_id": task_id,

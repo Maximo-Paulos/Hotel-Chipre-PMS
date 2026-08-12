@@ -84,6 +84,13 @@ class Settings(BaseSettings):
     GMAIL_REDIRECT_URI: str = "http://127.0.0.1:8040/api/integrations/oauth/gmail/callback"
     MERCADOPAGO_WEBHOOK_SECRET: str = ""
 
+    # External-effect safety policy. ``None`` is intentionally distinct from
+    # ``False``: production must state every decision explicitly, while every
+    # runtime guard treats an unset value as disabled (fail closed).
+    EXTERNAL_EFFECTS_ENABLED: bool | None = None
+    INBOUND_PROVIDER_EVENTS_ENABLED: bool | None = None
+    GOOGLE_LOGIN_ENABLED: bool | None = None
+
     # OTA Credentials
     BOOKING_API_URL: str = "https://supply-xml.booking.com/hotels/xml"
     BOOKING_USERNAME: str = ""
@@ -240,6 +247,12 @@ def _validate_preview_qa_security(runtime_settings: Settings) -> None:
             errors.append(f"{name} must be {expected} in preview QA")
     if runtime_settings.CONNECTIONS_ENABLED:
         errors.append("CONNECTIONS_ENABLED must be false in preview QA")
+    if runtime_settings.EXTERNAL_EFFECTS_ENABLED is not False:
+        errors.append("EXTERNAL_EFFECTS_ENABLED must be explicitly false in preview QA")
+    if runtime_settings.INBOUND_PROVIDER_EVENTS_ENABLED is not False:
+        errors.append("INBOUND_PROVIDER_EVENTS_ENABLED must be explicitly false in preview QA")
+    if runtime_settings.GOOGLE_LOGIN_ENABLED is not False:
+        errors.append("GOOGLE_LOGIN_ENABLED must be explicitly false in preview QA")
     if runtime_settings.AI_ENABLED is not False:
         errors.append("AI_ENABLED must be explicitly false in preview QA")
     if runtime_settings.GEMMA_ENABLED:
@@ -349,6 +362,44 @@ def validate_runtime_security(settings: Settings | None = None) -> None:
 
     errors: list[str] = []
 
+    for flag_name in (
+        "EXTERNAL_EFFECTS_ENABLED",
+        "INBOUND_PROVIDER_EVENTS_ENABLED",
+        "GOOGLE_LOGIN_ENABLED",
+    ):
+        if getattr(runtime_settings, flag_name) is None:
+            errors.append(f"{flag_name} must be explicitly true or false in production")
+
+    # A production-labelled sandbox is selected by explicitly disabling the
+    # global outbound lane. It must then match the complete non-live provider
+    # profile; retaining credentials is allowed, but no setting may make them
+    # usable. A future real production deployment remains possible only by
+    # explicitly setting EXTERNAL_EFFECTS_ENABLED=true.
+    if runtime_settings.EXTERNAL_EFFECTS_ENABLED is False:
+        sandbox_exact_values = {
+            "EMAIL_PROVIDER": (runtime_settings.EMAIL_PROVIDER, "null"),
+            "AI_PROVIDER": (runtime_settings.AI_PROVIDER, "disabled"),
+            "GEMMA_PROVIDER": (runtime_settings.GEMMA_PROVIDER, "disabled"),
+            "PAYPAL_MODE": (runtime_settings.PAYPAL_MODE, "sandbox"),
+        }
+        for name, (value, expected) in sandbox_exact_values.items():
+            if _normalized_env_value(value) != expected:
+                errors.append(
+                    f"{name} must be {expected} when EXTERNAL_EFFECTS_ENABLED=false in production"
+                )
+        sandbox_false_values = {
+            "INBOUND_PROVIDER_EVENTS_ENABLED": runtime_settings.INBOUND_PROVIDER_EVENTS_ENABLED,
+            "GOOGLE_LOGIN_ENABLED": runtime_settings.GOOGLE_LOGIN_ENABLED,
+            "CONNECTIONS_ENABLED": runtime_settings.CONNECTIONS_ENABLED,
+            "AI_ENABLED": runtime_settings.AI_ENABLED,
+            "GEMMA_ENABLED": runtime_settings.GEMMA_ENABLED,
+        }
+        for name, value in sandbox_false_values.items():
+            if value is not False:
+                errors.append(
+                    f"{name} must be explicitly false when EXTERNAL_EFFECTS_ENABLED=false in production"
+                )
+
     if not runtime_settings.DISTRIBUTED_LOCK_ENABLED or not runtime_settings.DISTRIBUTED_LOCK_REQUIRED:
         errors.append("DISTRIBUTED_LOCK_ENABLED and DISTRIBUTED_LOCK_REQUIRED must be true in production")
     if runtime_settings.CLICKHOUSE_REQUIRED and (
@@ -396,10 +447,14 @@ def validate_runtime_security(settings: Settings | None = None) -> None:
     gmail_active = _gmail_is_active(runtime_settings)
     resend_active = _resend_is_active(runtime_settings)
 
-    if mercadopago_active and not runtime_settings.MERCADOPAGO_WEBHOOK_SECRET.strip():
+    if (
+        runtime_settings.INBOUND_PROVIDER_EVENTS_ENABLED is True
+        and mercadopago_active
+        and not runtime_settings.MERCADOPAGO_WEBHOOK_SECRET.strip()
+    ):
         errors.append("MERCADOPAGO_WEBHOOK_SECRET must be configured when Mercado Pago is enabled")
 
-    if resend_active:
+    if runtime_settings.EXTERNAL_EFFECTS_ENABLED is True and resend_active:
         if not _has_value(runtime_settings.RESEND_API_KEY):
             errors.append("RESEND_API_KEY must be configured when EMAIL_PROVIDER=resend")
         if not _has_value(runtime_settings.SYSTEM_EMAIL_FROM):
@@ -410,13 +465,28 @@ def validate_runtime_security(settings: Settings | None = None) -> None:
     # OAuth redirect URIs: only validate when the respective service is configured
     # (only check when the integration is truly enabled)
     conditional_redirect_uris = [
-        ("PAYPAL_REDIRECT_URI", runtime_settings.PAYPAL_REDIRECT_URI, paypal_active),
-        ("MERCADOPAGO_REDIRECT_URI", runtime_settings.MERCADOPAGO_REDIRECT_URI, mercadopago_active),
-        ("GMAIL_REDIRECT_URI", runtime_settings.GMAIL_REDIRECT_URI, gmail_active),
+        (
+            "PAYPAL_REDIRECT_URI",
+            runtime_settings.PAYPAL_REDIRECT_URI,
+            runtime_settings.EXTERNAL_EFFECTS_ENABLED is True and paypal_active,
+        ),
+        (
+            "MERCADOPAGO_REDIRECT_URI",
+            runtime_settings.MERCADOPAGO_REDIRECT_URI,
+            runtime_settings.EXTERNAL_EFFECTS_ENABLED is True and mercadopago_active,
+        ),
+        (
+            "GMAIL_REDIRECT_URI",
+            runtime_settings.GMAIL_REDIRECT_URI,
+            runtime_settings.EXTERNAL_EFFECTS_ENABLED is True and gmail_active,
+        ),
     ]
     for name, value, service_configured in conditional_redirect_uris:
         if service_configured and not _is_public_https_url(value):
             errors.append(f"{name} must be a public https URL when the integration is enabled")
+
+    if runtime_settings.GOOGLE_LOGIN_ENABLED is True and not _has_value(runtime_settings.GOOGLE_CLIENT_ID):
+        errors.append("GOOGLE_CLIENT_ID must be configured when GOOGLE_LOGIN_ENABLED=true")
 
     if errors:
         raise RuntimeError("Invalid production security configuration: " + "; ".join(errors))

@@ -5,15 +5,25 @@ from sqlalchemy.orm import sessionmaker
 
 from app.models.security_audit_log import SecurityAuditLog
 from app.models.hotel_config import HotelConfiguration
-from app.models.permission import Permission, RolePermissionDefault
+from app.models.permission import HotelPermissionOverride, Permission, RolePermissionDefault
 from app.services.permission_service import (
     DEFAULT_MATRIX,
+    PERMISSION_CASH_APPROVE_DIFFERENCE,
+    PERMISSION_CASH_OPERATE,
     PERMISSION_CHECKIN_PERFORM,
+    PERMISSION_GUEST_CREATE,
     PERMISSION_GUEST_EDIT,
+    PERMISSION_GUEST_TAGS,
+    PERMISSION_GUEST_VIEW,
     PERMISSION_DEFINITIONS,
     PERMISSION_RESERVATION_CREATE,
+    PERMISSION_RESERVATION_MANUAL_RATE,
+    PERMISSION_REPORTS_FINANCIAL_VIEW,
+    PERMISSION_REPORTS_OPERATIONAL_VIEW,
+    PERMISSION_ROOM_CLEANING_STATUS,
     PERMISSION_STOCK_ADJUST,
     PERMISSION_STOCK_OPERATE,
+    can_role_hold_permission,
     get_matrix,
     resolve,
     seed_default_permissions,
@@ -39,23 +49,37 @@ def test_default_permissions_seeded_for_owner_manager_reception_housekeeping(db)
     assert rows[("owner", PERMISSION_GUEST_EDIT)] is True
     assert rows[("manager", PERMISSION_RESERVATION_CREATE)] is True
     assert rows[("receptionist", PERMISSION_CHECKIN_PERFORM)] is True
+    assert rows[("receptionist", PERMISSION_GUEST_VIEW)] is True
+    assert rows[("receptionist", PERMISSION_GUEST_CREATE)] is True
+    assert rows[("receptionist", PERMISSION_GUEST_EDIT)] is True
+    assert rows[("receptionist", PERMISSION_GUEST_TAGS)] is True
     assert rows[("housekeeping", PERMISSION_GUEST_EDIT)] is False
     assert rows[("housekeeping", PERMISSION_RESERVATION_CREATE)] is False
     assert rows[("housekeeping", PERMISSION_CHECKIN_PERFORM)] is False
     assert rows[("manager", PERMISSION_STOCK_OPERATE)] is True
     assert rows[("manager", PERMISSION_STOCK_ADJUST)] is False
+    assert rows[("manager", PERMISSION_CASH_OPERATE)] is False
+    assert rows[("manager", PERMISSION_CASH_APPROVE_DIFFERENCE)] is False
+    assert rows[("receptionist", PERMISSION_CASH_OPERATE)] is True
     assert rows[("owner", PERMISSION_STOCK_ADJUST)] is True
+    assert rows[("manager", PERMISSION_REPORTS_OPERATIONAL_VIEW)] is True
+    assert rows[("manager", PERMISSION_REPORTS_FINANCIAL_VIEW)] is False
+    assert rows[("owner", PERMISSION_REPORTS_FINANCIAL_VIEW)] is True
+    assert rows[("co_owner", PERMISSION_REPORTS_FINANCIAL_VIEW)] is True
+    assert rows[("housekeeping", PERMISSION_ROOM_CLEANING_STATUS)] is True
+    assert can_role_hold_permission("manager", PERMISSION_STOCK_ADJUST) is False
+    assert can_role_hold_permission("manager", PERMISSION_RESERVATION_MANUAL_RATE) is False
 
 
-def test_permission_override_allows_receptionist_guest_edit(db):
+def test_permission_override_can_deny_receptionist_guest_edit(db):
     _seed_hotel(db, 1)
     seed_default_permissions(db)
 
-    assert resolve(db, 1, "receptionist", PERMISSION_GUEST_EDIT) is False
-
-    set_override(db, 1, "receptionist", PERMISSION_GUEST_EDIT, True, user_id=None)
-
     assert resolve(db, 1, "receptionist", PERMISSION_GUEST_EDIT) is True
+
+    set_override(db, 1, "receptionist", PERMISSION_GUEST_EDIT, False, user_id=None)
+
+    assert resolve(db, 1, "receptionist", PERMISSION_GUEST_EDIT) is False
     audit = db.query(SecurityAuditLog).filter(SecurityAuditLog.action == "permission.override.updated").one()
     assert audit.hotel_id == 1
 
@@ -67,25 +91,47 @@ def test_housekeeping_cannot_create_reservation_by_default(db):
     assert resolve(db, 1, "housekeeping", PERMISSION_RESERVATION_CREATE) is False
 
 
+def test_role_ceiling_ignores_a_stale_privilege_escalating_override(db):
+    _seed_hotel(db, 1)
+    seed_default_permissions(db)
+    db.add(
+        HotelPermissionOverride(
+            hotel_id=1,
+            role="housekeeping",
+            permission_code=PERMISSION_GUEST_VIEW,
+            allowed=True,
+        )
+    )
+    db.flush()
+
+    assert resolve(db, 1, "housekeeping", PERMISSION_GUEST_VIEW) is False
+    matrix = get_matrix(db, 1)
+    assert matrix["housekeeping"][PERMISSION_GUEST_VIEW] == {
+        "allowed": False,
+        "source": "ceiling",
+        "description": "View guest profile data",
+    }
+
+
 def test_override_in_hotel_a_does_not_affect_hotel_b(db):
     _seed_hotel(db, 1)
     _seed_hotel(db, 2)
     seed_default_permissions(db)
 
-    set_override(db, 1, "receptionist", PERMISSION_GUEST_EDIT, True, user_id=None)
+    set_override(db, 1, "receptionist", PERMISSION_GUEST_EDIT, False, user_id=None)
 
-    assert resolve(db, 1, "receptionist", PERMISSION_GUEST_EDIT) is True
-    assert resolve(db, 2, "receptionist", PERMISSION_GUEST_EDIT) is False
+    assert resolve(db, 1, "receptionist", PERMISSION_GUEST_EDIT) is False
+    assert resolve(db, 2, "receptionist", PERMISSION_GUEST_EDIT) is True
 
 
 def test_get_matrix_includes_hotel_overrides(db):
     _seed_hotel(db, 1)
     seed_default_permissions(db)
-    set_override(db, 1, "receptionist", PERMISSION_GUEST_EDIT, True, user_id=None)
+    set_override(db, 1, "receptionist", PERMISSION_GUEST_EDIT, False, user_id=None)
 
     matrix = get_matrix(db, 1)
 
-    assert matrix["receptionist"][PERMISSION_GUEST_EDIT]["allowed"] is True
+    assert matrix["receptionist"][PERMISSION_GUEST_EDIT]["allowed"] is False
     assert matrix["receptionist"][PERMISSION_GUEST_EDIT]["source"] == "override"
 
 

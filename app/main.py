@@ -5,6 +5,7 @@ Serves the API + bundled frontend files.
 import json
 import logging
 import os
+import re
 from contextlib import asynccontextmanager
 from decimal import Decimal
 from pathlib import Path
@@ -17,6 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
 LOGGER = logging.getLogger(__name__)
+_GIT_SHA_RE = re.compile(r"[0-9a-fA-F]{40}")
 
 
 class _DecimalAwareEncoder(json.JSONEncoder):
@@ -73,6 +75,7 @@ from app.api import (
     room_movement_groups,
     health,
     events,
+    settings_security,
 )
 import app.master_admin.models  # noqa: F401
 from app.master_admin.router import router as master_admin_router
@@ -260,6 +263,7 @@ app.include_router(room_movement_groups.router)
 app.include_router(master_admin_router)
 app.include_router(health.router)
 app.include_router(events.router)
+app.include_router(settings_security.router)
 
 # Frontend build paths
 BASE_DIR = Path(__file__).resolve().parent
@@ -308,7 +312,13 @@ def _frontend_placeholder() -> HTMLResponse:
 
 @app.get("/health")
 def health_check():
-    return {"status": "ok", "system": "Hotel PMS v1.0.0"}
+    raw_sha = (os.getenv("RENDER_GIT_COMMIT") or os.getenv("APP_CODE_SHA") or "").strip()
+    code_sha = raw_sha.lower() if _GIT_SHA_RE.fullmatch(raw_sha) else None
+    return {
+        "status": "ok",
+        "system": "Hotel PMS v1.0.0",
+        "code_sha": code_sha,
+    }
 
 
 @app.api_route(

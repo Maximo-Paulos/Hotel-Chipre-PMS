@@ -7,11 +7,20 @@ from sqlalchemy.orm import sessionmaker
 
 import app.database as db_module
 import app.main as main_module
+from app.config import get_settings
 from app.database import Base, get_db
 from app.models.hotel_config import HotelConfiguration
 from app.models.ota import OTAReservationMapping
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.services.ota_service import OTAIntegrationService
+
+
+@pytest.fixture(autouse=True)
+def _enable_mocked_inbound_events(monkeypatch):
+    monkeypatch.setenv("INBOUND_PROVIDER_EVENTS_ENABLED", "true")
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
 
 
 @pytest.fixture(scope="function")

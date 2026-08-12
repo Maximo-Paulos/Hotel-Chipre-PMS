@@ -7,6 +7,10 @@ from typing import Optional
 
 from app.schemas.transaction import PaymentGatewayResponse
 from app.config import get_settings
+from app.services.external_effects_policy import (
+    require_external_connections,
+    require_inbound_provider_events,
+)
 
 
 class PayPalAdapter:
@@ -21,6 +25,7 @@ class PayPalAdapter:
         client_secret: Optional[str] = None,
         mode: Optional[str] = None,
     ):
+        require_external_connections("PayPal adapter initialization")
         settings = get_settings()
         self.client_id = client_id or settings.PAYPAL_CLIENT_ID
         self.client_secret = client_secret or settings.PAYPAL_CLIENT_SECRET
@@ -59,6 +64,7 @@ class PayPalAdapter:
         Returns a redirect URL for the customer to approve on PayPal.
         """
         try:
+            require_external_connections("PayPal order creation")
             api = self._get_api()
 
             payment = api.Payment({
@@ -128,6 +134,7 @@ class PayPalAdapter:
         Called when customer returns from PayPal with paymentId and PayerID.
         """
         try:
+            require_external_connections("PayPal payment capture")
             api = self._get_api()
             payment = api.Payment.find(payment_id)
 
@@ -158,6 +165,7 @@ class PayPalAdapter:
         Process a PayPal webhook notification.
         """
         try:
+            require_inbound_provider_events("PayPal")
             event_type = data.get("event_type", "")
             resource = data.get("resource", {})
             payment_id = resource.get("id", "")

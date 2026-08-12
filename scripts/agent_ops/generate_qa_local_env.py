@@ -18,7 +18,15 @@ DEFAULT_OUTPUT = ROOT / ".env.qa.local"
 DEFAULT_DOMAIN = "qa.hotels-pms.com"
 DEFAULT_APP_URL = "https://app-preview.example.invalid"
 DEFAULT_API_URL = "https://api-preview.example.invalid"
-PERSONAS = ("owner", "manager", "reception", "housekeeping", "master-admin")
+PERSONAS = (
+    "owner",
+    "co-owner",
+    "manager",
+    "reception",
+    "housekeeping",
+    "isolation-owner",
+    "master-admin",
+)
 ALLOWED_KEYS = (
     "QA_APP_URL",
     "QA_API_URL",
@@ -27,12 +35,16 @@ ALLOWED_KEYS = (
     "QA_EMAIL_DOMAIN_IS_DEDICATED",
     "QA_OWNER_EMAIL",
     "QA_OWNER_PASSWORD",
+    "QA_CO_OWNER_EMAIL",
+    "QA_CO_OWNER_PASSWORD",
     "QA_MANAGER_EMAIL",
     "QA_MANAGER_PASSWORD",
     "QA_RECEPTION_EMAIL",
     "QA_RECEPTION_PASSWORD",
     "QA_HOUSEKEEPING_EMAIL",
     "QA_HOUSEKEEPING_PASSWORD",
+    "QA_ISOLATION_OWNER_EMAIL",
+    "QA_ISOLATION_OWNER_PASSWORD",
     "QA_MASTER_ADMIN_EMAIL",
     "QA_MASTER_ADMIN_PASSWORD",
     "QA_MASTER_ADMIN_PIN",
@@ -100,7 +112,7 @@ def build_values(
 
     if tuple(values) != ALLOWED_KEYS:
         raise QALocalEnvError("internal QA environment schema does not match .env.qa.example")
-    if len({values[f"QA_{p.upper().replace('-', '_')}_PASSWORD"] for p in PERSONAS}) != 5:
+    if len({values[f"QA_{p.upper().replace('-', '_')}_PASSWORD"] for p in PERSONAS}) != len(PERSONAS):
         raise QALocalEnvError("generated QA passwords must be distinct")
     return values
 

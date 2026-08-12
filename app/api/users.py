@@ -32,8 +32,8 @@ def _assert_assignable_role(actor_role: str | None, target_role: str) -> None:
         )
 
     allowed_by_actor = {
-        "owner": {"co_owner", "manager", "housekeeping"},
-        "co_owner": {"manager", "housekeeping"},
+        "owner": {"co_owner", "manager", "receptionist", "housekeeping"},
+        "co_owner": {"manager", "receptionist", "housekeeping"},
     }
     if target_role not in allowed_by_actor.get(actor_role or "", set()):
         raise HTTPException(
@@ -44,8 +44,8 @@ def _assert_assignable_role(actor_role: str | None, target_role: str) -> None:
 
 def _assert_manageable_membership(actor_role: str | None, membership: HotelMembership, *, action: str) -> None:
     managed_roles = {
-        "owner": {"co_owner", "manager", "housekeeping"},
-        "co_owner": {"manager", "housekeeping"},
+        "owner": {"co_owner", "manager", "receptionist", "housekeeping"},
+        "co_owner": {"manager", "receptionist", "housekeeping"},
     }
     if membership.role not in managed_roles.get(actor_role or "", set()):
         raise HTTPException(
@@ -104,7 +104,7 @@ def invite_user(
     db.commit()
 
     role = payload.role
-    if role not in {"owner", "co_owner", "manager", "housekeeping"}:
+    if role not in {"owner", "co_owner", "manager", "receptionist", "housekeeping"}:
         raise HTTPException(status_code=400, detail="Rol inválido")
     _assert_assignable_role(context.user_role, role)
 
@@ -233,7 +233,7 @@ def update_role(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_roles("owner", "co_owner")),
 ):
-    if payload.role not in {"owner", "co_owner", "manager", "housekeeping"}:
+    if payload.role not in {"owner", "co_owner", "manager", "receptionist", "housekeeping"}:
         raise HTTPException(status_code=400, detail="Rol inválido")
     _assert_assignable_role(context.user_role, payload.role)
     membership = (

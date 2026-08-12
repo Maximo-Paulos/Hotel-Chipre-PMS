@@ -12,7 +12,7 @@ class PaymentLinkCreate(BaseModel):
     recipient_email: EmailStr
     recipient_name: Optional[str] = None
     recipient_phone: Optional[str] = None
-    currency: str = Field(default="ARS", min_length=3, max_length=3)
+    currency: Optional[str] = Field(default=None, min_length=3, max_length=3)
     provider: str = "mercado_pago"
     title: Optional[str] = None
     description: Optional[str] = None
@@ -20,8 +20,8 @@ class PaymentLinkCreate(BaseModel):
 
     @field_validator("currency")
     @classmethod
-    def normalize_currency(cls, value: str) -> str:
-        return value.strip().upper()
+    def normalize_currency(cls, value: Optional[str]) -> Optional[str]:
+        return value.strip().upper() if value else None
 
     @field_validator("provider")
     @classmethod
@@ -46,6 +46,8 @@ class PaymentLinkRead(BaseModel):
     recipient_name: Optional[str] = None
     description: Optional[str] = None
     status: str
+    execution_mode: str
+    payable: bool
     external_reference: Optional[str] = None
     external_checkout_url: Optional[str] = None
     expires_at: Optional[datetime] = None
