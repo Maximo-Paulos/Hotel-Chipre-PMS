@@ -82,7 +82,12 @@ from app.models.rate_limit_event import RateLimitEvent
 from app.models.ai_assistant import AIAssistantSession, AIAssistantMessage, AIAssistantActionRun, AIAssistantInsight
 from app.models.audit_log import AuditLog, AuditActionEnum
 from app.models.security_audit_log import SecurityAuditLog
-from app.models.permission import Permission, RolePermissionDefault, HotelPermissionOverride
+from app.models.permission import (
+    Permission,
+    RolePermissionDefault,
+    HotelPermissionOverride,
+    UserPermissionOverride,
+)
 from app.models.laundry import LaundryBatch, LaundryItem
 from app.models.laundry_vendor import LaundryVendor, LaundryVendorPrice, LaundryRemito, LaundryRemitoLine
 from app.models.stock import StockItem, StockLocation, StockMovement
@@ -231,6 +236,7 @@ __all__ = [
     "Permission",
     "RolePermissionDefault",
     "HotelPermissionOverride",
+    "UserPermissionOverride",
     "LaundryBatch",
     "LaundryItem",
     "StockItem",

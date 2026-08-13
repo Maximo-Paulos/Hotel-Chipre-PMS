@@ -168,7 +168,13 @@ def require_permission(permission: str):
         context.permissions = perms
         if not context.is_verified:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Verifica tu email para usar el sistema")
-        if not resolve(db, context.hotel_id, context.user_role, permission):
+        if not resolve(
+            db,
+            context.hotel_id,
+            context.user_role,
+            permission,
+            user_id=context.user_id,
+        ):
             audit_permission_denied(
                 db,
                 hotel_id=context.hotel_id,
@@ -204,7 +210,16 @@ def require_any_permission(*permissions: str):
         context.permissions = perms
         if not context.is_verified:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Verifica tu email para usar el sistema")
-        if not any(resolve(db, context.hotel_id, context.user_role, permission) for permission in permissions):
+        if not any(
+            resolve(
+                db,
+                context.hotel_id,
+                context.user_role,
+                permission,
+                user_id=context.user_id,
+            )
+            for permission in permissions
+        ):
             audit_permission_denied(
                 db,
                 hotel_id=context.hotel_id,
@@ -216,6 +231,24 @@ def require_any_permission(*permissions: str):
         return context
 
     return dependency
+
+
+def require_permission_administrator(
+    context: AuthContext = Depends(get_auth_context),
+) -> AuthContext:
+    """Non-delegable invariant: only this hotel's owner administers RBAC."""
+
+    if not context.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Verifica tu email para usar el sistema",
+        )
+    if context.user_role != "owner":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tenes permisos para esta accion",
+        )
+    return context
 
 
 def require_roles(*roles: str):

@@ -45,7 +45,7 @@ def operational_daily_report(
     if report_date is None:
         report_date = date.today()
     report = build_daily_operational_report(db, context.hotel_id, report_date)
-    if resolve(db, context.hotel_id, context.user_role, PERMISSION_REPORTS_FINANCIAL_VIEW):
+    if resolve(db, context.hotel_id, context.user_role, PERMISSION_REPORTS_FINANCIAL_VIEW, user_id=context.user_id):
         return report
     return redact_daily_report_financials(report)
 
@@ -59,7 +59,7 @@ def operational_alerts(
     if report_date is None:
         report_date = date.today()
     summary = build_nightly_summary(db, context.hotel_id, report_date)
-    if resolve(db, context.hotel_id, context.user_role, PERMISSION_REPORTS_FINANCIAL_VIEW):
+    if resolve(db, context.hotel_id, context.user_role, PERMISSION_REPORTS_FINANCIAL_VIEW, user_id=context.user_id):
         return summary
     return redact_nightly_summary_financials(summary)
 
@@ -95,7 +95,7 @@ def trigger_nightly_summary_delivery(
         provider_message_id=result.provider_message_id,
         recipients=recipients,
     )
-    if resolve(db, context.hotel_id, context.user_role, PERMISSION_REPORTS_FINANCIAL_VIEW):
+    if resolve(db, context.hotel_id, context.user_role, PERMISSION_REPORTS_FINANCIAL_VIEW, user_id=context.user_id):
         return response
     return response.model_copy(
         update={

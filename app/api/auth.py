@@ -112,6 +112,7 @@ def _build_auth_response(db: Session, user: User, requested_hotel_id: int | None
         db,
         hotel_id=hotel_id,
         role=active_membership.role,
+        user_id=user.id,
     )
     token = create_access_token(
         subject=user.id,
@@ -400,6 +401,7 @@ def me(
         db,
         hotel_id=context.hotel_id,
         role=context.user_role,
+        user_id=context.user_id,
     )
     return UserInfo(
         id=current_user.id,

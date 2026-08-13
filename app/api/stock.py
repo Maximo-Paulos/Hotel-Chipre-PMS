@@ -40,7 +40,13 @@ router = APIRouter(prefix="/api/stock", tags=["Stock"])
 
 
 def _ensure_adjustment_permission(db: Session, context: AuthContext) -> None:
-    if resolve(db, context.hotel_id, context.user_role, PERMISSION_STOCK_ADJUST):
+    if resolve(
+        db,
+        context.hotel_id,
+        context.user_role,
+        PERMISSION_STOCK_ADJUST,
+        user_id=context.user_id,
+    ):
         return
     audit_permission_denied(
         db,

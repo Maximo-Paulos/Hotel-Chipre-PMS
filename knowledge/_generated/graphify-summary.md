@@ -1,31 +1,33 @@
 # Resumen Graphify
 
-Generado: 2026-07-28T20:08:27.458776+00:00
-Commit: `765ff7b`
+Generado: 2026-08-13T22:45:57.329045+00:00
+Commit: `46a90d5`
 
 `graphify summary .graphify/graph.json`:
 ```text
 Graphify First-Hop Summary
-Graph: 8638 nodes, 36255 edges, 351 communities, density 0.001, average degree 8.3943, undirected
+Graph: 9071 nodes, 39609 edges, 343 communities, density 0.001, average degree 8.7331, undirected
 
 Top hubs:
-  1. ReservationStatusEnum (degree 834, community 3 Community 3, app/models/reservation.py)
-  2. Reservation (degree 833, community 3 Community 3, app/models/reservation.py)
-  3. HotelConfiguration (degree 814, community 2 Community 2, app/models/hotel_config.py)
-  4. Room (degree 674, community 0 Community 0, app/models/room.py)
-  5. Guest (degree 656, community 0 Community 0, app/models/guest.py)
+  1. Reservation (degree 879, community 0 Community 0, app/models/reservation.py)
+  2. ReservationStatusEnum (degree 875, community 0 Community 0, app/models/reservation.py)
+  3. HotelConfiguration (degree 870, community 2 Community 2, app/models/hotel_config.py)
+  4. Room (degree 716, community 0 Community 0, app/models/room.py)
+  5. Guest (degree 686, community 0 Community 0, app/models/guest.py)
 
 Key communities:
-  1. Community 0 - Community 0: 389 nodes, 1685 internal edges, density 0.0223; top nodes: Room, Guest, RoomCategory
-  2. Community 1 - Community 1: 349 nodes, 587 internal edges, density 0.0097; top nodes: dc4b68a ojooooo, database.py, main.py
-  3. Community 2 - Community 2: 337 nodes, 1738 internal edges, density 0.0307; top nodes: HotelConfiguration, TransactionTypeEnum, PaymentMethodEnum
-  4. Community 3 - Community 3: 275 nodes, 904 internal edges, density 0.024; top nodes: ReservationStatusEnum, Reservation, ReservationError
-  5. Community 4 - Community 4: 267 nodes, 1365 internal edges, density 0.0384; top nodes: CategoryPricing, DailyRate, ReservationChannelCodeEnum
+  1. Community 0 - Community 0: 444 nodes, 2339 internal edges, density 0.0238; top nodes: Reservation, ReservationStatusEnum, Room
+  2. Community 1 - Community 1: 405 nodes, 5890 internal edges, density 0.072; top nodes: worktree-agent-af404149f1b835229, worktree-agent-aa90c760fab5d7651, codex/fix/full-functional-qa
+  3. Community 2 - Community 2: 350 nodes, 1858 internal edges, density 0.0304; top nodes: HotelConfiguration, Transaction, TransactionTypeEnum
+  4. Community 3 - Community 3: 332 nodes, 1489 internal edges, density 0.0271; top nodes: codex/feature/pms-e2e-scale-hardening, main, claude/feature/pms-roles-housekeeping-qa
+  5. Community 4 - Community 4: 321 nodes, 487 internal edges, density 0.0095; top nodes: dc4b68a ojooooo, database.py, config.py
 
-Next best action: Start with get_neighbors on "ReservationStatusEnum", then use query_graph for the user's specific question.
+Next best action: Start with get_neighbors on "Reservation", then use query_graph for the user's specific question.
 ```
 `graphify check-update .`:
 ```text
-[graphify check-update] Graph state looks current for /Users/maximopaulos/AI-Workspace/projects/Hotel-Chipre-PMS/.claude/worktrees/agent-a406cbc9533347deb.
+[graphify check-update] Pending semantic updates in /Users/maximopaulos/AI-Workspace/worktrees/hotel-chipre-pms-mobile-first.
+[graphify check-update] graph was rebuilt by the fast git hook without descriptions/labels (.graphify_describe_pending)
+[graphify check-update] Fill the batch-*.json / communities.json files and re-run `graphify update` to ingest.
 ```
 Fuente técnica: `.graphify/`. Este artefacto no reemplaza `GRAPH_REPORT.md`.

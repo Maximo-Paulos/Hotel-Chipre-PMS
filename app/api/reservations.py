@@ -116,7 +116,13 @@ def _ensure_manual_rate_permission(db: Session, context: AuthContext) -> None:
     only a role holding reservation:manual_rate (owner/co_owner by default)
     may use it. Rejects instead of silently ignoring the client-supplied
     override, so a direct API call can't bypass the UI gate."""
-    if resolve(db, context.hotel_id, context.user_role, PERMISSION_RESERVATION_MANUAL_RATE):
+    if resolve(
+        db,
+        context.hotel_id,
+        context.user_role,
+        PERMISSION_RESERVATION_MANUAL_RATE,
+        user_id=context.user_id,
+    ):
         return
     audit_permission_denied(
         db,

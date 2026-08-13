@@ -329,7 +329,13 @@ def analytics_operations(
             currency_display=currency_display,
         )
     )
-    if resolve(db, context.hotel_id, context.user_role, PERMISSION_REPORTS_FINANCIAL_VIEW):
+    if resolve(
+        db,
+        context.hotel_id,
+        context.user_role,
+        PERMISSION_REPORTS_FINANCIAL_VIEW,
+        user_id=context.user_id,
+    ):
         return payload
     payload["currency_display"] = None
     for fact in payload.get("data", {}).get("facts", []):

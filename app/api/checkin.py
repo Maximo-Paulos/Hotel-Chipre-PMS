@@ -43,6 +43,7 @@ def _authorize_override(db: Session, context: AuthContext, override_prohibido: b
         context.hotel_id,
         context.user_role,
         PERMISSION_CHECKIN_OVERRIDE_PROHIBIDO,
+        user_id=context.user_id,
     ):
         audit_permission_denied(
             db,
