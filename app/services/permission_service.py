@@ -232,8 +232,7 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
         PERMISSION_CHECKOUT_PERFORM, PERMISSION_CASH_OPERATE,
     ),
     ROLE_HOUSEKEEPING: _role_permissions(
-        PERMISSION_RESERVATION_READ, PERMISSION_ROOM_READ,
-        PERMISSION_ROOM_STATUS_UPDATE, PERMISSION_LAUNDRY_READ,
+        PERMISSION_ROOM_READ, PERMISSION_ROOM_STATUS_UPDATE, PERMISSION_LAUNDRY_READ,
         PERMISSION_LAUNDRY_MOVE, PERMISSION_LAUNDRY_REMITO_MANAGE,
     ),
 }
@@ -309,10 +308,10 @@ def seed_default_permissions(db: Session) -> None:
         for code, allowed in permissions.items()
     ]
     _insert_if_missing(db, RolePermissionDefault.__table__, values, ["role", "permission_code"])
-    defaults = {(row.role, row.permission_code): row for row in db.query(RolePermissionDefault).all()}
-    for role, permissions in DEFAULT_MATRIX.items():
-        for code, allowed in permissions.items():
-            defaults[(role, code)].allowed = allowed
+    # Defaults are deployment data, not runtime configuration. The migration
+    # may have backfilled a safer decision from a legacy permission and an
+    # operator may already rely on that persisted value. Runtime seeding only
+    # fills missing rows; explicit override APIs are the sole mutation path.
     db.flush()
 
 

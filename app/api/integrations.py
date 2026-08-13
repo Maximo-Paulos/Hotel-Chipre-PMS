@@ -7,7 +7,15 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import get_db
-from app.dependencies.auth import AuthContext, require_roles
+from app.dependencies.auth import AuthContext, require_permission
+from app.models.hotel_membership import HotelMembership
+from app.services.permission_service import (
+    PERMISSION_HOTEL_SECURITY_MANAGE,
+    PERMISSION_HOTEL_SETTINGS_READ,
+    audit_permission_denied,
+    resolve,
+)
+from app.services.tenant_context import set_tenant_hotel_context, set_tenant_user_context
 from app.schemas.integration import (
     IntegrationConnectRequest,
     IntegrationConnectResponse,
@@ -209,11 +217,47 @@ def _store_oauth_code(db: Session, hotel_id: int, integration_id: int, provider:
         raise HTTPException(status_code=400, detail=message)
 
 
+def _authorize_oauth_state_actor(db: Session, *, hotel_id: int, user_id: int) -> None:
+    """Revalidate the actor embedded in a short-lived OAuth state token.
+
+    Provider callbacks cannot carry the application's bearer token. The
+    signed state identifies the initiating user, whose active tenant
+    membership and owner-only security permission are checked again before
+    any authorization code is exchanged or stored.
+    """
+    if hotel_id <= 0 or user_id <= 0:
+        raise HTTPException(status_code=403, detail="Autorizacion de integracion invalida")
+    set_tenant_user_context(db, user_id)
+    set_tenant_hotel_context(db, hotel_id)
+    membership = db.query(HotelMembership).filter_by(
+        hotel_id=hotel_id,
+        user_id=user_id,
+        status="active",
+    ).one_or_none()
+    if membership and resolve(
+        db,
+        hotel_id,
+        membership.role,
+        PERMISSION_HOTEL_SECURITY_MANAGE,
+        user_id=user_id,
+    ):
+        return
+    if membership:
+        audit_permission_denied(
+            db,
+            hotel_id=hotel_id,
+            user_id=user_id,
+            role=membership.role,
+            permission_code=PERMISSION_HOTEL_SECURITY_MANAGE,
+        )
+    raise HTTPException(status_code=403, detail="Autorizacion de integracion invalida")
+
+
 @router.get("/", response_model=IntegrationStatusResponse)
 @router.get("", response_model=IntegrationStatusResponse)
 def get_status(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner")),
+    context: AuthContext = Depends(require_permission(PERMISSION_HOTEL_SETTINGS_READ)),
 ):
     _ensure_enabled()
     catalog, connections = list_catalog_with_status(db, context.hotel_id)
@@ -238,7 +282,7 @@ def connect_integration(
     payload: IntegrationConnectRequest,
     request: Request,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner")),
+    context: AuthContext = Depends(require_permission(PERMISSION_HOTEL_SECURITY_MANAGE)),
 ):
     _ensure_enabled()
     integration, _ = _find_integration(db, context.hotel_id, integration_id)
@@ -380,6 +424,7 @@ def oauth_provider_callback(
         raise HTTPException(status_code=400, detail="state invalido para esta integracion")
 
     hotel_id = int(state_payload.get("hotel_id") or 0)
+    user_id = int(state_payload.get("user_id") or 0)
     web_origin = str(state_payload.get("web_origin") or "").strip()
     error = request.query_params.get("error")
     if error:
@@ -394,6 +439,7 @@ def oauth_provider_callback(
     code = request.query_params.get("code")
     if not code:
         raise HTTPException(status_code=400, detail="code requerido")
+    _authorize_oauth_state_actor(db, hotel_id=hotel_id, user_id=user_id)
     integration, _ = _find_integration(db, hotel_id, integration_id)
     try:
         _store_oauth_code(db, hotel_id, integration_id, integration.provider, code)
@@ -419,7 +465,7 @@ def oauth_callback_manual(
     integration_id: int,
     request: Request,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner")),
+    context: AuthContext = Depends(require_permission(PERMISSION_HOTEL_SECURITY_MANAGE)),
 ):
     _ensure_enabled()
     code = request.query_params.get("code")
@@ -434,7 +480,7 @@ def oauth_callback_manual(
 def revoke(
     integration_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner")),
+    context: AuthContext = Depends(require_permission(PERMISSION_HOTEL_SECURITY_MANAGE)),
 ):
     _ensure_enabled()
     revoke_connection(db, context.hotel_id, integration_id)
@@ -446,7 +492,7 @@ def revoke(
 def refresh(
     integration_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner")),
+    context: AuthContext = Depends(require_permission(PERMISSION_HOTEL_SECURITY_MANAGE)),
 ):
     _ensure_enabled()
     try:

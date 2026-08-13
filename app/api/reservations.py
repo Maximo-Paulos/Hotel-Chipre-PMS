@@ -76,12 +76,18 @@ from app.services.ota_manual_service import (
 )
 from app.services.payment_service import PaymentError
 from app.services.allocation_runtime_service import run_persisted_allocation
-from app.dependencies.auth import AuthContext, require_roles, require_permission
+from app.dependencies.auth import AuthContext, require_all_permissions, require_permission
 from app.services.permission_service import (
+    PERMISSION_COMPANY_MANAGE,
+    PERMISSION_GUEST_CREATE,
+    PERMISSION_RESERVATION_CANCEL,
     PERMISSION_RESERVATION_CHARGE,
     PERMISSION_RESERVATION_CREATE,
     PERMISSION_RESERVATION_MANUAL_RATE,
-    PERMISSION_RESERVATION_ROOM_MOVE,
+    PERMISSION_RESERVATION_MOVE,
+    PERMISSION_RESERVATION_READ,
+    PERMISSION_RESERVATION_UPDATE,
+    PERMISSION_ROOM_READ,
     audit_permission_denied,
     resolve,
 )
@@ -135,6 +141,32 @@ def _ensure_manual_rate_permission(db: Session, context: AuthContext) -> None:
         status_code=status.HTTP_403_FORBIDDEN,
         detail="No tenes permisos para fijar una tarifa manual en la reserva.",
     )
+
+
+def _ensure_action_permission(
+    db: Session,
+    context: AuthContext,
+    permission_code: str,
+    *,
+    detail: str = "No tenes permisos para esta accion",
+) -> None:
+    """Enforce payload-dependent actions before loading or mutating data."""
+    if resolve(
+        db,
+        context.hotel_id,
+        context.user_role,
+        permission_code,
+        user_id=context.user_id,
+    ):
+        return
+    audit_permission_denied(
+        db,
+        hotel_id=context.hotel_id,
+        user_id=context.user_id,
+        role=context.user_role,
+        permission_code=permission_code,
+    )
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
 
 
 def _trigger_reoptimization_bg(hotel_id: int, trigger_type: str = "new_reservation") -> None:
@@ -230,7 +262,9 @@ def create_new_reservation(
 def create_or_update_manual_ota(
     data: ManualOTAReservationCreate,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_CREATE)),
+    context: AuthContext = Depends(
+        require_all_permissions(PERMISSION_RESERVATION_CREATE, PERMISSION_RESERVATION_UPDATE)
+    ),
 ):
     if data.total_amount is not None:
         _ensure_manual_rate_permission(db, context)
@@ -267,7 +301,7 @@ def list_reservations(
     limit: int = Query(50, ge=1, le=200),
     order: Literal["recent", "check_in"] = "recent",
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "receptionist")),
+    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_READ)),
 ):
     reservations = list_reservations_service(
         db,
@@ -291,7 +325,7 @@ def list_reservations(
 def list_pending_actions(
     limit: int = 100,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "receptionist")),
+    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_READ)),
 ):
     safe_limit = max(1, min(limit, 250))
     try:
@@ -309,9 +343,7 @@ def occupancy_grid(
     date_from: date = Query(...),
     date_to: date = Query(...),
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(
-        require_roles("owner", "co_owner", "manager", "receptionist", "housekeeping")
-    ),
+    context: AuthContext = Depends(require_permission(PERMISSION_ROOM_READ)),
 ):
     """B2: planilla de ocupación — rooms x days grid data for one hotel."""
     if date_to <= date_from:
@@ -348,7 +380,7 @@ def occupancy_grid(
 def reservation_operations_summary(
     reservation_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "receptionist")),
+    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_READ)),
 ):
     try:
         return get_reservation_operations_summary(
@@ -365,7 +397,7 @@ def resolve_external_follow_up(
     reservation_id: int,
     payload: ReservationActionResolveRequest,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_UPDATE)),
 ):
     try:
         response = resolve_external_channel_follow_up(
@@ -387,7 +419,7 @@ def clear_manual_review(
     reservation_id: int,
     payload: ReservationActionResolveRequest,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_UPDATE)),
 ):
     try:
         response = clear_reservation_manual_review(
@@ -409,7 +441,9 @@ def register_settlement(
     reservation_id: int,
     payload: ReservationActionResolveRequest,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(
+        require_all_permissions(PERMISSION_RESERVATION_UPDATE, PERMISSION_COMPANY_MANAGE)
+    ),
 ):
     """Register the deferred corporate collection (v72 §3.5): settled."""
     reservation = get_reservation_by_id(db, reservation_id, context.hotel_id)
@@ -434,7 +468,7 @@ def register_settlement(
 def get_reservation(
     reservation_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "receptionist")),
+    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_READ)),
 ):
     reservation = get_reservation_by_id(db, reservation_id, context.hotel_id)
     if not reservation:
@@ -450,7 +484,9 @@ def add_reservation_guests(
     reservation_id: int,
     guests: list[GuestCreate],
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "receptionist")),
+    context: AuthContext = Depends(
+        require_all_permissions(PERMISSION_RESERVATION_UPDATE, PERMISSION_GUEST_CREATE)
+    ),
 ):
     reservation = get_reservation_by_id(db, reservation_id, context.hotel_id)
     if not reservation:
@@ -534,7 +570,7 @@ def cancel_reservation(
     reservation_id: int,
     manager_pin: str | None = None,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_CANCEL)),
 ):
     """Cancel a reservation. Post check-in cancellations are not allowed."""
     config = db.get(HotelConfiguration, context.hotel_id)
@@ -635,9 +671,15 @@ def release_no_guarantee_reservation(
     reservation_id: int,
     reason: str | None = None,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_CANCEL)),
 ):
     """§10.2 — Internally release a no-guarantee OTA reservation (no provider cancel call)."""
+    # This provider-reconciliation exception remains a manager lane. The
+    # canonical cancellation permission is still evaluated first (and can be
+    # revoked per user/role), while ordinary receptionist cancellations use
+    # the normal /cancel action above.
+    if not _is_manager_context(context):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tenes permisos para esta accion")
     r = get_reservation_by_id(db, reservation_id, context.hotel_id)
     if not r:
         raise HTTPException(status_code=404, detail="Reservation not found")
@@ -671,7 +713,7 @@ def mark_no_show(
     reservation_id: int,
     payload: ReservationNoShowRequest,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "receptionist")),
+    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_CANCEL)),
 ):
     """Mark a reservation as no-show without automatic charge."""
     r = get_reservation_by_id(db, reservation_id, context.hotel_id)
@@ -711,8 +753,10 @@ def change_dates(
     payload: ReservationDateChangeRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "receptionist")),
+    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_UPDATE)),
 ):
+    if payload.room_id is not None:
+        _ensure_action_permission(db, context, PERMISSION_RESERVATION_MOVE)
     r = get_reservation_by_id(db, reservation_id, context.hotel_id)
     if not r:
         raise HTTPException(status_code=404, detail="Reservation not found")
@@ -767,9 +811,11 @@ def modify_reservation(
     data: ReservationUpdate,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_UPDATE)),
 ):
     """Modify a reservation (dates, notes, room). Only allowed for pre-check-in states."""
+    if "room_id" in data.model_fields_set:
+        _ensure_action_permission(db, context, PERMISSION_RESERVATION_MOVE)
     config = db.get(HotelConfiguration, context.hotel_id)
     if config and not config.subscription_active:
         raise HTTPException(
@@ -825,7 +871,7 @@ def extend_stay(
     payload: ReservationExtensionRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_UPDATE)),
 ):
     """Extend a guest's stay to a new checkout date."""
     r = get_reservation_by_id(db, reservation_id, context.hotel_id)
@@ -884,7 +930,7 @@ def room_move(
     payload: RoomMoveRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_ROOM_MOVE)),
+    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_MOVE)),
 ):
     reservation = get_reservation_by_id(db, reservation_id, context.hotel_id)
     if not reservation:
@@ -946,8 +992,12 @@ def rebook_ota_to_direct(
     reservation_id: int,
     payload: OTARebookToDirectRequest,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(
+        require_all_permissions(PERMISSION_RESERVATION_UPDATE, PERMISSION_RESERVATION_CREATE)
+    ),
 ):
+    if payload.total_override is not None:
+        _ensure_manual_rate_permission(db, context)
     reservation = get_reservation_by_id(db, reservation_id, context.hotel_id)
     if not reservation:
         raise HTTPException(status_code=404, detail="Reservation not found")
@@ -989,8 +1039,10 @@ def preview_ota_rebook_to_direct(
     reservation_id: int,
     payload: OTARebookToDirectRequest,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_READ)),
 ):
+    if payload.total_override is not None:
+        _ensure_manual_rate_permission(db, context)
     reservation = get_reservation_by_id(db, reservation_id, context.hotel_id)
     if not reservation:
         raise HTTPException(status_code=404, detail="Reservation not found")
@@ -1033,7 +1085,7 @@ def preview_ota_rebook_to_direct(
 def recalculate_allocation(
     payload: AllocationRunRequest,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_MOVE)),
 ):
     result = run_persisted_allocation(
         db,

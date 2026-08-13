@@ -4,6 +4,9 @@ import os
 import subprocess
 import sys
 import tempfile
+import importlib.util
+from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import create_engine, event, inspect, text
@@ -13,6 +16,15 @@ from sqlalchemy.orm import sessionmaker
 
 PRE_REVISION = "20260812_external_effects"
 REVISION = "20260813_rbac_overrides"
+
+
+def _load_migration():
+    path = Path(__file__).parents[1] / "alembic" / "versions" / "20260813_rbac_user_overrides.py"
+    spec = importlib.util.spec_from_file_location("rbac_user_overrides_migration", path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def _alembic(cwd: str, db_path: str, *args: str) -> None:
@@ -121,7 +133,6 @@ def test_rbac_expand_contract_round_trip_preserves_safe_legacy_decisions():
                     )
         finally:
             engine.dispose()
-
         _alembic(cwd, db_path, "downgrade", PRE_REVISION)
         engine = _engine(db_path)
         try:
@@ -147,3 +158,24 @@ def test_rbac_expand_contract_round_trip_preserves_safe_legacy_decisions():
                 ).scalar()) is False
         finally:
             engine.dispose()
+
+
+def test_postgresql_rls_contract_executes_enable_policy_and_downgrade_removal(monkeypatch):
+    migration = _load_migration()
+    statements: list[str] = []
+    fake_op = SimpleNamespace(execute=lambda statement: statements.append(str(statement)))
+    monkeypatch.setattr(migration, "op", fake_op)
+
+    migration._install_user_override_rls(SimpleNamespace(dialect=SimpleNamespace(name="postgresql")))
+    assert any("ENABLE ROW LEVEL SECURITY" in statement for statement in statements)
+    assert any("FORCE ROW LEVEL SECURITY" in statement for statement in statements)
+    policy = next(statement for statement in statements if "CREATE POLICY" in statement)
+    assert "tenant_isolation_user_permission_overrides" in policy
+    assert "current_setting('app.hotel_id', true)" in policy
+    assert "WITH CHECK" in policy
+
+    statements.clear()
+    migration._remove_user_override_rls(SimpleNamespace(dialect=SimpleNamespace(name="postgresql")))
+    assert any("DROP POLICY IF EXISTS" in statement for statement in statements)
+    assert any("NO FORCE ROW LEVEL SECURITY" in statement for statement in statements)
+    assert any("DISABLE ROW LEVEL SECURITY" in statement for statement in statements)

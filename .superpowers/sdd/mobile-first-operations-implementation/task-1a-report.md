@@ -73,3 +73,91 @@ Generated API, OpenAPI, migration-head, and surface inventories were refreshed. 
 ## Recommended next step
 
 Run Graphify semantic enrichment, then validate the migration against an isolated PostgreSQL preview before release promotion.
+
+## Fix round 1 — canonical route enforcement and RLS evidence
+
+### Review findings closed
+
+- Replaced static role guards and the legacy `stock:operate` route guard with canonical action permissions before handler reads or mutations. Covered reservation read/create/update/cancel/move/manual-rate/check-in/check-out, stock read/movement/adjust/admin, room read/status, laundry read/movement, and rate read/update routes, including the alternate rate-calendar read path.
+- Preserved the narrow manager-only room mutation and OTA no-guarantee reconciliation lanes only as secondary product boundaries after canonical permission resolution. Housekeeping keeps the dedicated constrained cleaning-status path and never gains generic room configuration mutation.
+- Protected integration connect, manual callback, revoke, and refresh with immutable owner-only `hotel_settings:security_manage`. The public provider callback revalidates the signed-state actor's active `(hotel_id, user_id)` membership and owner-only effective permission before any code exchange or credential storage.
+- Changed runtime role-default seeding to insert missing rows only, so migration/backfilled decisions are never overwritten during permission resolution.
+- Kept PostgreSQL RLS DDL in the additive `20260813_rbac_overrides` migration and added an Alembic PostgreSQL offline-recorder contract that executes the install/remove helpers through `MigrationContext` and `Operations`, then verifies ordered `ENABLE`, `FORCE`, policy `USING`/`WITH CHECK`, `DROP`, `NO FORCE`, and `DISABLE` statements.
+
+### TDD evidence
+
+Initial review regressions were captured before implementation:
+
+```text
+/Users/maximopaulos/AI-Workspace/worktrees/hotel-chipre-pms-scale-hardening/.venv/bin/python -m pytest -q tests/test_rbac_sensitive_route_permissions.py tests/test_integration_security_permissions.py tests/test_permission_overrides_v2.py::test_runtime_seeding_never_overwrites_existing_backfilled_default tests/test_rbac_user_overrides_migration.py::test_postgresql_rls_contract_executes_enable_policy_and_downgrade_removal
+5 failed, 21 warnings in 1.23s
+```
+
+The follow-up room/laundry/rates bypasses were also demonstrated before their guards changed:
+
+```text
+/Users/maximopaulos/AI-Workspace/worktrees/hotel-chipre-pms-scale-hardening/.venv/bin/python -m pytest -q --disable-warnings tests/test_rbac_sensitive_route_permissions.py -k 'room_read or laundry_read or rate_read'
+3 failed, 3 deselected, 21 warnings in 1.05s
+```
+
+Final focused security and migration contract run:
+
+```text
+/Users/maximopaulos/AI-Workspace/worktrees/hotel-chipre-pms-scale-hardening/.venv/bin/python -m pytest -q --disable-warnings tests/test_rbac_sensitive_route_permissions.py tests/test_integration_security_permissions.py tests/test_permission_overrides_v2.py::test_runtime_seeding_never_overwrites_existing_backfilled_default tests/test_rbac_user_overrides_migration.py::test_postgresql_rls_contract_executes_enable_policy_and_downgrade_removal tests/test_tenant_rls_contract.py::test_user_override_rls_round_trip_records_valid_postgresql_ddl
+10 passed, 23 warnings in 1.81s
+```
+
+The HTTP regressions explicitly revoke and grant each route-family permission and assert that a denied response leaks no protected data and performs no partial mutation.
+
+### Affected validation
+
+```text
+/Users/maximopaulos/AI-Workspace/worktrees/hotel-chipre-pms-scale-hardening/.venv/bin/python -m pytest -q --disable-warnings tests/test_rooms_api_roles.py tests/test_rooms_schema.py tests/test_api_scaffolding.py tests/test_room_blocks_api.py tests/test_room_block_service.py tests/test_room_movement_groups_api.py tests/test_laundry_service.py tests/test_laundry_vendor_api.py tests/test_laundry_vendor_service.py tests/test_v72_daily_rates.py tests/test_rate_calendar_api.py tests/test_rate_calendar_service.py tests/test_v72_fx_rates.py tests/test_audit_coverage.py tests/test_cross_hotel_id_collision_api.py tests/test_permission_service.py tests/test_permission_overrides_v2.py tests/test_rbac_sensitive_route_permissions.py tests/test_integration_security_permissions.py tests/test_rbac_user_overrides_migration.py tests/test_tenant_rls_contract.py
+165 passed, 25 warnings in 13.09s
+```
+
+```text
+/Users/maximopaulos/AI-Workspace/worktrees/hotel-chipre-pms-scale-hardening/.venv/bin/python -m pytest -q --disable-warnings tests/test_role_contracts.py tests/test_route_security_guardrail.py tests/test_reservation_manual_rate_permission.py tests/test_v72_mobility.py tests/test_checkin_override_api.py tests/test_stock_api.py tests/test_stock_service.py tests/smoke/test_connect_channels_smoke.py tests/test_gmail_outbound_flow.py
+40 passed, 21 warnings in 3.80s
+```
+
+An earlier affected slice covering reservations, check-in, stock, integrations, authorization, and tenant collisions also completed with `134 passed, 1 xfailed, 24 warnings in 14.28s`.
+
+The first full-suite run correctly exposed two compatibility regressions: the manager-only no-guarantee release lane and the historical baseline RLS inventory expectation. Both received focused fixes and regressions; the intermediate retry completed with `1474 passed, 22 skipped, 12 xfailed, 1 xpassed`.
+
+Final full backend suite after all route-family fixes:
+
+```text
+/Users/maximopaulos/AI-Workspace/worktrees/hotel-chipre-pms-scale-hardening/.venv/bin/python -m pytest -q --disable-warnings
+1478 passed, 22 skipped, 12 xfailed, 1 xpassed, 29 warnings in 138.53s (0:02:18)
+```
+
+`python -m compileall -q` on every changed Python module and `git diff --check` both completed successfully.
+
+### Migration validation and PostgreSQL limitation
+
+A new temporary SQLite database completed:
+
+```text
+python -m alembic upgrade head
+python -m alembic downgrade 20260812_external_effects
+python -m alembic upgrade head
+python -m alembic current
+python -m alembic heads
+20260813_rbac_overrides (head)
+20260813_rbac_overrides (head)
+```
+
+No production, preview, or developer PostgreSQL database was contacted. The deterministic PostgreSQL evidence compiles and records the real migration helpers with Alembic's PostgreSQL dialect, so it validates emitted DDL and order without external state. It does not prove server execution, privileges, or live policy behavior; an isolated preview PostgreSQL up/down/up remains a release-time validation requirement.
+
+### Security review
+
+- Permission dependencies execute before tenant-scoped queries or mutations. Conditional permissions such as force checkout, manual rate, room move, and stock adjustment are resolved before their handler performs work.
+- All route data access continues to bind `context.hotel_id`; new HTTP tests cover denied-response nondisclosure and existing cross-hotel collision tests remain green.
+- Credential mutations are owner-only, and the bearer-less OAuth callback rechecks current membership and effective permission before token exchange/storage.
+- No credentials, OAuth codes, webhook values, sessions, payment data, guest PII, or external effects were written to tests, logs, the report, or memory checkpoints.
+- A second independent fix-round review found no remaining Task 1A blockers.
+
+### Documentation and generated artifacts
+
+This implementation report is the only documentation artifact updated in the fix round. Per fix-round instruction, Graphify and generated inventories were not regenerated; the pre-existing semantic-enrichment pending state therefore remains a separate repository-knowledge/release gate.

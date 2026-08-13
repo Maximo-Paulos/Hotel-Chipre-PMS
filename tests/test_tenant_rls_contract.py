@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 import importlib.util
+from io import StringIO
 from pathlib import Path
+from types import SimpleNamespace
 
 import app.models  # noqa: F401
 import pytest
+from alembic.migration import MigrationContext
+from alembic.operations import Operations
 from sqlalchemy import UniqueConstraint, create_engine
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Session
 
 from app.database import Base
@@ -54,6 +59,15 @@ CORE_COMPOSITE_FK_REQUIREMENTS = (
 def _load_rls_migration():
     path = Path(__file__).parents[1] / "alembic" / "versions" / "20260724_tenant_rls_context.py"
     spec = importlib.util.spec_from_file_location("tenant_rls_context_migration", path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_user_override_migration():
+    path = Path(__file__).parents[1] / "alembic" / "versions" / "20260813_rbac_user_overrides.py"
+    spec = importlib.util.spec_from_file_location("rbac_user_overrides_rls_migration", path)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -173,7 +187,15 @@ def test_rls_migration_covers_every_hotel_scoped_model_table():
         for table in Base.metadata.sorted_tables
         if "hotel_id" in table.c
     }
-    expected = model_tables - {"hotel_api_keys", "hotel_memberships", "payment_proofs"}
+    # Tables introduced after the baseline migration own their RLS DDL in the
+    # additive migration that creates them. Keeping them out of the historical
+    # inventory preserves linear migration compatibility.
+    expected = model_tables - {
+        "hotel_api_keys",
+        "hotel_memberships",
+        "payment_proofs",
+        "user_permission_overrides",
+    }
     assert set(migration.TENANT_TABLES) == expected
     assert "hotel_memberships" not in migration.TENANT_TABLES
 
@@ -184,6 +206,42 @@ def test_new_tenant_table_enables_its_own_rls_policy():
     assert '"payment_proofs"' in source
     assert "tenant_isolation_payment_proofs" in source
     assert "FORCE ROW LEVEL SECURITY" in source
+
+
+def test_user_override_rls_round_trip_records_valid_postgresql_ddl(monkeypatch):
+    """Compile the additive RLS helpers through Alembic's PostgreSQL recorder.
+
+    This is deterministic and executable without a production or preview
+    database. It validates dialect rendering and statement ordering, but it is
+    intentionally not a substitute for a release-time PostgreSQL migration run.
+    """
+
+    migration = _load_user_override_migration()
+    output = StringIO()
+    dialect = postgresql.dialect()
+    context = MigrationContext.configure(
+        dialect=dialect,
+        opts={"as_sql": True, "output_buffer": output},
+    )
+    monkeypatch.setattr(migration, "op", Operations(context))
+    connection = SimpleNamespace(dialect=dialect)
+
+    migration._install_user_override_rls(connection)
+    migration._remove_user_override_rls(connection)
+
+    ddl = output.getvalue()
+    expected_in_order = (
+        'ALTER TABLE "user_permission_overrides" ENABLE ROW LEVEL SECURITY',
+        'ALTER TABLE "user_permission_overrides" FORCE ROW LEVEL SECURITY',
+        'CREATE POLICY "tenant_isolation_user_permission_overrides"',
+        "USING (hotel_id = NULLIF(current_setting('app.hotel_id', true), '')::integer)",
+        "WITH CHECK (hotel_id = NULLIF(current_setting('app.hotel_id', true), '')::integer)",
+        'DROP POLICY IF EXISTS "tenant_isolation_user_permission_overrides"',
+        'ALTER TABLE "user_permission_overrides" NO FORCE ROW LEVEL SECURITY',
+        'ALTER TABLE "user_permission_overrides" DISABLE ROW LEVEL SECURITY',
+    )
+    positions = [ddl.index(fragment) for fragment in expected_in_order]
+    assert positions == sorted(positions)
 
 
 def test_rls_migration_keeps_api_key_bootstrap_exception_explicit():

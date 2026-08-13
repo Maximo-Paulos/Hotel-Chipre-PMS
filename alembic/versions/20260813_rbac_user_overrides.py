@@ -144,8 +144,8 @@ def _backfill_defaults(connection) -> None:
             "room:block_create", "checkout:perform",
         },
         "housekeeping": {
-            "reservation:read", "room:read", "room:status_update",
-            "laundry:read", "laundry:movement", "laundry:remito_manage",
+            "room:read", "room:status_update", "laundry:read",
+            "laundry:movement", "laundry:remito_manage",
         },
     }
     for role in ROLES:
@@ -240,15 +240,33 @@ def upgrade() -> None:
         "user_permission_overrides",
         ["hotel_id", "user_id"],
     )
-    if connection.dialect.name == "postgresql":
-        op.execute('ALTER TABLE "user_permission_overrides" ENABLE ROW LEVEL SECURITY')
-        op.execute('ALTER TABLE "user_permission_overrides" FORCE ROW LEVEL SECURITY')
-        op.execute(
-            '''CREATE POLICY "tenant_isolation_user_permission_overrides"
-               ON "user_permission_overrides"
-               USING (hotel_id = NULLIF(current_setting('app.hotel_id', true), '')::integer)
-               WITH CHECK (hotel_id = NULLIF(current_setting('app.hotel_id', true), '')::integer)'''
-        )
+    _install_user_override_rls(connection)
+
+
+def _install_user_override_rls(connection) -> None:
+    """Install the PostgreSQL tenant policy; no-op on other dialects."""
+    if connection.dialect.name != "postgresql":
+        return
+    op.execute('ALTER TABLE "user_permission_overrides" ENABLE ROW LEVEL SECURITY')
+    op.execute('ALTER TABLE "user_permission_overrides" FORCE ROW LEVEL SECURITY')
+    op.execute(
+        '''CREATE POLICY "tenant_isolation_user_permission_overrides"
+           ON "user_permission_overrides"
+           USING (hotel_id = NULLIF(current_setting('app.hotel_id', true), '')::integer)
+           WITH CHECK (hotel_id = NULLIF(current_setting('app.hotel_id', true), '')::integer)'''
+    )
+
+
+def _remove_user_override_rls(connection) -> None:
+    """Remove the PostgreSQL tenant policy before dropping its table."""
+    if connection.dialect.name != "postgresql":
+        return
+    op.execute(
+        'DROP POLICY IF EXISTS "tenant_isolation_user_permission_overrides" '
+        'ON "user_permission_overrides"'
+    )
+    op.execute('ALTER TABLE "user_permission_overrides" NO FORCE ROW LEVEL SECURITY')
+    op.execute('ALTER TABLE "user_permission_overrides" DISABLE ROW LEVEL SECURITY')
 
 
 def _contract_legacy_rows(connection, table: str, key_columns: tuple[str, ...]) -> None:
@@ -283,13 +301,7 @@ def downgrade() -> None:
     _contract_legacy_rows(connection, "role_permission_defaults", ("role",))
     _contract_legacy_rows(connection, "hotel_permission_overrides", ("hotel_id", "role"))
 
-    if connection.dialect.name == "postgresql":
-        op.execute(
-            'DROP POLICY IF EXISTS "tenant_isolation_user_permission_overrides" '
-            'ON "user_permission_overrides"'
-        )
-        op.execute('ALTER TABLE "user_permission_overrides" NO FORCE ROW LEVEL SECURITY')
-        op.execute('ALTER TABLE "user_permission_overrides" DISABLE ROW LEVEL SECURITY')
+    _remove_user_override_rls(connection)
     op.drop_index("ix_user_permission_overrides_hotel_user", table_name="user_permission_overrides")
     op.drop_table("user_permission_overrides")
     codes = tuple(NEW_PERMISSIONS)

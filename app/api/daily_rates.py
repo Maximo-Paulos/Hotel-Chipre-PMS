@@ -21,7 +21,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies.auth import AuthContext, require_roles
+from app.dependencies.auth import AuthContext, require_permission
 from app.models.audit_log import AuditActionEnum
 from app.models.daily_rate import DailyRate, PricePeriod
 from app.models.room import RoomCategory
@@ -32,11 +32,9 @@ from app.services.pricing_service import (
     resolve_rate_calendar,
 )
 from app.services.timeseries_projection import project_daily_rate_change
+from app.services.permission_service import PERMISSION_RATES_READ, PERMISSION_RATES_UPDATE
 
 router = APIRouter(prefix="/api/rates", tags=["Daily Rates"])
-
-_WRITE_ROLES = ("owner", "co_owner", "manager")
-_READ_ROLES = ("owner", "co_owner", "manager")
 
 # ---------------------------------------------------------------------------
 # Pydantic schemas
@@ -217,7 +215,7 @@ def get_category_rates(
     to_date: date = Query(...),
     payment_method: Optional[str] = Query(default=None),
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles(*_READ_ROLES)),
+    context: AuthContext = Depends(require_permission(PERMISSION_RATES_READ)),
 ):
     if to_date < from_date:
         raise HTTPException(status_code=422, detail="to_date must be >= from_date")
@@ -254,7 +252,7 @@ def upsert_daily_rate(
     category_id: int,
     payload: DailyRateIn,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles(*_WRITE_ROLES)),
+    context: AuthContext = Depends(require_permission(PERMISSION_RATES_UPDATE)),
 ):
     _get_category_or_404(db, context.hotel_id, category_id)
 
@@ -330,7 +328,7 @@ def bulk_upsert_daily_rates(
     category_id: int,
     payload: BulkRateIn,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles(*_WRITE_ROLES)),
+    context: AuthContext = Depends(require_permission(PERMISSION_RATES_UPDATE)),
 ):
     if payload.to_date < payload.from_date:
         raise HTTPException(status_code=422, detail="to_date must be >= from_date")
@@ -440,7 +438,7 @@ def bulk_update_daily_rate_field(
     category_id: int,
     payload: BulkFieldRateIn,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles(*_WRITE_ROLES)),
+    context: AuthContext = Depends(require_permission(PERMISSION_RATES_UPDATE)),
 ):
     if payload.to_date < payload.from_date:
         raise HTTPException(status_code=422, detail="to_date must be >= from_date")
@@ -537,7 +535,7 @@ def list_price_periods(
     category_id: Optional[int] = Query(None),
     active_only: bool = Query(True),
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles(*_READ_ROLES)),
+    context: AuthContext = Depends(require_permission(PERMISSION_RATES_READ)),
 ):
     q = db.query(PricePeriod).filter(
         PricePeriod.hotel_id == context.hotel_id,
@@ -559,7 +557,7 @@ def list_price_periods(
 def create_price_period(
     payload: PricePeriodIn,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles(*_WRITE_ROLES)),
+    context: AuthContext = Depends(require_permission(PERMISSION_RATES_UPDATE)),
 ):
     if payload.end_date < payload.start_date:
         raise HTTPException(status_code=422, detail="end_date must be >= start_date")
@@ -599,7 +597,7 @@ def update_price_period(
     period_id: int,
     payload: PricePeriodPatch,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles(*_WRITE_ROLES)),
+    context: AuthContext = Depends(require_permission(PERMISSION_RATES_UPDATE)),
 ):
     period = (
         db.query(PricePeriod)
@@ -655,7 +653,7 @@ def update_price_period(
 def delete_price_period(
     period_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles(*_WRITE_ROLES)),
+    context: AuthContext = Depends(require_permission(PERMISSION_RATES_UPDATE)),
 ):
     period = (
         db.query(PricePeriod)
@@ -693,7 +691,7 @@ def delete_price_period(
 def apply_period_to_daily_rates(
     period_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles(*_WRITE_ROLES)),
+    context: AuthContext = Depends(require_permission(PERMISSION_RATES_UPDATE)),
 ):
     period = (
         db.query(PricePeriod)

@@ -11,6 +11,7 @@ from app.main import app as fastapi_app
 from app.models.hotel_config import HotelConfiguration
 from app.models.hotel_membership import HotelMembership
 from app.models.permission import UserPermissionOverride
+from app.models.permission import RolePermissionDefault
 from app.models.security_audit_log import SecurityAuditLog
 from app.models.user import User
 from app.services.permission_service import (
@@ -27,6 +28,7 @@ from app.services.permission_service import (
     resolve,
     set_role_override,
     set_user_override,
+    seed_default_permissions,
 )
 
 
@@ -203,3 +205,19 @@ def test_user_override_rejects_self_elevation_and_cross_hotel_id_without_disclos
         fastapi_app.dependency_overrides.clear()
         db.close()
         engine.dispose()
+
+
+def test_runtime_seeding_never_overwrites_existing_backfilled_default(db):
+    db.add(HotelConfiguration(id=1, subscription_active=True))
+    seed_default_permissions(db)
+    backfilled = db.query(RolePermissionDefault).filter_by(
+        role="receptionist", permission_code=PERMISSION_GUEST_READ
+    ).one()
+    backfilled.allowed = False
+    db.flush()
+
+    seed_default_permissions(db)
+
+    db.refresh(backfilled)
+    assert backfilled.allowed is False
+    assert resolve(db, 1, "receptionist", PERMISSION_GUEST_READ, user_id=20) is False

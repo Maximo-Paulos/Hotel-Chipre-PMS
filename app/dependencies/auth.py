@@ -153,7 +153,8 @@ def get_auth_context(
 def require_permission(permission: str):
     """
     Dependency factory that enforces a permission via the configurable hotel
-    permission matrix (override > role default > deny). Denials are audited.
+    permission matrix (invariant > user > hotel role > role default > deny).
+    Denials are audited.
     """
 
     def dependency(
@@ -175,6 +176,45 @@ def require_permission(permission: str):
             permission,
             user_id=context.user_id,
         ):
+            audit_permission_denied(
+                db,
+                hotel_id=context.hotel_id,
+                user_id=context.user_id,
+                role=context.user_role,
+                permission_code=permission,
+            )
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tenes permisos para esta accion")
+        return context
+
+    return dependency
+
+
+def require_all_permissions(*permissions: str):
+    """Require every canonical capability before the handler can run."""
+
+    if not permissions:
+        raise ValueError("At least one permission is required")
+
+    def dependency(
+        db: Session = Depends(get_db),
+        context: AuthContext = Depends(get_auth_context),
+    ) -> AuthContext:
+        from app.services.permission_service import audit_permission_denied, resolve
+
+        requested = context.permissions or set()
+        requested.update(permissions)
+        context.permissions = requested
+        if not context.is_verified:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Verifica tu email para usar el sistema")
+        for permission in permissions:
+            if resolve(
+                db,
+                context.hotel_id,
+                context.user_role,
+                permission,
+                user_id=context.user_id,
+            ):
+                continue
             audit_permission_denied(
                 db,
                 hotel_id=context.hotel_id,

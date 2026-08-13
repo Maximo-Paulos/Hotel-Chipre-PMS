@@ -28,7 +28,7 @@ from app.schemas.room import (
 )
 from app.services.reservation_service import ReservationError, find_available_rooms
 from app.services.pricing_service import get_price_for_date
-from app.dependencies.auth import AuthContext, require_permission, require_roles
+from app.dependencies.auth import AuthContext, require_permission
 from app.services.allocation_runtime_service import run_persisted_allocation
 from app.services.read_model_cache import get_cached_availability_payload, invalidate_hotel_operational_caches
 from app.services.subscription_service import ensure_room_within_limit
@@ -36,9 +36,28 @@ from app.services.analytics_service import record_hotel_audit_event
 from app.services import audit_log_service
 from app.services.timeseries_projection import project_room_state_event
 from app.services.distributed_lock import DistributedLockBusy, DistributedLockUnavailable
-from app.services.permission_service import PERMISSION_ROOM_CLEANING_STATUS
+from app.services.permission_service import (
+    PERMISSION_HOTEL_SETTINGS_UPDATE,
+    PERMISSION_RATES_READ,
+    PERMISSION_RATES_UPDATE,
+    PERMISSION_RESERVATION_MOVE,
+    PERMISSION_ROOM_READ,
+    PERMISSION_ROOM_STATUS_UPDATE,
+)
 
 router = APIRouter(prefix="/api/rooms", tags=["Rooms"])
+
+
+def _require_manager_room_lane(context: AuthContext) -> None:
+    """Keep broad room mutations outside the housekeeping-only lane.
+
+    The canonical dependency is evaluated first, so per-user revocations still
+    fail closed. This secondary product lane prevents the housekeeping
+    cleaning permission from authorizing inventory/configuration mutations.
+    """
+
+    if context.user_role not in {"owner", "co_owner", "manager"}:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tenes permisos para esta accion")
 
 
 class RoomStatusUpdate(BaseModel):
@@ -67,7 +86,7 @@ def _serialize_reallocation_result(result, *, include_message: bool = False) -> 
 def create_category(
     data: RoomCategoryCreate,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner")),
+    context: AuthContext = Depends(require_permission(PERMISSION_HOTEL_SETTINGS_UPDATE)),
 ):
     category = RoomCategory(**data.model_dump(), hotel_id=context.hotel_id)
     db.add(category)
@@ -98,7 +117,7 @@ def update_category(
     category_id: int,
     data: RoomCategoryUpdate,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner")),
+    context: AuthContext = Depends(require_permission(PERMISSION_HOTEL_SETTINGS_UPDATE)),
 ):
     category = db.query(RoomCategory).filter(RoomCategory.id == category_id, RoomCategory.hotel_id == context.hotel_id).first()
     if not category:
@@ -142,7 +161,7 @@ def _housekeeping_room(room: Room) -> RoomHousekeepingRead:
 @router.get("/categories", response_model=list[RoomCategoryRead | RoomCategoryOperationalRead])
 def list_categories(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping", "receptionist")),
+    context: AuthContext = Depends(require_permission(PERMISSION_ROOM_READ)),
 ):
     categories = db.query(RoomCategory).filter(RoomCategory.hotel_id == context.hotel_id).all()
     if context.user_role == "housekeeping":
@@ -156,7 +175,7 @@ def list_categories(
 def get_category(
     category_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping")),
+    context: AuthContext = Depends(require_permission(PERMISSION_ROOM_READ)),
 ):
     category = (
         db.query(RoomCategory)
@@ -173,7 +192,7 @@ def get_category(
 @router.get("/categories/pricing/all", response_model=list[CategoryPricingRead])
 def get_all_category_pricing(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_RATES_READ)),
 ):
     return (
         db.query(CategoryPricing)
@@ -187,7 +206,7 @@ def get_all_category_pricing(
 def get_category_pricing(
     category_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_RATES_READ)),
 ):
     pricing = (
         db.query(CategoryPricing)
@@ -205,7 +224,7 @@ def update_category_pricing(
     category_id: int,
     data: CategoryPricingSchema,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner")),
+    context: AuthContext = Depends(require_permission(PERMISSION_RATES_UPDATE)),
 ):
     category = (
         db.query(RoomCategory)
@@ -237,7 +256,7 @@ def update_category_pricing(
 def create_room(
     data: RoomCreate,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner")),
+    context: AuthContext = Depends(require_permission(PERMISSION_HOTEL_SETTINGS_UPDATE)),
 ):
     category = db.query(RoomCategory).filter(RoomCategory.id == data.category_id, RoomCategory.hotel_id == context.hotel_id).first()
     if not category:
@@ -270,7 +289,7 @@ def create_room(
 @router.get("/", response_model=list[RoomRead | RoomHousekeepingRead])
 def list_rooms(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping", "receptionist")),
+    context: AuthContext = Depends(require_permission(PERMISSION_ROOM_READ)),
 ):
     rooms = db.query(Room).filter(Room.hotel_id == context.hotel_id, Room.deleted_at.is_(None)).all()
     if context.user_role == "housekeeping":
@@ -284,7 +303,7 @@ def room_availability(
     check_in_date: date | None = None,
     check_out_date: date | None = None,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "receptionist")),
+    context: AuthContext = Depends(require_permission(PERMISSION_ROOM_READ)),
 ):
     """
     Simple availability helper. Returns a placeholder message if required
@@ -326,7 +345,7 @@ def room_availability(
 def get_room(
     room_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping")),
+    context: AuthContext = Depends(require_permission(PERMISSION_ROOM_READ)),
 ):
     room = db.query(Room).filter(Room.id == room_id, Room.hotel_id == context.hotel_id, Room.deleted_at.is_(None)).first()
     if not room:
@@ -341,9 +360,10 @@ def update_room(
     room_id: int,
     data: RoomUpdate,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_ROOM_STATUS_UPDATE)),
 ):
     """Generic room update (number, floor, notes, status, etc.)."""
+    _require_manager_room_lane(context)
     room = db.query(Room).filter(Room.id == room_id, Room.hotel_id == context.hotel_id, Room.deleted_at.is_(None)).first()
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
@@ -396,10 +416,11 @@ def update_room_status(
     room_id: int,
     data: RoomStatusUpdate,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_ROOM_STATUS_UPDATE)),
 ):
     """Update room status for housekeeping. When a room is set to cleaning/maintenance/blocked,
     any reservations assigned to it are automatically relocated by the allocation engine."""
+    _require_manager_room_lane(context)
     room = db.query(Room).filter(Room.id == room_id, Room.hotel_id == context.hotel_id, Room.deleted_at.is_(None)).first()
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
@@ -453,7 +474,7 @@ def update_room_cleaning_status(
     room_id: int,
     data: RoomStatusUpdate,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_ROOM_CLEANING_STATUS)),
+    context: AuthContext = Depends(require_permission(PERMISSION_ROOM_STATUS_UPDATE)),
 ):
     """Apply the narrow housekeeping transition without reallocating guests.
 
@@ -544,9 +565,10 @@ def update_room_category(
     room_id: int,
     data: RoomCategoryAssignmentUpdate,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_ROOM_STATUS_UPDATE)),
 ):
     """Update the category of a specific room."""
+    _require_manager_room_lane(context)
     room = db.query(Room).filter(Room.id == room_id, Room.hotel_id == context.hotel_id, Room.deleted_at.is_(None)).first()
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
@@ -579,13 +601,14 @@ def update_room_category(
 @router.post("/reallocate")
 def trigger_reallocation(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_MOVE)),
 ):
     """Manually trigger the allocation engine to optimally redistribute all reservations.
     This maximizes availability and profitability by packing rooms tightly and
     relocating reservations away from cleaning/maintenance rooms.
     Returns unassigned reservations (to be shown in yellow in the UI)."""
     
+    _require_manager_room_lane(context)
     try:
         result = run_persisted_allocation(
             db,
@@ -618,7 +641,7 @@ def trigger_reallocation(
 @router.get("/housekeeping/summary")
 def housekeeping_summary(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping")),
+    context: AuthContext = Depends(require_permission(PERMISSION_ROOM_READ)),
 ):
     """Get housekeeping overview: how many rooms in each status."""
     rooms = db.query(Room).filter(Room.hotel_id == context.hotel_id, Room.deleted_at.is_(None)).all()
@@ -666,7 +689,7 @@ def housekeeping_summary(
 def delete_room(
     room_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner")),
+    context: AuthContext = Depends(require_permission(PERMISSION_HOTEL_SETTINGS_UPDATE)),
 ):
     """Soft-delete a room when no active reservations are attached."""
     room = db.query(Room).filter(Room.id == room_id, Room.hotel_id == context.hotel_id, Room.deleted_at.is_(None)).first()
