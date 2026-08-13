@@ -261,7 +261,7 @@ def list_reservations(
     limit: int = Query(50, ge=1, le=200),
     order: Literal["recent", "check_in"] = "recent",
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "receptionist")),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "receptionist")),
 ):
     reservations = list_reservations_service(
         db,
@@ -285,7 +285,7 @@ def list_reservations(
 def list_pending_actions(
     limit: int = 100,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "receptionist")),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "receptionist")),
 ):
     safe_limit = max(1, min(limit, 250))
     try:
@@ -304,7 +304,7 @@ def occupancy_grid(
     date_to: date = Query(...),
     db: Session = Depends(get_db),
     context: AuthContext = Depends(
-        require_roles("owner", "co_owner", "receptionist", "housekeeping")
+        require_roles("owner", "co_owner", "manager", "receptionist", "housekeeping")
     ),
 ):
     """B2: planilla de ocupación — rooms x days grid data for one hotel."""
@@ -342,7 +342,7 @@ def occupancy_grid(
 def reservation_operations_summary(
     reservation_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "receptionist")),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "receptionist")),
 ):
     try:
         return get_reservation_operations_summary(
@@ -428,7 +428,7 @@ def register_settlement(
 def get_reservation(
     reservation_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "receptionist")),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "receptionist")),
 ):
     reservation = get_reservation_by_id(db, reservation_id, context.hotel_id)
     if not reservation:
@@ -444,7 +444,7 @@ def add_reservation_guests(
     reservation_id: int,
     guests: list[GuestCreate],
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "receptionist")),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "receptionist")),
 ):
     reservation = get_reservation_by_id(db, reservation_id, context.hotel_id)
     if not reservation:
@@ -665,7 +665,7 @@ def mark_no_show(
     reservation_id: int,
     payload: ReservationNoShowRequest,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "receptionist")),
+    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "receptionist")),
 ):
     """Mark a reservation as no-show without automatic charge."""
     r = get_reservation_by_id(db, reservation_id, context.hotel_id)

@@ -124,6 +124,22 @@ def test_housekeeping_cannot_access_guest_or_reservation_pii(role_client):
     assert client.get("/api/bookings/").status_code == 403
 
 
+def test_manager_can_read_reservations_operationally(role_client):
+    client, _db, auth, _room, _guest, _category = role_client
+    auth["role"] = "manager"
+
+    assert client.get("/api/reservations/").status_code == 200
+    assert client.get("/api/reservations/actions/pending").status_code == 200
+    today = date.today()
+    assert (
+        client.get(
+            "/api/reservations/occupancy-grid",
+            params={"date_from": today.isoformat(), "date_to": (today + timedelta(days=1)).isoformat()},
+        ).status_code
+        == 200
+    )
+
+
 def test_report_permissions_split_operational_from_financial(role_client):
     client, db, auth, _room, _guest, _category = role_client
     auth["role"] = "manager"
