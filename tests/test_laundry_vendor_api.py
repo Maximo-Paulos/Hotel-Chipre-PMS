@@ -398,3 +398,41 @@ def test_linen_items_and_locations_are_hotel_scoped():
         assert cross_delete.status_code == 404
     finally:
         _teardown(db, engine)
+
+
+def test_linen_summary_is_hotel_scoped_and_denies_roles_without_laundry_permission():
+    """Backend counterpart of avoiding LaundryPage.tsx's per-item
+    getCurrentLinenStock() N+1 loop, mirroring GET /api/stock/summary."""
+    client, db, engine = _client_with_db()
+    try:
+        item = create_linen_item(db, hotel_id=1, name="Sabanas", unit="unidad")
+        house = create_location(db, hotel_id=1, name="Deposito")
+        register_movement(
+            db, hotel_id=1, item_id=item.id, location_id=house.id, movement_type="in",
+            quantity=Decimal("9.00"), reason=None, reservation_id=None, created_by_user_id=None,
+        )
+        other_item = create_linen_item(db, hotel_id=2, name="Sabanas H2", unit="unidad")
+        register_movement(
+            db, hotel_id=2, item_id=other_item.id, location_id=None, movement_type="in",
+            quantity=Decimal("40.00"), reason=None, reservation_id=None, created_by_user_id=None,
+        )
+        db.commit()
+
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner")
+        summary = client.get("/api/laundry/items/summary")
+        assert summary.status_code == 200
+        assert len(summary.json()) == 1
+        assert summary.json()[0]["item"]["id"] == item.id
+        assert summary.json()[0]["current_quantity"] == "9.00"
+
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(2, "owner")
+        other_hotel_summary = client.get("/api/laundry/items/summary")
+        assert other_hotel_summary.json()[0]["item"]["id"] == other_item.id
+
+        # A role with neither manage_vendors nor operate_remitos (e.g. plain
+        # receptionist) is denied.
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "receptionist")
+        denied = client.get("/api/laundry/items/summary")
+        assert denied.status_code == 403
+    finally:
+        _teardown(db, engine)

@@ -5,7 +5,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
@@ -34,6 +34,7 @@ from app.services.stock_service import (
     list_stock_items,
     low_stock_items,
     register_movement,
+    stock_summary,
     update_location,
     update_stock_item,
 )
@@ -126,6 +127,7 @@ class StockMovementRead(BaseModel):
     reservation_id: Optional[int] = None
     created_by_user_id: Optional[int] = None
     created_at: datetime
+    idempotency_key: Optional[str] = None
 
 
 class StockConsumptionItem(BaseModel):
@@ -168,6 +170,24 @@ def list_items(
     context: AuthContext = Depends(require_permission(PERMISSION_STOCK_READ)),
 ):
     return list_stock_items(db, hotel_id=context.hotel_id)
+
+
+class StockSummaryEntry(BaseModel):
+    item: StockItemRead
+    current_quantity: Decimal
+
+
+@router.get("/summary", response_model=list[StockSummaryEntry])
+def get_stock_summary(
+    location_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_READ)),
+):
+    """Every item's current balance in one request -- avoids the N+1
+    per-item /items/{id}/current pattern for grids that need every balance
+    at once (see StockPage.tsx).
+    """
+    return stock_summary(db, hotel_id=context.hotel_id, location_id=location_id)
 
 
 @router.get("/items/low-stock", response_model=list[StockItemRead])
@@ -295,6 +315,16 @@ def delete_stock_location(
 @router.post("/movements", response_model=StockMovementRead, status_code=status.HTTP_201_CREATED)
 def create_movement(
     data: StockMovementCreate,
+    # Same convention as POST /api/payment-links: a client-generated key on a
+    # retried request (e.g. a flaky connection resends the same POST) so the
+    # retry returns the first attempt's movement instead of double-counting
+    # stock, rather than being part of the JSON body.
+    idempotency_key: str | None = Header(
+        default=None,
+        alias="Idempotency-Key",
+        min_length=8,
+        max_length=100,
+    ),
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_STOCK_MOVE)),
 ):
@@ -305,6 +335,7 @@ def create_movement(
             db,
             hotel_id=context.hotel_id,
             created_by_user_id=context.user_id,
+            idempotency_key=idempotency_key,
             **data.model_dump(),
         )
     except StockError as exc:

@@ -159,8 +159,11 @@ def register_movement(
     )
     if item is None:
         raise LinenError("Linen item not found")
+    # Same per-location bug as stock_service.register_movement: an outbound
+    # movement scoped to one location must only be checked against THAT
+    # location's balance, not the hotel-wide total across every location.
     if movement_type in _OUTBOUND_MOVEMENT_TYPES and quantity > current_stock(
-        db, hotel_id=hotel_id, item_id=item.id
+        db, hotel_id=hotel_id, item_id=item.id, location_id=location_id
     ):
         raise LinenError("Linen movement would make stock negative")
     if location_id is not None:
@@ -178,6 +181,32 @@ def register_movement(
     db.add(movement)
     db.flush()
     return movement
+
+
+def linen_summary(db: Session, *, hotel_id: int, location_id: int | None = None) -> list[dict]:
+    """Every active linen item's current balance in one query pair, instead
+    of the N+1 pattern of calling current_stock() once per item (see
+    LaundryPage.tsx's houseStockQueries useQueries loop -- this is its
+    backend counterpart, mirroring stock_service.stock_summary).
+    """
+    items = list_linen_items(db, hotel_id=hotel_id)
+    if not items:
+        return []
+    signed_quantity = case(
+        (LinenMovement.movement_type.in_(_OUTBOUND_MOVEMENT_TYPES), -LinenMovement.quantity),
+        else_=LinenMovement.quantity,
+    )
+    query = (
+        db.query(LinenMovement.item_id, func.coalesce(func.sum(signed_quantity), 0))
+        .filter(LinenMovement.hotel_id == hotel_id, LinenMovement.item_id.in_([item.id for item in items]))
+    )
+    if location_id is not None:
+        query = query.filter(LinenMovement.location_id == location_id)
+    totals = {item_id: Decimal(total).quantize(Decimal("0.01")) for item_id, total in query.group_by(LinenMovement.item_id).all()}
+    return [
+        {"item": item, "current_quantity": totals.get(item.id, Decimal("0.00"))}
+        for item in items
+    ]
 
 
 def current_stock(

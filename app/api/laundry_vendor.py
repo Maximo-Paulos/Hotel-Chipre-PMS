@@ -40,6 +40,7 @@ from app.services.linen_service import (
     create_location as create_linen_location,
     current_stock as current_linen_stock,
     delete_linen_item,
+    linen_summary,
     list_linen_items,
     list_locations as list_linen_locations,
     register_movement as register_linen_movement,
@@ -297,6 +298,25 @@ def get_current_laundry_linen_stock(
     except LinenError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     return {"item_id": item_id, "quantity": quantity}
+
+
+class LinenSummaryEntry(BaseModel):
+    item: LinenItemRead
+    current_quantity: Decimal
+
+
+@router.get("/items/summary", response_model=list[LinenSummaryEntry])
+def get_laundry_linen_summary(
+    location_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    # Every active linen item's balance in one request -- avoids the N+1
+    # per-item /items/{id}/current pattern (see LaundryPage.tsx's
+    # houseStockQueries), same shape as GET /api/stock/summary.
+    context: AuthContext = Depends(
+        require_any_permission(PERMISSION_LAUNDRY_MANAGE_VENDORS, PERMISSION_LAUNDRY_OPERATE_REMITOS)
+    ),
+):
+    return linen_summary(db, hotel_id=context.hotel_id, location_id=location_id)
 
 
 @router.get("/locations", response_model=list[LinenLocationRead])

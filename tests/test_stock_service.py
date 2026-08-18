@@ -3,6 +3,7 @@ from decimal import Decimal
 import pytest
 
 from app.models.hotel_config import HotelConfiguration
+from app.models.stock import StockMovement
 from app.services.stock_service import (
     StockError,
     create_location,
@@ -13,6 +14,7 @@ from app.services.stock_service import (
     list_stock_items,
     low_stock_items,
     register_movement,
+    stock_summary,
     update_stock_item,
 )
 
@@ -412,3 +414,157 @@ def test_stock_item_unit_cost_is_optional_and_updatable(db):
     updated = update_stock_item(db, hotel_id=1, item_id=priced.id, unit_cost=Decimal("15.00"))
     db.commit()
     assert updated.unit_cost == Decimal("15.00")
+
+
+def test_register_movement_with_repeated_idempotency_key_returns_same_row_not_a_duplicate(db):
+    """A retried request (flaky connection resends the same POST) must not
+    double-count stock -- the second call with the same idempotency_key
+    returns the first attempt's row instead of inserting a new one."""
+    _seed_hotels(db)
+    item = create_stock_item(db, hotel_id=1, name="Sabanas", unit="unidad")
+    db.commit()
+
+    first = register_movement(
+        db, hotel_id=1, item_id=item.id, location_id=None, movement_type="in",
+        quantity=Decimal("10.00"), reason="opening balance", reservation_id=None,
+        created_by_user_id=None, idempotency_key="req-1",
+    )
+    db.commit()
+
+    retried = register_movement(
+        db, hotel_id=1, item_id=item.id, location_id=None, movement_type="in",
+        quantity=Decimal("10.00"), reason="opening balance", reservation_id=None,
+        created_by_user_id=None, idempotency_key="req-1",
+    )
+    db.commit()
+
+    assert retried.id == first.id
+    assert current_stock(db, hotel_id=1, item_id=item.id) == Decimal("10.00")
+    assert len(list_stock_movements(db, hotel_id=1, item_id=item.id, limit=20)) == 1
+
+
+def test_register_movement_idempotency_key_is_scoped_per_hotel(db):
+    """The same client-generated key from two different hotels must not
+    collide -- each hotel gets its own movement."""
+    _seed_hotels(db)
+    item1 = create_stock_item(db, hotel_id=1, name="Sabanas", unit="unidad")
+    item2 = create_stock_item(db, hotel_id=2, name="Sabanas", unit="unidad")
+    db.commit()
+
+    register_movement(
+        db, hotel_id=1, item_id=item1.id, location_id=None, movement_type="in",
+        quantity=Decimal("5.00"), reason=None, reservation_id=None,
+        created_by_user_id=None, idempotency_key="shared-key",
+    )
+    register_movement(
+        db, hotel_id=2, item_id=item2.id, location_id=None, movement_type="in",
+        quantity=Decimal("7.00"), reason=None, reservation_id=None,
+        created_by_user_id=None, idempotency_key="shared-key",
+    )
+    db.commit()
+
+    assert current_stock(db, hotel_id=1, item_id=item1.id) == Decimal("5.00")
+    assert current_stock(db, hotel_id=2, item_id=item2.id) == Decimal("7.00")
+
+
+def test_register_movement_without_idempotency_key_never_dedupes(db):
+    """Movements with no key (the vast majority) must keep behaving like
+    before -- two separate 'in' calls are two separate movements."""
+    _seed_hotels(db)
+    item = create_stock_item(db, hotel_id=1, name="Sabanas", unit="unidad")
+    db.commit()
+
+    register_movement(
+        db, hotel_id=1, item_id=item.id, location_id=None, movement_type="in",
+        quantity=Decimal("5.00"), reason=None, reservation_id=None, created_by_user_id=None,
+    )
+    register_movement(
+        db, hotel_id=1, item_id=item.id, location_id=None, movement_type="in",
+        quantity=Decimal("5.00"), reason=None, reservation_id=None, created_by_user_id=None,
+    )
+    db.commit()
+
+    assert current_stock(db, hotel_id=1, item_id=item.id) == Decimal("10.00")
+    assert len(list_stock_movements(db, hotel_id=1, item_id=item.id, limit=20)) == 2
+
+
+def test_register_movement_concurrent_retry_race_returns_the_winner_not_an_error(db, monkeypatch):
+    """Two concurrent requests both pass the pre-insert existing-row check
+    (neither sees the other's row yet), then collide on the unique
+    (hotel_id, idempotency_key) index at insert time. The SAVEPOINT rollback
+    must only undo this insert -- the loser re-queries and returns the
+    winner's row instead of raising. Forces the exact race window (the
+    pre-check missing a row that's actually already there) instead of
+    relying on real thread timing, so the exception-recovery branch is
+    exercised deterministically."""
+    _seed_hotels(db)
+    item = create_stock_item(db, hotel_id=1, name="Sabanas", unit="unidad")
+    db.commit()
+
+    winner = register_movement(
+        db, hotel_id=1, item_id=item.id, location_id=None, movement_type="in",
+        quantity=Decimal("10.00"), reason=None, reservation_id=None,
+        created_by_user_id=None, idempotency_key="race-key",
+    )
+    db.commit()
+
+    original_query = db.query
+
+    class _MissOnce:
+        def filter(self, *args, **kwargs):
+            return self
+
+        def one_or_none(self):
+            return None
+
+    def _query_misses_first_stockmovement_lookup(*args, **kwargs):
+        if args and args[0] is StockMovement:
+            monkeypatch.setattr(db, "query", original_query)
+            return _MissOnce()
+        return original_query(*args, **kwargs)
+
+    monkeypatch.setattr(db, "query", _query_misses_first_stockmovement_lookup)
+
+    loser = register_movement(
+        db, hotel_id=1, item_id=item.id, location_id=None, movement_type="in",
+        quantity=Decimal("10.00"), reason=None, reservation_id=None,
+        created_by_user_id=None, idempotency_key="race-key",
+    )
+
+    assert loser.id == winner.id
+    assert current_stock(db, hotel_id=1, item_id=item.id) == Decimal("10.00")
+    assert len(list_stock_movements(db, hotel_id=1, item_id=item.id, limit=20)) == 1
+
+
+def test_stock_summary_returns_every_active_item_balance_in_one_call_hotel_scoped(db):
+    """Backend counterpart of avoiding StockPage.tsx's N+1 per-item
+    getCurrentStock() loop: one call returns every item with its balance,
+    hotel-scoped, optionally narrowed to one location."""
+    _seed_hotels(db)
+    item = create_stock_item(db, hotel_id=1, name="Sabanas", unit="unidad")
+    other_hotel_item = create_stock_item(db, hotel_id=2, name="Sabanas", unit="unidad")
+    house = create_location(db, hotel_id=1, name="Deposito")
+    db.flush()
+
+    register_movement(
+        db, hotel_id=1, item_id=item.id, location_id=house.id, movement_type="in",
+        quantity=Decimal("8.00"), reason=None, reservation_id=None, created_by_user_id=None,
+    )
+    register_movement(
+        db, hotel_id=2, item_id=other_hotel_item.id, location_id=None, movement_type="in",
+        quantity=Decimal("99.00"), reason=None, reservation_id=None, created_by_user_id=None,
+    )
+    db.commit()
+
+    summary = stock_summary(db, hotel_id=1)
+    assert len(summary) == 1
+    assert summary[0]["item"].id == item.id
+    assert summary[0]["current_quantity"] == Decimal("8.00")
+
+    summary_at_house = stock_summary(db, hotel_id=1, location_id=house.id)
+    assert summary_at_house[0]["current_quantity"] == Decimal("8.00")
+
+    other_location = create_location(db, hotel_id=1, name="Otro deposito")
+    db.commit()
+    summary_elsewhere = stock_summary(db, hotel_id=1, location_id=other_location.id)
+    assert summary_elsewhere[0]["current_quantity"] == Decimal("0.00")

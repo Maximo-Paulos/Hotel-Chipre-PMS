@@ -58,6 +58,12 @@ def _teardown(db, engine):
     engine.dispose()
 
 
+def _second_hotel(db):
+    db.add(HotelConfiguration(id=2, subscription_active=True))
+    db.flush()
+    db.commit()
+
+
 def test_owner_can_delete_item_and_recreate_it_with_the_same_name():
     client, db, engine = _client_with_db()
     try:
@@ -136,5 +142,64 @@ def test_stock_item_full_edit_updates_name_sku_unit_and_min_quantity():
 
         listed = client.get("/api/stock/items")
         assert listed.json()[0]["name"] == "Sabanas King"
+    finally:
+        _teardown(db, engine)
+
+
+def test_movement_idempotency_key_header_dedupes_a_retried_request():
+    """Same convention as POST /api/payment-links: a client resending the
+    same POST (e.g. after a timeout) with the same Idempotency-Key header
+    gets back the original movement instead of a duplicate."""
+    client, db, engine = _client_with_db()
+    try:
+        item = client.post("/api/stock/items", json={"name": "Sabanas", "unit": "unidad"}).json()
+
+        headers = {"Idempotency-Key": "retry-key-001"}
+        first = client.post(
+            "/api/stock/movements",
+            json={"item_id": item["id"], "movement_type": "in", "quantity": "10.00"},
+            headers=headers,
+        )
+        assert first.status_code == 201
+        assert first.json()["idempotency_key"] == "retry-key-001"
+
+        retried = client.post(
+            "/api/stock/movements",
+            json={"item_id": item["id"], "movement_type": "in", "quantity": "10.00"},
+            headers=headers,
+        )
+        assert retried.status_code == 201
+        assert retried.json()["id"] == first.json()["id"]
+
+        history = client.get(f"/api/stock/movements?item_id={item['id']}")
+        assert len(history.json()) == 1
+    finally:
+        _teardown(db, engine)
+
+
+def test_stock_summary_is_hotel_scoped_and_requires_stock_read_permission():
+    client, db, engine = _client_with_db()
+    try:
+        _second_hotel(db)
+        item = client.post("/api/stock/items", json={"name": "Sabanas", "unit": "unidad"}).json()
+        client.post(
+            "/api/stock/movements", json={"item_id": item["id"], "movement_type": "in", "quantity": "8.00"}
+        )
+
+        summary = client.get("/api/stock/summary")
+        assert summary.status_code == 200
+        assert len(summary.json()) == 1
+        assert summary.json()[0]["item"]["id"] == item["id"]
+        assert summary.json()[0]["current_quantity"] == "8.00"
+
+        # A different hotel's summary must never see hotel 1's item/balance.
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(2, "owner")
+        other_hotel_summary = client.get("/api/stock/summary")
+        assert other_hotel_summary.json() == []
+
+        # A role without stock:read (e.g. receptionist) is denied, no mutation risk here (read-only route).
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "receptionist")
+        denied = client.get("/api/stock/summary")
+        assert denied.status_code == 403
     finally:
         _teardown(db, engine)
