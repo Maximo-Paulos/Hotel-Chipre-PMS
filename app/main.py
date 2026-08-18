@@ -197,7 +197,7 @@ _base_origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
 ]
-_extra = os.getenv("CORS_ORIGINS", "")
+_extra = get_settings().CORS_ORIGINS
 _extra_entries = [o.strip() for o in _extra.split(",") if o.strip()]
 # Wildcard is incompatible with allow_credentials=True in the browser spec
 # (the server must echo a concrete Origin). When operators set CORS_ORIGINS=*

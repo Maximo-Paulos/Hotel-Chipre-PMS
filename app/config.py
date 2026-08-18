@@ -23,6 +23,11 @@ class Settings(BaseSettings):
     # Frontend public URL used in emails (invitation links, password reset, etc.)
     FRONTEND_URL: str = "http://localhost:5173"
 
+    # Extra CORS origins (comma-separated), read directly via os.getenv in
+    # app/main.py; declared here only so pydantic-settings (extra="forbid" by
+    # default) doesn't crash when this documented, commonly-set var is present.
+    CORS_ORIGINS: str = ""
+
     # Database
     DATABASE_URL: str = "postgresql+psycopg2://pms:pms@localhost:5432/hotel_pms"
 
