@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 
 import { RateCalendarGrid } from "../../components/RateCalendarGrid";
 import { RateEditorGrid, type PriceField } from "../../components/RateEditorGrid";
+import { RateEditorMobileCards } from "../../components/RateEditorMobileCards";
 import { useCategories } from "../../hooks/useCategories";
 import {
   todayIso,
@@ -387,15 +388,28 @@ export function RateCalendarPage() {
 
             {cellError ? <p className="mx-4 mt-4 rounded-xl bg-rose-50 p-3 text-sm text-rose-700">{cellError}</p> : null}
 
-            <RateEditorGrid
-              dailyRates={dailyRatesQuery.data}
-              calendar={calendarQuery.data}
-              currencyCode={currencyCode}
-              onSaveCell={handleSaveCell}
-              onSelectCell={handleSelectCell}
-              selectedRange={selectedRange}
-              disabled={cellSave.isPending}
-            />
+            {/* Dense spreadsheet grid: needs real width for a day-per-column
+                layout, so it's desktop/tablet only (md and up). */}
+            <div className="hidden md:block">
+              <RateEditorGrid
+                dailyRates={dailyRatesQuery.data}
+                calendar={calendarQuery.data}
+                currencyCode={currencyCode}
+                onSaveCell={handleSaveCell}
+                onSelectCell={handleSelectCell}
+                selectedRange={selectedRange}
+                disabled={cellSave.isPending}
+              />
+            </div>
+            {/* Mobile alternative: card-per-day, step-through-the-week flow. */}
+            <div className="md:hidden">
+              <RateEditorMobileCards
+                dailyRates={dailyRatesQuery.data}
+                currencyCode={currencyCode}
+                onSaveCell={handleSaveCell}
+                disabled={cellSave.isPending}
+              />
+            </div>
 
             {calendarQuery.data ? (
               <div className="border-t-2 border-slate-200">

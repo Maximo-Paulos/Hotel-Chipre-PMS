@@ -445,13 +445,20 @@ export function ReservationsPage() {
     return {
       nights: quoteQuery.data.nights,
       total: quoteQuery.data.total_amount,
+      subtotal: quoteQuery.data.subtotal_amount,
+      taxAmount: quoteQuery.data.tax_amount,
+      feeAmount: quoteQuery.data.fee_amount,
+      paymentMethod: quoteQuery.data.pricing_payment_method ?? null,
       defaultDeposit: quoteQuery.data.deposit_amount,
       currencyCode: quoteQuery.data.currency_code,
       quoteToken: quoteQuery.data.quote_token,
+      promotionsApplied: quoteQuery.data.promotions_applied ?? [],
       rows: quoteQuery.data.breakdown.map((row) => ({
         date: row.date,
         amount: row.price,
-        source: row.source ?? "backend_quote"
+        basePrice: row.base_price ?? row.price,
+        source: row.source ?? "backend_quote",
+        promotionsApplied: row.promotions_applied ?? []
       }))
     };
   }, [
@@ -2201,6 +2208,36 @@ export function ReservationsPage() {
                         </div>
                       </div>
 
+                      {!quoteQuery.isError && reservationQuote && (reservationQuote.subtotal !== reservationQuote.total || reservationQuote.taxAmount > 0 || reservationQuote.feeAmount > 0) ? (
+                        <p className="mt-2 text-xs text-slate-600">
+                          Subtotal {formatMoney(reservationQuote.subtotal, reservationQuote.currencyCode)}
+                          {reservationQuote.taxAmount > 0 ? ` · Impuestos ${formatMoney(reservationQuote.taxAmount, reservationQuote.currencyCode)}` : ""}
+                          {reservationQuote.feeAmount > 0 ? ` · Cargos ${formatMoney(reservationQuote.feeAmount, reservationQuote.currencyCode)}` : ""}
+                          {reservationQuote.paymentMethod ? ` · Medio de pago: ${reservationQuote.paymentMethod}` : ""}
+                        </p>
+                      ) : null}
+
+                      {!quoteQuery.isError && reservationQuote && reservationQuote.promotionsApplied.length > 0 ? (
+                        <div className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 p-2">
+                          <p className="text-xs font-semibold text-emerald-800">Promociones aplicadas</p>
+                          <ul className="mt-1 flex flex-wrap gap-1.5">
+                            {Object.values(
+                              reservationQuote.promotionsApplied.reduce<Record<string, { code: string; total: number }>>((acc, promo) => {
+                                const key = promo.code;
+                                const entry = acc[key] ?? { code: promo.code, total: 0 };
+                                entry.total += Number(promo.amount_deducted) || 0;
+                                acc[key] = entry;
+                                return acc;
+                              }, {})
+                            ).map((entry) => (
+                              <li key={entry.code} className="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-emerald-800 shadow-sm">
+                                {entry.code}: -{formatMoney(entry.total, reservationQuote.currencyCode)}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : null}
+
                       {quoteQuery.isError ? (
                         <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800" role="alert">
                           <p>
@@ -2236,6 +2273,12 @@ export function ReservationsPage() {
                               <tr>
                                 <th className="px-3 py-2 font-semibold">Noche</th>
                                 <th className="px-3 py-2 font-semibold">Origen</th>
+                                {reservationQuote.promotionsApplied.length > 0 ? (
+                                  <>
+                                    <th className="px-3 py-2 text-right font-semibold">Base</th>
+                                    <th className="px-3 py-2 font-semibold">Promo</th>
+                                  </>
+                                ) : null}
                                 <th className="px-3 py-2 text-right font-semibold">Importe</th>
                               </tr>
                             </thead>
@@ -2244,6 +2287,18 @@ export function ReservationsPage() {
                                 <tr key={row.date} className="border-t border-blue-100">
                                   <td className="px-3 py-2 text-slate-700">{row.date}</td>
                                   <td className="px-3 py-2 text-slate-500">{row.source}</td>
+                                  {reservationQuote.promotionsApplied.length > 0 ? (
+                                    <>
+                                      <td className="px-3 py-2 text-right text-slate-500">
+                                        {formatMoney(row.basePrice, reservationQuote.currencyCode)}
+                                      </td>
+                                      <td className="px-3 py-2 text-slate-500">
+                                        {row.promotionsApplied.length
+                                          ? row.promotionsApplied.map((p) => p.code).join(", ")
+                                          : "—"}
+                                      </td>
+                                    </>
+                                  ) : null}
                                   <td className="px-3 py-2 text-right font-semibold text-slate-800">
                                     {formatMoney(row.amount, reservationQuote.currencyCode)}
                                   </td>

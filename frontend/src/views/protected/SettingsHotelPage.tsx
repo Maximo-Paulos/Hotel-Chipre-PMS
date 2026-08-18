@@ -1,5 +1,6 @@
 ﻿import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 
 import { getHotelConfig, updateHotelConfig, type HotelConfig } from "../../api/config";
 import {
@@ -379,8 +380,39 @@ export function SettingsHotelPage() {
         </form>
       )}
 
-      <PaymentSurchargesCard />
+      <TarifasPromocionesPagosSection />
     </div>
+  );
+}
+
+function TarifasPromocionesPagosSection() {
+  return (
+    <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold text-slate-900">Tarifas, promociones y pagos</h2>
+          <p className="text-sm text-slate-600">
+            El calendario de tarifas y el generador de promociones sin código viven en pantallas propias; acá se
+            configuran los recargos y descuentos por medio de pago que se aplican junto con ellas.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            to="/operacion/tarifas"
+            className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            Ir a Tarifas
+          </Link>
+          <Link
+            to="/operacion/promociones"
+            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+          >
+            Ir a Promociones
+          </Link>
+        </div>
+      </div>
+      <PaymentSurchargesCard />
+    </section>
   );
 }
 
@@ -411,7 +443,7 @@ function PaymentSurchargesCard() {
   };
 
   return (
-    <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+    <div className="space-y-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
       <div>
         <h2 className="text-lg font-semibold text-slate-900">Recargos por medio de pago</h2>
         <p className="text-sm text-slate-600">
@@ -465,7 +497,7 @@ function PaymentSurchargesCard() {
           ))
         )}
       </div>
-    </section>
+    </div>
   );
 }
 

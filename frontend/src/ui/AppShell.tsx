@@ -72,6 +72,7 @@ const groupedNav: NavSection[] = [
       { label: "Lavanderia", to: "/operacion/lavanderia", requiresAnyPermission: ["laundry:operate_remitos", "laundry:manage_vendors"] },
       { label: "Stock", to: "/operacion/stock", requiresAnyPermission: ["stock:operate"] },
       { label: "Tarifas", to: "/operacion/tarifas", requiresRole: ["owner", "co_owner", "manager"] },
+      { label: "Promociones", to: "/operacion/promociones", requiresRole: ["owner", "co_owner", "manager"], requiresAnyPermission: ["promotions:read"] },
       { label: "Onboarding", to: "/onboarding", requiresRole: ["owner", "co_owner"] },
     ],
   },

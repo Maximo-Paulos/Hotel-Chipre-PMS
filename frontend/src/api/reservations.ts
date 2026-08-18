@@ -254,6 +254,17 @@ export type ReservationPayload = {
   restriction_override?: RestrictionOverride | null;
 };
 
+// Aggregated or per-night promotion application -- see
+// app.services.promotion_service.apply_promotions_to_night.
+export type ReservationQuotePromotionApplied = {
+  promotion_id: number;
+  code: string;
+  version: number;
+  benefit_type: "fixed" | "percentage";
+  benefit_value: string;
+  amount_deducted: string;
+};
+
 export type ReservationQuote = {
   status: "ok";
   category_id: number;
@@ -271,7 +282,16 @@ export type ReservationQuote = {
   currency_code: string;
   pricing_payment_method?: string | null;
   pricing_revision: string;
-  breakdown: Array<{ date: string; price: number; source?: string }>;
+  breakdown: Array<{
+    date: string;
+    price: number;
+    base_price?: number;
+    source?: string;
+    promotions_applied?: ReservationQuotePromotionApplied[];
+  }>;
+  // Aggregated across every night in the stay (same entries also appear
+  // per-night inside `breakdown[].promotions_applied`).
+  promotions_applied?: ReservationQuotePromotionApplied[];
   quote_token: string;
   expires_at: string;
 };

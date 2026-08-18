@@ -56,6 +56,9 @@ const OccupancyPlanningPage = lazy(() =>
 const RateCalendarPage = lazy(() =>
   import("./views/protected/RateCalendarPage").then((m) => ({ default: m.RateCalendarPage }))
 );
+const PromotionsPage = lazy(() =>
+  import("./views/protected/PromotionsPage").then((m) => ({ default: m.PromotionsPage }))
+);
 const ReservationsPage = lazy(() =>
   import("./views/protected/ReservationsPage").then((m) => ({ default: m.ReservationsPage }))
 );
@@ -218,6 +221,7 @@ const appRoutes = APP_HOST
           { path: "operacion/lavanderia", element: <PermissionGate anyPermission={["laundry:operate_remitos", "laundry:manage_vendors"]}><LaundryPage /></PermissionGate> },
           { path: "operacion/stock", element: <PermissionGate anyPermission={["stock:operate"]}><StockPage /></PermissionGate> },
           { path: "operacion/tarifas", element: <PermissionGate roles={["owner", "co_owner", "manager"]}><RateCalendarPage /></PermissionGate> },
+          { path: "operacion/promociones", element: <PermissionGate roles={["owner", "co_owner", "manager"]} anyPermission={["promotions:read"]}><PromotionsPage /></PermissionGate> },
           { path: "onboarding/*", element: <PermissionGate roles={["owner", "co_owner"]}><OnboardingGate /></PermissionGate> },
           { path: "settings", element: <PermissionGate roles={["owner", "co_owner"]}><Navigate to="/settings/users" replace /></PermissionGate> },
           { path: "settings/users", element: <PermissionGate roles={["owner", "co_owner"]}><SettingsUsersPage /></PermissionGate> },
