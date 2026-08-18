@@ -109,7 +109,8 @@ export function useReservationQuote(params: ReservationQuoteParams | null) {
       params?.check_in_date ?? null,
       params?.check_out_date ?? null,
       params?.pricing_payment_method ?? null,
-      params?.occupancy ?? null
+      params?.occupancy ?? null,
+      params?.guest_id ?? null
     ],
     queryFn: () => getReservationQuote(params!, session),
     enabled: Boolean(params) && hasValidSession(session),
@@ -198,18 +199,22 @@ export function useReservationMutations(filters?: ReservationFilters) {
 
   type CheckInParams = number | ({ id: number } & CheckInPayload);
   const normalizeCheckInParams = (params: CheckInParams) =>
-    typeof params === "number" ? { id: params, guest: undefined, override_prohibido: undefined } : params;
+    typeof params === "number"
+      ? { id: params, guest: undefined, override_prohibido: undefined, restriction_override: undefined }
+      : params;
 
   const checkInMutation = useGuardedMutation({
     mutationFn: (params: CheckInParams) => {
-      const { id, guest, override_prohibido } = normalizeCheckInParams(params);
-      return checkInReservation(id, { guest, override_prohibido }, session);
+      const { id, guest, override_prohibido, restriction_override } = normalizeCheckInParams(params);
+      return checkInReservation(id, { guest, override_prohibido, restriction_override }, session);
     },
     onSuccess: (_, params) => invalidateReservationDetail(normalizeCheckInParams(params).id)
   });
 
   // B3.1: partial check-in (PRE_CHECK_IN) -- same guest-capture payload shape
-  // as the final check-in, different target status.
+  // as the final check-in, different target status. restriction_override is
+  // accepted by the shared CheckInRequest schema but never acted on here --
+  // see app/api/checkin.py (checkin_partial never catches GuestProhibitedError).
   const partialCheckInMutation = useGuardedMutation({
     mutationFn: (params: CheckInParams) => {
       const { id, guest, override_prohibido } = normalizeCheckInParams(params);

@@ -7,6 +7,8 @@ import { useGuest, useGuestCreate } from "../hooks/useGuests";
 import { useEffectivePermissions } from "../hooks/usePermissions";
 import { useSession } from "../state/session";
 
+import { GuestRestrictionBadge } from "./GuestRestrictionBadge";
+
 // Shared "buscar huésped existente (por nombre/DNI) o alta rápida" sub-form.
 // Used by both the direct "reserva rápida" create form and the "Cargar
 // reserva de OTA" form (B4) -- same fields, same create-and-assign behavior,
@@ -79,6 +81,7 @@ function GuestSummaryCard({
         {guestFullName(guest) || `Huésped #${guest.id}`}{" "}
         <span className="font-normal text-emerald-700">#{guest.id}</span>
       </p>
+      <GuestRestrictionBadge guestId={guest.id} className="mt-1" />
       <dl className="mt-1 grid gap-x-3 gap-y-0.5 text-xs text-emerald-800 sm:grid-cols-2">
         <div>
           <dt className="inline font-medium">Email: </dt>
@@ -347,6 +350,7 @@ export default function GuestQuickCreatePanel({
                       {guest.document_number || "Sin documento"}
                       {guest.email ? ` · ${guest.email}` : ""}
                     </p>
+                    <GuestRestrictionBadge guestId={guest.id} className="mt-1" />
                   </button>
                 ))}
               </div>

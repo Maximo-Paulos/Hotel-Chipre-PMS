@@ -14,9 +14,14 @@ import {
   type GuestTagType,
   type GuestUpdatePayload
 } from "../../api/guests";
+import type { RestrictionOverride } from "../../api/guestRestrictions";
+import { GuestRestrictionBadge } from "../../components/GuestRestrictionBadge";
+import { GuestRestrictionsPanel } from "../../components/GuestRestrictionsPanel";
+import { RestrictionOverrideModal } from "../../components/RestrictionOverrideModal";
 import { GUEST_PAGE_SIZE, useGuestCompanionAdd, useGuestUpdate, useGuests } from "../../hooks/useGuests";
 import { useEffectivePermissions } from "../../hooks/usePermissions";
 import { useReservationDrawer } from "../../hooks/useReservationDrawer";
+import { useRestrictionOverridePrompt } from "../../hooks/useRestrictionOverridePrompt";
 import { useSession } from "../../state/session";
 
 const DOCUMENT_TYPES = ["DNI", "PASSPORT", "CEDULA"] as const;
@@ -158,9 +163,23 @@ export function GuestsPage() {
     onSuccess: async (_, variables) => invalidateGuestOperationalData(variables.guestId)
   });
 
+  const restrictionOverridePrompt = useRestrictionOverridePrompt();
+
   const checkInMutation = useMutation({
-    mutationFn: ({ reservationId, override }: { reservationId: number; override: boolean }) =>
-      checkInGuestReservation(reservationId, { override_prohibido: override }, session),
+    mutationFn: ({
+      reservationId,
+      override,
+      restrictionOverride
+    }: {
+      reservationId: number;
+      override: boolean;
+      restrictionOverride?: RestrictionOverride | null;
+    }) =>
+      checkInGuestReservation(
+        reservationId,
+        { override_prohibido: override, restriction_override: restrictionOverride ?? undefined },
+        session
+      ),
     onSuccess: async (_, variables) => {
       if (selectedGuest?.id) {
         await invalidateGuestOperationalData(selectedGuest.id);
@@ -289,13 +308,27 @@ export function GuestsPage() {
     }
   };
 
-  const handleCheckIn = async (reservationId: number, override: boolean) => {
+  const handleCheckIn = async (
+    reservationId: number,
+    override: boolean,
+    restrictionOverride?: RestrictionOverride
+  ) => {
     if (!canCheckIn || (override && !canOverrideProhibido)) return;
     setCheckInMessage(null);
     try {
-      await checkInMutation.mutateAsync({ reservationId, override });
+      await checkInMutation.mutateAsync({ reservationId, override, restrictionOverride });
       setCheckInMessage(override ? "Check-in realizado con override autorizado." : "Check-in realizado.");
     } catch (error) {
+      // The guest has an active GuestRestriction (separate from the legacy
+      // "prohibido_alojar" tag above) -- prompt for an override reason and
+      // retry instead of surfacing a raw 409/403.
+      if (
+        restrictionOverridePrompt.handleError(error, (nextOverride) =>
+          void handleCheckIn(reservationId, override, nextOverride)
+        )
+      ) {
+        return;
+      }
       setCheckInMessage(error instanceof Error ? error.message : "No se pudo realizar el check-in.");
     }
   };
@@ -345,11 +378,12 @@ export function GuestsPage() {
                       className={`w-full px-4 py-3 text-left hover:bg-slate-50 ${isActive ? "bg-brand-50" : "bg-white"}`}
                     >
                       <div className="flex items-start justify-between gap-3">
-                        <div>
+                        <div className="min-w-0">
                           <p className="font-semibold text-slate-900">{fullName || `Huésped #${guest.id}`}</p>
                           <p className="text-xs text-slate-500">
                             {guest.document_number || guest.email || guest.phone || "Sin documento ni contacto"}
                           </p>
+                          <GuestRestrictionBadge guestId={guest.id} className="mt-1" />
                         </div>
                         <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-600">
                           #{guest.id}
@@ -403,6 +437,7 @@ export function GuestsPage() {
                       Actualizado{" "}
                       {selectedGuest.updated_at ? new Date(selectedGuest.updated_at).toLocaleString("es-AR") : "sin fecha"}
                     </p>
+                    <GuestRestrictionBadge guestId={selectedGuest.id} className="mt-2" />
                   </div>
                   <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">
                     ID {selectedGuest.id}
@@ -623,6 +658,8 @@ export function GuestsPage() {
                 </form> : null}
               </section>
 
+              <GuestRestrictionsPanel guestId={selectedGuest.id} />
+
               <section className="space-y-4 border-t border-slate-200 pt-4">
                 <div>
                   <p className="text-xs uppercase tracking-wide text-slate-500">Check-in</p>
@@ -825,6 +862,15 @@ export function GuestsPage() {
           )}
         </section>
       </div>
+
+      {restrictionOverridePrompt.phase !== "idle" ? (
+        <RestrictionOverrideModal
+          phase={restrictionOverridePrompt.phase}
+          onSubmit={restrictionOverridePrompt.submit}
+          onCancel={restrictionOverridePrompt.dismiss}
+          isPending={checkInMutation.isPending}
+        />
+      ) : null}
     </div>
   );
 }

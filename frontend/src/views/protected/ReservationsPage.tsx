@@ -9,11 +9,13 @@ import {
   type Reservation,
   type ReservationChargePayload,
   type ReservationNoShowPayload,
+  type ReservationPayload,
   type ReservationPendingAction,
   type ReservationRoomMovePayload,
   type ReservationRoomMoveResponse,
   type ReservationSource,
-  type ReservationStatus
+  type ReservationStatus,
+  type ReservationUpdatePayload
 } from "../../api/reservations";
 import {
   listRoomMovementGroups,
@@ -23,12 +25,15 @@ import {
   type RoomMovementGroup
 } from "../../api/allocationRuns";
 import { ApiError, hasValidSession } from "../../api/client";
+import { getGuestProhibitedDetail, type RestrictionOverride } from "../../api/guestRestrictions";
 import GuestQuickCreatePanel, {
   emptyQuickGuestForm,
   hasQuickGuestFormData,
   type QuickGuestFormValues
 } from "../../components/GuestQuickCreatePanel";
 import ManualOtaReservationModal from "../../components/ManualOtaReservationModal";
+import { RestrictionOverrideModal } from "../../components/RestrictionOverrideModal";
+import { useRestrictionOverridePrompt } from "../../hooks/useRestrictionOverridePrompt";
 import { checkRoomAvailability, type RoomAvailabilityResponse } from "../../api/rooms";
 import { type PaymentMethod } from "../../api/payments";
 import { useCategories } from "../../hooks/useCategories";
@@ -273,6 +278,7 @@ export function ReservationsPage() {
     mutationFn: (payload) => checkRoomAvailability(payload, session)
   });
   const { createMutation, updateMutation, cancelMutation, checkInMutation, checkOutMutation } = useReservationMutations(filters);
+  const restrictionOverridePrompt = useRestrictionOverridePrompt();
   const { resolveExternalMutation, clearManualReviewMutation } = useReservationActionMutations(filters);
   const movementGroupsQuery = useQuery<RoomMovementGroup[]>({
     queryKey: ["room-movement-groups", session.hotelId, 6],
@@ -416,6 +422,7 @@ export function ReservationsPage() {
   const quoteNights = diffNights(formValues.check_in_date, formValues.check_out_date);
   const quoteCategoryId =
     !editing && selectedFormCategory && quoteNights > 0 ? Number(selectedFormCategory.id) : null;
+  const quoteGuestId = Number(formValues.guest_id);
   const quoteQuery = useReservationQuote(
     quoteCategoryId && formValues.check_in_date && formValues.check_out_date
       ? {
@@ -423,7 +430,11 @@ export function ReservationsPage() {
           check_in_date: formValues.check_in_date,
           check_out_date: formValues.check_out_date,
           pricing_payment_method: pricingPaymentMethod === "base" ? null : pricingPaymentMethod,
-          occupancy: (Number(formValues.num_adults) || 1) + (Number(formValues.num_children) || 0)
+          occupancy: (Number(formValues.num_adults) || 1) + (Number(formValues.num_children) || 0),
+          // Lets an operator find out a guest is restricted before filling
+          // out the whole form -- the endpoint itself has no override, the
+          // real override happens at reservation creation (see submitCreate).
+          guest_id: Number.isFinite(quoteGuestId) && quoteGuestId > 0 ? quoteGuestId : null
         }
       : null
   );
@@ -672,20 +683,33 @@ export function ReservationsPage() {
       // cambian con Check-in/Check-out/Cancelar/Marcar no-show.
       const { category_id, ...updatePayload } = commonPayload;
       void category_id;
-      updateMutation.mutate(
-        { id: editing.id, payload: updatePayload },
-        {
-          onSuccess: () => {
-            showToast("success", "Reserva actualizada");
-            closeForm();
-          },
-          onError: (err: unknown) => {
-            const msg = err instanceof Error ? err.message : "No se pudo guardar la reserva";
-            setFormError(msg);
-            showToast("error", msg);
+      const submitUpdate = (payload: ReservationUpdatePayload) => {
+        updateMutation.mutate(
+          { id: editing.id, payload },
+          {
+            onSuccess: () => {
+              showToast("success", "Reserva actualizada");
+              closeForm();
+            },
+            onError: (err: unknown) => {
+              // GuestRestriction blocked the update -- prompt for an
+              // override reason and retry the same request with it attached
+              // instead of surfacing a raw 409/403.
+              if (
+                restrictionOverridePrompt.handleError(err, (override) =>
+                  submitUpdate({ ...payload, restriction_override: override })
+                )
+              ) {
+                return;
+              }
+              const msg = err instanceof Error ? err.message : "No se pudo guardar la reserva";
+              setFormError(msg);
+              showToast("error", msg);
+            }
           }
-        }
-      );
+        );
+      };
+      submitUpdate(updatePayload);
     } else {
       // B4: con tarifa manual, la cotización automática (y su quote_token) no
       // aplica -- el backend usaría el total manual igual, pero no tiene
@@ -695,7 +719,7 @@ export function ReservationsPage() {
         setFormError("Esperá a que se actualice la cotización vigente antes de crear la reserva.");
         return;
       }
-      const createPayload = {
+      const createPayload: ReservationPayload = {
         ...commonPayload,
         guest_id: guestIdNum,
         source: formValues.source,
@@ -705,25 +729,35 @@ export function ReservationsPage() {
           ? { total_amount: manualTotalAmount, target_currency: manualTargetCurrency }
           : { quote_token: reservationQuote?.quoteToken })
       };
-      createMutation.mutate(createPayload, {
-        onSuccess: (created) => {
-          showToast("success", "Reserva creada");
-          if (manualTotalAmount !== null) {
-            // Keep the form open just long enough to show the operator what
-            // currency/cotización the manual total was saved with -- closing
-            // immediately would hide fx_rate_snapshot right after they asked
-            // for a currency conversion.
-            setLastCreatedReservation(created);
-          } else {
-            closeForm();
+      const submitCreate = (payload: ReservationPayload) => {
+        createMutation.mutate(payload, {
+          onSuccess: (created) => {
+            showToast("success", "Reserva creada");
+            if (manualTotalAmount !== null) {
+              // Keep the form open just long enough to show the operator what
+              // currency/cotización the manual total was saved with -- closing
+              // immediately would hide fx_rate_snapshot right after they asked
+              // for a currency conversion.
+              setLastCreatedReservation(created);
+            } else {
+              closeForm();
+            }
+          },
+          onError: (err: unknown) => {
+            if (
+              restrictionOverridePrompt.handleError(err, (override) =>
+                submitCreate({ ...payload, restriction_override: override })
+              )
+            ) {
+              return;
+            }
+            const msg = err instanceof Error ? err.message : "No se pudo crear la reserva";
+            setFormError(msg);
+            showToast("error", msg);
           }
-        },
-        onError: (err: unknown) => {
-          const msg = err instanceof Error ? err.message : "No se pudo crear la reserva";
-          setFormError(msg);
-          showToast("error", msg);
-        }
-      });
+        });
+      };
+      submitCreate(createPayload);
     }
   };
 
@@ -753,22 +787,29 @@ export function ReservationsPage() {
       );
       return;
     }
-    checkInMutation.mutate(reservation.id, {
-      onSuccess: () => showToast("success", "Check-in registrado"),
-      onError: (err: unknown) => {
-        const msg = err instanceof Error ? err.message : "No se pudo hacer check-in";
-        // B3.3/B3.4: this quick action has no room to show the guest-data
-        // capture form inline -- send the receptionist to the reservation
-        // panel, which shows that form up front, instead of leaving them
-        // stuck on a bare 400 with no way to fix it from here.
-        if (msg.includes("missing required guest data")) {
-          openReservation(reservation.id);
-          showToast("info", "Faltan datos del huésped para el check-in: completalos en el panel de la reserva.");
-          return;
+    const submitCheckIn = (restrictionOverride?: RestrictionOverride) => {
+      checkInMutation.mutate(
+        restrictionOverride ? { id: reservation.id, restriction_override: restrictionOverride } : reservation.id,
+        {
+          onSuccess: () => showToast("success", "Check-in registrado"),
+          onError: (err: unknown) => {
+            if (restrictionOverridePrompt.handleError(err, submitCheckIn)) return;
+            const msg = err instanceof Error ? err.message : "No se pudo hacer check-in";
+            // B3.3/B3.4: this quick action has no room to show the guest-data
+            // capture form inline -- send the receptionist to the reservation
+            // panel, which shows that form up front, instead of leaving them
+            // stuck on a bare 400 with no way to fix it from here.
+            if (msg.includes("missing required guest data")) {
+              openReservation(reservation.id);
+              showToast("info", "Faltan datos del huésped para el check-in: completalos en el panel de la reserva.");
+              return;
+            }
+            showToast("error", msg);
+          }
         }
-        showToast("error", msg);
-      }
-    });
+      );
+    };
+    submitCheckIn();
   };
 
   const handleCheckOut = (reservation: Reservation) => {
@@ -2168,7 +2209,14 @@ export function ReservationsPage() {
                                 Detect it from the backend's own message instead (pricing_policy_service
                                 raises "No active/matching price..." / "Rate plan not found..." for
                                 every "nothing configured" scenario). */}
-                            {quoteQuery.error instanceof ApiError && /price|rate plan/i.test(quoteQuery.error.message)
+                            {getGuestProhibitedDetail(quoteQuery.error)
+                              ? // The quote endpoint never accepts an override (it's a preview, not
+                                // the actual booking) -- the auto-priced path is blocked without a
+                                // quote_token, so the only way through is a manual total, which
+                                // skips the quote_token requirement and lets "Crear reserva" surface
+                                // its own override prompt.
+                                "Este huésped tiene una restricción de alojamiento activa: no se puede cotizar automáticamente. Para crear la reserva igual, cargá una tarifa manual arriba; se te va a pedir el motivo del override al confirmar."
+                              : quoteQuery.error instanceof ApiError && /price|rate plan/i.test(quoteQuery.error.message)
                               ? "No hay una tarifa disponible para la categoría y las fechas elegidas. Cargá una tarifa manual arriba o configurala en Tarifas."
                               : "No se pudo calcular la cotización. Revisá las fechas y las tarifas antes de confirmar."}
                           </p>
@@ -2670,6 +2718,15 @@ export function ReservationsPage() {
       )}
 
       <ManualOtaReservationModal open={otaFormOpen} onClose={() => setOtaFormOpen(false)} />
+
+      {restrictionOverridePrompt.phase !== "idle" ? (
+        <RestrictionOverrideModal
+          phase={restrictionOverridePrompt.phase}
+          onSubmit={restrictionOverridePrompt.submit}
+          onCancel={restrictionOverridePrompt.dismiss}
+          isPending={createMutation.isPending || updateMutation.isPending || checkInMutation.isPending}
+        />
+      ) : null}
 
       {detailsReservation && (
         <div className="fixed inset-0 z-30 flex animate-fade-in items-center justify-center bg-slate-900/30 px-4 py-6">

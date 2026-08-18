@@ -1,5 +1,6 @@
 import { apiFetch, type SessionLike } from "./client";
 import type { GuestUpdatePayload } from "./guests";
+import type { RestrictionOverride } from "./guestRestrictions";
 
 export type ReservationStatus =
   | "pending"
@@ -246,6 +247,11 @@ export type ReservationPayload = {
   // stays null otherwise -- show it only when present).
   total_amount?: number | null;
   target_currency?: string | null;
+  // Authorizes bypassing an active guest restriction after the operator
+  // confirms an override reason -- see RestrictionOverrideModal. Only
+  // actors with reservation:prohibition_override can use it; others get a
+  // 403 (see app/api/reservations.py).
+  restriction_override?: RestrictionOverride | null;
 };
 
 export type ReservationQuote = {
@@ -276,6 +282,10 @@ export type ReservationQuoteParams = {
   check_out_date: string;
   pricing_payment_method?: string | null;
   occupancy?: number;
+  // When set, the backend 409s with GUEST_PROHIBITED if the guest has an
+  // active restriction (see app/api/bookings.py price_quote) -- the quote
+  // endpoint never accepts an override, this is a preview-time warning only.
+  guest_id?: number | null;
 };
 
 export type ReservationUpdatePayload = Partial<ReservationPayload> & {
@@ -379,6 +389,7 @@ export const getReservationQuote = (params: ReservationQuoteParams, session?: Se
   });
   if (params.pricing_payment_method) query.set("pricing_payment_method", params.pricing_payment_method);
   if (params.occupancy && params.occupancy > 0) query.set("occupancy", String(params.occupancy));
+  if (params.guest_id) query.set("guest_id", String(params.guest_id));
   return apiFetch<ReservationQuote>(`/api/bookings/price-quote?${query.toString()}`, { session });
 };
 
@@ -407,6 +418,10 @@ export const addReservationCharge = (id: number, payload: ReservationChargePaylo
 export type CheckInPayload = {
   override_prohibido?: boolean;
   guest?: GuestUpdatePayload;
+  // Only honored by the final check-in endpoint below, not partial
+  // check-in -- see app/api/checkin.py (checkin_partial never catches
+  // GuestProhibitedError).
+  restriction_override?: RestrictionOverride | null;
 };
 
 export const checkInReservation = (id: number, payload: CheckInPayload = {}, session?: SessionLike) =>
