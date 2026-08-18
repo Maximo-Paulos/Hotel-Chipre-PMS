@@ -116,6 +116,16 @@ from app.models.room_block import RoomBlock, RoomBlockReasonEnum
 from app.models.fx_rate_snapshot import FxRateSnapshot
 from app.models.company_document import CompanyDocument, CompanyDocumentTypeEnum, CompanyDocumentStatusEnum
 from app.models.promotion import Promotion, PromotionBenefitTypeEnum, PromotionScopeEnum
+from app.models.notification import (
+    Notification,
+    PushSubscription,
+    NotificationPreference,
+    NotificationOutbox,
+    DailyReportSchedule,
+    NotificationSeverityEnum,
+    NotificationChannelEnum,
+    NotificationOutboxStatusEnum,
+)
 # master_admin models live outside app/models but share Base — import them so
 # Base.metadata is complete (create_all/drop_all in tests must see every table)
 import app.master_admin.models  # noqa: F401
@@ -278,4 +288,12 @@ __all__ = [
     "Promotion",
     "PromotionBenefitTypeEnum",
     "PromotionScopeEnum",
+    "Notification",
+    "PushSubscription",
+    "NotificationPreference",
+    "NotificationOutbox",
+    "DailyReportSchedule",
+    "NotificationSeverityEnum",
+    "NotificationChannelEnum",
+    "NotificationOutboxStatusEnum",
 ]

@@ -166,6 +166,14 @@ class Settings(BaseSettings):
     CONNECTIONS_ENABLED: bool = True
     INTEGRATIONS_ENCRYPTION_KEY: str = "ZGVmYXVsdC1pbnRlZ3JhdGlvbnMta2V5LXNlY3JldA=="  # base64 fernet
 
+    # Notification backend (Task 8). Off by default: a hotel that never
+    # configures these must never silently start sending real push/email.
+    NOTIFICATION_EMAIL_ENABLED: bool = False
+    WEB_PUSH_ENABLED: bool = False
+    WEB_PUSH_VAPID_PUBLIC_KEY: str = ""
+    WEB_PUSH_VAPID_PRIVATE_KEY: str = ""
+    WEB_PUSH_VAPID_SUBJECT: str = ""  # mailto: or https: contact per the Web Push spec
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 
@@ -342,6 +350,7 @@ def _validate_preview_qa_security(runtime_settings: Settings) -> None:
         "PAYPAL_CLIENT_SECRET": runtime_settings.PAYPAL_CLIENT_SECRET,
         "PAYPAL_WEBHOOK_ID": runtime_settings.PAYPAL_WEBHOOK_ID,
         "RESEND_API_KEY": runtime_settings.RESEND_API_KEY,
+        "WEB_PUSH_VAPID_PRIVATE_KEY": runtime_settings.WEB_PUSH_VAPID_PRIVATE_KEY,
     }
     configured = sorted(name for name, value in forbidden_values.items() if _has_value(value))
     if configured:

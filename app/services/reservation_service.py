@@ -129,6 +129,41 @@ def _touch_facts(db: Session, hotel_id: int | None, date_from: date | None, date
     touch_reservation_fact_window(db, hotel_id=hotel_id, date_from=date_from, date_to=date_to)
 
 
+def _notify_reservation_event(
+    db: Session,
+    *,
+    hotel_id: int | None,
+    reservation: "Reservation",
+    event_type: str,
+    title: str,
+    dedupe_suffix: str,
+) -> None:
+    """Durable, per-recipient notification for a reservation lifecycle
+    change. Best-effort: a notification failure must never roll back or
+    block the reservation write it describes."""
+    if hotel_id is None:
+        return
+    try:
+        from app.models.notification import NotificationSeverityEnum
+        from app.services.notification_service import enqueue_notifications_for_event
+        from app.services.permission_service import ROLE_CODES
+
+        enqueue_notifications_for_event(
+            db,
+            hotel_id=hotel_id,
+            event_type=event_type,
+            dedupe_key=f"{event_type}:{reservation.id}:{dedupe_suffix}",
+            title=title,
+            severity=NotificationSeverityEnum.INFO,
+            entity_type="reservation",
+            entity_id=reservation.id,
+            payload={"reservation_id": reservation.id, "status": reservation.status.value if reservation.status else None},
+            recipient_roles=list(ROLE_CODES),
+        )
+    except Exception:
+        logger.exception("reservation.notify_failed", extra={"hotel_id": hotel_id, "reservation_id": reservation.id})
+
+
 def _resolve_hotel_id(
     hotel_id: Optional[int],
     category: Optional[RoomCategory] = None,
@@ -1060,6 +1095,10 @@ def create_reservation(
         )
     _invalidate_availability_cache(hotel_id)
     _touch_facts(db, hotel_id, reservation.check_in_date, reservation.check_out_date)
+    _notify_reservation_event(
+        db, hotel_id=hotel_id, reservation=reservation, event_type="reservation.created",
+        title=f"New reservation {reservation.confirmation_code}", dedupe_suffix="created",
+    )
     return reservation
 
 
@@ -1151,6 +1190,11 @@ def transition_reservation_status(
     db.flush()
     _invalidate_availability_cache(reservation.hotel_id)
     _touch_facts(db, reservation.hotel_id, reservation.check_in_date, reservation.check_out_date)
+    if new_status == ReservationStatusEnum.CANCELLED:
+        _notify_reservation_event(
+            db, hotel_id=reservation.hotel_id, reservation=reservation, event_type="reservation.cancelled",
+            title=f"Reservation {reservation.confirmation_code} cancelled", dedupe_suffix=f"cancelled:{reservation.version}",
+        )
     return reservation
 
 
@@ -1469,6 +1513,10 @@ def update_reservation_fields(
         min(original_check_in, reservation.check_in_date),
         max(original_check_out, reservation.check_out_date),
     )
+    _notify_reservation_event(
+        db, hotel_id=hotel_id, reservation=reservation, event_type="reservation.updated",
+        title=f"Reservation {reservation.confirmation_code} updated", dedupe_suffix=f"updated:{reservation.version}",
+    )
     return reservation
 
 
@@ -1525,6 +1573,10 @@ def mark_reservation_no_show(
     db.flush()
     _invalidate_availability_cache(hotel_id)
     _touch_facts(db, hotel_id, reservation.check_in_date, reservation.check_out_date)
+    _notify_reservation_event(
+        db, hotel_id=hotel_id, reservation=reservation, event_type="reservation.no_show",
+        title=f"Reservation {reservation.confirmation_code} marked no-show", dedupe_suffix=f"no_show:{reservation.version}",
+    )
     return reservation
 
 

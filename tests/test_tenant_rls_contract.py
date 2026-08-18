@@ -197,6 +197,11 @@ def test_rls_migration_covers_every_hotel_scoped_model_table():
         "user_permission_overrides",
         "guest_restrictions",
         "promotions",
+        "notifications",
+        "push_subscriptions",
+        "notification_preferences",
+        "notification_outbox",
+        "daily_report_schedules",
     }
     assert set(migration.TENANT_TABLES) == expected
     assert "hotel_memberships" not in migration.TENANT_TABLES

@@ -3,6 +3,7 @@ Hotel-scoped stock and inventory movement service.
 """
 from __future__ import annotations
 
+import logging
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 
@@ -13,6 +14,9 @@ from sqlalchemy.orm import Session
 from app.models.audit_log import AuditActionEnum
 from app.models.stock import StockItem, StockLocation, StockMovement
 from app.services import audit_log_service
+
+
+logger = logging.getLogger(__name__)
 
 
 class StockError(ValueError):
@@ -152,6 +156,39 @@ def delete_location(
     )
 
 
+def _notify_if_low_stock(db: Session, *, hotel_id: int, item: StockItem) -> None:
+    """Best-effort threshold check after a movement: fires at most once per
+    hotel-local calendar day per item (dedupe_key), so a busy day of outbound
+    movements while already below the threshold doesn't spam the outbox."""
+    if item.min_quantity is None:
+        return
+    try:
+        balance = current_stock(db, hotel_id=hotel_id, item_id=item.id)
+        if balance >= item.min_quantity:
+            return
+        from app.models.notification import NotificationSeverityEnum
+        from app.services.notification_service import enqueue_notifications_for_event
+        from app.services.permission_service import ROLE_CODES
+
+        severity = NotificationSeverityEnum.CRITICAL if balance <= 0 else NotificationSeverityEnum.WARNING
+        event_type = "stock.out_of_stock" if balance <= 0 else "stock.low"
+        today = datetime.now(timezone.utc).date().isoformat()
+        enqueue_notifications_for_event(
+            db,
+            hotel_id=hotel_id,
+            event_type=event_type,
+            dedupe_key=f"{event_type}:{item.id}:{today}",
+            title=f"Low stock: {item.name}" if balance > 0 else f"Out of stock: {item.name}",
+            severity=severity,
+            entity_type="stock_item",
+            entity_id=item.id,
+            payload={"item_id": item.id, "status": "low" if balance > 0 else "out"},
+            recipient_roles=list(ROLE_CODES),
+        )
+    except Exception:
+        logger.exception("stock.low_stock_notify_failed", extra={"hotel_id": hotel_id, "item_id": item.id})
+
+
 def register_movement(
     db: Session,
     *,
@@ -225,6 +262,8 @@ def register_movement(
             .one()
         )
         return existing
+    if movement_type in _OUTBOUND_MOVEMENT_TYPES:
+        _notify_if_low_stock(db, hotel_id=hotel_id, item=item)
     return movement
 
 

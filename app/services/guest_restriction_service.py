@@ -21,11 +21,16 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.models.guest_restriction import GuestRestriction, GuestRestrictionStatusEnum
+from app.models.notification import NotificationSeverityEnum
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.security_audit_log import SecurityAuditLog
 from app.schemas.guest_restriction import GuestRestrictionOverrideRequest
 from app.services.domain_events import RealtimeEventsUnavailable, publish_domain_event
-from app.services.permission_service import PERMISSION_RESERVATION_PROHIBITION_OVERRIDE, resolve as resolve_permission
+from app.services.permission_service import (
+    PERMISSION_RESERVATION_PROHIBITION_OVERRIDE,
+    ROLE_CODES,
+    resolve as resolve_permission,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -98,14 +103,16 @@ def _flag_future_active_reservations(db: Session, *, hotel_id: int, guest_id: in
         reservation.requires_manual_review = True
 
 
-def _publish_restriction_created(*, hotel_id: int, guest_id: int, restriction: GuestRestriction, actor_user_id: Optional[int]) -> None:
+def _publish_restriction_event(
+    *, hotel_id: int, guest_id: int, restriction: GuestRestriction, actor_user_id: Optional[int], event_type: str,
+) -> None:
     """Best-effort realtime signal. `reason`/`detail` are deliberately
     excluded from the payload -- only identifiers and status travel here."""
     try:
         publish_domain_event(
             hotel_id=hotel_id,
             domain="guests",
-            event_type="guest.restriction.created",
+            event_type=event_type,
             payload={
                 "guest_id": guest_id,
                 "restriction_id": restriction.id,
@@ -117,6 +124,44 @@ def _publish_restriction_created(*, hotel_id: int, guest_id: int, restriction: G
         logger.warning("guest_restriction.realtime_unavailable", extra={"hotel_id": hotel_id})
     except Exception:
         logger.exception("guest_restriction.publish_failed", extra={"hotel_id": hotel_id})
+
+
+def _publish_restriction_created(*, hotel_id: int, guest_id: int, restriction: GuestRestriction, actor_user_id: Optional[int]) -> None:
+    _publish_restriction_event(
+        hotel_id=hotel_id, guest_id=guest_id, restriction=restriction, actor_user_id=actor_user_id,
+        event_type="guest.restriction.created",
+    )
+
+
+def _notify_restriction_event(
+    db: Session,
+    *,
+    hotel_id: int,
+    guest_id: int,
+    restriction: GuestRestriction,
+    event_type: str,
+    title: str,
+) -> None:
+    """Durable, per-recipient notification counterpart to the realtime-only
+    `publish_domain_event` above. Never carries `reason`/`detail`; the
+    notification only signals that something changed and where to look."""
+    try:
+        from app.services.notification_service import enqueue_notifications_for_event
+
+        enqueue_notifications_for_event(
+            db,
+            hotel_id=hotel_id,
+            event_type=event_type,
+            dedupe_key=f"{event_type}:{restriction.id}",
+            title=title,
+            severity=NotificationSeverityEnum.WARNING,
+            entity_type="guest_restriction",
+            entity_id=restriction.id,
+            payload={"guest_id": guest_id, "restriction_id": restriction.id, "status": restriction.status.value},
+            recipient_roles=list(ROLE_CODES),
+        )
+    except Exception:
+        logger.exception("guest_restriction.notify_failed", extra={"hotel_id": hotel_id})
 
 
 def create_guest_restriction(
@@ -149,6 +194,10 @@ def create_guest_restriction(
     _publish_restriction_created(
         hotel_id=hotel_id, guest_id=guest_id, restriction=restriction, actor_user_id=created_by_user_id
     )
+    _notify_restriction_event(
+        db, hotel_id=hotel_id, guest_id=guest_id, restriction=restriction,
+        event_type="guest.restriction.created", title="New guest lodging restriction created",
+    )
     return restriction
 
 
@@ -180,6 +229,14 @@ def resolve_guest_restriction(
     restriction.resolved_at = _now()
     restriction.resolution_note = resolution_note
     db.flush()
+    _publish_restriction_event(
+        hotel_id=hotel_id, guest_id=guest_id, restriction=restriction, actor_user_id=resolved_by_user_id,
+        event_type="guest.restriction.resolved",
+    )
+    _notify_restriction_event(
+        db, hotel_id=hotel_id, guest_id=guest_id, restriction=restriction,
+        event_type="guest.restriction.resolved", title="Guest lodging restriction resolved",
+    )
     return restriction
 
 
@@ -222,6 +279,14 @@ def record_restriction_override(
         )
     )
     db.flush()
+    _publish_restriction_event(
+        hotel_id=hotel_id, guest_id=restriction.guest_id, restriction=restriction, actor_user_id=actor_user_id,
+        event_type="guest.restriction.overridden",
+    )
+    _notify_restriction_event(
+        db, hotel_id=hotel_id, guest_id=restriction.guest_id, restriction=restriction,
+        event_type="guest.restriction.overridden", title="Guest lodging restriction overridden",
+    )
 
 
 def validate_no_active_restriction(

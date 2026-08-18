@@ -78,6 +78,7 @@ from app.api import (
     health,
     events,
     settings_security,
+    notifications,
 )
 import app.master_admin.models  # noqa: F401
 from app.master_admin.router import router as master_admin_router
@@ -268,6 +269,7 @@ app.include_router(master_admin_router)
 app.include_router(health.router)
 app.include_router(events.router)
 app.include_router(settings_security.router)
+app.include_router(notifications.router)
 
 # Frontend build paths
 BASE_DIR = Path(__file__).resolve().parent
