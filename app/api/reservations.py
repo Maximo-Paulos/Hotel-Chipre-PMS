@@ -53,6 +53,7 @@ from app.services.reservation_service import (
     update_reservation_fields,
     register_company_settlement,
 )
+from app.services.guest_restriction_service import GuestProhibitedError, RestrictionOverridePermissionError
 from app.services.reservation_operations_service import (
     ReservationOperationsError,
     change_reservation_dates,
@@ -239,7 +240,10 @@ def create_new_reservation(
             detail="Suscripción inactiva. Reactivá el plan para crear nuevas reservas.",
         )
     try:
-        reservation = create_reservation(db, data, hotel_id=context.hotel_id)
+        reservation = create_reservation(
+            db, data, hotel_id=context.hotel_id,
+            actor_user_id=context.user_id, actor_role=context.user_role,
+        )
         db.commit()
         db.refresh(reservation)
         audit_log_service.safe_create_audit_log(
@@ -256,6 +260,15 @@ def create_new_reservation(
         return _to_read(reservation)
     except ReservationError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except GuestProhibitedError as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail={"code": e.code, "message": str(e), "restriction_id": e.restriction_id},
+        )
+    except RestrictionOverridePermissionError:
+        db.rollback()
+        raise HTTPException(status_code=403, detail="No tenes permisos para esta accion")
 
 
 @router.post("/manual-ota", response_model=ReservationRead, status_code=status.HTTP_201_CREATED)
@@ -839,6 +852,7 @@ def modify_reservation(
             data,
             context.hotel_id,
             changed_by_user_id=context.user_id,
+            actor_role=context.user_role,
             room_move_reason_code="manual_update",
             room_move_notes="Cambio manual desde API de reservas",
             client_version=data.client_version,
@@ -864,6 +878,15 @@ def modify_reservation(
         return _to_read(r)
     except ReservationError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except GuestProhibitedError as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail={"code": e.code, "message": str(e), "restriction_id": e.restriction_id},
+        )
+    except RestrictionOverridePermissionError:
+        db.rollback()
+        raise HTTPException(status_code=403, detail="No tenes permisos para esta accion")
 
 @router.post("/{reservation_id}/extend", response_model=ReservationExtensionResponse)
 def extend_stay(

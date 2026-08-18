@@ -1,5 +1,6 @@
 from app.models.room import Room, RoomCategory
 from app.models.guest import Guest, GuestCompanion, GuestTag, GuestRatingEnum, GuestTagTypeEnum
+from app.models.guest_restriction import GuestRestriction, GuestRestrictionStatusEnum
 from app.models.reservation import (
     Reservation,
     ReservationStatusEnum,
@@ -138,6 +139,7 @@ from app.models.analytics import (
 __all__ = [
     "Room", "RoomCategory",
     "Guest", "GuestCompanion", "GuestTag", "GuestRatingEnum", "GuestTagTypeEnum",
+    "GuestRestriction", "GuestRestrictionStatusEnum",
     "Reservation", "ReservationStatusEnum", "ReservationOutcomeEnum",
     "ReservationGuestSegmentEnum", "ReservationGuestSegmentSourceEnum",
     "ReservationChannelCodeEnum", "ReservationCancellationReasonCodeEnum",

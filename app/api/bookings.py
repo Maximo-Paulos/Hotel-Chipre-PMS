@@ -26,6 +26,7 @@ from app.services.reservation_service import (
 )
 from app.services.reservation_quote_service import build_reservation_quote
 from app.services.checkin_service import perform_checkin, perform_checkout, CheckInError
+from app.services.guest_restriction_service import GuestProhibitedError, get_active_guest_restrictions
 from app.services.graph_projection import project_company_link, project_reservation_assignment
 from app.services import audit_log_service
 
@@ -107,6 +108,7 @@ def price_quote(
     category_id: int,
     check_in_date: date,
     check_out_date: date,
+    guest_id: int | None = None,
     sellable_product_id: int | None = None,
     rate_plan_id: int | None = None,
     tax_policy_id: int | None = None,
@@ -122,6 +124,14 @@ def price_quote(
     Calculate pricing for a potential booking without persisting it.
     Uses CategoryPricing (cash) when present, otherwise the base category price.
     """
+    if guest_id is not None:
+        active = get_active_guest_restrictions(db, hotel_id=context.hotel_id, guest_id=guest_id)
+        if active:
+            error = GuestProhibitedError(active[0].id)
+            raise HTTPException(
+                status_code=409,
+                detail={"code": error.code, "message": str(error), "restriction_id": error.restriction_id},
+            )
     try:
         return build_reservation_quote(
             db,

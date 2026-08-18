@@ -25,6 +25,8 @@ from app.models.room import Room, RoomStatusEnum
 from app.services.guest_profile import get_guest_profile, validate_primary_guest_record
 from app.models.security_audit_log import SecurityAuditLog
 from app.services.financial_ledger import paid_amount_with_legacy_fallback
+from app.schemas.guest_restriction import GuestRestrictionOverrideRequest
+from app.services.guest_restriction_service import record_restriction_override, validate_no_active_restriction
 
 
 class CheckInError(Exception):
@@ -161,6 +163,9 @@ def perform_checkin(
     override_prohibido: bool = False,
     override_user_id: int | None = None,
     guest_patch: dict | None = None,
+    restriction_override: GuestRestrictionOverrideRequest | None = None,
+    actor_user_id: int | None = None,
+    actor_role: str | None = None,
 ) -> Reservation:
     """
     Full check-in process:
@@ -170,7 +175,11 @@ def perform_checkin(
     4. Transition to checked_in
     5. Record actual check-in timestamp
 
-    Raises CheckInError with descriptive messages on failure.
+    Raises CheckInError with descriptive messages on failure. Raises
+    GuestProhibitedError / RestrictionOverridePermissionError (from
+    app.services.guest_restriction_service) when the formal GuestRestriction
+    gate blocks the check-in -- distinct from the legacy prohibido_alojar
+    tag gate in `_guard_prohibido`.
     """
     reservation, hotel_id = _load_reservation(db, reservation_id, hotel_id)
     ledger_paid = paid_amount_with_legacy_fallback(db, hotel_id, reservation)
@@ -188,6 +197,25 @@ def perform_checkin(
     guest = db.query(Guest).filter(Guest.id == reservation.guest_id, Guest.hotel_id == hotel_id).first()
     if not guest:
         raise CheckInError("Guest record not found for this reservation")
+
+    overridden_restriction = validate_no_active_restriction(
+        db,
+        hotel_id=hotel_id,
+        guest_id=guest.id,
+        restriction_override=restriction_override,
+        actor_user_id=actor_user_id,
+        actor_role=actor_role,
+    )
+    if overridden_restriction is not None:
+        record_restriction_override(
+            db,
+            hotel_id=hotel_id,
+            actor_user_id=actor_user_id,
+            restriction=overridden_restriction,
+            reason=restriction_override.reason,
+            reservation_id=reservation.id,
+            operation="checkin",
+        )
 
     _guard_prohibido(
         db, hotel_id, guest, reservation,

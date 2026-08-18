@@ -32,6 +32,7 @@ from app.config import get_settings, is_demo_mode, is_production_mode, validate_
 from app.api import (
     rooms,
     guests,
+    guest_restrictions,
     reservations,
     waitlist,
     payments,
@@ -219,6 +220,7 @@ app.include_router(onboarding.router)
 app.include_router(reference.router)
 app.include_router(rooms.router)
 app.include_router(guests.router)
+app.include_router(guest_restrictions.router)
 app.include_router(reservations.router)
 app.include_router(waitlist.router)
 app.include_router(bookings.router)

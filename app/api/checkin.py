@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.schemas.guest import GuestUpdate
+from app.schemas.guest_restriction import GuestRestrictionOverrideRequest
 from app.schemas.reservation import ReservationRead
 from app.services.checkin_service import (
     perform_checkin,
@@ -15,6 +16,7 @@ from app.services.checkin_service import (
     validate_guest_for_checkin,
     CheckInError,
 )
+from app.services.guest_restriction_service import GuestProhibitedError, RestrictionOverridePermissionError
 from app.models.guest import Guest
 from app.dependencies.auth import AuthContext, require_permission
 from app.services.permission_service import (
@@ -38,6 +40,7 @@ class CheckInRequest(BaseModel):
     # request that performs the check-in, instead of a bare 400 with no way
     # to fix it. Applied before validation, same transaction.
     guest: GuestUpdate | None = None
+    restriction_override: GuestRestrictionOverrideRequest | None = None
 
 
 def _authorize_override(db: Session, context: AuthContext, override_prohibido: bool) -> None:
@@ -69,6 +72,7 @@ def checkin(
 ):
     override_prohibido = bool(request.override_prohibido) if request else False
     _authorize_override(db, context, override_prohibido)
+    restriction_override = request.restriction_override if request else None
 
     try:
         reservation = perform_checkin(
@@ -78,6 +82,9 @@ def checkin(
             override_prohibido=override_prohibido,
             override_user_id=context.user_id if override_prohibido else None,
             guest_patch=request.guest.model_dump(exclude_unset=True) if request and request.guest else None,
+            restriction_override=restriction_override,
+            actor_user_id=context.user_id,
+            actor_role=context.user_role,
         )
         db.commit()
         db.refresh(reservation)
@@ -88,6 +95,15 @@ def checkin(
     except CheckInError as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
+    except GuestProhibitedError as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": e.code, "message": str(e), "restriction_id": e.restriction_id},
+        )
+    except RestrictionOverridePermissionError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tenes permisos para esta accion")
 
 
 @router.post("/{reservation_id}/partial", response_model=ReservationRead)

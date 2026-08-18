@@ -757,7 +757,14 @@ def find_available_rooms(
     ]
 
 
-def create_reservation(db: Session, data: ReservationCreate, hotel_id: Optional[int] = None) -> Reservation:
+def create_reservation(
+    db: Session,
+    data: ReservationCreate,
+    hotel_id: Optional[int] = None,
+    *,
+    actor_user_id: Optional[int] = None,
+    actor_role: Optional[str] = None,
+) -> Reservation:
     """
     Create a new reservation with full validation.
 
@@ -935,6 +942,20 @@ def create_reservation(db: Session, data: ReservationCreate, hotel_id: Optional[
         deferred_days = int(company.deferred_days or 0)
         settlement_due_date = data.check_out_date + timedelta(days=deferred_days)
 
+    # Revalidate inside the same transaction, right before persisting: a
+    # restriction created after the quote (or after this call started) must
+    # still block the write. See app/services/guest_restriction_service.py.
+    from app.services.guest_restriction_service import record_restriction_override, validate_no_active_restriction
+
+    overridden_restriction = validate_no_active_restriction(
+        db,
+        hotel_id=hotel_id,
+        guest_id=data.guest_id,
+        restriction_override=data.restriction_override,
+        actor_user_id=actor_user_id,
+        actor_role=actor_role,
+    )
+
     confirmation_code = generate_confirmation_code()
     reservation = Reservation(
         confirmation_code=confirmation_code,
@@ -977,6 +998,15 @@ def create_reservation(db: Session, data: ReservationCreate, hotel_id: Optional[
     )
     db.add(reservation)
     db.flush()
+    if overridden_restriction is not None:
+        record_restriction_override(
+            db,
+            hotel_id=hotel_id,
+            actor_user_id=actor_user_id,
+            restriction=overridden_restriction,
+            reason=data.restriction_override.reason,
+            reservation_id=reservation.id,
+        )
     _invalidate_availability_cache(hotel_id)
     _touch_facts(db, hotel_id, reservation.check_in_date, reservation.check_out_date)
     return reservation
@@ -1249,6 +1279,7 @@ def update_reservation_fields(
     hotel_id: Optional[int] = None,
     *,
     changed_by_user_id: Optional[int] = None,
+    actor_role: Optional[str] = None,
     room_move_reason_code: Optional[str] = None,
     room_move_notes: Optional[str] = None,
     client_version: Optional[int] = None,
@@ -1260,8 +1291,32 @@ def update_reservation_fields(
             f"got {reservation.version}). Reload and retry."
         )
 
-    update_data = data.model_dump(exclude_unset=True)
     hotel_id = _resolve_hotel_id(hotel_id, room=reservation.room if hasattr(reservation, "room") else None)
+
+    # Reject-before-mutate: revalidate the guest restriction before touching
+    # any other field, so a blocked update never partially persists (e.g.
+    # `notes`) ahead of raising.
+    from app.services.guest_restriction_service import record_restriction_override, validate_no_active_restriction
+
+    overridden_restriction = validate_no_active_restriction(
+        db,
+        hotel_id=hotel_id,
+        guest_id=reservation.guest_id,
+        restriction_override=data.restriction_override,
+        actor_user_id=changed_by_user_id,
+        actor_role=actor_role,
+    )
+    if overridden_restriction is not None:
+        record_restriction_override(
+            db,
+            hotel_id=hotel_id,
+            actor_user_id=changed_by_user_id,
+            restriction=overridden_restriction,
+            reason=data.restriction_override.reason,
+            reservation_id=reservation.id,
+        )
+
+    update_data = data.model_dump(exclude_unset=True)
     original_check_in = reservation.check_in_date
     original_check_out = reservation.check_out_date
 
