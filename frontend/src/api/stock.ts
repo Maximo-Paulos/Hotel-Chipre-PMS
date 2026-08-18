@@ -64,6 +64,14 @@ export type CurrentStock = {
   quantity: DecimalValue;
 };
 
+// GET /api/stock/summary: every item's current balance in one request --
+// avoids the per-item N+1 that used to back StockPage's item grid (see
+// app/api/stock.py get_stock_summary docstring).
+export type StockSummaryEntry = {
+  item: StockItem;
+  current_quantity: DecimalValue;
+};
+
 export type StockConsumptionGroupBy = "week" | "month";
 
 export type StockConsumptionItem = {
@@ -106,8 +114,22 @@ export const listStockLocations = (session?: SessionLike) =>
 export const createStockLocation = (payload: StockLocationCreate, session?: SessionLike) =>
   apiFetch<StockLocation>("/api/stock/locations", { method: "POST", data: payload, session });
 
-export const createStockMovement = (payload: StockMovementCreate, session?: SessionLike) =>
-  apiFetch<StockMovement>("/api/stock/movements", { method: "POST", data: payload, session });
+export const createStockMovement = (
+  payload: StockMovementCreate,
+  { idempotencyKey }: { idempotencyKey?: string } = {},
+  session?: SessionLike
+) =>
+  apiFetch<StockMovement>("/api/stock/movements", {
+    method: "POST",
+    data: payload,
+    headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
+    session
+  });
+
+export const getStockSummary = ({ locationId }: { locationId?: number } = {}, session?: SessionLike) => {
+  const query = locationId ? `?location_id=${locationId}` : "";
+  return apiFetch<StockSummaryEntry[]>(`/api/stock/summary${query}`, { session });
+};
 
 export const listStockMovements = (
   { itemId, limit = 20 }: { itemId?: number; limit?: number } = {},

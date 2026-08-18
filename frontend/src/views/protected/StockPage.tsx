@@ -1,13 +1,13 @@
 import { useMemo, useState } from "react";
-import { useMutation, useQueries, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 
 import {
   createStockItem,
   createStockLocation,
   createStockMovement,
   deleteStockItem,
-  getCurrentStock,
   getStockConsumptionReport,
+  getStockSummary,
   listLowStockItems,
   listStockMovements,
   listStockItems,
@@ -26,8 +26,24 @@ import { listReservations, type Reservation } from "../../api/reservations";
 import { hasValidSession } from "../../api/client";
 import ConfirmDialog from "../../components/ConfirmDialog";
 import { useGuardedMutation } from "../../hooks/useGuardedMutation";
+import { useIsDesktopViewport } from "../../hooks/useIsDesktopViewport";
+import { useOnlineStatus } from "../../hooks/useOnlineStatus";
 import { useSession } from "../../state/session";
 import { startOfCurrentMonthIso, startOfCurrentWeekIso, todayIso } from "../../utils/date";
+
+// Mobile task-based tabs (see the useIsDesktopViewport docstring for why this
+// is JS state, not a CSS breakpoint split): "movement" and "adjustment" both
+// render the SAME <form id="stock-movement-form"> (filtered to a subset of
+// availableMovementModeOptions), not two copies -- there is exactly one
+// movement form in the DOM at all times, same as desktop always had.
+type StockMobileTab = "summary" | "movement" | "adjustment" | "alerts" | "history";
+const STOCK_MOBILE_TABS: Array<{ tab: StockMobileTab; label: string }> = [
+  { tab: "summary", label: "Resumen" },
+  { tab: "movement", label: "Movimiento" },
+  { tab: "adjustment", label: "Ajuste" },
+  { tab: "alerts", label: "Alertas" },
+  { tab: "history", label: "Historial" }
+];
 
 // Used for the movement-mode buttons/heading, where "Ajuste" covers both
 // directions (the direction toggle underneath clarifies which one).
@@ -87,6 +103,20 @@ export function StockPage() {
     () => (canAdjustStock ? movementModeOptions : movementModeOptions.filter((option) => option.type !== "adjustment")),
     [canAdjustStock]
   );
+  const isDesktop = useIsDesktopViewport();
+  const isOnline = useOnlineStatus();
+  const [mobileTab, setMobileTab] = useState<StockMobileTab>("summary");
+  // Desktop keeps every mode (Ingreso/Egreso/Ajuste) in the one form, exactly
+  // as before. On mobile, "Movimiento" and "Ajuste" are separate tabs that
+  // both render this same form, filtered to their own subset -- see
+  // STOCK_MOBILE_TABS docstring.
+  const mobileFilteredMovementModeOptions = useMemo(() => {
+    if (isDesktop) return availableMovementModeOptions;
+    if (mobileTab === "adjustment") return availableMovementModeOptions.filter((option) => option.type === "adjustment");
+    return availableMovementModeOptions.filter((option) => option.type !== "adjustment");
+  }, [availableMovementModeOptions, isDesktop, mobileTab]);
+  const showSection = (tab: StockMobileTab) => isDesktop || mobileTab === tab;
+  const movementFormVisible = isDesktop || mobileTab === "movement" || (mobileTab === "adjustment" && canAdjustStock);
   const queryClient = useQueryClient();
   const [itemForm, setItemForm] = useState(emptyItemForm);
   const [locationForm, setLocationForm] = useState(emptyLocationForm);
@@ -106,6 +136,10 @@ export function StockPage() {
   // % contra el periodo anterior de igual largo (calculado en el backend).
   const [consumptionGroupBy, setConsumptionGroupBy] = useState<StockConsumptionGroupBy>("week");
   const [consumptionRange, setConsumptionRange] = useState(() => ({ from: startOfCurrentWeekIso(), to: todayIso() }));
+  // Mobile "Historial" tab: the backend has no cursor/offset pagination for
+  // GET /api/stock/movements (limit only, capped at 200 -- see app/api/stock.py),
+  // so "Ver más" just raises the requested limit client-side.
+  const [historyLimit, setHistoryLimit] = useState(20);
   const enabled = hasValidSession(session);
 
   // Stock general (insumos: bolsas, detergentes, jabon) -- ropa blanca de
@@ -149,28 +183,25 @@ export function StockPage() {
     staleTime: 15 * 1000
   });
 
+  // Task 5 backend: one request for every item's balance instead of the old
+  // per-item useQueries N+1 loop (see StockSummaryEntry docstring).
+  const stockSummaryQuery = useQuery({
+    queryKey: ["stock-summary", session.hotelId],
+    queryFn: () => getStockSummary({}, session),
+    enabled,
+    staleTime: 15 * 1000
+  });
+
   const items = useMemo(() => itemsQuery.data ?? [], [itemsQuery.data]);
   const locations = useMemo(() => locationsQuery.data ?? [], [locationsQuery.data]);
   const lowStock = useMemo(() => lowStockQuery.data ?? [], [lowStockQuery.data]);
   const reservations = useMemo(() => reservationsQuery.data ?? [], [reservationsQuery.data]);
 
-  const stockQueries = useQueries({
-    queries: items.map((item) => ({
-      queryKey: ["stock-current", session.hotelId, item.id],
-      queryFn: () => getCurrentStock(item.id, {}, session),
-      enabled,
-      staleTime: 15 * 1000
-    }))
-  });
-
   const currentByItemId = useMemo(() => {
     const map = new Map<number, string>();
-    stockQueries.forEach((query, index) => {
-      const item = items[index];
-      if (item && query.data) map.set(item.id, String(query.data.quantity));
-    });
+    (stockSummaryQuery.data ?? []).forEach((entry) => map.set(entry.item.id, String(entry.current_quantity)));
     return map;
-  }, [items, stockQueries]);
+  }, [stockSummaryQuery.data]);
 
   const selectedItem = useMemo(
     () => items.find((item) => String(item.id) === movementForm.item_id),
@@ -179,8 +210,8 @@ export function StockPage() {
   const selectedCurrentStock = selectedItem ? currentByItemId.get(selectedItem.id) : null;
   const historyItemId = movementForm.item_id ? Number(movementForm.item_id) : undefined;
   const movementHistoryQuery = useQuery({
-    queryKey: ["stock-movements", session.hotelId, historyItemId],
-    queryFn: () => listStockMovements({ itemId: historyItemId }, session),
+    queryKey: ["stock-movements", session.hotelId, historyItemId, historyLimit],
+    queryFn: () => listStockMovements({ itemId: historyItemId, limit: historyLimit }, session),
     enabled,
     staleTime: 15 * 1000
   });
@@ -225,14 +256,27 @@ export function StockPage() {
   const selectMovement = (itemId: number, movementType: StockMovementType) => {
     setMovementForm((currentForm) => ({ ...currentForm, item_id: String(itemId), movement_type: movementType }));
     setAdjustmentDirection("increase");
+    setMobileTab(movementType === "adjustment" ? "adjustment" : "movement");
     document.getElementById("stock-movement-form")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
+
+  const selectMobileTab = (tab: StockMobileTab) => {
+    setMobileTab(tab);
+    // Keep the shared form's mode in sync with which tab it's rendered
+    // under -- otherwise "Ajuste" could show the form still set to "in".
+    if (tab === "adjustment" && movementForm.movement_type !== "adjustment") {
+      setMovementForm((current) => ({ ...current, movement_type: "adjustment" }));
+      setAdjustmentDirection("increase");
+    } else if (tab === "movement" && movementForm.movement_type === "adjustment") {
+      setMovementForm((current) => ({ ...current, movement_type: "in" }));
+    }
   };
 
   const invalidateStock = () => {
     queryClient.invalidateQueries({ queryKey: ["stock-items", session.hotelId] });
     queryClient.invalidateQueries({ queryKey: ["stock-locations", session.hotelId] });
     queryClient.invalidateQueries({ queryKey: ["stock-low", session.hotelId] });
-    queryClient.invalidateQueries({ queryKey: ["stock-current", session.hotelId] });
+    queryClient.invalidateQueries({ queryKey: ["stock-summary", session.hotelId] });
     queryClient.invalidateQueries({ queryKey: ["stock-movements", session.hotelId] });
     queryClient.invalidateQueries({ queryKey: ["stock-consumption-report", session.hotelId] });
   };
@@ -310,9 +354,12 @@ export function StockPage() {
 
   // A double-click/double-enter on "Registrar movimiento" before the button
   // re-renders as disabled would otherwise double the recorded stock
-  // adjustment (register_movement has no server-side idempotency key).
+  // adjustment. useGuardedMutation blocks the double-tap itself; the
+  // Idempotency-Key header (Task 5 backend) covers the other case -- a form
+  // resubmit after a flaky connection that already reached the server.
   const createMovementMutation = useGuardedMutation({
-    mutationFn: (payload: StockMovementCreate) => createStockMovement(payload, session),
+    mutationFn: ({ payload, idempotencyKey }: { payload: StockMovementCreate; idempotencyKey: string }) =>
+      createStockMovement(payload, { idempotencyKey }, session),
     onSuccess: () => {
       invalidateStock();
       setMovementForm((current) => ({
@@ -329,6 +376,10 @@ export function StockPage() {
   const handleCreateItem = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setMessage(null);
+    if (!isOnline) {
+      setMessage("Sin conexión. Conectate para crear el item.");
+      return;
+    }
     try {
       await createItemMutation.mutateAsync();
     } catch (error) {
@@ -339,6 +390,10 @@ export function StockPage() {
   const handleCreateLocation = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setMessage(null);
+    if (!isOnline) {
+      setMessage("Sin conexión. Conectate para crear la ubicación.");
+      return;
+    }
     try {
       await createLocationMutation.mutateAsync();
     } catch (error) {
@@ -349,14 +404,23 @@ export function StockPage() {
   const handleCreateMovement = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setMessage(null);
+    if (!isOnline) {
+      setMessage("Sin conexión. Conectate para registrar el movimiento.");
+      return;
+    }
     try {
       await createMovementMutation.mutateAsync({
-        item_id: Number(movementForm.item_id),
-        location_id: movementForm.location_id ? Number(movementForm.location_id) : null,
-        movement_type: apiMovementType,
-        quantity: movementForm.quantity,
-        reason: movementForm.reason || null,
-        reservation_id: movementForm.reservation_id ? Number(movementForm.reservation_id) : null
+        payload: {
+          item_id: Number(movementForm.item_id),
+          location_id: movementForm.location_id ? Number(movementForm.location_id) : null,
+          movement_type: apiMovementType,
+          quantity: movementForm.quantity,
+          reason: movementForm.reason || null,
+          reservation_id: movementForm.reservation_id ? Number(movementForm.reservation_id) : null
+        },
+        // One key per submit attempt (not per mutation instance): a retry of
+        // this same click reuses it, a brand-new click gets a fresh one.
+        idempotencyKey: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`
       });
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "No se pudo registrar el movimiento.");
@@ -371,10 +435,18 @@ export function StockPage() {
           <h1 className="text-2xl font-semibold text-slate-900">Stock</h1>
           <p className="text-sm text-slate-600">Inventario operativo con movimientos y alertas de bajo stock.</p>
         </div>
-        {(itemsQuery.isFetching || lowStockQuery.isFetching) && <p className="text-xs text-slate-500">Actualizando...</p>}
+        {(itemsQuery.isFetching || lowStockQuery.isFetching || stockSummaryQuery.isFetching) && (
+          <p className="text-xs text-slate-500">Actualizando...</p>
+        )}
       </header>
 
       {message ? <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">{message}</div> : null}
+
+      {!isOnline && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900" role="status">
+          Sin conexión. Podés seguir mirando los datos ya cargados, pero los movimientos y altas se habilitan cuando vuelvas a estar online.
+        </div>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-3">
         <StatusBadge label="Items" value={items.length} className="bg-slate-100 text-slate-700" />
@@ -382,8 +454,31 @@ export function StockPage() {
         <StatusBadge label="Bajo stock" value={lowStock.length} className="bg-rose-100 text-rose-800" />
       </div>
 
+      {/* Mobile task-based tabs -- desktop (md+) ignores mobileTab entirely
+          and keeps showing every section at once, same as before this task. */}
+      <div className="flex gap-2 overflow-x-auto pb-1 md:hidden" role="tablist" aria-label="Secciones de stock">
+        {STOCK_MOBILE_TABS.map(({ tab, label }) => (
+          <button
+            key={tab}
+            type="button"
+            role="tab"
+            aria-selected={mobileTab === tab}
+            onClick={() => selectMobileTab(tab)}
+            className={`min-h-11 shrink-0 rounded-full border px-4 py-2 text-sm font-semibold ${
+              mobileTab === tab ? "border-brand-300 bg-brand-50 text-brand-800" : "border-slate-200 bg-white text-slate-600"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {!isDesktop && mobileTab === "alerts" && (
+        <StockAlertsPanel lowStock={lowStock} currentByItemId={currentByItemId} onRestock={(itemId) => selectMovement(itemId, "in")} />
+      )}
+
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <section className={showSection("summary") ? "space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm" : "hidden"}>
           <div>
             <p className="text-xs uppercase tracking-wide text-slate-500">Inventario</p>
             <h2 className="text-lg font-semibold text-slate-900">Items ({items.length})</h2>
@@ -470,14 +565,24 @@ export function StockPage() {
         </section>
 
         <aside className="space-y-4">
-          <form id="stock-movement-form" className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm" onSubmit={handleCreateMovement}>
+          {!isDesktop && mobileTab === "adjustment" && !canAdjustStock && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900" role="alert">
+              <p className="font-semibold">No tenés permiso para hacer ajustes de stock.</p>
+              <p className="mt-1 text-xs">Pedile a un dueño o co-dueño que corrija el conteo, o usá la pestaña "Movimiento" para un ingreso/egreso normal.</p>
+            </div>
+          )}
+          <form
+            id="stock-movement-form"
+            className={movementFormVisible ? "space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm" : "hidden"}
+            onSubmit={handleCreateMovement}
+          >
             <div>
               <p className="text-xs uppercase tracking-wide text-slate-500">Movimiento</p>
               <h2 className="text-lg font-semibold text-slate-900">Registrar {movementLabel[movementForm.movement_type]}</h2>
               <p className="mt-1 text-xs text-slate-500">Elegí una acción, revisá el resultado previsto y confirmá con un motivo.</p>
             </div>
             <div className="grid gap-2" role="group" aria-label="Acción de inventario">
-              {availableMovementModeOptions.map((option) => {
+              {mobileFilteredMovementModeOptions.map((option) => {
                 const selected = movementForm.movement_type === option.type;
                 return (
                   <button
@@ -633,23 +738,34 @@ export function StockPage() {
             </details>
             <button
               type="submit"
-              disabled={createMovementMutation.isPending || willGoNegative}
+              disabled={createMovementMutation.isPending || willGoNegative || !isOnline}
               className="w-full rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
             >
               Registrar {movementLabel[movementForm.movement_type]}
             </button>
           </form>
 
-          <StockMovementHistory
-            movements={movementHistory}
-            isLoading={movementHistoryQuery.isLoading}
-            selectedItem={selectedItem?.name}
-            itemById={itemById}
-            locationById={locationById}
-            reservationById={reservationById}
-          />
+          <div className={showSection("history") ? "space-y-3" : "hidden"}>
+            <StockMovementHistory
+              movements={movementHistory}
+              isLoading={movementHistoryQuery.isLoading}
+              selectedItem={selectedItem?.name}
+              itemById={itemById}
+              locationById={locationById}
+              reservationById={reservationById}
+            />
+            {!isDesktop && historyLimit < 200 && movementHistory.length >= historyLimit && (
+              <button
+                type="button"
+                onClick={() => setHistoryLimit((current) => Math.min(200, current + 20))}
+                className="min-h-11 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Ver más movimientos
+              </button>
+            )}
+          </div>
 
-          <form className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm" onSubmit={handleCreateItem}>
+          <form className={showSection("summary") ? "space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm" : "hidden"} onSubmit={handleCreateItem}>
             <div>
               <p className="text-xs uppercase tracking-wide text-slate-500">Nuevo item</p>
               <h2 className="text-lg font-semibold text-slate-900">Alta de stock</h2>
@@ -708,14 +824,17 @@ export function StockPage() {
             </div>
             <button
               type="submit"
-              disabled={createItemMutation.isPending}
+              disabled={createItemMutation.isPending || !isOnline}
               className="w-full rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
             >
               Crear item
             </button>
           </form>
 
-          <form className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm" onSubmit={handleCreateLocation}>
+          <form
+            className={showSection("summary") ? "space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm" : "hidden"}
+            onSubmit={handleCreateLocation}
+          >
             <div>
               <p className="text-xs uppercase tracking-wide text-slate-500">Ubicaciones</p>
               <h2 className="text-lg font-semibold text-slate-900">Nueva ubicacion</h2>
@@ -731,7 +850,7 @@ export function StockPage() {
             </label>
             <button
               type="submit"
-              disabled={createLocationMutation.isPending}
+              disabled={createLocationMutation.isPending || !isOnline}
               className="w-full rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
             >
               Crear ubicacion
@@ -886,6 +1005,54 @@ function EditStockItemModal({
         </div>
       </form>
     </div>
+  );
+}
+
+// Mobile-only "Alertas" tab: only unmounted (not just CSS-hidden) when its
+// tab isn't active, so it never shows up in a desktop-viewport DOM at all --
+// desktop already shows the same info inline via the "Bajo" badge on each
+// item card, this is the mobile equivalent of a dedicated triage list.
+function StockAlertsPanel({
+  lowStock,
+  currentByItemId,
+  onRestock
+}: {
+  lowStock: StockItem[];
+  currentByItemId: Map<number, string>;
+  onRestock: (itemId: number) => void;
+}) {
+  return (
+    <section aria-labelledby="stock-alerts-title" className="space-y-3 rounded-xl border border-rose-200 bg-rose-50 p-4">
+      <div>
+        <p className="text-xs uppercase tracking-wide text-rose-700">Alertas</p>
+        <h2 id="stock-alerts-title" className="text-lg font-semibold text-rose-900">
+          Bajo stock ({lowStock.length})
+        </h2>
+      </div>
+      {lowStock.length === 0 ? (
+        <p className="text-sm text-rose-800">Ningún item está por debajo de su mínimo ahora mismo.</p>
+      ) : (
+        <ul className="space-y-2">
+          {lowStock.map((item) => (
+            <li key={item.id} className="flex items-center justify-between gap-3 rounded-lg bg-white px-3 py-2 shadow-sm">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-slate-900">{item.name}</p>
+                <p className="text-xs text-slate-500">
+                  {currentByItemId.get(item.id) ?? "..."} {item.unit} · mínimo {item.min_quantity ?? "sin minimo"}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => onRestock(item.id)}
+                className="min-h-11 shrink-0 rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-xs font-semibold text-brand-700 hover:bg-brand-100"
+              >
+                Registrar ingreso
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 

@@ -22,7 +22,7 @@ import {
   createLinenItem,
   createLinenLocation,
   createLinenMovement,
-  getCurrentLinenStock,
+  getLinenSummary,
   listLinenItems,
   listLinenLocations,
   type LinenItem
@@ -31,9 +31,21 @@ import type { StockMovementType } from "../../api/stock";
 import { hasValidSession } from "../../api/client";
 import { useGuardedMutation } from "../../hooks/useGuardedMutation";
 import { useEffectivePermissions } from "../../hooks/usePermissions";
+import { useIsDesktopViewport } from "../../hooks/useIsDesktopViewport";
+import { useOnlineStatus } from "../../hooks/useOnlineStatus";
 import { useSession } from "../../state/session";
 import { formatMoney } from "../../utils/currency";
 import { startOfCurrentMonthIso, startOfCurrentWeekIso, todayIso } from "../../utils/date";
+
+// Mobile task-based tabs (see useIsDesktopViewport docstring): "outbound" and
+// "inbound" both render the SAME "Nuevo remito" form (direction pre-selected,
+// still togglable), not two copies -- desktop keeps showing every section at
+// once regardless of mobileTab. "vendors" (lavaderos/precios/catálogo) is
+// only offered to users who actually hold laundry:manage_vendors -- mirrors
+// the existing (tested, see housekeeping-laundry-journey.spec.ts) desktop
+// behavior of never revealing that panel exists to housekeeping at all,
+// rather than showing a permission-denied explanation for it.
+type LaundryMobileTab = "available" | "outbound" | "inbound" | "vendors" | "history";
 
 // D2 (Via D lavanderia): replaces the old LaundryBatch/LaundryItem UI
 // entirely -- D0 confirmed no open batches in production, so there is no
@@ -73,6 +85,26 @@ export function LaundryPage() {
   const enabled = hasValidSession(session);
   const manageVendors = hasPermission("laundry:manage_vendors");
   const operateRemitos = hasPermission("laundry:operate_remitos");
+  const isDesktop = useIsDesktopViewport();
+  const isOnline = useOnlineStatus();
+  const mobileTabs = useMemo(() => {
+    const tabs: Array<{ tab: LaundryMobileTab; label: string }> = [];
+    if (operateRemitos) tabs.push({ tab: "available", label: "Disponible" });
+    if (operateRemitos) tabs.push({ tab: "outbound", label: "Salida" });
+    if (operateRemitos) tabs.push({ tab: "inbound", label: "Retorno" });
+    if (manageVendors) tabs.push({ tab: "vendors", label: "Lavaderos" });
+    if (operateRemitos) tabs.push({ tab: "history", label: "Historial" });
+    return tabs;
+  }, [operateRemitos, manageVendors]);
+  const [mobileTab, setMobileTab] = useState<LaundryMobileTab>("available");
+  const showSection = (tab: LaundryMobileTab) => isDesktop || mobileTab === tab;
+  const remitoFormVisible = isDesktop || mobileTab === "outbound" || mobileTab === "inbound";
+  const selectMobileTab = (tab: LaundryMobileTab) => {
+    setMobileTab(tab);
+    if (tab === "outbound" || tab === "inbound") {
+      setRemitoForm((current) => (current.direction === tab ? current : { ...current, direction: tab }));
+    }
+  };
 
   const [message, setMessage] = useState<string | null>(null);
   const [selectedVendorId, setSelectedVendorId] = useState<number | null>(null);
@@ -207,19 +239,24 @@ export function LaundryPage() {
   );
   const spendFetching = spendQueries.some((query) => query.isFetching);
 
-  const houseStockQueries = useQueries({
-    queries: items.map((item) => ({
-      queryKey: ["linen-current", session.hotelId, item.id, houseStockLocationId || "hotel-wide"],
-      queryFn: () =>
-        getCurrentLinenStock(
-          item.id,
-          houseStockLocationId ? { locationId: Number(houseStockLocationId) } : {},
-          session
-        ),
-      enabled: enabled && Boolean(houseStockLocationId),
-      staleTime: 15 * 1000
-    }))
+  // Task 5 backend: one request for every linen item's balance instead of
+  // the old per-item useQueries N+1 loop (see LinenSummaryEntry docstring).
+  // Available to operateRemitos too, not just manageVendors -- the backend
+  // endpoint (get_current_laundry_linen_stock / get_laundry_linen_summary)
+  // already accepts either permission; the previous `manageVendors &&` gate
+  // around this panel hid it from housekeeping unnecessarily.
+  const houseStockSummaryQuery = useQuery({
+    queryKey: ["linen-summary", session.hotelId, houseStockLocationId || "hotel-wide"],
+    queryFn: () =>
+      getLinenSummary(houseStockLocationId ? { locationId: Number(houseStockLocationId) } : {}, session),
+    enabled: enabled && Boolean(houseStockLocationId),
+    staleTime: 15 * 1000
   });
+  const houseStockByItemId = useMemo(() => {
+    const map = new Map<number, string>();
+    (houseStockSummaryQuery.data ?? []).forEach((entry) => map.set(entry.item.id, String(entry.current_quantity)));
+    return map;
+  }, [houseStockSummaryQuery.data]);
 
   const invalidateVendors = () => queryClient.invalidateQueries({ queryKey: ["laundry-vendors", session.hotelId] });
   const invalidatePrices = (vendorId: number) =>
@@ -231,10 +268,10 @@ export function LaundryPage() {
     queryClient.invalidateQueries({ queryKey: ["laundry-remitos", session.hotelId] });
     queryClient.invalidateQueries({ queryKey: ["laundry-vendor-balance", session.hotelId] });
     queryClient.invalidateQueries({ queryKey: ["laundry-vendor-spend", session.hotelId] });
-    queryClient.invalidateQueries({ queryKey: ["linen-current", session.hotelId] });
+    queryClient.invalidateQueries({ queryKey: ["linen-summary", session.hotelId] });
   };
   const invalidateAfterMovement = () => {
-    queryClient.invalidateQueries({ queryKey: ["linen-current", session.hotelId] });
+    queryClient.invalidateQueries({ queryKey: ["linen-summary", session.hotelId] });
   };
 
   const createVendorMutation = useMutation({
@@ -375,6 +412,10 @@ export function LaundryPage() {
   const handleCreateVendor = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setMessage(null);
+    if (!isOnline) {
+      setMessage("Sin conexión. Conectate para crear el lavadero.");
+      return;
+    }
     try {
       await createVendorMutation.mutateAsync();
     } catch (error) {
@@ -385,6 +426,10 @@ export function LaundryPage() {
   const handleSetPrice = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setMessage(null);
+    if (!isOnline) {
+      setMessage("Sin conexión. Conectate para guardar el precio.");
+      return;
+    }
     try {
       await setPriceMutation.mutateAsync();
     } catch (error) {
@@ -395,6 +440,10 @@ export function LaundryPage() {
   const handleCreateLinenItem = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setMessage(null);
+    if (!isOnline) {
+      setMessage("Sin conexión. Conectate para crear el tipo de ropa blanca.");
+      return;
+    }
     try {
       await createLinenItemMutation.mutateAsync();
     } catch (error) {
@@ -405,6 +454,10 @@ export function LaundryPage() {
   const handleCreateLinenLocation = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setMessage(null);
+    if (!isOnline) {
+      setMessage("Sin conexión. Conectate para crear la ubicación.");
+      return;
+    }
     try {
       await createLinenLocationMutation.mutateAsync();
     } catch (error) {
@@ -417,6 +470,10 @@ export function LaundryPage() {
   const handleCreateLinenMovement = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setMessage(null);
+    if (!isOnline) {
+      setMessage("Sin conexión. Conectate para registrar el movimiento.");
+      return;
+    }
     try {
       await createLinenMovementMutation.mutateAsync();
     } catch (error) {
@@ -450,6 +507,10 @@ export function LaundryPage() {
   const handleCreateRemito = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setRemitoError(null);
+    if (!isOnline) {
+      setRemitoError("Sin conexión. Conectate para guardar el remito.");
+      return;
+    }
     if (lines.length === 0) {
       setRemitoError("Agregá al menos una línea (ítem + cantidad).");
       return;
@@ -481,8 +542,37 @@ export function LaundryPage() {
 
       {message ? <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">{message}</div> : null}
 
+      {!isOnline && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900" role="status">
+          Sin conexión. Podés seguir mirando los datos ya cargados, pero remitos, movimientos y altas se habilitan cuando vuelvas a estar online.
+        </div>
+      )}
+
+      {/* Mobile task-based tabs -- desktop (md+) ignores mobileTab and keeps
+          showing every section the user's permissions allow, same as before
+          this task. Tab list itself is permission-filtered (see mobileTabs),
+          not just its content. */}
+      {mobileTabs.length > 0 && (
+        <div className="flex gap-2 overflow-x-auto pb-1 md:hidden" role="tablist" aria-label="Secciones de lavandería">
+          {mobileTabs.map(({ tab, label }) => (
+            <button
+              key={tab}
+              type="button"
+              role="tab"
+              aria-selected={mobileTab === tab}
+              onClick={() => selectMobileTab(tab)}
+              className={`min-h-11 shrink-0 rounded-full border px-4 py-2 text-sm font-semibold ${
+                mobileTab === tab ? "border-brand-300 bg-brand-50 text-brand-800" : "border-slate-200 bg-white text-slate-600"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
       {manageVendors && (
-        <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <section className={showSection("vendors") ? "space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm" : "hidden"}>
           <div>
             <p className="text-xs uppercase tracking-wide text-slate-500">Lavaderos</p>
             <h2 className="text-lg font-semibold text-slate-900">Lavaderos y precios ({vendors.length})</h2>
@@ -539,7 +629,7 @@ export function LaundryPage() {
                 </label>
                 <button
                   type="submit"
-                  disabled={createVendorMutation.isPending}
+                  disabled={createVendorMutation.isPending || !isOnline}
                   className="min-h-11 w-full rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
                 >
                   Crear lavadero
@@ -596,7 +686,7 @@ export function LaundryPage() {
                     </label>
                     <button
                       type="submit"
-                      disabled={setPriceMutation.isPending}
+                      disabled={setPriceMutation.isPending || !isOnline}
                       className="min-h-11 w-full rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
                     >
                       Guardar precio
@@ -612,7 +702,7 @@ export function LaundryPage() {
       )}
 
       {manageVendors && (
-        <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <section className={showSection("vendors") ? "space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm" : "hidden"}>
           <div>
             <p className="text-xs uppercase tracking-wide text-slate-500">Ropa blanca</p>
             <h2 className="text-lg font-semibold text-slate-900">Tipos de ropa blanca ({items.length})</h2>
@@ -655,7 +745,7 @@ export function LaundryPage() {
               </label>
               <button
                 type="submit"
-                disabled={createLinenItemMutation.isPending}
+                disabled={createLinenItemMutation.isPending || !isOnline}
                 className="min-h-11 w-full rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
               >
                 Crear tipo de ropa blanca
@@ -666,7 +756,7 @@ export function LaundryPage() {
       )}
 
       {manageVendors && (
-        <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <section className={showSection("vendors") ? "space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm" : "hidden"}>
           <div>
             <p className="text-xs uppercase tracking-wide text-slate-500">Ropa blanca</p>
             <h2 className="text-lg font-semibold text-slate-900">Ubicaciones y movimientos ({houseLocations.length})</h2>
@@ -700,7 +790,7 @@ export function LaundryPage() {
               </label>
               <button
                 type="submit"
-                disabled={createLinenLocationMutation.isPending}
+                disabled={createLinenLocationMutation.isPending || !isOnline}
                 className="min-h-11 w-full rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
               >
                 Crear ubicación
@@ -789,7 +879,7 @@ export function LaundryPage() {
               </label>
               <button
                 type="submit"
-                disabled={createLinenMovementMutation.isPending}
+                disabled={createLinenMovementMutation.isPending || !isOnline}
                 className="min-h-11 w-full rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
               >
                 Registrar movimiento
@@ -898,7 +988,7 @@ export function LaundryPage() {
 
       {operateRemitos && (
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_420px]">
-          <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <section className={showSection("history") ? "space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm" : "hidden"}>
             <div>
               <p className="text-xs uppercase tracking-wide text-slate-500">Historial</p>
               <h2 className="text-lg font-semibold text-slate-900">Remitos ({remitos.length})</h2>
@@ -969,7 +1059,10 @@ export function LaundryPage() {
           </section>
 
           <aside className="space-y-4">
-            <form className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm" onSubmit={handleCreateRemito}>
+            <form
+              className={remitoFormVisible ? "space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm" : "hidden"}
+              onSubmit={handleCreateRemito}
+            >
               <div>
                 <p className="text-xs uppercase tracking-wide text-slate-500">Remito</p>
                 <h2 className="text-lg font-semibold text-slate-900">Nuevo remito</h2>
@@ -1151,27 +1244,29 @@ export function LaundryPage() {
 
               <button
                 type="submit"
-                disabled={createRemitoMutation.isPending}
+                disabled={createRemitoMutation.isPending || !isOnline}
                 className="min-h-11 w-full rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
               >
                 {createRemitoMutation.isPending ? "Guardando..." : "Guardar remito"}
               </button>
             </form>
 
-            {/* GET /api/stock/items/{id}/current requires stock:operate,
-                which housekeeping does not hold (only the laundry-specific
-                permissions above) -- gate this panel the same way StockPage
-                itself is gated in AppShell's nav, or housekeeping would see
-                a 403 in every row instead of a balance. */}
-            {manageVendors && (
+            {/* GET /api/laundry/items/{id}/current and .../items/summary both
+                accept laundry:operate_remitos OR laundry:manage_vendors (see
+                app/api/laundry_vendor.py) -- housekeeping holds the former,
+                so this is not manageVendors-gated (a prior version of this
+                comment incorrectly claimed the backend required stock:operate,
+                which does not apply to this linen-specific endpoint at all). */}
+            <div className={showSection("available") ? "" : "hidden"}>
               <HouseStockPanel
                 locations={houseLocations}
                 items={items}
                 selectedLocationId={houseStockLocationId}
                 onSelectLocation={setHouseStockLocationId}
-                stockQueries={houseStockQueries}
+                currentByItemId={houseStockByItemId}
+                isLoading={houseStockSummaryQuery.isFetching}
               />
-            )}
+            </div>
           </aside>
         </div>
       )}
@@ -1382,13 +1477,15 @@ function HouseStockPanel({
   items,
   selectedLocationId,
   onSelectLocation,
-  stockQueries
+  currentByItemId,
+  isLoading
 }: {
   locations: Array<{ id: number; name: string }>;
   items: LinenItem[];
   selectedLocationId: string;
   onSelectLocation: (value: string) => void;
-  stockQueries: Array<{ data?: { quantity: string | number } }>;
+  currentByItemId: Map<number, string>;
+  isLoading: boolean;
 }) {
   return (
     <section aria-labelledby="house-stock-title" className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -1412,17 +1509,20 @@ function HouseStockPanel({
         </select>
       </label>
       {selectedLocationId ? (
-        <ul className="space-y-1 text-sm">
-          {items.map((item, index) => (
-            <li key={item.id} className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
-              <span>{item.name}</span>
-              <span className="font-semibold text-slate-900">
-                {stockQueries[index]?.data ? `${stockQueries[index]?.data?.quantity} ${item.unit}` : "..."}
-              </span>
-            </li>
-          ))}
-          {items.length === 0 && <li className="text-xs text-slate-500">No hay ítems de stock cargados.</li>}
-        </ul>
+        <>
+          {isLoading && <p className="text-xs text-slate-500">Actualizando...</p>}
+          <ul className="space-y-1 text-sm">
+            {items.map((item) => (
+              <li key={item.id} className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+                <span>{item.name}</span>
+                <span className="font-semibold text-slate-900">
+                  {currentByItemId.has(item.id) ? `${currentByItemId.get(item.id)} ${item.unit}` : "..."}
+                </span>
+              </li>
+            ))}
+            {items.length === 0 && <li className="text-xs text-slate-500">No hay ítems de stock cargados.</li>}
+          </ul>
+        </>
       ) : (
         <p className="text-xs text-slate-500">Elegí una ubicación para ver el stock limpio disponible ahí.</p>
       )}
