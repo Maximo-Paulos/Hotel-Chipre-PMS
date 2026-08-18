@@ -218,6 +218,8 @@ def calculate_reservation_pricing(
     guest_scope: str = "all",
     target_currency: str | None = None,
     occupancy: int | None = None,
+    guest_id: int | None = None,
+    company_id: int | None = None,
 ) -> ReservationPricingResult:
     category_query = db.query(RoomCategory).filter(RoomCategory.id == category_id)
     if hotel_id is not None:
@@ -284,6 +286,10 @@ def calculate_reservation_pricing(
         payment_method=pricing_payment_method,
         sellable_product=sellable_product,
         tax_policy=tax_policy,
+        pricing_channel_code=pricing_channel_code,
+        target_currency=target_currency,
+        guest_id=guest_id,
+        company_id=company_id,
     )
 
 
@@ -352,10 +358,24 @@ def _daily_rate_pricing_result(
     payment_method: str | None,
     sellable_product: SellableProduct | None,
     tax_policy: TaxPolicy | None,
+    pricing_channel_code: str | None = None,
+    target_currency: str | None = None,
+    guest_id: int | None = None,
+    company_id: int | None = None,
 ) -> ReservationPricingResult:
+    from app.services.promotion_service import (
+        PromotionMatchContext,
+        apply_promotions_to_night,
+        find_applicable_promotions,
+    )
+
+    booking_date = datetime.now(timezone.utc).date()
     breakdown = []
+    promotions_applied_all: list[dict] = []
     current = check_in
+    night_index = 0
     while current < check_out:
+        night_index += 1
         configured_source = _calendar_pricing_source(
             db,
             hotel_id=hotel_id,
@@ -373,7 +393,35 @@ def _daily_rate_pricing_result(
         if configured_source is None:
             price = float(category.base_price_per_night or 0.0)
         price = round(float(price), 2)
-        breakdown.append({"date": current.isoformat(), "price": price, "source": source})
+
+        # Step 3 of the canonical pricing order (see
+        # app.services.promotion_pricing_service): promotions eligible for
+        # this specific night, applied per-night, clamped at 0.
+        ctx = PromotionMatchContext(
+            hotel_id=hotel_id,
+            night_date=current,
+            night_index=night_index,
+            nights_total=nights,
+            booking_date=booking_date,
+            category_id=category.id,
+            sales_channel_code=pricing_channel_code,
+            guest_id=guest_id,
+            company_id=company_id,
+            payment_currency=target_currency,
+            payment_method=payment_method,
+        )
+        matched = find_applicable_promotions(db, ctx)
+        post_promo, applied = apply_promotions_to_night(Decimal(str(price)), matched)
+        promotions_applied_all.extend(applied)
+        final_price = float(post_promo)
+
+        breakdown.append({
+            "date": current.isoformat(),
+            "price": final_price,
+            "base_price": price,
+            "source": source,
+            "promotions_applied": applied,
+        })
         current += timedelta(days=1)
 
     total_amount = round(sum(row["price"] for row in breakdown), 2)
@@ -386,6 +434,7 @@ def _daily_rate_pricing_result(
         "nights": nights,
         "nightly_rate": nightly_rate,
         "breakdown": breakdown,
+        "promotions_applied": promotions_applied_all,
     }
     return ReservationPricingResult(
         nights=nights,
@@ -852,6 +901,8 @@ def create_reservation(
             guest_scope=data.guest_scope,
             target_currency=data.target_currency,
             occupancy=data.num_adults + data.num_children,
+            guest_id=data.guest_id,
+            company_id=data.company_id,
         )
         if company is not None:
             pricing = _apply_corporate_pricing(db, hotel_id=hotel_id, pricing=pricing, company=company, explicit_total=None)

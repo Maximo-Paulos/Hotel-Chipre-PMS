@@ -155,7 +155,9 @@ def calculate_payment_surcharge(
         else:
             surcharge_amount = (base * Decimal(str(surcharge_record.amount)) / Decimal("100")).quantize(Decimal("0.01"))
 
-    final_amount = (base + surcharge_amount).quantize(Decimal("0.01"))
+    # A discount-shaped adjustment (negative amount) must never push the
+    # final amount below 0 -- clamp rather than invent negative money owed.
+    final_amount = max(Decimal("0.00"), (base + surcharge_amount)).quantize(Decimal("0.01"))
     return {
         "base_amount": base,
         "surcharge_type": surcharge_type,

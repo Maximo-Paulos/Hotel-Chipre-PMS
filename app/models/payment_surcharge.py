@@ -14,9 +14,9 @@ from sqlalchemy import (
     Column,
     DateTime,
     Enum,
-    Float,
     ForeignKey,
     Integer,
+    Numeric,
     String,
     UniqueConstraint,
 )
@@ -48,7 +48,11 @@ class PaymentSurcharge(Base):
         ),
         nullable=False,
     )
-    amount = Column(Float, nullable=False)
+    # Decimal-safe storage (v72 mobile-first pricing task): FIXED is a money
+    # amount, PERCENTAGE is 0-100. Negative values represent a discount (e.g.
+    # cash pays less than card) and are allowed; the *computed* final amount
+    # is always clamped at 0 by app.services.payment_service.
+    amount = Column(Numeric(12, 4), nullable=False)
     currency_code = Column(String(3), nullable=False, default="ARS")
     is_active = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=_utcnow)

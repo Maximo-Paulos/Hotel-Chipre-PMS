@@ -9,16 +9,20 @@ DELETE /api/payment-surcharges/{id}     - deactivate a surcharge
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies.auth import AuthContext, require_permission
 from app.models.audit_log import AuditActionEnum
+from app.models.daily_rate import DailyRate
 from app.models.payment_surcharge import PaymentSurcharge, PaymentSurchargeTypeEnum
+from app.models.pricing import CategoryPricing
+from app.models.room import RoomCategory
 from app.services import audit_log_service
 from app.services.permission_service import (
     PERMISSION_CASH_OPERATE,
@@ -27,13 +31,48 @@ from app.services.permission_service import (
 
 router = APIRouter(prefix="/api/payment-surcharges", tags=["Payment Surcharges"])
 
+# Payment method -> per-method nightly-price override column, mirrors
+# app.services.pricing_service._METHOD_COLS. A hotel must configure either a
+# payment-method-specific nightly rate OR a payment-method surcharge for a
+# given payment method -- never both (no double-adjustment on the same
+# concept).
+_METHOD_PRICE_COLS: dict[str, str] = {
+    "cash": "price_cash",
+    "transfer": "price_transfer",
+    "mercadopago": "price_mercadopago",
+    "paypal": "price_paypal",
+    "credit_card": "price_credit_card",
+}
+
+
+def _has_per_method_nightly_price(db: Session, *, hotel_id: int, payment_method: str) -> bool:
+    column_name = _METHOD_PRICE_COLS.get(payment_method)
+    if column_name is None:
+        return False
+    daily_column = getattr(DailyRate, column_name)
+    if (
+        db.query(DailyRate.id)
+        .filter(DailyRate.hotel_id == hotel_id, daily_column.is_not(None))
+        .first()
+        is not None
+    ):
+        return True
+    category_column = getattr(CategoryPricing, column_name)
+    return (
+        db.query(CategoryPricing.category_id)
+        .join(RoomCategory, RoomCategory.id == CategoryPricing.category_id)
+        .filter(RoomCategory.hotel_id == hotel_id, category_column.is_not(None))
+        .first()
+        is not None
+    )
+
 
 class PaymentSurchargeRead(BaseModel):
     id: int
     hotel_id: int
     payment_method: str
     surcharge_type: PaymentSurchargeTypeEnum
-    amount: float
+    amount: Decimal
     currency_code: str
     is_active: bool
     created_at: datetime
@@ -44,14 +83,23 @@ class PaymentSurchargeRead(BaseModel):
 class PaymentSurchargeCreate(BaseModel):
     payment_method: str = Field(..., max_length=50)
     surcharge_type: PaymentSurchargeTypeEnum
-    amount: float = Field(..., ge=0)
+    # Negative values represent a discount (e.g. cash pays less than card).
+    # The *computed* final amount is always clamped at 0 by
+    # app.services.payment_service.calculate_payment_surcharge.
+    amount: Decimal = Field(..., ge=-1_000_000, le=1_000_000)
     currency_code: str = Field(default="ARS", max_length=3)
+
+    @model_validator(mode="after")
+    def _validate_amount_range(self) -> "PaymentSurchargeCreate":
+        if self.surcharge_type == PaymentSurchargeTypeEnum.PERCENTAGE and abs(self.amount) > 100:
+            raise ValueError("Percentage amount must be between -100 and 100")
+        return self
 
 
 class PaymentSurchargeUpdate(BaseModel):
     payment_method: Optional[str] = Field(default=None, max_length=50)
     surcharge_type: Optional[PaymentSurchargeTypeEnum] = None
-    amount: Optional[float] = Field(default=None, ge=0)
+    amount: Optional[Decimal] = Field(default=None, ge=-1_000_000, le=1_000_000)
     currency_code: Optional[str] = Field(default=None, max_length=3)
     is_active: Optional[bool] = None
 
@@ -111,6 +159,15 @@ def create_payment_surcharge(
                 "Use PATCH para actualizar o reactivar."
             ),
         )
+    if _has_per_method_nightly_price(db, hotel_id=context.hotel_id, payment_method=payload.payment_method):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"El hotel ya tiene una tarifa nocturna especifica para el metodo "
+                f"'{payload.payment_method}' (DailyRate/CategoryPricing). No se puede "
+                "configurar tambien un recargo para el mismo metodo (doble ajuste)."
+            ),
+        )
 
     surcharge = PaymentSurcharge(
         hotel_id=context.hotel_id,
@@ -146,12 +203,28 @@ def update_payment_surcharge(
     surcharge = _get_surcharge_or_404(db, surcharge_id, context.hotel_id)
     before = audit_log_service.model_snapshot(surcharge)
 
-    if payload.payment_method is not None:
-        surcharge.payment_method = payload.payment_method
-    if payload.surcharge_type is not None:
-        surcharge.surcharge_type = payload.surcharge_type
-    if payload.amount is not None:
-        surcharge.amount = payload.amount
+    new_payment_method = payload.payment_method if payload.payment_method is not None else surcharge.payment_method
+    new_surcharge_type = payload.surcharge_type if payload.surcharge_type is not None else surcharge.surcharge_type
+    new_amount = payload.amount if payload.amount is not None else surcharge.amount
+    if new_surcharge_type == PaymentSurchargeTypeEnum.PERCENTAGE and abs(new_amount) > 100:
+        raise HTTPException(status_code=422, detail="Percentage amount must be between -100 and 100")
+    if (
+        payload.payment_method is not None
+        and payload.payment_method != surcharge.payment_method
+        and _has_per_method_nightly_price(db, hotel_id=context.hotel_id, payment_method=new_payment_method)
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"El hotel ya tiene una tarifa nocturna especifica para el metodo "
+                f"'{new_payment_method}'. No se puede configurar tambien un recargo "
+                "para el mismo metodo (doble ajuste)."
+            ),
+        )
+
+    surcharge.payment_method = new_payment_method
+    surcharge.surcharge_type = new_surcharge_type
+    surcharge.amount = new_amount
     if payload.currency_code is not None:
         surcharge.currency_code = payload.currency_code.upper()
     if payload.is_active is not None:

@@ -109,6 +109,7 @@ def price_quote(
     check_in_date: date,
     check_out_date: date,
     guest_id: int | None = None,
+    company_id: int | None = None,
     sellable_product_id: int | None = None,
     rate_plan_id: int | None = None,
     tax_policy_id: int | None = None,
@@ -147,6 +148,8 @@ def price_quote(
             guest_scope=guest_scope,
             target_currency=target_currency,
             occupancy=occupancy,
+            guest_id=guest_id,
+            company_id=company_id,
         )
     except (ReservationError, ValueError) as e:
         raise HTTPException(status_code=400, detail=str(e))

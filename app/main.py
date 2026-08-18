@@ -53,6 +53,7 @@ from app.api import (
     payment_links,
     payment_proofs,
     payment_surcharges,
+    promotions,
     hotel_api_keys,
     public_booking,
     whatsapp_hooks,
@@ -241,6 +242,7 @@ app.include_router(payment_link_tests.router)
 app.include_router(payment_links.router)
 app.include_router(payment_proofs.router)
 app.include_router(payment_surcharges.router)
+app.include_router(promotions.router)
 app.include_router(hotel_api_keys.router)
 app.include_router(public_booking.router)
 app.include_router(whatsapp_hooks.router)
