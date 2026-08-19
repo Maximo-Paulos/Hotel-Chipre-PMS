@@ -104,6 +104,14 @@ test("owner creates a promotion and simulates its price breakdown", async ({ pag
           token_type: "bearer",
           hotel_id: 1,
           hotel_ids: [1],
+          // Real LoginResponse (app/schemas/auth.py) always includes
+          // `permissions`. Omitting it here made session.tsx's login()
+          // reducer treat the resulting `null` (not `undefined`) as "no
+          // permissions" and write an empty array immediately -- PermissionGate
+          // then saw permissionsKnown=true with an empty set and redirected to
+          // /dashboard before the separate /api/permissions/effective fetch
+          // below ever got a chance to resolve with the real list.
+          permissions: ["promotions:read", "promotions:manage"],
           user: { id: 1, email: "owner@example.com", role: "owner", is_verified: true, is_active: true }
         })
       });
@@ -139,6 +147,18 @@ test("owner creates a promotion and simulates its price breakdown", async ({ pag
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({ hotel_id: 1, role: "owner", permissions: ["promotions:read", "promotions:manage"] })
+      });
+      return;
+    }
+    if (url.pathname.endsWith("/api/notifications")) {
+      // Task 9: AppShell's header bell polls this on every authenticated
+      // page (see useUnreadCount in useNotifications.ts) -- without a mock
+      // this route falls through to the 404 "Unhandled mock" below, which
+      // breaks the whole shell render before promotions-page ever mounts.
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ items: [], unread_count: 0 })
       });
       return;
     }
