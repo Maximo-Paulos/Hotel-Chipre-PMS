@@ -4,6 +4,7 @@ import { ApiError } from "../api/client";
 import { type GuestUpdatePayload } from "../api/guests";
 import { type RestrictionOverride } from "../api/guestRestrictions";
 import { type PaymentMethod } from "../api/payments";
+import { useDialogA11y } from "../hooks/useDialogA11y";
 import {
   useReservation,
   useReservationMutations,
@@ -194,12 +195,18 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
     );
   };
 
+  const containerRef = useDialogA11y(open, onClose);
+
   if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex" role="dialog" aria-modal="true" aria-labelledby="reservation-drawer-title">
       <div className="flex-1 animate-fade-in bg-black/30" onClick={onClose} />
-      <div className="flex w-full max-w-xl animate-slide-in-right flex-col border-l border-slate-200 bg-white shadow-xl">
+      <div
+        ref={containerRef}
+        tabIndex={-1}
+        className="flex w-full max-w-xl animate-slide-in-right flex-col border-l border-slate-200 bg-white shadow-xl outline-none"
+      >
         <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-3">
           <div className="min-w-0">
             <p className="text-xs uppercase tracking-wide text-slate-500">Reserva</p>

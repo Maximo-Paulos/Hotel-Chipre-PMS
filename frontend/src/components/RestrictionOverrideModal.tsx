@@ -1,5 +1,7 @@
 import { useState } from "react";
 
+import { useDialogA11y } from "../hooks/useDialogA11y";
+
 type Props = {
   phase: "prompting" | "forbidden";
   onSubmit: (reason: string) => void;
@@ -16,6 +18,8 @@ type Props = {
 export function RestrictionOverrideModal({ phase, onSubmit, onCancel, isPending = false }: Props) {
   const [reason, setReason] = useState("");
   const trimmed = reason.trim();
+  // Mounted by the parent only while a phase is active -- always "open".
+  const containerRef = useDialogA11y(true, onCancel);
 
   return (
     <div
@@ -23,10 +27,12 @@ export function RestrictionOverrideModal({ phase, onSubmit, onCancel, isPending 
       onClick={onCancel}
     >
       <div
+        ref={containerRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="restriction-override-title"
-        className="w-full max-w-sm animate-scale-in rounded-xl border border-slate-200 bg-white p-5 shadow-xl"
+        className="w-full max-w-sm animate-scale-in rounded-xl border border-slate-200 bg-white p-5 shadow-xl outline-none"
         onClick={(event) => event.stopPropagation()}
       >
         {phase === "prompting" ? (

@@ -1,3 +1,5 @@
+import { useDialogA11y } from "../hooks/useDialogA11y";
+
 // ponytail: replaces window.confirm for destructive actions. window.confirm
 // is a synchronous, chrome-owned dialog -- some mobile in-app browsers
 // (WhatsApp/Instagram-style embedded WebViews) silently no-op JS dialogs
@@ -25,6 +27,7 @@ export default function ConfirmDialog({
   onConfirm,
   onCancel
 }: ConfirmDialogProps) {
+  const containerRef = useDialogA11y(open, onCancel);
   if (!open) return null;
 
   return (
@@ -33,11 +36,13 @@ export default function ConfirmDialog({
       onClick={onCancel}
     >
       <div
+        ref={containerRef}
+        tabIndex={-1}
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="confirm-dialog-title"
         aria-describedby="confirm-dialog-message"
-        className="w-full max-w-sm animate-scale-in rounded-xl border border-slate-200 bg-white p-5 shadow-xl"
+        className="w-full max-w-sm animate-scale-in rounded-xl border border-slate-200 bg-white p-5 shadow-xl outline-none"
         onClick={(event) => event.stopPropagation()}
       >
         <h2 id="confirm-dialog-title" className="text-base font-semibold text-slate-900">

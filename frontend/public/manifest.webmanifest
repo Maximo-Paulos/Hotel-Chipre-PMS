@@ -1,0 +1,15 @@
+{
+  "name": "Hotel Chipre PMS",
+  "short_name": "Chipre PMS",
+  "description": "Sistema de gestión hotelera para centralizar reservas, habitaciones, huéspedes y cobros en un solo lugar.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#12324f",
+  "icons": [
+    { "src": "/brand/favicon-180.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "/brand/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/brand/logo-avatar.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

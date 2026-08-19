@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { type Reservation } from "../api/reservations";
 import { useCategories } from "../hooks/useCategories";
+import { useDialogA11y } from "../hooks/useDialogA11y";
 import { useGuestCreate } from "../hooks/useGuests";
 import { useReservationMutations } from "../hooks/useReservations";
 import { useRooms } from "../hooks/useRooms";
@@ -76,6 +77,10 @@ export default function ManualOtaReservationModal({ open, onClose }: ManualOtaRe
   const [form, setForm] = useState<FormState>(emptyFormState);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<Reservation | null>(null);
+  const containerRef = useDialogA11y(open, () => {
+    reset();
+    onClose();
+  });
 
   if (!open) return null;
 
@@ -191,11 +196,18 @@ export default function ManualOtaReservationModal({ open, onClose }: ManualOtaRe
       data-testid="manual-ota-modal"
       className="fixed inset-0 z-30 flex animate-fade-in items-center justify-center bg-slate-900/40 px-4 py-6"
     >
-      <div className="w-full max-w-2xl max-h-[90vh] animate-scale-in overflow-y-auto rounded-xl border border-slate-200 bg-white p-6 shadow-xl">
+      <div
+        ref={containerRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="manual-ota-modal-title"
+        className="w-full max-w-2xl max-h-[90vh] animate-scale-in overflow-y-auto rounded-xl border border-slate-200 bg-white p-6 shadow-xl outline-none"
+      >
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-xs uppercase tracking-wide text-slate-500">OTA</p>
-            <h3 className="text-lg font-semibold text-slate-900">Cargar reserva de OTA</h3>
+            <h3 id="manual-ota-modal-title" className="text-lg font-semibold text-slate-900">Cargar reserva de OTA</h3>
             <p className="text-xs text-slate-500">
               Booking, Expedia u otra OTA gestionada por fuera del motor de reservas.
             </p>

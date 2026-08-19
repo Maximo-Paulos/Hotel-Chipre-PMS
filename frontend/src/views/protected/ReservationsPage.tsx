@@ -1888,7 +1888,8 @@ export function ReservationsPage() {
           </div>
           <span className="text-xs text-slate-500">Total: {reservations.length}</span>
         </div>
-        <div className="overflow-x-auto">
+        {/* Dense table needs real column width -- desktop/tablet only. */}
+        <div className="hidden overflow-x-auto md:block">
           <table className="min-w-full divide-y divide-slate-200 text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
               <tr>
@@ -1986,6 +1987,91 @@ export function ReservationsPage() {
               })}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile alternative to the table above: one card per reservation
+            with the same data/actions, stacked instead of columned. */}
+        <div className="divide-y divide-slate-200 md:hidden">
+          {!isLoading && reservations.length === 0 && (
+            <p className="px-4 py-4 text-sm text-slate-500">No hay reservas con los filtros actuales.</p>
+          )}
+          {reservations.map((reservation) => {
+            const cfg = statusConfig[reservation.status];
+            return (
+              <div key={reservation.id} className="flex flex-col gap-2 px-4 py-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-slate-900">{reservation.confirmation_code}</p>
+                    <button
+                      type="button"
+                      className="truncate text-left text-sm font-semibold text-brand-700 hover:underline"
+                      onClick={() => openGuest(reservation.guest_id)}
+                    >
+                      {reservationGuestLabel(reservation)}
+                    </button>
+                  </div>
+                  <span className={`shrink-0 rounded-full px-2 py-1 text-xs font-semibold ${cfg?.className ?? "bg-slate-100 text-slate-800"}`}>
+                    {cfg?.label ?? reservation.status}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600">
+                  {reservation.room_id ? `Hab ${reservation.room_id}` : "Sin asignar"} · Cat {reservation.category_id}
+                </p>
+                <p className="text-xs text-slate-600">
+                  {reservation.check_in_date} → {reservation.check_out_date}
+                </p>
+                <p className="text-sm font-semibold text-slate-900">
+                  {formatMoney(reservation.total_amount ?? 0, reservation.currency_code)}
+                </p>
+                <div className="flex flex-wrap gap-2 pt-1 text-xs text-slate-700">
+                  <button
+                    type="button"
+                    onClick={() => openEdit(reservation)}
+                    className="min-h-11 rounded-lg border border-slate-200 px-3 py-2 hover:border-slate-300 disabled:opacity-50"
+                    disabled={subscriptionBlocked}
+                  >
+                    Editar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openDetails(reservation)}
+                    className="min-h-11 rounded-lg border border-slate-200 px-3 py-2 hover:border-slate-300"
+                  >
+                    Ficha
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!canCancel(reservation.status) || cancelMutation.isPending || subscriptionBlocked}
+                    onClick={() => handleCancel(reservation.id)}
+                    className="min-h-11 rounded-lg border border-rose-200 px-3 py-2 text-rose-700 hover:border-rose-300 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!canCheckIn(reservation.status) || checkInMutation.isPending || subscriptionBlocked}
+                    onClick={() => handleCheckIn(reservation)}
+                    title={
+                      isCheckInReady(reservation.status)
+                        ? "Registrar check-in"
+                        : "Cobrar el saldo antes del check-in"
+                    }
+                    className="min-h-11 rounded-lg border border-emerald-200 px-3 py-2 text-emerald-700 hover:border-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Check-in
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!canCheckOut(reservation.status) || checkOutMutation.isPending || subscriptionBlocked}
+                    onClick={() => handleCheckOut(reservation)}
+                    className="min-h-11 rounded-lg border border-sky-200 px-3 py-2 text-sky-700 hover:border-sky-300 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Check-out
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 

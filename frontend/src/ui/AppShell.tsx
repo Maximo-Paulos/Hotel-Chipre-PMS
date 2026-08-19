@@ -2,9 +2,12 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import cx from "clsx";
 import { Link, NavLink, Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 
+import { NotificationsPanel } from "../components/NotificationsPanel";
 import { ReservationDetailDrawer } from "../components/ReservationDetailDrawer";
 import { ReservationGlobalSearch } from "../components/ReservationGlobalSearch";
 import { Seo } from "../components/Seo";
+import { useDialogA11y } from "../hooks/useDialogA11y";
+import { useInstallPrompt } from "../hooks/useInstallPrompt";
 import { useOnboardingStatus } from "../hooks/useOnboardingStatus";
 import { useEffectivePermissions } from "../hooks/usePermissions";
 import { useReservationDrawer } from "../hooks/useReservationDrawer";
@@ -13,6 +16,7 @@ import { defaultPathForRole, useSession } from "../state/session";
 import { ApiError, hasValidSession } from "../api/client";
 import { useCrossTabSync } from "../sync/crossTabSync";
 
+import { BottomNav, type BottomNavTab } from "./BottomNav";
 import { HotelSelector } from "./HotelSelector";
 import { UserBadge, roleLabels } from "./UserBadge";
 
@@ -128,6 +132,9 @@ export function AppShell() {
   // <details> "Mas opciones" text link that doesn't read as a menu). One
   // recognizable menu button + one slide-over panel replaces both.
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [alertsOpen, setAlertsOpen] = useState(false);
+  const mobileMenuPanelRef = useDialogA11y(mobileMenuOpen, () => setMobileMenuOpen(false));
+  const installPrompt = useInstallPrompt();
 
   useCrossTabSync();
 
@@ -188,6 +195,39 @@ export function AppShell() {
       })
       .filter((section): section is NavSection => Boolean(section));
   }, [filterItems]);
+
+  // Mobile bottom nav: reuses the exact same NavItem objects (and filterItems
+  // gating) as the desktop sidebar/slide-over -- one permission model, not a
+  // parallel one. Housekeeping gets its own small set (Habitaciones,
+  // Lavanderia) instead of the operator set (Planilla/Reservas/Huespedes)
+  // because those routes are role-gated away from housekeeping already (see
+  // router.tsx); an item that isn't allowed simply never enters the list,
+  // same as "disappears automatically" on desktop.
+  const bottomNavTabs = useMemo<BottomNavTab[]>(() => {
+    const habitaciones = dailyNav.find((item) => item.to === "/habitaciones");
+    const lavanderia = groupedNav.flatMap((section) => section.items).find((item) => item.label === "Lavanderia");
+    const candidates: NavItem[] = isHousekeeping
+      ? [habitaciones, lavanderia].filter((item): item is NavItem => Boolean(item))
+      : dailyNav.filter((item) => item.to !== "/caja");
+    const links = filterItems(candidates).map((item): BottomNavTab => ({ kind: "link", label: item.label, to: item.to }));
+    const tabs: BottomNavTab[] = [...links];
+    if (isHousekeeping) {
+      tabs.push({
+        kind: "button",
+        label: "Alertas",
+        onClick: () => setAlertsOpen(true),
+        testId: "bottom-nav-alerts-button"
+      });
+    }
+    tabs.push({
+      kind: "button",
+      label: "Más",
+      onClick: () => setMobileMenuOpen(true),
+      testId: "bottom-nav-more-button",
+      active: mobileMenuOpen
+    });
+    return tabs;
+  }, [isHousekeeping, filterItems, mobileMenuOpen]);
 
   const path = location.pathname;
   if (onboarding?.completed && path.startsWith("/onboarding")) return <Navigate to="/dashboard" replace />;
@@ -256,6 +296,28 @@ export function AppShell() {
             : onboardingError.status === 403
               ? "Debes verificar tu email para continuar."
               : "Sin conexion con el backend. Seguimos en modo offline para no bloquear la UI."}
+        </div>
+      )}
+
+      {installPrompt.canInstall && (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-emerald-200 bg-emerald-50 px-6 py-2 text-sm text-emerald-900">
+          <span>Instalá Hotel Chipre PMS en este dispositivo para acceso rápido.</span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={installPrompt.promptInstall}
+              className="min-h-11 rounded-lg border border-emerald-300 bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700"
+            >
+              Instalar
+            </button>
+            <button
+              type="button"
+              onClick={installPrompt.dismiss}
+              className="min-h-11 rounded-lg border border-emerald-200 px-3 py-1.5 text-xs font-semibold text-emerald-800 hover:bg-emerald-100"
+            >
+              Ahora no
+            </button>
+          </div>
         </div>
       )}
 
@@ -333,26 +395,51 @@ export function AppShell() {
                   className="h-9 w-9 rounded-full border border-slate-200 object-cover"
                 />
               </Link>
-              <button
-                type="button"
-                onClick={() => setMobileMenuOpen(true)}
-                aria-label="Abrir menú"
-                aria-haspopup="true"
-                aria-expanded={mobileMenuOpen}
-                aria-controls="mobile-menu-panel"
-                data-testid="mobile-menu-button"
-                className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100"
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="h-5 w-5" aria-hidden="true">
-                  <line x1="4" y1="6" x2="20" y2="6" />
-                  <line x1="4" y1="12" x2="20" y2="12" />
-                  <line x1="4" y1="18" x2="20" y2="18" />
-                </svg>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setAlertsOpen(true)}
+                  aria-label="Ver alertas"
+                  data-testid="mobile-alerts-button"
+                  className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5" aria-hidden="true">
+                    <path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+                    <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMobileMenuOpen(true)}
+                  aria-label="Abrir menú"
+                  aria-haspopup="true"
+                  aria-expanded={mobileMenuOpen}
+                  aria-controls="mobile-menu-panel"
+                  data-testid="mobile-menu-button"
+                  className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="h-5 w-5" aria-hidden="true">
+                    <line x1="4" y1="6" x2="20" y2="6" />
+                    <line x1="4" y1="12" x2="20" y2="12" />
+                    <line x1="4" y1="18" x2="20" y2="18" />
+                  </svg>
+                </button>
+              </div>
             </div>
 
             <div className="hidden px-4 py-3 md:flex md:items-center md:justify-end md:gap-3">
               {hasAnyPermission(["reservation:create", "checkin:perform"]) && <ReservationGlobalSearch />}
+              <button
+                type="button"
+                onClick={() => setAlertsOpen(true)}
+                aria-label="Ver alertas"
+                className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5" aria-hidden="true">
+                  <path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+                  <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                </svg>
+              </button>
               <HotelSelector />
               <UserBadge />
             </div>
@@ -368,7 +455,9 @@ export function AppShell() {
               <div className="flex-1 animate-fade-in bg-black/30" onClick={() => setMobileMenuOpen(false)} />
               <div
                 id="mobile-menu-panel"
-                className="flex h-full w-full max-w-xs animate-slide-in-right flex-col overflow-y-auto border-l border-slate-200 bg-white shadow-xl"
+                ref={mobileMenuPanelRef}
+                tabIndex={-1}
+                className="flex h-full w-full max-w-xs animate-slide-in-right flex-col overflow-y-auto border-l border-slate-200 bg-white shadow-xl outline-none"
               >
                 <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
                   <span className="text-sm font-semibold text-slate-900">Menú</span>
@@ -428,7 +517,10 @@ export function AppShell() {
             </div>
           )}
 
-          <main className="min-w-0 flex-1 px-4 py-8 sm:px-8">
+          {/* Bottom padding clears the fixed BottomNav (56px tall) plus the
+              home-indicator safe area on notched phones; md+ keeps the
+              original padding since the bottom nav is md:hidden there. */}
+          <main className="min-w-0 flex-1 px-4 pb-[calc(56px+env(safe-area-inset-bottom)+1.5rem)] pt-8 sm:px-8 md:pb-8">
             <div className="mx-auto max-w-6xl min-w-0">
               <Suspense fallback={<p className="text-sm text-slate-500">Cargando...</p>}>
                 <Outlet />
@@ -438,9 +530,13 @@ export function AppShell() {
         </div>
       </div>
 
+      <BottomNav tabs={bottomNavTabs} />
+
       {hasAnyPermission(["reservation:create", "checkin:perform"]) && (
         <ReservationDetailDrawer reservationId={drawerReservationId} onClose={closeReservation} />
       )}
+
+      <NotificationsPanel open={alertsOpen} onClose={() => setAlertsOpen(false)} />
     </div>
   );
 }
