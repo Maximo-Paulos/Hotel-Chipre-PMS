@@ -13,6 +13,8 @@ import {
   markLaundryVendorSettlementPaid,
   setLaundryVendorPrice,
   updateLaundryVendor,
+  type LaundryRemitoCreate,
+  type LaundryRemitoCreateResponse,
   type LaundryRemitoLineCreate,
   type LaundryVendor,
   type LaundryVendorSettlementQuarter,
@@ -37,15 +39,13 @@ import { useSession } from "../../state/session";
 import { formatMoney } from "../../utils/currency";
 import { startOfCurrentMonthIso, startOfCurrentWeekIso, todayIso } from "../../utils/date";
 
-// Mobile task-based tabs (see useIsDesktopViewport docstring): "outbound" and
-// "inbound" both render the SAME "Nuevo remito" form (direction pre-selected,
-// still togglable), not two copies -- desktop keeps showing every section at
-// once regardless of mobileTab. "vendors" (lavaderos/precios/catálogo) is
-// only offered to users who actually hold laundry:manage_vendors -- mirrors
-// the existing (tested, see housekeeping-laundry-journey.spec.ts) desktop
+// Mobile task-based tabs -- desktop keeps showing every section at once
+// regardless of mobileTab. "vendors" (lavaderos/precios/catálogo) is only
+// offered to users who actually hold laundry:manage_vendors -- mirrors the
+// existing (tested, see housekeeping-laundry-journey.spec.ts) desktop
 // behavior of never revealing that panel exists to housekeeping at all,
 // rather than showing a permission-denied explanation for it.
-type LaundryMobileTab = "available" | "outbound" | "inbound" | "vendors" | "history";
+type LaundryMobileTab = "available" | "remito" | "vendors" | "history";
 
 // D2 (Via D lavanderia): replaces the old LaundryBatch/LaundryItem UI
 // entirely -- D0 confirmed no open batches in production, so there is no
@@ -67,13 +67,18 @@ const emptyLinenItemForm = { name: "", unit: "unidad" };
 const emptyLinenLocationForm = { name: "" };
 const emptyMovementForm = { linen_item_id: "", location_id: "", movement_type: "in" as StockMovementType, quantity: "1", reason: "" };
 
-type LineDraft = { linen_item_id: number; item_name: string; unit: string; quantity: string };
+// Combined remito entry: one row per linen item, quantity for each direction
+// at once (mirrors the vendor's paper remito, which has a RETIRO and an
+// ENTREGO column side by side for the same visit -- see task brief). Empty
+// or "0" means "nothing for this item in this direction", not an error.
+type RemitoQuantities = Record<number, { retiro: string; entrego: string }>;
 
 const emptyRemitoForm = () => ({
-  direction: "outbound" as RemitoDirection,
   vendor_id: "",
   house_location_id: "",
-  remito_number: "",
+  // Auto-suggested from today's date (still editable) -- the paper slip
+  // numbers vary per vendor and this field isn't globally unique server-side.
+  remito_number: todayIso().replace(/-/g, ""),
   remito_date: todayIso(),
   notes: ""
 });
@@ -85,26 +90,25 @@ export function LaundryPage() {
   const enabled = hasValidSession(session);
   const manageVendors = hasPermission("laundry:manage_vendors");
   const operateRemitos = hasPermission("laundry:operate_remitos");
+  // Financial visibility (spend report + settlements), not vendor operations
+  // -- owner/co-owner only by default now, matching the backend gate on
+  // GET .../spend, GET .../settlements and the mark-paid POST (see
+  // app/api/laundry_vendor.py). A manager still holds manageVendors (vendor
+  // CRUD/prices/remitos), just not this money-visibility section.
+  const viewFinancial = hasPermission("reports:financial:view");
   const isDesktop = useIsDesktopViewport();
   const isOnline = useOnlineStatus();
   const mobileTabs = useMemo(() => {
     const tabs: Array<{ tab: LaundryMobileTab; label: string }> = [];
     if (operateRemitos) tabs.push({ tab: "available", label: "Disponible" });
-    if (operateRemitos) tabs.push({ tab: "outbound", label: "Salida" });
-    if (operateRemitos) tabs.push({ tab: "inbound", label: "Retorno" });
+    if (operateRemitos) tabs.push({ tab: "remito", label: "Nuevo remito" });
     if (manageVendors) tabs.push({ tab: "vendors", label: "Lavaderos" });
     if (operateRemitos) tabs.push({ tab: "history", label: "Historial" });
     return tabs;
   }, [operateRemitos, manageVendors]);
   const [mobileTab, setMobileTab] = useState<LaundryMobileTab>("available");
   const showSection = (tab: LaundryMobileTab) => isDesktop || mobileTab === tab;
-  const remitoFormVisible = isDesktop || mobileTab === "outbound" || mobileTab === "inbound";
-  const selectMobileTab = (tab: LaundryMobileTab) => {
-    setMobileTab(tab);
-    if (tab === "outbound" || tab === "inbound") {
-      setRemitoForm((current) => (current.direction === tab ? current : { ...current, direction: tab }));
-    }
-  };
+  const remitoFormVisible = isDesktop || mobileTab === "remito";
 
   const [message, setMessage] = useState<string | null>(null);
   const [selectedVendorId, setSelectedVendorId] = useState<number | null>(null);
@@ -114,8 +118,7 @@ export function LaundryPage() {
   const [linenLocationForm, setLinenLocationForm] = useState(emptyLinenLocationForm);
   const [movementForm, setMovementForm] = useState(emptyMovementForm);
   const [remitoForm, setRemitoForm] = useState(emptyRemitoForm);
-  const [lines, setLines] = useState<LineDraft[]>([]);
-  const [lineDraft, setLineDraft] = useState({ linen_item_id: "", quantity: "1" });
+  const [remitoQuantities, setRemitoQuantities] = useState<RemitoQuantities>({});
   const [remitoError, setRemitoError] = useState<string | null>(null);
   const [houseStockLocationId, setHouseStockLocationId] = useState<string>("");
   const [spendRange, setSpendRange] = useState(() => ({ from: startOfCurrentMonthIso(), to: todayIso() }));
@@ -182,7 +185,7 @@ export function LaundryPage() {
   const settlementsQuery = useQuery({
     queryKey: ["laundry-vendor-settlements", session.hotelId, selectedVendorId, settlementYear],
     queryFn: () => getLaundryVendorSettlements(selectedVendorId as number, settlementYear, session),
-    enabled: enabled && manageVendors && selectedVendorId !== null,
+    enabled: enabled && viewFinancial && selectedVendorId !== null,
     staleTime: 15 * 1000
   });
   const settlementQuarters = useMemo(() => settlementsQuery.data ?? [], [settlementsQuery.data]);
@@ -212,9 +215,57 @@ export function LaundryPage() {
       staleTime: 15 * 1000
     }))
   });
+  // "En el lavadero" per item, for the vendor picked in the remito form --
+  // reuses the same balanceQueries array (multi-vendor pattern already used
+  // by the "Balance por lavadero" panel below), just narrowed to one vendor
+  // instead of rendered per-vendor, since a remito only ever targets one.
+  const remitoVendorBalanceByItemId = useMemo(() => {
+    const map = new Map<number, string>();
+    const index = vendors.findIndex((vendor) => vendor.id === remitoVendorId);
+    if (index === -1) return map;
+    (balanceQueries[index]?.data ?? []).forEach((line) => map.set(line.linen_item_id, String(line.quantity)));
+    return map;
+  }, [vendors, remitoVendorId, balanceQueries]);
 
-  // Spend report: GET /api/laundry/vendors/{id}/spend is per-vendor only
-  // (gated by laundry:manage_vendors, which housekeeping never holds anyway).
+  // "En el hotel" per item, for the house location picked in the remito
+  // form -- same current_stock() primitive as HouseStockPanel below, kept as
+  // its own query since the two panels serve different purposes (this one is
+  // contextual to the remito being entered; HouseStockPanel is a standalone
+  // browse view with its own location picker).
+  const remitoHouseStockQuery = useQuery({
+    queryKey: ["linen-summary", session.hotelId, "remito-form", remitoForm.house_location_id],
+    queryFn: () => getLinenSummary({ locationId: Number(remitoForm.house_location_id) }, session),
+    enabled: enabled && Boolean(remitoForm.house_location_id),
+    staleTime: 15 * 1000
+  });
+  const remitoHouseStockByItemId = useMemo(() => {
+    const map = new Map<number, string>();
+    (remitoHouseStockQuery.data ?? []).forEach((entry) => map.set(entry.item.id, String(entry.current_quantity)));
+    return map;
+  }, [remitoHouseStockQuery.data]);
+
+  // Combined entry, mirrors the paper remito's two columns: every item with
+  // a "Retiro" qty > 0 becomes one outbound remito line, every item with an
+  // "Entrego" qty > 0 becomes one inbound remito line -- see createRemitoMutation.
+  const outboundLines = useMemo<LaundryRemitoLineCreate[]>(
+    () =>
+      items
+        .map((item) => ({ linen_item_id: item.id, quantity: remitoQuantities[item.id]?.retiro ?? "" }))
+        .filter((line) => Number(line.quantity) > 0),
+    [items, remitoQuantities]
+  );
+  const inboundLines = useMemo<LaundryRemitoLineCreate[]>(
+    () =>
+      items
+        .map((item) => ({ linen_item_id: item.id, quantity: remitoQuantities[item.id]?.entrego ?? "" }))
+        .filter((line) => Number(line.quantity) > 0),
+    [items, remitoQuantities]
+  );
+
+  // Spend report: GET /api/laundry/vendors/{id}/spend is per-vendor only,
+  // gated by reports:financial:view -- owner/co-owner by default, not
+  // laundry:manage_vendors (a manager keeps vendor/price/remito management
+  // but not this money visibility, see viewFinancial above).
   // A hotel realistically has 1-3 laundries (see plan D3), so N small
   // parallel requests summed client-side is simpler than adding and testing
   // a new aggregate backend endpoint for a handful of rows.
@@ -229,7 +280,7 @@ export function LaundryPage() {
           { dateFrom: dayStartIso(spendRange.from), dateTo: dayEndIso(spendRange.to) },
           session
         ),
-      enabled: enabled && manageVendors,
+      enabled: enabled && viewFinancial,
       staleTime: 15 * 1000
     }))
   });
@@ -368,44 +419,81 @@ export function LaundryPage() {
     }
   });
 
+  // One visit to the vendor's paper remito produces up to two rows in
+  // laundry_remitos (outbound + inbound), sharing the same remito_number and
+  // remito_date -- create_remito is single-direction and atomic per call
+  // (see app/services/laundry_vendor_service.py docstring), there is no
+  // cross-remito transaction. Sequential, not Promise.all: if outbound fails
+  // nothing was saved and inbound is never attempted (fail fast, safe to
+  // retry both). If outbound succeeds and inbound fails, that is real partial
+  // state -- surfaced as a warning message, not rolled back and not thrown as
+  // a generic error (see RemitoSaveResult / handleCreateRemito below).
+  type RemitoSaveResult = {
+    outbound: LaundryRemitoCreateResponse | null;
+    inbound: LaundryRemitoCreateResponse | null;
+    inboundError: string | null;
+  };
+
   // A duplicate remito submission would create a second real stock transfer
   // (and, for outbound, a second real charge from the laundry) -- guard it.
-  const createRemitoMutation = useGuardedMutation({
-    mutationFn: () =>
-      createLaundryRemito(
-        {
-          vendor_id: Number(remitoForm.vendor_id),
-          direction: remitoForm.direction,
-          remito_number: remitoForm.remito_number.trim(),
-          remito_date: new Date(`${remitoForm.remito_date}T00:00:00`).toISOString(),
-          house_location_id: Number(remitoForm.house_location_id),
-          notes: remitoForm.notes || null,
-          lines: lines.map<LaundryRemitoLineCreate>((line) => ({
-            linen_item_id: line.linen_item_id,
-            quantity: line.quantity
-          }))
-        },
-        session
-      ),
-    onSuccess: (response) => {
+  const createRemitoMutation = useGuardedMutation<RemitoSaveResult>({
+    mutationFn: async () => {
+      const buildPayload = (direction: RemitoDirection, remitoLines: LaundryRemitoLineCreate[]): LaundryRemitoCreate => ({
+        vendor_id: Number(remitoForm.vendor_id),
+        direction,
+        remito_number: remitoForm.remito_number.trim(),
+        remito_date: new Date(`${remitoForm.remito_date}T00:00:00`).toISOString(),
+        house_location_id: Number(remitoForm.house_location_id),
+        notes: remitoForm.notes || null,
+        lines: remitoLines
+      });
+
+      let outbound: LaundryRemitoCreateResponse | null = null;
+      if (outboundLines.length > 0) {
+        outbound = await createLaundryRemito(buildPayload("outbound", outboundLines), session);
+      }
+
+      let inbound: LaundryRemitoCreateResponse | null = null;
+      let inboundError: string | null = null;
+      if (inboundLines.length > 0) {
+        try {
+          inbound = await createLaundryRemito(buildPayload("inbound", inboundLines), session);
+        } catch (error) {
+          if (!outbound) throw error;
+          inboundError = error instanceof Error ? error.message : "No se pudo registrar el retorno.";
+        }
+      }
+
+      return { outbound, inbound, inboundError };
+    },
+    onSuccess: (result) => {
       invalidateAfterRemito();
-      setLines([]);
-      // Keep direction/vendor/house location: a remito cycle is "salida,
-      // salida, entrada, ..." for the same vendor+location in one sitting
-      // (see plan D), so re-selecting all three before every single line is
-      // friction, not a safety feature -- only remito_number/date/lines/notes
+      if (result.inboundError) {
+        setMessage(
+          `Salida registrada (remito ${result.outbound?.remito.remito_number}), pero el retorno falló: ${result.inboundError}`
+        );
+        // Only the retiro half went through -- clear it, keep whatever
+        // entrego quantities were entered so retrying just needs "Guardar" again.
+        setRemitoQuantities((current) => {
+          const next: RemitoQuantities = {};
+          Object.entries(current).forEach(([itemId, quantity]) => {
+            if (Number(quantity.entrego) > 0) next[Number(itemId)] = { retiro: "", entrego: quantity.entrego };
+          });
+          return next;
+        });
+      } else {
+        const warnings = [...(result.outbound?.warnings ?? []), ...(result.inbound?.warnings ?? [])];
+        const remitoNumber = result.outbound?.remito.remito_number ?? result.inbound?.remito.remito_number;
+        setMessage(
+          warnings.length > 0 ? `Remito ${remitoNumber} guardado. ${warnings.join(" ")}` : `Remito ${remitoNumber} guardado.`
+        );
+        setRemitoQuantities({});
+      }
+      // Keep vendor/house location: a laundry visit is usually the only one
+      // for that vendor+location that day, but re-selecting both before the
+      // next remito is still friction -- only number/date/notes/quantities
       // are one-shot per remito and reset.
-      setRemitoForm((current) => ({
-        ...emptyRemitoForm(),
-        direction: current.direction,
-        vendor_id: current.vendor_id,
-        house_location_id: current.house_location_id
-      }));
-      setMessage(
-        response.warnings.length > 0
-          ? `Remito ${response.remito.remito_number} guardado. ${response.warnings.join(" ")}`
-          : `Remito ${response.remito.remito_number} guardado.`
-      );
+      setRemitoForm((current) => ({ ...emptyRemitoForm(), vendor_id: current.vendor_id, house_location_id: current.house_location_id }));
     }
   });
 
@@ -481,28 +569,23 @@ export function LaundryPage() {
     }
   };
 
-  const addLine = () => {
-    const itemId = Number(lineDraft.linen_item_id);
-    const item = itemById.get(itemId);
-    const quantity = Number(lineDraft.quantity);
-    if (!item || !Number.isFinite(quantity) || quantity <= 0) return;
-    setLines((current) => {
-      const withoutItem = current.filter((line) => line.linen_item_id !== itemId);
-      return [...withoutItem, { linen_item_id: itemId, item_name: item.name, unit: item.unit, quantity: lineDraft.quantity }];
-    });
-    setLineDraft({ linen_item_id: "", quantity: "1" });
-  };
-
-  const removeLine = (itemId: number) => setLines((current) => current.filter((line) => line.linen_item_id !== itemId));
-
+  // Billing only ever happens on the outbound side (see the spend report's
+  // "según lo que se mandó a lavar" comment below) -- the running total
+  // while entering a remito mirrors that, using only the retiro quantities.
   const remitoTotal = useMemo(() => {
-    return lines.reduce((sum, line) => {
+    return outboundLines.reduce((sum, line) => {
       const price = remitoVendorPriceByItem.get(line.linen_item_id);
       if (!price) return sum;
       return sum + Number(price.unit_price) * Number(line.quantity || 0);
     }, 0);
-  }, [lines, remitoVendorPriceByItem]);
+  }, [outboundLines, remitoVendorPriceByItem]);
   const remitoCurrency = remitoVendorPricesQuery.data?.[0]?.currency_code;
+
+  const setRemitoQuantity = (itemId: number, direction: "retiro" | "entrego", value: string) =>
+    setRemitoQuantities((current) => ({
+      ...current,
+      [itemId]: { retiro: current[itemId]?.retiro ?? "", entrego: current[itemId]?.entrego ?? "", [direction]: value }
+    }));
 
   const handleCreateRemito = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -511,8 +594,8 @@ export function LaundryPage() {
       setRemitoError("Sin conexión. Conectate para guardar el remito.");
       return;
     }
-    if (lines.length === 0) {
-      setRemitoError("Agregá al menos una línea (ítem + cantidad).");
+    if (outboundLines.length === 0 && inboundLines.length === 0) {
+      setRemitoError("Cargá al menos una cantidad de retiro o entrega.");
       return;
     }
     try {
@@ -524,8 +607,6 @@ export function LaundryPage() {
       setRemitoError(error instanceof Error ? error.message : "No se pudo guardar el remito.");
     }
   };
-
-  const itemsAvailableToAdd = items.filter((item) => !lines.some((line) => line.linen_item_id === item.id));
 
   return (
     <div className="space-y-6">
@@ -560,7 +641,7 @@ export function LaundryPage() {
               type="button"
               role="tab"
               aria-selected={mobileTab === tab}
-              onClick={() => selectMobileTab(tab)}
+              onClick={() => setMobileTab(tab)}
               className={`min-h-11 shrink-0 rounded-full border px-4 py-2 text-sm font-semibold ${
                 mobileTab === tab ? "border-brand-300 bg-brand-50 text-brand-800" : "border-slate-200 bg-white text-slate-600"
               }`}
@@ -889,7 +970,7 @@ export function LaundryPage() {
         </section>
       )}
 
-      {manageVendors && (
+      {viewFinancial && (
         <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <div>
@@ -974,7 +1055,7 @@ export function LaundryPage() {
         </section>
       )}
 
-      {manageVendors && (
+      {viewFinancial && (
         <SettlementSection
           selectedVendor={selectedVendor}
           year={settlementYear}
@@ -1066,33 +1147,10 @@ export function LaundryPage() {
               <div>
                 <p className="text-xs uppercase tracking-wide text-slate-500">Remito</p>
                 <h2 className="text-lg font-semibold text-slate-900">Nuevo remito</h2>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2" role="group" aria-label="Dirección del remito">
-                <button
-                  type="button"
-                  aria-pressed={remitoForm.direction === "outbound"}
-                  onClick={() => setRemitoForm((current) => ({ ...current, direction: "outbound" }))}
-                  className={`min-h-11 rounded-lg border px-3 py-2 text-xs font-semibold ${
-                    remitoForm.direction === "outbound"
-                      ? "border-rose-300 bg-rose-50 text-rose-800"
-                      : "border-slate-200 bg-white text-slate-700"
-                  }`}
-                >
-                  Salida (se lleva sucia)
-                </button>
-                <button
-                  type="button"
-                  aria-pressed={remitoForm.direction === "inbound"}
-                  onClick={() => setRemitoForm((current) => ({ ...current, direction: "inbound" }))}
-                  className={`min-h-11 rounded-lg border px-3 py-2 text-xs font-semibold ${
-                    remitoForm.direction === "inbound"
-                      ? "border-emerald-300 bg-emerald-50 text-emerald-800"
-                      : "border-slate-200 bg-white text-slate-700"
-                  }`}
-                >
-                  Entrada (trae limpia)
-                </button>
+                <p className="text-sm text-slate-600">
+                  Retiro: lo que se lleva sucio. Entrego: lo que trae limpio. Cargá cada ítem como en el remito de
+                  papel del lavadero.
+                </p>
               </div>
 
               <label className="space-y-1 text-sm">
@@ -1152,76 +1210,47 @@ export function LaundryPage() {
               </div>
 
               <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Líneas</p>
-                {lines.length > 0 && (
-                  <ul className="space-y-1">
-                    {lines.map((line) => {
-                      const price = remitoVendorPriceByItem.get(line.linen_item_id);
-                      const subtotal = price ? Number(price.unit_price) * Number(line.quantity || 0) : null;
-                      return (
-                        <li key={line.linen_item_id} className="flex items-center justify-between gap-2 rounded-md bg-white px-3 py-2 text-sm shadow-sm">
-                          <span>
-                            {line.item_name} × {line.quantity} {line.unit}
-                          </span>
-                          <span className="flex items-center gap-2">
-                            {manageVendors && (
-                              <span className="text-xs text-slate-600">
-                                {subtotal !== null ? formatMoney(subtotal, remitoCurrency) : "sin precio"}
-                              </span>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => removeLine(line.linen_item_id)}
-                              aria-label={`Quitar ${line.item_name}`}
-                              className="text-xs font-semibold text-rose-700 hover:underline"
-                            >
-                              Quitar
-                            </button>
-                          </span>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-                <div className="grid grid-cols-[1fr_90px_auto] items-end gap-2">
-                  <label className="space-y-1 text-xs font-semibold text-slate-600">
-                    Ítem
-                    <select
-                      value={lineDraft.linen_item_id}
-                      onChange={(event) => setLineDraft((current) => ({ ...current, linen_item_id: event.target.value }))}
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                    >
-                      <option value="">Seleccionar</option>
-                      {itemsAvailableToAdd.map((item: LinenItem) => (
-                        <option key={item.id} value={item.id}>
-                          {item.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="space-y-1 text-xs font-semibold text-slate-600">
-                    Cant.
-                    <input
-                      type="number"
-                      min="0.01"
-                      step="0.01"
-                      value={lineDraft.quantity}
-                      onChange={(event) => setLineDraft((current) => ({ ...current, quantity: event.target.value }))}
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    onClick={addLine}
-                    disabled={!lineDraft.linen_item_id}
-                    className="min-h-11 rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-xs font-semibold text-brand-700 hover:bg-brand-100 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    Agregar línea
-                  </button>
-                </div>
-                {manageVendors && lines.length > 0 && (
+                <p className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Ítems</p>
+                <ul className="space-y-2">
+                  {items.map((item) => (
+                    <li key={item.id} className="space-y-2 rounded-lg bg-white px-3 py-2 shadow-sm">
+                      <div>
+                        <p className="text-sm font-medium text-slate-900">{item.name}</p>
+                        <p className="text-xs text-slate-500">
+                          Hotel:{" "}
+                          {remitoForm.house_location_id ? `${remitoHouseStockByItemId.get(item.id) ?? "0"} ${item.unit}` : "elegí ubicación"}
+                          {" · "}
+                          Lavadero:{" "}
+                          {remitoForm.vendor_id ? `${remitoVendorBalanceByItemId.get(item.id) ?? "0"} ${item.unit}` : "elegí lavadero"}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                        <div className="flex items-center gap-2">
+                          <span className="w-14 shrink-0 text-xs font-semibold uppercase tracking-wide text-slate-500">Retiro</span>
+                          <QuantityStepper
+                            ariaLabel={`Retiro ${item.name}`}
+                            value={remitoQuantities[item.id]?.retiro ?? ""}
+                            onChange={(value) => setRemitoQuantity(item.id, "retiro", value)}
+                          />
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="w-14 shrink-0 text-xs font-semibold uppercase tracking-wide text-slate-500">Entrego</span>
+                          <QuantityStepper
+                            ariaLabel={`Entrego ${item.name}`}
+                            value={remitoQuantities[item.id]?.entrego ?? ""}
+                            onChange={(value) => setRemitoQuantity(item.id, "entrego", value)}
+                          />
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                  {items.length === 0 && (
+                    <li className="text-xs text-slate-500">Todavía no hay tipos de ropa blanca cargados.</li>
+                  )}
+                </ul>
+                {manageVendors && outboundLines.length > 0 && (
                   <p className="text-right text-sm font-semibold text-slate-800">
-                    Total estimado: {formatMoney(remitoTotal, remitoCurrency)}
+                    Total estimado (retiro): {formatMoney(remitoTotal, remitoCurrency)}
                   </p>
                 )}
               </div>
@@ -1270,6 +1299,54 @@ export function LaundryPage() {
           </aside>
         </div>
       )}
+    </div>
+  );
+}
+
+// Fast tap-per-item entry, mirrors the paper remito's RETIRO/ENTREGO columns:
+// a number input (select-on-focus so a tap + digit replaces "0" instantly)
+// flanked by +/- buttons for one-tap adjustments, all 44px+ for touch (see
+// task brief: "se van cinco, entra cuatro, hacés así rápidamente").
+function QuantityStepper({
+  ariaLabel,
+  value,
+  onChange
+}: {
+  ariaLabel: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const quantity = Number(value) || 0;
+  const step = (delta: number) => onChange(String(Math.max(0, quantity + delta)));
+  return (
+    <div className="flex items-center gap-1">
+      <button
+        type="button"
+        aria-label={`Restar a ${ariaLabel}`}
+        onClick={() => step(-1)}
+        className="flex h-11 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-base font-semibold text-slate-600 hover:bg-slate-50"
+      >
+        −
+      </button>
+      <input
+        type="number"
+        inputMode="decimal"
+        min="0"
+        step="1"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        onFocus={(event) => event.target.select()}
+        aria-label={ariaLabel}
+        className="h-11 w-14 rounded-lg border border-slate-300 px-1 text-center text-lg font-semibold"
+      />
+      <button
+        type="button"
+        aria-label={`Sumar a ${ariaLabel}`}
+        onClick={() => step(1)}
+        className="flex h-11 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-base font-semibold text-slate-600 hover:bg-slate-50"
+      >
+        +
+      </button>
     </div>
   );
 }
