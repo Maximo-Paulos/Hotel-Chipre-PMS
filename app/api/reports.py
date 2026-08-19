@@ -3,6 +3,7 @@ FastAPI routes for Reports & Night Audit.
 Daily summaries, occupancy reports, revenue tracking.
 """
 from datetime import date, datetime, timezone, timedelta
+from decimal import Decimal
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -162,7 +163,8 @@ def daily_report(
     )
 
     revenue_by_method = {}
-    total_revenue = 0.0
+    # Same float/Decimal accumulator bug as revenue_report() below.
+    total_revenue = Decimal("0")
     for t in today_transactions:
         method = t.payment_method.value
         revenue_by_method[method] = revenue_by_method.get(method, 0) + t.amount
@@ -321,7 +323,11 @@ def revenue_report(
 
     by_method = {}
     by_day = {}
-    total = 0.0
+    # Transaction.amount is Numeric/Decimal (app/models/transaction.py) --
+    # a float accumulator here raises "unsupported operand type(s) for +=:
+    # 'float' and 'decimal.Decimal'" on the very first completed transaction,
+    # crashing this endpoint with a 500 for any hotel with real payment data.
+    total = Decimal("0")
 
     for t in transactions:
         method = t.payment_method.value
