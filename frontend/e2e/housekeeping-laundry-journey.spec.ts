@@ -82,15 +82,10 @@ test("housekeeping sends a laundry remito on a vendor set up by the owner", asyn
   await expect(main.getByText("Lavaderos y precios", { exact: false })).toHaveCount(0);
 
   const remitoForm = main.locator("form").filter({ hasText: "Nuevo remito" });
-  await remitoForm.getByRole("button", { name: "Salida (se lleva sucia)", exact: true }).click();
   await remitoForm.getByLabel("Lavadero").selectOption({ label: vendorName });
   await remitoForm.getByLabel("Ubicación casa (origen/destino en el hotel)").selectOption({ label: locationName });
   await remitoForm.getByLabel("N° de remito (papel)").fill(`R-HK-${suffix}`);
-  const remitoLineForm = remitoForm.locator("div").filter({ hasText: "Líneas" }).last();
-  await remitoLineForm.getByLabel("Ítem").selectOption({ label: itemName });
-  await remitoLineForm.getByLabel("Cant.").fill("5");
-  await remitoLineForm.getByRole("button", { name: "Agregar línea", exact: true }).click();
-  await expect(remitoForm).toContainText(`${itemName} × 5`);
+  await remitoForm.getByLabel(`Retiro ${itemName}`, { exact: true }).fill("5");
   await remitoForm.getByRole("button", { name: "Guardar remito", exact: true }).click();
   // No price was set for this vendor/item (out of scope for a permission
   // test), so the success message also carries the "sin precio" warning --

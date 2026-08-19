@@ -79,22 +79,18 @@ test("owner runs the full vendor/remito cycle: pricing, outbound, partial inboun
     await expect(page.getByText("Precio guardado.", { exact: true })).toBeVisible();
   }
 
+  // Combined entry: one row per item with a Retiro (sale sucia) and an
+  // Entrego (vuelve limpia) quantity side by side, mirroring the vendor's
+  // paper remito -- see LaundryPage.tsx's "Nuevo remito" form.
   const remitoForm = page.locator("form").filter({ hasText: "Nuevo remito" });
-  const remitoLineForm = remitoForm.locator("div").filter({ hasText: "Líneas" }).last();
 
   // --- Remito de salida: 6 sabanas + 4 toallas, total estimado 6*150 + 4*250 = 1900 ---
-  await remitoForm.getByRole("button", { name: "Salida (se lleva sucia)", exact: true }).click();
   await remitoForm.getByLabel("Lavadero").selectOption({ label: vendorName });
   await remitoForm.getByLabel("Ubicación casa (origen/destino en el hotel)").selectOption({ label: locationName });
   await remitoForm.getByLabel("N° de remito (papel)").fill(`R-OUT-${suffix}`);
-
-  await remitoLineForm.getByLabel("Ítem").selectOption({ label: sheetsName });
-  await remitoLineForm.getByLabel("Cant.").fill("6");
-  await remitoLineForm.getByRole("button", { name: "Agregar línea", exact: true }).click();
-  await remitoLineForm.getByLabel("Ítem").selectOption({ label: towelsName });
-  await remitoLineForm.getByLabel("Cant.").fill("4");
-  await remitoLineForm.getByRole("button", { name: "Agregar línea", exact: true }).click();
-  await expect(remitoForm.getByText(/Total estimado:\s*\$\s*1\.?900/)).toBeVisible();
+  await remitoForm.getByLabel(`Retiro ${sheetsName}`, { exact: true }).fill("6");
+  await remitoForm.getByLabel(`Retiro ${towelsName}`, { exact: true }).fill("4");
+  await expect(remitoForm.getByText(/Total estimado \(retiro\):\s*\$\s*1\.?900/)).toBeVisible();
 
   await remitoForm.getByRole("button", { name: "Guardar remito", exact: true }).click();
   await expect(page.getByText(`Remito R-OUT-${suffix} guardado.`, { exact: true })).toBeVisible();
@@ -109,11 +105,8 @@ test("owner runs the full vendor/remito cycle: pricing, outbound, partial inboun
   await expect(vendorBalance).toContainText("4");
 
   // --- Remito de entrada parcial: vuelven 3 de las 6 sabanas ---
-  await remitoForm.getByRole("button", { name: "Entrada (trae limpia)", exact: true }).click();
   await remitoForm.getByLabel("N° de remito (papel)").fill(`R-IN-${suffix}`);
-  await remitoLineForm.getByLabel("Ítem").selectOption({ label: sheetsName });
-  await remitoLineForm.getByLabel("Cant.").fill("3");
-  await remitoLineForm.getByRole("button", { name: "Agregar línea", exact: true }).click();
+  await remitoForm.getByLabel(`Entrego ${sheetsName}`, { exact: true }).fill("3");
   await remitoForm.getByRole("button", { name: "Guardar remito", exact: true }).click();
   await expect(page.getByText(`Remito R-IN-${suffix} guardado.`, { exact: true })).toBeVisible();
 
@@ -129,11 +122,8 @@ test("owner runs the full vendor/remito cycle: pricing, outbound, partial inboun
   await expect(sheetsRow).toContainText("7");
 
   // --- Intento de remito de salida mayor al disponible: rechazo con mensaje claro ---
-  await remitoForm.getByRole("button", { name: "Salida (se lleva sucia)", exact: true }).click();
   await remitoForm.getByLabel("N° de remito (papel)").fill(`R-FAIL-${suffix}`);
-  await remitoLineForm.getByLabel("Ítem").selectOption({ label: towelsName });
-  await remitoLineForm.getByLabel("Cant.").fill("999");
-  await remitoLineForm.getByRole("button", { name: "Agregar línea", exact: true }).click();
+  await remitoForm.getByLabel(`Retiro ${towelsName}`, { exact: true }).fill("999");
   await remitoForm.getByRole("button", { name: "Guardar remito", exact: true }).click();
   await expect(remitoForm.getByRole("alert")).toContainText("Not enough");
   await expect(remitoForm.getByRole("alert")).toContainText(towelsName);

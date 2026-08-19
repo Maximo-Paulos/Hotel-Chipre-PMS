@@ -592,16 +592,11 @@ test("owner operates waitlist, housekeeping, laundry and daily reports", async (
   await expect(page.getByText("Precio guardado.", { exact: true })).toBeVisible();
 
   const remitoForm = page.locator("form").filter({ hasText: "Nuevo remito" });
-  await remitoForm.getByRole("button", { name: "Salida (se lleva sucia)", exact: true }).click();
   await remitoForm.getByLabel("Lavadero").selectOption({ label: vendorName });
   await remitoForm.getByLabel("Ubicación casa (origen/destino en el hotel)").selectOption({ label: linenLocationName });
   await remitoForm.getByLabel("N° de remito (papel)").fill(`R-${suffix}`);
-  const remitoLineForm = remitoForm.locator("div").filter({ hasText: "Líneas" }).last();
-  await remitoLineForm.getByLabel("Ítem").selectOption({ label: linenItemName });
-  await remitoLineForm.getByLabel("Cant.").fill("4");
-  await remitoLineForm.getByRole("button", { name: "Agregar línea", exact: true }).click();
-  await expect(remitoForm).toContainText(`${linenItemName} × 4`);
-  await expect(remitoForm.getByText(/Total estimado:\s*\$\s*800/)).toBeVisible();
+  await remitoForm.getByLabel(`Retiro ${linenItemName}`, { exact: true }).fill("4");
+  await expect(remitoForm.getByText(/Total estimado \(retiro\):\s*\$\s*800/)).toBeVisible();
   await remitoForm.getByRole("button", { name: "Guardar remito", exact: true }).click();
   await expect(page.getByText(`Remito R-${suffix} guardado.`, { exact: true })).toBeVisible();
 
