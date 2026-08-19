@@ -70,6 +70,7 @@ const SettingsConnectionsPage = lazy(() =>
   import("./views/protected/SettingsConnectionsPage").then((m) => ({ default: m.SettingsConnectionsPage }))
 );
 const SettingsHotelPage = lazy(() => import("./views/protected/SettingsHotelPage"));
+const SettingsNotificationsPage = lazy(() => import("./views/protected/SettingsNotificationsPage"));
 const SettingsSecurityPage = lazy(() =>
   import("./views/protected/SettingsSecurityPage").then((m) => ({ default: m.SettingsSecurityPage }))
 );
@@ -233,7 +234,8 @@ const appRoutes = APP_HOST
           { path: "settings/connections", element: <PermissionGate roles={["owner", "co_owner"]}><SettingsConnectionsPage /></PermissionGate> },
           { path: "settings/tests", element: <PermissionGate roles={["owner", "co_owner"]}><SettingsTestsPage /></PermissionGate> },
           { path: "settings/hotel", element: <PermissionGate roles={["owner", "co_owner"]}><SettingsHotelPage /></PermissionGate> },
-          { path: "settings/security", element: <PermissionGate roles={["owner", "co_owner"]}><SettingsSecurityPage /></PermissionGate> }
+          { path: "settings/security", element: <PermissionGate roles={["owner", "co_owner"]}><SettingsSecurityPage /></PermissionGate> },
+          { path: "settings/notifications", element: <SettingsNotificationsPage /> }
         ]
       },
       {

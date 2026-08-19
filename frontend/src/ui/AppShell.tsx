@@ -8,6 +8,7 @@ import { ReservationGlobalSearch } from "../components/ReservationGlobalSearch";
 import { Seo } from "../components/Seo";
 import { useDialogA11y } from "../hooks/useDialogA11y";
 import { useInstallPrompt } from "../hooks/useInstallPrompt";
+import { useUnreadNotificationCount } from "../hooks/useNotifications";
 import { useOnboardingStatus } from "../hooks/useOnboardingStatus";
 import { useEffectivePermissions } from "../hooks/usePermissions";
 import { useReservationDrawer } from "../hooks/useReservationDrawer";
@@ -94,6 +95,13 @@ const groupedNav: NavSection[] = [
       { label: "Pruebas", to: "/settings/tests", requiresRole: ["owner", "co_owner"] },
       { label: "Hotel", to: "/settings/hotel", requiresRole: ["owner", "co_owner"] },
       { label: "Seguridad", to: "/settings/security", requiresRole: ["owner", "co_owner"] },
+      // No requiresAnyPermission gate (push/preferences are per-user, not
+      // permission-scoped) but excluded from housekeeping's nav on purpose --
+      // housekeeping's menu is deliberately minimal (see role-journey.spec.ts
+      // "housekeeping stays inside rooms and laundry without loading
+      // restricted data surfaces"); the route itself has no PermissionGate,
+      // so this only hides the link, it doesn't block direct navigation.
+      { label: "Notificaciones", to: "/settings/notifications", requiresRole: ["owner", "co_owner", "manager", "receptionist"] },
     ],
   },
 ];
@@ -135,6 +143,7 @@ export function AppShell() {
   const [alertsOpen, setAlertsOpen] = useState(false);
   const mobileMenuPanelRef = useDialogA11y(mobileMenuOpen, () => setMobileMenuOpen(false));
   const installPrompt = useInstallPrompt();
+  const unreadNotifications = useUnreadNotificationCount();
 
   useCrossTabSync();
 
@@ -216,7 +225,8 @@ export function AppShell() {
         kind: "button",
         label: "Alertas",
         onClick: () => setAlertsOpen(true),
-        testId: "bottom-nav-alerts-button"
+        testId: "bottom-nav-alerts-button",
+        badge: unreadNotifications > 0
       });
     }
     tabs.push({
@@ -227,7 +237,7 @@ export function AppShell() {
       active: mobileMenuOpen
     });
     return tabs;
-  }, [isHousekeeping, filterItems, mobileMenuOpen]);
+  }, [isHousekeeping, filterItems, mobileMenuOpen, unreadNotifications]);
 
   const path = location.pathname;
   if (onboarding?.completed && path.startsWith("/onboarding")) return <Navigate to="/dashboard" replace />;
@@ -399,14 +409,21 @@ export function AppShell() {
                 <button
                   type="button"
                   onClick={() => setAlertsOpen(true)}
-                  aria-label="Ver alertas"
+                  aria-label={unreadNotifications > 0 ? `Ver alertas (${unreadNotifications} sin leer)` : "Ver alertas"}
                   data-testid="mobile-alerts-button"
-                  className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100"
+                  className="relative inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100"
                 >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5" aria-hidden="true">
                     <path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
                     <path d="M13.73 21a2 2 0 0 1-3.46 0" />
                   </svg>
+                  {unreadNotifications > 0 && (
+                    <span
+                      aria-hidden="true"
+                      data-testid="notifications-badge"
+                      className="absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full bg-rose-600"
+                    />
+                  )}
                 </button>
                 <button
                   type="button"
@@ -432,13 +449,16 @@ export function AppShell() {
               <button
                 type="button"
                 onClick={() => setAlertsOpen(true)}
-                aria-label="Ver alertas"
-                className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100"
+                aria-label={unreadNotifications > 0 ? `Ver alertas (${unreadNotifications} sin leer)` : "Ver alertas"}
+                className="relative inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100"
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5" aria-hidden="true">
                   <path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
                   <path d="M13.73 21a2 2 0 0 1-3.46 0" />
                 </svg>
+                {unreadNotifications > 0 && (
+                  <span aria-hidden="true" className="absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full bg-rose-600" />
+                )}
               </button>
               <HotelSelector />
               <UserBadge />

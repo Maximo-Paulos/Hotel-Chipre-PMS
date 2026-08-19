@@ -22,6 +22,48 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+// Backend's RealWebPushAdapter is currently a stub (see app/services/
+// push_adapter.py) -- no push message is actually sent yet. This handler
+// exists so the subscribe flow is functionally complete on the frontend side
+// the moment that adapter ships; until then it simply never fires. Payload
+// shape (title/body/url) is the frontend's own choice, not a backend
+// contract -- keep it in sync with whatever RealWebPushAdapter eventually
+// sends. No guest/reservation detail belongs in a push payload beyond what
+// the in-app inbox already exposes (see api/notifications.ts's NotificationItem
+// non-disclosure comment) -- entity_type/entity_id/title only.
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = { title: "Hotel Chipre PMS", body: event.data ? event.data.text() : "" };
+  }
+  const title = data.title || "Hotel Chipre PMS";
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body: data.body || "",
+      icon: "/brand/icon-192.png",
+      badge: "/brand/icon-192.png",
+      data: { url: data.url || "/" }
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || "/";
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      const existing = clients.find((client) => "focus" in client);
+      if (existing) {
+        existing.navigate(url);
+        return existing.focus();
+      }
+      return self.clients.openWindow(url);
+    })
+  );
+});
+
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   if (request.method !== "GET") return;

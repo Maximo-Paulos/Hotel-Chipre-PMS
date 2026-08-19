@@ -3,7 +3,7 @@ import { NavLink } from "react-router-dom";
 
 export type BottomNavTab =
   | { kind: "link"; label: string; to: string }
-  | { kind: "button"; label: string; onClick: () => void; testId?: string; active?: boolean };
+  | { kind: "button"; label: string; onClick: () => void; testId?: string; active?: boolean; badge?: boolean };
 
 type Props = {
   tabs: BottomNavTab[];
@@ -42,8 +42,11 @@ export function BottomNav({ tabs }: Props) {
             type="button"
             onClick={tab.onClick}
             data-testid={tab.testId}
-            className={itemClass({ active: Boolean(tab.active) })}
+            className={cx("relative", itemClass({ active: Boolean(tab.active) }))}
           >
+            {tab.badge && (
+              <span aria-hidden="true" className="absolute right-[30%] top-1 h-2 w-2 rounded-full bg-rose-600" />
+            )}
             <span className="truncate">{tab.label}</span>
           </button>
         );

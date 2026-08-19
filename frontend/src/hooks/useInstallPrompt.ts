@@ -10,6 +10,20 @@ interface BeforeInstallPromptEvent extends Event {
 
 const DISMISSED_KEY = "chipre-pwa-install-dismissed";
 
+// iOS/iPadOS Safari: no `beforeinstallprompt`, no `navigator.standalone` on
+// other platforms -- so "is this already an installed PWA" needs a
+// browser-native check, not a captured event. Exported standalone (not just
+// used internally) because usePushSubscription needs the same "already
+// installed?" answer to decide whether push permission can even be
+// requested on iOS.
+export const isIOSDevice = (): boolean =>
+  typeof navigator !== "undefined" && /iphone|ipad|ipod/i.test(navigator.userAgent);
+
+export const isStandaloneDisplay = (): boolean => {
+  if (typeof navigator !== "undefined" && (navigator as unknown as { standalone?: boolean }).standalone) return true;
+  return typeof window !== "undefined" && window.matchMedia?.("(display-mode: standalone)").matches === true;
+};
+
 // ponytail: no offline-queue, no background sync -- just the minimal
 // beforeinstallprompt capture the task asked for. iOS Safari never fires
 // this event (no A2HS API), so canInstall stays false there; that's a
@@ -49,5 +63,11 @@ export function useInstallPrompt() {
     }
   };
 
-  return { canInstall: Boolean(deferredEvent) && !dismissed, promptInstall, dismiss };
+  return {
+    canInstall: Boolean(deferredEvent) && !dismissed,
+    promptInstall,
+    dismiss,
+    isIOS: isIOSDevice(),
+    isStandalone: isStandaloneDisplay()
+  };
 }
