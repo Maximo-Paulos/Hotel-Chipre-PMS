@@ -48,6 +48,7 @@ from app.services.linen_service import (
 from app.services.permission_service import (
     PERMISSION_LAUNDRY_MANAGE_VENDORS,
     PERMISSION_LAUNDRY_OPERATE_REMITOS,
+    PERMISSION_REPORTS_FINANCIAL_VIEW,
 )
 
 router = APIRouter(prefix="/api/laundry", tags=["Laundry Vendors"])
@@ -514,7 +515,11 @@ def get_laundry_vendor_spend(
     date_from: Optional[datetime] = None,
     date_to: Optional[datetime] = None,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_LAUNDRY_MANAGE_VENDORS)),
+    # Financial visibility, not vendor operations -- owner/co-owner only by
+    # default (same gate as app/api/reports.py), distinct from
+    # laundry:manage_vendors which a manager already holds by default and
+    # which still covers creating vendors/setting prices/remitos below.
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
 ):
     try:
         return vendor_spend(db, hotel_id=context.hotel_id, vendor_id=vendor_id, date_from=date_from, date_to=date_to)
@@ -527,7 +532,7 @@ def get_laundry_vendor_settlements(
     vendor_id: int,
     year: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_LAUNDRY_MANAGE_VENDORS)),
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
 ):
     try:
         return vendor_settlements(db, hotel_id=context.hotel_id, vendor_id=vendor_id, year=year)
@@ -541,7 +546,7 @@ def mark_laundry_vendor_settlement_paid(
     period_start: date,
     data: SettlementMarkPaid,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_LAUNDRY_MANAGE_VENDORS)),
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
 ):
     try:
         mark_vendor_settlement_paid(
