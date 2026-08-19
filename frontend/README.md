@@ -25,6 +25,10 @@ npm install
 - Todas las peticiones incluyen `X-User-Id` y `X-Hotel-Id` (persisten en `localStorage`).
 - Selector de hotel en el header; persiste la selección y cae a `1` si el valor es inválido.
 
+## App nativa (Capacitor)
+- Workflow: `npm run build && npx cap sync` (copia `dist/` a `ios/` y `android/`), luego `npx cap open ios` / `npx cap open android`.
+- Detalle completo, config de API para dispositivo real, y pasos manuales para publicar en las stores: ver `CAPACITOR_RELEASE.md`.
+
 ## Problema conocido (build en este host)
 - `npm run build` falla con `spawn EPERM` al intentar levantar esbuild con `stdio` en modo pipe (restricción del host). Ejemplo reproducible:
   - `spawnSync(esbuild.exe, ['--version'])` -> `EPERM`
