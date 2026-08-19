@@ -9,6 +9,7 @@ from app.models.reservation import ReservationChannelCodeEnum, ReservationStatus
 from app.schemas.payment_link import PaymentLinkCreate, PaymentLinkRead
 from app.schemas.transaction import PaymentRequest, TransactionRead
 from app.schemas.guest import GuestRead
+from app.schemas.guest_restriction import GuestRestrictionOverrideRequest
 
 class GuestSummary(BaseModel):
     id: int
@@ -44,6 +45,7 @@ class ReservationCreate(BaseModel):
     # Waitlist / overbooking (v72 §9)
     is_wait_listed: bool = False
     wait_list_reason: Optional[str] = Field(default=None, max_length=255)
+    restriction_override: Optional[GuestRestrictionOverrideRequest] = None
 
 
 class ReservationRead(BaseModel):
@@ -107,6 +109,7 @@ class ReservationUpdate(BaseModel):
     notes: Optional[str] = None
     mobility_restriction: Optional[bool] = None
     client_version: Optional[int] = None
+    restriction_override: Optional[GuestRestrictionOverrideRequest] = None
 
 
 class ReservationNoShowRequest(BaseModel):

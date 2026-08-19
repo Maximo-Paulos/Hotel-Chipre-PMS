@@ -19,6 +19,12 @@ export class ApiError extends Error {
 
 // Default to local backend so the dev/preview build doesn't hit the Vite preview origin.
 // Use 8040 to avoid conflicts with other local services; override with VITE_API_URL if set.
+//
+// Capacitor builds: the iOS Simulator can reach the host Mac's 127.0.0.1 directly, so this
+// default (or a VITE_API_URL override pointed at a local dev backend) works for `npx cap run ios`.
+// A physical device or a real store-submission build CANNOT reach 127.0.0.1 — it must be built
+// with VITE_API_URL set to the deployed backend (e.g. https://<render-service>.onrender.com/api,
+// per APP_BASE_URL's production value in .env.example) before `npm run build && npx cap sync`.
 const DEFAULT_API_BASE = "http://127.0.0.1:8040/api";
 const API_BASE =
   (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "") || DEFAULT_API_BASE;

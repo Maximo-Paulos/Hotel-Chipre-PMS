@@ -1,4 +1,5 @@
 import { apiFetch, buildAuthHeaders, buildUrl, type SessionLike } from "./client";
+import type { RestrictionOverride } from "./guestRestrictions";
 
 export type Guest = {
   id: number;
@@ -220,7 +221,7 @@ export const validateGuestForCheckin = (guestId: number, session?: SessionLike) 
 
 export const checkInGuestReservation = (
   reservationId: number,
-  payload: { override_prohibido?: boolean } = {},
+  payload: { override_prohibido?: boolean; restriction_override?: RestrictionOverride | null } = {},
   session?: SessionLike
 ) =>
   apiFetch<GuestCheckInReservation>(`/api/checkin/${reservationId}`, {

@@ -9,11 +9,13 @@ import {
   type Reservation,
   type ReservationChargePayload,
   type ReservationNoShowPayload,
+  type ReservationPayload,
   type ReservationPendingAction,
   type ReservationRoomMovePayload,
   type ReservationRoomMoveResponse,
   type ReservationSource,
-  type ReservationStatus
+  type ReservationStatus,
+  type ReservationUpdatePayload
 } from "../../api/reservations";
 import {
   listRoomMovementGroups,
@@ -23,12 +25,15 @@ import {
   type RoomMovementGroup
 } from "../../api/allocationRuns";
 import { ApiError, hasValidSession } from "../../api/client";
+import { getGuestProhibitedDetail, type RestrictionOverride } from "../../api/guestRestrictions";
 import GuestQuickCreatePanel, {
   emptyQuickGuestForm,
   hasQuickGuestFormData,
   type QuickGuestFormValues
 } from "../../components/GuestQuickCreatePanel";
 import ManualOtaReservationModal from "../../components/ManualOtaReservationModal";
+import { RestrictionOverrideModal } from "../../components/RestrictionOverrideModal";
+import { useRestrictionOverridePrompt } from "../../hooks/useRestrictionOverridePrompt";
 import { checkRoomAvailability, type RoomAvailabilityResponse } from "../../api/rooms";
 import { type PaymentMethod } from "../../api/payments";
 import { useCategories } from "../../hooks/useCategories";
@@ -273,6 +278,7 @@ export function ReservationsPage() {
     mutationFn: (payload) => checkRoomAvailability(payload, session)
   });
   const { createMutation, updateMutation, cancelMutation, checkInMutation, checkOutMutation } = useReservationMutations(filters);
+  const restrictionOverridePrompt = useRestrictionOverridePrompt();
   const { resolveExternalMutation, clearManualReviewMutation } = useReservationActionMutations(filters);
   const movementGroupsQuery = useQuery<RoomMovementGroup[]>({
     queryKey: ["room-movement-groups", session.hotelId, 6],
@@ -416,6 +422,7 @@ export function ReservationsPage() {
   const quoteNights = diffNights(formValues.check_in_date, formValues.check_out_date);
   const quoteCategoryId =
     !editing && selectedFormCategory && quoteNights > 0 ? Number(selectedFormCategory.id) : null;
+  const quoteGuestId = Number(formValues.guest_id);
   const quoteQuery = useReservationQuote(
     quoteCategoryId && formValues.check_in_date && formValues.check_out_date
       ? {
@@ -423,7 +430,11 @@ export function ReservationsPage() {
           check_in_date: formValues.check_in_date,
           check_out_date: formValues.check_out_date,
           pricing_payment_method: pricingPaymentMethod === "base" ? null : pricingPaymentMethod,
-          occupancy: (Number(formValues.num_adults) || 1) + (Number(formValues.num_children) || 0)
+          occupancy: (Number(formValues.num_adults) || 1) + (Number(formValues.num_children) || 0),
+          // Lets an operator find out a guest is restricted before filling
+          // out the whole form -- the endpoint itself has no override, the
+          // real override happens at reservation creation (see submitCreate).
+          guest_id: Number.isFinite(quoteGuestId) && quoteGuestId > 0 ? quoteGuestId : null
         }
       : null
   );
@@ -434,13 +445,20 @@ export function ReservationsPage() {
     return {
       nights: quoteQuery.data.nights,
       total: quoteQuery.data.total_amount,
+      subtotal: quoteQuery.data.subtotal_amount,
+      taxAmount: quoteQuery.data.tax_amount,
+      feeAmount: quoteQuery.data.fee_amount,
+      paymentMethod: quoteQuery.data.pricing_payment_method ?? null,
       defaultDeposit: quoteQuery.data.deposit_amount,
       currencyCode: quoteQuery.data.currency_code,
       quoteToken: quoteQuery.data.quote_token,
+      promotionsApplied: quoteQuery.data.promotions_applied ?? [],
       rows: quoteQuery.data.breakdown.map((row) => ({
         date: row.date,
         amount: row.price,
-        source: row.source ?? "backend_quote"
+        basePrice: row.base_price ?? row.price,
+        source: row.source ?? "backend_quote",
+        promotionsApplied: row.promotions_applied ?? []
       }))
     };
   }, [
@@ -672,20 +690,33 @@ export function ReservationsPage() {
       // cambian con Check-in/Check-out/Cancelar/Marcar no-show.
       const { category_id, ...updatePayload } = commonPayload;
       void category_id;
-      updateMutation.mutate(
-        { id: editing.id, payload: updatePayload },
-        {
-          onSuccess: () => {
-            showToast("success", "Reserva actualizada");
-            closeForm();
-          },
-          onError: (err: unknown) => {
-            const msg = err instanceof Error ? err.message : "No se pudo guardar la reserva";
-            setFormError(msg);
-            showToast("error", msg);
+      const submitUpdate = (payload: ReservationUpdatePayload) => {
+        updateMutation.mutate(
+          { id: editing.id, payload },
+          {
+            onSuccess: () => {
+              showToast("success", "Reserva actualizada");
+              closeForm();
+            },
+            onError: (err: unknown) => {
+              // GuestRestriction blocked the update -- prompt for an
+              // override reason and retry the same request with it attached
+              // instead of surfacing a raw 409/403.
+              if (
+                restrictionOverridePrompt.handleError(err, (override) =>
+                  submitUpdate({ ...payload, restriction_override: override })
+                )
+              ) {
+                return;
+              }
+              const msg = err instanceof Error ? err.message : "No se pudo guardar la reserva";
+              setFormError(msg);
+              showToast("error", msg);
+            }
           }
-        }
-      );
+        );
+      };
+      submitUpdate(updatePayload);
     } else {
       // B4: con tarifa manual, la cotización automática (y su quote_token) no
       // aplica -- el backend usaría el total manual igual, pero no tiene
@@ -695,7 +726,7 @@ export function ReservationsPage() {
         setFormError("Esperá a que se actualice la cotización vigente antes de crear la reserva.");
         return;
       }
-      const createPayload = {
+      const createPayload: ReservationPayload = {
         ...commonPayload,
         guest_id: guestIdNum,
         source: formValues.source,
@@ -705,25 +736,35 @@ export function ReservationsPage() {
           ? { total_amount: manualTotalAmount, target_currency: manualTargetCurrency }
           : { quote_token: reservationQuote?.quoteToken })
       };
-      createMutation.mutate(createPayload, {
-        onSuccess: (created) => {
-          showToast("success", "Reserva creada");
-          if (manualTotalAmount !== null) {
-            // Keep the form open just long enough to show the operator what
-            // currency/cotización the manual total was saved with -- closing
-            // immediately would hide fx_rate_snapshot right after they asked
-            // for a currency conversion.
-            setLastCreatedReservation(created);
-          } else {
-            closeForm();
+      const submitCreate = (payload: ReservationPayload) => {
+        createMutation.mutate(payload, {
+          onSuccess: (created) => {
+            showToast("success", "Reserva creada");
+            if (manualTotalAmount !== null) {
+              // Keep the form open just long enough to show the operator what
+              // currency/cotización the manual total was saved with -- closing
+              // immediately would hide fx_rate_snapshot right after they asked
+              // for a currency conversion.
+              setLastCreatedReservation(created);
+            } else {
+              closeForm();
+            }
+          },
+          onError: (err: unknown) => {
+            if (
+              restrictionOverridePrompt.handleError(err, (override) =>
+                submitCreate({ ...payload, restriction_override: override })
+              )
+            ) {
+              return;
+            }
+            const msg = err instanceof Error ? err.message : "No se pudo crear la reserva";
+            setFormError(msg);
+            showToast("error", msg);
           }
-        },
-        onError: (err: unknown) => {
-          const msg = err instanceof Error ? err.message : "No se pudo crear la reserva";
-          setFormError(msg);
-          showToast("error", msg);
-        }
-      });
+        });
+      };
+      submitCreate(createPayload);
     }
   };
 
@@ -753,22 +794,29 @@ export function ReservationsPage() {
       );
       return;
     }
-    checkInMutation.mutate(reservation.id, {
-      onSuccess: () => showToast("success", "Check-in registrado"),
-      onError: (err: unknown) => {
-        const msg = err instanceof Error ? err.message : "No se pudo hacer check-in";
-        // B3.3/B3.4: this quick action has no room to show the guest-data
-        // capture form inline -- send the receptionist to the reservation
-        // panel, which shows that form up front, instead of leaving them
-        // stuck on a bare 400 with no way to fix it from here.
-        if (msg.includes("missing required guest data")) {
-          openReservation(reservation.id);
-          showToast("info", "Faltan datos del huésped para el check-in: completalos en el panel de la reserva.");
-          return;
+    const submitCheckIn = (restrictionOverride?: RestrictionOverride) => {
+      checkInMutation.mutate(
+        restrictionOverride ? { id: reservation.id, restriction_override: restrictionOverride } : reservation.id,
+        {
+          onSuccess: () => showToast("success", "Check-in registrado"),
+          onError: (err: unknown) => {
+            if (restrictionOverridePrompt.handleError(err, submitCheckIn)) return;
+            const msg = err instanceof Error ? err.message : "No se pudo hacer check-in";
+            // B3.3/B3.4: this quick action has no room to show the guest-data
+            // capture form inline -- send the receptionist to the reservation
+            // panel, which shows that form up front, instead of leaving them
+            // stuck on a bare 400 with no way to fix it from here.
+            if (msg.includes("missing required guest data")) {
+              openReservation(reservation.id);
+              showToast("info", "Faltan datos del huésped para el check-in: completalos en el panel de la reserva.");
+              return;
+            }
+            showToast("error", msg);
+          }
         }
-        showToast("error", msg);
-      }
-    });
+      );
+    };
+    submitCheckIn();
   };
 
   const handleCheckOut = (reservation: Reservation) => {
@@ -1840,7 +1888,8 @@ export function ReservationsPage() {
           </div>
           <span className="text-xs text-slate-500">Total: {reservations.length}</span>
         </div>
-        <div className="overflow-x-auto">
+        {/* Dense table needs real column width -- desktop/tablet only. */}
+        <div className="hidden overflow-x-auto md:block">
           <table className="min-w-full divide-y divide-slate-200 text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
               <tr>
@@ -1938,6 +1987,91 @@ export function ReservationsPage() {
               })}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile alternative to the table above: one card per reservation
+            with the same data/actions, stacked instead of columned. */}
+        <div className="divide-y divide-slate-200 md:hidden">
+          {!isLoading && reservations.length === 0 && (
+            <p className="px-4 py-4 text-sm text-slate-500">No hay reservas con los filtros actuales.</p>
+          )}
+          {reservations.map((reservation) => {
+            const cfg = statusConfig[reservation.status];
+            return (
+              <div key={reservation.id} className="flex flex-col gap-2 px-4 py-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-slate-900">{reservation.confirmation_code}</p>
+                    <button
+                      type="button"
+                      className="truncate text-left text-sm font-semibold text-brand-700 hover:underline"
+                      onClick={() => openGuest(reservation.guest_id)}
+                    >
+                      {reservationGuestLabel(reservation)}
+                    </button>
+                  </div>
+                  <span className={`shrink-0 rounded-full px-2 py-1 text-xs font-semibold ${cfg?.className ?? "bg-slate-100 text-slate-800"}`}>
+                    {cfg?.label ?? reservation.status}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600">
+                  {reservation.room_id ? `Hab ${reservation.room_id}` : "Sin asignar"} · Cat {reservation.category_id}
+                </p>
+                <p className="text-xs text-slate-600">
+                  {reservation.check_in_date} → {reservation.check_out_date}
+                </p>
+                <p className="text-sm font-semibold text-slate-900">
+                  {formatMoney(reservation.total_amount ?? 0, reservation.currency_code)}
+                </p>
+                <div className="flex flex-wrap gap-2 pt-1 text-xs text-slate-700">
+                  <button
+                    type="button"
+                    onClick={() => openEdit(reservation)}
+                    className="min-h-11 rounded-lg border border-slate-200 px-3 py-2 hover:border-slate-300 disabled:opacity-50"
+                    disabled={subscriptionBlocked}
+                  >
+                    Editar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openDetails(reservation)}
+                    className="min-h-11 rounded-lg border border-slate-200 px-3 py-2 hover:border-slate-300"
+                  >
+                    Ficha
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!canCancel(reservation.status) || cancelMutation.isPending || subscriptionBlocked}
+                    onClick={() => handleCancel(reservation.id)}
+                    className="min-h-11 rounded-lg border border-rose-200 px-3 py-2 text-rose-700 hover:border-rose-300 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!canCheckIn(reservation.status) || checkInMutation.isPending || subscriptionBlocked}
+                    onClick={() => handleCheckIn(reservation)}
+                    title={
+                      isCheckInReady(reservation.status)
+                        ? "Registrar check-in"
+                        : "Cobrar el saldo antes del check-in"
+                    }
+                    className="min-h-11 rounded-lg border border-emerald-200 px-3 py-2 text-emerald-700 hover:border-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Check-in
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!canCheckOut(reservation.status) || checkOutMutation.isPending || subscriptionBlocked}
+                    onClick={() => handleCheckOut(reservation)}
+                    className="min-h-11 rounded-lg border border-sky-200 px-3 py-2 text-sky-700 hover:border-sky-300 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Check-out
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -2160,6 +2294,36 @@ export function ReservationsPage() {
                         </div>
                       </div>
 
+                      {!quoteQuery.isError && reservationQuote && (reservationQuote.subtotal !== reservationQuote.total || reservationQuote.taxAmount > 0 || reservationQuote.feeAmount > 0) ? (
+                        <p className="mt-2 text-xs text-slate-600">
+                          Subtotal {formatMoney(reservationQuote.subtotal, reservationQuote.currencyCode)}
+                          {reservationQuote.taxAmount > 0 ? ` · Impuestos ${formatMoney(reservationQuote.taxAmount, reservationQuote.currencyCode)}` : ""}
+                          {reservationQuote.feeAmount > 0 ? ` · Cargos ${formatMoney(reservationQuote.feeAmount, reservationQuote.currencyCode)}` : ""}
+                          {reservationQuote.paymentMethod ? ` · Medio de pago: ${reservationQuote.paymentMethod}` : ""}
+                        </p>
+                      ) : null}
+
+                      {!quoteQuery.isError && reservationQuote && reservationQuote.promotionsApplied.length > 0 ? (
+                        <div className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 p-2">
+                          <p className="text-xs font-semibold text-emerald-800">Promociones aplicadas</p>
+                          <ul className="mt-1 flex flex-wrap gap-1.5">
+                            {Object.values(
+                              reservationQuote.promotionsApplied.reduce<Record<string, { code: string; total: number }>>((acc, promo) => {
+                                const key = promo.code;
+                                const entry = acc[key] ?? { code: promo.code, total: 0 };
+                                entry.total += Number(promo.amount_deducted) || 0;
+                                acc[key] = entry;
+                                return acc;
+                              }, {})
+                            ).map((entry) => (
+                              <li key={entry.code} className="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-emerald-800 shadow-sm">
+                                {entry.code}: -{formatMoney(entry.total, reservationQuote.currencyCode)}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : null}
+
                       {quoteQuery.isError ? (
                         <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800" role="alert">
                           <p>
@@ -2168,7 +2332,14 @@ export function ReservationsPage() {
                                 Detect it from the backend's own message instead (pricing_policy_service
                                 raises "No active/matching price..." / "Rate plan not found..." for
                                 every "nothing configured" scenario). */}
-                            {quoteQuery.error instanceof ApiError && /price|rate plan/i.test(quoteQuery.error.message)
+                            {getGuestProhibitedDetail(quoteQuery.error)
+                              ? // The quote endpoint never accepts an override (it's a preview, not
+                                // the actual booking) -- the auto-priced path is blocked without a
+                                // quote_token, so the only way through is a manual total, which
+                                // skips the quote_token requirement and lets "Crear reserva" surface
+                                // its own override prompt.
+                                "Este huésped tiene una restricción de alojamiento activa: no se puede cotizar automáticamente. Para crear la reserva igual, cargá una tarifa manual arriba; se te va a pedir el motivo del override al confirmar."
+                              : quoteQuery.error instanceof ApiError && /price|rate plan/i.test(quoteQuery.error.message)
                               ? "No hay una tarifa disponible para la categoría y las fechas elegidas. Cargá una tarifa manual arriba o configurala en Tarifas."
                               : "No se pudo calcular la cotización. Revisá las fechas y las tarifas antes de confirmar."}
                           </p>
@@ -2188,6 +2359,12 @@ export function ReservationsPage() {
                               <tr>
                                 <th className="px-3 py-2 font-semibold">Noche</th>
                                 <th className="px-3 py-2 font-semibold">Origen</th>
+                                {reservationQuote.promotionsApplied.length > 0 ? (
+                                  <>
+                                    <th className="px-3 py-2 text-right font-semibold">Base</th>
+                                    <th className="px-3 py-2 font-semibold">Promo</th>
+                                  </>
+                                ) : null}
                                 <th className="px-3 py-2 text-right font-semibold">Importe</th>
                               </tr>
                             </thead>
@@ -2196,6 +2373,18 @@ export function ReservationsPage() {
                                 <tr key={row.date} className="border-t border-blue-100">
                                   <td className="px-3 py-2 text-slate-700">{row.date}</td>
                                   <td className="px-3 py-2 text-slate-500">{row.source}</td>
+                                  {reservationQuote.promotionsApplied.length > 0 ? (
+                                    <>
+                                      <td className="px-3 py-2 text-right text-slate-500">
+                                        {formatMoney(row.basePrice, reservationQuote.currencyCode)}
+                                      </td>
+                                      <td className="px-3 py-2 text-slate-500">
+                                        {row.promotionsApplied.length
+                                          ? row.promotionsApplied.map((p) => p.code).join(", ")
+                                          : "—"}
+                                      </td>
+                                    </>
+                                  ) : null}
                                   <td className="px-3 py-2 text-right font-semibold text-slate-800">
                                     {formatMoney(row.amount, reservationQuote.currencyCode)}
                                   </td>
@@ -2670,6 +2859,15 @@ export function ReservationsPage() {
       )}
 
       <ManualOtaReservationModal open={otaFormOpen} onClose={() => setOtaFormOpen(false)} />
+
+      {restrictionOverridePrompt.phase !== "idle" ? (
+        <RestrictionOverrideModal
+          phase={restrictionOverridePrompt.phase}
+          onSubmit={restrictionOverridePrompt.submit}
+          onCancel={restrictionOverridePrompt.dismiss}
+          isPending={createMutation.isPending || updateMutation.isPending || checkInMutation.isPending}
+        />
+      ) : null}
 
       {detailsReservation && (
         <div className="fixed inset-0 z-30 flex animate-fade-in items-center justify-center bg-slate-900/30 px-4 py-6">

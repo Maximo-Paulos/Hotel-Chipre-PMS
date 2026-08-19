@@ -6,10 +6,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies.auth import AuthContext, require_permission, require_roles
+from app.dependencies.auth import AuthContext, require_permission
 from app.schemas.rate_calendar import RateCalendarResponse
 from app.services.rate_calendar_service import get_daily_calendar
-from app.services.permission_service import PERMISSION_REPORTS_FINANCIAL_VIEW
+from app.services.permission_service import PERMISSION_RATES_READ
 
 
 router = APIRouter(prefix="/api/rate-calendar", tags=["Rate Calendar"])
@@ -21,7 +21,7 @@ def get_daily_rate_calendar(
     date_from: date = Query(...),
     date_to: date = Query(...),
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
+    context: AuthContext = Depends(require_permission(PERMISSION_RATES_READ)),
 ):
     if date_to < date_from:
         raise HTTPException(status_code=422, detail="date_to must be greater than or equal to date_from")

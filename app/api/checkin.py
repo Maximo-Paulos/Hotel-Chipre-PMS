@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.schemas.guest import GuestUpdate
+from app.schemas.guest_restriction import GuestRestrictionOverrideRequest
 from app.schemas.reservation import ReservationRead
 from app.services.checkin_service import (
     perform_checkin,
@@ -15,12 +16,16 @@ from app.services.checkin_service import (
     validate_guest_for_checkin,
     CheckInError,
 )
+from app.services.guest_restriction_service import GuestProhibitedError, RestrictionOverridePermissionError
 from app.models.guest import Guest
 from app.dependencies.auth import AuthContext, require_permission
 from app.services.permission_service import (
     PERMISSION_CHECKIN_OVERRIDE_PROHIBIDO,
     PERMISSION_CHECKIN_PERFORM,
-    PERMISSION_GUEST_VIEW,
+    PERMISSION_CHECKOUT_FORCE,
+    PERMISSION_CHECKOUT_PERFORM,
+    PERMISSION_GUEST_READ,
+    PERMISSION_RESERVATION_PROHIBITION_OVERRIDE,
     audit_permission_denied,
     resolve,
 )
@@ -35,6 +40,7 @@ class CheckInRequest(BaseModel):
     # request that performs the check-in, instead of a bare 400 with no way
     # to fix it. Applied before validation, same transaction.
     guest: GuestUpdate | None = None
+    restriction_override: GuestRestrictionOverrideRequest | None = None
 
 
 def _authorize_override(db: Session, context: AuthContext, override_prohibido: bool) -> None:
@@ -42,13 +48,16 @@ def _authorize_override(db: Session, context: AuthContext, override_prohibido: b
         db,
         context.hotel_id,
         context.user_role,
-        PERMISSION_CHECKIN_OVERRIDE_PROHIBIDO,
+        PERMISSION_RESERVATION_PROHIBITION_OVERRIDE,
+        user_id=context.user_id,
     ):
         audit_permission_denied(
             db,
             hotel_id=context.hotel_id,
             user_id=context.user_id,
             role=context.user_role,
+            # Keep the legacy requested key in the audit during the expand
+            # window; audit_permission_denied also records its canonical key.
             permission_code=PERMISSION_CHECKIN_OVERRIDE_PROHIBIDO,
         )
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tenes permisos para esta accion")
@@ -63,6 +72,7 @@ def checkin(
 ):
     override_prohibido = bool(request.override_prohibido) if request else False
     _authorize_override(db, context, override_prohibido)
+    restriction_override = request.restriction_override if request else None
 
     try:
         reservation = perform_checkin(
@@ -72,6 +82,9 @@ def checkin(
             override_prohibido=override_prohibido,
             override_user_id=context.user_id if override_prohibido else None,
             guest_patch=request.guest.model_dump(exclude_unset=True) if request and request.guest else None,
+            restriction_override=restriction_override,
+            actor_user_id=context.user_id,
+            actor_role=context.user_role,
         )
         db.commit()
         db.refresh(reservation)
@@ -82,6 +95,15 @@ def checkin(
     except CheckInError as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
+    except GuestProhibitedError as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": e.code, "message": str(e), "restriction_id": e.restriction_id},
+        )
+    except RestrictionOverridePermissionError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tenes permisos para esta accion")
 
 
 @router.post("/{reservation_id}/partial", response_model=ReservationRead)
@@ -121,8 +143,23 @@ def checkout(
     reservation_id: int,
     force: bool = False,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_CHECKIN_PERFORM)),
+    context: AuthContext = Depends(require_permission(PERMISSION_CHECKOUT_PERFORM)),
 ):
+    if force and not resolve(
+        db,
+        context.hotel_id,
+        context.user_role,
+        PERMISSION_CHECKOUT_FORCE,
+        user_id=context.user_id,
+    ):
+        audit_permission_denied(
+            db,
+            hotel_id=context.hotel_id,
+            user_id=context.user_id,
+            role=context.user_role,
+            permission_code=PERMISSION_CHECKOUT_FORCE,
+        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tenes permisos para forzar el checkout")
     try:
         reservation = perform_checkout(db, reservation_id, hotel_id=context.hotel_id, force=force)
         db.commit()
@@ -139,7 +176,7 @@ def checkout(
 def validate_guest(
     guest_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_GUEST_VIEW)),
+    context: AuthContext = Depends(require_permission(PERMISSION_GUEST_READ)),
 ):
     guest = (
         db.query(Guest)

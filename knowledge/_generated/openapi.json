@@ -959,7 +959,14 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/RoomCategoryRead"
+                    "anyOf": [
+                      {
+                        "$ref": "#/components/schemas/RoomCategoryRead"
+                      },
+                      {
+                        "$ref": "#/components/schemas/RoomCategoryOperationalRead"
+                      }
+                    ]
                   },
                   "title": "Response List Categories Api Rooms Categories Get"
                 }
@@ -1117,7 +1124,15 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RoomCategoryRead"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/RoomCategoryRead"
+                    },
+                    {
+                      "$ref": "#/components/schemas/RoomCategoryOperationalRead"
+                    }
+                  ],
+                  "title": "Response Get Category Api Rooms Categories  Category Id  Get"
                 }
               }
             }
@@ -1482,7 +1497,14 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/RoomRead"
+                    "anyOf": [
+                      {
+                        "$ref": "#/components/schemas/RoomRead"
+                      },
+                      {
+                        "$ref": "#/components/schemas/RoomHousekeepingRead"
+                      }
+                    ]
                   },
                   "title": "Response List Rooms Api Rooms  Get"
                 }
@@ -1672,7 +1694,15 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RoomRead"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/RoomRead"
+                    },
+                    {
+                      "$ref": "#/components/schemas/RoomHousekeepingRead"
+                    }
+                  ],
+                  "title": "Response Get Room Api Rooms  Room Id  Get"
                 }
               }
             }
@@ -1847,6 +1877,91 @@
         "summary": "Update Room Status",
         "description": "Update room status for housekeeping. When a room is set to cleaning/maintenance/blocked,\nany reservations assigned to it are automatically relocated by the allocation engine.",
         "operationId": "update_room_status_api_rooms__room_id__status_patch",
+        "parameters": [
+          {
+            "name": "room_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Room Id"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoomStatusUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoomStatusUpdateResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/rooms/{room_id}/cleaning-status": {
+      "patch": {
+        "tags": [
+          "Rooms"
+        ],
+        "summary": "Update Room Cleaning Status",
+        "description": "Apply the narrow housekeeping transition without reallocating guests.\n\nThis endpoint deliberately cannot enter maintenance/blocked/occupied, and\ncannot touch a room assigned to a non-terminal reservation. Broader room\nstate changes remain on the manager-only status endpoint above.",
+        "operationId": "update_room_cleaning_status_api_rooms__room_id__cleaning_status_patch",
         "parameters": [
           {
             "name": "room_id",
@@ -7079,17 +7194,6 @@
             }
           }
         ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "title": "Payload"
-              }
-            }
-          }
-        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -7140,17 +7244,6 @@
             }
           }
         ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "title": "Payload"
-              }
-            }
-          }
-        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -7201,17 +7294,6 @@
             }
           }
         ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "title": "Payload"
-              }
-            }
-          }
-        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -8958,6 +9040,48 @@
         }
       }
     },
+    "/api/auth/google": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Google Login",
+        "description": "\"Sign in with Google\" via Google Identity Services' ID-token flow: the\nfrontend never talks to our backend during the OAuth dance, it just hands\nus the signed JWT Google issued. We verify that signature against\nGOOGLE_CLIENT_ID (env var, public, same value as frontend's\nVITE_GOOGLE_CLIENT_ID -- no client secret exists or is needed for this\nflow). Google Cloud Console: create an OAuth Client ID (type \"Web\napplication\") with authorized JavaScript origins for the real app\ndomains (no redirect URI needed, this flow doesn't use one).",
+        "operationId": "google_login_api_auth_google_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GoogleAuthRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/auth/verify-email": {
       "post": {
         "tags": [
@@ -9129,6 +9253,22 @@
         "summary": "Me",
         "operationId": "me_api_auth_me_get",
         "parameters": [
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
           {
             "name": "authorization",
             "in": "header",
@@ -10338,6 +10478,24 @@
         "operationId": "create_payment_link_payment_links_post",
         "parameters": [
           {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 8,
+                  "maxLength": 100
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          },
+          {
             "name": "x-hotel-id",
             "in": "header",
             "required": false,
@@ -10488,6 +10646,24 @@
         "summary": "Create Payment Link",
         "operationId": "create_payment_link_api_payment_links_post",
         "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 8,
+                  "maxLength": 100
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          },
           {
             "name": "x-hotel-id",
             "in": "header",
@@ -12906,16 +13082,6 @@
             }
           }
         ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/WhatsAppPaymentConfirmation"
-              }
-            }
-          }
-        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -12965,16 +13131,6 @@
             }
           }
         ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/WhatsAppPaymentConfirmation"
-              }
-            }
-          }
-        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -12983,6 +13139,132 @@
                 "schema": {
                   "$ref": "#/components/schemas/WhatsAppPaymentConfirmationResponse"
                 }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/permissions/effective": {
+      "get": {
+        "tags": [
+          "Permissions"
+        ],
+        "summary": "Read Effective Permissions",
+        "operationId": "read_effective_permissions_api_permissions_effective_get",
+        "parameters": [
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/permissions/catalog": {
+      "get": {
+        "tags": [
+          "Permissions"
+        ],
+        "summary": "Read Permission Catalog",
+        "operationId": "read_permission_catalog_api_permissions_catalog_get",
+        "parameters": [
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
               }
             }
           },
@@ -13062,6 +13344,140 @@
         }
       }
     },
+    "/api/permissions/role-overrides": {
+      "get": {
+        "tags": [
+          "Permissions"
+        ],
+        "summary": "Read Role Permission Profiles",
+        "operationId": "read_role_permission_profiles_api_permissions_role_overrides_get",
+        "parameters": [
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Permissions"
+        ],
+        "summary": "Update Permission Override",
+        "operationId": "update_permission_override_api_permissions_role_overrides_put",
+        "parameters": [
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RolePermissionOverrideRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/permissions/override": {
       "put": {
         "tags": [
@@ -13108,11 +13524,378 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/PermissionOverrideRequest"
+                "$ref": "#/components/schemas/RolePermissionOverrideRequest"
               }
             }
           }
         },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/permissions/role-overrides/{role}": {
+      "delete": {
+        "tags": [
+          "Permissions"
+        ],
+        "summary": "Restore Role Permission Defaults",
+        "operationId": "restore_role_permission_defaults_api_permissions_role_overrides__role__delete",
+        "parameters": [
+          {
+            "name": "role",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Role"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/permissions/user-overrides/{user_id}": {
+      "get": {
+        "tags": [
+          "Permissions"
+        ],
+        "summary": "Read User Overrides",
+        "operationId": "read_user_overrides_api_permissions_user_overrides__user_id__get",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "User Id"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Permissions"
+        ],
+        "summary": "Update User Override",
+        "operationId": "update_user_override_api_permissions_user_overrides__user_id__put",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "User Id"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserPermissionOverrideRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Permissions"
+        ],
+        "summary": "Restore User Permission Defaults",
+        "operationId": "restore_user_permission_defaults_api_permissions_user_overrides__user_id__delete",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "User Id"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/permissions/effective/preview": {
+      "get": {
+        "tags": [
+          "Permissions"
+        ],
+        "summary": "Preview Effective Permissions",
+        "operationId": "preview_effective_permissions_api_permissions_effective_preview_get",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "User Id"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -26330,6 +27113,214 @@
         }
       }
     },
+    "/api/settings/security/overview": {
+      "get": {
+        "tags": [
+          "Settings Security"
+        ],
+        "summary": "Security Overview",
+        "operationId": "security_overview_api_settings_security_overview_get",
+        "parameters": [
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecurityOverviewRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/settings/security/events": {
+      "get": {
+        "tags": [
+          "Settings Security"
+        ],
+        "summary": "Recent Security Events",
+        "operationId": "recent_security_events_api_settings_security_events_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecurityEventsRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/settings/security/revoke-all": {
+      "post": {
+        "tags": [
+          "Settings Security"
+        ],
+        "summary": "Revoke Current User Sessions",
+        "description": "Invalidate every access token previously issued to the caller.",
+        "operationId": "revoke_current_user_sessions_api_settings_security_revoke_all_post",
+        "parameters": [
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevokeAllSessionsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "summary": "Health Check",
@@ -28376,6 +29367,13 @@
           },
           "user": {
             "$ref": "#/components/schemas/UserInfo"
+          },
+          "permissions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Permissions"
           },
           "requires_verification": {
             "type": "boolean",
@@ -32388,6 +33386,20 @@
           "status"
         ],
         "title": "GemmaRuntimeStatusRead"
+      },
+      "GoogleAuthRequest": {
+        "properties": {
+          "id_token": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Id Token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id_token"
+        ],
+        "title": "GoogleAuthRequest"
       },
       "GuestCompanionCreate": {
         "properties": {
@@ -36990,11 +38002,17 @@
             "title": "Recipient Phone"
           },
           "currency": {
-            "type": "string",
-            "maxLength": 3,
-            "minLength": 3,
-            "title": "Currency",
-            "default": "ARS"
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 3,
+                "minLength": 3
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
           },
           "provider": {
             "type": "string",
@@ -37108,6 +38126,14 @@
             "type": "string",
             "title": "Status"
           },
+          "execution_mode": {
+            "type": "string",
+            "title": "Execution Mode"
+          },
+          "payable": {
+            "type": "boolean",
+            "title": "Payable"
+          },
           "external_reference": {
             "anyOf": [
               {
@@ -37196,6 +38222,8 @@
           "currency",
           "recipient_email",
           "status",
+          "execution_mode",
+          "payable",
           "created_at"
         ],
         "title": "PaymentLinkRead"
@@ -37912,33 +38940,6 @@
         "type": "object",
         "title": "PaymentSurchargeUpdate"
       },
-      "PermissionOverrideRequest": {
-        "properties": {
-          "role": {
-            "type": "string",
-            "maxLength": 50,
-            "minLength": 1,
-            "title": "Role"
-          },
-          "permission_code": {
-            "type": "string",
-            "maxLength": 100,
-            "minLength": 1,
-            "title": "Permission Code"
-          },
-          "allowed": {
-            "type": "boolean",
-            "title": "Allowed"
-          }
-        },
-        "type": "object",
-        "required": [
-          "role",
-          "permission_code",
-          "allowed"
-        ],
-        "title": "PermissionOverrideRequest"
-      },
       "PricePeriodIn": {
         "properties": {
           "category_id": {
@@ -38528,6 +39529,14 @@
             "type": "string",
             "title": "Status"
           },
+          "execution_mode": {
+            "type": "string",
+            "title": "Execution Mode"
+          },
+          "payable": {
+            "type": "boolean",
+            "title": "Payable"
+          },
           "external_reference": {
             "anyOf": [
               {
@@ -38616,6 +39625,8 @@
           "currency",
           "recipient_email",
           "status",
+          "execution_mode",
+          "payable",
           "created_at"
         ],
         "title": "PublicPaymentLinkRead"
@@ -42232,6 +43243,61 @@
         ],
         "title": "ResetPasswordRequest"
       },
+      "RevokeAllSessionsResponse": {
+        "properties": {
+          "revoked": {
+            "type": "boolean",
+            "title": "Revoked"
+          },
+          "user_id": {
+            "type": "integer",
+            "title": "User Id"
+          },
+          "token_version": {
+            "type": "integer",
+            "title": "Token Version"
+          },
+          "reauthentication_required": {
+            "type": "boolean",
+            "title": "Reauthentication Required"
+          }
+        },
+        "type": "object",
+        "required": [
+          "revoked",
+          "user_id",
+          "token_version",
+          "reauthentication_required"
+        ],
+        "title": "RevokeAllSessionsResponse"
+      },
+      "RolePermissionOverrideRequest": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Role"
+          },
+          "permission_code": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Permission Code"
+          },
+          "allowed": {
+            "type": "boolean",
+            "title": "Allowed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "role",
+          "permission_code",
+          "allowed"
+        ],
+        "title": "RolePermissionOverrideRequest"
+      },
       "RoomBlockCreate": {
         "properties": {
           "room_id": {
@@ -42478,6 +43544,57 @@
         ],
         "title": "RoomCategoryCreate"
       },
+      "RoomCategoryOperationalRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "max_occupancy": {
+            "type": "integer",
+            "title": "Max Occupancy"
+          },
+          "amenities": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amenities"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "code",
+          "max_occupancy"
+        ],
+        "title": "RoomCategoryOperationalRead",
+        "description": "Non-financial category metadata safe for housekeeping workflows."
+      },
       "RoomCategoryRead": {
         "properties": {
           "name": {
@@ -42714,6 +43831,59 @@
           "category_id"
         ],
         "title": "RoomCreate"
+      },
+      "RoomHousekeepingRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "room_number": {
+            "type": "string",
+            "title": "Room Number"
+          },
+          "floor": {
+            "type": "integer",
+            "title": "Floor"
+          },
+          "category_id": {
+            "type": "integer",
+            "title": "Category Id"
+          },
+          "status": {
+            "$ref": "#/components/schemas/RoomStatusEnum"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          },
+          "is_accessible": {
+            "type": "boolean",
+            "title": "Is Accessible",
+            "default": false
+          },
+          "category": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RoomCategoryOperationalRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "room_number",
+          "floor",
+          "category_id",
+          "status",
+          "is_active"
+        ],
+        "title": "RoomHousekeepingRead",
+        "description": "Room state without rates or free-text notes that may contain PII."
       },
       "RoomInput": {
         "properties": {
@@ -43326,7 +44496,15 @@
       "RoomStatusUpdateResponse": {
         "properties": {
           "room": {
-            "$ref": "#/components/schemas/RoomRead"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RoomRead"
+              },
+              {
+                "$ref": "#/components/schemas/RoomHousekeepingRead"
+              }
+            ],
+            "title": "Room"
           },
           "reallocation": {
             "anyOf": [
@@ -43470,6 +44648,165 @@
           "rooms"
         ],
         "title": "RoomsPayload"
+      },
+      "SecurityCurrentUserRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role"
+          },
+          "last_login": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Login"
+          },
+          "token_version": {
+            "type": "integer",
+            "title": "Token Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "email",
+          "role",
+          "token_version"
+        ],
+        "title": "SecurityCurrentUserRead"
+      },
+      "SecurityEventRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "action": {
+            "type": "string",
+            "title": "Action"
+          },
+          "actor_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor User Id"
+          },
+          "resource_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resource Type"
+          },
+          "resource_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resource Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "action",
+          "created_at"
+        ],
+        "title": "SecurityEventRead"
+      },
+      "SecurityEventsRead": {
+        "properties": {
+          "hotel_id": {
+            "type": "integer",
+            "title": "Hotel Id"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/SecurityEventRead"
+            },
+            "type": "array",
+            "title": "Events"
+          }
+        },
+        "type": "object",
+        "required": [
+          "hotel_id"
+        ],
+        "title": "SecurityEventsRead"
+      },
+      "SecurityOverviewRead": {
+        "properties": {
+          "hotel_id": {
+            "type": "integer",
+            "title": "Hotel Id"
+          },
+          "session_timeout_minutes": {
+            "type": "integer",
+            "title": "Session Timeout Minutes"
+          },
+          "active_members": {
+            "type": "integer",
+            "title": "Active Members"
+          },
+          "pending_invitations": {
+            "type": "integer",
+            "title": "Pending Invitations"
+          },
+          "security_events_24h": {
+            "type": "integer",
+            "title": "Security Events 24H"
+          },
+          "permission_denials_24h": {
+            "type": "integer",
+            "title": "Permission Denials 24H"
+          },
+          "current_user": {
+            "$ref": "#/components/schemas/SecurityCurrentUserRead"
+          }
+        },
+        "type": "object",
+        "required": [
+          "hotel_id",
+          "session_timeout_minutes",
+          "active_members",
+          "pending_invitations",
+          "security_events_24h",
+          "permission_denials_24h",
+          "current_user"
+        ],
+        "title": "SecurityOverviewRead"
       },
       "SellableProductCreate": {
         "properties": {
@@ -45200,6 +46537,13 @@
           "is_active": {
             "type": "boolean",
             "title": "Is Active"
+          },
+          "permissions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Permissions"
           }
         },
         "type": "object",
@@ -45211,6 +46555,26 @@
           "is_active"
         ],
         "title": "UserInfo"
+      },
+      "UserPermissionOverrideRequest": {
+        "properties": {
+          "permission_code": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Permission Code"
+          },
+          "allowed": {
+            "type": "boolean",
+            "title": "Allowed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "permission_code",
+          "allowed"
+        ],
+        "title": "UserPermissionOverrideRequest"
       },
       "ValidationError": {
         "properties": {
@@ -46006,69 +47370,6 @@
         ],
         "title": "WhatsAppOptionsResponse"
       },
-      "WhatsAppPaymentConfirmation": {
-        "properties": {
-          "payment_link_id": {
-            "type": "integer",
-            "title": "Payment Link Id"
-          },
-          "provider": {
-            "type": "string",
-            "title": "Provider",
-            "default": "mercado_pago"
-          },
-          "webhook_id": {
-            "type": "string",
-            "maxLength": 200,
-            "minLength": 1,
-            "title": "Webhook Id"
-          },
-          "payment_id": {
-            "type": "string",
-            "maxLength": 200,
-            "minLength": 1,
-            "title": "Payment Id"
-          },
-          "status": {
-            "type": "string",
-            "maxLength": 40,
-            "minLength": 1,
-            "title": "Status",
-            "default": "approved"
-          },
-          "amount": {
-            "anyOf": [
-              {
-                "type": "number",
-                "exclusiveMinimum": 0.0
-              },
-              {
-                "type": "string"
-              }
-            ],
-            "title": "Amount"
-          },
-          "currency": {
-            "type": "string",
-            "maxLength": 3,
-            "minLength": 3,
-            "title": "Currency",
-            "default": "ARS"
-          },
-          "raw_payload": {
-            "type": "object",
-            "title": "Raw Payload"
-          }
-        },
-        "type": "object",
-        "required": [
-          "payment_link_id",
-          "webhook_id",
-          "payment_id",
-          "amount"
-        ],
-        "title": "WhatsAppPaymentConfirmation"
-      },
       "WhatsAppPaymentConfirmationResponse": {
         "properties": {
           "status": {
@@ -46261,6 +47562,14 @@
             "type": "string",
             "title": "Status"
           },
+          "execution_mode": {
+            "type": "string",
+            "title": "Execution Mode"
+          },
+          "payable": {
+            "type": "boolean",
+            "title": "Payable"
+          },
           "external_reference": {
             "anyOf": [
               {
@@ -46349,6 +47658,8 @@
           "currency",
           "recipient_email",
           "status",
+          "execution_mode",
+          "payable",
           "created_at"
         ],
         "title": "WhatsAppPaymentLinkRead"

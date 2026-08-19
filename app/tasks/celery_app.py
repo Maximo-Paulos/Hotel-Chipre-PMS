@@ -30,7 +30,16 @@ celery_app.conf.update(
 )
 
 def build_beat_schedule(runtime_settings: Settings) -> dict:
-    """Return no scheduled provider/network work for a closed sandbox."""
+    """Return no scheduled provider/network work for a closed sandbox.
+
+    `notifications.process_outbox` also creates in-app Notification rows
+    (no network egress), but it is kept under the same closed-sandbox gate
+    as everything else here -- this function's tested contract is "closed
+    sandbox means an empty beat_schedule", not "empty unless the task claims
+    to be network-free". Callers that need in-app delivery inside a closed
+    sandbox call `app.services.notification_service.process_pending_outbox`
+    directly instead of relying on beat.
+    """
 
     if not external_connections_enabled(runtime_settings):
         return {}
@@ -54,6 +63,14 @@ def build_beat_schedule(runtime_settings: Settings) -> dict:
             "task": "reports.send_nightly_reports",
             "schedule": crontab(hour=23, minute=0),
         },
+        "notifications-process-outbox": {
+            "task": "notifications.process_outbox",
+            "schedule": 60.0,
+        },
+        "notifications-generate-daily-reports": {
+            "task": "notifications.generate_daily_reports",
+            "schedule": crontab(minute="*/15"),
+        },
     }
 
 
@@ -65,3 +82,4 @@ celery_app.conf.beat_schedule = build_beat_schedule(settings)
 import app.tasks.ota_tasks  # noqa: F401,E402
 import app.tasks.analytics_tasks  # noqa: F401,E402
 import app.tasks.report_tasks  # noqa: F401,E402
+import app.tasks.notification_tasks  # noqa: F401,E402

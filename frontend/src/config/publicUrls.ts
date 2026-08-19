@@ -1,3 +1,5 @@
+import { Capacitor } from "@capacitor/core";
+
 const trimTrailingSlash = (value: string) => value.replace(/\/+$/, "");
 const ensureLeadingSlash = (value: string) => (value.startsWith("/") ? value : `/${value}`);
 const parseHostname = (value?: string | null) => {
@@ -35,6 +37,11 @@ export const resolveSalesContactUrl = (subject = "Consulta sobre Hotel Chipre PM
   `mailto:${PUBLIC_SALES_EMAIL}?subject=${encodeURIComponent(subject)}`;
 
 export const isAppHostname = (hostname?: string) => {
+  // Packaged Capacitor apps load from capacitor://localhost (iOS) or
+  // https://localhost (Android WebView), never from app.hotels-pms.com, so
+  // the hostname check below can never match. Treat any native shell as the
+  // app host directly so it never redirects itself to the marketing site.
+  if (!hostname && Capacitor.isNativePlatform()) return true;
   const resolved = (hostname || (typeof window !== "undefined" ? window.location.hostname : "")).toLowerCase();
   if (!resolved) return false;
   const candidates = Array.from(

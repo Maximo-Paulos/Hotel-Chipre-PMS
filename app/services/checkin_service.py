@@ -9,6 +9,7 @@ Manages the deep guest check-in flow:
   6. Also handles check-out flow
 """
 import json
+import logging
 from datetime import datetime, timezone
 from decimal import Decimal
 
@@ -25,11 +26,40 @@ from app.models.room import Room, RoomStatusEnum
 from app.services.guest_profile import get_guest_profile, validate_primary_guest_record
 from app.models.security_audit_log import SecurityAuditLog
 from app.services.financial_ledger import paid_amount_with_legacy_fallback
+from app.schemas.guest_restriction import GuestRestrictionOverrideRequest
+from app.services.guest_restriction_service import record_restriction_override, validate_no_active_restriction
+
+
+logger = logging.getLogger(__name__)
 
 
 class CheckInError(Exception):
     """Custom exception for check-in validation errors."""
     pass
+
+
+def _notify_reservation_event(db: Session, *, hotel_id: int, reservation: Reservation, event_type: str, title: str) -> None:
+    """Durable, per-recipient notification counterpart to the status
+    transition below. Best-effort: never blocks or rolls back check-in/out."""
+    try:
+        from app.models.notification import NotificationSeverityEnum
+        from app.services.notification_service import enqueue_notifications_for_event
+        from app.services.permission_service import ROLE_CODES
+
+        enqueue_notifications_for_event(
+            db,
+            hotel_id=hotel_id,
+            event_type=event_type,
+            dedupe_key=f"{event_type}:{reservation.id}",
+            title=title,
+            severity=NotificationSeverityEnum.INFO,
+            entity_type="reservation",
+            entity_id=reservation.id,
+            payload={"reservation_id": reservation.id, "status": reservation.status.value if reservation.status else None},
+            recipient_roles=list(ROLE_CODES),
+        )
+    except Exception:
+        logger.exception("checkin.notify_failed", extra={"hotel_id": hotel_id, "reservation_id": reservation.id})
 
 
 def _resolve_jurisdiction_code(config: HotelConfiguration | None) -> str:
@@ -161,6 +191,9 @@ def perform_checkin(
     override_prohibido: bool = False,
     override_user_id: int | None = None,
     guest_patch: dict | None = None,
+    restriction_override: GuestRestrictionOverrideRequest | None = None,
+    actor_user_id: int | None = None,
+    actor_role: str | None = None,
 ) -> Reservation:
     """
     Full check-in process:
@@ -170,7 +203,11 @@ def perform_checkin(
     4. Transition to checked_in
     5. Record actual check-in timestamp
 
-    Raises CheckInError with descriptive messages on failure.
+    Raises CheckInError with descriptive messages on failure. Raises
+    GuestProhibitedError / RestrictionOverridePermissionError (from
+    app.services.guest_restriction_service) when the formal GuestRestriction
+    gate blocks the check-in -- distinct from the legacy prohibido_alojar
+    tag gate in `_guard_prohibido`.
     """
     reservation, hotel_id = _load_reservation(db, reservation_id, hotel_id)
     ledger_paid = paid_amount_with_legacy_fallback(db, hotel_id, reservation)
@@ -188,6 +225,25 @@ def perform_checkin(
     guest = db.query(Guest).filter(Guest.id == reservation.guest_id, Guest.hotel_id == hotel_id).first()
     if not guest:
         raise CheckInError("Guest record not found for this reservation")
+
+    overridden_restriction = validate_no_active_restriction(
+        db,
+        hotel_id=hotel_id,
+        guest_id=guest.id,
+        restriction_override=restriction_override,
+        actor_user_id=actor_user_id,
+        actor_role=actor_role,
+    )
+    if overridden_restriction is not None:
+        record_restriction_override(
+            db,
+            hotel_id=hotel_id,
+            actor_user_id=actor_user_id,
+            restriction=overridden_restriction,
+            reason=restriction_override.reason,
+            reservation_id=reservation.id,
+            operation="checkin",
+        )
 
     _guard_prohibido(
         db, hotel_id, guest, reservation,
@@ -208,6 +264,10 @@ def perform_checkin(
         if room:
             room.status = RoomStatusEnum.OCCUPIED
     db.flush()
+    _notify_reservation_event(
+        db, hotel_id=hotel_id, reservation=reservation, event_type="reservation.checked_in",
+        title=f"Reservation {reservation.confirmation_code} checked in",
+    )
 
     return reservation
 
@@ -323,7 +383,11 @@ def perform_checkout(
         room = db.query(Room).filter(Room.id == reservation.room_id, Room.hotel_id == hotel_id).first()
         if room:
             room.status = RoomStatusEnum.CLEANING
-            
+
     db.flush()
+    _notify_reservation_event(
+        db, hotel_id=hotel_id, reservation=reservation, event_type="reservation.checked_out",
+        title=f"Reservation {reservation.confirmation_code} checked out",
+    )
 
     return reservation

@@ -1,5 +1,6 @@
 from app.models.room import Room, RoomCategory
 from app.models.guest import Guest, GuestCompanion, GuestTag, GuestRatingEnum, GuestTagTypeEnum
+from app.models.guest_restriction import GuestRestriction, GuestRestrictionStatusEnum
 from app.models.reservation import (
     Reservation,
     ReservationStatusEnum,
@@ -82,7 +83,12 @@ from app.models.rate_limit_event import RateLimitEvent
 from app.models.ai_assistant import AIAssistantSession, AIAssistantMessage, AIAssistantActionRun, AIAssistantInsight
 from app.models.audit_log import AuditLog, AuditActionEnum
 from app.models.security_audit_log import SecurityAuditLog
-from app.models.permission import Permission, RolePermissionDefault, HotelPermissionOverride
+from app.models.permission import (
+    Permission,
+    RolePermissionDefault,
+    HotelPermissionOverride,
+    UserPermissionOverride,
+)
 from app.models.laundry import LaundryBatch, LaundryItem
 from app.models.laundry_vendor import LaundryVendor, LaundryVendorPrice, LaundryRemito, LaundryRemitoLine
 from app.models.stock import StockItem, StockLocation, StockMovement
@@ -109,6 +115,17 @@ from app.models.hotel_api_key import HotelAPIKey, APIKeyPurposeEnum
 from app.models.room_block import RoomBlock, RoomBlockReasonEnum
 from app.models.fx_rate_snapshot import FxRateSnapshot
 from app.models.company_document import CompanyDocument, CompanyDocumentTypeEnum, CompanyDocumentStatusEnum
+from app.models.promotion import Promotion, PromotionBenefitTypeEnum, PromotionScopeEnum
+from app.models.notification import (
+    Notification,
+    PushSubscription,
+    NotificationPreference,
+    NotificationOutbox,
+    DailyReportSchedule,
+    NotificationSeverityEnum,
+    NotificationChannelEnum,
+    NotificationOutboxStatusEnum,
+)
 # master_admin models live outside app/models but share Base — import them so
 # Base.metadata is complete (create_all/drop_all in tests must see every table)
 import app.master_admin.models  # noqa: F401
@@ -133,6 +150,7 @@ from app.models.analytics import (
 __all__ = [
     "Room", "RoomCategory",
     "Guest", "GuestCompanion", "GuestTag", "GuestRatingEnum", "GuestTagTypeEnum",
+    "GuestRestriction", "GuestRestrictionStatusEnum",
     "Reservation", "ReservationStatusEnum", "ReservationOutcomeEnum",
     "ReservationGuestSegmentEnum", "ReservationGuestSegmentSourceEnum",
     "ReservationChannelCodeEnum", "ReservationCancellationReasonCodeEnum",
@@ -231,6 +249,7 @@ __all__ = [
     "Permission",
     "RolePermissionDefault",
     "HotelPermissionOverride",
+    "UserPermissionOverride",
     "LaundryBatch",
     "LaundryItem",
     "StockItem",
@@ -266,4 +285,15 @@ __all__ = [
     "CompanyDocument",
     "CompanyDocumentTypeEnum",
     "CompanyDocumentStatusEnum",
+    "Promotion",
+    "PromotionBenefitTypeEnum",
+    "PromotionScopeEnum",
+    "Notification",
+    "PushSubscription",
+    "NotificationPreference",
+    "NotificationOutbox",
+    "DailyReportSchedule",
+    "NotificationSeverityEnum",
+    "NotificationChannelEnum",
+    "NotificationOutboxStatusEnum",
 ]

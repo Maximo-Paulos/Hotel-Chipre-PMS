@@ -28,6 +28,8 @@ def build_reservation_quote(
     guest_scope: str = "all",
     target_currency: str | None = None,
     occupancy: int | None = None,
+    guest_id: int | None = None,
+    company_id: int | None = None,
 ) -> dict[str, Any]:
     normalized_payment_method = normalize_pricing_payment_method(pricing_payment_method)
     pricing = calculate_reservation_pricing(
@@ -44,6 +46,8 @@ def build_reservation_quote(
         guest_scope=guest_scope,
         target_currency=target_currency,
         occupancy=occupancy,
+        guest_id=guest_id,
+        company_id=company_id,
     )
     revision = build_pricing_revision(
         db,
@@ -78,6 +82,9 @@ def build_reservation_quote(
             }
             for offset in range(pricing.nights)
         ]
+    promotions_applied = snapshot.get("promotions_applied")
+    if not isinstance(promotions_applied, list):
+        promotions_applied = []
 
     issued_at = datetime.now(timezone.utc)
     expires_at = issued_at.timestamp() + 900
@@ -118,6 +125,7 @@ def build_reservation_quote(
         "pricing_payment_method": normalized_payment_method,
         "pricing_revision": revision,
         "breakdown": breakdown,
+        "promotions_applied": promotions_applied,
         "quote_token": token,
         "expires_at": datetime.fromtimestamp(expires_at, timezone.utc),
     }

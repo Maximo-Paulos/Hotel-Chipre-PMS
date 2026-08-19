@@ -9,7 +9,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies.auth import AuthContext, require_roles
+from app.dependencies.auth import AuthContext, require_permission
+from app.services.permission_service import PERMISSION_LAUNDRY_MOVE, PERMISSION_LAUNDRY_READ
 from app.services.laundry_service import (
     LaundryError,
     add_item,
@@ -66,7 +67,7 @@ class LaundryStatusUpdate(BaseModel):
 def create_laundry_batch(
     data: LaundryBatchCreate,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_LAUNDRY_MOVE)),
 ):
     batch = create_batch(
         db,
@@ -84,7 +85,7 @@ def list_laundry_batches(
     status_filter: Optional[str] = None,
     batch_code: Optional[str] = None,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping")),
+    context: AuthContext = Depends(require_permission(PERMISSION_LAUNDRY_READ)),
 ):
     return list_batches(
         db,
@@ -97,7 +98,7 @@ def list_laundry_batches(
 def get_laundry_batch(
     batch_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping")),
+    context: AuthContext = Depends(require_permission(PERMISSION_LAUNDRY_READ)),
 ):
     try:
         return get_batch(db, hotel_id=context.hotel_id, batch_id=batch_id)
@@ -110,7 +111,7 @@ def add_laundry_item(
     batch_id: int,
     data: LaundryItemCreate,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping")),
+    context: AuthContext = Depends(require_permission(PERMISSION_LAUNDRY_MOVE)),
 ):
     try:
         item = add_item(db, hotel_id=context.hotel_id, batch_id=batch_id, **data.model_dump())
@@ -126,7 +127,7 @@ def update_laundry_status(
     batch_id: int,
     data: LaundryStatusUpdate,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "housekeeping")),
+    context: AuthContext = Depends(require_permission(PERMISSION_LAUNDRY_MOVE)),
 ):
     try:
         batch = transition_status(db, hotel_id=context.hotel_id, batch_id=batch_id, new_status=data.status)

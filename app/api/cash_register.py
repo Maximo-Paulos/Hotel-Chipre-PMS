@@ -146,7 +146,13 @@ def close_cash_session(
             # cannot approve a difference with operate-only access.
             from app.services.permission_service import audit_permission_denied, resolve
 
-            if not resolve(db, context.hotel_id, context.user_role, PERMISSION_CASH_APPROVE_DIFFERENCE):
+            if not resolve(
+                db,
+                context.hotel_id,
+                context.user_role,
+                PERMISSION_CASH_APPROVE_DIFFERENCE,
+                user_id=context.user_id,
+            ):
                 audit_permission_denied(
                     db,
                     hotel_id=context.hotel_id,

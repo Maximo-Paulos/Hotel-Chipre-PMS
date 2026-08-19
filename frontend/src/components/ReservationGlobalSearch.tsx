@@ -27,8 +27,8 @@ export function ReservationGlobalSearch() {
   };
 
   return (
-    <div className="flex items-center gap-2">
-      <div className="relative">
+    <div className="flex flex-wrap items-center gap-2">
+      <div className="relative w-full sm:w-auto">
         <input
           type="search"
           value={query}
@@ -40,7 +40,7 @@ export function ReservationGlobalSearch() {
           onBlur={() => window.setTimeout(() => setShowResults(false), 150)}
           placeholder="Buscar reserva por confirmación o huésped"
           aria-label="Buscar reserva"
-          className="w-56 rounded-lg border border-slate-300 px-3 py-2 text-sm sm:w-72"
+          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm sm:w-72"
         />
         {showResults && query.trim().length >= 2 && (
           <div

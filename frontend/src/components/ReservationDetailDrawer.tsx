@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 
 import { ApiError } from "../api/client";
 import { type GuestUpdatePayload } from "../api/guests";
+import { type RestrictionOverride } from "../api/guestRestrictions";
 import { type PaymentMethod } from "../api/payments";
+import { useDialogA11y } from "../hooks/useDialogA11y";
 import {
   useReservation,
   useReservationMutations,
@@ -11,6 +13,7 @@ import {
 } from "../hooks/useReservations";
 import { useGuest } from "../hooks/useGuests";
 import { usePaymentMutation, usePaymentSummary } from "../hooks/usePayments";
+import { useRestrictionOverridePrompt } from "../hooks/useRestrictionOverridePrompt";
 import { formatMoney, normalizeCurrencyCode } from "../utils/currency";
 import {
   canCancelReservation,
@@ -19,6 +22,9 @@ import {
   canPartialCheckIn,
   reservationStatusConfig
 } from "../utils/reservationStatus";
+
+import { GuestRestrictionBadge } from "./GuestRestrictionBadge";
+import { RestrictionOverrideModal } from "./RestrictionOverrideModal";
 
 type CheckinCaptureForm = {
   document_type: "" | "DNI" | "PASSPORT" | "CEDULA";
@@ -78,6 +84,7 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
   const paymentMutation = usePaymentMutation(reservationId ?? undefined);
   const { cancelMutation, checkInMutation, partialCheckInMutation, checkOutMutation, addGuestsMutation } =
     useReservationMutations();
+  const restrictionOverridePrompt = useRestrictionOverridePrompt();
 
   const open = Boolean(reservationId);
   const reservation = reservationQuery.data;
@@ -188,12 +195,18 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
     );
   };
 
+  const containerRef = useDialogA11y(open, onClose);
+
   if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex" role="dialog" aria-modal="true" aria-labelledby="reservation-drawer-title">
       <div className="flex-1 animate-fade-in bg-black/30" onClick={onClose} />
-      <div className="flex w-full max-w-xl animate-slide-in-right flex-col border-l border-slate-200 bg-white shadow-xl">
+      <div
+        ref={containerRef}
+        tabIndex={-1}
+        className="flex w-full max-w-xl animate-slide-in-right flex-col border-l border-slate-200 bg-white shadow-xl outline-none"
+      >
         <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-3">
           <div className="min-w-0">
             <p className="text-xs uppercase tracking-wide text-slate-500">Reserva</p>
@@ -243,6 +256,9 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                 <p className="text-xs uppercase tracking-wide text-slate-500">Huéspedes</p>
                 <p data-testid="drawer-guest-name" className="mt-1 font-semibold text-slate-900">{guestFullName(reservation.guest, reservation.guest_id)}</p>
                 <p className="text-xs text-slate-500">Titular</p>
+                {reservation.guest_id ? (
+                  <GuestRestrictionBadge guestId={reservation.guest_id} className="mt-1" />
+                ) : null}
                 {reservation.additional_guests && reservation.additional_guests.length > 0 ? (
                   <ul className="mt-2 space-y-1">
                     {reservation.additional_guests.map((guest) => (
@@ -553,17 +569,29 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                 <button
                   type="button"
                   disabled={!canCheckInReservation(reservation.status) || checkInMutation.isPending}
-                  onClick={() =>
-                    runAction("check-in", () =>
-                      checkInMutation.mutate(
-                        { id: reservation.id, guest: needsCheckinCapture ? buildGuestPatch() : undefined },
-                        {
-                          onSuccess: () => setActionMessage("Check-in registrado."),
-                          onError: (err) => setActionError(err instanceof ApiError ? err.message : "No se pudo hacer check-in.")
-                        }
-                      )
-                    )
-                  }
+                  onClick={() => {
+                    const submitCheckIn = (restrictionOverride?: RestrictionOverride) =>
+                      runAction("check-in", () =>
+                        checkInMutation.mutate(
+                          {
+                            id: reservation.id,
+                            guest: needsCheckinCapture ? buildGuestPatch() : undefined,
+                            restriction_override: restrictionOverride
+                          },
+                          {
+                            onSuccess: () => setActionMessage("Check-in registrado."),
+                            onError: (err) => {
+                              // The guest has an active GuestRestriction --
+                              // prompt for an override reason and retry
+                              // instead of surfacing a raw 409/403.
+                              if (restrictionOverridePrompt.handleError(err, submitCheckIn)) return;
+                              setActionError(err instanceof ApiError ? err.message : "No se pudo hacer check-in.");
+                            }
+                          }
+                        )
+                      );
+                    submitCheckIn();
+                  }}
                   className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-xs font-semibold text-brand-700 hover:border-brand-300 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Confirmar check-in
@@ -603,6 +631,15 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
           )}
         </div>
       </div>
+
+      {restrictionOverridePrompt.phase !== "idle" ? (
+        <RestrictionOverrideModal
+          phase={restrictionOverridePrompt.phase}
+          onSubmit={restrictionOverridePrompt.submit}
+          onCancel={restrictionOverridePrompt.dismiss}
+          isPending={checkInMutation.isPending}
+        />
+      ) : null}
     </div>
   );
 }

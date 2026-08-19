@@ -553,7 +553,32 @@ test("owner operates waitlist, housekeeping, laundry and daily reports", async (
   await movementForm.getByRole("button", { name: "Registrar Ingreso", exact: true }).click();
   await expect(page.getByText("Movimiento registrado.", { exact: true })).toBeVisible();
 
+  // Ropa blanca vive en su propia tabla/API (linen_items/linen_locations),
+  // separada del stock general recien cargado arriba -- StockPage ya no
+  // puede targetear un item de linen (ver laundry-vendor-cycle-journey.spec.ts).
+  // Sin este alta dedicada, el "Ítem" de mas abajo nunca encuentra la opcion.
   await navigateFromShell(page, "/operacion/lavanderia");
+  const linenItemName = `Sabanas E2E ${suffix}`;
+  const linenLocationName = `Deposito blancos lavanderia E2E ${suffix}`;
+  const linenItemForm = page.locator("form").filter({ hasText: "Nuevo tipo de ropa blanca" });
+  await linenItemForm.getByLabel("Nombre").fill(linenItemName);
+  await linenItemForm.getByRole("button", { name: "Crear tipo de ropa blanca", exact: true }).click();
+  await expect(page.getByText("Tipo de ropa blanca creado.", { exact: true })).toBeVisible();
+
+  const linenLocationForm = page.locator("form").filter({ hasText: "Nueva ubicación" });
+  await linenLocationForm.getByLabel("Nombre").fill(linenLocationName);
+  await linenLocationForm.getByRole("button", { name: "Crear ubicación", exact: true }).click();
+  await expect(page.getByText("Ubicacion de lavanderia creada.", { exact: true })).toBeVisible();
+
+  const linenMovementForm = page.locator("form").filter({ hasText: "Registrar movimiento" });
+  await linenMovementForm.getByLabel("Ítem").selectOption({ label: linenItemName });
+  await linenMovementForm.getByLabel("Ubicación").selectOption({ label: linenLocationName });
+  await linenMovementForm.getByRole("button", { name: "Ingreso", exact: true }).click();
+  await linenMovementForm.getByLabel("Cantidad").fill("10");
+  await linenMovementForm.getByLabel("Motivo").fill("Stock inicial ropa blanca E2E");
+  await linenMovementForm.getByRole("button", { name: "Registrar movimiento", exact: true }).click();
+  await expect(page.getByText("Movimiento registrado.", { exact: true })).toBeVisible();
+
   const vendorName = `Lavadero E2E ${suffix}`;
   const vendorForm = page.locator("form").filter({ hasText: "Nuevo lavadero" });
   await vendorForm.getByLabel("Nombre").fill(vendorName);
@@ -561,7 +586,7 @@ test("owner operates waitlist, housekeeping, laundry and daily reports", async (
   await expect(page.getByText(`Lavadero "${vendorName}" creado.`, { exact: true })).toBeVisible();
 
   const priceForm = page.locator("form").filter({ hasText: "Guardar precio" });
-  await priceForm.getByLabel("Ítem").selectOption({ label: stockItemName });
+  await priceForm.getByLabel("Ítem").selectOption({ label: linenItemName });
   await priceForm.getByLabel("Precio por unidad").fill("200");
   await priceForm.getByRole("button", { name: "Guardar precio", exact: true }).click();
   await expect(page.getByText("Precio guardado.", { exact: true })).toBeVisible();
@@ -569,13 +594,13 @@ test("owner operates waitlist, housekeeping, laundry and daily reports", async (
   const remitoForm = page.locator("form").filter({ hasText: "Nuevo remito" });
   await remitoForm.getByRole("button", { name: "Salida (se lleva sucia)", exact: true }).click();
   await remitoForm.getByLabel("Lavadero").selectOption({ label: vendorName });
-  await remitoForm.getByLabel("Ubicación casa (origen/destino en el hotel)").selectOption({ label: stockLocationName });
+  await remitoForm.getByLabel("Ubicación casa (origen/destino en el hotel)").selectOption({ label: linenLocationName });
   await remitoForm.getByLabel("N° de remito (papel)").fill(`R-${suffix}`);
   const remitoLineForm = remitoForm.locator("div").filter({ hasText: "Líneas" }).last();
-  await remitoLineForm.getByLabel("Ítem").selectOption({ label: stockItemName });
+  await remitoLineForm.getByLabel("Ítem").selectOption({ label: linenItemName });
   await remitoLineForm.getByLabel("Cant.").fill("4");
   await remitoLineForm.getByRole("button", { name: "Agregar línea", exact: true }).click();
-  await expect(remitoForm).toContainText(`${stockItemName} × 4`);
+  await expect(remitoForm).toContainText(`${linenItemName} × 4`);
   await expect(remitoForm.getByText(/Total estimado:\s*\$\s*800/)).toBeVisible();
   await remitoForm.getByRole("button", { name: "Guardar remito", exact: true }).click();
   await expect(page.getByText(`Remito R-${suffix} guardado.`, { exact: true })).toBeVisible();
@@ -584,7 +609,7 @@ test("owner operates waitlist, housekeeping, laundry and daily reports", async (
     .getByRole("region", { name: "Qué está en cada lavadero ahora", exact: true })
     .locator("div.rounded-lg.border.border-slate-200.bg-slate-50.p-3")
     .filter({ hasText: vendorName });
-  await expect(vendorBalance).toContainText(stockItemName);
+  await expect(vendorBalance).toContainText(linenItemName);
   await expect(vendorBalance).toContainText("4");
 
   await navigateFromShell(page, "/reportes");

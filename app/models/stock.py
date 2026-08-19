@@ -102,6 +102,13 @@ class StockMovement(Base):
     reservation_id = Column(Integer, nullable=True)
     created_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL", name="fk_stock_movements_created_by_user_id"), nullable=True)
     created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    # Retried "register movement" requests (e.g. a flaky connection resends
+    # the same POST) send the same client-generated key so the second attempt
+    # returns the first attempt's row instead of double-counting stock. NULL
+    # for movements that don't opt in -- NULLs never collide with each other
+    # or with a real key in a unique constraint (same convention as
+    # payment_links.idempotency_key, see 20260812_external_effect_payment_links).
+    idempotency_key = Column(String(100), nullable=True)
 
     item = relationship("StockItem", back_populates="movements", lazy="joined")
     location = relationship("StockLocation", back_populates="movements", lazy="joined")
@@ -123,6 +130,9 @@ class StockMovement(Base):
         ForeignKeyConstraint(
             ["hotel_id", "reservation_id"], ["reservations.hotel_id", "reservations.id"],
             name="fk_stock_movements_hotel_reservation",
+        ),
+        UniqueConstraint(
+            "hotel_id", "idempotency_key", name="uq_stock_movement_idempotency_per_hotel"
         ),
         Index("ix_stock_movements_hotel_id", "hotel_id"),
     )

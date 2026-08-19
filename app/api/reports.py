@@ -3,6 +3,7 @@ FastAPI routes for Reports & Night Audit.
 Daily summaries, occupancy reports, revenue tracking.
 """
 from datetime import date, datetime, timezone, timedelta
+from decimal import Decimal
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -45,7 +46,7 @@ def operational_daily_report(
     if report_date is None:
         report_date = date.today()
     report = build_daily_operational_report(db, context.hotel_id, report_date)
-    if resolve(db, context.hotel_id, context.user_role, PERMISSION_REPORTS_FINANCIAL_VIEW):
+    if resolve(db, context.hotel_id, context.user_role, PERMISSION_REPORTS_FINANCIAL_VIEW, user_id=context.user_id):
         return report
     return redact_daily_report_financials(report)
 
@@ -59,7 +60,7 @@ def operational_alerts(
     if report_date is None:
         report_date = date.today()
     summary = build_nightly_summary(db, context.hotel_id, report_date)
-    if resolve(db, context.hotel_id, context.user_role, PERMISSION_REPORTS_FINANCIAL_VIEW):
+    if resolve(db, context.hotel_id, context.user_role, PERMISSION_REPORTS_FINANCIAL_VIEW, user_id=context.user_id):
         return summary
     return redact_nightly_summary_financials(summary)
 
@@ -95,7 +96,7 @@ def trigger_nightly_summary_delivery(
         provider_message_id=result.provider_message_id,
         recipients=recipients,
     )
-    if resolve(db, context.hotel_id, context.user_role, PERMISSION_REPORTS_FINANCIAL_VIEW):
+    if resolve(db, context.hotel_id, context.user_role, PERMISSION_REPORTS_FINANCIAL_VIEW, user_id=context.user_id):
         return response
     return response.model_copy(
         update={
@@ -162,7 +163,8 @@ def daily_report(
     )
 
     revenue_by_method = {}
-    total_revenue = 0.0
+    # Same float/Decimal accumulator bug as revenue_report() below.
+    total_revenue = Decimal("0")
     for t in today_transactions:
         method = t.payment_method.value
         revenue_by_method[method] = revenue_by_method.get(method, 0) + t.amount
@@ -321,7 +323,11 @@ def revenue_report(
 
     by_method = {}
     by_day = {}
-    total = 0.0
+    # Transaction.amount is Numeric/Decimal (app/models/transaction.py) --
+    # a float accumulator here raises "unsupported operand type(s) for +=:
+    # 'float' and 'decimal.Decimal'" on the very first completed transaction,
+    # crashing this endpoint with a 500 for any hotel with real payment data.
+    total = Decimal("0")
 
     for t in transactions:
         method = t.payment_method.value

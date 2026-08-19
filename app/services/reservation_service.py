@@ -129,6 +129,41 @@ def _touch_facts(db: Session, hotel_id: int | None, date_from: date | None, date
     touch_reservation_fact_window(db, hotel_id=hotel_id, date_from=date_from, date_to=date_to)
 
 
+def _notify_reservation_event(
+    db: Session,
+    *,
+    hotel_id: int | None,
+    reservation: "Reservation",
+    event_type: str,
+    title: str,
+    dedupe_suffix: str,
+) -> None:
+    """Durable, per-recipient notification for a reservation lifecycle
+    change. Best-effort: a notification failure must never roll back or
+    block the reservation write it describes."""
+    if hotel_id is None:
+        return
+    try:
+        from app.models.notification import NotificationSeverityEnum
+        from app.services.notification_service import enqueue_notifications_for_event
+        from app.services.permission_service import ROLE_CODES
+
+        enqueue_notifications_for_event(
+            db,
+            hotel_id=hotel_id,
+            event_type=event_type,
+            dedupe_key=f"{event_type}:{reservation.id}:{dedupe_suffix}",
+            title=title,
+            severity=NotificationSeverityEnum.INFO,
+            entity_type="reservation",
+            entity_id=reservation.id,
+            payload={"reservation_id": reservation.id, "status": reservation.status.value if reservation.status else None},
+            recipient_roles=list(ROLE_CODES),
+        )
+    except Exception:
+        logger.exception("reservation.notify_failed", extra={"hotel_id": hotel_id, "reservation_id": reservation.id})
+
+
 def _resolve_hotel_id(
     hotel_id: Optional[int],
     category: Optional[RoomCategory] = None,
@@ -218,6 +253,8 @@ def calculate_reservation_pricing(
     guest_scope: str = "all",
     target_currency: str | None = None,
     occupancy: int | None = None,
+    guest_id: int | None = None,
+    company_id: int | None = None,
 ) -> ReservationPricingResult:
     category_query = db.query(RoomCategory).filter(RoomCategory.id == category_id)
     if hotel_id is not None:
@@ -284,6 +321,10 @@ def calculate_reservation_pricing(
         payment_method=pricing_payment_method,
         sellable_product=sellable_product,
         tax_policy=tax_policy,
+        pricing_channel_code=pricing_channel_code,
+        target_currency=target_currency,
+        guest_id=guest_id,
+        company_id=company_id,
     )
 
 
@@ -352,10 +393,24 @@ def _daily_rate_pricing_result(
     payment_method: str | None,
     sellable_product: SellableProduct | None,
     tax_policy: TaxPolicy | None,
+    pricing_channel_code: str | None = None,
+    target_currency: str | None = None,
+    guest_id: int | None = None,
+    company_id: int | None = None,
 ) -> ReservationPricingResult:
+    from app.services.promotion_service import (
+        PromotionMatchContext,
+        apply_promotions_to_night,
+        find_applicable_promotions,
+    )
+
+    booking_date = datetime.now(timezone.utc).date()
     breakdown = []
+    promotions_applied_all: list[dict] = []
     current = check_in
+    night_index = 0
     while current < check_out:
+        night_index += 1
         configured_source = _calendar_pricing_source(
             db,
             hotel_id=hotel_id,
@@ -373,7 +428,35 @@ def _daily_rate_pricing_result(
         if configured_source is None:
             price = float(category.base_price_per_night or 0.0)
         price = round(float(price), 2)
-        breakdown.append({"date": current.isoformat(), "price": price, "source": source})
+
+        # Step 3 of the canonical pricing order (see
+        # app.services.promotion_pricing_service): promotions eligible for
+        # this specific night, applied per-night, clamped at 0.
+        ctx = PromotionMatchContext(
+            hotel_id=hotel_id,
+            night_date=current,
+            night_index=night_index,
+            nights_total=nights,
+            booking_date=booking_date,
+            category_id=category.id,
+            sales_channel_code=pricing_channel_code,
+            guest_id=guest_id,
+            company_id=company_id,
+            payment_currency=target_currency,
+            payment_method=payment_method,
+        )
+        matched = find_applicable_promotions(db, ctx)
+        post_promo, applied = apply_promotions_to_night(Decimal(str(price)), matched)
+        promotions_applied_all.extend(applied)
+        final_price = float(post_promo)
+
+        breakdown.append({
+            "date": current.isoformat(),
+            "price": final_price,
+            "base_price": price,
+            "source": source,
+            "promotions_applied": applied,
+        })
         current += timedelta(days=1)
 
     total_amount = round(sum(row["price"] for row in breakdown), 2)
@@ -386,6 +469,7 @@ def _daily_rate_pricing_result(
         "nights": nights,
         "nightly_rate": nightly_rate,
         "breakdown": breakdown,
+        "promotions_applied": promotions_applied_all,
     }
     return ReservationPricingResult(
         nights=nights,
@@ -757,7 +841,14 @@ def find_available_rooms(
     ]
 
 
-def create_reservation(db: Session, data: ReservationCreate, hotel_id: Optional[int] = None) -> Reservation:
+def create_reservation(
+    db: Session,
+    data: ReservationCreate,
+    hotel_id: Optional[int] = None,
+    *,
+    actor_user_id: Optional[int] = None,
+    actor_role: Optional[str] = None,
+) -> Reservation:
     """
     Create a new reservation with full validation.
 
@@ -845,6 +936,8 @@ def create_reservation(db: Session, data: ReservationCreate, hotel_id: Optional[
             guest_scope=data.guest_scope,
             target_currency=data.target_currency,
             occupancy=data.num_adults + data.num_children,
+            guest_id=data.guest_id,
+            company_id=data.company_id,
         )
         if company is not None:
             pricing = _apply_corporate_pricing(db, hotel_id=hotel_id, pricing=pricing, company=company, explicit_total=None)
@@ -935,6 +1028,20 @@ def create_reservation(db: Session, data: ReservationCreate, hotel_id: Optional[
         deferred_days = int(company.deferred_days or 0)
         settlement_due_date = data.check_out_date + timedelta(days=deferred_days)
 
+    # Revalidate inside the same transaction, right before persisting: a
+    # restriction created after the quote (or after this call started) must
+    # still block the write. See app/services/guest_restriction_service.py.
+    from app.services.guest_restriction_service import record_restriction_override, validate_no_active_restriction
+
+    overridden_restriction = validate_no_active_restriction(
+        db,
+        hotel_id=hotel_id,
+        guest_id=data.guest_id,
+        restriction_override=data.restriction_override,
+        actor_user_id=actor_user_id,
+        actor_role=actor_role,
+    )
+
     confirmation_code = generate_confirmation_code()
     reservation = Reservation(
         confirmation_code=confirmation_code,
@@ -977,8 +1084,21 @@ def create_reservation(db: Session, data: ReservationCreate, hotel_id: Optional[
     )
     db.add(reservation)
     db.flush()
+    if overridden_restriction is not None:
+        record_restriction_override(
+            db,
+            hotel_id=hotel_id,
+            actor_user_id=actor_user_id,
+            restriction=overridden_restriction,
+            reason=data.restriction_override.reason,
+            reservation_id=reservation.id,
+        )
     _invalidate_availability_cache(hotel_id)
     _touch_facts(db, hotel_id, reservation.check_in_date, reservation.check_out_date)
+    _notify_reservation_event(
+        db, hotel_id=hotel_id, reservation=reservation, event_type="reservation.created",
+        title=f"New reservation {reservation.confirmation_code}", dedupe_suffix="created",
+    )
     return reservation
 
 
@@ -1070,6 +1190,11 @@ def transition_reservation_status(
     db.flush()
     _invalidate_availability_cache(reservation.hotel_id)
     _touch_facts(db, reservation.hotel_id, reservation.check_in_date, reservation.check_out_date)
+    if new_status == ReservationStatusEnum.CANCELLED:
+        _notify_reservation_event(
+            db, hotel_id=reservation.hotel_id, reservation=reservation, event_type="reservation.cancelled",
+            title=f"Reservation {reservation.confirmation_code} cancelled", dedupe_suffix=f"cancelled:{reservation.version}",
+        )
     return reservation
 
 
@@ -1249,6 +1374,7 @@ def update_reservation_fields(
     hotel_id: Optional[int] = None,
     *,
     changed_by_user_id: Optional[int] = None,
+    actor_role: Optional[str] = None,
     room_move_reason_code: Optional[str] = None,
     room_move_notes: Optional[str] = None,
     client_version: Optional[int] = None,
@@ -1260,8 +1386,32 @@ def update_reservation_fields(
             f"got {reservation.version}). Reload and retry."
         )
 
-    update_data = data.model_dump(exclude_unset=True)
     hotel_id = _resolve_hotel_id(hotel_id, room=reservation.room if hasattr(reservation, "room") else None)
+
+    # Reject-before-mutate: revalidate the guest restriction before touching
+    # any other field, so a blocked update never partially persists (e.g.
+    # `notes`) ahead of raising.
+    from app.services.guest_restriction_service import record_restriction_override, validate_no_active_restriction
+
+    overridden_restriction = validate_no_active_restriction(
+        db,
+        hotel_id=hotel_id,
+        guest_id=reservation.guest_id,
+        restriction_override=data.restriction_override,
+        actor_user_id=changed_by_user_id,
+        actor_role=actor_role,
+    )
+    if overridden_restriction is not None:
+        record_restriction_override(
+            db,
+            hotel_id=hotel_id,
+            actor_user_id=changed_by_user_id,
+            restriction=overridden_restriction,
+            reason=data.restriction_override.reason,
+            reservation_id=reservation.id,
+        )
+
+    update_data = data.model_dump(exclude_unset=True)
     original_check_in = reservation.check_in_date
     original_check_out = reservation.check_out_date
 
@@ -1363,6 +1513,10 @@ def update_reservation_fields(
         min(original_check_in, reservation.check_in_date),
         max(original_check_out, reservation.check_out_date),
     )
+    _notify_reservation_event(
+        db, hotel_id=hotel_id, reservation=reservation, event_type="reservation.updated",
+        title=f"Reservation {reservation.confirmation_code} updated", dedupe_suffix=f"updated:{reservation.version}",
+    )
     return reservation
 
 
@@ -1419,6 +1573,10 @@ def mark_reservation_no_show(
     db.flush()
     _invalidate_availability_cache(hotel_id)
     _touch_facts(db, hotel_id, reservation.check_in_date, reservation.check_out_date)
+    _notify_reservation_event(
+        db, hotel_id=hotel_id, reservation=reservation, event_type="reservation.no_show",
+        title=f"Reservation {reservation.confirmation_code} marked no-show", dedupe_suffix=f"no_show:{reservation.version}",
+    )
     return reservation
 
 

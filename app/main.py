@@ -32,6 +32,7 @@ from app.config import get_settings, is_demo_mode, is_production_mode, validate_
 from app.api import (
     rooms,
     guests,
+    guest_restrictions,
     reservations,
     waitlist,
     payments,
@@ -52,6 +53,7 @@ from app.api import (
     payment_links,
     payment_proofs,
     payment_surcharges,
+    promotions,
     hotel_api_keys,
     public_booking,
     whatsapp_hooks,
@@ -76,6 +78,7 @@ from app.api import (
     health,
     events,
     settings_security,
+    notifications,
 )
 import app.master_admin.models  # noqa: F401
 from app.master_admin.router import router as master_admin_router
@@ -195,7 +198,7 @@ _base_origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
 ]
-_extra = os.getenv("CORS_ORIGINS", "")
+_extra = get_settings().CORS_ORIGINS
 _extra_entries = [o.strip() for o in _extra.split(",") if o.strip()]
 # Wildcard is incompatible with allow_credentials=True in the browser spec
 # (the server must echo a concrete Origin). When operators set CORS_ORIGINS=*
@@ -219,6 +222,7 @@ app.include_router(onboarding.router)
 app.include_router(reference.router)
 app.include_router(rooms.router)
 app.include_router(guests.router)
+app.include_router(guest_restrictions.router)
 app.include_router(reservations.router)
 app.include_router(waitlist.router)
 app.include_router(bookings.router)
@@ -239,6 +243,7 @@ app.include_router(payment_link_tests.router)
 app.include_router(payment_links.router)
 app.include_router(payment_proofs.router)
 app.include_router(payment_surcharges.router)
+app.include_router(promotions.router)
 app.include_router(hotel_api_keys.router)
 app.include_router(public_booking.router)
 app.include_router(whatsapp_hooks.router)
@@ -264,6 +269,7 @@ app.include_router(master_admin_router)
 app.include_router(health.router)
 app.include_router(events.router)
 app.include_router(settings_security.router)
+app.include_router(notifications.router)
 
 # Frontend build paths
 BASE_DIR = Path(__file__).resolve().parent

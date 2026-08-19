@@ -5,12 +5,29 @@ Exhaustive fields for check-in panel: identity documents, nationality, contact, 
 import enum
 from sqlalchemy import (
     Column, Integer, String, Boolean, ForeignKey, Text, DateTime, Date, Enum,
-    UniqueConstraint, Index, ForeignKeyConstraint,
+    UniqueConstraint, Index, ForeignKeyConstraint, TypeDecorator,
 )
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone, timedelta
 
 from app.database import Base
+
+
+class _LenientDateTime(TypeDecorator):
+    """DateTime that also accepts ISO-formatted strings on bind.
+
+    Callers occasionally pass an ISO string (e.g. seeded/imported data)
+    instead of a ``datetime`` object; coerce it here instead of letting the
+    SQLite dialect reject it at the driver boundary.
+    """
+
+    impl = DateTime
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if isinstance(value, str):
+            return datetime.fromisoformat(value)
+        return value
 
 
 class DocumentTypeEnum(str, enum.Enum):
@@ -206,7 +223,7 @@ class GuestTag(Base):
         nullable=False,
     )
     note = Column(Text, nullable=True)
-    expires_at = Column(DateTime, nullable=True)
+    expires_at = Column(_LenientDateTime, nullable=True)
     created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
     created_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
@@ -220,6 +237,10 @@ class GuestTag(Base):
             ondelete="CASCADE",
         ),
         Index("ix_guest_tags_hotel_guest", "hotel_id", "guest_id"),
+        # Lets other tenant-scoped tables (GuestRestriction.legacy_guest_tag_id)
+        # reference a specific tag with a composite (hotel_id, id) FK instead of
+        # a scalar one, so a cross-hotel legacy-tag link is rejected at the DB.
+        UniqueConstraint("hotel_id", "id", name="uq_guest_tag_hotel_id_id"),
     )
 
     def __repr__(self) -> str:

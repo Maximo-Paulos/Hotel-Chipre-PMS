@@ -59,6 +59,14 @@ export type CurrentLinenStock = {
   quantity: DecimalValue;
 };
 
+// GET /api/laundry/items/summary: every linen item's current balance in one
+// request -- avoids the per-item N+1 (see LaundryPage.tsx's houseStockQueries
+// and app/api/laundry_vendor.py get_laundry_linen_summary docstring).
+export type LinenSummaryEntry = {
+  item: LinenItem;
+  current_quantity: DecimalValue;
+};
+
 export const listLinenItems = (session?: SessionLike) =>
   apiFetch<LinenItem[]>("/api/laundry/items", { session });
 
@@ -84,4 +92,9 @@ export const getCurrentLinenStock = (
 ) => {
   const query = locationId ? `?location_id=${locationId}` : "";
   return apiFetch<CurrentLinenStock>(`/api/laundry/items/${itemId}/current${query}`, { session });
+};
+
+export const getLinenSummary = ({ locationId }: { locationId?: number } = {}, session?: SessionLike) => {
+  const query = locationId ? `?location_id=${locationId}` : "";
+  return apiFetch<LinenSummaryEntry[]>(`/api/laundry/items/summary${query}`, { session });
 };

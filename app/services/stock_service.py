@@ -3,6 +3,7 @@ Hotel-scoped stock and inventory movement service.
 """
 from __future__ import annotations
 
+import logging
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 
@@ -13,6 +14,9 @@ from sqlalchemy.orm import Session
 from app.models.audit_log import AuditActionEnum
 from app.models.stock import StockItem, StockLocation, StockMovement
 from app.services import audit_log_service
+
+
+logger = logging.getLogger(__name__)
 
 
 class StockError(ValueError):
@@ -152,6 +156,39 @@ def delete_location(
     )
 
 
+def _notify_if_low_stock(db: Session, *, hotel_id: int, item: StockItem) -> None:
+    """Best-effort threshold check after a movement: fires at most once per
+    hotel-local calendar day per item (dedupe_key), so a busy day of outbound
+    movements while already below the threshold doesn't spam the outbox."""
+    if item.min_quantity is None:
+        return
+    try:
+        balance = current_stock(db, hotel_id=hotel_id, item_id=item.id)
+        if balance >= item.min_quantity:
+            return
+        from app.models.notification import NotificationSeverityEnum
+        from app.services.notification_service import enqueue_notifications_for_event
+        from app.services.permission_service import ROLE_CODES
+
+        severity = NotificationSeverityEnum.CRITICAL if balance <= 0 else NotificationSeverityEnum.WARNING
+        event_type = "stock.out_of_stock" if balance <= 0 else "stock.low"
+        today = datetime.now(timezone.utc).date().isoformat()
+        enqueue_notifications_for_event(
+            db,
+            hotel_id=hotel_id,
+            event_type=event_type,
+            dedupe_key=f"{event_type}:{item.id}:{today}",
+            title=f"Low stock: {item.name}" if balance > 0 else f"Out of stock: {item.name}",
+            severity=severity,
+            entity_type="stock_item",
+            entity_id=item.id,
+            payload={"item_id": item.id, "status": "low" if balance > 0 else "out"},
+            recipient_roles=list(ROLE_CODES),
+        )
+    except Exception:
+        logger.exception("stock.low_stock_notify_failed", extra={"hotel_id": hotel_id, "item_id": item.id})
+
+
 def register_movement(
     db: Session,
     *,
@@ -163,6 +200,7 @@ def register_movement(
     reason: str | None = None,
     reservation_id: int | None = None,
     created_by_user_id: int | None = None,
+    idempotency_key: str | None = None,
 ) -> StockMovement:
     if movement_type not in VALID_MOVEMENT_TYPES:
         raise StockError("Invalid stock movement type")
@@ -176,8 +214,22 @@ def register_movement(
     )
     if item is None:
         raise StockError("Stock item not found")
+    if idempotency_key:
+        existing = (
+            db.query(StockMovement)
+            .filter(StockMovement.hotel_id == hotel_id, StockMovement.idempotency_key == idempotency_key)
+            .one_or_none()
+        )
+        if existing is not None:
+            return existing
+    # Bug fix: an outbound movement scoped to one location must only be
+    # checked against THAT location's balance, not the hotel-wide total
+    # across every location -- otherwise "out" at location B could draw down
+    # a balance that actually lives at location A (never validated against
+    # location B at all). Movements with no location_id keep checking the
+    # hotel-wide total, unchanged.
     if movement_type in _OUTBOUND_MOVEMENT_TYPES and quantity > current_stock(
-        db, hotel_id=hotel_id, item_id=item.id
+        db, hotel_id=hotel_id, item_id=item.id, location_id=location_id
     ):
         raise StockError("Stock movement would make stock negative")
     if location_id is not None:
@@ -191,9 +243,27 @@ def register_movement(
         reason=reason,
         reservation_id=reservation_id,
         created_by_user_id=created_by_user_id,
+        idempotency_key=idempotency_key,
     )
-    db.add(movement)
-    db.flush()
+    try:
+        # SAVEPOINT: a retried request racing its own first attempt (both
+        # already past the existing-row check above) collapses into the
+        # unique (hotel_id, idempotency_key) index instead of inserting a
+        # duplicate movement -- return the winner's row either way.
+        with db.begin_nested():
+            db.add(movement)
+            db.flush()
+    except IntegrityError:
+        # Only the SAVEPOINT rolled back (see create_stock_item above) -- the
+        # session is still usable. A concurrent retry of the same request won.
+        existing = (
+            db.query(StockMovement)
+            .filter(StockMovement.hotel_id == hotel_id, StockMovement.idempotency_key == idempotency_key)
+            .one()
+        )
+        return existing
+    if movement_type in _OUTBOUND_MOVEMENT_TYPES:
+        _notify_if_low_stock(db, hotel_id=hotel_id, item=item)
     return movement
 
 
@@ -237,6 +307,31 @@ def current_stock(
         query = query.filter(StockMovement.location_id == location_id)
     total = query.scalar()
     return Decimal(total).quantize(Decimal("0.01"))
+
+
+def stock_summary(db: Session, *, hotel_id: int, location_id: int | None = None) -> list[dict]:
+    """Every active item's current balance in one query pair, instead of the
+    N+1 pattern of calling current_stock() once per item (see StockPage.tsx's
+    stockQueries useQueries loop -- this is its backend counterpart).
+    """
+    items = list_stock_items(db, hotel_id=hotel_id)
+    if not items:
+        return []
+    signed_quantity = case(
+        (StockMovement.movement_type.in_(_OUTBOUND_MOVEMENT_TYPES), -StockMovement.quantity),
+        else_=StockMovement.quantity,
+    )
+    query = (
+        db.query(StockMovement.item_id, func.coalesce(func.sum(signed_quantity), 0))
+        .filter(StockMovement.hotel_id == hotel_id, StockMovement.item_id.in_([item.id for item in items]))
+    )
+    if location_id is not None:
+        query = query.filter(StockMovement.location_id == location_id)
+    totals = {item_id: Decimal(total).quantize(Decimal("0.01")) for item_id, total in query.group_by(StockMovement.item_id).all()}
+    return [
+        {"item": item, "current_quantity": totals.get(item.id, Decimal("0.00"))}
+        for item in items
+    ]
 
 
 def low_stock_items(db: Session, *, hotel_id: int) -> list[StockItem]:

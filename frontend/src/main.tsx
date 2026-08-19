@@ -21,6 +21,18 @@ const queryClient = new QueryClient({
   }
 });
 
+// Only register in production builds: the dev server's own HMR/module
+// requests would otherwise get caught by the SW's fetch handler and served
+// stale during local development.
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {
+      // Offline-shell caching is a progressive enhancement -- a failed
+      // registration must never block the app from loading.
+    });
+  });
+}
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>

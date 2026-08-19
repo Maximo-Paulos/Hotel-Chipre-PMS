@@ -1,4 +1,5 @@
 import { integrationHelp, type IntegrationHelp } from "../content/integrationHelp";
+import { useDialogA11y } from "../hooks/useDialogA11y";
 
 type Props = {
   provider: string | null;
@@ -10,13 +11,18 @@ export function IntegrationHelpDrawer({ provider, open, onClose }: Props) {
   const help: IntegrationHelp | undefined = provider
     ? integrationHelp.find((h) => h.provider === provider)
     : undefined;
+  const containerRef = useDialogA11y(open, onClose);
 
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex">
+    <div className="fixed inset-0 z-50 flex" role="dialog" aria-modal="true" aria-label="Guía de conexión">
       <div className="flex-1 animate-fade-in bg-black/30" onClick={onClose} />
-      <div className="w-full max-w-lg animate-slide-in-right bg-white shadow-xl border-l border-slate-200 flex flex-col">
+      <div
+        ref={containerRef}
+        tabIndex={-1}
+        className="w-full max-w-lg animate-slide-in-right bg-white shadow-xl border-l border-slate-200 flex flex-col outline-none"
+      >
         <div className="flex items-start justify-between border-b px-4 py-3">
           <div>
             <h3 className="text-lg font-semibold text-slate-900">{help ? help.title : "Guía de conexión"}</h3>

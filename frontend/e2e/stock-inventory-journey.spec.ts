@@ -127,7 +127,15 @@ test("owner runs the full inventory journey: item/location, movements, adjustmen
   await movementForm.getByLabel("Cantidad").fill("4");
   await movementForm.getByLabel("Motivo").fill("Consumo huésped QA");
   await advancedOptionsToggle.click();
-  await movementForm.getByLabel("Ubicacion").selectOption({ label: locationName });
+  // Not selecting locationName here: the ingreso above deliberately used the
+  // quick default path (no location, see D4 parte 1), and register_movement
+  // now validates an outbound movement against ONLY the location it names
+  // (stock_service.py's "an outbound movement scoped to one location must
+  // only be checked against THAT location's balance" fix) -- so drawing this
+  // egreso from a named location that never received stock would correctly
+  // fail as "would make stock negative". Stay on "Sin ubicacion" (the same
+  // hotel-wide bucket the ingreso wrote to) to keep exercising the advanced
+  // options' reservation-search field without that false negative.
   const reservationSearchInput = movementForm.getByPlaceholder("Buscar huésped o código");
   await reservationSearchInput.fill(guestLastName);
   const reservationSelect = movementForm.locator("select").filter({ hasText: "Sin reserva asociada" });

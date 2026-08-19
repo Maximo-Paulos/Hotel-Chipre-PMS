@@ -5,7 +5,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
@@ -13,7 +13,9 @@ from app.database import get_db
 from app.dependencies.auth import AuthContext, require_permission
 from app.services.permission_service import (
     PERMISSION_STOCK_ADJUST,
-    PERMISSION_STOCK_OPERATE,
+    PERMISSION_STOCK_ADMIN,
+    PERMISSION_STOCK_MOVE,
+    PERMISSION_STOCK_READ,
     audit_permission_denied,
     resolve,
 )
@@ -32,6 +34,7 @@ from app.services.stock_service import (
     list_stock_items,
     low_stock_items,
     register_movement,
+    stock_summary,
     update_location,
     update_stock_item,
 )
@@ -40,7 +43,13 @@ router = APIRouter(prefix="/api/stock", tags=["Stock"])
 
 
 def _ensure_adjustment_permission(db: Session, context: AuthContext) -> None:
-    if resolve(db, context.hotel_id, context.user_role, PERMISSION_STOCK_ADJUST):
+    if resolve(
+        db,
+        context.hotel_id,
+        context.user_role,
+        PERMISSION_STOCK_ADJUST,
+        user_id=context.user_id,
+    ):
         return
     audit_permission_denied(
         db,
@@ -118,6 +127,7 @@ class StockMovementRead(BaseModel):
     reservation_id: Optional[int] = None
     created_by_user_id: Optional[int] = None
     created_at: datetime
+    idempotency_key: Optional[str] = None
 
 
 class StockConsumptionItem(BaseModel):
@@ -143,7 +153,7 @@ class StockConsumptionReportRead(BaseModel):
 def create_item(
     data: StockItemCreate,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_OPERATE)),
+    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_ADMIN)),
 ):
     try:
         item = create_stock_item(db, hotel_id=context.hotel_id, **data.model_dump())
@@ -157,15 +167,33 @@ def create_item(
 @router.get("/items", response_model=list[StockItemRead])
 def list_items(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_OPERATE)),
+    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_READ)),
 ):
     return list_stock_items(db, hotel_id=context.hotel_id)
+
+
+class StockSummaryEntry(BaseModel):
+    item: StockItemRead
+    current_quantity: Decimal
+
+
+@router.get("/summary", response_model=list[StockSummaryEntry])
+def get_stock_summary(
+    location_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_READ)),
+):
+    """Every item's current balance in one request -- avoids the N+1
+    per-item /items/{id}/current pattern for grids that need every balance
+    at once (see StockPage.tsx).
+    """
+    return stock_summary(db, hotel_id=context.hotel_id, location_id=location_id)
 
 
 @router.get("/items/low-stock", response_model=list[StockItemRead])
 def list_low_stock_items(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_OPERATE)),
+    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_READ)),
 ):
     return low_stock_items(db, hotel_id=context.hotel_id)
 
@@ -174,7 +202,7 @@ def list_low_stock_items(
 def get_item(
     item_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_OPERATE)),
+    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_READ)),
 ):
     try:
         return get_stock_item(db, hotel_id=context.hotel_id, item_id=item_id)
@@ -187,7 +215,7 @@ def update_item(
     item_id: int,
     data: StockItemUpdate,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_OPERATE)),
+    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_ADMIN)),
 ):
     try:
         item = update_stock_item(db, hotel_id=context.hotel_id, item_id=item_id, **data.model_dump(exclude_unset=True))
@@ -202,7 +230,7 @@ def update_item(
 def delete_item(
     item_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_OPERATE)),
+    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_ADMIN)),
 ):
     try:
         delete_stock_item(
@@ -221,7 +249,7 @@ def delete_item(
 def create_stock_location(
     data: StockLocationCreate,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_OPERATE)),
+    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_ADMIN)),
 ):
     location = create_location(db, hotel_id=context.hotel_id, name=data.name)
     db.commit()
@@ -232,7 +260,7 @@ def create_stock_location(
 @router.get("/locations", response_model=list[StockLocationRead])
 def list_stock_locations(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_OPERATE)),
+    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_READ)),
 ):
     return list_locations(db, hotel_id=context.hotel_id)
 
@@ -241,7 +269,7 @@ def list_stock_locations(
 def get_stock_location(
     location_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_OPERATE)),
+    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_READ)),
 ):
     try:
         return get_location(db, hotel_id=context.hotel_id, location_id=location_id)
@@ -254,7 +282,7 @@ def update_stock_location(
     location_id: int,
     data: StockLocationCreate,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_OPERATE)),
+    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_ADMIN)),
 ):
     try:
         location = update_location(db, hotel_id=context.hotel_id, location_id=location_id, name=data.name)
@@ -269,7 +297,7 @@ def update_stock_location(
 def delete_stock_location(
     location_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_OPERATE)),
+    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_ADMIN)),
 ):
     try:
         delete_location(
@@ -287,8 +315,18 @@ def delete_stock_location(
 @router.post("/movements", response_model=StockMovementRead, status_code=status.HTTP_201_CREATED)
 def create_movement(
     data: StockMovementCreate,
+    # Same convention as POST /api/payment-links: a client-generated key on a
+    # retried request (e.g. a flaky connection resends the same POST) so the
+    # retry returns the first attempt's movement instead of double-counting
+    # stock, rather than being part of the JSON body.
+    idempotency_key: str | None = Header(
+        default=None,
+        alias="Idempotency-Key",
+        min_length=8,
+        max_length=100,
+    ),
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_OPERATE)),
+    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_MOVE)),
 ):
     try:
         if data.movement_type in ("adjustment", "adjustment_out"):
@@ -297,6 +335,7 @@ def create_movement(
             db,
             hotel_id=context.hotel_id,
             created_by_user_id=context.user_id,
+            idempotency_key=idempotency_key,
             **data.model_dump(),
         )
     except StockError as exc:
@@ -311,7 +350,7 @@ def list_movements(
     item_id: Optional[int] = None,
     limit: int = Query(default=50, ge=1, le=200),
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_OPERATE)),
+    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_READ)),
 ):
     return list_stock_movements(db, hotel_id=context.hotel_id, item_id=item_id, limit=limit)
 
@@ -322,11 +361,7 @@ def get_stock_consumption_report(
     date_to: date = Query(...),
     group_by: str = Query(default="week"),
     db: Session = Depends(get_db),
-    # D5 (Via D): same permission as every other stock read in this router
-    # (list_items, list_movements, ...) -- there is no separate "read stock"
-    # permission today, and this report is derived from the same movements
-    # anyone with stock:operate can already list one by one.
-    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_OPERATE)),
+    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_READ)),
 ):
     try:
         return consumption_report(
@@ -344,7 +379,7 @@ def get_current_stock(
     # which never changes for a transfer (see current_stock() docstring).
     location_id: Optional[int] = None,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_OPERATE)),
+    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_READ)),
 ):
     try:
         quantity = current_stock(db, hotel_id=context.hotel_id, item_id=item_id, location_id=location_id)

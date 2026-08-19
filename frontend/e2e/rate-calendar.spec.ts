@@ -474,14 +474,21 @@ test("rate calendar page renders annual editor and integrated channel view", asy
 
   await expect(page.getByTestId("rate-calendar-page")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Calendario de tarifas y disponibilidad" })).toBeVisible();
-  await expect(page.getByTestId("rate-editor-grid")).toBeVisible();
-  await expect(page.getByLabel("Precio base 2026-05-07")).toBeVisible();
+  const rateEditorGrid = page.getByTestId("rate-editor-grid");
+  await expect(rateEditorGrid).toBeVisible();
+  // Task 4 added RateEditorMobileCards, a `md:hidden` sibling tree that
+  // mounts the same "Precio base <date>" aria-labels for a card-per-day
+  // mobile layout (see RateEditorMobileCards.tsx) alongside RateEditorGrid's
+  // desktop spreadsheet -- getByLabel finds both regardless of the
+  // Tailwind breakpoint that visually hides one, so this desktop-viewport
+  // test must scope to the grid to keep resolving a single element.
+  await expect(rateEditorGrid.getByLabel("Precio base 2026-05-07")).toBeVisible();
   await expect(page.getByText("Edición masiva")).toBeVisible();
   await expect(page.getByRole("button", { name: "Aplicar al calendario" })).toBeVisible();
   await expect(page.getByTestId("rate-calendar-grid")).toBeVisible();
   await expect(page.getByText("Direct", { exact: true })).toHaveCount(0);
 
-  const firstBasePrice = page.getByLabel("Precio base 2026-05-07");
+  const firstBasePrice = rateEditorGrid.getByLabel("Precio base 2026-05-07");
   await expect(firstBasePrice).toHaveValue("42000");
   await firstBasePrice.fill("");
   await firstBasePrice.press("Enter");
