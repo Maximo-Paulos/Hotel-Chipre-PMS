@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-20T15:29:54.357Z",
+  "generatedAt": "2026-08-20T16:02:16.684Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -14029,6 +14029,28 @@
       "warnings": []
     },
     {
+      "id": "flow:versions_20260820_missing_tenant_rls_downgrade",
+      "name": "downgrade",
+      "entryPoint": "versions_20260820_missing_tenant_rls_downgrade",
+      "entryPointId": "versions_20260820_missing_tenant_rls_downgrade",
+      "path": [
+        "versions_20260820_missing_tenant_rls_downgrade",
+        "versions_20260820_missing_tenant_rls_remove_rls"
+      ],
+      "qualifiedPath": [
+        "versions_20260820_missing_tenant_rls_downgrade",
+        "versions_20260820_missing_tenant_rls_remove_rls"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20260820_missing_tenant_rls.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:versions_d4f8c21e7b10_extend_payment_link_tests_states_downgrade",
       "name": "downgrade",
       "entryPoint": "versions_d4f8c21e7b10_extend_payment_link_tests_states_downgrade",
@@ -17626,6 +17648,28 @@
       "fileCount": 1,
       "files": [
         "alembic/versions/20260818_promotions.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:versions_20260820_missing_tenant_rls_upgrade",
+      "name": "upgrade",
+      "entryPoint": "versions_20260820_missing_tenant_rls_upgrade",
+      "entryPointId": "versions_20260820_missing_tenant_rls_upgrade",
+      "path": [
+        "versions_20260820_missing_tenant_rls_upgrade",
+        "versions_20260820_missing_tenant_rls_install_rls"
+      ],
+      "qualifiedPath": [
+        "versions_20260820_missing_tenant_rls_upgrade",
+        "versions_20260820_missing_tenant_rls_install_rls"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20260820_missing_tenant_rls.py"
       ],
       "criticality": 0.16,
       "warnings": []

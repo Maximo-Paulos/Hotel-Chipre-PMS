@@ -61,6 +61,10 @@ class SimpleRateLimiter:
             RateLimitEvent.subject_key == key,
             RateLimitEvent.created_at < cutoff,
         ).delete(synchronize_session=False)
+        db.add(RateLimitEvent(scope=self.scope, subject_key=key))
+        db.flush()
+        # Insert-first narrows the race window; under READ COMMITTED, perfectly
+        # simultaneous transactions can still miss each other's uncommitted rows.
         active_count = (
             db.query(RateLimitEvent)
             .filter(
@@ -70,11 +74,7 @@ class SimpleRateLimiter:
             )
             .count()
         )
-        if active_count >= limit:
-            return False
-        db.add(RateLimitEvent(scope=self.scope, subject_key=key))
-        db.flush()
-        return True
+        return active_count <= limit
 
     @staticmethod
     def _normalize_key(key: str) -> str:
