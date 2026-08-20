@@ -172,19 +172,21 @@ def validate_and_touch_session(
     db: Session,
     session_token: str,
     csrf_token_header: str | None,
-    csrf_token_cookie: str | None = None,
+    csrf_token_cookie: str | None,
 ) -> tuple[UserSession, str] | None:
     """Validate CSRF/expiry and atomically replace the session token.
 
     The return value is ``(session, new_session_token)`` because the caller
-    must replace the HttpOnly cookie after every successful rotation. The
-    optional cookie argument preserves a small direct-service API while API
-    callers always provide the actual double-submit cookie.
+    must replace the HttpOnly cookie after every successful rotation.
+    ``csrf_token_cookie`` has no default on purpose: the double-submit check
+    only means something when the header and cookie come from two genuinely
+    separate sources, so every caller must extract both explicitly rather
+    than risk ever comparing the header against itself.
     """
 
     if not session_token or not csrf_token_header:
         return None
-    csrf_cookie = csrf_token_cookie if csrf_token_cookie is not None else csrf_token_header
+    csrf_cookie = csrf_token_cookie
     if not csrf_double_submit_matches(csrf_token_header, csrf_cookie):
         return None
 

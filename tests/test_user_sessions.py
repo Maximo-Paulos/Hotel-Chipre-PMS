@@ -87,15 +87,15 @@ def test_create_validate_and_rotate_session(session_user: User, db: Session):
 
     assert session.session_token_hash != token
     assert token not in session.session_token_hash
-    rotated = user_session_service.validate_and_touch_session(db, token, csrf)
+    rotated = user_session_service.validate_and_touch_session(db, token, csrf, csrf)
 
     assert rotated is not None
     rotated_session, new_token = rotated
     assert rotated_session.id == session.id
     assert new_token != token
     db.commit()
-    assert user_session_service.validate_and_touch_session(db, token, csrf) is None
-    assert user_session_service.validate_and_touch_session(db, new_token, csrf) is not None
+    assert user_session_service.validate_and_touch_session(db, token, csrf, csrf) is None
+    assert user_session_service.validate_and_touch_session(db, new_token, csrf, csrf) is not None
 
 
 def test_absolute_expiration_rejects_and_revokes(session_user: User, db: Session, monkeypatch):
@@ -109,7 +109,7 @@ def test_absolute_expiration_rejects_and_revokes(session_user: User, db: Session
         "_now",
         lambda: base + user_session_service.USER_SESSION_ABSOLUTE_TTL + timedelta(seconds=1),
     )
-    assert user_session_service.validate_and_touch_session(db, token, csrf) is None
+    assert user_session_service.validate_and_touch_session(db, token, csrf, csrf) is None
     db.refresh(session)
     assert session.revoked_at is not None
 
@@ -121,7 +121,7 @@ def test_idle_expiration_rejects_and_revokes(session_user: User, db: Session, mo
     session.last_seen_at = base - user_session_service.USER_SESSION_IDLE_TTL - timedelta(seconds=1)
     db.commit()
 
-    assert user_session_service.validate_and_touch_session(db, token, csrf) is None
+    assert user_session_service.validate_and_touch_session(db, token, csrf, csrf) is None
     db.refresh(session)
     assert session.revoked_at is not None
 
@@ -132,7 +132,7 @@ def test_csrf_invalid_and_double_submit_mismatch_are_rejected(session_user: User
 
     assert user_session_service.validate_and_touch_session(db, token, "wrong", csrf) is None
     assert user_session_service.validate_and_touch_session(db, token, csrf, "different") is None
-    assert user_session_service.validate_and_touch_session(db, token, "wrong") is None
+    assert user_session_service.validate_and_touch_session(db, token, "wrong", None) is None
 
 
 def test_individual_revocation_leaves_another_session_alive(session_user: User, db: Session):
@@ -142,8 +142,8 @@ def test_individual_revocation_leaves_another_session_alive(session_user: User, 
 
     assert user_session_service.revoke_session(db, first.id, session_user.id) is not None
     db.commit()
-    assert user_session_service.validate_and_touch_session(db, first_token, first_csrf) is None
-    assert user_session_service.validate_and_touch_session(db, second_token, second_csrf) is not None
+    assert user_session_service.validate_and_touch_session(db, first_token, first_csrf, first_csrf) is None
+    assert user_session_service.validate_and_touch_session(db, second_token, second_csrf, second_csrf) is not None
     assert [row.id for row in user_session_service.list_active_sessions(db, session_user.id)] == [second.id]
 
 
@@ -155,7 +155,7 @@ def test_global_revocation_invalidates_all_sessions(session_user: User, db: Sess
     db.commit()
     assert user_session_service.list_active_sessions(db, session_user.id) == []
     for _session, token, csrf in sessions:
-        assert user_session_service.validate_and_touch_session(db, token, csrf) is None
+        assert user_session_service.validate_and_touch_session(db, token, csrf, csrf) is None
 
 
 def test_login_json_and_bearer_contract_remain_unchanged_while_cookie_is_additive(session_client):
