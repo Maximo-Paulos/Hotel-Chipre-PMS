@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -12,9 +13,11 @@ import app.models
 import app.database as db_module
 import app.main as main_module
 from app.database import Base, get_db
+from app.master_admin.models import MasterAdminAuditEvent
 from app.models.hotel_config import HotelConfiguration
 from app.models.hotel_membership import HotelMembership
-from app.models.subscription_v2 import SubscriptionEvent
+from app.models.subscription import HotelSubscription
+from app.models.subscription_v2 import Subscription, SubscriptionEvent
 from app.models.user import User
 from app.services.security import create_access_token, hash_password
 from app.services.subscription_entitlements import (
@@ -167,6 +170,7 @@ def test_comped_override_records_audit_event(client):
 
     db = SessionLocal()
     try:
+        admin_user = db.query(User).filter(User.email == "platform_admin-global-999@test.com").one()
         latest_event = (
             db.query(SubscriptionEvent)
             .filter(SubscriptionEvent.hotel_id == 7)
@@ -176,6 +180,50 @@ def test_comped_override_records_audit_event(client):
         assert latest_event is not None
         assert latest_event.event_type == "comped_granted"
         assert "pilot-comp" in (latest_event.payload or "")
+
+        audit_event = (
+            db.query(MasterAdminAuditEvent)
+            .filter(MasterAdminAuditEvent.action == "comped_override_grant")
+            .one()
+        )
+        assert audit_event.actor_user_id == admin_user.id
+        assert audit_event.outcome == "success"
+        assert audit_event.target_type == "hotel"
+        assert audit_event.target_id == "7"
+        assert audit_event.request_path == "/api/admin/subscription/comped-override"
+        assert audit_event.request_method == "POST"
+        assert json.loads(audit_event.metadata_json or "{}") == {
+            "hotel_id": 7,
+            "plan_code": "ultra",
+            "reason": "pilot-comp",
+        }
+    finally:
+        db.close()
+
+
+def test_comped_override_rejects_unknown_hotel_without_subscription_state(client):
+    test_client, SessionLocal = client
+    db = SessionLocal()
+    try:
+        admin_headers = _auth_headers(db, hotel_id=1, membership_role=None, user_role="platform_admin")
+        db.commit()
+    finally:
+        db.close()
+
+    response = test_client.post(
+        "/api/admin/subscription/comped-override",
+        json={"hotel_id": 99999, "plan_code": "ultra", "reason": "unknown-hotel"},
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 404, response.text
+    assert response.json()["detail"] == "Hotel no encontrado"
+
+    db = SessionLocal()
+    try:
+        assert db.query(Subscription).filter(Subscription.hotel_id == 99999).count() == 0
+        assert db.query(SubscriptionEvent).filter(SubscriptionEvent.hotel_id == 99999).count() == 0
+        assert db.query(HotelSubscription).filter(HotelSubscription.hotel_id == 99999).count() == 0
     finally:
         db.close()
 
