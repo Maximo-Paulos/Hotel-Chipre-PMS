@@ -63,6 +63,7 @@
       "alembic/versions/20260818_promotions.py",
       "alembic/versions/20260818_repair_rooms_categories_companies_uq.py",
       "alembic/versions/20260818_stock_movement_idempotency_key.py",
+      "alembic/versions/20260820_missing_tenant_rls.py",
       "alembic/versions/3eaf48a79290_sync_model_drift_missing_columns.py",
       "alembic/versions/513720cf2551_merge_stock_kind_fix_and_laundry_vendor_.py",
       "alembic/versions/62fddec52b79_repair_sqlite_reservation_status_enum_.py",
@@ -1033,10 +1034,10 @@
     ],
     "video": []
   },
-  "total_files": 1024,
-  "total_words": 1641815,
+  "total_files": 1025,
+  "total_words": 1642253,
   "needs_graph": true,
-  "warning": "Large corpus: 1024 files · ~1,641,815 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
+  "warning": "Large corpus: 1025 files · ~1,642,253 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
   "skipped_sensitive": [
     "alembic/versions/20260408_security_tokens.py",
     "alembic/versions/20260725_user_token_version.py",
@@ -1048,12 +1049,13 @@
     "frontend/src/components/PasswordInput.tsx",
     "frontend/src/views/public/ForgotPasswordPage.tsx",
     "frontend/src/views/public/ResetPasswordPage.tsx",
-    "qa/trust/qa-evidence-public-key.pem"
+    "qa/trust/qa-evidence-public-key.pem",
+    "tests/test_memory_tokens.py"
   ],
   "graphifyignore_patterns": 61,
   "git": {
     "source_owner": "git",
-    "source_hash": "4ef3eca0dd0dd5c2d8d19f39c6eaade63a1399e8",
+    "source_hash": "469b13e8cbc7e10797ce0a242f1d485ef18506e4",
     "branches": [
       "agent-linensplit",
       "agent-login",
@@ -1076,7 +1078,9 @@
       "fix/audit-log-append-only-cascade",
       "fix/comped-override-audit-and-isolation",
       "fix/invitation-accept-account-takeover",
+      "fix/invite-accept-password-minimum",
       "fix/local-dev-no-prod-redirect",
+      "fix/rate-limiter-atomic-count",
       "fix/rls-missing-tenant-tables",
       "fix/security-token-atomic-consumption",
       "main",
@@ -1105,12 +1109,12 @@
     "source": "cli",
     "root": ".",
     "git_root": ".",
-    "head": "4ef3eca0dd0dd5c2d8d19f39c6eaade63a1399e8",
+    "head": "469b13e8cbc7e10797ce0a242f1d485ef18506e4",
     "candidate_count": null,
-    "included_count": 1024,
+    "included_count": 1025,
     "excluded_untracked_count": 0,
     "excluded_ignored_count": 0,
-    "excluded_sensitive_count": 11,
+    "excluded_sensitive_count": 12,
     "missing_committed_count": 0,
     "warnings": [],
     "recommendation": null

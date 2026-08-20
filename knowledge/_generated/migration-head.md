@@ -1,9 +1,9 @@
 # Alembic head
 
-Generado: 2026-08-20T15:30:03.097446+00:00
-Commit: `4ef3eca`
+Generado: 2026-08-20T16:02:17.068020+00:00
+Commit: `469b13e`
 
 ```text
-7b14658560e1 (head)
+20260820_missing_tenant_rls (head)
 ```
 Fuente: `alembic.ini` y `alembic/versions/`.

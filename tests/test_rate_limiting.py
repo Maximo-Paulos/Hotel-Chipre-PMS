@@ -1,4 +1,7 @@
 ﻿# -*- coding: utf-8 -*-
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -9,12 +12,14 @@ from app.main import app as fastapi_app
 from app.database import Base
 import app.models  # noqa: F401
 from app.adapters.rate_limiter import (
+    SimpleRateLimiter,
     verify_request_limiter,
     reset_request_limiter,
     invite_limiter,
     code_guess_limiter,
     register_limiter,
 )
+from app.models.rate_limit_event import RateLimitEvent
 from app.services.security import hash_password
 from app.models.user import User
 from app.models.hotel_config import HotelConfiguration
@@ -235,3 +240,43 @@ def test_invite_rate_limited(authed_client):
 
     assert r1.status_code == 201
     assert r2.status_code == 429
+
+
+def test_concurrent_db_requests_record_each_attempt_before_deciding(tmp_path):
+    """Concurrent attempts share the same budget instead of racing on a pre-count."""
+    engine = create_engine(
+        f"sqlite:///{(tmp_path / 'rate-limit-race.sqlite').as_posix()}",
+        connect_args={"check_same_thread": False, "timeout": 30},
+    )
+    Base.metadata.create_all(bind=engine, tables=[RateLimitEvent.__table__])
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    limiter = SimpleRateLimiter("concurrent-test", limit=3)
+    request_count = 8
+    all_requests_ready = Barrier(request_count)
+
+    def allow_request():
+        with SessionLocal() as session:
+            all_requests_ready.wait(timeout=10)
+            allowed = limiter.allow("same-key", db=session)
+            session.commit()
+            return allowed
+
+    try:
+        with ThreadPoolExecutor(max_workers=request_count) as executor:
+            results = list(executor.map(lambda _unused: allow_request(), range(request_count)))
+
+        assert sum(results) <= limiter.limit
+
+        with SessionLocal() as session:
+            recorded_attempts = (
+                session.query(RateLimitEvent)
+                .filter(
+                    RateLimitEvent.scope == limiter.scope,
+                    RateLimitEvent.subject_key == "same-key",
+                )
+                .count()
+            )
+            assert recorded_attempts == request_count
+    finally:
+        Base.metadata.drop_all(bind=engine, tables=[RateLimitEvent.__table__])
+        engine.dispose()
