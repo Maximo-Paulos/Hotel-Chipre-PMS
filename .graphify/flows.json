@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-20T20:14:53.133Z",
+  "generatedAt": "2026-08-20T20:21:25.837Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -1682,6 +1682,28 @@
       "fileCount": 1,
       "files": [
         "alembic/versions/f3bdaadd3d15_master_admin_rls_bypass.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_invitation_service_find_by_token",
+      "name": "find_by_token",
+      "entryPoint": "services_invitation_service_find_by_token",
+      "entryPointId": "services_invitation_service_find_by_token",
+      "path": [
+        "services_invitation_service_find_by_token",
+        "services_invitation_service_hash_invitation_token"
+      ],
+      "qualifiedPath": [
+        "services_invitation_service_find_by_token",
+        "services_invitation_service_hash_invitation_token"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/services/invitation_service.py"
       ],
       "criticality": 0.41,
       "warnings": []
@@ -5697,27 +5719,27 @@
       "warnings": []
     },
     {
-      "id": "flow:api_users_invite_user",
-      "name": "invite_user",
-      "entryPoint": "api_users_invite_user",
-      "entryPointId": "api_users_invite_user",
+      "id": "flow:services_invitation_service_issue_invitation",
+      "name": "issue_invitation",
+      "entryPoint": "services_invitation_service_issue_invitation",
+      "entryPointId": "services_invitation_service_issue_invitation",
       "path": [
-        "api_users_invite_user",
-        "api_users_assert_assignable_role",
-        "api_users_inviteresponse",
-        "api_users_membership_user_info"
+        "services_invitation_service_issue_invitation",
+        "services_invitation_service_hash_invitation_token",
+        "services_invitation_service_normalize_email",
+        "services_invitation_service_utcnow"
       ],
       "qualifiedPath": [
-        "api_users_invite_user",
-        "api_users_assert_assignable_role",
-        "api_users_inviteresponse",
-        "api_users_membership_user_info"
+        "services_invitation_service_issue_invitation",
+        "services_invitation_service_hash_invitation_token",
+        "services_invitation_service_normalize_email",
+        "services_invitation_service_utcnow"
       ],
       "depth": 1,
       "nodeCount": 4,
       "fileCount": 1,
       "files": [
-        "app/api/users.py"
+        "app/services/invitation_service.py"
       ],
       "criticality": 0.2225,
       "warnings": []
@@ -6668,6 +6690,34 @@
       "fileCount": 1,
       "files": [
         "app/services/payment_service.py"
+      ],
+      "criticality": 0.21,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_users_invite_user",
+      "name": "invite_user",
+      "entryPoint": "api_users_invite_user",
+      "entryPointId": "api_users_invite_user",
+      "path": [
+        "api_users_invite_user",
+        "api_users_assert_assignable_role",
+        "api_users_inviteresponse",
+        "api_users_membership_user_info",
+        "api_users_send_invitation_email"
+      ],
+      "qualifiedPath": [
+        "api_users_invite_user",
+        "api_users_assert_assignable_role",
+        "api_users_inviteresponse",
+        "api_users_membership_user_info",
+        "api_users_send_invitation_email"
+      ],
+      "depth": 1,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "app/api/users.py"
       ],
       "criticality": 0.21,
       "warnings": []
@@ -12719,6 +12769,28 @@
       "warnings": []
     },
     {
+      "id": "flow:api_invitations_accept_invitation",
+      "name": "accept_invitation",
+      "entryPoint": "api_invitations_accept_invitation",
+      "entryPointId": "api_invitations_accept_invitation",
+      "path": [
+        "api_invitations_accept_invitation",
+        "api_invitations_available_invitation"
+      ],
+      "qualifiedPath": [
+        "api_invitations_accept_invitation",
+        "api_invitations_available_invitation"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/invitations.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:services_laundry_service_add_item",
       "name": "add_item",
       "entryPoint": "services_laundry_service_add_item",
@@ -13788,6 +13860,28 @@
       "fileCount": 1,
       "files": [
         "app/services/cash_register_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_invitation_service_consume_invitation",
+      "name": "consume_invitation",
+      "entryPoint": "services_invitation_service_consume_invitation",
+      "entryPointId": "services_invitation_service_consume_invitation",
+      "path": [
+        "services_invitation_service_consume_invitation",
+        "services_invitation_service_utcnow"
+      ],
+      "qualifiedPath": [
+        "services_invitation_service_consume_invitation",
+        "services_invitation_service_utcnow"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/services/invitation_service.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -15391,6 +15485,28 @@
       "warnings": []
     },
     {
+      "id": "flow:api_invitations_get_invitation",
+      "name": "get_invitation",
+      "entryPoint": "api_invitations_get_invitation",
+      "entryPointId": "api_invitations_get_invitation",
+      "path": [
+        "api_invitations_get_invitation",
+        "api_invitations_available_invitation"
+      ],
+      "qualifiedPath": [
+        "api_invitations_get_invitation",
+        "api_invitations_available_invitation"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/invitations.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:services_stock_service_get_location",
       "name": "get_location",
       "entryPoint": "services_stock_service_get_location",
@@ -15744,6 +15860,28 @@
       "fileCount": 1,
       "files": [
         "app/config.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_invitation_service_is_expired",
+      "name": "is_expired",
+      "entryPoint": "services_invitation_service_is_expired",
+      "entryPointId": "services_invitation_service_is_expired",
+      "path": [
+        "services_invitation_service_is_expired",
+        "services_invitation_service_utcnow"
+      ],
+      "qualifiedPath": [
+        "services_invitation_service_is_expired",
+        "services_invitation_service_utcnow"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/services/invitation_service.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -17067,6 +17205,34 @@
       "warnings": []
     },
     {
+      "id": "flow:api_users_resend_invitation",
+      "name": "resend_invitation",
+      "entryPoint": "api_users_resend_invitation",
+      "entryPointId": "api_users_resend_invitation",
+      "path": [
+        "api_users_resend_invitation",
+        "api_users_assert_manageable_membership",
+        "api_users_inviteresponse",
+        "api_users_membership_user_info",
+        "api_users_send_invitation_email"
+      ],
+      "qualifiedPath": [
+        "api_users_resend_invitation",
+        "api_users_assert_manageable_membership",
+        "api_users_inviteresponse",
+        "api_users_membership_user_info",
+        "api_users_send_invitation_email"
+      ],
+      "depth": 1,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "app/api/users.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:api_demo_reset_demo",
       "name": "reset_demo",
       "entryPoint": "api_demo_reset_demo",
@@ -17314,6 +17480,28 @@
       "fileCount": 1,
       "files": [
         "app/api/integrations.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_users_revoke_invitation",
+      "name": "revoke_invitation",
+      "entryPoint": "api_users_revoke_invitation",
+      "entryPointId": "api_users_revoke_invitation",
+      "path": [
+        "api_users_revoke_invitation",
+        "api_users_assert_manageable_membership"
+      ],
+      "qualifiedPath": [
+        "api_users_revoke_invitation",
+        "api_users_assert_manageable_membership"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/users.py"
       ],
       "criticality": 0.16,
       "warnings": []
