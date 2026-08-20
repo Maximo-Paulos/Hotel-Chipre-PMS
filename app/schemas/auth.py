@@ -6,7 +6,7 @@ from app.config import is_test_mode
 
 class RegisterRequest(BaseModel):
     email: str
-    password: str = Field(min_length=6)
+    password: str = Field(min_length=12)
     role: str | None = "owner"
 
     @field_validator("email")
@@ -48,7 +48,7 @@ class VerifyCodeRequest(BaseModel):
 class ResetPasswordRequest(BaseModel):
     email: str
     code: str
-    new_password: str = Field(min_length=6)
+    new_password: str = Field(min_length=12)
 
 
 class UserInfo(BaseModel):

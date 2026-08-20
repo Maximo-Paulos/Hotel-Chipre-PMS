@@ -159,7 +159,7 @@ export function ResetPasswordPage() {
               <PasswordInput
                 value={password}
                 onChange={setPassword}
-                placeholder="Mínimo 6 caracteres"
+                placeholder="Mínimo 12 caracteres"
                 required
                 autoComplete="new-password"
               />

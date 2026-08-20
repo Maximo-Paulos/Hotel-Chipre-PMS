@@ -86,7 +86,7 @@ def _auth_headers(db, hotel_id: int, *, membership_role: str | None = "owner", u
     if not user:
         user = User(
             email=email,
-            password_hash=hash_password("Demo123!"),
+            password_hash=hash_password("Demo123!pass"),
             is_active=True,
             is_verified=True,
             role=user_role,

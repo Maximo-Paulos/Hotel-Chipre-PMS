@@ -29,7 +29,11 @@ from app.schemas.onboarding import (
 )
 from app.schemas.room import RoomCategoryCreate
 from app.services import onboarding_service
-from app.services.security import hash_password, verify_password
+from app.services.security import hash_password, needs_rehash, verify_password
+
+
+LEGACY_PASSWORD = "LegacyPassphrase!"
+LEGACY_BCRYPT_HASH = "$2b$12$yigTHM64/nKxzect75/p1uSTwcu7SD3hYkF1b5sQHXJ8.O4rN2Qjm"
 
 
 @pytest.fixture(autouse=True)
@@ -104,7 +108,7 @@ def _clear_settings_cache():
 def _register_owner(client: TestClient, email: str):
     response = client.post(
         "/api/auth/register",
-        json={"email": email, "password": "Demo123!", "role": "owner"},
+        json={"email": email, "password": "Demo123!pass", "role": "owner"},
     )
     assert response.status_code == 201, response.text
     return response.json()
@@ -211,6 +215,105 @@ def _configure_resend(monkeypatch: pytest.MonkeyPatch, sent_payloads: list[dict]
     return payloads
 
 
+def test_hash_password_uses_argon2id():
+    hashed = hash_password("A sufficiently long passphrase!")
+
+    assert hashed.startswith("$argon2id$")
+    assert verify_password("A sufficiently long passphrase!", hashed)
+
+
+def test_existing_bcrypt_hash_still_verifies():
+    assert verify_password(LEGACY_PASSWORD, LEGACY_BCRYPT_HASH)
+    assert not verify_password("wrong legacy password", LEGACY_BCRYPT_HASH)
+
+
+def test_needs_rehash_identifies_legacy_bcrypt_only():
+    assert needs_rehash(LEGACY_BCRYPT_HASH) is True
+
+    fresh_hash = hash_password("A sufficiently long passphrase!")
+    assert needs_rehash(fresh_hash) is False
+
+
+def test_successful_login_upgrades_legacy_bcrypt_hash(client_and_db):
+    client, db, _session_factory = client_and_db
+    user = User(
+        email="legacy-login@example.com",
+        password_hash=LEGACY_BCRYPT_HASH,
+        role="owner",
+        is_verified=True,
+        is_active=True,
+    )
+    db.add(user)
+    db.flush()
+    db.add(HotelConfiguration(id=1, owner_email=user.email, hotel_name="Legacy Hotel", subscription_active=True))
+    db.add(HotelMembership(hotel_id=1, user_id=user.id, role="owner", status="active"))
+    db.commit()
+
+    response = client.post(
+        "/api/auth/login",
+        json={"email": user.email, "password": LEGACY_PASSWORD},
+    )
+
+    assert response.status_code == 200, response.text
+    db.refresh(user)
+    assert user.password_hash.startswith("$argon2id$")
+    assert user.password_hash != LEGACY_BCRYPT_HASH
+    assert needs_rehash(user.password_hash) is False
+    assert verify_password(LEGACY_PASSWORD, user.password_hash)
+
+
+def test_argon2id_does_not_truncate_long_passwords():
+    long_password = "long-password-" + ("x" * 100)
+    hashed = hash_password(long_password)
+
+    assert verify_password(long_password, hashed)
+    assert not verify_password(long_password + "x", hashed)
+
+
+def test_password_policy_requires_twelve_characters_for_register_and_reset(
+    client_and_db, fixed_code_patch, monkeypatch
+):
+    client, _db, _session_factory = client_and_db
+    _configure_resend(monkeypatch, [])
+
+    short_register = client.post(
+        "/api/auth/register",
+        json={"email": "short-register@example.com", "password": "short-pass"},
+    )
+    assert short_register.status_code == 422
+    assert "12 characters" in short_register.json()["detail"][0]["msg"]
+
+    short_reset = client.post(
+        "/api/auth/reset-password",
+        json={"email": "short-reset@example.com", "code": "123456", "new_password": "short-pass"},
+    )
+    assert short_reset.status_code == 422
+    assert "12 characters" in short_reset.json()["detail"][0]["msg"]
+
+    exact_password = "TwelveChars!"
+    email = "exact-length@example.com"
+    register = client.post(
+        "/api/auth/register",
+        json={"email": email, "password": exact_password},
+    )
+    assert register.status_code == 201, register.text
+
+    verify = client.post(
+        "/api/auth/verify-email",
+        json={"email": email, "code": "123456"},
+    )
+    assert verify.status_code == 200, verify.text
+
+    request_reset = client.post("/api/auth/request-reset", json={"email": email})
+    assert request_reset.status_code == 200, request_reset.text
+
+    reset = client.post(
+        "/api/auth/reset-password",
+        json={"email": email, "code": "123456", "new_password": exact_password},
+    )
+    assert reset.status_code == 200, reset.text
+
+
 def test_register_verify_and_reset_use_resend_provider(client_and_db, fixed_code_patch, monkeypatch):
     client, db, _session_factory = client_and_db
     sent_payloads = _configure_resend(monkeypatch, [])
@@ -241,12 +344,12 @@ def test_register_verify_and_reset_use_resend_provider(client_and_db, fixed_code
 
     reset = client.post(
         "/api/auth/reset-password",
-        json={"email": "owner@example.com", "code": "123456", "new_password": "Demo1234!"},
+        json={"email": "owner@example.com", "code": "123456", "new_password": "Demo1234!pass"},
     )
     assert reset.status_code == 200, reset.text
     assert reset.json()["requires_verification"] is False
 
-    login = client.post("/api/auth/login", json={"email": "owner@example.com", "password": "Demo1234!"})
+    login = client.post("/api/auth/login", json={"email": "owner@example.com", "password": "Demo1234!pass"})
     assert login.status_code == 200, login.text
     assert login.json()["user"]["email"] == "owner@example.com"
 
@@ -265,18 +368,18 @@ def test_auth_flows_fail_without_connected_mail_provider(client_and_db, fixed_co
 
     failed_register = client.post(
         "/api/auth/register",
-        json={"email": "blocked@example.com", "password": "Demo123!", "role": "owner"},
+        json={"email": "blocked@example.com", "password": "Demo123!pass", "role": "owner"},
     )
     assert failed_register.status_code == 503
     assert "Resend" in failed_register.json()["detail"]
 
-    db.add(User(email="pending@example.com", password_hash=hash_password("Demo123!"), role="owner", is_verified=False, is_active=True))
+    db.add(User(email="pending@example.com", password_hash=hash_password("Demo123!pass"), role="owner", is_verified=False, is_active=True))
     db.commit()
 
     failed_request_verify = client.post("/api/auth/request-verify", json={"email": "pending@example.com"})
     assert failed_request_verify.status_code == 503
 
-    db.add(User(email="reset@example.com", password_hash=hash_password("Demo123!"), role="owner", is_verified=True, is_active=True))
+    db.add(User(email="reset@example.com", password_hash=hash_password("Demo123!pass"), role="owner", is_verified=True, is_active=True))
     db.commit()
 
     failed_request_reset = client.post("/api/auth/request-reset", json={"email": "reset@example.com"})
@@ -309,7 +412,7 @@ def test_login_prefers_a_completed_hotel_when_multiple_memberships_exist(client_
 
     user = User(
         email="multi@example.com",
-        password_hash=hash_password("Demo123!"),
+        password_hash=hash_password("Demo123!pass"),
         role="owner",
         is_verified=True,
         is_active=True,
@@ -335,7 +438,7 @@ def test_login_prefers_a_completed_hotel_when_multiple_memberships_exist(client_
     _complete_onboarding(db, 2, "multi@example.com")
     db.commit()
 
-    login = client.post("/api/auth/login", json={"email": "multi@example.com", "password": "Demo123!"})
+    login = client.post("/api/auth/login", json={"email": "multi@example.com", "password": "Demo123!pass"})
     assert login.status_code == 200, login.text
     payload = login.json()
     assert payload["hotel_id"] == 2
@@ -362,7 +465,7 @@ def test_register_rejects_malformed_email(client_and_db, monkeypatch):
 
     response = client.post(
         "/api/auth/register",
-        json={"email": "not-an-email-at-all", "password": "Demo123!"},
+        json={"email": "not-an-email-at-all", "password": "Demo123!pass"},
     )
     assert response.status_code == 422, response.text
     assert db.query(User).filter(User.email == "not-an-email-at-all").first() is None
@@ -381,7 +484,7 @@ def test_register_rejects_reserved_test_tld_outside_test_mode(client_and_db, mon
 
     response = client.post(
         "/api/auth/register",
-        json={"email": "owner@example.test", "password": "Demo123!"},
+        json={"email": "owner@example.test", "password": "Demo123!pass"},
     )
     assert response.status_code == 422, response.text
     assert db.query(User).filter(User.email == "owner@example.test").first() is None
@@ -399,7 +502,7 @@ def test_register_accepts_reserved_test_tld_in_test_mode(client_and_db, monkeypa
 
     response = client.post(
         "/api/auth/register",
-        json={"email": "owner@example.test", "password": "Demo123!"},
+        json={"email": "owner@example.test", "password": "Demo123!pass"},
     )
     assert response.status_code == 201, response.text
     assert db.query(User).filter(User.email == "owner@example.test").first() is not None
@@ -432,7 +535,7 @@ def test_reset_password_revokes_previously_issued_tokens(client_and_db, fixed_co
 
     reset = client.post(
         "/api/auth/reset-password",
-        json={"email": "leaked@example.com", "code": "123456", "new_password": "Demo1234!"},
+        json={"email": "leaked@example.com", "code": "123456", "new_password": "Demo1234!pass"},
     )
     assert reset.status_code == 200, reset.text
 
@@ -452,7 +555,7 @@ def test_self_registration_cannot_grant_platform_admin_role(client_and_db, fixed
 
     register = client.post(
         "/api/auth/register",
-        json={"email": "attacker@example.com", "password": "Demo123!", "role": "platform_admin"},
+        json={"email": "attacker@example.com", "password": "Demo123!pass", "role": "platform_admin"},
     )
     assert register.status_code == 201, register.text
 
@@ -467,7 +570,7 @@ def test_self_registration_cannot_grant_platform_admin_role(client_and_db, fixed
 
     login = client.post(
         "/api/auth/login",
-        json={"email": "attacker@example.com", "password": "Demo123!"},
+        json={"email": "attacker@example.com", "password": "Demo123!pass"},
     )
     assert login.status_code == 200, login.text
     token = login.json()["access_token"]

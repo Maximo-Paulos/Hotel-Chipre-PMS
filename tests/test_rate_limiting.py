@@ -178,11 +178,11 @@ def test_reset_password_code_guessing_is_rate_limited_and_shared_with_validate(c
         r2 = client.post("/api/auth/validate-reset", json={"email": email, "code": "000000"})
         r3 = client.post(
             "/api/auth/reset-password",
-            json={"email": email, "code": "000000", "new_password": "Demo1234!"},
+            json={"email": email, "code": "000000", "new_password": "Demo1234!pass"},
         )
         r4 = client.post(
             "/api/auth/reset-password",
-            json={"email": email, "code": "000000", "new_password": "Demo1234!"},
+            json={"email": email, "code": "000000", "new_password": "Demo1234!pass"},
         )
     finally:
         code_guess_limiter.reset("password_reset:" + email, db=db)
@@ -207,7 +207,7 @@ def test_register_is_rate_limited_by_source(client_with_db):
         responses = [
             client.post(
                 "/api/auth/register",
-                json={"email": f"farmed-{i}@test.com", "password": "Demo123!"},
+                json={"email": f"farmed-{i}@test.com", "password": "Demo123!pass"},
             )
             for i in range(4)
         ]

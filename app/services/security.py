@@ -20,7 +20,22 @@ if not hasattr(_bcrypt, "__about__"):
         __version__ = getattr(_bcrypt, "__version__", "unknown")
     _bcrypt.__about__ = _About()
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# OWASP baseline for Argon2id: 19 MiB, 2 iterations, and one lane. These
+# values keep login latency and per-request memory bounded while meeting the
+# recommended minimum; re-benchmark them when the runtime or traffic changes.
+ARGON2_TIME_COST = 2
+ARGON2_MEMORY_COST_KIB = 19_456
+ARGON2_PARALLELISM = 1
+
+pwd_context = CryptContext(
+    schemes=["argon2", "bcrypt"],
+    deprecated="auto",
+    default="argon2",
+    argon2__type="ID",
+    argon2__time_cost=ARGON2_TIME_COST,
+    argon2__memory_cost=ARGON2_MEMORY_COST_KIB,
+    argon2__parallelism=ARGON2_PARALLELISM,
+)
 
 
 def _jwt_secret(kind: str) -> str:
@@ -44,6 +59,10 @@ def hash_password(password: str) -> str:
 
 def verify_password(password: str, hashed: str) -> bool:
     return pwd_context.verify(password, hashed)
+
+
+def needs_rehash(hashed: str) -> bool:
+    return pwd_context.needs_update(hashed)
 
 
 def create_access_token(subject: str | int, extra: Optional[Dict[str, Any]] = None) -> str:

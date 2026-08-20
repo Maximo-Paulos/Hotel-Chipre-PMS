@@ -59,7 +59,7 @@ def _register_owner(client: TestClient, email: str) -> dict[str, str]:
     ), patch("app.api.auth.send_verification_success_email", return_value=True):
         response = client.post(
             "/api/auth/register",
-            json={"email": email, "password": "Demo123!", "role": "owner"},
+            json={"email": email, "password": "Demo123!pass", "role": "owner"},
         )
         assert response.status_code == 201, response.text
 

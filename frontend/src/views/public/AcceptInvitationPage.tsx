@@ -117,7 +117,7 @@ export function AcceptInvitationPage() {
             <input
               type="password"
               className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 shadow-sm focus:border-brand-500 focus:ring-brand-500"
-              placeholder="Mínimo 6 caracteres"
+              placeholder="Mínimo 12 caracteres"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
