@@ -28,6 +28,7 @@ from app.models.user import User
 from app.schemas.auth import (
     AuthResponse,
     GoogleAuthRequest,
+    GoogleUnlinkRequest,
     LoginRequest,
     MfaChallengeResponse,
     MfaCodeRequest,
@@ -568,6 +569,37 @@ def google_login(
     db.commit()
     db.refresh(user)
     return _build_login_response(db, user, request=request, response=response)
+
+
+@router.post("/google/unlink")
+def unlink_google(
+    payload: GoogleUnlinkRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Remove the Google login only after proving control of the password.
+
+    Google-only accounts contain a random password hash that was never shown
+    to the user, so password verification naturally prevents them from
+    removing their only usable login method until they set a real password.
+    """
+    if not user.google_sub:
+        raise HTTPException(status_code=400, detail="La cuenta no tiene un login de Google vinculado")
+    if not verify_password(payload.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Reautenticacion invalida")
+
+    user.google_sub = None
+    user.token_version = (user.token_version or 0) + 1
+    revoke_all_sessions(db, user.id)
+    _audit_security_event(
+        db,
+        user=user,
+        action="google_auth.unlinked",
+        details={"provider": "google"},
+    )
+    db.add(user)
+    db.commit()
+    return {"unlinked": True}
 
 
 @router.post("/verify-email", response_model=AuthResponse)

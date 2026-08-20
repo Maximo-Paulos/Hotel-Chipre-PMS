@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-20T18:30:07.889Z",
+  "generatedAt": "2026-08-20T18:36:20.683Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -293,34 +293,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_permission_service_get_permission_catalog",
-      "name": "get_permission_catalog",
-      "entryPoint": "services_permission_service_get_permission_catalog",
-      "entryPointId": "services_permission_service_get_permission_catalog",
-      "path": [
-        "services_permission_service_get_permission_catalog",
-        "services_permission_service_ensure_permission_matrix_seeded",
-        "services_permission_service_engine_key",
-        "services_permission_service_seed_default_permissions",
-        "services_permission_service_insert_if_missing"
-      ],
-      "qualifiedPath": [
-        "services_permission_service_get_permission_catalog",
-        "services_permission_service_ensure_permission_matrix_seeded",
-        "services_permission_service_engine_key",
-        "services_permission_service_seed_default_permissions",
-        "services_permission_service_insert_if_missing"
-      ],
-      "depth": 3,
-      "nodeCount": 5,
-      "fileCount": 1,
-      "files": [
-        "app/services/permission_service.py"
-      ],
-      "criticality": 0.43,
-      "warnings": []
-    },
-    {
       "id": "flow:master_admin_email_provider_get_system_email_status",
       "name": "get_system_email_status",
       "entryPoint": "master_admin_email_provider_get_system_email_status",
@@ -518,6 +490,48 @@
       "fileCount": 1,
       "files": [
         "app/api/auth.py"
+      ],
+      "criticality": 0.43,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_permission_service_set_user_override",
+      "name": "set_user_override",
+      "entryPoint": "services_permission_service_set_user_override",
+      "entryPointId": "services_permission_service_set_user_override",
+      "path": [
+        "services_permission_service_set_user_override",
+        "services_permission_service_active_membership",
+        "services_permission_service_audit",
+        "services_permission_service_ensure_permission_matrix_seeded",
+        "services_permission_service_invalidate_effective_permission_cache",
+        "services_permission_service_validate_mutable",
+        "services_permission_service_engine_key",
+        "services_permission_service_seed_default_permissions",
+        "services_permission_service_can_role_hold_permission",
+        "services_permission_service_canonical_permission_code",
+        "services_permission_service_immutable_permission_decision",
+        "services_permission_service_insert_if_missing"
+      ],
+      "qualifiedPath": [
+        "services_permission_service_set_user_override",
+        "services_permission_service_active_membership",
+        "services_permission_service_audit",
+        "services_permission_service_ensure_permission_matrix_seeded",
+        "services_permission_service_invalidate_effective_permission_cache",
+        "services_permission_service_validate_mutable",
+        "services_permission_service_engine_key",
+        "services_permission_service_seed_default_permissions",
+        "services_permission_service_can_role_hold_permission",
+        "services_permission_service_canonical_permission_code",
+        "services_permission_service_immutable_permission_decision",
+        "services_permission_service_insert_if_missing"
+      ],
+      "depth": 3,
+      "nodeCount": 12,
+      "fileCount": 1,
+      "files": [
+        "app/services/permission_service.py"
       ],
       "criticality": 0.43,
       "warnings": []
@@ -995,6 +1009,48 @@
       "warnings": []
     },
     {
+      "id": "flow:services_permission_service_set_override",
+      "name": "set_override",
+      "entryPoint": "services_permission_service_set_override",
+      "entryPointId": "services_permission_service_set_override",
+      "path": [
+        "services_permission_service_set_override",
+        "services_permission_service_can_role_hold_permission",
+        "services_permission_service_ensure_permission_matrix_seeded",
+        "services_permission_service_seed_default_permissions",
+        "services_permission_service_set_role_override",
+        "services_permission_service_canonical_permission_code",
+        "services_permission_service_immutable_permission_decision",
+        "services_permission_service_engine_key",
+        "services_permission_service_insert_if_missing",
+        "services_permission_service_audit",
+        "services_permission_service_invalidate_effective_permission_cache",
+        "services_permission_service_validate_mutable"
+      ],
+      "qualifiedPath": [
+        "services_permission_service_set_override",
+        "services_permission_service_can_role_hold_permission",
+        "services_permission_service_ensure_permission_matrix_seeded",
+        "services_permission_service_seed_default_permissions",
+        "services_permission_service_set_role_override",
+        "services_permission_service_canonical_permission_code",
+        "services_permission_service_immutable_permission_decision",
+        "services_permission_service_engine_key",
+        "services_permission_service_insert_if_missing",
+        "services_permission_service_audit",
+        "services_permission_service_invalidate_effective_permission_cache",
+        "services_permission_service_validate_mutable"
+      ],
+      "depth": 2,
+      "nodeCount": 12,
+      "fileCount": 1,
+      "files": [
+        "app/services/permission_service.py"
+      ],
+      "criticality": 0.42,
+      "warnings": []
+    },
+    {
       "id": "flow:master_admin_stripe_stripe_secret_configured",
       "name": "stripe_secret_configured",
       "entryPoint": "master_admin_stripe_stripe_secret_configured",
@@ -1148,98 +1204,6 @@
         "app/master_admin/stripe.py"
       ],
       "criticality": 0.42,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_permission_service_set_override",
-      "name": "set_override",
-      "entryPoint": "services_permission_service_set_override",
-      "entryPointId": "services_permission_service_set_override",
-      "path": [
-        "services_permission_service_set_override",
-        "services_permission_service_can_role_hold_permission",
-        "services_permission_service_ensure_permission_matrix_seeded",
-        "services_permission_service_seed_default_permissions",
-        "services_permission_service_set_role_override",
-        "services_permission_service_canonical_permission_code",
-        "services_permission_service_immutable_permission_decision",
-        "services_permission_service_engine_key",
-        "services_permission_service_insert_if_missing",
-        "services_permission_service_audit",
-        "services_permission_service_invalidate_effective_permission_cache",
-        "services_permission_service_permissionversionconflict",
-        "services_permission_service_validate_mutable",
-        "valueerror"
-      ],
-      "qualifiedPath": [
-        "services_permission_service_set_override",
-        "services_permission_service_can_role_hold_permission",
-        "services_permission_service_ensure_permission_matrix_seeded",
-        "services_permission_service_seed_default_permissions",
-        "services_permission_service_set_role_override",
-        "services_permission_service_canonical_permission_code",
-        "services_permission_service_immutable_permission_decision",
-        "services_permission_service_engine_key",
-        "services_permission_service_insert_if_missing",
-        "services_permission_service_audit",
-        "services_permission_service_invalidate_effective_permission_cache",
-        "services_permission_service_permissionversionconflict",
-        "services_permission_service_validate_mutable",
-        "valueerror"
-      ],
-      "depth": 3,
-      "nodeCount": 14,
-      "fileCount": 1,
-      "files": [
-        "app/services/permission_service.py"
-      ],
-      "criticality": 0.4121,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_permission_service_set_user_override",
-      "name": "set_user_override",
-      "entryPoint": "services_permission_service_set_user_override",
-      "entryPointId": "services_permission_service_set_user_override",
-      "path": [
-        "services_permission_service_set_user_override",
-        "services_permission_service_active_membership",
-        "services_permission_service_audit",
-        "services_permission_service_ensure_permission_matrix_seeded",
-        "services_permission_service_invalidate_effective_permission_cache",
-        "services_permission_service_permissionversionconflict",
-        "services_permission_service_validate_mutable",
-        "services_permission_service_engine_key",
-        "services_permission_service_seed_default_permissions",
-        "services_permission_service_can_role_hold_permission",
-        "services_permission_service_canonical_permission_code",
-        "services_permission_service_immutable_permission_decision",
-        "valueerror",
-        "services_permission_service_insert_if_missing"
-      ],
-      "qualifiedPath": [
-        "services_permission_service_set_user_override",
-        "services_permission_service_active_membership",
-        "services_permission_service_audit",
-        "services_permission_service_ensure_permission_matrix_seeded",
-        "services_permission_service_invalidate_effective_permission_cache",
-        "services_permission_service_permissionversionconflict",
-        "services_permission_service_validate_mutable",
-        "services_permission_service_engine_key",
-        "services_permission_service_seed_default_permissions",
-        "services_permission_service_can_role_hold_permission",
-        "services_permission_service_canonical_permission_code",
-        "services_permission_service_immutable_permission_decision",
-        "valueerror",
-        "services_permission_service_insert_if_missing"
-      ],
-      "depth": 3,
-      "nodeCount": 14,
-      "fileCount": 1,
-      "files": [
-        "app/services/permission_service.py"
-      ],
-      "criticality": 0.4121,
       "warnings": []
     },
     {
@@ -2140,6 +2104,28 @@
       "fileCount": 1,
       "files": [
         "app/services/user_session_service.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_auth_unlink_google",
+      "name": "unlink_google",
+      "entryPoint": "api_auth_unlink_google",
+      "entryPointId": "api_auth_unlink_google",
+      "path": [
+        "api_auth_unlink_google",
+        "api_auth_audit_security_event"
+      ],
+      "qualifiedPath": [
+        "api_auth_unlink_google",
+        "api_auth_audit_security_event"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/auth.py"
       ],
       "criticality": 0.41,
       "warnings": []
@@ -3100,6 +3086,28 @@
       "fileCount": 1,
       "files": [
         "app/services/hotel_api_key_service.py"
+      ],
+      "criticality": 0.285,
+      "warnings": []
+    },
+    {
+      "id": "flow:app_main_lifespan",
+      "name": "lifespan",
+      "entryPoint": "app_main_lifespan",
+      "entryPointId": "app_main_lifespan",
+      "path": [
+        "app_main_lifespan",
+        "app_main_seed_permission_matrix_once"
+      ],
+      "qualifiedPath": [
+        "app_main_lifespan",
+        "app_main_seed_permission_matrix_once"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/main.py"
       ],
       "criticality": 0.285,
       "warnings": []
@@ -4532,30 +4540,6 @@
       "fileCount": 1,
       "files": [
         "app/services/reservation_operations_service.py"
-      ],
-      "criticality": 0.2433,
-      "warnings": []
-    },
-    {
-      "id": "flow:app_main_lifespan",
-      "name": "lifespan",
-      "entryPoint": "app_main_lifespan",
-      "entryPointId": "app_main_lifespan",
-      "path": [
-        "app_main_lifespan",
-        "app_main_log_rls_bypass_diagnostic_once",
-        "app_main_seed_permission_matrix_once"
-      ],
-      "qualifiedPath": [
-        "app_main_lifespan",
-        "app_main_log_rls_bypass_diagnostic_once",
-        "app_main_seed_permission_matrix_once"
-      ],
-      "depth": 1,
-      "nodeCount": 3,
-      "fileCount": 1,
-      "files": [
-        "app/main.py"
       ],
       "criticality": 0.2433,
       "warnings": []
