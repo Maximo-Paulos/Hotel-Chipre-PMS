@@ -11,7 +11,13 @@ import app.models  # noqa
 from app.models.user import User
 from app.models.hotel_config import HotelConfiguration
 from app.models.hotel_membership import HotelMembership
-from app.services.security import hash_password, decode_signed_token
+from app.services.security import (
+    create_access_token,
+    create_signed_token,
+    decode_signed_token,
+    hash_password,
+    verify_password,
+)
 from app.dependencies.auth import AuthContext
 from app.services.permission_service import (
     PERMISSION_REPORTS_FINANCIAL_VIEW,
@@ -27,6 +33,17 @@ def get_db_override_target():
 def get_auth_context_target():
     from app.dependencies.auth import get_auth_context
     return get_auth_context
+
+
+def _invitation_token(hotel_id, email, role="manager"):
+    return create_signed_token(
+        {
+            "type": "invite",
+            "hotel_id": hotel_id,
+            "email": email,
+            "role": role,
+        }
+    )
 
 
 @pytest.fixture
@@ -131,6 +148,146 @@ def test_invite_returns_token_and_accepts(owner_ctx):
     assert invited_membership is not None
     assert invited_membership.status == "active"
     assert invited_user.is_active and invited_user.is_verified
+
+
+def test_existing_user_invitation_requires_matching_authenticated_user(owner_ctx):
+    client, db, ctx = owner_ctx
+    victim = User(
+        email="existing-victim@test.com",
+        password_hash=hash_password("original-password"),
+        role="manager",
+        is_active=True,
+        is_verified=True,
+    )
+    other_user = User(
+        email="other-user@test.com",
+        password_hash=hash_password("other-password"),
+        role="manager",
+        is_active=True,
+        is_verified=True,
+    )
+    db.add_all([victim, other_user])
+    db.commit()
+    original_hash = victim.password_hash
+    token = _invitation_token(ctx["hotel_id"], victim.email)
+
+    for headers in ({}, {"Authorization": f"Bearer {create_access_token(other_user.id)}"}):
+        response = client.post(
+            f"/api/invitations/{token}/accept",
+            json={"email": victim.email, "password": "attacker-password"},
+            headers=headers,
+        )
+
+        assert response.status_code == 409, response.text
+        assert "Inicia sesión" in response.json()["detail"]
+        db.refresh(victim)
+        assert victim.password_hash == original_hash
+        assert victim.is_verified is True
+        assert victim.is_active is True
+
+
+def test_existing_user_invitation_with_own_auth_attaches_without_resetting_account(owner_ctx):
+    client, db, ctx = owner_ctx
+    victim = User(
+        email="existing-member@test.com",
+        password_hash=hash_password("original-password"),
+        role="manager",
+        is_active=True,
+        is_verified=True,
+    )
+    db.add(victim)
+    db.flush()
+    membership = HotelMembership(
+        hotel_id=ctx["hotel_id"],
+        user_id=victim.id,
+        role="receptionist",
+        status="invited",
+    )
+    db.add(membership)
+    db.commit()
+    original_hash = victim.password_hash
+    token = _invitation_token(ctx["hotel_id"], victim.email, role="manager")
+    headers = {"Authorization": f"Bearer {create_access_token(victim.id)}"}
+
+    response = client.post(
+        f"/api/invitations/{token}/accept",
+        json={"email": victim.email, "password": "must-not-be-used-to-reset"},
+        headers=headers,
+    )
+
+    assert response.status_code == 200, response.text
+    db.refresh(victim)
+    db.refresh(membership)
+    assert victim.password_hash == original_hash
+    assert verify_password("original-password", victim.password_hash)
+    assert victim.is_verified is True
+    assert victim.is_active is True
+    assert membership.status == "active"
+    assert membership.role == "manager"
+    assert response.json()["user"]["id"] == victim.id
+
+
+def test_revoked_membership_cannot_be_reactivated_by_replaying_old_accept_token(owner_ctx):
+    client, db, ctx = owner_ctx
+    victim = User(
+        email="revoked-member@test.com",
+        password_hash=hash_password("original-password"),
+        role="manager",
+        is_active=True,
+        is_verified=True,
+    )
+    db.add(victim)
+    db.flush()
+    membership = HotelMembership(
+        hotel_id=ctx["hotel_id"],
+        user_id=victim.id,
+        role="receptionist",
+        status="revoked",
+    )
+    db.add(membership)
+    db.commit()
+    # A pre-revoke accept token stays cryptographically valid for up to 7 days
+    # and is independent of membership state; the victim may still hold an
+    # unexpired session for their own account.
+    token = _invitation_token(ctx["hotel_id"], victim.email, role="manager")
+    headers = {"Authorization": f"Bearer {create_access_token(victim.id)}"}
+
+    response = client.post(
+        f"/api/invitations/{token}/accept",
+        json={"email": victim.email, "password": "does-not-matter"},
+        headers=headers,
+    )
+
+    assert response.status_code == 409, response.text
+    assert "revocado" in response.json()["detail"].lower()
+    db.refresh(membership)
+    assert membership.status == "revoked"
+
+
+def test_invitation_creates_and_activates_user_when_email_is_new(owner_ctx):
+    client, db, ctx = owner_ctx
+    email = "brand-new-user@test.com"
+    assert db.query(User).filter(User.email == email).first() is None
+    token = _invitation_token(ctx["hotel_id"], email)
+
+    response = client.post(
+        f"/api/invitations/{token}/accept",
+        json={"email": email, "password": "new-account-password"},
+    )
+
+    assert response.status_code == 200, response.text
+    new_user = db.query(User).filter(User.email == email).first()
+    assert new_user is not None
+    assert verify_password("new-account-password", new_user.password_hash)
+    assert new_user.is_verified is True
+    assert new_user.is_active is True
+    new_membership = (
+        db.query(HotelMembership)
+        .filter(HotelMembership.hotel_id == ctx["hotel_id"], HotelMembership.user_id == new_user.id)
+        .first()
+    )
+    assert new_membership is not None
+    assert new_membership.status == "active"
 
 
 def test_update_role_requires_owner(owner_ctx):
