@@ -1,6 +1,7 @@
 """Thin FastAPI transport for the tenant-scoped permission service."""
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.exc import StaleDataError
 
 from app.database import get_db
 from app.dependencies.auth import (
@@ -23,6 +24,7 @@ from app.services.permission_service import (
     get_permission_catalog,
     get_role_profiles,
     publish_permission_invalidation,
+    PermissionVersionConflict,
     restore_role_defaults,
     restore_user_defaults,
     set_role_override,
@@ -82,9 +84,10 @@ def read_effective_permissions(
 
 @router.get("/catalog")
 def read_permission_catalog(
+    db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission_administrator),
 ):
-    return {"hotel_id": context.hotel_id, "permissions": get_permission_catalog()}
+    return {"hotel_id": context.hotel_id, "permissions": get_permission_catalog(db)}
 
 
 @router.get("/matrix")
@@ -121,10 +124,17 @@ def _update_role_override(
             code,
             payload.allowed,
             actor_user_id=context.user_id,
+            expected_version=payload.expected_version,
         )
+        db.commit()
+    except PermissionVersionConflict as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except StaleDataError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="El permiso fue modificado por otra solicitud") from exc
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
-    db.commit()
     db.refresh(override)
     publish_permission_invalidation(context.hotel_id)
     return {
@@ -132,6 +142,7 @@ def _update_role_override(
         "role": override.role,
         "permission_code": override.permission_code,
         "allowed": bool(override.allowed),
+        "version": override.version,
         "source": "role_override",
         "locked": False,
         "updated_by_user_id": override.updated_by_user_id,
@@ -205,10 +216,17 @@ def update_user_override(
             code,
             payload.allowed,
             actor_user_id=context.user_id,
+            expected_version=payload.expected_version,
         )
+        db.commit()
+    except PermissionVersionConflict as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except StaleDataError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="El permiso fue modificado por otra solicitud") from exc
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
-    db.commit()
     db.refresh(override)
     publish_permission_invalidation(context.hotel_id)
     return {
@@ -217,6 +235,7 @@ def update_user_override(
         "role": membership.role,
         "permission_code": override.permission_code,
         "allowed": bool(override.allowed),
+        "version": override.version,
         "source": "user_override",
         "locked": False,
         "updated_by_user_id": override.updated_by_user_id,

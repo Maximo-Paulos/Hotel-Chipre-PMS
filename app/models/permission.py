@@ -23,6 +23,9 @@ class Permission(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     code = Column(String(100), nullable=False, unique=True)
     description = Column(String(255), nullable=False)
+    critical = Column(Boolean, nullable=False, default=False, server_default="0")
+    step_up_required = Column(Boolean, nullable=False, default=False, server_default="0")
+    delegable = Column(Boolean, nullable=False, default=True, server_default="1")
 
 
 class RolePermissionDefault(Base):
@@ -52,6 +55,7 @@ class HotelPermissionOverride(Base):
     role = Column(String(50), nullable=False)
     permission_code = Column(String(100), nullable=False)
     allowed = Column(Boolean, nullable=False, default=False, server_default="0")
+    version = Column(Integer, nullable=False, default=1, server_default="1")
     updated_by_user_id = Column(Integer, nullable=True)
     updated_at = Column(
         DateTime,
@@ -82,6 +86,7 @@ class HotelPermissionOverride(Base):
         ),
         Index("ix_hotel_permission_overrides_hotel_id", "hotel_id"),
     )
+    __mapper_args__ = {"version_id_col": version}
 
 
 class UserPermissionOverride(Base):
@@ -94,6 +99,7 @@ class UserPermissionOverride(Base):
     user_id = Column(Integer, nullable=False)
     permission_code = Column(String(100), nullable=False)
     allowed = Column(Boolean, nullable=False, default=False, server_default="0")
+    version = Column(Integer, nullable=False, default=1, server_default="1")
     updated_by_user_id = Column(Integer, nullable=True)
     updated_at = Column(
         DateTime,
@@ -129,3 +135,4 @@ class UserPermissionOverride(Base):
         ),
         Index("ix_user_permission_overrides_hotel_user", "hotel_id", "user_id"),
     )
+    __mapper_args__ = {"version_id_col": version}
