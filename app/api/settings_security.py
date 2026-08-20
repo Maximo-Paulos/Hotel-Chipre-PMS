@@ -18,6 +18,7 @@ from app.schemas.settings_security import (
     SecurityEventsRead,
     SecurityOverviewRead,
 )
+from app.services.user_session_service import revoke_all_sessions
 
 
 router = APIRouter(prefix="/api/settings/security", tags=["Settings Security"])
@@ -117,6 +118,9 @@ def revoke_current_user_sessions(
 
     user = _current_user(db, context)
     user.token_version = (user.token_version or 0) + 1
+    # Keep the legacy JWT invalidation and the new browser-session plane in
+    # lockstep for the existing "close all sessions" control.
+    revoke_all_sessions(db, user.id)
     db.add(
         SecurityAuditLog(
             hotel_id=context.hotel_id,
