@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 import time
 from unittest.mock import patch
 
@@ -18,6 +19,7 @@ from app.config import get_settings
 from app.database import Base, get_db
 from app.models.hotel_config import HotelConfiguration
 from app.models.hotel_membership import HotelMembership
+from app.models.security_audit_log import SecurityAuditLog
 from app.models.user import User
 from app.models.user_mfa import UserMfaRecoveryCode, UserMfaSecret
 from app.schemas.onboarding import (
@@ -446,6 +448,13 @@ def test_login_prefers_a_completed_hotel_when_multiple_memberships_exist(client_
     payload = login.json()
     assert payload["hotel_id"] == 2
     assert payload["hotel_ids"] == [1, 2]
+    audits = (
+        db.query(SecurityAuditLog)
+        .filter(SecurityAuditLog.action == "auth.login.success")
+        .order_by(SecurityAuditLog.hotel_id.asc())
+        .all()
+    )
+    assert [audit.hotel_id for audit in audits] == [1, 2]
 
     headers = _auth_headers(payload)
     status = client.get("/api/onboarding/status", headers=headers)
@@ -631,6 +640,10 @@ def test_google_login_creates_new_user_when_email_unknown(client_and_db, monkeyp
     assert stored_user.password_hash
     assert not verify_password("", stored_user.password_hash)
 
+    audit = db.query(SecurityAuditLog).filter_by(action="google_auth.linked").one()
+    assert audit.hotel_id == body["hotel_id"]
+    assert json.loads(audit.details) == {"account_state": "created", "provider": "google"}
+
 
 def test_google_login_relogin_with_same_sub_preserves_password(client_and_db, monkeypatch):
     client, db, _session_factory = client_and_db
@@ -652,6 +665,14 @@ def test_google_login_relogin_with_same_sub_preserves_password(client_and_db, mo
     db.refresh(stored_user)
     assert stored_user.google_sub == "google-relogin-sub"
     assert stored_user.password_hash == original_password_hash
+    audits = (
+        db.query(SecurityAuditLog)
+        .filter(SecurityAuditLog.action == "google_auth.linked")
+        .order_by(SecurityAuditLog.id.asc())
+        .all()
+    )
+    assert len(audits) == 2
+    assert [json.loads(audit.details)["account_state"] for audit in audits] == ["created", "existing"]
 
 
 def test_google_login_replaces_password_for_unverified_email_squatter(
@@ -683,6 +704,10 @@ def test_google_login_replaces_password_for_unverified_email_squatter(
     assert stored_user.google_sub == "google-victim-sub"
     assert stored_user.password_hash != old_password_hash
     assert stored_user.token_version == 1
+
+    audit = db.query(SecurityAuditLog).filter_by(action="google_auth.account_reclaimed").one()
+    assert audit.hotel_id == body["hotel_id"]
+    assert json.loads(audit.details) == {"password_invalidated": True, "provider": "google"}
 
     password_login = client.post(
         "/api/auth/login",
@@ -763,11 +788,14 @@ def _enroll_and_confirm_mfa(
     user = db.query(User).filter(User.email == email).one()
     mfa_secret = db.query(UserMfaSecret).filter(UserMfaSecret.user_id == user.id).one()
     assert mfa_secret.status == "active"
+    audit = db.query(SecurityAuditLog).filter_by(action="mfa.enrolled").one()
+    assert audit.hotel_id == auth["hotel_id"]
+    assert json.loads(audit.details) == {"factor": "totp"}
     return auth, secret, recovery_codes
 
 
 def test_login_without_mfa_keeps_returning_the_normal_auth_response(client_and_db, fixed_code_patch, monkeypatch):
-    client, _db, _session_factory = client_and_db
+    client, db, _session_factory = client_and_db
     auth = _verified_auth(client, "without-mfa@example.com", monkeypatch)
 
     login = client.post(
@@ -777,6 +805,10 @@ def test_login_without_mfa_keeps_returning_the_normal_auth_response(client_and_d
     assert login.status_code == 200, login.text
     assert login.json()["access_token"]
     assert login.json()["user"]["email"] == auth["user"]["email"]
+
+    audit = db.query(SecurityAuditLog).filter_by(action="auth.login.success").one()
+    assert audit.hotel_id == login.json()["hotel_id"]
+    assert json.loads(audit.details) == {"method": "password"}
 
 
 def test_mfa_enroll_confirm_uses_encrypted_secret_and_requires_second_login_step(
@@ -811,6 +843,9 @@ def test_mfa_enroll_confirm_uses_encrypted_secret_and_requires_second_login_step
     )
     assert completed.status_code == 200, completed.text
     assert completed.json()["access_token"]
+    audit = db.query(SecurityAuditLog).filter_by(action="auth.login.success").one()
+    assert audit.hotel_id == completed.json()["hotel_id"]
+    assert json.loads(audit.details) == {"method": "password+mfa"}
 
 
 def test_mfa_rejects_invalid_and_replayed_totp_codes(client_and_db, fixed_code_patch, monkeypatch):
@@ -881,6 +916,9 @@ def test_recovery_code_is_single_use_and_regeneration_invalidates_old_codes(
     new_codes = regenerated.json()["recovery_codes"]
     assert len(new_codes) == 10
     assert set(new_codes).isdisjoint(recovery_codes)
+    audit = db.query(SecurityAuditLog).filter_by(action="mfa.recovery_codes_regenerated").one()
+    assert audit.hotel_id == auth["hotel_id"]
+    assert json.loads(audit.details) == {"factor": "totp"}
 
     old_challenge = client.post(
         "/api/auth/login",
@@ -926,3 +964,6 @@ def test_disable_mfa_requires_current_password_and_a_valid_factor(client_and_db,
     assert disabled.json() == {"disabled": True}
     assert db.query(UserMfaSecret).count() == 0
     assert db.query(UserMfaRecoveryCode).count() == 0
+    audit = db.query(SecurityAuditLog).filter_by(action="mfa.disabled").one()
+    assert audit.hotel_id == auth["hotel_id"]
+    assert json.loads(audit.details) == {"factor": "totp"}

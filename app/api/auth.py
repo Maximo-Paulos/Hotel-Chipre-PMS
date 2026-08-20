@@ -2,6 +2,7 @@
 Auth endpoints: register, login, email verification and password reset.
 Verification and reset codes are persisted in the database.
 """
+import json
 import logging
 from datetime import datetime, timezone
 import secrets
@@ -22,6 +23,7 @@ from app.adapters.rate_limiter import (
     verify_request_limiter,
 )
 from app.database import get_db
+from app.models.security_audit_log import SecurityAuditLog
 from app.models.user import User
 from app.schemas.auth import (
     AuthResponse,
@@ -178,14 +180,49 @@ def _attach_user_session_cookies(
     db.commit()
 
 
+def _audit_security_event(
+    db: Session,
+    *,
+    user: User,
+    action: str,
+    details: dict[str, object],
+) -> None:
+    """Project a global identity event into every hotel the user actively belongs to."""
+    details_json = json.dumps(details, sort_keys=True)
+    memberships = get_memberships_for_user(db, user.id)
+    # Identity events have no single hotel; skip users without an active
+    # membership because SecurityAuditLog.hotel_id is intentionally required.
+    for membership in memberships:
+        db.add(
+            SecurityAuditLog(
+                hotel_id=membership.hotel_id,
+                user_id=user.id,
+                action=action,
+                resource_type="user",
+                resource_id=str(user.id),
+                details=details_json,
+            )
+        )
+
+
 def _issue_auth_response(
     db: Session,
     user: User,
     request: Request | None = None,
     response: Response | None = None,
+    *,
+    audit_action: str | None = None,
+    audit_details: dict[str, object] | None = None,
 ) -> AuthResponse:
     user.last_login = datetime.now(timezone.utc)
     db.add(user)
+    if audit_action is not None:
+        _audit_security_event(
+            db,
+            user=user,
+            action=audit_action,
+            details=audit_details or {},
+        )
     db.commit()
     db.refresh(user)
     auth_response = _build_auth_response(db, user)
@@ -199,6 +236,9 @@ def _build_login_response(
     user: User,
     request: Request | None = None,
     response: Response | None = None,
+    *,
+    audit_action: str | None = None,
+    audit_details: dict[str, object] | None = None,
 ) -> AuthResponse | MfaChallengeResponse:
     """Return a session only after the required account MFA factor succeeds."""
     if mfa_service.get_active_mfa_secret(db, user.id):
@@ -215,7 +255,14 @@ def _build_login_response(
             expires_in=MFA_LOGIN_CHALLENGE_MINUTES * 60,
         )
 
-    return _issue_auth_response(db, user, request=request, response=response)
+    return _issue_auth_response(
+        db,
+        user,
+        request=request,
+        response=response,
+        audit_action=audit_action,
+        audit_details=audit_details,
+    )
 
 
 def _mfa_attempt_key(action: str, user_id: int) -> str:
@@ -341,7 +388,14 @@ def login(
     db.commit()
     login_limiter.reset(key, db=db)
     db.commit()
-    return _build_login_response(db, user, request=request, response=response)
+    return _build_login_response(
+        db,
+        user,
+        request=request,
+        response=response,
+        audit_action="auth.login.success",
+        audit_details={"method": "password"},
+    )
 
 
 @router.post("/login/mfa", response_model=AuthResponse)
@@ -379,7 +433,14 @@ def complete_mfa_login(
         raise HTTPException(status_code=401, detail="Codigo MFA invalido o ya utilizado")
 
     _reset_mfa_attempts(db, "login", user.id)
-    return _issue_auth_response(db, user, request=request, response=response)
+    return _issue_auth_response(
+        db,
+        user,
+        request=request,
+        response=response,
+        audit_action="auth.login.success",
+        audit_details={"method": "password+mfa"},
+    )
 
 
 @router.post("/google", response_model=AuthResponse | MfaChallengeResponse)
@@ -437,6 +498,11 @@ def google_login(
     # A hit is case (a): the provider subject is already bound, so the
     # account is logged in directly without changing its password or link.
     user = db.query(User).filter(User.google_sub == google_sub).first()
+    google_audit_action = "google_auth.linked"
+    google_audit_details: dict[str, object] = {
+        "account_state": "existing",
+        "provider": "google",
+    }
     if user is None:
         user = db.query(User).filter(User.email.ilike(email)).first()
         if user is None:
@@ -454,6 +520,7 @@ def google_login(
             db.add(user)
             db.flush()
             get_or_create_hotel_for_owner(db, user.email)
+            google_audit_details["account_state"] = "created"
         elif not user.is_active:
             raise HTTPException(status_code=403, detail="Usuario deshabilitado")
         elif user.google_sub is None:
@@ -467,6 +534,11 @@ def google_login(
             user.password_hash = hash_password(secrets.token_urlsafe(32))
             user.token_version = (user.token_version or 0) + 1
             user.is_verified = True
+            google_audit_action = "google_auth.account_reclaimed"
+            google_audit_details = {
+                "password_invalidated": True,
+                "provider": "google",
+            }
         else:
             # A different Google subject must never overwrite an existing
             # link or fall back to email-only login. Fail closed on this
@@ -476,6 +548,14 @@ def google_login(
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Usuario deshabilitado")
 
+    # Keep one normal Google event per successful provider login, including
+    # re-logins with the same subject; it is a confirmed identity-use trace.
+    _audit_security_event(
+        db,
+        user=user,
+        action=google_audit_action,
+        details=google_audit_details,
+    )
     db.add(user)
     db.commit()
     db.refresh(user)
@@ -615,6 +695,12 @@ def confirm_mfa_enrollment(
         db.commit()
         raise HTTPException(status_code=400, detail="Codigo TOTP invalido o enrolamiento inexistente")
     _reset_mfa_attempts(db, "enroll", user.id)
+    _audit_security_event(
+        db,
+        user=user,
+        action="mfa.enrolled",
+        details={"factor": "totp"},
+    )
     db.commit()
     return MfaRecoveryCodesResponse(recovery_codes=recovery_codes)
 
@@ -642,6 +728,12 @@ def disable_mfa(
 
     mfa_service.disable_user_mfa(db, user.id)
     _reset_mfa_attempts(db, "disable", user.id)
+    _audit_security_event(
+        db,
+        user=user,
+        action="mfa.disabled",
+        details={"factor": "totp"},
+    )
     db.commit()
     return {"disabled": True}
 
@@ -668,6 +760,12 @@ def regenerate_mfa_recovery_codes(
 
     recovery_codes = mfa_service.replace_recovery_codes(db, user.id, mfa_secret)
     _reset_mfa_attempts(db, "regenerate", user.id)
+    _audit_security_event(
+        db,
+        user=user,
+        action="mfa.recovery_codes_regenerated",
+        details={"factor": "totp"},
+    )
     db.commit()
     return MfaRecoveryCodesResponse(recovery_codes=recovery_codes)
 
