@@ -148,14 +148,15 @@ const MasterAdminStripePage = lazy(() =>
 
 const APP_HOST = isAppHostname();
 
-function HostRedirect({ target }: { target: string }) {
+function HostRedirect({ target, children }: { target: string; children: ReactNode }) {
   useEffect(() => {
+    if (import.meta.env.DEV) return;
     if (typeof window !== "undefined" && window.location.href !== target) {
       window.location.replace(target);
     }
   }, [target]);
 
-  return null;
+  return import.meta.env.DEV ? <>{children}</> : null;
 }
 
 function MarketingRedirect({ children }: { children: ReactNode }) {
@@ -165,7 +166,9 @@ function MarketingRedirect({ children }: { children: ReactNode }) {
     return (
       <HostRedirect
         target={resolveSiteLocation(location.pathname, location.search, location.hash)}
-      />
+      >
+        {children}
+      </HostRedirect>
     );
   }
   return <>{children}</>;
@@ -178,7 +181,9 @@ function AppHostOnly({ children }: { children: ReactNode }) {
     return (
       <HostRedirect
         target={resolveAppLocation(location.pathname, location.search, location.hash)}
-      />
+      >
+        {children}
+      </HostRedirect>
     );
   }
 
