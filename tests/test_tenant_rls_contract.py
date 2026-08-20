@@ -211,6 +211,7 @@ def test_rls_migration_covers_every_hotel_scoped_model_table():
         "notification_preferences",
         "notification_outbox",
         "daily_report_schedules",
+        "temporary_action_grants",
     }
     assert set(migration.TENANT_TABLES) == expected
     assert "hotel_memberships" not in migration.TENANT_TABLES

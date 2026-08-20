@@ -1,5 +1,5 @@
 """Thin FastAPI transport for the tenant-scoped permission service."""
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.exc import StaleDataError
 
@@ -8,10 +8,14 @@ from app.dependencies.auth import (
     AuthContext,
     get_auth_context,
     require_permission_administrator,
+    require_roles,
 )
 from app.models.hotel_membership import HotelMembership
 from app.schemas.permission import (
     RolePermissionOverrideRequest,
+    TemporaryActionGrantApproveRequest,
+    TemporaryActionGrantConsumeRequest,
+    TemporaryActionGrantRequest,
     UserPermissionOverrideRequest,
 )
 from app.services.permission_service import (
@@ -30,8 +34,57 @@ from app.services.permission_service import (
     set_role_override,
     set_user_override,
 )
+from app.services.temporary_action_grant_service import (
+    TemporaryGrantActor,
+    TemporaryGrantAuthorizationError,
+    TemporaryGrantError,
+    TemporaryGrantMfaError,
+    TemporaryGrantNotFoundError,
+    TemporaryGrantStateError,
+    approve_grant,
+    consume_grant,
+    deny_grant,
+    list_pending_grants_for_hotel,
+    request_grant,
+)
 
 router = APIRouter(prefix="/api/permissions", tags=["Permissions"])
+
+
+def _temporary_grant_actor(context: AuthContext) -> TemporaryGrantActor:
+    if context.user_id is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Autenticacion requerida")
+    return TemporaryGrantActor(user_id=context.user_id, hotel_id=context.hotel_id)
+
+
+def _temporary_grant_response(grant) -> dict:
+    return {
+        "id": grant.id,
+        "hotel_id": grant.hotel_id,
+        "requester_user_id": grant.requester_user_id,
+        "approver_user_id": grant.approver_user_id,
+        "permission_code": grant.permission_code,
+        "resource_type": grant.resource_type,
+        "resource_id": grant.resource_id,
+        "reason": grant.reason,
+        "status": grant.status.value if hasattr(grant.status, "value") else grant.status,
+        "created_at": grant.created_at,
+        "approved_at": grant.approved_at,
+        "used_at": grant.used_at,
+        "expires_at": grant.expires_at,
+    }
+
+
+def _raise_temporary_grant_http_error(exc: TemporaryGrantError) -> None:
+    if isinstance(exc, TemporaryGrantNotFoundError):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Grant no encontrado") from exc
+    if isinstance(exc, TemporaryGrantStateError):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    if isinstance(exc, TemporaryGrantMfaError):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    if isinstance(exc, TemporaryGrantAuthorizationError):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
 
 
 def _validate_role(role: str) -> None:
@@ -286,3 +339,101 @@ def preview_effective_permissions(
         ),
         "details": details,
     }
+
+
+@router.post("/temporary-grants/request", status_code=status.HTTP_201_CREATED)
+def create_temporary_action_grant(
+    payload: TemporaryActionGrantRequest,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(get_auth_context),
+):
+    """Ask for one exceptional permission without changing the requester's role."""
+    try:
+        grant = request_grant(
+            db,
+            context.hotel_id,
+            _temporary_grant_actor(context),
+            payload.permission_code,
+            payload.resource_type,
+            payload.resource_id,
+            payload.reason,
+        )
+        db.commit()
+        db.refresh(grant)
+        return _temporary_grant_response(grant)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    except TemporaryGrantError as exc:
+        db.rollback()
+        _raise_temporary_grant_http_error(exc)
+
+
+@router.get("/temporary-grants/pending")
+def read_pending_temporary_action_grants(
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_roles("owner", "co_owner")),
+):
+    grants = list_pending_grants_for_hotel(db, context.hotel_id)
+    return {
+        "hotel_id": context.hotel_id,
+        "grants": [_temporary_grant_response(grant) for grant in grants],
+    }
+
+
+@router.post("/temporary-grants/{grant_id}/approve")
+def approve_temporary_action_grant(
+    payload: TemporaryActionGrantApproveRequest,
+    grant_id: int = Path(gt=0),
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_roles("owner", "co_owner")),
+):
+    try:
+        grant, token = approve_grant(
+            db,
+            grant_id,
+            _temporary_grant_actor(context),
+            payload.totp_code,
+        )
+        db.commit()
+        db.refresh(grant)
+        return {"grant": _temporary_grant_response(grant), "token": token}
+    except TemporaryGrantError as exc:
+        db.rollback()
+        _raise_temporary_grant_http_error(exc)
+
+
+@router.post("/temporary-grants/{grant_id}/deny")
+def deny_temporary_action_grant(
+    grant_id: int = Path(gt=0),
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_roles("owner", "co_owner")),
+):
+    try:
+        grant = deny_grant(db, grant_id, _temporary_grant_actor(context))
+        db.commit()
+        db.refresh(grant)
+        return _temporary_grant_response(grant)
+    except TemporaryGrantError as exc:
+        db.rollback()
+        _raise_temporary_grant_http_error(exc)
+
+
+@router.post("/temporary-grants/consume")
+def consume_temporary_action_grant(
+    payload: TemporaryActionGrantConsumeRequest,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(get_auth_context),
+):
+    try:
+        consumed = consume_grant(db, payload.token, _temporary_grant_actor(context))
+        db.commit()
+    except TemporaryGrantError as exc:
+        db.rollback()
+        _raise_temporary_grant_http_error(exc)
+    if not consumed:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Grant invalido, expirado o ya consumido",
+        )
+    return {"consumed": True}

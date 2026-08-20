@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-20T18:53:59.305Z",
+  "generatedAt": "2026-08-20T19:03:32.343Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -1273,6 +1273,32 @@
       "warnings": []
     },
     {
+      "id": "flow:api_permissions_approve_temporary_action_grant",
+      "name": "approve_temporary_action_grant",
+      "entryPoint": "api_permissions_approve_temporary_action_grant",
+      "entryPointId": "api_permissions_approve_temporary_action_grant",
+      "path": [
+        "api_permissions_approve_temporary_action_grant",
+        "api_permissions_raise_temporary_grant_http_error",
+        "api_permissions_temporary_grant_actor",
+        "api_permissions_temporary_grant_response"
+      ],
+      "qualifiedPath": [
+        "api_permissions_approve_temporary_action_grant",
+        "api_permissions_raise_temporary_grant_http_error",
+        "api_permissions_temporary_grant_actor",
+        "api_permissions_temporary_grant_response"
+      ],
+      "depth": 1,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/api/permissions.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
       "id": "flow:api_gemma_chat_archive_chat_session",
       "name": "archive_chat_session",
       "entryPoint": "api_gemma_chat_archive_chat_session",
@@ -1383,6 +1409,30 @@
       "warnings": []
     },
     {
+      "id": "flow:api_permissions_consume_temporary_action_grant",
+      "name": "consume_temporary_action_grant",
+      "entryPoint": "api_permissions_consume_temporary_action_grant",
+      "entryPointId": "api_permissions_consume_temporary_action_grant",
+      "path": [
+        "api_permissions_consume_temporary_action_grant",
+        "api_permissions_raise_temporary_grant_http_error",
+        "api_permissions_temporary_grant_actor"
+      ],
+      "qualifiedPath": [
+        "api_permissions_consume_temporary_action_grant",
+        "api_permissions_raise_temporary_grant_http_error",
+        "api_permissions_temporary_grant_actor"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/api/permissions.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
       "id": "flow:services_security_create_access_token",
       "name": "create_access_token",
       "entryPoint": "services_security_create_access_token",
@@ -1483,6 +1533,32 @@
       "warnings": []
     },
     {
+      "id": "flow:api_permissions_create_temporary_action_grant",
+      "name": "create_temporary_action_grant",
+      "entryPoint": "api_permissions_create_temporary_action_grant",
+      "entryPointId": "api_permissions_create_temporary_action_grant",
+      "path": [
+        "api_permissions_create_temporary_action_grant",
+        "api_permissions_raise_temporary_grant_http_error",
+        "api_permissions_temporary_grant_actor",
+        "api_permissions_temporary_grant_response"
+      ],
+      "qualifiedPath": [
+        "api_permissions_create_temporary_action_grant",
+        "api_permissions_raise_temporary_grant_http_error",
+        "api_permissions_temporary_grant_actor",
+        "api_permissions_temporary_grant_response"
+      ],
+      "depth": 1,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/api/permissions.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
       "id": "flow:master_admin_router_dashboard_summary",
       "name": "dashboard_summary",
       "entryPoint": "master_admin_router_dashboard_summary",
@@ -1544,6 +1620,32 @@
       "fileCount": 1,
       "files": [
         "app/services/security.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_permissions_deny_temporary_action_grant",
+      "name": "deny_temporary_action_grant",
+      "entryPoint": "api_permissions_deny_temporary_action_grant",
+      "entryPointId": "api_permissions_deny_temporary_action_grant",
+      "path": [
+        "api_permissions_deny_temporary_action_grant",
+        "api_permissions_raise_temporary_grant_http_error",
+        "api_permissions_temporary_grant_actor",
+        "api_permissions_temporary_grant_response"
+      ],
+      "qualifiedPath": [
+        "api_permissions_deny_temporary_action_grant",
+        "api_permissions_raise_temporary_grant_http_error",
+        "api_permissions_temporary_grant_actor",
+        "api_permissions_temporary_grant_response"
+      ],
+      "depth": 1,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/api/permissions.py"
       ],
       "criticality": 0.41,
       "warnings": []
@@ -1658,28 +1760,6 @@
       "fileCount": 1,
       "files": [
         "app/dependencies/api_key_auth.py"
-      ],
-      "criticality": 0.41,
-      "warnings": []
-    },
-    {
-      "id": "flow:state_session_initialsession",
-      "name": "initialSession",
-      "entryPoint": "state_session_initialsession",
-      "entryPointId": "state_session_initialsession",
-      "path": [
-        "state_session_initialsession",
-        "state_session_readstoredcsrftoken"
-      ],
-      "qualifiedPath": [
-        "state_session_initialsession",
-        "state_session_readstoredcsrftoken"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "frontend/src/state/session.tsx"
       ],
       "criticality": 0.41,
       "warnings": []
@@ -1836,6 +1916,28 @@
       "qualifiedPath": [
         "api_permissions_preview_effective_permissions",
         "api_permissions_target_membership_or_404"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/permissions.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_permissions_read_pending_temporary_action_grants",
+      "name": "read_pending_temporary_action_grants",
+      "entryPoint": "api_permissions_read_pending_temporary_action_grants",
+      "entryPointId": "api_permissions_read_pending_temporary_action_grants",
+      "path": [
+        "api_permissions_read_pending_temporary_action_grants",
+        "api_permissions_temporary_grant_response"
+      ],
+      "qualifiedPath": [
+        "api_permissions_read_pending_temporary_action_grants",
+        "api_permissions_temporary_grant_response"
       ],
       "depth": 1,
       "nodeCount": 2,
@@ -2054,28 +2156,6 @@
       "fileCount": 1,
       "files": [
         "app/master_admin/stripe.py"
-      ],
-      "criticality": 0.41,
-      "warnings": []
-    },
-    {
-      "id": "flow:state_session_sessionfromauthresponse",
-      "name": "sessionFromAuthResponse",
-      "entryPoint": "state_session_sessionfromauthresponse",
-      "entryPointId": "state_session_sessionfromauthresponse",
-      "path": [
-        "state_session_sessionfromauthresponse",
-        "state_session_normalizerole"
-      ],
-      "qualifiedPath": [
-        "state_session_sessionfromauthresponse",
-        "state_session_normalizerole"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "frontend/src/state/session.tsx"
       ],
       "criticality": 0.41,
       "warnings": []
@@ -2446,60 +2526,6 @@
         "app/services/integration_service.py"
       ],
       "criticality": 0.3367,
-      "warnings": []
-    },
-    {
-      "id": "flow:api_client_apifetch",
-      "name": "apiFetch",
-      "entryPoint": "api_client_apifetch",
-      "entryPointId": "api_client_apifetch",
-      "path": [
-        "api_client_apifetch",
-        "api_client_apierror",
-        "api_client_buildauthheaders",
-        "api_client_buildurl",
-        "api_client_formaterrordetail",
-        "api_client_handleunauthorized",
-        "api_client_requestwithrefresh",
-        "api_client_safejson",
-        "api_client_hasvalidsession",
-        "api_client_normalizehotelid",
-        "api_client_ispublicauthpath",
-        "api_client_makeapierror",
-        "api_client_mergesession",
-        "api_client_refreshsession",
-        "api_client_requestheaders",
-        "api_client_setclientsession",
-        "api_client_istokenexpired",
-        "api_client_jwtexpms"
-      ],
-      "qualifiedPath": [
-        "api_client_apifetch",
-        "api_client_apierror",
-        "api_client_buildauthheaders",
-        "api_client_buildurl",
-        "api_client_formaterrordetail",
-        "api_client_handleunauthorized",
-        "api_client_requestwithrefresh",
-        "api_client_safejson",
-        "api_client_hasvalidsession",
-        "api_client_normalizehotelid",
-        "api_client_ispublicauthpath",
-        "api_client_makeapierror",
-        "api_client_mergesession",
-        "api_client_refreshsession",
-        "api_client_requestheaders",
-        "api_client_setclientsession",
-        "api_client_istokenexpired",
-        "api_client_jwtexpms"
-      ],
-      "depth": 4,
-      "nodeCount": 18,
-      "fileCount": 1,
-      "files": [
-        "frontend/src/api/client.ts"
-      ],
-      "criticality": 0.3289,
       "warnings": []
     },
     {
@@ -3685,6 +3711,46 @@
       "warnings": []
     },
     {
+      "id": "flow:api_client_apifetch",
+      "name": "apiFetch",
+      "entryPoint": "api_client_apifetch",
+      "entryPointId": "api_client_apifetch",
+      "path": [
+        "api_client_apifetch",
+        "api_client_apierror",
+        "api_client_buildauthheaders",
+        "api_client_buildurl",
+        "api_client_formaterrordetail",
+        "api_client_handleunauthorized",
+        "api_client_safejson",
+        "api_client_hasvalidsession",
+        "api_client_normalizehotelid",
+        "api_client_istokenexpired",
+        "api_client_jwtexpms"
+      ],
+      "qualifiedPath": [
+        "api_client_apifetch",
+        "api_client_apierror",
+        "api_client_buildauthheaders",
+        "api_client_buildurl",
+        "api_client_formaterrordetail",
+        "api_client_handleunauthorized",
+        "api_client_safejson",
+        "api_client_hasvalidsession",
+        "api_client_normalizehotelid",
+        "api_client_istokenexpired",
+        "api_client_jwtexpms"
+      ],
+      "depth": 4,
+      "nodeCount": 11,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/api/client.ts"
+      ],
+      "criticality": 0.2809,
+      "warnings": []
+    },
+    {
       "id": "flow:versions_7b14658560e1_restrict_audit_log_hotel_deletion_downgrade",
       "name": "downgrade",
       "entryPoint": "versions_7b14658560e1_restrict_audit_log_hotel_deletion_downgrade",
@@ -3830,6 +3896,34 @@
       "fileCount": 1,
       "files": [
         "app/services/cash_register_service.py"
+      ],
+      "criticality": 0.27,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_temporary_action_grant_service_request_grant",
+      "name": "request_grant",
+      "entryPoint": "services_temporary_action_grant_service_request_grant",
+      "entryPointId": "services_temporary_action_grant_service_request_grant",
+      "path": [
+        "services_temporary_action_grant_service_request_grant",
+        "services_temporary_action_grant_service_active_membership",
+        "services_temporary_action_grant_service_audit",
+        "services_temporary_action_grant_service_temporarygrantauthorizationerror",
+        "services_temporary_action_grant_service_status_value"
+      ],
+      "qualifiedPath": [
+        "services_temporary_action_grant_service_request_grant",
+        "services_temporary_action_grant_service_active_membership",
+        "services_temporary_action_grant_service_audit",
+        "services_temporary_action_grant_service_temporarygrantauthorizationerror",
+        "services_temporary_action_grant_service_status_value"
+      ],
+      "depth": 2,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "app/services/temporary_action_grant_service.py"
       ],
       "criticality": 0.27,
       "warnings": []
@@ -6845,6 +6939,38 @@
       "warnings": []
     },
     {
+      "id": "flow:services_temporary_action_grant_service_consume_grant",
+      "name": "consume_grant",
+      "entryPoint": "services_temporary_action_grant_service_consume_grant",
+      "entryPointId": "services_temporary_action_grant_service_consume_grant",
+      "path": [
+        "services_temporary_action_grant_service_consume_grant",
+        "services_temporary_action_grant_service_active_membership",
+        "services_temporary_action_grant_service_audit",
+        "services_temporary_action_grant_service_expire_stale_grants",
+        "services_temporary_action_grant_service_utcnow",
+        "services_temporary_action_grant_service_temporarygrantauthorizationerror",
+        "services_temporary_action_grant_service_status_value"
+      ],
+      "qualifiedPath": [
+        "services_temporary_action_grant_service_consume_grant",
+        "services_temporary_action_grant_service_active_membership",
+        "services_temporary_action_grant_service_audit",
+        "services_temporary_action_grant_service_expire_stale_grants",
+        "services_temporary_action_grant_service_utcnow",
+        "services_temporary_action_grant_service_temporarygrantauthorizationerror",
+        "services_temporary_action_grant_service_status_value"
+      ],
+      "depth": 2,
+      "nodeCount": 7,
+      "fileCount": 1,
+      "files": [
+        "app/services/temporary_action_grant_service.py"
+      ],
+      "criticality": 0.2057,
+      "warnings": []
+    },
+    {
       "id": "flow:services_reservation_service_mark_reservation_no_show",
       "name": "mark_reservation_no_show",
       "entryPoint": "services_reservation_service_mark_reservation_no_show",
@@ -7107,6 +7233,42 @@
       "warnings": []
     },
     {
+      "id": "flow:services_temporary_action_grant_service_deny_grant",
+      "name": "deny_grant",
+      "entryPoint": "services_temporary_action_grant_service_deny_grant",
+      "entryPointId": "services_temporary_action_grant_service_deny_grant",
+      "path": [
+        "services_temporary_action_grant_service_deny_grant",
+        "services_temporary_action_grant_service_audit",
+        "services_temporary_action_grant_service_grant_for_actor",
+        "services_temporary_action_grant_service_require_approver",
+        "services_temporary_action_grant_service_temporarygrantstateerror",
+        "services_temporary_action_grant_service_status_value",
+        "services_temporary_action_grant_service_temporarygrantnotfounderror",
+        "services_temporary_action_grant_service_active_membership",
+        "services_temporary_action_grant_service_temporarygrantauthorizationerror"
+      ],
+      "qualifiedPath": [
+        "services_temporary_action_grant_service_deny_grant",
+        "services_temporary_action_grant_service_audit",
+        "services_temporary_action_grant_service_grant_for_actor",
+        "services_temporary_action_grant_service_require_approver",
+        "services_temporary_action_grant_service_temporarygrantstateerror",
+        "services_temporary_action_grant_service_status_value",
+        "services_temporary_action_grant_service_temporarygrantnotfounderror",
+        "services_temporary_action_grant_service_active_membership",
+        "services_temporary_action_grant_service_temporarygrantauthorizationerror"
+      ],
+      "depth": 2,
+      "nodeCount": 9,
+      "fileCount": 1,
+      "files": [
+        "app/services/temporary_action_grant_service.py"
+      ],
+      "criticality": 0.1978,
+      "warnings": []
+    },
+    {
       "id": "flow:agent_ops_check_qa_evidence_main",
       "name": "main",
       "entryPoint": "agent_ops_check_qa_evidence_main",
@@ -7138,6 +7300,42 @@
       "fileCount": 1,
       "files": [
         "scripts/agent_ops/check_qa_evidence.py"
+      ],
+      "criticality": 0.1978,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_temporary_action_grant_service_revoke_grant",
+      "name": "revoke_grant",
+      "entryPoint": "services_temporary_action_grant_service_revoke_grant",
+      "entryPointId": "services_temporary_action_grant_service_revoke_grant",
+      "path": [
+        "services_temporary_action_grant_service_revoke_grant",
+        "services_temporary_action_grant_service_audit",
+        "services_temporary_action_grant_service_grant_for_actor",
+        "services_temporary_action_grant_service_require_approver",
+        "services_temporary_action_grant_service_temporarygrantstateerror",
+        "services_temporary_action_grant_service_status_value",
+        "services_temporary_action_grant_service_temporarygrantnotfounderror",
+        "services_temporary_action_grant_service_active_membership",
+        "services_temporary_action_grant_service_temporarygrantauthorizationerror"
+      ],
+      "qualifiedPath": [
+        "services_temporary_action_grant_service_revoke_grant",
+        "services_temporary_action_grant_service_audit",
+        "services_temporary_action_grant_service_grant_for_actor",
+        "services_temporary_action_grant_service_require_approver",
+        "services_temporary_action_grant_service_temporarygrantstateerror",
+        "services_temporary_action_grant_service_status_value",
+        "services_temporary_action_grant_service_temporarygrantnotfounderror",
+        "services_temporary_action_grant_service_active_membership",
+        "services_temporary_action_grant_service_temporarygrantauthorizationerror"
+      ],
+      "depth": 2,
+      "nodeCount": 9,
+      "fileCount": 1,
+      "files": [
+        "app/services/temporary_action_grant_service.py"
       ],
       "criticality": 0.1978,
       "warnings": []
@@ -7310,6 +7508,46 @@
       "fileCount": 1,
       "files": [
         "app/services/analytics_ai_providers.py"
+      ],
+      "criticality": 0.1927,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_temporary_action_grant_service_approve_grant",
+      "name": "approve_grant",
+      "entryPoint": "services_temporary_action_grant_service_approve_grant",
+      "entryPointId": "services_temporary_action_grant_service_approve_grant",
+      "path": [
+        "services_temporary_action_grant_service_approve_grant",
+        "services_temporary_action_grant_service_audit",
+        "services_temporary_action_grant_service_grant_for_actor",
+        "services_temporary_action_grant_service_require_approver",
+        "services_temporary_action_grant_service_temporarygrantmfaerror",
+        "services_temporary_action_grant_service_temporarygrantstateerror",
+        "services_temporary_action_grant_service_utcnow",
+        "services_temporary_action_grant_service_status_value",
+        "services_temporary_action_grant_service_temporarygrantnotfounderror",
+        "services_temporary_action_grant_service_active_membership",
+        "services_temporary_action_grant_service_temporarygrantauthorizationerror"
+      ],
+      "qualifiedPath": [
+        "services_temporary_action_grant_service_approve_grant",
+        "services_temporary_action_grant_service_audit",
+        "services_temporary_action_grant_service_grant_for_actor",
+        "services_temporary_action_grant_service_require_approver",
+        "services_temporary_action_grant_service_temporarygrantmfaerror",
+        "services_temporary_action_grant_service_temporarygrantstateerror",
+        "services_temporary_action_grant_service_utcnow",
+        "services_temporary_action_grant_service_status_value",
+        "services_temporary_action_grant_service_temporarygrantnotfounderror",
+        "services_temporary_action_grant_service_active_membership",
+        "services_temporary_action_grant_service_temporarygrantauthorizationerror"
+      ],
+      "depth": 2,
+      "nodeCount": 11,
+      "fileCount": 1,
+      "files": [
+        "app/services/temporary_action_grant_service.py"
       ],
       "criticality": 0.1927,
       "warnings": []
@@ -14341,6 +14579,28 @@
       "warnings": []
     },
     {
+      "id": "flow:versions_0f85dca5b98b_add_temporary_action_grants_downgrade",
+      "name": "downgrade",
+      "entryPoint": "versions_0f85dca5b98b_add_temporary_action_grants_downgrade",
+      "entryPointId": "versions_0f85dca5b98b_add_temporary_action_grants_downgrade",
+      "path": [
+        "versions_0f85dca5b98b_add_temporary_action_grants_downgrade",
+        "versions_0f85dca5b98b_add_temporary_action_grants_remove_rls"
+      ],
+      "qualifiedPath": [
+        "versions_0f85dca5b98b_add_temporary_action_grants_downgrade",
+        "versions_0f85dca5b98b_add_temporary_action_grants_remove_rls"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/0f85dca5b98b_add_temporary_action_grants.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:versions_20260408_launch_security_hardening_downgrade",
       "name": "downgrade",
       "entryPoint": "versions_20260408_launch_security_hardening_downgrade",
@@ -17878,6 +18138,28 @@
       "fileCount": 1,
       "files": [
         "app/services/waitlist_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:versions_0f85dca5b98b_add_temporary_action_grants_upgrade",
+      "name": "upgrade",
+      "entryPoint": "versions_0f85dca5b98b_add_temporary_action_grants_upgrade",
+      "entryPointId": "versions_0f85dca5b98b_add_temporary_action_grants_upgrade",
+      "path": [
+        "versions_0f85dca5b98b_add_temporary_action_grants_upgrade",
+        "versions_0f85dca5b98b_add_temporary_action_grants_install_rls"
+      ],
+      "qualifiedPath": [
+        "versions_0f85dca5b98b_add_temporary_action_grants_upgrade",
+        "versions_0f85dca5b98b_add_temporary_action_grants_install_rls"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/0f85dca5b98b_add_temporary_action_grants.py"
       ],
       "criticality": 0.16,
       "warnings": []
