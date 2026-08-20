@@ -41,7 +41,7 @@ class AuditLog(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     hotel_id = Column(
         Integer,
-        ForeignKey("hotel_configuration.id", ondelete="CASCADE"),
+        ForeignKey("hotel_configuration.id", ondelete="RESTRICT"),
         nullable=False,
     )
     table_name = Column(String(100), nullable=False)

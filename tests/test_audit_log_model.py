@@ -2,7 +2,7 @@
 TDD tests for the AuditLog model.
 
 Invariants:
-  - AuditLog is hotel-scoped (hotel_id FK with CASCADE).
+  - AuditLog is hotel-scoped (hotel_id FK with RESTRICT).
   - actor_user_id is nullable (system-triggered actions have no human actor).
   - payload_before / payload_after are raw JSON text — no ORM coercion.
   - Rows are append-only: no update route exists at the model level.
@@ -121,9 +121,9 @@ def test_audit_log_actor_nullable_for_system_actions(db):
     assert saved.action == AuditActionEnum.STATUS_CHANGE
 
 
-def test_audit_log_hotel_cascade_delete(db):
-    """When a hotel is deleted all its audit logs cascade."""
-    hotel = HotelConfiguration(id=503, hotel_name="Cascade Hotel", subscription_active=True)
+def test_audit_log_hotel_delete_is_restricted(db):
+    """Deleting a hotel cannot destroy its audit-log evidence."""
+    hotel = HotelConfiguration(id=503, hotel_name="Restricted Hotel", subscription_active=True)
     db.add(hotel)
     db.flush()
 
@@ -140,10 +140,13 @@ def test_audit_log_hotel_cascade_delete(db):
     assert count_before == 3
 
     db.delete(hotel)
-    db.commit()
+    with pytest.raises(sa.exc.IntegrityError):
+        db.commit()
+    db.rollback()
 
+    assert db.get(HotelConfiguration, 503) is not None
     count_after = db.query(AuditLog).filter_by(hotel_id=503).count()
-    assert count_after == 0
+    assert count_after == 3
 
 
 def test_audit_log_all_actions_persist(db):
