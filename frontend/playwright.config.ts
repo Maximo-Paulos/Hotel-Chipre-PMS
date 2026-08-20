@@ -189,8 +189,9 @@ export default defineConfig({
       timeout: 120_000,
       env: {
         VITE_PUBLIC_APP_HOSTNAME: "127.0.0.1",
-        VITE_ALLOW_PREVIEW_APP_HOST: "true",
-        VITE_PREVIEW_APP_HOST_SUFFIXES: ".localhost",
+        // Keep preview.localhost intentionally unrecognized so this project
+        // covers the local-dev redirect safety guard.
+        VITE_ALLOW_PREVIEW_APP_HOST: "false",
         VITE_API_URL: `${backendURL}/api`,
         VITE_BACKEND_URL: backendURL
       }
