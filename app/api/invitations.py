@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import Field
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -29,7 +30,10 @@ def get_invitation(token: str, db: Session = Depends(get_db)):
 
 
 class AcceptPayload(LoginRequest):
-    pass
+    # LoginRequest.password has no min_length -- correct there (must accept
+    # existing passwords predating any length policy change), but this class
+    # sets a *new* credential and must enforce the current minimum itself.
+    password: str = Field(min_length=12)
 
 
 @router.post("/{token}/accept", response_model=AuthResponse)
