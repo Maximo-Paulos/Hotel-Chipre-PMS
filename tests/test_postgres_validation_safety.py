@@ -459,13 +459,11 @@ def test_postgres_validation_has_no_tautological_true_assertions():
     assert tautologies == []
 
 
-def test_missing_reservation_concurrency_evidence_is_explicitly_marked():
-    pending_test = postgres_validation.test_concurrent_reservation_insert_integrity_evidence_pending
-    marks = getattr(pending_test, "pytestmark", [])
-    assert any(
-        mark.name == "skip" and "Evidence gap" in str(mark.kwargs.get("reason"))
-        for mark in marks
-    )
+def test_reservation_concurrency_evidence_is_no_longer_marked_pending():
+    concurrency_test = postgres_validation.test_concurrent_reservation_auto_assignment_does_not_double_book
+    marks = getattr(concurrency_test, "pytestmark", [])
+    assert any(mark.name == "skipif" for mark in marks)
+    assert "evidence_pending" not in concurrency_test.__name__
 
 
 @pytest.mark.parametrize(

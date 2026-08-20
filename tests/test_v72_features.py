@@ -29,6 +29,7 @@ from app.models.reservation import (
     ReservationSourceEnum,
 )
 from app.models.room import Room, RoomStatusEnum
+from app.schemas.reservation import ReservationUpdate
 from app.services.allocation_engine import (
     ReservationSlot,
     RoomSlot,
@@ -47,6 +48,7 @@ from app.services.reservation_operations_service import (
     extend_reservation_stay,
     move_reservation_room,
 )
+from app.services.reservation_service import update_reservation_fields
 
 
 def _reservation(
@@ -272,6 +274,21 @@ def test_reservation_is_motor_protected_set_on_manual_move(db, sample_guest, sam
     db.refresh(reservation)
     # BRM §8: a MANUAL move protects the reservation from motor re-optimization.
     # main expresses this as allocation_locked (renamed from is_motor_protected).
+    assert reservation.allocation_locked is True
+
+
+def test_reservation_edit_room_change_protects_manual_assignment(db, sample_guest, sample_rooms):
+    reservation = _reservation(db, code="V72-MANUAL-EDIT", guest=sample_guest, room=sample_rooms[0])
+
+    update_reservation_fields(
+        db,
+        reservation,
+        ReservationUpdate(room_id=sample_rooms[1].id),
+        hotel_id=sample_guest.hotel_id,
+        room_move_reason_code="manual_update",
+    )
+
+    assert reservation.room_id == sample_rooms[1].id
     assert reservation.allocation_locked is True
 
 

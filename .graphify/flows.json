@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-20T19:29:06.218Z",
+  "generatedAt": "2026-08-20T20:14:53.133Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -549,6 +549,34 @@
       "warnings": []
     },
     {
+      "id": "flow:master_admin_security_audit_master_action",
+      "name": "audit_master_action",
+      "entryPoint": "master_admin_security_audit_master_action",
+      "entryPointId": "master_admin_security_audit_master_action",
+      "path": [
+        "master_admin_security_audit_master_action",
+        "master_admin_security_json_or_null",
+        "master_admin_security_redact_master_admin_audit_metadata",
+        "master_admin_security_mask_audit_email",
+        "master_admin_security_normalize_audit_metadata_key"
+      ],
+      "qualifiedPath": [
+        "master_admin_security_audit_master_action",
+        "master_admin_security_json_or_null",
+        "master_admin_security_redact_master_admin_audit_metadata",
+        "master_admin_security_mask_audit_email",
+        "master_admin_security_normalize_audit_metadata_key"
+      ],
+      "depth": 2,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "app/master_admin/security.py"
+      ],
+      "criticality": 0.42,
+      "warnings": []
+    },
+    {
       "id": "flow:master_admin_security_authenticate_master_login",
       "name": "authenticate_master_login",
       "entryPoint": "master_admin_security_authenticate_master_login",
@@ -786,6 +814,34 @@
       "fileCount": 1,
       "files": [
         "scripts/agent_ops/build_shared_sandbox_bootstrap_sql.py"
+      ],
+      "criticality": 0.42,
+      "warnings": []
+    },
+    {
+      "id": "flow:master_admin_security_redact_master_admin_audit_metadata_json",
+      "name": "redact_master_admin_audit_metadata_json",
+      "entryPoint": "master_admin_security_redact_master_admin_audit_metadata_json",
+      "entryPointId": "master_admin_security_redact_master_admin_audit_metadata_json",
+      "path": [
+        "master_admin_security_redact_master_admin_audit_metadata_json",
+        "master_admin_security_json_or_null",
+        "master_admin_security_redact_master_admin_audit_metadata",
+        "master_admin_security_mask_audit_email",
+        "master_admin_security_normalize_audit_metadata_key"
+      ],
+      "qualifiedPath": [
+        "master_admin_security_redact_master_admin_audit_metadata_json",
+        "master_admin_security_json_or_null",
+        "master_admin_security_redact_master_admin_audit_metadata",
+        "master_admin_security_mask_audit_email",
+        "master_admin_security_normalize_audit_metadata_key"
+      ],
+      "depth": 2,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "app/master_admin/security.py"
       ],
       "criticality": 0.42,
       "warnings": []
@@ -1326,28 +1382,6 @@
       "fileCount": 1,
       "files": [
         "app/api/gemma_chat.py"
-      ],
-      "criticality": 0.41,
-      "warnings": []
-    },
-    {
-      "id": "flow:master_admin_security_audit_master_action",
-      "name": "audit_master_action",
-      "entryPoint": "master_admin_security_audit_master_action",
-      "entryPointId": "master_admin_security_audit_master_action",
-      "path": [
-        "master_admin_security_audit_master_action",
-        "master_admin_security_json_or_null"
-      ],
-      "qualifiedPath": [
-        "master_admin_security_audit_master_action",
-        "master_admin_security_json_or_null"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "app/master_admin/security.py"
       ],
       "criticality": 0.41,
       "warnings": []
@@ -17466,30 +17500,6 @@
       "fileCount": 1,
       "files": [
         "alembic/env.py"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_guest_service_search_guests",
-      "name": "search_guests",
-      "entryPoint": "services_guest_service_search_guests",
-      "entryPointId": "services_guest_service_search_guests",
-      "path": [
-        "services_guest_service_search_guests",
-        "services_guest_service_escape_like_term",
-        "services_guest_service_guest_search_rank"
-      ],
-      "qualifiedPath": [
-        "services_guest_service_search_guests",
-        "services_guest_service_escape_like_term",
-        "services_guest_service_guest_search_rank"
-      ],
-      "depth": 1,
-      "nodeCount": 3,
-      "fileCount": 1,
-      "files": [
-        "app/services/guest_service.py"
       ],
       "criticality": 0.16,
       "warnings": []

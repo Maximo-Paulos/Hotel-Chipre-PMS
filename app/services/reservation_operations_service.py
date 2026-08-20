@@ -752,7 +752,13 @@ def move_reservation_room(
         raise ReservationOperationsError("reason_code is required for room moves")
     reason_code = reason_code.strip()
 
-    room = db.query(Room).filter(Room.id == to_room_id, Room.hotel_id == hotel_id).first()
+    room = (
+        db.query(Room)
+        .filter(Room.id == to_room_id, Room.hotel_id == hotel_id)
+        .enable_eagerloads(False)
+        .with_for_update()
+        .first()
+    )
     if not room:
         raise ReservationOperationsError("La habitacion destino no existe para este hotel")
 

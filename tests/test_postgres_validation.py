@@ -30,7 +30,7 @@ Covers:
 - Numeric(12,2) enforced correctly
 - All constraints active
 - Deterministic PostgreSQL row-lock behavior used by allocation flows
-- Explicitly tracked evidence gap for concurrent reservation insertion
+- Concurrent reservation insertion through the reservation service
 - Multi-tenant hotel_id isolation
 - EXPLAIN ANALYZE index usage verification
 """
@@ -39,8 +39,10 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timezone
 from decimal import Decimal
+from threading import Barrier
 
 import pytest
 
@@ -325,11 +327,106 @@ def test_room_row_lock_uses_skip_locked_deterministically(pg_engine):
             setup.close()
 
 
-@pytest.mark.skip(
-    reason=(
-        "Evidence gap: deterministic two-transaction reservation insertion test "
-        "through the reservation service is not implemented yet"
-    )
-)
-def test_concurrent_reservation_insert_integrity_evidence_pending():
-    """Track the missing end-to-end double-booking concurrency evidence."""
+@skip_if_no_pg
+def test_concurrent_reservation_auto_assignment_does_not_double_book(pg_engine):
+    """Concurrent auto-assignment requests serialize on the candidate room row."""
+    from sqlalchemy.orm import sessionmaker
+
+    from app.models.guest import Guest
+    from app.models.hotel_config import HotelConfiguration
+    from app.models.reservation import Reservation
+    from app.models.room import Room, RoomCategory, RoomStatusEnum
+    from app.schemas.reservation import ReservationCreate
+    from app.services.reservation_service import ReservationError, create_reservation
+
+    hotel_id = 9902
+    Session = sessionmaker(bind=pg_engine, expire_on_commit=False)
+    setup = Session()
+    try:
+        hotel = HotelConfiguration(id=hotel_id, hotel_name="PG-Concurrency-Test", subscription_active=True)
+        category = RoomCategory(
+            hotel_id=hotel_id,
+            name="PG Concurrency Category",
+            code="PG-CONCURRENCY",
+            base_price_per_night=Decimal("100.00"),
+            max_occupancy=2,
+        )
+        guest_a = Guest(
+            hotel_id=hotel_id,
+            first_name="Synthetic",
+            last_name="Concurrency A",
+            terms_accepted=True,
+        )
+        guest_b = Guest(
+            hotel_id=hotel_id,
+            first_name="Synthetic",
+            last_name="Concurrency B",
+            terms_accepted=True,
+        )
+        setup.add_all([hotel, category, guest_a, guest_b])
+        setup.flush()
+        room = Room(
+            hotel_id=hotel_id,
+            category_id=category.id,
+            room_number="PG-CONCURRENCY-1",
+            floor=1,
+            status=RoomStatusEnum.AVAILABLE,
+            is_active=True,
+        )
+        setup.add(room)
+        setup.commit()
+        category_id = category.id
+        guest_ids = (guest_a.id, guest_b.id)
+    finally:
+        setup.close()
+
+    ready = Barrier(2)
+
+    def attempt(guest_id: int) -> tuple[str, int | None, str | None]:
+        db = Session()
+        try:
+            ready.wait(timeout=10)
+            reservation = create_reservation(
+                db,
+                ReservationCreate(
+                    guest_id=guest_id,
+                    category_id=category_id,
+                    check_in_date=date(2026, 10, 1),
+                    check_out_date=date(2026, 10, 4),
+                ),
+                hotel_id=hotel_id,
+            )
+            db.commit()
+            return "assigned", reservation.room_id, None
+        except ReservationError as exc:
+            db.rollback()
+            return "rejected", None, str(exc)
+        except Exception as exc:  # pragma: no cover - makes unexpected DB failures explicit
+            db.rollback()
+            return "error", None, repr(exc)
+        finally:
+            db.close()
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            results = list(executor.map(attempt, guest_ids))
+
+        assert sorted(result[0] for result in results) == ["assigned", "rejected"]
+        assert not [result for result in results if result[0] == "error"]
+
+        check = Session()
+        try:
+            assert check.query(Reservation).filter(Reservation.hotel_id == hotel_id).count() == 1
+        finally:
+            check.close()
+    finally:
+        cleanup = Session()
+        try:
+            cleanup.query(Reservation).filter(Reservation.hotel_id == hotel_id).delete(synchronize_session=False)
+            cleanup.query(Guest).filter(Guest.hotel_id == hotel_id).delete(synchronize_session=False)
+            cleanup.query(Room).filter(Room.hotel_id == hotel_id).delete(synchronize_session=False)
+            cleanup.query(RoomCategory).filter(RoomCategory.hotel_id == hotel_id).delete(synchronize_session=False)
+            cleanup.query(HotelConfiguration).filter(HotelConfiguration.id == hotel_id).delete(synchronize_session=False)
+            cleanup.commit()
+        finally:
+            cleanup.close()
