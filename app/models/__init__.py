@@ -91,6 +91,10 @@ from app.models.permission import (
     HotelPermissionOverride,
     UserPermissionOverride,
 )
+from app.models.temporary_action_grant import (
+    TemporaryActionGrant,
+    TemporaryActionGrantStatusEnum,
+)
 from app.models.laundry import LaundryBatch, LaundryItem
 from app.models.laundry_vendor import LaundryVendor, LaundryVendorPrice, LaundryRemito, LaundryRemitoLine
 from app.models.stock import StockItem, StockLocation, StockMovement
@@ -255,6 +259,8 @@ __all__ = [
     "RolePermissionDefault",
     "HotelPermissionOverride",
     "UserPermissionOverride",
+    "TemporaryActionGrant",
+    "TemporaryActionGrantStatusEnum",
     "LaundryBatch",
     "LaundryItem",
     "StockItem",

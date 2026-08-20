@@ -308,13 +308,15 @@ Depends on: `TECH-0010`, `TECH-0030`
 
 ### TECH-0041 — Autorización temporal de una sola acción
 
-Status: `AUDIT_REQUIRED`  
+Status: `IN_PROGRESS`
 Priority: `P1`  
 Depends on: `TECH-0023`, `TECH-0040`, `TECH-0070`
 
 **Goal:** recepcionista solicita una acción no permitida (p. ej. descuento), Owner/Manager aprueba y se emite grant single-use.
 
 **Required:** solicitud ligada a hotel, actor, sesión, permiso, recurso, parámetros/monto, motivo y expiración; aprobador autorizado; TOTP autentica al aprobador y no funciona como PIN maestro; token hasheado; consumo atómico; idempotencia; estados pending/approved/denied/used/expired/revoked.
+
+**Implementación TECH-0041 (2026-08-20):** el núcleo de solicitud, aprobación MFA, token single-use hasheado, consumo atómico, denegación, revocación, expiración best-effort y rutas tenant-scoped está implementado. La integración del grant en acciones de negocio reales (pagos, descuentos u otras operaciones) y el vínculo a sesión/parámetros/monto quedan fuera de este cambio.
 
 ---
 
