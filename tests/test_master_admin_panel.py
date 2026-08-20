@@ -388,7 +388,9 @@ def test_master_dashboard_summary_counts_subscriptions_across_hotels(master_clie
 
     hotels = client.get("/api/master-admin/dashboard/hotels")
     assert hotels.status_code == 200, hotels.text
-    assert {item["hotel_id"] for item in hotels.json()["items"]} == {1, 2, 3}
+    items = hotels.json()["items"]
+    assert {item["hotel_id"] for item in items} == {1, 2, 3}
+    assert all("owner_email" not in item for item in items)
 
 
 def test_require_master_admin_sets_master_admin_rls_context(master_client, monkeypatch):
@@ -547,6 +549,54 @@ def test_master_policy_update_exempts_hotel_and_user(master_client, monkeypatch)
         assert decision.can_write is True
         assert decision.reason == "exempt"
         assert db.query(MasterAdminAuditEvent).filter(MasterAdminAuditEvent.action == "master_admin_update_billing_policy").count() == 1
+    finally:
+        db.close()
+
+
+@pytest.mark.parametrize(
+    ("path", "action"),
+    [
+        ("/api/master-admin/email/connect", "master_admin_email_connect"),
+        ("/api/master-admin/email/disconnect", "master_admin_email_disconnect"),
+    ],
+)
+def test_master_retired_email_actions_are_csrf_protected_and_audited(master_client, monkeypatch, path, action):
+    client, SessionLocal = master_client
+    monkeypatch.setenv("MASTER_ADMIN_PIN", "654321")
+    get_settings.cache_clear()
+
+    db = SessionLocal()
+    try:
+        admin = _seed_platform_admin(db)
+        admin_id = admin.id
+        db.commit()
+    finally:
+        db.close()
+
+    login = client.post(
+        "/api/master-admin/auth/login",
+        json={"email": "platform-admin@example.com", "password": "Master123!", "pin": "654321"},
+    )
+    assert login.status_code == 200, login.text
+    csrf_token = login.cookies.get("master_admin_csrf")
+    assert csrf_token
+
+    missing_csrf = client.post(path)
+    assert missing_csrf.status_code == 403, missing_csrf.text
+
+    response = client.post(path, headers={"X-CSRF-Token": csrf_token})
+    assert response.status_code == 410, response.text
+
+    db = SessionLocal()
+    try:
+        event = db.query(MasterAdminAuditEvent).filter(MasterAdminAuditEvent.action == action).one()
+        assert event.actor_user_id == admin_id
+        assert event.outcome == "failed"
+        assert event.target_type is None
+        assert event.target_id is None
+        assert event.request_path == path
+        assert event.request_method == "POST"
+        assert json.loads(event.metadata_json or "{}") == {"reason": "retired_endpoint"}
     finally:
         db.close()
 
