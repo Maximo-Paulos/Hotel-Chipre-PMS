@@ -1,4 +1,5 @@
 import email_validator
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
@@ -106,3 +107,11 @@ class MfaRecoveryCodesResponse(BaseModel):
 
 class ResetCodeValidationResponse(BaseModel):
     valid: bool
+
+
+class UserSessionRead(BaseModel):
+    id: int
+    created_at: datetime
+    last_seen_at: datetime
+    device_label: str
+    current: bool = False

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-20T16:49:03.455Z",
+  "generatedAt": "2026-08-20T17:29:10.226Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -16,23 +16,25 @@
         "api_auth_build_auth_response",
         "api_auth_build_login_response",
         "api_auth_pick_default_hotel_id",
-        "api_auth_issue_auth_response"
+        "api_auth_issue_auth_response",
+        "api_auth_attach_user_session_cookies"
       ],
       "qualifiedPath": [
         "api_auth_login",
         "api_auth_build_auth_response",
         "api_auth_build_login_response",
         "api_auth_pick_default_hotel_id",
-        "api_auth_issue_auth_response"
+        "api_auth_issue_auth_response",
+        "api_auth_attach_user_session_cookies"
       ],
-      "depth": 2,
-      "nodeCount": 5,
+      "depth": 3,
+      "nodeCount": 6,
       "fileCount": 2,
       "files": [
         "app/api/auth.py",
         "frontend/src/api/auth.ts"
       ],
-      "criticality": 0.495,
+      "criticality": 0.505,
       "warnings": []
     },
     {
@@ -42,6 +44,7 @@
       "entryPointId": "api_auth_register",
       "path": [
         "api_auth_register",
+        "api_auth_attach_user_session_cookies",
         "api_auth_build_auth_response",
         "api_auth_issue_email_token",
         "api_auth_pick_default_hotel_id",
@@ -49,13 +52,14 @@
       ],
       "qualifiedPath": [
         "api_auth_register",
+        "api_auth_attach_user_session_cookies",
         "api_auth_build_auth_response",
         "api_auth_issue_email_token",
         "api_auth_pick_default_hotel_id",
         "api_auth_generate_code"
       ],
       "depth": 2,
-      "nodeCount": 5,
+      "nodeCount": 6,
       "fileCount": 2,
       "files": [
         "app/api/auth.py",
@@ -197,6 +201,7 @@
         "api_auth_issue_auth_response",
         "api_auth_reset_mfa_attempts",
         "api_auth_mfa_attempt_key",
+        "api_auth_attach_user_session_cookies",
         "api_auth_build_auth_response",
         "api_auth_pick_default_hotel_id"
       ],
@@ -206,11 +211,12 @@
         "api_auth_issue_auth_response",
         "api_auth_reset_mfa_attempts",
         "api_auth_mfa_attempt_key",
+        "api_auth_attach_user_session_cookies",
         "api_auth_build_auth_response",
         "api_auth_pick_default_hotel_id"
       ],
       "depth": 3,
-      "nodeCount": 7,
+      "nodeCount": 8,
       "fileCount": 1,
       "files": [
         "app/api/auth.py"
@@ -308,6 +314,36 @@
       "fileCount": 1,
       "files": [
         "app/master_admin/email_provider.py"
+      ],
+      "criticality": 0.43,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_auth_google_login",
+      "name": "google_login",
+      "entryPoint": "api_auth_google_login",
+      "entryPointId": "api_auth_google_login",
+      "path": [
+        "api_auth_google_login",
+        "api_auth_build_auth_response",
+        "api_auth_build_login_response",
+        "api_auth_pick_default_hotel_id",
+        "api_auth_issue_auth_response",
+        "api_auth_attach_user_session_cookies"
+      ],
+      "qualifiedPath": [
+        "api_auth_google_login",
+        "api_auth_build_auth_response",
+        "api_auth_build_login_response",
+        "api_auth_pick_default_hotel_id",
+        "api_auth_issue_auth_response",
+        "api_auth_attach_user_session_cookies"
+      ],
+      "depth": 3,
+      "nodeCount": 6,
+      "fileCount": 1,
+      "files": [
+        "app/api/auth.py"
       ],
       "criticality": 0.43,
       "warnings": []
@@ -416,6 +452,36 @@
       "fileCount": 1,
       "files": [
         "scripts/scale/staged_http_load.py"
+      ],
+      "criticality": 0.43,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_auth_reset_password",
+      "name": "reset_password",
+      "entryPoint": "api_auth_reset_password",
+      "entryPointId": "api_auth_reset_password",
+      "path": [
+        "api_auth_reset_password",
+        "api_auth_build_auth_response",
+        "api_auth_build_login_response",
+        "api_auth_pick_default_hotel_id",
+        "api_auth_issue_auth_response",
+        "api_auth_attach_user_session_cookies"
+      ],
+      "qualifiedPath": [
+        "api_auth_reset_password",
+        "api_auth_build_auth_response",
+        "api_auth_build_login_response",
+        "api_auth_pick_default_hotel_id",
+        "api_auth_issue_auth_response",
+        "api_auth_attach_user_session_cookies"
+      ],
+      "depth": 3,
+      "nodeCount": 6,
+      "fileCount": 1,
+      "files": [
+        "app/api/auth.py"
       ],
       "criticality": 0.43,
       "warnings": []
@@ -699,34 +765,6 @@
       "warnings": []
     },
     {
-      "id": "flow:api_auth_google_login",
-      "name": "google_login",
-      "entryPoint": "api_auth_google_login",
-      "entryPointId": "api_auth_google_login",
-      "path": [
-        "api_auth_google_login",
-        "api_auth_build_auth_response",
-        "api_auth_build_login_response",
-        "api_auth_pick_default_hotel_id",
-        "api_auth_issue_auth_response"
-      ],
-      "qualifiedPath": [
-        "api_auth_google_login",
-        "api_auth_build_auth_response",
-        "api_auth_build_login_response",
-        "api_auth_pick_default_hotel_id",
-        "api_auth_issue_auth_response"
-      ],
-      "depth": 2,
-      "nodeCount": 5,
-      "fileCount": 1,
-      "files": [
-        "app/api/auth.py"
-      ],
-      "criticality": 0.42,
-      "warnings": []
-    },
-    {
       "id": "flow:agent_ops_build_shared_sandbox_bootstrap_sql_main",
       "name": "main",
       "entryPoint": "agent_ops_build_shared_sandbox_bootstrap_sql_main",
@@ -750,6 +788,30 @@
       "fileCount": 1,
       "files": [
         "scripts/agent_ops/build_shared_sandbox_bootstrap_sql.py"
+      ],
+      "criticality": 0.42,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_auth_refresh_session",
+      "name": "refresh_session",
+      "entryPoint": "api_auth_refresh_session",
+      "entryPointId": "api_auth_refresh_session",
+      "path": [
+        "api_auth_refresh_session",
+        "api_auth_build_auth_response",
+        "api_auth_pick_default_hotel_id"
+      ],
+      "qualifiedPath": [
+        "api_auth_refresh_session",
+        "api_auth_build_auth_response",
+        "api_auth_pick_default_hotel_id"
+      ],
+      "depth": 2,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/api/auth.py"
       ],
       "criticality": 0.42,
       "warnings": []
@@ -860,34 +922,6 @@
       "fileCount": 1,
       "files": [
         "app/master_admin/security.py"
-      ],
-      "criticality": 0.42,
-      "warnings": []
-    },
-    {
-      "id": "flow:api_auth_reset_password",
-      "name": "reset_password",
-      "entryPoint": "api_auth_reset_password",
-      "entryPointId": "api_auth_reset_password",
-      "path": [
-        "api_auth_reset_password",
-        "api_auth_build_auth_response",
-        "api_auth_build_login_response",
-        "api_auth_pick_default_hotel_id",
-        "api_auth_issue_auth_response"
-      ],
-      "qualifiedPath": [
-        "api_auth_reset_password",
-        "api_auth_build_auth_response",
-        "api_auth_build_login_response",
-        "api_auth_pick_default_hotel_id",
-        "api_auth_issue_auth_response"
-      ],
-      "depth": 2,
-      "nodeCount": 5,
-      "fileCount": 1,
-      "files": [
-        "app/api/auth.py"
       ],
       "criticality": 0.42,
       "warnings": []
@@ -1113,16 +1147,18 @@
       "entryPointId": "api_auth_verify_email",
       "path": [
         "api_auth_verify_email",
+        "api_auth_attach_user_session_cookies",
         "api_auth_build_auth_response",
         "api_auth_pick_default_hotel_id"
       ],
       "qualifiedPath": [
         "api_auth_verify_email",
+        "api_auth_attach_user_session_cookies",
         "api_auth_build_auth_response",
         "api_auth_pick_default_hotel_id"
       ],
       "depth": 2,
-      "nodeCount": 3,
+      "nodeCount": 4,
       "fileCount": 1,
       "files": [
         "app/api/auth.py"
@@ -1383,6 +1419,34 @@
       "warnings": []
     },
     {
+      "id": "flow:services_user_session_service_create_session",
+      "name": "create_session",
+      "entryPoint": "services_user_session_service_create_session",
+      "entryPointId": "services_user_session_service_create_session",
+      "path": [
+        "services_user_session_service_create_session",
+        "services_user_session_service_device_label_from_request",
+        "services_user_session_service_hash_value",
+        "services_user_session_service_issue_token",
+        "services_user_session_service_now"
+      ],
+      "qualifiedPath": [
+        "services_user_session_service_create_session",
+        "services_user_session_service_device_label_from_request",
+        "services_user_session_service_hash_value",
+        "services_user_session_service_issue_token",
+        "services_user_session_service_now"
+      ],
+      "depth": 1,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "app/services/user_session_service.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
       "id": "flow:services_security_create_signed_token",
       "name": "create_signed_token",
       "entryPoint": "services_security_create_signed_token",
@@ -1580,6 +1644,30 @@
       "fileCount": 1,
       "files": [
         "app/dependencies/api_key_auth.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_user_session_service_list_active_sessions",
+      "name": "list_active_sessions",
+      "entryPoint": "services_user_session_service_list_active_sessions",
+      "entryPointId": "services_user_session_service_list_active_sessions",
+      "path": [
+        "services_user_session_service_list_active_sessions",
+        "services_user_session_service_as_aware",
+        "services_user_session_service_now"
+      ],
+      "qualifiedPath": [
+        "services_user_session_service_list_active_sessions",
+        "services_user_session_service_as_aware",
+        "services_user_session_service_now"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/services/user_session_service.py"
       ],
       "criticality": 0.41,
       "warnings": []
@@ -1839,6 +1927,50 @@
       "warnings": []
     },
     {
+      "id": "flow:services_user_session_service_revoke_all_sessions",
+      "name": "revoke_all_sessions",
+      "entryPoint": "services_user_session_service_revoke_all_sessions",
+      "entryPointId": "services_user_session_service_revoke_all_sessions",
+      "path": [
+        "services_user_session_service_revoke_all_sessions",
+        "services_user_session_service_now"
+      ],
+      "qualifiedPath": [
+        "services_user_session_service_revoke_all_sessions",
+        "services_user_session_service_now"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/services/user_session_service.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_user_session_service_revoke_session",
+      "name": "revoke_session",
+      "entryPoint": "services_user_session_service_revoke_session",
+      "entryPointId": "services_user_session_service_revoke_session",
+      "path": [
+        "services_user_session_service_revoke_session",
+        "services_user_session_service_now"
+      ],
+      "qualifiedPath": [
+        "services_user_session_service_revoke_session",
+        "services_user_session_service_now"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/services/user_session_service.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
       "id": "flow:services_permission_service_role_permissions",
       "name": "role_permissions",
       "entryPoint": "services_permission_service_role_permissions",
@@ -1891,6 +2023,28 @@
       "warnings": []
     },
     {
+      "id": "flow:services_user_session_service_session_matches_token",
+      "name": "session_matches_token",
+      "entryPoint": "services_user_session_service_session_matches_token",
+      "entryPointId": "services_user_session_service_session_matches_token",
+      "path": [
+        "services_user_session_service_session_matches_token",
+        "services_user_session_service_hash_value"
+      ],
+      "qualifiedPath": [
+        "services_user_session_service_session_matches_token",
+        "services_user_session_service_hash_value"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/services/user_session_service.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
       "id": "flow:master_admin_security_set_master_session_cookies",
       "name": "set_master_session_cookies",
       "entryPoint": "master_admin_security_set_master_session_cookies",
@@ -1912,6 +2066,30 @@
       "fileCount": 1,
       "files": [
         "app/master_admin/security.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_user_session_service_set_user_session_cookies",
+      "name": "set_user_session_cookies",
+      "entryPoint": "services_user_session_service_set_user_session_cookies",
+      "entryPointId": "services_user_session_service_set_user_session_cookies",
+      "path": [
+        "services_user_session_service_set_user_session_cookies",
+        "services_user_session_service_session_cookie_samesite",
+        "services_user_session_service_session_cookie_secure"
+      ],
+      "qualifiedPath": [
+        "services_user_session_service_set_user_session_cookies",
+        "services_user_session_service_session_cookie_samesite",
+        "services_user_session_service_session_cookie_secure"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/services/user_session_service.py"
       ],
       "criticality": 0.41,
       "warnings": []
@@ -2050,6 +2228,36 @@
       "fileCount": 1,
       "files": [
         "frontend/src/hooks/usePermissions.ts"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_user_session_service_validate_and_touch_session",
+      "name": "validate_and_touch_session",
+      "entryPoint": "services_user_session_service_validate_and_touch_session",
+      "entryPointId": "services_user_session_service_validate_and_touch_session",
+      "path": [
+        "services_user_session_service_validate_and_touch_session",
+        "services_user_session_service_as_aware",
+        "services_user_session_service_csrf_double_submit_matches",
+        "services_user_session_service_hash_value",
+        "services_user_session_service_issue_token",
+        "services_user_session_service_now"
+      ],
+      "qualifiedPath": [
+        "services_user_session_service_validate_and_touch_session",
+        "services_user_session_service_as_aware",
+        "services_user_session_service_csrf_double_submit_matches",
+        "services_user_session_service_hash_value",
+        "services_user_session_service_issue_token",
+        "services_user_session_service_now"
+      ],
+      "depth": 1,
+      "nodeCount": 6,
+      "fileCount": 1,
+      "files": [
+        "app/services/user_session_service.py"
       ],
       "criticality": 0.41,
       "warnings": []

@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 import secrets
 
 import pyotp
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token as google_id_token
 from sqlalchemy.orm import Session
@@ -37,6 +37,7 @@ from app.schemas.auth import (
     RequestCode,
     ResetPasswordRequest,
     ResetCodeValidationResponse,
+    UserSessionRead,
     UserInfo,
     VerifyCodeRequest,
 )
@@ -58,6 +59,19 @@ from app.services.external_effects_policy import (
 )
 from app.services.permission_service import get_effective_permissions
 from app.services import mfa_service
+from app.services.user_session_service import (
+    USER_CSRF_COOKIE_NAME,
+    USER_SESSION_COOKIE_NAME,
+    clear_user_session_cookies,
+    create_session,
+    csrf_double_submit_matches,
+    list_active_sessions,
+    revoke_all_sessions,
+    revoke_session,
+    session_matches_token,
+    set_user_session_cookies,
+    validate_and_touch_session,
+)
 
 router = APIRouter(prefix="/api/auth", tags=["Auth"])
 LOGGER = logging.getLogger(__name__)
@@ -153,15 +167,39 @@ def _build_auth_response(db: Session, user: User, requested_hotel_id: int | None
     )
 
 
-def _issue_auth_response(db: Session, user: User) -> AuthResponse:
+def _attach_user_session_cookies(
+    db: Session,
+    user: User,
+    request: Request,
+    response: Response,
+) -> None:
+    _session, session_token, csrf_token = create_session(db, user, request)
+    set_user_session_cookies(response, session_token, csrf_token)
+    db.commit()
+
+
+def _issue_auth_response(
+    db: Session,
+    user: User,
+    request: Request | None = None,
+    response: Response | None = None,
+) -> AuthResponse:
     user.last_login = datetime.now(timezone.utc)
     db.add(user)
     db.commit()
     db.refresh(user)
-    return _build_auth_response(db, user)
+    auth_response = _build_auth_response(db, user)
+    if request is not None and response is not None:
+        _attach_user_session_cookies(db, user, request, response)
+    return auth_response
 
 
-def _build_login_response(db: Session, user: User) -> AuthResponse | MfaChallengeResponse:
+def _build_login_response(
+    db: Session,
+    user: User,
+    request: Request | None = None,
+    response: Response | None = None,
+) -> AuthResponse | MfaChallengeResponse:
     """Return a session only after the required account MFA factor succeeds."""
     if mfa_service.get_active_mfa_secret(db, user.id):
         challenge = create_signed_token(
@@ -177,7 +215,7 @@ def _build_login_response(db: Session, user: User) -> AuthResponse | MfaChalleng
             expires_in=MFA_LOGIN_CHALLENGE_MINUTES * 60,
         )
 
-    return _issue_auth_response(db, user)
+    return _issue_auth_response(db, user, request=request, response=response)
 
 
 def _mfa_attempt_key(action: str, user_id: int) -> str:
@@ -202,7 +240,12 @@ def _issue_email_token(db: Session, email: str, token_type: str) -> str:
 
 
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
-def register(payload: RegisterRequest, request: Request, db: Session = Depends(get_db)):
+def register(
+    payload: RegisterRequest,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+):
     # Registration always uses a fresh, distinct email, so the duplicate-email
     # check below cannot throttle repeated farming/spam from one source the
     # way it can for login/reset. Rate limit by source IP instead.
@@ -238,7 +281,9 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
         db.rollback()
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
-    return _build_auth_response(db, user)
+    auth_response = _build_auth_response(db, user)
+    _attach_user_session_cookies(db, user, request, response)
+    return auth_response
 
 
 @router.post("/request-verify")
@@ -268,7 +313,12 @@ def request_verify(payload: RequestCode, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=AuthResponse | MfaChallengeResponse)
-def login(payload: LoginRequest, db: Session = Depends(get_db)):
+def login(
+    payload: LoginRequest,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+):
     key = payload.email.lower()
     settings = get_settings()
     login_limiter.limit = getattr(settings, "LOGIN_RATE_LIMIT", 5)
@@ -291,11 +341,16 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
     db.commit()
     login_limiter.reset(key, db=db)
     db.commit()
-    return _build_login_response(db, user)
+    return _build_login_response(db, user, request=request, response=response)
 
 
 @router.post("/login/mfa", response_model=AuthResponse)
-def complete_mfa_login(payload: MfaLoginRequest, db: Session = Depends(get_db)):
+def complete_mfa_login(
+    payload: MfaLoginRequest,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+):
     challenge = decode_signed_token(payload.mfa_token)
     if challenge.get("purpose") != "mfa_login":
         raise HTTPException(status_code=401, detail="Desafio MFA invalido")
@@ -324,11 +379,16 @@ def complete_mfa_login(payload: MfaLoginRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=401, detail="Codigo MFA invalido o ya utilizado")
 
     _reset_mfa_attempts(db, "login", user.id)
-    return _issue_auth_response(db, user)
+    return _issue_auth_response(db, user, request=request, response=response)
 
 
 @router.post("/google", response_model=AuthResponse | MfaChallengeResponse)
-def google_login(payload: GoogleAuthRequest, db: Session = Depends(get_db)):
+def google_login(
+    payload: GoogleAuthRequest,
+    request: Request = None,
+    response: Response = None,
+    db: Session = Depends(get_db),
+):
     """
     "Sign in with Google" via Google Identity Services' ID-token flow: the
     frontend never talks to our backend during the OAuth dance, it just hands
@@ -419,11 +479,16 @@ def google_login(payload: GoogleAuthRequest, db: Session = Depends(get_db)):
     db.add(user)
     db.commit()
     db.refresh(user)
-    return _build_login_response(db, user)
+    return _build_login_response(db, user, request=request, response=response)
 
 
 @router.post("/verify-email", response_model=AuthResponse)
-def verify_email(payload: VerifyCodeRequest, db: Session = Depends(get_db)):
+def verify_email(
+    payload: VerifyCodeRequest,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+):
     key = payload.email.lower()
     if not code_guess_limiter.allow(f"email_verification:{key}", db=db):
         db.commit()
@@ -444,7 +509,9 @@ def verify_email(payload: VerifyCodeRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     db.commit()
     db.refresh(user)
-    return _build_auth_response(db, user)
+    auth_response = _build_auth_response(db, user)
+    _attach_user_session_cookies(db, user, request, response)
+    return auth_response
 
 
 @router.post("/request-reset")
@@ -486,7 +553,12 @@ def validate_reset(payload: VerifyCodeRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/reset-password", response_model=AuthResponse | MfaChallengeResponse)
-def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db)):
+def reset_password(
+    payload: ResetPasswordRequest,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+):
     key = payload.email.lower()
     if not code_guess_limiter.allow(f"password_reset:{key}", db=db):
         db.commit()
@@ -502,10 +574,13 @@ def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db))
     user.last_login = datetime.now(timezone.utc)
     # Revoke every token issued before this reset (see users.token_version).
     user.token_version = (user.token_version or 0) + 1
+    # Password reset is also a session-compromise recovery event: old browser
+    # sessions must not survive even though this endpoint issues a fresh one.
+    revoke_all_sessions(db, user.id)
     db.add(user)
     db.commit()
     db.refresh(user)
-    return _build_login_response(db, user)
+    return _build_login_response(db, user, request=request, response=response)
 
 
 @router.post("/mfa/enroll", response_model=MfaEnrollmentResponse)
@@ -595,6 +670,100 @@ def regenerate_mfa_recovery_codes(
     _reset_mfa_attempts(db, "regenerate", user.id)
     db.commit()
     return MfaRecoveryCodesResponse(recovery_codes=recovery_codes)
+
+
+@router.post("/session/refresh", response_model=AuthResponse)
+def refresh_session(
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+):
+    """Rotate a valid browser session and issue a fresh short-lived JWT."""
+
+    session_token = request.cookies.get(USER_SESSION_COOKIE_NAME)
+    csrf_cookie = request.cookies.get(USER_CSRF_COOKIE_NAME)
+    if not session_token or not csrf_cookie:
+        raise HTTPException(status_code=401, detail="Sesion invalida o expirada")
+
+    validated = validate_and_touch_session(
+        db,
+        session_token,
+        request.headers.get("X-CSRF-Token"),
+        csrf_cookie,
+    )
+    if validated is None:
+        raise HTTPException(status_code=401, detail="Sesion invalida o expirada")
+
+    session, new_session_token = validated
+    user = db.get(User, session.user_id)
+    if user is None or not user.is_active:
+        revoke_session(db, session.id, session.user_id)
+        db.commit()
+        raise HTTPException(status_code=401, detail="Usuario no valido")
+
+    auth_response = _build_auth_response(db, user)
+    db.commit()
+    set_user_session_cookies(response, new_session_token, csrf_cookie)
+    return auth_response
+
+
+@router.get("/sessions", response_model=list[UserSessionRead])
+def list_sessions(
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """List active sessions owned by the Bearer-authenticated user."""
+
+    current_token = request.cookies.get(USER_SESSION_COOKIE_NAME)
+    return [
+        UserSessionRead(
+            id=session.id,
+            created_at=session.created_at,
+            last_seen_at=session.last_seen_at,
+            device_label=session.device_label,
+            current=session_matches_token(session, current_token),
+        )
+        for session in list_active_sessions(db, user.id)
+    ]
+
+
+@router.delete("/sessions/{session_id}")
+def delete_session(
+    session_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    session = revoke_session(db, session_id, user.id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Sesion no encontrada")
+    db.commit()
+    return {"revoked": True, "session_id": session_id}
+
+
+@router.post("/logout")
+def logout(
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+):
+    """Revoke the current cookie session and clear both browser cookies."""
+
+    session_token = request.cookies.get(USER_SESSION_COOKIE_NAME)
+    csrf_cookie = request.cookies.get(USER_CSRF_COOKIE_NAME)
+    csrf_header = request.headers.get("X-CSRF-Token")
+    if session_token and not csrf_double_submit_matches(csrf_header, csrf_cookie):
+        raise HTTPException(status_code=403, detail="CSRF invalido")
+
+    if session_token:
+        validated = validate_and_touch_session(db, session_token, csrf_header, csrf_cookie)
+        if validated is not None:
+            session, _new_session_token = validated
+            revoke_session(db, session.id, session.user_id)
+            db.commit()
+
+    clear_user_session_cookies(response)
+    return {"logged_out": True}
 
 
 @router.get("/me", response_model=UserInfo)

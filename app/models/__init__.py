@@ -63,6 +63,7 @@ from app.models.allocation import (
 from app.models.connection import Connection
 from app.models.onboarding import OnboardingState
 from app.models.user import User
+from app.models.user_session import UserSession
 from app.models.user_mfa import UserMfaSecret, UserMfaRecoveryCode
 from app.models.hotel_membership import HotelMembership
 from app.models.subscription import SubscriptionPlan, HotelSubscription, SubscriptionEntitlement, HotelEntitlementOverride
@@ -202,6 +203,7 @@ __all__ = [
     "Connection",
     "OnboardingState",
     "User",
+    "UserSession",
     "UserMfaSecret",
     "UserMfaRecoveryCode",
     "HotelMembership",
