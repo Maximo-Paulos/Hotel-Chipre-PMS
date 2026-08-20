@@ -68,7 +68,7 @@ from app.models.user_mfa import UserMfaSecret, UserMfaRecoveryCode
 from app.models.hotel_membership import HotelMembership
 from app.models.invitation import StaffInvitation
 from app.models.subscription import SubscriptionPlan, HotelSubscription, SubscriptionEntitlement, HotelEntitlementOverride
-from app.models.subscription_v2 import Subscription, SubscriptionEvent
+from app.models.subscription_v2 import Subscription, SubscriptionEvent, SubscriptionAdjustment
 from app.models.integration import IntegrationCatalog, IntegrationConnection, IntegrationEvent
 from app.models.payment_link_test import PaymentLinkTest
 from app.models.payment_surcharge import PaymentSurcharge, PaymentSurchargeTypeEnum
@@ -219,6 +219,7 @@ __all__ = [
     "HotelEntitlementOverride",
     "Subscription",
     "SubscriptionEvent",
+    "SubscriptionAdjustment",
     "IntegrationCatalog",
     "IntegrationConnection",
     "IntegrationEvent",

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-20T21:38:06.909Z",
+  "generatedAt": "2026-08-20T21:48:38.718Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -615,34 +615,6 @@
       ],
       "depth": 2,
       "nodeCount": 12,
-      "fileCount": 1,
-      "files": [
-        "app/master_admin/security.py"
-      ],
-      "criticality": 0.42,
-      "warnings": []
-    },
-    {
-      "id": "flow:master_admin_security_authenticate_master_mfa_login",
-      "name": "authenticate_master_mfa_login",
-      "entryPoint": "master_admin_security_authenticate_master_mfa_login",
-      "entryPointId": "master_admin_security_authenticate_master_mfa_login",
-      "path": [
-        "master_admin_security_authenticate_master_mfa_login",
-        "master_admin_security_allow_master_admin_mfa_attempt",
-        "master_admin_security_authorize_user_for_master_panel",
-        "master_admin_security_reset_master_admin_mfa_attempts",
-        "master_admin_security_master_admin_mfa_attempt_key"
-      ],
-      "qualifiedPath": [
-        "master_admin_security_authenticate_master_mfa_login",
-        "master_admin_security_allow_master_admin_mfa_attempt",
-        "master_admin_security_authorize_user_for_master_panel",
-        "master_admin_security_reset_master_admin_mfa_attempts",
-        "master_admin_security_master_admin_mfa_attempt_key"
-      ],
-      "depth": 2,
-      "nodeCount": 5,
       "fileCount": 1,
       "files": [
         "app/master_admin/security.py"
@@ -1492,28 +1464,6 @@
       "fileCount": 1,
       "files": [
         "app/master_admin/email_provider.py"
-      ],
-      "criticality": 0.41,
-      "warnings": []
-    },
-    {
-      "id": "flow:master_admin_router_complete_mfa_login",
-      "name": "complete_mfa_login",
-      "entryPoint": "master_admin_router_complete_mfa_login",
-      "entryPointId": "master_admin_router_complete_mfa_login",
-      "path": [
-        "master_admin_router_complete_mfa_login",
-        "master_admin_router_serialize_user"
-      ],
-      "qualifiedPath": [
-        "master_admin_router_complete_mfa_login",
-        "master_admin_router_serialize_user"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "app/master_admin/router.py"
       ],
       "criticality": 0.41,
       "warnings": []
@@ -10426,27 +10376,41 @@
       "path": [
         "services_subscription_entitlements_grant_comped",
         "services_subscription_entitlements_actor_payload",
+        "services_subscription_entitlements_as_utc",
+        "services_subscription_entitlements_assert_same_adjustment",
+        "services_subscription_entitlements_default_adjustment_idempotency_key",
+        "services_subscription_entitlements_normalize_adjustment_reason",
         "services_subscription_entitlements_now",
         "services_subscription_entitlements_plan_defaults",
+        "services_subscription_entitlements_record_comped_adjustment",
         "services_subscription_entitlements_record_event",
         "services_subscription_entitlements_sync_legacy_tables",
         "services_subscription_entitlements_upsert_subscription",
+        "services_subscription_entitlements_actor_role",
+        "services_subscription_entitlements_actor_user_id",
         "services_subscription_entitlements_apply_plan",
         "services_subscription_entitlements_ensure_subscription_seed"
       ],
       "qualifiedPath": [
         "services_subscription_entitlements_grant_comped",
         "services_subscription_entitlements_actor_payload",
+        "services_subscription_entitlements_as_utc",
+        "services_subscription_entitlements_assert_same_adjustment",
+        "services_subscription_entitlements_default_adjustment_idempotency_key",
+        "services_subscription_entitlements_normalize_adjustment_reason",
         "services_subscription_entitlements_now",
         "services_subscription_entitlements_plan_defaults",
+        "services_subscription_entitlements_record_comped_adjustment",
         "services_subscription_entitlements_record_event",
         "services_subscription_entitlements_sync_legacy_tables",
         "services_subscription_entitlements_upsert_subscription",
+        "services_subscription_entitlements_actor_role",
+        "services_subscription_entitlements_actor_user_id",
         "services_subscription_entitlements_apply_plan",
         "services_subscription_entitlements_ensure_subscription_seed"
       ],
       "depth": 2,
-      "nodeCount": 9,
+      "nodeCount": 16,
       "fileCount": 1,
       "files": [
         "app/services/subscription_entitlements.py"
@@ -11766,6 +11730,32 @@
       "fileCount": 1,
       "files": [
         "alembic/versions/dee1bd0660f6_ota_allocation_foundation.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
+      "id": "flow:versions_e6aadf684343_add_subscription_adjustment_ledger_upgrade",
+      "name": "upgrade",
+      "entryPoint": "versions_e6aadf684343_add_subscription_adjustment_ledger_upgrade",
+      "entryPointId": "versions_e6aadf684343_add_subscription_adjustment_ledger_upgrade",
+      "path": [
+        "versions_e6aadf684343_add_subscription_adjustment_ledger_upgrade",
+        "versions_e6aadf684343_add_subscription_adjustment_ledger_ensure_subscription_composite_target",
+        "versions_e6aadf684343_add_subscription_adjustment_ledger_install_rls",
+        "versions_e6aadf684343_add_subscription_adjustment_ledger_has_unique"
+      ],
+      "qualifiedPath": [
+        "versions_e6aadf684343_add_subscription_adjustment_ledger_upgrade",
+        "versions_e6aadf684343_add_subscription_adjustment_ledger_ensure_subscription_composite_target",
+        "versions_e6aadf684343_add_subscription_adjustment_ledger_install_rls",
+        "versions_e6aadf684343_add_subscription_adjustment_ledger_has_unique"
+      ],
+      "depth": 2,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/e6aadf684343_add_subscription_adjustment_ledger.py"
       ],
       "criticality": 0.17,
       "warnings": []
@@ -15168,6 +15158,28 @@
       "fileCount": 1,
       "files": [
         "alembic/versions/d4f8c21e7b10_extend_payment_link_tests_states.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:versions_e6aadf684343_add_subscription_adjustment_ledger_downgrade",
+      "name": "downgrade",
+      "entryPoint": "versions_e6aadf684343_add_subscription_adjustment_ledger_downgrade",
+      "entryPointId": "versions_e6aadf684343_add_subscription_adjustment_ledger_downgrade",
+      "path": [
+        "versions_e6aadf684343_add_subscription_adjustment_ledger_downgrade",
+        "versions_e6aadf684343_add_subscription_adjustment_ledger_remove_rls"
+      ],
+      "qualifiedPath": [
+        "versions_e6aadf684343_add_subscription_adjustment_ledger_downgrade",
+        "versions_e6aadf684343_add_subscription_adjustment_ledger_remove_rls"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/e6aadf684343_add_subscription_adjustment_ledger.py"
       ],
       "criticality": 0.16,
       "warnings": []

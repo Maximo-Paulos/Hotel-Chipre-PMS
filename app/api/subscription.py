@@ -186,6 +186,8 @@ def admin_comped_override(
         plan_code=payload.plan_code,
         reason=payload.reason,
         actor={"user_id": context.user_id, "user_role": context.user_role},
+        valid_until=payload.valid_until,
+        idempotency_key=payload.idempotency_key or request.headers.get("Idempotency-Key"),
     )
     audit_master_action(
         db,
@@ -197,6 +199,8 @@ def admin_comped_override(
             "hotel_id": payload.hotel_id,
             "plan_code": payload.plan_code,
             "reason": payload.reason,
+            **({"valid_until": payload.valid_until.isoformat()} if payload.valid_until else {}),
+            **({"idempotency_key": payload.idempotency_key} if payload.idempotency_key else {}),
         },
         request=request,
     )
