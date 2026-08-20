@@ -8,10 +8,9 @@ import { expect, test, type Page } from "@playwright/test";
 // 1. The switcher is honest about being a preview: a banner says so, and
 //    baseRole-gated screens (real mutations, real secrets) keep behaving
 //    like the real user, not the previewed one.
-// 2. Manipulating localStorage directly to fake a higher role (bypassing
-//    the switcher UI entirely) only ever changes what's cosmetically shown
-//    -- it never unlocks a baseRole-gated screen, and never produces a
-//    broken page.
+// 2. A legacy localStorage payload cannot fake a higher role (the frontend no
+//    longer persists bearer sessions there) -- it never unlocks a baseRole-
+//    gated screen, and never produces a broken page.
 
 const owner = {
   email: process.env.E2E_OWNER_EMAIL || "owner@e2e.com",
@@ -44,7 +43,12 @@ test("owner previewing as Manager sees the honesty banner and keeps owner-only a
   // StockPage's "Ajuste" option is gated on baseRole (owner), not the
   // previewed role: the real owner keeps it even while previewing as
   // Manager, who wouldn't normally see it (see role-journey.spec.ts).
-  await page.goto("/operacion/stock");
+  // Use the in-app navigation so the local preview role remains in React
+  // state; a full page reload intentionally starts from the cookie-backed
+  // authenticated role.
+  await page.getByText("Mas operacion", { exact: true }).click();
+  await page.getByRole("link", { name: "Stock", exact: true }).click();
+  await expect(page).toHaveURL(/\/operacion\/stock$/);
   const movementGroup = page.getByRole("group", { name: "Acción de inventario" });
   await expect(movementGroup.getByRole("button", { name: /^Ajuste/ })).toBeVisible();
 
@@ -53,7 +57,7 @@ test("owner previewing as Manager sees the honesty banner and keeps owner-only a
   await expect(page.getByTestId("session-role")).toHaveText("Dueño");
 });
 
-test("a role spoofed directly in localStorage does not unlock baseRole-gated screens for a real receptionist", async ({
+test("a legacy localStorage role payload does not unlock baseRole-gated screens for a real receptionist", async ({
   page
 }) => {
   await login(page, receptionist);
@@ -61,21 +65,17 @@ test("a role spoofed directly in localStorage does not unlock baseRole-gated scr
   // The switcher itself is owner-only and must stay hidden for this persona.
   await expect(page.getByTestId("role-switcher")).toHaveCount(0);
 
-  // Simulate an employee editing localStorage directly (not via the UI) to
-  // claim a role they don't have.
+  // Simulate a legacy client payload left behind by an older frontend. The
+  // current client must ignore it and recover the real session from cookies.
   await page.evaluate(() => {
-    const raw = localStorage.getItem("hotel-pms-session");
-    if (!raw) throw new Error("no session in localStorage");
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    parsed.role = "owner";
-    localStorage.setItem("hotel-pms-session", JSON.stringify(parsed));
+    localStorage.setItem("hotel-pms-session", JSON.stringify({ role: "owner", accessToken: "legacy" }));
   });
   await page.reload();
 
-  // The label can remain cosmetically spoofed because preview state is local,
-  // but the authenticated base role and effective permission set remain the
-  // security boundary.
-  await expect(page.getByTestId("session-role")).toBeVisible();
+  // The cookie-backed session is the source of truth. No bearer token or
+  // spoofed role is restored from localStorage.
+  await expect(page.getByTestId("session-role")).toHaveText("Recepción");
+  expect(await page.evaluate(() => localStorage.getItem("hotel-pms-session"))).toBeNull();
 
   const sensitiveRequests: string[] = [];
   page.on("request", (request) => {

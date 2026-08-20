@@ -28,6 +28,13 @@ test("owner can invite reception and revoke every current session from the secur
   await expect(page.getByRole("heading", { name: "Eventos recientes", exact: true })).toBeVisible();
   await expect(page.getByText(/Pendiente: controles de tiempo de sesión/)).toHaveCount(0);
 
+  await page.goto("/settings/sessions");
+  await expect(page.getByRole("heading", { name: "Dispositivos y sesiones activas", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Sesiones activas" })).toBeVisible();
+  await expect(page.getByText("Este dispositivo", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Cerrar sesión", exact: true })).toBeVisible();
+
+  await page.goto("/settings/security");
   page.once("dialog", (dialog) => dialog.accept());
   await page.getByTestId("security-revoke-all").click();
   await page.waitForURL("**/login?sessions=revoked", { timeout: 20_000 });

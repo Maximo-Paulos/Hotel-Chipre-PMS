@@ -37,6 +37,14 @@ export type RevokeAllSessionsResponse = {
   reauthentication_required: true;
 };
 
+export type UserSession = {
+  id: number;
+  created_at: string;
+  last_seen_at: string;
+  device_label: string;
+  current: boolean;
+};
+
 export const getSecurityOverview = (session?: SessionLike) =>
   apiFetch<SecurityOverview>("/api/settings/security/overview", { session });
 
@@ -45,3 +53,12 @@ export const getSecurityEvents = (limit = 20, session?: SessionLike) =>
 
 export const revokeAllSessions = (session?: SessionLike) =>
   apiFetch<RevokeAllSessionsResponse>("/api/settings/security/revoke-all", { method: "POST", session });
+
+export const listUserSessions = (session?: SessionLike) =>
+  apiFetch<UserSession[]>("/api/auth/sessions", { session });
+
+export const revokeUserSession = (sessionId: number, session?: SessionLike) =>
+  apiFetch<{ revoked: true; session_id: number }>(`/api/auth/sessions/${sessionId}`, {
+    method: "DELETE",
+    session
+  });

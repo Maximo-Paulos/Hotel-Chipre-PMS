@@ -66,6 +66,7 @@ export function AcceptInvitationPage() {
         baseRole: acceptedRole,
         permissions: res.permissions ?? res.user.permissions ?? null,
         accessToken: res.access_token,
+        csrfToken: res.csrf_token,
         isVerified: res.user.is_verified
       });
       setInfo("Cuenta creada. Redirigiendo...");

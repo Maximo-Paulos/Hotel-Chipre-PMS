@@ -72,6 +72,7 @@ export function ResetPasswordPage() {
         baseRole: normalizeRole(res.user.role),
         permissions: res.permissions ?? res.user.permissions ?? null,
         accessToken: res.access_token,
+        csrfToken: res.csrf_token,
         isVerified: res.user.is_verified
       });
       setSaved(true);

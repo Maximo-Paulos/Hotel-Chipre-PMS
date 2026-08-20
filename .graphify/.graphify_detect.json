@@ -271,7 +271,6 @@
       "app/services/analytics_warehouse.py",
       "app/services/audit_log_service.py",
       "app/services/audit_projection.py",
-      "app/services/audit_timeline_service.py",
       "app/services/cash_register_service.py",
       "app/services/checkin_service.py",
       "app/services/commercial_service.py",
@@ -548,6 +547,7 @@
       "frontend/src/views/protected/SettingsNotificationsPage.tsx",
       "frontend/src/views/protected/SettingsPermissionsPage.tsx",
       "frontend/src/views/protected/SettingsSecurityPage.tsx",
+      "frontend/src/views/protected/SettingsSessionsPage.tsx",
       "frontend/src/views/protected/SettingsSubscriptionPage.tsx",
       "frontend/src/views/protected/SettingsTestsPage.tsx",
       "frontend/src/views/protected/SettingsUsersPage.tsx",
@@ -1045,9 +1045,9 @@
     "video": []
   },
   "total_files": 1035,
-  "total_words": 1649079,
+  "total_words": 1649393,
   "needs_graph": true,
-  "warning": "Large corpus: 1035 files · ~1,649,079 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
+  "warning": "Large corpus: 1035 files · ~1,649,393 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
   "skipped_sensitive": [
     "alembic/versions/20260408_security_tokens.py",
     "alembic/versions/20260725_user_token_version.py",
@@ -1065,7 +1065,7 @@
   "graphifyignore_patterns": 61,
   "git": {
     "source_owner": "git",
-    "source_hash": "0534c64fb8b3c1014d62812b09a20466575f1bc9",
+    "source_hash": "b4cdeb9365cf7520a646826d078fec064d32a245",
     "branches": [
       "agent-linensplit",
       "agent-login",
@@ -1134,7 +1134,7 @@
     "source": "cli",
     "root": ".",
     "git_root": ".",
-    "head": "0534c64fb8b3c1014d62812b09a20466575f1bc9",
+    "head": "b4cdeb9365cf7520a646826d078fec064d32a245",
     "candidate_count": null,
     "included_count": 1035,
     "excluded_untracked_count": 0,
