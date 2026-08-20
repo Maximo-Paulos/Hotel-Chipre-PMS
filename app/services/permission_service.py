@@ -24,6 +24,10 @@ from app.models.security_audit_log import SecurityAuditLog
 logger = logging.getLogger(__name__)
 
 
+class PermissionVersionConflict(ValueError):
+    """Raised when a permission override was changed after it was read."""
+
+
 ROLE_OWNER = "owner"
 ROLE_CO_OWNER = "co_owner"
 ROLE_MANAGER = "manager"
@@ -295,12 +299,24 @@ def seed_default_permissions(db: Session) -> None:
     _insert_if_missing(
         db,
         Permission.__table__,
-        [{"code": code, "description": description} for code, description in PERMISSION_DEFINITIONS.items()],
+        [
+            {
+                "code": code,
+                "description": description,
+                "critical": code in _OWNER_ONLY,
+                "step_up_required": code in _OWNER_ONLY,
+                "delegable": code not in _OWNER_ONLY,
+            }
+            for code, description in PERMISSION_DEFINITIONS.items()
+        ],
         ["code"],
     )
     rows = {row.code: row for row in db.query(Permission).filter(Permission.code.in_(PERMISSION_DEFINITIONS)).all()}
     for code, description in PERMISSION_DEFINITIONS.items():
         rows[code].description = description
+        rows[code].critical = code in _OWNER_ONLY
+        rows[code].step_up_required = code in _OWNER_ONLY
+        rows[code].delegable = code not in _OWNER_ONLY
     db.flush()
     values = [
         {"role": role, "permission_code": code, "allowed": allowed}
@@ -452,13 +468,28 @@ def _validate_mutable(role: str, code: str, allowed: bool) -> str:
 
 def set_role_override(
     db: Session, hotel_id: int, role: str, code: str, allowed: bool, actor_user_id: int | None,
+    expected_version: int | None = None,
 ) -> HotelPermissionOverride:
     canonical = _validate_mutable(role, code, allowed)
     ensure_permission_matrix_seeded(db)
     row = db.query(HotelPermissionOverride).filter_by(hotel_id=hotel_id, role=role, permission_code=canonical).one_or_none()
+    if expected_version is not None:
+        if row is None and expected_version != 0:
+            raise PermissionVersionConflict("El permiso fue modificado por otra solicitud")
+        if row is not None and row.version != expected_version:
+            raise PermissionVersionConflict("El permiso fue modificado por otra solicitud")
     before = None if row is None else {"allowed": bool(row.allowed)}
+    next_version = 1 if row is None else row.version + 1
+    if row is not None:
+        before["version"] = row.version
     if row is None:
-        row = HotelPermissionOverride(hotel_id=hotel_id, role=role, permission_code=canonical, allowed=allowed)
+        row = HotelPermissionOverride(
+            hotel_id=hotel_id,
+            role=role,
+            permission_code=canonical,
+            allowed=allowed,
+            version=1,
+        )
         db.add(row)
     row.allowed = allowed
     row.updated_by_user_id = actor_user_id
@@ -467,16 +498,21 @@ def set_role_override(
         db, hotel_id=hotel_id, actor_user_id=actor_user_id,
         action="permission.override.updated", resource_type="permission_override",
         resource_id=f"{role}:{canonical}", before=before,
-        after={"role": role, "permission_code": canonical, "allowed": allowed},
+        after={"role": role, "permission_code": canonical, "allowed": allowed, "version": next_version},
     )
     db.flush()
     invalidate_effective_permission_cache(db, hotel_id)
     return row
 
 
-def set_override(db: Session, hotel_id: int, role: str, code: str, allowed: bool, user_id: int | None):
+def set_override(
+    db: Session, hotel_id: int, role: str, code: str, allowed: bool, user_id: int | None,
+    expected_version: int | None = None,
+):
     """Backward-compatible alias for the role-override mutation."""
-    return set_role_override(db, hotel_id, role, code, allowed, actor_user_id=user_id)
+    return set_role_override(
+        db, hotel_id, role, code, allowed, actor_user_id=user_id, expected_version=expected_version,
+    )
 
 
 def _active_membership(db: Session, hotel_id: int, user_id: int) -> HotelMembership | None:
@@ -485,7 +521,7 @@ def _active_membership(db: Session, hotel_id: int, user_id: int) -> HotelMembers
 
 def set_user_override(
     db: Session, hotel_id: int, target_user_id: int, target_role: str | None,
-    code: str, allowed: bool, actor_user_id: int | None,
+    code: str, allowed: bool, actor_user_id: int | None, expected_version: int | None = None,
 ) -> UserPermissionOverride:
     membership = _active_membership(db, hotel_id, target_user_id)
     if membership is None or (target_role is not None and membership.role != target_role):
@@ -495,9 +531,23 @@ def set_user_override(
     row = db.query(UserPermissionOverride).filter_by(
         hotel_id=hotel_id, user_id=target_user_id, permission_code=canonical
     ).one_or_none()
+    if expected_version is not None:
+        if row is None and expected_version != 0:
+            raise PermissionVersionConflict("El permiso fue modificado por otra solicitud")
+        if row is not None and row.version != expected_version:
+            raise PermissionVersionConflict("El permiso fue modificado por otra solicitud")
     before = None if row is None else {"allowed": bool(row.allowed)}
+    next_version = 1 if row is None else row.version + 1
+    if row is not None:
+        before["version"] = row.version
     if row is None:
-        row = UserPermissionOverride(hotel_id=hotel_id, user_id=target_user_id, permission_code=canonical, allowed=allowed)
+        row = UserPermissionOverride(
+            hotel_id=hotel_id,
+            user_id=target_user_id,
+            permission_code=canonical,
+            allowed=allowed,
+            version=1,
+        )
         db.add(row)
     row.allowed = allowed
     row.updated_by_user_id = actor_user_id
@@ -506,7 +556,7 @@ def set_user_override(
         db, hotel_id=hotel_id, actor_user_id=actor_user_id,
         action="permission.user_override.updated", resource_type="user_permission_override",
         resource_id=f"{target_user_id}:{canonical}", before=before,
-        after={"user_id": target_user_id, "permission_code": canonical, "allowed": allowed},
+        after={"user_id": target_user_id, "permission_code": canonical, "allowed": allowed, "version": next_version},
     )
     db.flush()
     invalidate_effective_permission_cache(db, hotel_id, target_user_id)
@@ -545,9 +595,17 @@ def restore_user_defaults(db: Session, hotel_id: int, target_user_id: int, actor
     return len(rows)
 
 
-def get_permission_catalog() -> list[dict[str, object]]:
+def get_permission_catalog(db: Session | None = None) -> list[dict[str, object]]:
+    metadata_by_code: dict[str, Permission] = {}
+    if db is not None:
+        ensure_permission_matrix_seeded(db)
+        metadata_by_code = {
+            row.code: row
+            for row in db.query(Permission).filter(Permission.code.in_(_CANONICAL_DEFINITIONS)).all()
+        }
     result = []
     for code, (module, description) in _CANONICAL_DEFINITIONS.items():
+        metadata = metadata_by_code.get(code)
         result.append(
             {
                 "code": code,
@@ -556,6 +614,9 @@ def get_permission_catalog() -> list[dict[str, object]]:
                 "legacy_aliases": sorted(alias for alias, target in LEGACY_PERMISSION_ALIASES.items() if target == code),
                 "locked": code in _OWNER_ONLY,
                 "lock_reason": "owner_only" if code in _OWNER_ONLY else None,
+                "critical": bool(metadata.critical) if metadata is not None else code in _OWNER_ONLY,
+                "step_up_required": bool(metadata.step_up_required) if metadata is not None else code in _OWNER_ONLY,
+                "delegable": bool(metadata.delegable) if metadata is not None else code not in _OWNER_ONLY,
             }
         )
     return sorted(result, key=lambda row: (str(row["module"]), str(row["code"])))

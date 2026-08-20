@@ -152,6 +152,7 @@ def test_owner_can_grant_and_revoke_user_override_then_restore_defaults():
         )
         assert granted.status_code == 200
         assert granted.json()["source"] == "user_override"
+        assert granted.json()["version"] == 1
 
         preview = client.get("/api/permissions/effective/preview", params={"user_id": 20})
         assert preview.status_code == 200
@@ -162,6 +163,7 @@ def test_owner_can_grant_and_revoke_user_override_then_restore_defaults():
             json={"permission_code": PERMISSION_RESERVATION_PROHIBITION_OVERRIDE, "allowed": False},
         )
         assert revoked.status_code == 200
+        assert revoked.json()["version"] == 2
         restored = client.delete("/api/permissions/user-overrides/20")
         assert restored.status_code == 200
         assert db.query(UserPermissionOverride).filter_by(hotel_id=1, user_id=20).count() == 0

@@ -9,9 +9,14 @@ from app.main import app as fastapi_app
 from app.models.security_audit_log import SecurityAuditLog
 from app.models.hotel_config import HotelConfiguration
 from app.services.permission_service import (
+    PERMISSION_APIKEY_MANAGE,
     PERMISSION_GUEST_CREATE,
     PERMISSION_GUEST_EDIT,
+    PERMISSION_HOTEL_PROPERTY_MANAGE,
+    PERMISSION_HOTEL_SECURITY_MANAGE,
     PERMISSION_RESERVATION_CREATE,
+    PERMISSION_PERMISSION_MANAGE,
+    PERMISSION_ROOM_STATUS_UPDATE,
     PERMISSION_STOCK_ADJUST,
 )
 
@@ -79,6 +84,34 @@ def test_permissions_matrix_available_to_permission_manager_only():
         engine.dispose()
 
 
+def test_permission_catalog_exposes_owner_only_and_normal_metadata():
+    client, db, engine = _client_with_db()
+    fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner")
+    try:
+        response = client.get("/api/permissions/catalog")
+        assert response.status_code == 200
+        catalog = {row["code"]: row for row in response.json()["permissions"]}
+
+        for code in (
+            PERMISSION_PERMISSION_MANAGE,
+            PERMISSION_HOTEL_PROPERTY_MANAGE,
+            PERMISSION_HOTEL_SECURITY_MANAGE,
+            PERMISSION_APIKEY_MANAGE,
+        ):
+            assert catalog[code]["critical"] is True
+            assert catalog[code]["step_up_required"] is True
+            assert catalog[code]["delegable"] is False
+
+        for code in (PERMISSION_GUEST_CREATE, PERMISSION_RESERVATION_CREATE, PERMISSION_ROOM_STATUS_UPDATE):
+            assert catalog[code]["critical"] is False
+            assert catalog[code]["step_up_required"] is False
+            assert catalog[code]["delegable"] is True
+    finally:
+        fastapi_app.dependency_overrides.clear()
+        db.close()
+        engine.dispose()
+
+
 def test_effective_permissions_returns_only_current_role_capabilities():
     client, db, engine = _client_with_db()
     fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "receptionist")
@@ -107,11 +140,51 @@ def test_permission_override_can_deny_receptionist_guest_edit():
         )
         assert response.status_code == 200
         assert response.json()["allowed"] is False
+        assert response.json()["version"] == 1
 
         fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "receptionist")
         effective = client.get("/api/permissions/effective")
         assert effective.status_code == 200
         assert PERMISSION_GUEST_EDIT not in effective.json()["permissions"]
+    finally:
+        fastapi_app.dependency_overrides.clear()
+        db.close()
+        engine.dispose()
+
+
+def test_stale_expected_version_is_rejected_for_role_override():
+    client, db, engine = _client_with_db()
+    fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner", user_id=99)
+    try:
+        created = client.put(
+            "/api/permissions/override",
+            json={"role": "receptionist", "permission_code": PERMISSION_GUEST_EDIT, "allowed": False},
+        )
+        assert created.status_code == 200
+        assert created.json()["version"] == 1
+
+        first_update = client.put(
+            "/api/permissions/override",
+            json={
+                "role": "receptionist",
+                "permission_code": PERMISSION_GUEST_EDIT,
+                "allowed": True,
+                "expected_version": 1,
+            },
+        )
+        assert first_update.status_code == 200
+        assert first_update.json()["version"] == 2
+
+        stale_update = client.put(
+            "/api/permissions/override",
+            json={
+                "role": "receptionist",
+                "permission_code": PERMISSION_GUEST_EDIT,
+                "allowed": False,
+                "expected_version": 1,
+            },
+        )
+        assert stale_update.status_code == 409
     finally:
         fastapi_app.dependency_overrides.clear()
         db.close()
