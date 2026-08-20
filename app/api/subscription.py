@@ -5,11 +5,13 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies.auth import AuthContext, require_platform_admin, require_roles
+from app.master_admin.security import audit_master_action
+from app.models.hotel_config import HotelConfiguration
 from app.models.room import Room
 from app.schemas.subscription import (
     CompedOverrideRequest,
@@ -167,15 +169,32 @@ def delete_override(
 @admin_router.post("/comped-override")
 def admin_comped_override(
     payload: CompedOverrideRequest,
+    request: Request,
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_platform_admin()),
 ):
+    if db.get(HotelConfiguration, payload.hotel_id) is None:
+        raise HTTPException(status_code=404, detail="Hotel no encontrado")
+
     grant_comped(
         db,
         hotel_id=payload.hotel_id,
         plan_code=payload.plan_code,
         reason=payload.reason,
         actor={"user_id": context.user_id, "user_role": context.user_role},
+    )
+    audit_master_action(
+        db,
+        actor_user_id=context.user_id,
+        action="comped_override_grant",
+        target_type="hotel",
+        target_id=str(payload.hotel_id),
+        metadata={
+            "hotel_id": payload.hotel_id,
+            "plan_code": payload.plan_code,
+            "reason": payload.reason,
+        },
+        request=request,
     )
     db.commit()
     return _serialize_status_payload(db, payload.hotel_id)
