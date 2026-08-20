@@ -38,6 +38,7 @@ from .security import (
     clear_master_session_cookies,
     create_master_session,
     require_master_admin,
+    redact_master_admin_audit_metadata_json,
     set_master_session_cookies,
 )
 from .stripe import clear_stripe_settings, get_stripe_status, save_stripe_settings, verify_stripe_signature
@@ -346,7 +347,7 @@ def audit_events(request: Request, db: Session = Depends(get_db)):
                 "request_path": event.request_path,
                 "request_method": event.request_method,
                 "created_at": event.created_at,
-                "metadata_json": event.metadata_json,
+                "metadata_json": redact_master_admin_audit_metadata_json(event.metadata_json),
             }
             for event in events
         ]
