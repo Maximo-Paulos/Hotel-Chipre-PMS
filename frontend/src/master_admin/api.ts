@@ -97,7 +97,6 @@ export type MasterBillingPolicy = {
 export type MasterHotelRow = {
   hotel_id: number;
   hotel_name: string;
-  owner_email: string | null;
   plan: string;
   status: string;
   can_write: boolean;

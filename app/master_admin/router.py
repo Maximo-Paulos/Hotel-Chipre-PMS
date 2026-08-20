@@ -136,7 +136,6 @@ def dashboard_hotels(request: Request, db: Session = Depends(get_db)):
             {
                 "hotel_id": hotel.id,
                 "hotel_name": hotel.hotel_name,
-                "owner_email": hotel.owner_email,
                 "plan": snapshot.get("plan"),
                 "status": snapshot.get("status"),
                 "can_write": decision.can_write,
@@ -185,7 +184,16 @@ def email_providers(request: Request, db: Session = Depends(get_db)):
 
 @router.post("/email/connect")
 def email_connect(request: Request, db: Session = Depends(get_db)):
-    require_master_admin(request=request, db=db, csrf_header=request.headers.get("X-CSRF-Token"), write=True)
+    context = require_master_admin(request=request, db=db, csrf_header=request.headers.get("X-CSRF-Token"), write=True)
+    audit_master_action(
+        db,
+        actor_user_id=context.user.id,
+        action="master_admin_email_connect",
+        outcome="failed",
+        metadata={"reason": "retired_endpoint"},
+        request=request,
+    )
+    db.commit()
     raise HTTPException(status_code=status.HTTP_410_GONE, detail="Gmail OAuth para el mail del sistema fue retirado. Usa Resend.")
 
 
@@ -196,7 +204,16 @@ def email_oauth_callback(request: Request, db: Session = Depends(get_db)):
 
 @router.post("/email/disconnect")
 def email_disconnect(request: Request, db: Session = Depends(get_db)):
-    require_master_admin(request=request, db=db, csrf_header=request.headers.get("X-CSRF-Token"), write=True)
+    context = require_master_admin(request=request, db=db, csrf_header=request.headers.get("X-CSRF-Token"), write=True)
+    audit_master_action(
+        db,
+        actor_user_id=context.user.id,
+        action="master_admin_email_disconnect",
+        outcome="failed",
+        metadata={"reason": "retired_endpoint"},
+        request=request,
+    )
+    db.commit()
     raise HTTPException(status_code=status.HTTP_410_GONE, detail="Gmail OAuth para el mail del sistema fue retirado. Usa Resend.")
 
 
