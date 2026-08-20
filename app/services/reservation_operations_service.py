@@ -649,6 +649,8 @@ def extend_reservation_stay(
     assert_reservation_version(reservation, client_version)
     if reservation.status not in (ReservationStatusEnum.CHECKED_IN, ReservationStatusEnum.FULLY_PAID):
         raise ReservationOperationsError("Solo se pueden extender reservas checked-in o fully-paid")
+    if new_checkout_date <= reservation.check_out_date:
+        raise ReservationOperationsError("New checkout must be after current checkout")
     conflict_resolution = resolve_extension_conflict(
         db,
         reservation=reservation,

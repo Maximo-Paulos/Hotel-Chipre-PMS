@@ -17,7 +17,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.models.daily_rate import DailyRate, PricePeriod
 from app.models.pricing import CategoryPricing
-from app.services.pricing_service import apply_price_period, get_price_for_date
+from app.services.pricing_service import apply_price_period, get_price_for_date, get_prices_for_range
 
 
 # ---------------------------------------------------------------------------
@@ -222,6 +222,14 @@ class TestGetPriceForDate:
         # Outside the period the resolver falls back to the category base price.
         assert price_before == category.base_price_per_night
         assert price_after == category.base_price_per_night
+
+
+def test_prices_for_range_rejects_non_positive_stay_window(db, sample_categories):
+    category = sample_categories[0]
+    with pytest.raises(ValueError, match="check_out must be after check_in"):
+        get_prices_for_range(db, 1, category.id, date(2026, 9, 2), date(2026, 9, 1))
+    with pytest.raises(ValueError, match="check_out must be after check_in"):
+        get_prices_for_range(db, 1, category.id, date(2026, 9, 1), date(2026, 9, 1))
 
 
 # ---------------------------------------------------------------------------

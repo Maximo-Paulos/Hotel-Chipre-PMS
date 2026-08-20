@@ -280,7 +280,7 @@ def get_prices_for_range(
         }
     """
     if check_out <= check_in:
-        return {"total": 0.0, "nights": 0, "breakdown": []}
+        raise ValueError("check_out must be after check_in")
 
     breakdown = []
     current = check_in

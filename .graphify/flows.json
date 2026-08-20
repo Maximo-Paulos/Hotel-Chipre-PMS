@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-20T20:21:25.837Z",
+  "generatedAt": "2026-08-20T21:37:58.324Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -48,7 +48,9 @@
         "api_auth_register",
         "api_auth_attach_user_session_cookies",
         "api_auth_build_auth_response",
+        "api_auth_burn_auth_timing_work",
         "api_auth_issue_email_token",
+        "api_auth_request_source",
         "api_auth_pick_default_hotel_id",
         "api_auth_generate_code"
       ],
@@ -56,12 +58,14 @@
         "api_auth_register",
         "api_auth_attach_user_session_cookies",
         "api_auth_build_auth_response",
+        "api_auth_burn_auth_timing_work",
         "api_auth_issue_email_token",
+        "api_auth_request_source",
         "api_auth_pick_default_hotel_id",
         "api_auth_generate_code"
       ],
       "depth": 2,
-      "nodeCount": 6,
+      "nodeCount": 8,
       "fileCount": 2,
       "files": [
         "app/api/auth.py",
@@ -905,16 +909,20 @@
       "entryPointId": "api_auth_request_reset",
       "path": [
         "api_auth_request_reset",
+        "api_auth_burn_auth_timing_work",
         "api_auth_issue_email_token",
+        "api_auth_request_source",
         "api_auth_generate_code"
       ],
       "qualifiedPath": [
         "api_auth_request_reset",
+        "api_auth_burn_auth_timing_work",
         "api_auth_issue_email_token",
+        "api_auth_request_source",
         "api_auth_generate_code"
       ],
       "depth": 2,
-      "nodeCount": 3,
+      "nodeCount": 5,
       "fileCount": 1,
       "files": [
         "app/api/auth.py"
@@ -929,18 +937,22 @@
       "entryPointId": "api_auth_request_verify",
       "path": [
         "api_auth_request_verify",
+        "api_auth_burn_auth_timing_work",
         "api_auth_issue_email_token",
         "api_auth_mask_email",
+        "api_auth_request_source",
         "api_auth_generate_code"
       ],
       "qualifiedPath": [
         "api_auth_request_verify",
+        "api_auth_burn_auth_timing_work",
         "api_auth_issue_email_token",
         "api_auth_mask_email",
+        "api_auth_request_source",
         "api_auth_generate_code"
       ],
       "depth": 2,
-      "nodeCount": 4,
+      "nodeCount": 6,
       "fileCount": 1,
       "files": [
         "app/api/auth.py"
@@ -1365,6 +1377,32 @@
       "warnings": []
     },
     {
+      "id": "flow:api_permissions_approve_temporary_action_grant",
+      "name": "approve_temporary_action_grant",
+      "entryPoint": "api_permissions_approve_temporary_action_grant",
+      "entryPointId": "api_permissions_approve_temporary_action_grant",
+      "path": [
+        "api_permissions_approve_temporary_action_grant",
+        "api_permissions_raise_temporary_grant_http_error",
+        "api_permissions_temporary_grant_actor",
+        "api_permissions_temporary_grant_response"
+      ],
+      "qualifiedPath": [
+        "api_permissions_approve_temporary_action_grant",
+        "api_permissions_raise_temporary_grant_http_error",
+        "api_permissions_temporary_grant_actor",
+        "api_permissions_temporary_grant_response"
+      ],
+      "depth": 1,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/api/permissions.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
       "id": "flow:api_gemma_chat_archive_chat_session",
       "name": "archive_chat_session",
       "entryPoint": "api_gemma_chat_archive_chat_session",
@@ -1448,6 +1486,30 @@
       "fileCount": 1,
       "files": [
         "app/master_admin/email_provider.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_permissions_consume_temporary_action_grant",
+      "name": "consume_temporary_action_grant",
+      "entryPoint": "api_permissions_consume_temporary_action_grant",
+      "entryPointId": "api_permissions_consume_temporary_action_grant",
+      "path": [
+        "api_permissions_consume_temporary_action_grant",
+        "api_permissions_raise_temporary_grant_http_error",
+        "api_permissions_temporary_grant_actor"
+      ],
+      "qualifiedPath": [
+        "api_permissions_consume_temporary_action_grant",
+        "api_permissions_raise_temporary_grant_http_error",
+        "api_permissions_temporary_grant_actor"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/api/permissions.py"
       ],
       "criticality": 0.41,
       "warnings": []
@@ -1553,6 +1615,32 @@
       "warnings": []
     },
     {
+      "id": "flow:api_permissions_create_temporary_action_grant",
+      "name": "create_temporary_action_grant",
+      "entryPoint": "api_permissions_create_temporary_action_grant",
+      "entryPointId": "api_permissions_create_temporary_action_grant",
+      "path": [
+        "api_permissions_create_temporary_action_grant",
+        "api_permissions_raise_temporary_grant_http_error",
+        "api_permissions_temporary_grant_actor",
+        "api_permissions_temporary_grant_response"
+      ],
+      "qualifiedPath": [
+        "api_permissions_create_temporary_action_grant",
+        "api_permissions_raise_temporary_grant_http_error",
+        "api_permissions_temporary_grant_actor",
+        "api_permissions_temporary_grant_response"
+      ],
+      "depth": 1,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/api/permissions.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
       "id": "flow:master_admin_router_dashboard_summary",
       "name": "dashboard_summary",
       "entryPoint": "master_admin_router_dashboard_summary",
@@ -1614,6 +1702,32 @@
       "fileCount": 1,
       "files": [
         "app/services/security.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_permissions_deny_temporary_action_grant",
+      "name": "deny_temporary_action_grant",
+      "entryPoint": "api_permissions_deny_temporary_action_grant",
+      "entryPointId": "api_permissions_deny_temporary_action_grant",
+      "path": [
+        "api_permissions_deny_temporary_action_grant",
+        "api_permissions_raise_temporary_grant_http_error",
+        "api_permissions_temporary_grant_actor",
+        "api_permissions_temporary_grant_response"
+      ],
+      "qualifiedPath": [
+        "api_permissions_deny_temporary_action_grant",
+        "api_permissions_raise_temporary_grant_http_error",
+        "api_permissions_temporary_grant_actor",
+        "api_permissions_temporary_grant_response"
+      ],
+      "depth": 1,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/api/permissions.py"
       ],
       "criticality": 0.41,
       "warnings": []
@@ -1687,28 +1801,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_invitation_service_find_by_token",
-      "name": "find_by_token",
-      "entryPoint": "services_invitation_service_find_by_token",
-      "entryPointId": "services_invitation_service_find_by_token",
-      "path": [
-        "services_invitation_service_find_by_token",
-        "services_invitation_service_hash_invitation_token"
-      ],
-      "qualifiedPath": [
-        "services_invitation_service_find_by_token",
-        "services_invitation_service_hash_invitation_token"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "app/services/invitation_service.py"
-      ],
-      "criticality": 0.41,
-      "warnings": []
-    },
-    {
       "id": "flow:protected_settingsconnectionspage_getprovidererrormessage",
       "name": "getProviderErrorMessage",
       "entryPoint": "protected_settingsconnectionspage_getprovidererrormessage",
@@ -1750,6 +1842,28 @@
       "fileCount": 1,
       "files": [
         "app/dependencies/api_key_auth.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
+      "id": "flow:state_session_initialsession",
+      "name": "initialSession",
+      "entryPoint": "state_session_initialsession",
+      "entryPointId": "state_session_initialsession",
+      "path": [
+        "state_session_initialsession",
+        "state_session_readstoredcsrftoken"
+      ],
+      "qualifiedPath": [
+        "state_session_initialsession",
+        "state_session_readstoredcsrftoken"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/state/session.tsx"
       ],
       "criticality": 0.41,
       "warnings": []
@@ -1906,6 +2020,28 @@
       "qualifiedPath": [
         "api_permissions_preview_effective_permissions",
         "api_permissions_target_membership_or_404"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/permissions.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_permissions_read_pending_temporary_action_grants",
+      "name": "read_pending_temporary_action_grants",
+      "entryPoint": "api_permissions_read_pending_temporary_action_grants",
+      "entryPointId": "api_permissions_read_pending_temporary_action_grants",
+      "path": [
+        "api_permissions_read_pending_temporary_action_grants",
+        "api_permissions_temporary_grant_response"
+      ],
+      "qualifiedPath": [
+        "api_permissions_read_pending_temporary_action_grants",
+        "api_permissions_temporary_grant_response"
       ],
       "depth": 1,
       "nodeCount": 2,
@@ -2124,6 +2260,28 @@
       "fileCount": 1,
       "files": [
         "app/master_admin/stripe.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
+      "id": "flow:state_session_sessionfromauthresponse",
+      "name": "sessionFromAuthResponse",
+      "entryPoint": "state_session_sessionfromauthresponse",
+      "entryPointId": "state_session_sessionfromauthresponse",
+      "path": [
+        "state_session_sessionfromauthresponse",
+        "state_session_normalizerole"
+      ],
+      "qualifiedPath": [
+        "state_session_sessionfromauthresponse",
+        "state_session_normalizerole"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/state/session.tsx"
       ],
       "criticality": 0.41,
       "warnings": []
@@ -2516,6 +2674,60 @@
         "app/services/integration_service.py"
       ],
       "criticality": 0.3367,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_client_apifetch",
+      "name": "apiFetch",
+      "entryPoint": "api_client_apifetch",
+      "entryPointId": "api_client_apifetch",
+      "path": [
+        "api_client_apifetch",
+        "api_client_apierror",
+        "api_client_buildauthheaders",
+        "api_client_buildurl",
+        "api_client_formaterrordetail",
+        "api_client_handleunauthorized",
+        "api_client_requestwithrefresh",
+        "api_client_safejson",
+        "api_client_hasvalidsession",
+        "api_client_normalizehotelid",
+        "api_client_ispublicauthpath",
+        "api_client_makeapierror",
+        "api_client_mergesession",
+        "api_client_refreshsession",
+        "api_client_requestheaders",
+        "api_client_setclientsession",
+        "api_client_istokenexpired",
+        "api_client_jwtexpms"
+      ],
+      "qualifiedPath": [
+        "api_client_apifetch",
+        "api_client_apierror",
+        "api_client_buildauthheaders",
+        "api_client_buildurl",
+        "api_client_formaterrordetail",
+        "api_client_handleunauthorized",
+        "api_client_requestwithrefresh",
+        "api_client_safejson",
+        "api_client_hasvalidsession",
+        "api_client_normalizehotelid",
+        "api_client_ispublicauthpath",
+        "api_client_makeapierror",
+        "api_client_mergesession",
+        "api_client_refreshsession",
+        "api_client_requestheaders",
+        "api_client_setclientsession",
+        "api_client_istokenexpired",
+        "api_client_jwtexpms"
+      ],
+      "depth": 4,
+      "nodeCount": 18,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/api/client.ts"
+      ],
+      "criticality": 0.3289,
       "warnings": []
     },
     {
@@ -3701,46 +3913,6 @@
       "warnings": []
     },
     {
-      "id": "flow:api_client_apifetch",
-      "name": "apiFetch",
-      "entryPoint": "api_client_apifetch",
-      "entryPointId": "api_client_apifetch",
-      "path": [
-        "api_client_apifetch",
-        "api_client_apierror",
-        "api_client_buildauthheaders",
-        "api_client_buildurl",
-        "api_client_formaterrordetail",
-        "api_client_handleunauthorized",
-        "api_client_safejson",
-        "api_client_hasvalidsession",
-        "api_client_normalizehotelid",
-        "api_client_istokenexpired",
-        "api_client_jwtexpms"
-      ],
-      "qualifiedPath": [
-        "api_client_apifetch",
-        "api_client_apierror",
-        "api_client_buildauthheaders",
-        "api_client_buildurl",
-        "api_client_formaterrordetail",
-        "api_client_handleunauthorized",
-        "api_client_safejson",
-        "api_client_hasvalidsession",
-        "api_client_normalizehotelid",
-        "api_client_istokenexpired",
-        "api_client_jwtexpms"
-      ],
-      "depth": 4,
-      "nodeCount": 11,
-      "fileCount": 1,
-      "files": [
-        "frontend/src/api/client.ts"
-      ],
-      "criticality": 0.2809,
-      "warnings": []
-    },
-    {
       "id": "flow:versions_70014cb60e2c_allow_system_actors_in_hotel_audit_downgrade",
       "name": "downgrade",
       "entryPoint": "versions_70014cb60e2c_allow_system_actors_in_hotel_audit_downgrade",
@@ -3942,6 +4114,34 @@
       "fileCount": 1,
       "files": [
         "app/services/cash_register_service.py"
+      ],
+      "criticality": 0.27,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_temporary_action_grant_service_request_grant",
+      "name": "request_grant",
+      "entryPoint": "services_temporary_action_grant_service_request_grant",
+      "entryPointId": "services_temporary_action_grant_service_request_grant",
+      "path": [
+        "services_temporary_action_grant_service_request_grant",
+        "services_temporary_action_grant_service_active_membership",
+        "services_temporary_action_grant_service_audit",
+        "services_temporary_action_grant_service_temporarygrantauthorizationerror",
+        "services_temporary_action_grant_service_status_value"
+      ],
+      "qualifiedPath": [
+        "services_temporary_action_grant_service_request_grant",
+        "services_temporary_action_grant_service_active_membership",
+        "services_temporary_action_grant_service_audit",
+        "services_temporary_action_grant_service_temporarygrantauthorizationerror",
+        "services_temporary_action_grant_service_status_value"
+      ],
+      "depth": 2,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "app/services/temporary_action_grant_service.py"
       ],
       "criticality": 0.27,
       "warnings": []
@@ -4428,6 +4628,30 @@
       "fileCount": 1,
       "files": [
         "scripts/seed_e2e_backend.py"
+      ],
+      "criticality": 0.2533,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_email_service_send_generic_auth_notice_email",
+      "name": "send_generic_auth_notice_email",
+      "entryPoint": "services_email_service_send_generic_auth_notice_email",
+      "entryPointId": "services_email_service_send_generic_auth_notice_email",
+      "path": [
+        "services_email_service_send_generic_auth_notice_email",
+        "services_email_service_send_platform_email",
+        "services_email_service_mailer_send"
+      ],
+      "qualifiedPath": [
+        "services_email_service_send_generic_auth_notice_email",
+        "services_email_service_send_platform_email",
+        "services_email_service_mailer_send"
+      ],
+      "depth": 2,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/services/email_service.py"
       ],
       "criticality": 0.2533,
       "warnings": []
@@ -5719,27 +5943,27 @@
       "warnings": []
     },
     {
-      "id": "flow:services_invitation_service_issue_invitation",
-      "name": "issue_invitation",
-      "entryPoint": "services_invitation_service_issue_invitation",
-      "entryPointId": "services_invitation_service_issue_invitation",
+      "id": "flow:api_users_invite_user",
+      "name": "invite_user",
+      "entryPoint": "api_users_invite_user",
+      "entryPointId": "api_users_invite_user",
       "path": [
-        "services_invitation_service_issue_invitation",
-        "services_invitation_service_hash_invitation_token",
-        "services_invitation_service_normalize_email",
-        "services_invitation_service_utcnow"
+        "api_users_invite_user",
+        "api_users_assert_assignable_role",
+        "api_users_inviteresponse",
+        "api_users_membership_user_info"
       ],
       "qualifiedPath": [
-        "services_invitation_service_issue_invitation",
-        "services_invitation_service_hash_invitation_token",
-        "services_invitation_service_normalize_email",
-        "services_invitation_service_utcnow"
+        "api_users_invite_user",
+        "api_users_assert_assignable_role",
+        "api_users_inviteresponse",
+        "api_users_membership_user_info"
       ],
       "depth": 1,
       "nodeCount": 4,
       "fileCount": 1,
       "files": [
-        "app/services/invitation_service.py"
+        "app/api/users.py"
       ],
       "criticality": 0.2225,
       "warnings": []
@@ -6049,6 +6273,144 @@
       "warnings": []
     },
     {
+      "id": "flow:services_reservation_service_update_reservation_fields",
+      "name": "update_reservation_fields",
+      "entryPoint": "services_reservation_service_update_reservation_fields",
+      "entryPointId": "services_reservation_service_update_reservation_fields",
+      "path": [
+        "services_reservation_service_update_reservation_fields",
+        "services_reservation_service_apply_pricing_result_to_reservation",
+        "services_reservation_service_calculate_reservation_pricing",
+        "services_reservation_service_check_room_availability",
+        "services_reservation_service_invalidate_availability_cache",
+        "services_reservation_service_notify_reservation_event",
+        "services_reservation_service_reservationerror",
+        "services_reservation_service_resolve_hotel_id",
+        "services_reservation_service_touch_facts",
+        "services_reservation_service_validate_reservation_occupancy",
+        "services_reservation_service_daily_rate_pricing_result",
+        "services_reservation_service_normalize_pricing_payment_method",
+        "services_reservation_service_pricing_result_from_quote",
+        "services_reservation_service_resolve_reservation_commercial_context",
+        "services_reservation_service_validate_stay_dates",
+        "services_reservation_service_calendar_pricing_source",
+        "services_reservation_service_compute_deposit_amount",
+        "services_reservation_service_get_hotel_default_currency",
+        "services_reservation_service_reservationpricingresult"
+      ],
+      "qualifiedPath": [
+        "services_reservation_service_update_reservation_fields",
+        "services_reservation_service_apply_pricing_result_to_reservation",
+        "services_reservation_service_calculate_reservation_pricing",
+        "services_reservation_service_check_room_availability",
+        "services_reservation_service_invalidate_availability_cache",
+        "services_reservation_service_notify_reservation_event",
+        "services_reservation_service_reservationerror",
+        "services_reservation_service_resolve_hotel_id",
+        "services_reservation_service_touch_facts",
+        "services_reservation_service_validate_reservation_occupancy",
+        "services_reservation_service_daily_rate_pricing_result",
+        "services_reservation_service_normalize_pricing_payment_method",
+        "services_reservation_service_pricing_result_from_quote",
+        "services_reservation_service_resolve_reservation_commercial_context",
+        "services_reservation_service_validate_stay_dates",
+        "services_reservation_service_calendar_pricing_source",
+        "services_reservation_service_compute_deposit_amount",
+        "services_reservation_service_get_hotel_default_currency",
+        "services_reservation_service_reservationpricingresult"
+      ],
+      "depth": 3,
+      "nodeCount": 19,
+      "fileCount": 1,
+      "files": [
+        "app/services/reservation_service.py"
+      ],
+      "criticality": 0.2195,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_reservation_service_create_reservation",
+      "name": "create_reservation",
+      "entryPoint": "services_reservation_service_create_reservation",
+      "entryPointId": "services_reservation_service_create_reservation",
+      "path": [
+        "services_reservation_service_create_reservation",
+        "services_reservation_service_apply_corporate_pricing",
+        "services_reservation_service_apply_custom_deposit_amount",
+        "services_reservation_service_apply_manual_total_override",
+        "services_reservation_service_calculate_reservation_pricing",
+        "services_reservation_service_check_room_availability",
+        "services_reservation_service_find_available_rooms",
+        "services_reservation_service_generate_confirmation_code",
+        "services_reservation_service_invalidate_availability_cache",
+        "services_reservation_service_normalize_pricing_payment_method",
+        "services_reservation_service_notify_reservation_event",
+        "services_reservation_service_pricing_result_for_explicit_total",
+        "services_reservation_service_reservationerror",
+        "services_reservation_service_resolve_creation_channel_code",
+        "services_reservation_service_resolve_hotel_id",
+        "services_reservation_service_resolve_reservation_company",
+        "services_reservation_service_touch_facts",
+        "services_reservation_service_validate_manual_telephonic_guest_requirements",
+        "services_reservation_service_validate_quote_token_for_reservation",
+        "services_reservation_service_validate_reservation_occupancy",
+        "services_reservation_service_with_pricing_revision",
+        "services_reservation_service_pricing_with_total",
+        "services_reservation_service_daily_rate_pricing_result",
+        "services_reservation_service_pricing_result_from_quote",
+        "services_reservation_service_resolve_reservation_commercial_context",
+        "services_reservation_service_validate_stay_dates",
+        "services_reservation_service_get_hotel_default_currency",
+        "services_reservation_service_reservationpricingresult",
+        "services_reservation_service_reservation_channel_indicator",
+        "services_reservation_service_is_manual_or_telephonic_reservation",
+        "services_reservation_service_compute_deposit_amount",
+        "services_reservation_service_calendar_pricing_source"
+      ],
+      "qualifiedPath": [
+        "services_reservation_service_create_reservation",
+        "services_reservation_service_apply_corporate_pricing",
+        "services_reservation_service_apply_custom_deposit_amount",
+        "services_reservation_service_apply_manual_total_override",
+        "services_reservation_service_calculate_reservation_pricing",
+        "services_reservation_service_check_room_availability",
+        "services_reservation_service_find_available_rooms",
+        "services_reservation_service_generate_confirmation_code",
+        "services_reservation_service_invalidate_availability_cache",
+        "services_reservation_service_normalize_pricing_payment_method",
+        "services_reservation_service_notify_reservation_event",
+        "services_reservation_service_pricing_result_for_explicit_total",
+        "services_reservation_service_reservationerror",
+        "services_reservation_service_resolve_creation_channel_code",
+        "services_reservation_service_resolve_hotel_id",
+        "services_reservation_service_resolve_reservation_company",
+        "services_reservation_service_touch_facts",
+        "services_reservation_service_validate_manual_telephonic_guest_requirements",
+        "services_reservation_service_validate_quote_token_for_reservation",
+        "services_reservation_service_validate_reservation_occupancy",
+        "services_reservation_service_with_pricing_revision",
+        "services_reservation_service_pricing_with_total",
+        "services_reservation_service_daily_rate_pricing_result",
+        "services_reservation_service_pricing_result_from_quote",
+        "services_reservation_service_resolve_reservation_commercial_context",
+        "services_reservation_service_validate_stay_dates",
+        "services_reservation_service_get_hotel_default_currency",
+        "services_reservation_service_reservationpricingresult",
+        "services_reservation_service_reservation_channel_indicator",
+        "services_reservation_service_is_manual_or_telephonic_reservation",
+        "services_reservation_service_compute_deposit_amount",
+        "services_reservation_service_calendar_pricing_source"
+      ],
+      "depth": 3,
+      "nodeCount": 32,
+      "fileCount": 1,
+      "files": [
+        "app/services/reservation_service.py"
+      ],
+      "criticality": 0.2191,
+      "warnings": []
+    },
+    {
       "id": "flow:api_movement_groups_revert_movement_group",
       "name": "revert_movement_group",
       "entryPoint": "api_movement_groups_revert_movement_group",
@@ -6118,86 +6480,6 @@
         "app/services/domain_events.py"
       ],
       "criticality": 0.2155,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_reservation_service_create_reservation",
-      "name": "create_reservation",
-      "entryPoint": "services_reservation_service_create_reservation",
-      "entryPointId": "services_reservation_service_create_reservation",
-      "path": [
-        "services_reservation_service_create_reservation",
-        "services_reservation_service_apply_corporate_pricing",
-        "services_reservation_service_apply_custom_deposit_amount",
-        "services_reservation_service_apply_manual_total_override",
-        "services_reservation_service_calculate_reservation_pricing",
-        "services_reservation_service_check_room_availability",
-        "services_reservation_service_find_available_rooms",
-        "services_reservation_service_generate_confirmation_code",
-        "services_reservation_service_invalidate_availability_cache",
-        "services_reservation_service_normalize_pricing_payment_method",
-        "services_reservation_service_notify_reservation_event",
-        "services_reservation_service_pricing_result_for_explicit_total",
-        "services_reservation_service_reservationerror",
-        "services_reservation_service_resolve_creation_channel_code",
-        "services_reservation_service_resolve_hotel_id",
-        "services_reservation_service_resolve_reservation_company",
-        "services_reservation_service_touch_facts",
-        "services_reservation_service_validate_manual_telephonic_guest_requirements",
-        "services_reservation_service_validate_quote_token_for_reservation",
-        "services_reservation_service_validate_reservation_occupancy",
-        "services_reservation_service_with_pricing_revision",
-        "services_reservation_service_pricing_with_total",
-        "services_reservation_service_daily_rate_pricing_result",
-        "services_reservation_service_pricing_result_from_quote",
-        "services_reservation_service_resolve_reservation_commercial_context",
-        "services_reservation_service_get_hotel_default_currency",
-        "services_reservation_service_reservationpricingresult",
-        "services_reservation_service_reservation_channel_indicator",
-        "services_reservation_service_is_manual_or_telephonic_reservation",
-        "services_reservation_service_compute_deposit_amount",
-        "services_reservation_service_calendar_pricing_source"
-      ],
-      "qualifiedPath": [
-        "services_reservation_service_create_reservation",
-        "services_reservation_service_apply_corporate_pricing",
-        "services_reservation_service_apply_custom_deposit_amount",
-        "services_reservation_service_apply_manual_total_override",
-        "services_reservation_service_calculate_reservation_pricing",
-        "services_reservation_service_check_room_availability",
-        "services_reservation_service_find_available_rooms",
-        "services_reservation_service_generate_confirmation_code",
-        "services_reservation_service_invalidate_availability_cache",
-        "services_reservation_service_normalize_pricing_payment_method",
-        "services_reservation_service_notify_reservation_event",
-        "services_reservation_service_pricing_result_for_explicit_total",
-        "services_reservation_service_reservationerror",
-        "services_reservation_service_resolve_creation_channel_code",
-        "services_reservation_service_resolve_hotel_id",
-        "services_reservation_service_resolve_reservation_company",
-        "services_reservation_service_touch_facts",
-        "services_reservation_service_validate_manual_telephonic_guest_requirements",
-        "services_reservation_service_validate_quote_token_for_reservation",
-        "services_reservation_service_validate_reservation_occupancy",
-        "services_reservation_service_with_pricing_revision",
-        "services_reservation_service_pricing_with_total",
-        "services_reservation_service_daily_rate_pricing_result",
-        "services_reservation_service_pricing_result_from_quote",
-        "services_reservation_service_resolve_reservation_commercial_context",
-        "services_reservation_service_get_hotel_default_currency",
-        "services_reservation_service_reservationpricingresult",
-        "services_reservation_service_reservation_channel_indicator",
-        "services_reservation_service_is_manual_or_telephonic_reservation",
-        "services_reservation_service_compute_deposit_amount",
-        "services_reservation_service_calendar_pricing_source"
-      ],
-      "depth": 3,
-      "nodeCount": 31,
-      "fileCount": 1,
-      "files": [
-        "app/services/reservation_service.py"
-      ],
-      "criticality": 0.2123,
       "warnings": []
     },
     {
@@ -6695,34 +6977,6 @@
       "warnings": []
     },
     {
-      "id": "flow:api_users_invite_user",
-      "name": "invite_user",
-      "entryPoint": "api_users_invite_user",
-      "entryPointId": "api_users_invite_user",
-      "path": [
-        "api_users_invite_user",
-        "api_users_assert_assignable_role",
-        "api_users_inviteresponse",
-        "api_users_membership_user_info",
-        "api_users_send_invitation_email"
-      ],
-      "qualifiedPath": [
-        "api_users_invite_user",
-        "api_users_assert_assignable_role",
-        "api_users_inviteresponse",
-        "api_users_membership_user_info",
-        "api_users_send_invitation_email"
-      ],
-      "depth": 1,
-      "nodeCount": 5,
-      "fileCount": 1,
-      "files": [
-        "app/api/users.py"
-      ],
-      "criticality": 0.21,
-      "warnings": []
-    },
-    {
       "id": "flow:services_reservation_operations_service_move_reservation_room",
       "name": "move_reservation_room",
       "entryPoint": "services_reservation_operations_service_move_reservation_room",
@@ -6931,57 +7185,35 @@
       "warnings": []
     },
     {
-      "id": "flow:services_reservation_service_update_reservation_fields",
-      "name": "update_reservation_fields",
-      "entryPoint": "services_reservation_service_update_reservation_fields",
-      "entryPointId": "services_reservation_service_update_reservation_fields",
+      "id": "flow:services_temporary_action_grant_service_consume_grant",
+      "name": "consume_grant",
+      "entryPoint": "services_temporary_action_grant_service_consume_grant",
+      "entryPointId": "services_temporary_action_grant_service_consume_grant",
       "path": [
-        "services_reservation_service_update_reservation_fields",
-        "services_reservation_service_apply_pricing_result_to_reservation",
-        "services_reservation_service_calculate_reservation_pricing",
-        "services_reservation_service_check_room_availability",
-        "services_reservation_service_invalidate_availability_cache",
-        "services_reservation_service_notify_reservation_event",
-        "services_reservation_service_reservationerror",
-        "services_reservation_service_resolve_hotel_id",
-        "services_reservation_service_touch_facts",
-        "services_reservation_service_validate_reservation_occupancy",
-        "services_reservation_service_daily_rate_pricing_result",
-        "services_reservation_service_normalize_pricing_payment_method",
-        "services_reservation_service_pricing_result_from_quote",
-        "services_reservation_service_resolve_reservation_commercial_context",
-        "services_reservation_service_calendar_pricing_source",
-        "services_reservation_service_compute_deposit_amount",
-        "services_reservation_service_get_hotel_default_currency",
-        "services_reservation_service_reservationpricingresult"
+        "services_temporary_action_grant_service_consume_grant",
+        "services_temporary_action_grant_service_active_membership",
+        "services_temporary_action_grant_service_audit",
+        "services_temporary_action_grant_service_expire_stale_grants",
+        "services_temporary_action_grant_service_utcnow",
+        "services_temporary_action_grant_service_temporarygrantauthorizationerror",
+        "services_temporary_action_grant_service_status_value"
       ],
       "qualifiedPath": [
-        "services_reservation_service_update_reservation_fields",
-        "services_reservation_service_apply_pricing_result_to_reservation",
-        "services_reservation_service_calculate_reservation_pricing",
-        "services_reservation_service_check_room_availability",
-        "services_reservation_service_invalidate_availability_cache",
-        "services_reservation_service_notify_reservation_event",
-        "services_reservation_service_reservationerror",
-        "services_reservation_service_resolve_hotel_id",
-        "services_reservation_service_touch_facts",
-        "services_reservation_service_validate_reservation_occupancy",
-        "services_reservation_service_daily_rate_pricing_result",
-        "services_reservation_service_normalize_pricing_payment_method",
-        "services_reservation_service_pricing_result_from_quote",
-        "services_reservation_service_resolve_reservation_commercial_context",
-        "services_reservation_service_calendar_pricing_source",
-        "services_reservation_service_compute_deposit_amount",
-        "services_reservation_service_get_hotel_default_currency",
-        "services_reservation_service_reservationpricingresult"
+        "services_temporary_action_grant_service_consume_grant",
+        "services_temporary_action_grant_service_active_membership",
+        "services_temporary_action_grant_service_audit",
+        "services_temporary_action_grant_service_expire_stale_grants",
+        "services_temporary_action_grant_service_utcnow",
+        "services_temporary_action_grant_service_temporarygrantauthorizationerror",
+        "services_temporary_action_grant_service_status_value"
       ],
-      "depth": 3,
-      "nodeCount": 18,
+      "depth": 2,
+      "nodeCount": 7,
       "fileCount": 1,
       "files": [
-        "app/services/reservation_service.py"
+        "app/services/temporary_action_grant_service.py"
       ],
-      "criticality": 0.2078,
+      "criticality": 0.2057,
       "warnings": []
     },
     {
@@ -7247,6 +7479,42 @@
       "warnings": []
     },
     {
+      "id": "flow:services_temporary_action_grant_service_deny_grant",
+      "name": "deny_grant",
+      "entryPoint": "services_temporary_action_grant_service_deny_grant",
+      "entryPointId": "services_temporary_action_grant_service_deny_grant",
+      "path": [
+        "services_temporary_action_grant_service_deny_grant",
+        "services_temporary_action_grant_service_audit",
+        "services_temporary_action_grant_service_grant_for_actor",
+        "services_temporary_action_grant_service_require_approver",
+        "services_temporary_action_grant_service_temporarygrantstateerror",
+        "services_temporary_action_grant_service_status_value",
+        "services_temporary_action_grant_service_temporarygrantnotfounderror",
+        "services_temporary_action_grant_service_active_membership",
+        "services_temporary_action_grant_service_temporarygrantauthorizationerror"
+      ],
+      "qualifiedPath": [
+        "services_temporary_action_grant_service_deny_grant",
+        "services_temporary_action_grant_service_audit",
+        "services_temporary_action_grant_service_grant_for_actor",
+        "services_temporary_action_grant_service_require_approver",
+        "services_temporary_action_grant_service_temporarygrantstateerror",
+        "services_temporary_action_grant_service_status_value",
+        "services_temporary_action_grant_service_temporarygrantnotfounderror",
+        "services_temporary_action_grant_service_active_membership",
+        "services_temporary_action_grant_service_temporarygrantauthorizationerror"
+      ],
+      "depth": 2,
+      "nodeCount": 9,
+      "fileCount": 1,
+      "files": [
+        "app/services/temporary_action_grant_service.py"
+      ],
+      "criticality": 0.1978,
+      "warnings": []
+    },
+    {
       "id": "flow:agent_ops_check_qa_evidence_main",
       "name": "main",
       "entryPoint": "agent_ops_check_qa_evidence_main",
@@ -7278,6 +7546,42 @@
       "fileCount": 1,
       "files": [
         "scripts/agent_ops/check_qa_evidence.py"
+      ],
+      "criticality": 0.1978,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_temporary_action_grant_service_revoke_grant",
+      "name": "revoke_grant",
+      "entryPoint": "services_temporary_action_grant_service_revoke_grant",
+      "entryPointId": "services_temporary_action_grant_service_revoke_grant",
+      "path": [
+        "services_temporary_action_grant_service_revoke_grant",
+        "services_temporary_action_grant_service_audit",
+        "services_temporary_action_grant_service_grant_for_actor",
+        "services_temporary_action_grant_service_require_approver",
+        "services_temporary_action_grant_service_temporarygrantstateerror",
+        "services_temporary_action_grant_service_status_value",
+        "services_temporary_action_grant_service_temporarygrantnotfounderror",
+        "services_temporary_action_grant_service_active_membership",
+        "services_temporary_action_grant_service_temporarygrantauthorizationerror"
+      ],
+      "qualifiedPath": [
+        "services_temporary_action_grant_service_revoke_grant",
+        "services_temporary_action_grant_service_audit",
+        "services_temporary_action_grant_service_grant_for_actor",
+        "services_temporary_action_grant_service_require_approver",
+        "services_temporary_action_grant_service_temporarygrantstateerror",
+        "services_temporary_action_grant_service_status_value",
+        "services_temporary_action_grant_service_temporarygrantnotfounderror",
+        "services_temporary_action_grant_service_active_membership",
+        "services_temporary_action_grant_service_temporarygrantauthorizationerror"
+      ],
+      "depth": 2,
+      "nodeCount": 9,
+      "fileCount": 1,
+      "files": [
+        "app/services/temporary_action_grant_service.py"
       ],
       "criticality": 0.1978,
       "warnings": []
@@ -7450,6 +7754,46 @@
       "fileCount": 1,
       "files": [
         "app/services/analytics_ai_providers.py"
+      ],
+      "criticality": 0.1927,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_temporary_action_grant_service_approve_grant",
+      "name": "approve_grant",
+      "entryPoint": "services_temporary_action_grant_service_approve_grant",
+      "entryPointId": "services_temporary_action_grant_service_approve_grant",
+      "path": [
+        "services_temporary_action_grant_service_approve_grant",
+        "services_temporary_action_grant_service_audit",
+        "services_temporary_action_grant_service_grant_for_actor",
+        "services_temporary_action_grant_service_require_approver",
+        "services_temporary_action_grant_service_temporarygrantmfaerror",
+        "services_temporary_action_grant_service_temporarygrantstateerror",
+        "services_temporary_action_grant_service_utcnow",
+        "services_temporary_action_grant_service_status_value",
+        "services_temporary_action_grant_service_temporarygrantnotfounderror",
+        "services_temporary_action_grant_service_active_membership",
+        "services_temporary_action_grant_service_temporarygrantauthorizationerror"
+      ],
+      "qualifiedPath": [
+        "services_temporary_action_grant_service_approve_grant",
+        "services_temporary_action_grant_service_audit",
+        "services_temporary_action_grant_service_grant_for_actor",
+        "services_temporary_action_grant_service_require_approver",
+        "services_temporary_action_grant_service_temporarygrantmfaerror",
+        "services_temporary_action_grant_service_temporarygrantstateerror",
+        "services_temporary_action_grant_service_utcnow",
+        "services_temporary_action_grant_service_status_value",
+        "services_temporary_action_grant_service_temporarygrantnotfounderror",
+        "services_temporary_action_grant_service_active_membership",
+        "services_temporary_action_grant_service_temporarygrantauthorizationerror"
+      ],
+      "depth": 2,
+      "nodeCount": 11,
+      "fileCount": 1,
+      "files": [
+        "app/services/temporary_action_grant_service.py"
       ],
       "criticality": 0.1927,
       "warnings": []
@@ -7654,6 +7998,40 @@
         "scripts/agent_ops/trusted_release_gate.py"
       ],
       "criticality": 0.1909,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_audit_timeline_service_list_audit_timeline",
+      "name": "list_audit_timeline",
+      "entryPoint": "services_audit_timeline_service_list_audit_timeline",
+      "entryPointId": "services_audit_timeline_service_list_audit_timeline",
+      "path": [
+        "services_audit_timeline_service_list_audit_timeline",
+        "services_audit_timeline_service_details_for_row",
+        "services_audit_timeline_service_safe_resource_id",
+        "services_audit_timeline_service_source_filters",
+        "services_audit_timeline_service_summary",
+        "services_audit_timeline_service_parse_redacted_json",
+        "services_audit_timeline_service_redact_value",
+        "services_audit_timeline_service_redact_text"
+      ],
+      "qualifiedPath": [
+        "services_audit_timeline_service_list_audit_timeline",
+        "services_audit_timeline_service_details_for_row",
+        "services_audit_timeline_service_safe_resource_id",
+        "services_audit_timeline_service_source_filters",
+        "services_audit_timeline_service_summary",
+        "services_audit_timeline_service_parse_redacted_json",
+        "services_audit_timeline_service_redact_value",
+        "services_audit_timeline_service_redact_text"
+      ],
+      "depth": 4,
+      "nodeCount": 8,
+      "fileCount": 1,
+      "files": [
+        "app/services/audit_timeline_service.py"
+      ],
+      "criticality": 0.19,
       "warnings": []
     },
     {
@@ -12769,28 +13147,6 @@
       "warnings": []
     },
     {
-      "id": "flow:api_invitations_accept_invitation",
-      "name": "accept_invitation",
-      "entryPoint": "api_invitations_accept_invitation",
-      "entryPointId": "api_invitations_accept_invitation",
-      "path": [
-        "api_invitations_accept_invitation",
-        "api_invitations_available_invitation"
-      ],
-      "qualifiedPath": [
-        "api_invitations_accept_invitation",
-        "api_invitations_available_invitation"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "app/api/invitations.py"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
       "id": "flow:services_laundry_service_add_item",
       "name": "add_item",
       "entryPoint": "services_laundry_service_add_item",
@@ -13865,28 +14221,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_invitation_service_consume_invitation",
-      "name": "consume_invitation",
-      "entryPoint": "services_invitation_service_consume_invitation",
-      "entryPointId": "services_invitation_service_consume_invitation",
-      "path": [
-        "services_invitation_service_consume_invitation",
-        "services_invitation_service_utcnow"
-      ],
-      "qualifiedPath": [
-        "services_invitation_service_consume_invitation",
-        "services_invitation_service_utcnow"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "app/services/invitation_service.py"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
       "id": "flow:services_stock_service_consumption_report",
       "name": "consumption_report",
       "entryPoint": "services_stock_service_consumption_report",
@@ -14520,6 +14854,28 @@
       "fileCount": 1,
       "files": [
         "app/services/distributed_lock.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:versions_0f85dca5b98b_add_temporary_action_grants_downgrade",
+      "name": "downgrade",
+      "entryPoint": "versions_0f85dca5b98b_add_temporary_action_grants_downgrade",
+      "entryPointId": "versions_0f85dca5b98b_add_temporary_action_grants_downgrade",
+      "path": [
+        "versions_0f85dca5b98b_add_temporary_action_grants_downgrade",
+        "versions_0f85dca5b98b_add_temporary_action_grants_remove_rls"
+      ],
+      "qualifiedPath": [
+        "versions_0f85dca5b98b_add_temporary_action_grants_downgrade",
+        "versions_0f85dca5b98b_add_temporary_action_grants_remove_rls"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/0f85dca5b98b_add_temporary_action_grants.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -15485,28 +15841,6 @@
       "warnings": []
     },
     {
-      "id": "flow:api_invitations_get_invitation",
-      "name": "get_invitation",
-      "entryPoint": "api_invitations_get_invitation",
-      "entryPointId": "api_invitations_get_invitation",
-      "path": [
-        "api_invitations_get_invitation",
-        "api_invitations_available_invitation"
-      ],
-      "qualifiedPath": [
-        "api_invitations_get_invitation",
-        "api_invitations_available_invitation"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "app/api/invitations.py"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
       "id": "flow:services_stock_service_get_location",
       "name": "get_location",
       "entryPoint": "services_stock_service_get_location",
@@ -15860,28 +16194,6 @@
       "fileCount": 1,
       "files": [
         "app/config.py"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_invitation_service_is_expired",
-      "name": "is_expired",
-      "entryPoint": "services_invitation_service_is_expired",
-      "entryPointId": "services_invitation_service_is_expired",
-      "path": [
-        "services_invitation_service_is_expired",
-        "services_invitation_service_utcnow"
-      ],
-      "qualifiedPath": [
-        "services_invitation_service_is_expired",
-        "services_invitation_service_utcnow"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "app/services/invitation_service.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -17205,34 +17517,6 @@
       "warnings": []
     },
     {
-      "id": "flow:api_users_resend_invitation",
-      "name": "resend_invitation",
-      "entryPoint": "api_users_resend_invitation",
-      "entryPointId": "api_users_resend_invitation",
-      "path": [
-        "api_users_resend_invitation",
-        "api_users_assert_manageable_membership",
-        "api_users_inviteresponse",
-        "api_users_membership_user_info",
-        "api_users_send_invitation_email"
-      ],
-      "qualifiedPath": [
-        "api_users_resend_invitation",
-        "api_users_assert_manageable_membership",
-        "api_users_inviteresponse",
-        "api_users_membership_user_info",
-        "api_users_send_invitation_email"
-      ],
-      "depth": 1,
-      "nodeCount": 5,
-      "fileCount": 1,
-      "files": [
-        "app/api/users.py"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
       "id": "flow:api_demo_reset_demo",
       "name": "reset_demo",
       "entryPoint": "api_demo_reset_demo",
@@ -17480,28 +17764,6 @@
       "fileCount": 1,
       "files": [
         "app/api/integrations.py"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
-      "id": "flow:api_users_revoke_invitation",
-      "name": "revoke_invitation",
-      "entryPoint": "api_users_revoke_invitation",
-      "entryPointId": "api_users_revoke_invitation",
-      "path": [
-        "api_users_revoke_invitation",
-        "api_users_assert_manageable_membership"
-      ],
-      "qualifiedPath": [
-        "api_users_revoke_invitation",
-        "api_users_assert_manageable_membership"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "app/api/users.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -18156,6 +18418,28 @@
       "fileCount": 1,
       "files": [
         "app/services/waitlist_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:versions_0f85dca5b98b_add_temporary_action_grants_upgrade",
+      "name": "upgrade",
+      "entryPoint": "versions_0f85dca5b98b_add_temporary_action_grants_upgrade",
+      "entryPointId": "versions_0f85dca5b98b_add_temporary_action_grants_upgrade",
+      "path": [
+        "versions_0f85dca5b98b_add_temporary_action_grants_upgrade",
+        "versions_0f85dca5b98b_add_temporary_action_grants_install_rls"
+      ],
+      "qualifiedPath": [
+        "versions_0f85dca5b98b_add_temporary_action_grants_upgrade",
+        "versions_0f85dca5b98b_add_temporary_action_grants_install_rls"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/0f85dca5b98b_add_temporary_action_grants.py"
       ],
       "criticality": 0.16,
       "warnings": []

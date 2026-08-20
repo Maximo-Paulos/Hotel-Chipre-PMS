@@ -179,6 +179,11 @@ def _resolve_hotel_id(
     raise ReservationError("hotel_id is required for reservation operations")
 
 
+def _validate_stay_dates(check_in: date, check_out: date) -> None:
+    if check_out <= check_in:
+        raise ReservationError("Check-out date must be after check-in date")
+
+
 def _validate_reservation_occupancy(
     category: RoomCategory,
     num_adults: int | None,
@@ -270,6 +275,14 @@ def calculate_reservation_pricing(
     nights = (check_out - check_in).days
     if nights <= 0:
         raise ReservationError("Check-out date must be after check-in date")
+    if occupancy is not None:
+        if occupancy <= 0:
+            raise ReservationError("Occupancy must be greater than 0")
+        max_occupancy = int(category.max_occupancy or 0)
+        if occupancy > max_occupancy:
+            raise ReservationError(
+                f"La categoría admite hasta {max_occupancy} huéspedes; se solicitaron {occupancy}."
+            )
     pricing_payment_method = normalize_pricing_payment_method(pricing_payment_method)
 
     sellable_product, rate_plan, tax_policy = _resolve_reservation_commercial_context(
@@ -282,6 +295,13 @@ def calculate_reservation_pricing(
     )
 
     if rate_plan is not None:
+        if occupancy is not None:
+            product_min = int(sellable_product.min_occupancy) if sellable_product else 1
+            product_max = int(sellable_product.max_occupancy) if sellable_product else int(category.max_occupancy or 0)
+            if not product_min <= occupancy <= product_max:
+                raise ReservationError(
+                    f"El producto admite entre {product_min} y {product_max} huéspedes; se solicitaron {occupancy}."
+                )
         try:
             quote = quote_rate_plan_stay(
                 db,
@@ -746,6 +766,7 @@ def check_room_availability(
     Check if a specific room is available for the given date range.
     A room is unavailable if there is ANY overlapping active reservation.
     """
+    _validate_stay_dates(check_in, check_out)
     room_query = db.query(Room).filter(Room.id == room_id)
     if hotel_id is not None:
         room_query = room_query.filter(Room.hotel_id == hotel_id)
@@ -790,6 +811,7 @@ def find_available_rooms(
     Find all rooms of a given category that are available in the date range.
     Only considers rooms that are active and not in maintenance/blocked.
     """
+    _validate_stay_dates(check_in, check_out)
     category_query = db.query(RoomCategory).filter(RoomCategory.id == category_id)
     if hotel_id is not None:
         category_query = category_query.filter(RoomCategory.hotel_id == hotel_id)
