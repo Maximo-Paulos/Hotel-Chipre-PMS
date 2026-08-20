@@ -180,9 +180,15 @@ def test_login_json_and_bearer_contract_remain_unchanged_while_cookie_is_additiv
         "user",
         "permissions",
         "requires_verification",
+        "csrf_token",
     }
     assert client.cookies.get(user_session_service.USER_SESSION_COOKIE_NAME)
     assert client.cookies.get(user_session_service.USER_CSRF_COOKIE_NAME)
+    # The API and the SPA are cross-site (Render vs Vercel): the frontend
+    # can never read the CSRF cookie via document.cookie, so the raw value
+    # must also come back in the JSON body -- this is the only channel it
+    # has to learn it.
+    assert body["csrf_token"] == client.cookies.get(user_session_service.USER_CSRF_COOKIE_NAME)
     stored = db.query(UserSession).one()
     assert stored.session_token_hash != client.cookies.get(user_session_service.USER_SESSION_COOKIE_NAME)
     assert stored.device_label == "Chrome en Windows"

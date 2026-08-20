@@ -87,6 +87,12 @@ class AuthResponse(BaseModel):
     user: UserInfo
     permissions: list[str] = Field(default_factory=list)
     requires_verification: bool = False
+    # The CSRF half of the double-submit cookie pair, returned once so the
+    # frontend can echo it as X-CSRF-Token. It cannot rely on reading the
+    # cookie via document.cookie: the API and the SPA are on different sites
+    # (Render vs Vercel), so the cookie is never visible to the page's JS
+    # regardless of its Path/HttpOnly settings.
+    csrf_token: str | None = None
 
 
 class MfaChallengeResponse(BaseModel):
