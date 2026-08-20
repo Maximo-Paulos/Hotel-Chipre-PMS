@@ -25,8 +25,8 @@ def _postgres_healthcheck() -> dict[str, Any]:
             db.execute(text("SELECT 1"))
         return {"status": "ok", "enabled": True, "connected": True, "error": None}
     except Exception as exc:  # pragma: no cover - defensive runtime fallback
-        logger.warning("postgres.healthcheck_failed", extra={"error": str(exc)})
-        return {"status": "error", "enabled": True, "connected": False, "error": str(exc)}
+        logger.warning("postgres.healthcheck_failed", extra={"error_type": type(exc).__name__})
+        return {"status": "error", "enabled": True, "connected": False, "error": "PostgreSQL healthcheck failed"}
 
 
 def _redis_healthcheck() -> dict[str, Any]:
@@ -62,7 +62,7 @@ def _redis_healthcheck() -> dict[str, Any]:
             "error": None,
         }
     except Exception as exc:  # pragma: no cover - defensive runtime fallback
-        logger.warning("redis.healthcheck_failed", extra={"error": str(exc)})
+        logger.warning("redis.healthcheck_failed", extra={"error_type": type(exc).__name__})
         return {
             "status": "error",
             "enabled": True,
@@ -71,7 +71,7 @@ def _redis_healthcheck() -> dict[str, Any]:
             "distributed_locks_enabled": locks_enabled,
             "distributed_locks_required": bool(settings.DISTRIBUTED_LOCK_REQUIRED),
             "realtime_events_enabled": realtime_enabled,
-            "error": str(exc),
+            "error": "Redis healthcheck failed",
         }
 
 
@@ -90,11 +90,11 @@ def _clickhouse_healthcheck() -> dict[str, Any]:
             }
         client.execute("SELECT 1 FORMAT JSONCompact")
         return {"status": "ok", "enabled": True, "connected": True, "error": None}
-    except AnalyticsWarehouseUnavailable as exc:
-        return {"status": "error", "enabled": True, "connected": False, "error": str(exc)}
+    except AnalyticsWarehouseUnavailable:
+        return {"status": "error", "enabled": True, "connected": False, "error": "ClickHouse healthcheck failed"}
     except Exception as exc:  # pragma: no cover - provider-specific runtime failure
-        logger.warning("clickhouse.healthcheck_failed", extra={"error": str(exc)})
-        return {"status": "error", "enabled": True, "connected": False, "error": str(exc)}
+        logger.warning("clickhouse.healthcheck_failed", extra={"error_type": type(exc).__name__})
+        return {"status": "error", "enabled": True, "connected": False, "error": "ClickHouse healthcheck failed"}
 
 
 @router.get("/datastores")

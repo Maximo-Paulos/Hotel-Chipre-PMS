@@ -117,7 +117,10 @@ def _invalidate_availability_cache(hotel_id: int | None) -> None:
     try:
         invalidate_hotel_operational_caches(hotel_id)
     except Exception as exc:  # pragma: no cover - defensive cache isolation
-        logger.debug("reservation.availability_cache_invalidation_failed", extra={"hotel_id": hotel_id, "error": str(exc)})
+        logger.debug(
+            "reservation.availability_cache_invalidation_failed",
+            extra={"hotel_id": hotel_id, "error_type": type(exc).__name__},
+        )
 
 
 def _touch_facts(db: Session, hotel_id: int | None, date_from: date | None, date_to: date | None) -> None:
@@ -160,8 +163,11 @@ def _notify_reservation_event(
             payload={"reservation_id": reservation.id, "status": reservation.status.value if reservation.status else None},
             recipient_roles=list(ROLE_CODES),
         )
-    except Exception:
-        logger.exception("reservation.notify_failed", extra={"hotel_id": hotel_id, "reservation_id": reservation.id})
+    except Exception as exc:
+        logger.error(
+            "reservation.notify_failed",
+            extra={"hotel_id": hotel_id, "reservation_id": reservation.id, "error_type": type(exc).__name__},
+        )
 
 
 def _resolve_hotel_id(

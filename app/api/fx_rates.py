@@ -60,7 +60,7 @@ async def get_all_rates(
     try:
         rates = await fetch_all_rates()
     except Exception as exc:
-        logger.error("Error fetching all FX rates: %s", exc)
+        logger.error("Error fetching all FX rates error_type=%s", type(exc).__name__)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="No se pudieron obtener los tipos de cambio. Intente nuevamente.",
@@ -139,7 +139,7 @@ async def create_fx_snapshot(
     try:
         snapshot_data = await get_all_rates_snapshot()
     except Exception as exc:
-        logger.error("Error fetching snapshot for persistence: %s", exc)
+        logger.error("Error fetching snapshot for persistence error_type=%s", type(exc).__name__)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="No se pudieron obtener los tipos de cambio para persistir.",

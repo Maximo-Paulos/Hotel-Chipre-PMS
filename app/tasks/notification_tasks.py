@@ -38,9 +38,9 @@ def process_outbox(database_url: Optional[str] = None) -> dict:
         counts = process_pending_outbox(db)
         db.commit()
         return counts
-    except Exception:
+    except Exception as exc:
         db.rollback()
-        logger.exception("notification_tasks.process_outbox_failed")
+        logger.error("notification_tasks.process_outbox_failed error_type=%s", type(exc).__name__)
         raise
     finally:
         db.close()
@@ -55,9 +55,9 @@ def generate_daily_reports(database_url: Optional[str] = None) -> dict:
         results = generate_due_daily_reports(db)
         db.commit()
         return {"hotels_reported": len(results), "results": results}
-    except Exception:
+    except Exception as exc:
         db.rollback()
-        logger.exception("notification_tasks.generate_daily_reports_failed")
+        logger.error("notification_tasks.generate_daily_reports_failed error_type=%s", type(exc).__name__)
         raise
     finally:
         db.close()

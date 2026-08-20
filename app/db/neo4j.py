@@ -29,7 +29,7 @@ def get_neo4j_driver() -> Any | None:
         _neo4j_driver.verify_connectivity()
         return _neo4j_driver
     except Exception as exc:  # pragma: no cover - defensive runtime fallback
-        logger.warning("neo4j.unavailable", extra={"error": str(exc)})
+        logger.warning("neo4j.unavailable", extra={"error_type": type(exc).__name__})
         _neo4j_driver = None
         return None
 
@@ -46,5 +46,5 @@ def neo4j_healthcheck() -> dict[str, Any]:
         driver.verify_connectivity()
         return {"status": "ok", "enabled": True, "connected": True, "error": None}
     except Exception as exc:  # pragma: no cover - defensive runtime fallback
-        logger.warning("neo4j.healthcheck_failed", extra={"error": str(exc)})
-        return {"status": "error", "enabled": True, "connected": False, "error": str(exc)}
+        logger.warning("neo4j.healthcheck_failed", extra={"error_type": type(exc).__name__})
+        return {"status": "error", "enabled": True, "connected": False, "error": "Neo4j healthcheck failed"}

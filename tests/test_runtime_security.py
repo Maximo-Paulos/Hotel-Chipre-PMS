@@ -194,6 +194,36 @@ def test_validate_runtime_security_rejects_unsafe_production_sandbox_profile():
             raise AssertionError(f"Production sandbox must reject {field}={value!r}")
 
 
+def test_validate_runtime_security_rejects_insecure_cookie_override_and_cors_wildcard():
+    base = {
+        "APP_ENV": "production",
+        "EXTERNAL_EFFECTS_ENABLED": False,
+        "INBOUND_PROVIDER_EVENTS_ENABLED": False,
+        "GOOGLE_LOGIN_ENABLED": False,
+        "CONNECTIONS_ENABLED": False,
+        "AI_ENABLED": False,
+        "AI_PROVIDER": "disabled",
+        "GEMMA_ENABLED": False,
+        "GEMMA_PROVIDER": "disabled",
+        "PAYPAL_MODE": "sandbox",
+        "EMAIL_PROVIDER": "null",
+        "JWT_SECRET": "super-secret-value-for-production-1234567890",
+        "MASTER_ADMIN_PIN": "654321",
+        "APP_BASE_URL": "https://hotel-chipre.example.com",
+        "DISTRIBUTED_LOCK_REQUIRED": True,
+        "INTEGRATIONS_ENCRYPTION_KEY": "fRb9jE74bWw5gAKpNwZrl_uCWhsx2Nl7fNL1jK5vLG8=",
+    }
+
+    for field, value in (("MASTER_ADMIN_COOKIE_SECURE", False), ("CORS_ORIGINS", "*")):
+        settings = Settings(**{**base, field: value})
+        try:
+            validate_runtime_security(settings)
+        except RuntimeError as exc:
+            assert field in str(exc)
+        else:
+            raise AssertionError(f"Production security validation should reject {field}={value!r}")
+
+
 def test_validate_runtime_security_requires_explicit_external_policy_flags():
     settings = Settings(
         APP_ENV="production",

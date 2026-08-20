@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 import json
+import re
 from urllib.parse import urlencode
 import requests
 
@@ -18,6 +19,27 @@ from app.services.encryption import get_encryption_fernet
 
 GOOGLE_IDENTITY_SCOPES = ["openid", "email", "profile"]
 GMAIL_SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send"
+
+_CREDENTIAL_ASSIGNMENT_RE = re.compile(
+    r"(?i)(authorization|bearer|access[_ -]?token|refresh[_ -]?token|api[_ -]?key|secret|password)"
+    r"(\s*[:=]\s*)([^,;\s}\"']+)"
+)
+_URL_CREDENTIAL_RE = re.compile(r"(?i)(://)([^/@\s:]+):([^/@\s]+)@")
+
+
+def redact_integration_error(
+    value: object,
+    *,
+    fallback: str = "No se pudo completar la conexion con el proveedor.",
+) -> str:
+    """Keep provider diagnostics useful without returning credential material."""
+
+    message = str(value or "").strip()
+    if not message:
+        return fallback
+    message = _CREDENTIAL_ASSIGNMENT_RE.sub(r"\1\2[REDACTED]", message)
+    message = _URL_CREDENTIAL_RE.sub(r"\1[REDACTED]:[REDACTED]@", message)
+    return message[:250] or fallback
 
 
 def _fernet():
@@ -199,7 +221,10 @@ def _mercadopago_error_message(response: requests.Response) -> str:
                 "El access_token de Mercado Pago es invalido, esta incompleto o no tiene permisos para "
                 "crear links de cobro. Vuelve a conectar Mercado Pago con un Access Token real de tu cuenta."
             )
-    return message or response.text[:250] or "Mercado Pago rechazo las credenciales."
+    return redact_integration_error(
+        message or response.text,
+        fallback="Mercado Pago rechazo las credenciales.",
+    )
 
 
 def validate_mercadopago_credentials(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -405,10 +430,10 @@ def verify_connection_health(
         payload = decrypt_payload(connection.auth_payload)
     except ValueError as exc:
         connection.status = "error"
-        connection.last_error = str(exc)
+        connection.last_error = redact_integration_error(exc)
         connection.last_checked_at = now
         db.flush()
-        return connection, str(exc)
+        return connection, connection.last_error
 
     if integration.provider == "mercadopago":
         try:
@@ -424,10 +449,10 @@ def verify_connection_health(
             return connection, "Conexion verificada correctamente con Mercado Pago."
         except ValueError as exc:
             connection.status = "error"
-            connection.last_error = str(exc)
+            connection.last_error = redact_integration_error(exc)
             connection.last_checked_at = now
             db.flush()
-            return connection, str(exc)
+            return connection, connection.last_error
 
     if integration.provider == "gmail":
         try:
@@ -441,10 +466,10 @@ def verify_connection_health(
             return connection, f"Gmail verificado correctamente para {enriched.get('account_email')}."
         except ValueError as exc:
             connection.status = "error"
-            connection.last_error = str(exc)
+            connection.last_error = redact_integration_error(exc)
             connection.last_checked_at = now
             db.flush()
-            return connection, str(exc)
+            return connection, connection.last_error
 
     connection.last_checked_at = now
     connection.last_error = None

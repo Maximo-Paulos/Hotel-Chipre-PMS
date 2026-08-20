@@ -16,6 +16,8 @@ from app.adapters.rate_limiter import (
     verify_request_limiter,
     reset_request_limiter,
     invite_limiter,
+    invitation_accept_limiter,
+    invitation_preview_limiter,
     code_guess_limiter,
     register_limiter,
 )
@@ -240,6 +242,40 @@ def test_invite_rate_limited(authed_client):
 
     assert r1.status_code == 201
     assert r2.status_code == 429
+
+
+def test_invitation_preview_and_acceptance_are_rate_limited(client_with_db):
+    client, db = client_with_db
+    preview_limit = invitation_preview_limiter.limit
+    accept_limit = invitation_accept_limiter.limit
+    invitation_preview_limiter.limit = 1
+    invitation_accept_limiter.limit = 1
+    invitation_preview_limiter.reset("testclient", db=db)
+    invitation_accept_limiter.reset("testclient", db=db)
+    db.commit()
+
+    try:
+        preview_one = client.get("/api/invitations/not-a-valid-token")
+        preview_two = client.get("/api/invitations/not-a-valid-token")
+        accept_one = client.post(
+            "/api/invitations/not-a-valid-token/accept",
+            json={"email": "invite@test.com", "password": "NewPassword123!"},
+        )
+        accept_two = client.post(
+            "/api/invitations/not-a-valid-token/accept",
+            json={"email": "invite@test.com", "password": "NewPassword123!"},
+        )
+    finally:
+        invitation_preview_limiter.reset("testclient", db=db)
+        invitation_accept_limiter.reset("testclient", db=db)
+        db.commit()
+        invitation_preview_limiter.limit = preview_limit
+        invitation_accept_limiter.limit = accept_limit
+
+    assert preview_one.status_code == 401
+    assert preview_two.status_code == 429
+    assert accept_one.status_code == 401
+    assert accept_two.status_code == 429
 
 
 def test_concurrent_db_requests_record_each_attempt_before_deciding(tmp_path):

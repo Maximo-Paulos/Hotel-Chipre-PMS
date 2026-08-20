@@ -185,8 +185,11 @@ def _notify_if_low_stock(db: Session, *, hotel_id: int, item: StockItem) -> None
             payload={"item_id": item.id, "status": "low" if balance > 0 else "out"},
             recipient_roles=list(ROLE_CODES),
         )
-    except Exception:
-        logger.exception("stock.low_stock_notify_failed", extra={"hotel_id": hotel_id, "item_id": item.id})
+    except Exception as exc:
+        logger.error(
+            "stock.low_stock_notify_failed",
+            extra={"hotel_id": hotel_id, "item_id": item.id, "error_type": type(exc).__name__},
+        )
 
 
 def register_movement(

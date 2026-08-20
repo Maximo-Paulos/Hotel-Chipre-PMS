@@ -41,7 +41,7 @@ def _get_redis_client() -> redis.Redis | None:
     try:
         return redis.Redis.from_url(_settings().REDIS_URL, decode_responses=True)
     except Exception as exc:  # pragma: no cover - defensive configuration fallback
-        logger.warning("distributed_lock.redis_unavailable", extra={"error": str(exc)})
+        logger.warning("distributed_lock.redis_unavailable", extra={"error_type": type(exc).__name__})
         return None
 
 
@@ -73,7 +73,10 @@ def _try_postgres_advisory_lock(db: object | None, key: str) -> bool | None:
             ).scalar_one()
         )
     except Exception as exc:  # pragma: no cover - defensive provider fallback
-        logger.warning("distributed_lock.postgres_advisory_unavailable", extra={"lock_key": key, "error": str(exc)})
+        logger.warning(
+            "distributed_lock.postgres_advisory_unavailable",
+            extra={"lock_key": key, "error_type": type(exc).__name__},
+        )
         return None
 
 
@@ -120,7 +123,7 @@ def distributed_lock(key: str, *, db: object | None = None, ttl_seconds: int | N
             raise DistributedLockBusy(f"Distributed lock is already held: {key}")
         if _required():
             raise DistributedLockUnavailable("Distributed lock backend is unavailable") from exc
-        logger.warning("distributed_lock.acquire_degraded", extra={"lock_key": key, "error": str(exc)})
+        logger.warning("distributed_lock.acquire_degraded", extra={"lock_key": key, "error_type": type(exc).__name__})
         yield
         return
 
@@ -133,7 +136,7 @@ def distributed_lock(key: str, *, db: object | None = None, ttl_seconds: int | N
         try:
             client.eval(_RELEASE_SCRIPT, 1, key, token)
         except Exception as exc:  # pragma: no cover - lock TTL remains the recovery mechanism
-            logger.warning("distributed_lock.release_failed", extra={"lock_key": key, "error": str(exc)})
+            logger.warning("distributed_lock.release_failed", extra={"lock_key": key, "error_type": type(exc).__name__})
 
 
 def with_distributed_lock(

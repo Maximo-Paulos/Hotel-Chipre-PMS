@@ -190,6 +190,10 @@ def _has_value(value: str | None) -> bool:
     return bool((value or "").strip())
 
 
+def _cors_contains_wildcard(settings: Settings) -> bool:
+    return any(entry.strip() == "*" for entry in (settings.CORS_ORIGINS or "").split(","))
+
+
 def _is_public_https_url(value: str | None) -> bool:
     normalized = (value or "").strip()
     return normalized.startswith("https://") and not any(host in normalized for host in ("localhost", "127.0.0.1"))
@@ -280,6 +284,8 @@ def _validate_preview_qa_security(runtime_settings: Settings) -> None:
         errors.append("NEO4J_ENABLED must be false in preview QA")
     if runtime_settings.MASTER_ADMIN_COOKIE_SECURE is not True:
         errors.append("MASTER_ADMIN_COOKIE_SECURE must be true in preview QA")
+    if _cors_contains_wildcard(runtime_settings):
+        errors.append("CORS_ORIGINS must not contain * in preview QA")
 
     if (
         not runtime_settings.JWT_SECRET
@@ -416,6 +422,10 @@ def validate_runtime_security(settings: Settings | None = None) -> None:
 
     if not runtime_settings.DISTRIBUTED_LOCK_ENABLED or not runtime_settings.DISTRIBUTED_LOCK_REQUIRED:
         errors.append("DISTRIBUTED_LOCK_ENABLED and DISTRIBUTED_LOCK_REQUIRED must be true in production")
+    if runtime_settings.MASTER_ADMIN_COOKIE_SECURE is False:
+        errors.append("MASTER_ADMIN_COOKIE_SECURE must not be false in production")
+    if _cors_contains_wildcard(runtime_settings):
+        errors.append("CORS_ORIGINS must not contain * in production")
     if runtime_settings.CLICKHOUSE_REQUIRED and (
         not runtime_settings.CLICKHOUSE_ENABLED or not runtime_settings.CLICKHOUSE_URL.strip()
     ):

@@ -122,8 +122,8 @@ def _publish_restriction_event(
         )
     except RealtimeEventsUnavailable:
         logger.warning("guest_restriction.realtime_unavailable", extra={"hotel_id": hotel_id})
-    except Exception:
-        logger.exception("guest_restriction.publish_failed", extra={"hotel_id": hotel_id})
+    except Exception as exc:
+        logger.error("guest_restriction.publish_failed", extra={"hotel_id": hotel_id, "error_type": type(exc).__name__})
 
 
 def _publish_restriction_created(*, hotel_id: int, guest_id: int, restriction: GuestRestriction, actor_user_id: Optional[int]) -> None:
@@ -160,8 +160,8 @@ def _notify_restriction_event(
             payload={"guest_id": guest_id, "restriction_id": restriction.id, "status": restriction.status.value},
             recipient_roles=list(ROLE_CODES),
         )
-    except Exception:
-        logger.exception("guest_restriction.notify_failed", extra={"hotel_id": hotel_id})
+    except Exception as exc:
+        logger.error("guest_restriction.notify_failed", extra={"hotel_id": hotel_id, "error_type": type(exc).__name__})
 
 
 def create_guest_restriction(

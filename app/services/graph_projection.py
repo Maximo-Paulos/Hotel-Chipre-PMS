@@ -71,7 +71,7 @@ def project_reservation_assignment(
             },
         )
     except Exception as exc:  # pragma: no cover - defensive datastore isolation
-        logger.warning("neo4j.assignment_projection_failed", extra={"error": str(exc)})
+        logger.warning("neo4j.assignment_projection_failed", extra={"error_type": type(exc).__name__})
 
 
 def project_room_movement(
@@ -99,7 +99,7 @@ def project_room_movement(
             },
         )
     except Exception as exc:  # pragma: no cover - defensive datastore isolation
-        logger.warning("neo4j.room_movement_projection_failed", extra={"error": str(exc)})
+        logger.warning("neo4j.room_movement_projection_failed", extra={"error_type": type(exc).__name__})
 
 
 def project_company_link(hotel_id: int, company_id: int, reservation_id: int) -> None:
@@ -119,4 +119,4 @@ def project_company_link(hotel_id: int, company_id: int, reservation_id: int) ->
             },
         )
     except Exception as exc:  # pragma: no cover - defensive datastore isolation
-        logger.warning("neo4j.company_link_projection_failed", extra={"error": str(exc)})
+        logger.warning("neo4j.company_link_projection_failed", extra={"error_type": type(exc).__name__})

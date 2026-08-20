@@ -29,6 +29,7 @@ from app.services.integration_service import (
     exchange_token,
     get_connection_record,
     list_catalog_with_status,
+    redact_integration_error,
     record_event,
     revoke_connection,
     upsert_connection,
@@ -71,12 +72,15 @@ def _connection_error_message(exc: Exception) -> str:
             if isinstance(payload, dict):
                 message = payload.get("message") or payload.get("error_description") or payload.get("error")
                 if isinstance(message, str) and message.strip():
-                    return message.strip()
+                    return redact_integration_error(message)
         except Exception:
             pass
         if getattr(response, "text", None):
-            return response.text[:250]
-    return str(exc)[:250] or "No se pudo guardar la conexion."
+            return redact_integration_error(
+                response.text,
+                fallback="El proveedor rechazo la conexion configurada.",
+            )
+    return redact_integration_error(exc, fallback="No se pudo guardar la conexion.")
 
 
 def _origin_for_popup(request: Request) -> str:
@@ -271,7 +275,7 @@ def get_status(
             conn.account_label = connection_account_label(conn)  # type: ignore[attr-defined]
         except ValueError as exc:
             conn.account_label = None  # type: ignore[attr-defined]
-            conn.last_error = str(exc)
+            conn.last_error = redact_integration_error(exc)
         response_connections.append(conn)
     return IntegrationStatusResponse(catalog=catalog, connections=response_connections)
 
@@ -300,16 +304,20 @@ def connect_integration(
                     integration_id,
                     oauth_payload,
                     status="error",
-                    last_error=str(exc),
+                    last_error=redact_integration_error(exc),
                 )
                 record_event(
                     db,
                     conn.id,
                     "failure",
-                    {"auth_type": integration.auth_type, "provider": integration.provider, "message": str(exc)},
+                    {
+                        "auth_type": integration.auth_type,
+                        "provider": integration.provider,
+                        "message": redact_integration_error(exc),
+                    },
                 )
                 db.commit()
-                raise HTTPException(status_code=400, detail=str(exc))
+                raise HTTPException(status_code=400, detail=redact_integration_error(exc)) from exc
             conn = upsert_connection(
                 db,
                 context.hotel_id,
@@ -389,16 +397,20 @@ def connect_integration(
             integration_id,
             manual_payload,
             status="error",
-            last_error=str(exc),
+            last_error=redact_integration_error(exc),
         )
         record_event(
             db,
             conn.id,
             "failure",
-            {"auth_type": integration.auth_type, "provider": integration.provider, "message": str(exc)},
+            {
+                "auth_type": integration.auth_type,
+                "provider": integration.provider,
+                "message": redact_integration_error(exc),
+            },
         )
         db.commit()
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=redact_integration_error(exc)) from exc
 
     conn = upsert_connection(db, context.hotel_id, integration_id, manual_payload, status="connected")
     record_event(db, conn.id, "connect", {"auth_type": integration.auth_type, "provider": integration.provider})
@@ -509,4 +521,4 @@ def refresh(
         raise HTTPException(status_code=404, detail=str(exc))
     except Exception as exc:
         db.rollback()
-        raise HTTPException(status_code=502, detail=f"No se pudo verificar la conexion: {exc}")
+        raise HTTPException(status_code=502, detail="No se pudo verificar la conexion") from exc

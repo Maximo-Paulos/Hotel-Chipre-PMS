@@ -58,8 +58,11 @@ def _notify_reservation_event(db: Session, *, hotel_id: int, reservation: Reserv
             payload={"reservation_id": reservation.id, "status": reservation.status.value if reservation.status else None},
             recipient_roles=list(ROLE_CODES),
         )
-    except Exception:
-        logger.exception("checkin.notify_failed", extra={"hotel_id": hotel_id, "reservation_id": reservation.id})
+    except Exception as exc:
+        logger.error(
+            "checkin.notify_failed",
+            extra={"hotel_id": hotel_id, "reservation_id": reservation.id, "error_type": type(exc).__name__},
+        )
 
 
 def _resolve_jurisdiction_code(config: HotelConfiguration | None) -> str:

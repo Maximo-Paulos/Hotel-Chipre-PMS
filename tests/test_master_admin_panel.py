@@ -556,6 +556,11 @@ def test_require_master_admin_sets_master_admin_rls_context(master_client, monke
 
 
 def test_master_session_cookie_uses_cross_site_settings_in_production(monkeypatch):
+    monkeypatch.setattr(
+        master_security,
+        "get_settings",
+        lambda: type("ProductionSettings", (), {"MASTER_ADMIN_COOKIE_SECURE": False})(),
+    )
     monkeypatch.setattr(master_security, "is_production_mode", lambda settings=None: True)
     response = Response()
 

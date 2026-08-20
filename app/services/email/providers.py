@@ -107,7 +107,11 @@ class ResendEmailProvider(EmailProvider):
                 timeout=20,
             )
         except Exception as exc:  # pragma: no cover - network failure
-            LOGGER.exception("Resend send failed recipients=%s subject=%s", masked_recipients, subject)
+            LOGGER.error(
+                "Resend send failed recipients=%s error_type=%s",
+                masked_recipients,
+                type(exc).__name__,
+            )
             raise EmailProviderError("No se pudo conectar con Resend para enviar el correo del sistema.") from exc
 
         if not response.ok:

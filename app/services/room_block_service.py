@@ -34,7 +34,10 @@ def _invalidate_availability_cache(hotel_id: int) -> None:
     try:
         invalidate_hotel_operational_caches(hotel_id)
     except Exception as exc:  # pragma: no cover - defensive cache isolation
-        logger.debug("room_block.availability_cache_invalidation_failed", extra={"hotel_id": hotel_id, "error": str(exc)})
+        logger.debug(
+            "room_block.availability_cache_invalidation_failed",
+            extra={"hotel_id": hotel_id, "error_type": type(exc).__name__},
+        )
 
 
 def _validate_range(starts_at: date, ends_at: date | None, is_indefinite: bool) -> None:

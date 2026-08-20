@@ -167,12 +167,13 @@ def safe_create_audit_log(
             )
             db.flush()
         return audit_log
-    except Exception:
-        logger.exception(
+    except Exception as exc:
+        logger.error(
             "Audit logging failed table=%s record_id=%s action=%s hotel_id=%s",
             table_name,
             record_id,
             audit_action.value,
             hotel_id,
+            extra={"error_type": type(exc).__name__},
         )
         return None

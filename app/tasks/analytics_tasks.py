@@ -330,7 +330,7 @@ def detect_no_shows(
         finally:
             db.close()
     except Exception as exc:
-        logger.error("analytics.detect_no_shows failed: %s", exc)
+        logger.error("analytics.detect_no_shows failed error_type=%s", type(exc).__name__)
         raise self.retry(exc=exc)
 
 
@@ -378,7 +378,7 @@ def refresh_fact_reservation_daily(
         finally:
             db.close()
     except Exception as exc:
-        logger.error("analytics.refresh_fact_reservation_daily failed: %s", exc)
+        logger.error("analytics.refresh_fact_reservation_daily failed error_type=%s", type(exc).__name__)
         raise self.retry(exc=exc)
 
 
@@ -426,7 +426,7 @@ def refresh_fact_room_occupancy_daily(
         finally:
             db.close()
     except Exception as exc:
-        logger.error("analytics.refresh_fact_room_occupancy_daily failed: %s", exc)
+        logger.error("analytics.refresh_fact_room_occupancy_daily failed error_type=%s", type(exc).__name__)
         raise self.retry(exc=exc)
 
 
@@ -522,7 +522,7 @@ def project_reservation_facts_to_clickhouse(
         finally:
             db.close()
     except Exception as exc:
-        logger.error("analytics.project_reservation_facts_to_clickhouse failed: %s", exc)
+        logger.error("analytics.project_reservation_facts_to_clickhouse failed error_type=%s", type(exc).__name__)
         raise self.retry(exc=exc)
 
 
@@ -571,7 +571,7 @@ def project_operational_facts_to_clickhouse(
         finally:
             db.close()
     except Exception as exc:
-        logger.error("analytics.project_operational_facts_to_clickhouse failed: %s", exc)
+        logger.error("analytics.project_operational_facts_to_clickhouse failed error_type=%s", type(exc).__name__)
         raise self.retry(exc=exc)
 
 
@@ -639,7 +639,7 @@ def project_all_derived_facts_incremental(self, database_url: Optional[str] = No
         result["window"] = "incremental"
         return result
     except Exception as exc:
-        logger.error("analytics.project_all_derived_facts_incremental failed: %s", exc)
+        logger.error("analytics.project_all_derived_facts_incremental failed error_type=%s", type(exc).__name__)
         raise self.retry(exc=exc)
 
 
@@ -662,7 +662,7 @@ def reconcile_all_derived_facts_nightly(self, database_url: Optional[str] = None
         result["window"] = "nightly"
         return result
     except Exception as exc:
-        logger.error("analytics.reconcile_all_derived_facts_nightly failed: %s", exc)
+        logger.error("analytics.reconcile_all_derived_facts_nightly failed error_type=%s", type(exc).__name__)
         raise self.retry(exc=exc)
 
 
@@ -719,5 +719,5 @@ def cleanup_expired_exports(self, database_url: Optional[str] = None):
         finally:
             db.close()
     except Exception as exc:
-        logger.error("analytics.cleanup_expired_exports failed: %s", exc)
+        logger.error("analytics.cleanup_expired_exports failed error_type=%s", type(exc).__name__)
         raise self.retry(exc=exc)

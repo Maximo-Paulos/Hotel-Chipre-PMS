@@ -203,13 +203,14 @@ def audited_change(table_name: str, action: AuditActionEnum | str) -> Callable[[
                             final_record_id,
                             audit_action.value,
                         )
-            except Exception:
-                logger.exception(
+            except Exception as exc:
+                logger.error(
                     "Audit logging failed for %s table=%s record_id=%s action=%s",
                     func.__name__,
                     table_name,
                     record_id,
                     audit_action.value,
+                    extra={"error_type": type(exc).__name__},
                 )
 
             return result
