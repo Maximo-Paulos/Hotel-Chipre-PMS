@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-20T18:50:53.718Z",
+  "generatedAt": "2026-08-20T18:53:59.305Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -1663,6 +1663,28 @@
       "warnings": []
     },
     {
+      "id": "flow:state_session_initialsession",
+      "name": "initialSession",
+      "entryPoint": "state_session_initialsession",
+      "entryPointId": "state_session_initialsession",
+      "path": [
+        "state_session_initialsession",
+        "state_session_readstoredcsrftoken"
+      ],
+      "qualifiedPath": [
+        "state_session_initialsession",
+        "state_session_readstoredcsrftoken"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/state/session.tsx"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
       "id": "flow:services_user_session_service_list_active_sessions",
       "name": "list_active_sessions",
       "entryPoint": "services_user_session_service_list_active_sessions",
@@ -2037,6 +2059,28 @@
       "warnings": []
     },
     {
+      "id": "flow:state_session_sessionfromauthresponse",
+      "name": "sessionFromAuthResponse",
+      "entryPoint": "state_session_sessionfromauthresponse",
+      "entryPointId": "state_session_sessionfromauthresponse",
+      "path": [
+        "state_session_sessionfromauthresponse",
+        "state_session_normalizerole"
+      ],
+      "qualifiedPath": [
+        "state_session_sessionfromauthresponse",
+        "state_session_normalizerole"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/state/session.tsx"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
       "id": "flow:services_user_session_service_session_matches_token",
       "name": "session_matches_token",
       "entryPoint": "services_user_session_service_session_matches_token",
@@ -2402,6 +2446,60 @@
         "app/services/integration_service.py"
       ],
       "criticality": 0.3367,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_client_apifetch",
+      "name": "apiFetch",
+      "entryPoint": "api_client_apifetch",
+      "entryPointId": "api_client_apifetch",
+      "path": [
+        "api_client_apifetch",
+        "api_client_apierror",
+        "api_client_buildauthheaders",
+        "api_client_buildurl",
+        "api_client_formaterrordetail",
+        "api_client_handleunauthorized",
+        "api_client_requestwithrefresh",
+        "api_client_safejson",
+        "api_client_hasvalidsession",
+        "api_client_normalizehotelid",
+        "api_client_ispublicauthpath",
+        "api_client_makeapierror",
+        "api_client_mergesession",
+        "api_client_refreshsession",
+        "api_client_requestheaders",
+        "api_client_setclientsession",
+        "api_client_istokenexpired",
+        "api_client_jwtexpms"
+      ],
+      "qualifiedPath": [
+        "api_client_apifetch",
+        "api_client_apierror",
+        "api_client_buildauthheaders",
+        "api_client_buildurl",
+        "api_client_formaterrordetail",
+        "api_client_handleunauthorized",
+        "api_client_requestwithrefresh",
+        "api_client_safejson",
+        "api_client_hasvalidsession",
+        "api_client_normalizehotelid",
+        "api_client_ispublicauthpath",
+        "api_client_makeapierror",
+        "api_client_mergesession",
+        "api_client_refreshsession",
+        "api_client_requestheaders",
+        "api_client_setclientsession",
+        "api_client_istokenexpired",
+        "api_client_jwtexpms"
+      ],
+      "depth": 4,
+      "nodeCount": 18,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/api/client.ts"
+      ],
+      "criticality": 0.3289,
       "warnings": []
     },
     {
@@ -3584,46 +3682,6 @@
         "scripts/bootstrap_cloud_qa.py"
       ],
       "criticality": 0.2842,
-      "warnings": []
-    },
-    {
-      "id": "flow:api_client_apifetch",
-      "name": "apiFetch",
-      "entryPoint": "api_client_apifetch",
-      "entryPointId": "api_client_apifetch",
-      "path": [
-        "api_client_apifetch",
-        "api_client_apierror",
-        "api_client_buildauthheaders",
-        "api_client_buildurl",
-        "api_client_formaterrordetail",
-        "api_client_handleunauthorized",
-        "api_client_safejson",
-        "api_client_hasvalidsession",
-        "api_client_normalizehotelid",
-        "api_client_istokenexpired",
-        "api_client_jwtexpms"
-      ],
-      "qualifiedPath": [
-        "api_client_apifetch",
-        "api_client_apierror",
-        "api_client_buildauthheaders",
-        "api_client_buildurl",
-        "api_client_formaterrordetail",
-        "api_client_handleunauthorized",
-        "api_client_safejson",
-        "api_client_hasvalidsession",
-        "api_client_normalizehotelid",
-        "api_client_istokenexpired",
-        "api_client_jwtexpms"
-      ],
-      "depth": 4,
-      "nodeCount": 11,
-      "fileCount": 1,
-      "files": [
-        "frontend/src/api/client.ts"
-      ],
-      "criticality": 0.2809,
       "warnings": []
     },
     {
@@ -7456,40 +7514,6 @@
         "scripts/agent_ops/trusted_release_gate.py"
       ],
       "criticality": 0.1909,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_audit_timeline_service_list_audit_timeline",
-      "name": "list_audit_timeline",
-      "entryPoint": "services_audit_timeline_service_list_audit_timeline",
-      "entryPointId": "services_audit_timeline_service_list_audit_timeline",
-      "path": [
-        "services_audit_timeline_service_list_audit_timeline",
-        "services_audit_timeline_service_details_for_row",
-        "services_audit_timeline_service_safe_resource_id",
-        "services_audit_timeline_service_source_filters",
-        "services_audit_timeline_service_summary",
-        "services_audit_timeline_service_parse_redacted_json",
-        "services_audit_timeline_service_redact_value",
-        "services_audit_timeline_service_redact_text"
-      ],
-      "qualifiedPath": [
-        "services_audit_timeline_service_list_audit_timeline",
-        "services_audit_timeline_service_details_for_row",
-        "services_audit_timeline_service_safe_resource_id",
-        "services_audit_timeline_service_source_filters",
-        "services_audit_timeline_service_summary",
-        "services_audit_timeline_service_parse_redacted_json",
-        "services_audit_timeline_service_redact_value",
-        "services_audit_timeline_service_redact_text"
-      ],
-      "depth": 4,
-      "nodeCount": 8,
-      "fileCount": 1,
-      "files": [
-        "app/services/audit_timeline_service.py"
-      ],
-      "criticality": 0.19,
       "warnings": []
     },
     {

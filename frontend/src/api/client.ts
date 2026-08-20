@@ -4,6 +4,25 @@ export type SessionLike = {
   hotelId?: number | null;
   userId?: string | null;
   accessToken?: string | null;
+  csrfToken?: string | null;
+};
+
+export type AuthResponsePayload = {
+  access_token: string;
+  token_type?: string;
+  hotel_id: number;
+  hotel_ids?: number[];
+  user: {
+    id: number;
+    email: string;
+    role: string;
+    is_verified: boolean;
+    is_active: boolean;
+    permissions?: string[];
+  };
+  permissions?: string[];
+  requires_verification?: boolean;
+  csrf_token?: string | null;
 };
 
 export class ApiError extends Error {
@@ -57,7 +76,10 @@ export const hasValidSession = (session?: SessionLike) => {
   const hotelId = normalizeHotelId(session?.hotelId);
   const userId = typeof session?.userId === "string" ? session.userId.trim() : "";
   const accessToken = typeof session?.accessToken === "string" ? session.accessToken.trim() : "";
-  if (isTokenExpired(accessToken)) return false;
+  // Let the request interceptor see an expired bearer token and refresh it
+  // from the browser session. This is intentionally different from the JWT
+  // expiry helper: an expired access token does not mean the cookie session is
+  // gone.
   return Boolean(hotelId && userId && accessToken && userId !== "guest");
 };
 
@@ -79,17 +101,40 @@ export const buildAuthHeaders = (session?: SessionLike): Record<string, string> 
   return headers;
 };
 
-// Clear the persisted session and redirect to /login. Guarded so a burst of
-// concurrent 401s only triggers one navigation.
+const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
+let clientSession: SessionLike | null = null;
+let authResponseHandler: ((response: AuthResponsePayload) => void) | null = null;
+let unauthorizedHandler: (() => void) | null = null;
+let refreshInFlight: Promise<AuthResponsePayload> | null = null;
 let unauthorizedHandled = false;
+
+export const setClientSession = (session?: SessionLike | null) => {
+  clientSession = session ? { ...session } : null;
+  if (clientSession?.accessToken) unauthorizedHandled = false;
+};
+
+export const setAuthResponseHandler = (handler: ((response: AuthResponsePayload) => void) | null) => {
+  authResponseHandler = handler;
+  return () => {
+    if (authResponseHandler === handler) authResponseHandler = null;
+  };
+};
+
+export const setUnauthorizedHandler = (handler: (() => void) | null) => {
+  unauthorizedHandler = handler;
+  return () => {
+    if (unauthorizedHandler === handler) unauthorizedHandler = null;
+  };
+};
+
+// Clear the in-memory session and redirect to /login. Guarded so a burst of
+// concurrent 401s only triggers one navigation.
 const handleUnauthorized = () => {
   if (unauthorizedHandled || typeof window === "undefined") return;
   unauthorizedHandled = true;
-  try {
-    localStorage.removeItem("hotel-pms-session");
-  } catch {
-    /* ignore */
-  }
+  clientSession = null;
+  unauthorizedHandler?.();
   if (window.location.pathname !== "/login") {
     window.location.assign("/login?expired=1");
   }
@@ -112,44 +157,150 @@ export const buildUrl = (path: string) => {
   return `${API_BASE}${leading}`;
 };
 
-export async function apiFetch<T = unknown>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { method = "GET", data, headers, signal, session } = options;
-
-  const finalHeaders: HeadersInit = {
-    "Content-Type": "application/json",
-    ...buildAuthHeaders(session),
-    ...headers
+const mergeSession = (session?: SessionLike | null): SessionLike | null => {
+  if (!clientSession && !session) return null;
+  const sessionHasCsrfToken = Boolean(session && Object.prototype.hasOwnProperty.call(session, "csrfToken"));
+  return {
+    ...(clientSession ?? {}),
+    ...(session ?? {}),
+    csrfToken: sessionHasCsrfToken ? session?.csrfToken ?? null : clientSession?.csrfToken ?? null
   };
+};
 
+const requestHeaders = (method: string, session: SessionLike | null, headers?: HeadersInit) => {
+  const finalHeaders = new Headers();
+  finalHeaders.set("Content-Type", "application/json");
+  Object.entries(buildAuthHeaders(session ?? undefined)).forEach(([key, value]) => finalHeaders.set(key, value));
+
+  const csrfToken = session?.csrfToken?.trim();
+  if (MUTATING_METHODS.has(method) && csrfToken) {
+    finalHeaders.set("X-CSRF-Token", csrfToken);
+  }
+
+  if (headers) {
+    new Headers(headers).forEach((value, key) => finalHeaders.set(key, value));
+  }
+  return finalHeaders;
+};
+
+const isPublicAuthPath = (path: string) =>
+  [
+    "/api/auth/login",
+    "/api/auth/register",
+    "/api/auth/google",
+    "/api/auth/request-verify",
+    "/api/auth/verify-email",
+    "/api/auth/request-reset",
+    "/api/auth/reset-password",
+    "/api/auth/session/refresh",
+    "/api/auth/logout"
+  ].some((publicPath) => path === publicPath || path.startsWith(`${publicPath}?`));
+
+const makeApiError = (response: Response, payload: unknown) => {
+  const detail =
+    typeof payload === "object" && payload !== null && "detail" in (payload as Record<string, unknown>)
+      ? (payload as Record<string, unknown>).detail
+      : undefined;
+  const message = formatErrorDetail(detail) || response.statusText || "Request failed";
+  return new ApiError(response.status, message, payload);
+};
+
+const isAuthResponsePayload = (payload: unknown): payload is AuthResponsePayload => {
+  if (!payload || typeof payload !== "object") return false;
+  const candidate = payload as Partial<AuthResponsePayload>;
+  return Boolean(
+    typeof candidate.access_token === "string" &&
+      typeof candidate.hotel_id === "number" &&
+      candidate.user &&
+      typeof candidate.user === "object" &&
+      typeof candidate.user.email === "string"
+  );
+};
+
+export async function refreshSession(session?: SessionLike): Promise<AuthResponsePayload> {
+  if (refreshInFlight) return refreshInFlight;
+
+  const refreshSessionState = mergeSession(session);
+  const promise = (async () => {
+    const csrfToken = refreshSessionState?.csrfToken?.trim();
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (csrfToken) headers["X-CSRF-Token"] = csrfToken;
+
+    const response = await fetch(buildUrl("/api/auth/session/refresh"), {
+      method: "POST",
+      headers,
+      credentials: "include"
+    });
+    const text = await response.text();
+    const payload = text ? safeJson(text) : null;
+    if (!response.ok) throw makeApiError(response, payload);
+    if (!isAuthResponsePayload(payload)) {
+      throw new ApiError(500, "La respuesta de renovación de sesión es inválida", payload);
+    }
+    return payload;
+  })().finally(() => {
+    refreshInFlight = null;
+  });
+
+  refreshInFlight = promise;
+  return promise;
+}
+
+async function requestWithRefresh<T>(path: string, options: RequestOptions, allowRefresh: boolean): Promise<T> {
+  const { method = "GET", data, headers, signal, session } = options;
+  const requestSession = mergeSession(session);
   const response = await fetch(buildUrl(path), {
     method,
-    headers: finalHeaders,
+    headers: requestHeaders(method, requestSession, headers),
     body: data !== undefined ? JSON.stringify(data) : undefined,
-    signal
+    signal,
+    credentials: "include"
   });
 
   const text = await response.text();
   const payload = text ? safeJson(text) : null;
 
   if (!response.ok) {
-    const detail = typeof payload === "object" && payload !== null && "detail" in (payload as Record<string, unknown>)
-      ? (payload as Record<string, unknown>).detail
-      : undefined;
-    const message = formatErrorDetail(detail) || response.statusText || "Request failed";
-    // An expired/invalid token leaves a stale session in localStorage that
-    // would otherwise render every protected section as broken (repeated 401s).
-    // Clear it and bounce to login so the user can re-authenticate cleanly.
-    if (response.status === 401 && buildAuthHeaders(session).Authorization) {
+    const error = makeApiError(response, payload);
+    const canRefresh =
+      allowRefresh &&
+      response.status === 401 &&
+      Boolean(requestSession?.accessToken) &&
+      !isPublicAuthPath(path);
+
+    if (canRefresh) {
+      try {
+        const refreshed = await refreshSession(requestSession ?? undefined);
+        const refreshedSession: SessionLike = {
+          ...(requestSession ?? {}),
+          accessToken: refreshed.access_token,
+          csrfToken: refreshed.csrf_token ?? null
+        };
+        setClientSession(refreshedSession);
+        authResponseHandler?.(refreshed);
+        return requestWithRefresh(path, { ...options, session: refreshedSession }, false);
+      } catch (refreshError) {
+        if (refreshError instanceof ApiError && refreshError.status >= 400 && refreshError.status < 500) {
+          handleUnauthorized();
+        }
+      }
+    }
+
+    if (response.status === 401 && requestSession?.accessToken && !allowRefresh) {
       handleUnauthorized();
     }
-    throw new ApiError(response.status, message, payload);
+    throw error;
   }
 
-  if (method !== "GET" && session?.hotelId) {
-    broadcastDomainChange(session.hotelId, path);
+  if (MUTATING_METHODS.has(method) && requestSession?.hotelId) {
+    broadcastDomainChange(requestSession.hotelId, path);
   }
 
   return payload as T;
+}
+
+export async function apiFetch<T = unknown>(path: string, options: RequestOptions = {}): Promise<T> {
+  return requestWithRefresh(path, options, true);
 }
 
 // FastAPI returns `detail` as a string for HTTPException, but as an array of

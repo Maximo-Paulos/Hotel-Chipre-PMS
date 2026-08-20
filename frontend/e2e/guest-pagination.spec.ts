@@ -21,12 +21,26 @@ async function login(page: Page) {
   await page.waitForURL("**/dashboard", { timeout: 20_000 });
 }
 
-type StoredSession = { hotelId?: number; userId?: string; accessToken?: string };
+type StoredSession = { hotelId?: number; userId?: string; accessToken?: string; csrfToken?: string };
 
 async function readSession(page: Page): Promise<StoredSession> {
-  const raw = await page.evaluate(() => localStorage.getItem("hotel-pms-session"));
-  if (!raw) throw new Error("No session persisted in localStorage after login");
-  return JSON.parse(raw) as StoredSession;
+  // Access tokens are intentionally memory-only in the browser. Use a
+  // separate test-only login response for this direct seeding helper instead
+  // of reaching into application storage.
+  const response = await page.request.post(`${backendURL}/api/auth/login`, { data: credentials });
+  expect(response.ok()).toBeTruthy();
+  const payload = (await response.json()) as {
+    hotel_id: number;
+    user: { email: string };
+    access_token: string;
+    csrf_token?: string;
+  };
+  return {
+    hotelId: payload.hotel_id,
+    userId: payload.user.email,
+    accessToken: payload.access_token,
+    csrfToken: payload.csrf_token
+  };
 }
 
 test("owner pages through >50 synthetic guests instead of only seeing the first 50", async ({ page }) => {
@@ -40,6 +54,7 @@ test("owner pages through >50 synthetic guests instead of only seeing the first 
     "X-Hotel-Id": String(session.hotelId),
     "X-User-Id": String(session.userId),
     Authorization: `Bearer ${session.accessToken}`,
+    "X-CSRF-Token": String(session.csrfToken || ""),
     "Content-Type": "application/json"
   };
 

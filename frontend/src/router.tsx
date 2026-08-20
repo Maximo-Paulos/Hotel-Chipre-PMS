@@ -74,6 +74,9 @@ const SettingsNotificationsPage = lazy(() => import("./views/protected/SettingsN
 const SettingsSecurityPage = lazy(() =>
   import("./views/protected/SettingsSecurityPage").then((m) => ({ default: m.SettingsSecurityPage }))
 );
+const SettingsSessionsPage = lazy(() =>
+  import("./views/protected/SettingsSessionsPage").then((m) => ({ default: m.SettingsSessionsPage }))
+);
 const SettingsTestsPage = lazy(() => import("./views/protected/SettingsTestsPage"));
 const SettingsUsersPage = lazy(() =>
   import("./views/protected/SettingsUsersPage").then((m) => ({ default: m.SettingsUsersPage }))
@@ -240,6 +243,7 @@ const appRoutes = APP_HOST
           { path: "settings/tests", element: <PermissionGate roles={["owner", "co_owner"]}><SettingsTestsPage /></PermissionGate> },
           { path: "settings/hotel", element: <PermissionGate roles={["owner", "co_owner"]}><SettingsHotelPage /></PermissionGate> },
           { path: "settings/security", element: <PermissionGate roles={["owner", "co_owner"]}><SettingsSecurityPage /></PermissionGate> },
+          { path: "settings/sessions", element: <PermissionGate roles={["owner", "co_owner"]}><SettingsSessionsPage /></PermissionGate> },
           { path: "settings/notifications", element: <SettingsNotificationsPage /> }
         ]
       },

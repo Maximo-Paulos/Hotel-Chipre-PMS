@@ -1,6 +1,16 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
-import { buildAuthHeaders } from "../api/client";
+import {
+  ApiError,
+  apiFetch,
+  buildAuthHeaders,
+  refreshSession,
+  setAuthResponseHandler,
+  setClientSession,
+  setUnauthorizedHandler,
+  type AuthResponsePayload
+} from "../api/client";
+import { isAppHostname } from "../config/publicUrls";
 
 export type Role = "owner" | "co_owner" | "manager" | "housekeeping" | "receptionist";
 
@@ -13,6 +23,7 @@ export type SessionState = {
   baseRole?: Role | null;
   permissions?: string[] | null;
   accessToken?: string | null;
+  csrfToken?: string | null;
   isVerified?: boolean;
 };
 
@@ -20,13 +31,16 @@ type SessionContextValue = {
   session: SessionState;
   login: (partial: Partial<SessionState>) => void;
   logout: () => void;
+  isInitializing: boolean;
+  restoredSession: boolean;
   setHotelId: (hotelId: number | null) => void;
   setRole: (role: SessionState["role"]) => void;
   setPermissions: (permissions: string[], role?: Role | null) => void;
   authHeaders: Record<string, string>;
 };
 
-const STORAGE_KEY = "hotel-pms-session";
+const LEGACY_STORAGE_KEY = "hotel-pms-session";
+const CSRF_STORAGE_KEY = "hotel-pms-csrf-token";
 const EMPTY_SESSION: SessionState = {
   userId: null,
   email: null,
@@ -36,6 +50,7 @@ const EMPTY_SESSION: SessionState = {
   baseRole: null,
   permissions: null,
   accessToken: null,
+  csrfToken: null,
   isVerified: false
 };
 
@@ -63,57 +78,70 @@ export const normalizeRole = (role?: string | null): Role | null => {
 export const defaultPathForRole = (role: Role | null | undefined) =>
   role === "housekeeping" ? "/habitaciones" : "/dashboard";
 
-const loadSession = (): SessionState => {
-  if (typeof localStorage === "undefined") return EMPTY_SESSION;
+const readStoredCsrfToken = (): string | null => {
+  if (typeof localStorage === "undefined") return null;
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return EMPTY_SESSION;
-    const parsed = JSON.parse(raw) as Partial<SessionState>;
-    const hotelId = safeHotelId(parsed.hotelId);
-    const userId = typeof parsed.userId === "string" ? parsed.userId.trim() : "";
-    const accessToken = typeof parsed.accessToken === "string" ? parsed.accessToken.trim() : "";
-    // Only restore a session that actually carries valid credentials.
-    if (!hotelId || !userId || !accessToken) return EMPTY_SESSION;
-    return {
-      ...EMPTY_SESSION,
-      ...parsed,
-      userId,
-      hotelId,
-      accessToken,
-      role: normalizeRole(parsed.role as string | null | undefined),
-      baseRole: normalizeRole((parsed.baseRole ?? parsed.role) as string | null | undefined),
-      permissions: Array.isArray(parsed.permissions)
-        ? parsed.permissions.filter((permission): permission is string => typeof permission === "string")
-        : null,
-    };
+    const token = localStorage.getItem(CSRF_STORAGE_KEY)?.trim();
+    return token || null;
   } catch {
-    return EMPTY_SESSION;
+    return null;
   }
 };
 
-const persistSession = (session: SessionState) => {
+const persistCsrfToken = (token?: string | null) => {
   if (typeof localStorage === "undefined") return;
   try {
-    if (session.userId && session.hotelId && session.accessToken) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+    if (token?.trim()) {
+      localStorage.setItem(CSRF_STORAGE_KEY, token.trim());
     } else {
-      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(CSRF_STORAGE_KEY);
     }
   } catch {
     /* ignore storage quota / availability errors */
   }
 };
 
+const clearLegacyStoredSession = () => {
+  if (typeof localStorage === "undefined") return;
+  try {
+    // Remove the old bearer-token payload once. Only the CSRF bootstrap value
+    // remains persisted; access tokens never return to browser storage.
+    localStorage.removeItem(LEGACY_STORAGE_KEY);
+  } catch {
+    /* ignore unavailable storage */
+  }
+};
+
+const initialSession = (): SessionState => ({
+  ...EMPTY_SESSION,
+  csrfToken: readStoredCsrfToken()
+});
+
+const sessionFromAuthResponse = (response: AuthResponsePayload): Partial<SessionState> => {
+  const role = normalizeRole(response.user.role);
+  return {
+    userId: response.user.email,
+    email: response.user.email,
+    hotelId: response.hotel_id,
+    hotelIds: response.hotel_ids?.length ? response.hotel_ids : [response.hotel_id],
+    role,
+    baseRole: role,
+    permissions: response.permissions ?? response.user.permissions ?? null,
+    accessToken: response.access_token,
+    csrfToken: response.csrf_token ?? null,
+    isVerified: response.user.is_verified
+  };
+};
+
 export function SessionProvider({ children }: { children: React.ReactNode }) {
-  const [session, setSession] = useState<SessionState>(() => loadSession());
+  const [session, setSession] = useState<SessionState>(() => {
+    clearLegacyStoredSession();
+    return initialSession();
+  });
+  const [isInitializing, setIsInitializing] = useState(() => isAppHostname());
+  const [restoredSession, setRestoredSession] = useState(false);
 
-  // Persist the session so reloads and deep-links into protected routes keep
-  // the user logged in instead of bouncing back to /login.
-  useEffect(() => {
-    persistSession(session);
-  }, [session]);
-
-  const login = (partial: Partial<SessionState>) => {
+  const login = useCallback((partial: Partial<SessionState>) => {
     setSession((prev) => ({
       userId: partial.userId?.trim() || prev.userId || null,
       email: partial.email ?? partial.userId ?? prev.email ?? null,
@@ -129,6 +157,12 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           ? Array.from(new Set((partial.permissions ?? []).filter((permission) => typeof permission === "string"))).sort()
           : prev.permissions ?? null,
       accessToken: partial.accessToken ?? prev.accessToken ?? null,
+      csrfToken:
+        partial.csrfToken !== undefined
+          ? typeof partial.csrfToken === "string" && partial.csrfToken.trim()
+            ? partial.csrfToken.trim()
+            : null
+          : prev.csrfToken ?? null,
       isVerified: partial.isVerified ?? prev.isVerified ?? false,
       hotelIds: partial.hotelIds?.length
         ? partial.hotelIds
@@ -136,11 +170,70 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           ? [safeHotelId(partial.hotelId ?? prev.hotelId) as number]
           : prev.hotelIds ?? null
     }));
-  };
+  }, []);
 
-  const logout = () => {
+  const applyAuthResponse = useCallback((response: AuthResponsePayload) => {
+    if (!response.access_token || !response.user || !response.hotel_id) return;
+    login(sessionFromAuthResponse(response));
+  }, [login]);
+
+  const logout = useCallback(() => {
+    const currentSession = session;
+    // Logout is deliberately best-effort. Clear local state immediately even
+    // if the browser is offline or the cookie session has already expired.
+    void apiFetch<{ logged_out: boolean }>("/api/auth/logout", {
+      method: "POST",
+      session: currentSession
+    }).catch(() => undefined);
+    setClientSession(null);
     setSession(EMPTY_SESSION);
-  };
+    setRestoredSession(false);
+  }, [session]);
+
+  // Keep the API module's synchronous snapshot aligned with React state so an
+  // interceptor can refresh even while a component still holds an older
+  // render's SessionState object.
+  useEffect(() => {
+    setClientSession(session);
+    persistCsrfToken(session.csrfToken);
+  }, [session]);
+
+  useEffect(() => {
+    const removeAuthResponseHandler = setAuthResponseHandler(applyAuthResponse);
+    const removeUnauthorizedHandler = setUnauthorizedHandler(() => {
+      setClientSession(null);
+      setSession(EMPTY_SESSION);
+      setRestoredSession(false);
+    });
+    return () => {
+      removeAuthResponseHandler();
+      removeUnauthorizedHandler();
+    };
+  }, [applyAuthResponse]);
+
+  useEffect(() => {
+    if (!isInitializing) return;
+    let cancelled = false;
+    void refreshSession()
+      .then((response) => {
+        if (cancelled) return;
+        applyAuthResponse(response);
+        setRestoredSession(true);
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        if (error instanceof ApiError && error.status === 401) {
+          persistCsrfToken(null);
+          setSession(EMPTY_SESSION);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsInitializing(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [applyAuthResponse, isInitializing]);
 
   const setHotelId = (hotelId: number | null) =>
     setSession((prev) => {
@@ -178,7 +271,21 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
   const authHeaders = useMemo(() => buildAuthHeaders(session), [session]);
 
-  const value: SessionContextValue = { session, login, logout, setHotelId, setRole, setPermissions, authHeaders };
+  const value: SessionContextValue = {
+    session,
+    login,
+    logout,
+    isInitializing,
+    restoredSession,
+    setHotelId,
+    setRole,
+    setPermissions,
+    authHeaders
+  };
+
+  if (isInitializing) {
+    return <p className="p-8 text-sm text-slate-500" role="status">Comprobando sesión...</p>;
+  }
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }

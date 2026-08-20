@@ -204,7 +204,8 @@ export const addGuestCompanions = (guestId: number, companions: GuestCompanionPa
 
 export const exportGuestLedger = (fromDate: string, toDate: string, session?: SessionLike) =>
   fetch(buildUrl(`/api/guests/ledger/export?from_date=${encodeURIComponent(fromDate)}&to_date=${encodeURIComponent(toDate)}`), {
-    headers: buildAuthHeaders(session)
+    headers: buildAuthHeaders(session),
+    credentials: "include"
   });
 
 export type GuestCheckinValidation = {

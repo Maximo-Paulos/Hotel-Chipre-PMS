@@ -219,6 +219,7 @@ const runEventStream = async (
     try {
       const response = await fetch(buildUrl("/api/events/stream"), {
         headers: buildAuthHeaders(session),
+        credentials: "include",
         signal
       });
       if (!response.ok) {

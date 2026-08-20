@@ -11,7 +11,7 @@ import { defaultPathForRole, normalizeRole, useSession, type SessionState } from
 
 export function LoginPage() {
   const navigate = useNavigate();
-  const { login } = useSession();
+  const { login, session, isInitializing, restoredSession } = useSession();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -28,6 +28,15 @@ export function LoginPage() {
     return () => window.clearTimeout(timeout);
   }, [loading]);
 
+  useEffect(() => {
+    if (isInitializing || !restoredSession || !session.accessToken) return;
+    if (!session.isVerified) {
+      navigate("/verify-email", { replace: true });
+      return;
+    }
+    navigate(defaultPathForRole(session.baseRole ?? session.role), { replace: true });
+  }, [isInitializing, navigate, restoredSession, session.accessToken, session.baseRole, session.isVerified, session.role]);
+
   const completeAuth = async (res: AuthResponse) => {
     if (!res.hotel_id) {
       throw new ApiError(500, "La respuesta de autenticación no devolvió un hotel válido.");
@@ -42,6 +51,7 @@ export function LoginPage() {
       baseRole: authenticatedRole,
       permissions: res.permissions ?? res.user.permissions ?? null,
       accessToken: res.access_token,
+      csrfToken: res.csrf_token,
       isVerified: res.user.is_verified
     };
     login(nextSession);

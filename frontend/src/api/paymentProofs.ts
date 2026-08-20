@@ -44,7 +44,8 @@ export const rejectPaymentProof = (proofId: number, reason: string, session?: Se
 
 export const fetchPaymentProofImage = async (proofId: number, session?: SessionLike): Promise<Blob> => {
   const response = await fetch(buildUrl(`/api/payment-proofs/${proofId}/image`), {
-    headers: buildAuthHeaders(session)
+    headers: buildAuthHeaders(session),
+    credentials: "include"
   });
   if (!response.ok) {
     throw new Error(response.statusText || "No se pudo abrir el comprobante");

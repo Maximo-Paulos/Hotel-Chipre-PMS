@@ -1,4 +1,4 @@
-import { apiFetch, type SessionLike } from "./client";
+import { apiFetch, type AuthResponsePayload, type SessionLike } from "./client";
 
 export type AuthUser = {
   id: number;
@@ -9,14 +9,8 @@ export type AuthUser = {
   permissions?: string[];
 };
 
-export type AuthResponse = {
-  access_token: string;
+export type AuthResponse = AuthResponsePayload & {
   token_type: string;
-  hotel_id: number;
-  hotel_ids?: number[];
-  user: AuthUser;
-  requires_verification?: boolean;
-  permissions?: string[];
   code?: string;
 };
 

@@ -56,6 +56,7 @@ export function VerifyEmailPage() {
         baseRole: normalizeRole(res.user.role),
         permissions: res.permissions ?? res.user.permissions ?? null,
         accessToken: res.access_token,
+        csrfToken: res.csrf_token,
         isVerified: true
       });
       const currentPendingOwner = getPendingOwner();
@@ -63,7 +64,8 @@ export function VerifyEmailPage() {
         await setOwner(currentPendingOwner, {
           userId: res.user.email,
           hotelId: res.hotel_id,
-          accessToken: res.access_token
+          accessToken: res.access_token,
+          csrfToken: res.csrf_token
         });
         clearPendingOwner();
       }

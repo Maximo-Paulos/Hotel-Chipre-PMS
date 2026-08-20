@@ -95,6 +95,7 @@ const groupedNav: NavSection[] = [
       { label: "Pruebas", to: "/settings/tests", requiresRole: ["owner", "co_owner"] },
       { label: "Hotel", to: "/settings/hotel", requiresRole: ["owner", "co_owner"] },
       { label: "Seguridad", to: "/settings/security", requiresRole: ["owner", "co_owner"] },
+      { label: "Dispositivos", to: "/settings/sessions", requiresRole: ["owner", "co_owner"] },
       // No requiresAnyPermission gate (push/preferences are per-user, not
       // permission-scoped) but excluded from housekeeping's nav on purpose --
       // housekeeping's menu is deliberately minimal (see role-journey.spec.ts
