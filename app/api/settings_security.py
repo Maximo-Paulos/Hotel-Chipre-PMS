@@ -1,6 +1,6 @@
 """Tenant-scoped security overview and current-user session revocation."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -13,12 +13,14 @@ from app.models.security_audit_log import SecurityAuditLog
 from app.models.user import User
 from app.schemas.settings_security import (
     RevokeAllSessionsResponse,
+    AuditTimelineRead,
     SecurityCurrentUserRead,
     SecurityEventRead,
     SecurityEventsRead,
     SecurityOverviewRead,
 )
 from app.services.user_session_service import revoke_all_sessions
+from app.services.audit_timeline_service import list_audit_timeline
 
 
 router = APIRouter(prefix="/api/settings/security", tags=["Settings Security"])
@@ -106,6 +108,36 @@ def recent_security_events(
             )
             for row in rows
         ],
+    )
+
+
+@router.get("/audit-timeline", response_model=AuditTimelineRead)
+def audit_timeline(
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0, le=10_000),
+    from_date: date | None = Query(default=None, alias="from"),
+    to_date: date | None = Query(default=None, alias="to"),
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_roles(*_SECURITY_ROLES)),
+):
+    if from_date is not None and to_date is not None and to_date < from_date:
+        raise HTTPException(status_code=422, detail="to must be greater than or equal to from")
+
+    items, total = list_audit_timeline(
+        db,
+        hotel_id=context.hotel_id,
+        limit=limit,
+        offset=offset,
+        from_date=from_date,
+        to_date=to_date,
+    )
+    return AuditTimelineRead(
+        hotel_id=context.hotel_id,
+        items=items,
+        total=total,
+        limit=limit,
+        offset=offset,
+        has_more=offset + len(items) < total,
     )
 
 

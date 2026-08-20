@@ -1,6 +1,7 @@
 """Public, redacted contracts for hotel security settings."""
 
 from datetime import datetime
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -35,6 +36,24 @@ class SecurityEventRead(BaseModel):
 class SecurityEventsRead(BaseModel):
     hotel_id: int
     events: list[SecurityEventRead] = Field(default_factory=list)
+
+
+class AuditTimelineItemRead(BaseModel):
+    source: Literal["row_mutation", "business_event", "security_event"]
+    action: str
+    actor_user_id: int | None = None
+    created_at: datetime
+    summary: str
+    details: dict[str, Any] = Field(default_factory=dict)
+
+
+class AuditTimelineRead(BaseModel):
+    hotel_id: int
+    items: list[AuditTimelineItemRead] = Field(default_factory=list)
+    total: int
+    limit: int
+    offset: int
+    has_more: bool
 
 
 class RevokeAllSessionsResponse(BaseModel):

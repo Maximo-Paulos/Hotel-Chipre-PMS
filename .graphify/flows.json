@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-20T18:36:20.683Z",
+  "generatedAt": "2026-08-20T18:50:53.718Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -2104,28 +2104,6 @@
       "fileCount": 1,
       "files": [
         "app/services/user_session_service.py"
-      ],
-      "criticality": 0.41,
-      "warnings": []
-    },
-    {
-      "id": "flow:api_auth_unlink_google",
-      "name": "unlink_google",
-      "entryPoint": "api_auth_unlink_google",
-      "entryPointId": "api_auth_unlink_google",
-      "path": [
-        "api_auth_unlink_google",
-        "api_auth_audit_security_event"
-      ],
-      "qualifiedPath": [
-        "api_auth_unlink_google",
-        "api_auth_audit_security_event"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "app/api/auth.py"
       ],
       "criticality": 0.41,
       "warnings": []
@@ -7478,6 +7456,40 @@
         "scripts/agent_ops/trusted_release_gate.py"
       ],
       "criticality": 0.1909,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_audit_timeline_service_list_audit_timeline",
+      "name": "list_audit_timeline",
+      "entryPoint": "services_audit_timeline_service_list_audit_timeline",
+      "entryPointId": "services_audit_timeline_service_list_audit_timeline",
+      "path": [
+        "services_audit_timeline_service_list_audit_timeline",
+        "services_audit_timeline_service_details_for_row",
+        "services_audit_timeline_service_safe_resource_id",
+        "services_audit_timeline_service_source_filters",
+        "services_audit_timeline_service_summary",
+        "services_audit_timeline_service_parse_redacted_json",
+        "services_audit_timeline_service_redact_value",
+        "services_audit_timeline_service_redact_text"
+      ],
+      "qualifiedPath": [
+        "services_audit_timeline_service_list_audit_timeline",
+        "services_audit_timeline_service_details_for_row",
+        "services_audit_timeline_service_safe_resource_id",
+        "services_audit_timeline_service_source_filters",
+        "services_audit_timeline_service_summary",
+        "services_audit_timeline_service_parse_redacted_json",
+        "services_audit_timeline_service_redact_value",
+        "services_audit_timeline_service_redact_text"
+      ],
+      "depth": 4,
+      "nodeCount": 8,
+      "fileCount": 1,
+      "files": [
+        "app/services/audit_timeline_service.py"
+      ],
+      "criticality": 0.19,
       "warnings": []
     },
     {
