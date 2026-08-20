@@ -1,7 +1,7 @@
 # Superficies cloud
 
-Generado: 2026-07-28T20:08:27.469338+00:00
-Commit: `765ff7b`
+Generado: 2026-08-20T14:45:03.348006+00:00
+Commit: `6cbb087`
 
 ## canonical
 

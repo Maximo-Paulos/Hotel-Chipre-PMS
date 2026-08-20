@@ -1,9 +1,9 @@
 # Alembic head
 
-Generado: 2026-08-13T22:45:56.972071+00:00
-Commit: `46a90d5`
+Generado: 2026-08-20T14:45:02.898101+00:00
+Commit: `6cbb087`
 
 ```text
-20260813_rbac_overrides (head)
+7b14658560e1 (head)
 ```
 Fuente: `alembic.ini` y `alembic/versions/`.

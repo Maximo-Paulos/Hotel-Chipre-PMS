@@ -1,19 +1,19 @@
 # Graph Report - .  (2026-08-20)
 
 ## Corpus Check
-- Large corpus: 1023 files · ~1,641,243 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.
+- Large corpus: 1025 files · ~1,644,927 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.
 
 ## Summary
-- 9858 nodes · 44031 edges · 361 communities detected
-- Extraction: 63% EXTRACTED · 37% INFERRED · 0% AMBIGUOUS · INFERRED: 16130 edges (avg confidence: 0.5)
+- 9872 nodes · 44253 edges · 361 communities detected
+- Extraction: 64% EXTRACTED · 36% INFERRED · 0% AMBIGUOUS · INFERRED: 16130 edges (avg confidence: 0.5)
 - Token cost: 0 input · 0 output
-- Edge kinds: uses: 16130 · ON_BRANCH: 8852 · contains: 5817 · calls: 4247 · MODIFIES: 3177 · rationale_for: 2000 · imports: 1078 · imports_from: 829 · PARENT_OF: 645 · inherits: 637 · method: 616 · re_exports: 3
+- Edge kinds: uses: 16130 · ON_BRANCH: 9052 · contains: 5824 · calls: 4253 · MODIFIES: 3180 · rationale_for: 2005 · imports: 1078 · imports_from: 829 · PARENT_OF: 646 · inherits: 637 · method: 616 · re_exports: 3
 
 
 ## Input Scope
 - Requested: all
 - Resolved: all (source: cli)
-- Included files: 1023 · Candidates: recursive
+- Included files: 1025 · Candidates: recursive
 - Excluded: 0 untracked · 0 ignored · 11 sensitive · 0 missing committed
 
 ## Graph Freshness
@@ -47,7 +47,7 @@
 
 ### Community 0 - "Community 0"
 Cohesion: 0.08
-Nodes (338): main(), normalize_instruction_paths(), Replace this repository's absolute root in generated instructions only., Replace this repository's absolute root in generated instructions only., agent-linensplit, agent-login, agent-mobilenav, agent-otafix (+330 more)
+Nodes (340): main(), normalize_instruction_paths(), Replace this repository's absolute root in generated instructions only., Replace this repository's absolute root in generated instructions only., agent-linensplit, agent-login, agent-mobilenav, agent-otafix (+332 more)
 
 ### Community 1 - "Community 1"
 Cohesion: 0.02
@@ -59,7 +59,7 @@ Nodes (141): Stream tenant-scoped invalidation signals; clients refetch from Pos
 
 ### Community 3 - "Community 3"
 Cohesion: 0.03
-Nodes (296): PaymentSurchargeCreate, daily_report(), occupancy_report(), FastAPI routes for Reports & Night Audit. Daily summaries, occupancy reports, re, Night Audit / Daily Report.     Shows arrivals, departures, occupancy, revenue c, Night Audit / Daily Report.     Shows arrivals, departures, occupancy, revenue c, Occupancy report for a date range (default: last 30 days)., Occupancy report for a date range (default: last 30 days). (+288 more)
+Nodes (298): PaymentSurchargeCreate, daily_report(), occupancy_report(), FastAPI routes for Reports & Night Audit. Daily summaries, occupancy reports, re, Night Audit / Daily Report.     Shows arrivals, departures, occupancy, revenue c, Night Audit / Daily Report.     Shows arrivals, departures, occupancy, revenue c, Occupancy report for a date range (default: last 30 days)., Occupancy report for a date range (default: last 30 days). (+290 more)
 
 ### Community 4 - "Community 4"
 Cohesion: 0.04
@@ -91,11 +91,11 @@ Nodes (152): graphify_state(), main(), main(), run(), validate_json(), claude/fe
 
 ### Community 11 - "Community 11"
 Cohesion: 0.02
-Nodes (133): ApiKeyPurpose, HotelApiKey, HotelApiKeyIssued, issueApiKey(), IssueHotelApiKeyPayload, listApiKeys(), revokeApiKey(), Category (+125 more)
+Nodes (131): ApiKeyPurpose, HotelApiKey, HotelApiKeyIssued, issueApiKey(), IssueHotelApiKeyPayload, listApiKeys(), revokeApiKey(), Category (+123 more)
 
 ### Community 12 - "Community 12"
 Cohesion: 0.02
-Nodes (149): StockConsumptionItem, StockConsumptionReportRead, StockItemCreate, StockItemRead, StockItemUpdate, StockLocationCreate, StockLocationRead, StockMovementCreate (+141 more)
+Nodes (150): FastAPI routes for Payments., StockConsumptionItem, StockConsumptionReportRead, StockItemCreate, StockItemRead, StockItemUpdate, StockLocationCreate, StockLocationRead (+142 more)
 
 ### Community 13 - "Community 13"
 Cohesion: 0.02
@@ -119,35 +119,35 @@ Nodes (63): createLaundryRemito(), createLaundryVendor(), getLaundryVendorBalanc
 
 ### Community 18 - "Community 18"
 Cohesion: 0.04
-Nodes (48): _authorize_override(), checkin(), email_status(), getHotelConfig(), HotelConfig, HotelConfigUpdate, FastAPI routes for Hotel Configuration (Admin Panel)., Lightweight status so the frontend can check the active system email provider. (+40 more)
+Nodes (47): _authorize_override(), checkin(), email_status(), getHotelConfig(), HotelConfig, HotelConfigUpdate, FastAPI routes for Hotel Configuration (Admin Panel)., Lightweight status so the frontend can check the active system email provider. (+39 more)
 
 ### Community 19 - "Community 19"
+Cohesion: 0.05
+Nodes (49): DailyReportSchedule, DailyReportScheduleUpdate, get_daily_report_schedule(), getDailyReportSchedule(), listNotificationPreferences(), listNotifications(), markAllNotificationsRead(), markNotificationRead() (+41 more)
+
+### Community 20 - "Community 20"
 Cohesion: 0.04
 Nodes (41): create_movement(), createStockItem(), createStockLocation(), createStockMovement(), CurrentStock, deleteStockItem(), _ensure_adjustment_permission(), get_stock_summary() (+33 more)
 
-### Community 20 - "Community 20"
+### Community 21 - "Community 21"
 Cohesion: 0.03
 Nodes (63): PermissionGate(), SettingsAssistantPage(), SettingsHotelPage(), SettingsUsersPage(), AcceptInvitationPage(), LoginPage(), MarketingHomePage(), PmsHoteleroPage() (+55 more)
 
-### Community 21 - "Community 21"
+### Community 22 - "Community 22"
 Cohesion: 0.10
 Nodes (60): CashCloseReport, CashCustodyHandoff, CashCustodyStatusEnum, CashMovement, CashMovementTypeEnum, CashSession, CashSessionStatusEnum, Cash register (caja) models — Sprint 1 requirement per v72 §13.  Lifecycle:   Ca (+52 more)
 
-### Community 22 - "Community 22"
+### Community 23 - "Community 23"
 Cohesion: 0.06
 Nodes (48): create_laundry_remito(), _housekeeping_remito(), LinenItemCreate, LinenItemRead, LinenLocationCreate, LinenLocationRead, LinenMovementCreate, LinenMovementRead (+40 more)
 
-### Community 23 - "Community 23"
+### Community 24 - "Community 24"
 Cohesion: 0.12
 Nodes (68): HotelPermissionOverride, Permission, RolePermissionDefault, SecurityAuditLog, _engine_key(), ensure_permission_matrix_seeded(), get_matrix(), _insert_if_missing() (+60 more)
 
-### Community 24 - "Community 24"
-Cohesion: 0.05
-Nodes (49): BulkRateField, BulkRateFieldMode, BulkRateResult, bulkUpdateDailyRateField(), bulkUpsertDailyRates(), DailyRateOut, DailyRatePrices, DailyRateRangeRow (+41 more)
-
 ### Community 25 - "Community 25"
 Cohesion: 0.05
-Nodes (44): DailyReportSchedule, DailyReportScheduleUpdate, get_daily_report_schedule(), getDailyReportSchedule(), listNotificationPreferences(), listNotifications(), markAllNotificationsRead(), markNotificationRead() (+36 more)
+Nodes (49): BulkRateField, BulkRateFieldMode, BulkRateResult, bulkUpdateDailyRateField(), bulkUpsertDailyRates(), DailyRateOut, DailyRatePrices, DailyRateRangeRow (+41 more)
 
 ### Community 26 - "Community 26"
 Cohesion: 0.09
@@ -162,12 +162,12 @@ Cohesion: 0.06
 Nodes (44): main(), valid_https(), bootstrap_configuration_fingerprint(), Shared, secret-safe binding for the Render QA bootstrap configuration., Hash the exact provider-observed values without exposing them individually., Hash the exact provider-observed values without exposing them individually., Hash the exact provider-observed values without exposing them individually., Hash the exact provider-observed values without exposing them individually. (+36 more)
 
 ### Community 29 - "Community 29"
-Cohesion: 0.11
-Nodes (53): _analytics_window(), build_category_detail_payload(), build_channels_breakdown(), build_channels_payload(), build_home_payload(), build_operations_payload(), build_room_detail_payload(), build_rooms_detail_breakdown() (+45 more)
+Cohesion: 0.05
+Nodes (40): PaymentMethod, ReservationStatus, ConfirmDialogProps, GuestRestrictionBadge(), Props, Props, CheckinCaptureForm, emptyCaptureForm (+32 more)
 
 ### Community 30 - "Community 30"
-Cohesion: 0.05
-Nodes (39): ReservationStatus, ConfirmDialogProps, GuestRestrictionBadge(), Props, Props, CheckinCaptureForm, emptyCaptureForm, guestFullName() (+31 more)
+Cohesion: 0.11
+Nodes (53): _analytics_window(), build_category_detail_payload(), build_channels_breakdown(), build_channels_payload(), build_home_payload(), build_operations_payload(), build_room_detail_payload(), build_rooms_detail_breakdown() (+45 more)
 
 ### Community 31 - "Community 31"
 Cohesion: 0.06
@@ -179,7 +179,7 @@ Nodes (43): 805b47a Unify reservation pricing with signed quote contract, APIKey
 
 ### Community 33 - "Community 33"
 Cohesion: 0.05
-Nodes (42): AllocationRunPayload, AllocationRunResponse, listRoomMovementGroups(), revertRoomMovementGroup(), RoomMoveEvent, RoomMovementGroup, triggerAllocationRecalculation(), listCategories() (+34 more)
+Nodes (43): AllocationRunPayload, AllocationRunResponse, listRoomMovementGroups(), revertRoomMovementGroup(), RoomMoveEvent, RoomMovementGroup, triggerAllocationRecalculation(), listCategories() (+35 more)
 
 ### Community 34 - "Community 34"
 Cohesion: 0.07
@@ -846,160 +846,160 @@ Cohesion: 0.44
 Nodes (8): add_to_waitlist(), cancel_waitlist_entry(), expire_waitlist_entry(), _get_waitlist_entry(), promote_from_waitlist(), request_payment_link_for_waitlist(), update_waitlist_entry(), WaitlistError
 
 ### Community 204 - "Community 204"
+Cohesion: 0.20
+Nodes (3): Reproduces the DELETE /api/stock/items/{id} incident: a stray NOT     NULL colum, test_audit_log_hotel_delete_is_restricted(), test_failed_audit_log_insert_does_not_roll_back_callers_change()
+
+### Community 205 - "Community 205"
 Cohesion: 0.49
 Nodes (9): _client_with_db(), _override_auth(), _seed_fully_paid_reservation(), test_add_companion_during_checkin_flow_appears_in_additional_guests(), test_add_companion_exceeding_capacity_returns_clear_400(), test_checkin_captures_missing_fields_in_same_request(), test_checkin_without_new_fields_fails_with_clear_message(), test_partial_checkin_reaches_pre_check_in_then_final_checkin() (+1 more)
 
-### Community 205 - "Community 205"
+### Community 206 - "Community 206"
 Cohesion: 0.58
 Nodes (9): _build_client(), _cleanup_client(), _get_db_override_target(), _override_auth(), _seed_hotel(), test_commercial_lists_are_hotel_scoped_and_validate_foreign_categories(), test_manager_can_read_but_cannot_mutate_commercial_configuration(), test_manager_has_no_access_to_commercial_configuration() (+1 more)
 
-### Community 206 - "Community 206"
+### Community 207 - "Community 207"
 Cohesion: 0.47
 Nodes (7): _build_client(), _cleanup(), _override_auth(), test_create_payment_surcharge_allows_a_different_payment_method_than_the_nightly_override(), test_create_payment_surcharge_rejects_percentage_over_100(), test_create_payment_surcharge_rejects_when_hotel_already_has_per_method_nightly_price(), test_reactivate_deactivated_surcharge_via_patch()
 
-### Community 207 - "Community 207"
+### Community 208 - "Community 208"
 Cohesion: 0.38
 Nodes (7): _make_hotel(), _make_reservation(), test_one_hotel_failure_does_not_abort_the_rest(), test_review_for_future_does_not_trigger_immediate_alert(), test_review_for_today_triggers_immediate_alert(), test_review_routing_swallows_email_errors(), test_send_morning_reports_iterates_active_hotels()
 
-### Community 208 - "Community 208"
+### Community 209 - "Community 209"
 Cohesion: 0.64
 Nodes (9): _build_client(), _cleanup_client(), _override_auth(), _seed_operational_state(), test_pending_actions_endpoint_is_hotel_scoped(), test_pending_actions_endpoint_surfaces_payment_errors_as_http_500(), test_reservation_operations_resolution_endpoints_close_followups(), test_reservation_operations_summary_endpoint_exposes_pending_operational_actions() (+1 more)
 
-### Community 209 - "Community 209"
+### Community 210 - "Community 210"
 Cohesion: 0.42
 Nodes (7): _override_auth(), _seed_room(), test_create_and_resolve_room_block_api(), test_housekeeping_cannot_create_room_block_by_default(), test_receptionist_can_create_but_not_release_room_block_by_default(), test_receptionist_cannot_create_room_block_by_default(), test_room_block_api_is_hotel_scoped()
 
-### Community 210 - "Community 210"
+### Community 211 - "Community 211"
 Cohesion: 0.38
 Nodes (7): _auth_headers(), _ensure_hotel(), test_comped_override_records_audit_event(), test_comped_override_rejects_unknown_hotel_without_subscription_state(), test_manual_transitions_emit_events(), test_role_gating_for_trial_and_comped_override(), test_trial_auto_suspends_after_fourteen_days()
 
-### Community 211 - "Community 211"
+### Community 212 - "Community 212"
 Cohesion: 0.38
 Nodes (9): _reservation(), test_change_dates_blocked_for_past_check_in(), test_change_dates_blocked_when_room_conflict(), test_change_dates_deposit_paid_auto_fully_paid_when_new_total_lower(), test_change_dates_deposit_paid_keeps_deposit(), test_change_dates_pending_updates_dates_and_price(), test_extend_stay_blocked_for_zero_or_negative_days(), test_extend_stay_blocked_when_room_occupied() (+1 more)
 
-### Community 212 - "Community 212"
+### Community 213 - "Community 213"
 Cohesion: 0.33
 Nodes (8): reservation_api_client_as_receptionist(), _seed_reservation_prerequisites(), test_create_reservation_persists_mobility_restriction(), test_patch_reservation_silently_ignores_unsupported_category_and_status_fields(), test_room_move_endpoint_rejects_capacity_overflow_and_returns_delta_on_reprice(), test_room_move_rejects_receptionist_without_room_move_permission(), test_room_move_requires_reason_code_and_accepts_valid_reason(), test_update_mobility_restriction_triggers_reoptimization()
 
-### Community 213 - "Community 213"
+### Community 214 - "Community 214"
 Cohesion: 0.36
 Nodes (8): _seed_group(), test_list_movement_groups_with_filters(), test_movement_group_hotel_isolation(), test_read_movement_group_detail_includes_movements(), test_revert_already_reverted_group_returns_400(), test_revert_group_service_conflict_does_not_overwrite_original_room(), test_revert_group_service_returns_reverted_without_conflicts(), test_revert_movement_group_restores_original_room_and_audits()
 
-### Community 214 - "Community 214"
+### Community 215 - "Community 215"
 Cohesion: 0.51
 Nodes (9): _ensure_hotel(), _reservation(), _surcharge(), test_fixed_surcharge_applies_to_transaction_gross_and_fee(), test_inactive_surcharge_is_noop(), test_payment_link_requested_amount_includes_surcharge(), test_payment_link_webhook_base_amount_can_be_recovered_from_final_amount(), test_percentage_surcharge_applies_to_transaction_gross_and_fee() (+1 more)
 
-### Community 215 - "Community 215"
+### Community 216 - "Community 216"
 Cohesion: 0.53
 Nodes (8): _headers(), _issue_key(), _seed_hotel(), test_whatsapp_availability_uses_api_key_hotel_scope(), test_whatsapp_create_reservation_sets_channel_code_whatsapp(), test_whatsapp_cross_hotel_isolation_for_create_and_payment_link(), test_whatsapp_generate_payment_link_sets_sent_via_whatsapp(), _whatsapp_quote()
 
-### Community 216 - "Community 216"
+### Community 217 - "Community 217"
 Cohesion: 0.42
 Nodes (8): _load_manifest(), main(), ManifestContinuityError, _provider_subject(), Safe error that never prints provider values., Allow only a newer observation timestamp between provider snapshots., _timestamp(), verify_manifest_continuity()
 
-### Community 217 - "Community 217"
+### Community 218 - "Community 218"
 Cohesion: 0.44
 Nodes (8): _catalog(), initialize(), _json_bytes(), main(), OperationalQAError, _utc_now(), validate(), _write()
 
-### Community 218 - "Community 218"
+### Community 219 - "Community 219"
 Cohesion: 0.22
 Nodes (9): _is_demo_mode_enabled(), Check whether demo-only utilities should be exposed., Check whether demo-only utilities should be exposed., Check whether demo-only utilities should be exposed., Check whether demo-only utilities should be exposed., Check whether demo-only utilities should be exposed., Check whether demo-only utilities should be exposed., Check whether demo-only utilities should be exposed. (+1 more)
 
-### Community 219 - "Community 219"
+### Community 220 - "Community 220"
 Cohesion: 0.28
 Nodes (5): createReservation(), localIsoDate(), owner, parseMoney(), readStat()
 
-### Community 220 - "Community 220"
+### Community 221 - "Community 221"
 Cohesion: 0.44
 Nodes (8): BillingDecision, evaluate_hotel_write_access(), get_policy_payload(), _parse_hotel_ids(), _parse_user_ids(), _policy_table(), update_policy(), _utcnow()
 
-### Community 221 - "Community 221"
+### Community 222 - "Community 222"
 Cohesion: 0.22
 Nodes (8): Configurable permission matrix models., An employee-specific permission decision within one hotel membership., UserPermissionOverride, publish_permission_invalidation(), Tenant-scoped permission catalog, resolution, mutation, and audit services., Explicit invalidation boundary for callers and future cache adapters.      Effec, Best-effort tenant signal after commit; never roll back the RBAC write., Best-effort tenant signal after commit; never roll back the RBAC write.
 
-### Community 222 - "Community 222"
+### Community 223 - "Community 223"
 Cohesion: 0.33
 Nodes (8): GuestBase, GuestCompanionBase, GuestCompanionCreate, GuestCompanionRead, GuestCreate, GuestRead, GuestUpdate, Pydantic schemas for Guest and companions.
 
-### Community 223 - "Community 223"
+### Community 224 - "Community 224"
 Cohesion: 0.36
 Nodes (8): issue_provider_evidence_token(), load_provider_evidence_private_key(), main(), Load the producer-only signer from PEM or base64 raw seed bytes., Create a provider-bound capability using the producer-only signer., _required(), _safe_output_path(), write_private_token()
 
-### Community 224 - "Community 224"
+### Community 225 - "Community 225"
 Cohesion: 0.50
 Nodes (8): _aggregate_inventory_rules(), _build_direct_prices(), _build_missing_channel(), _build_ota_prices(), _default_restrictions(), get_daily_calendar(), _select_ota_price_rule(), _select_rate_plan_price()
 
-### Community 225 - "Community 225"
+### Community 226 - "Community 226"
 Cohesion: 0.50
 Nodes (8): _auth(), _client(), API-level coverage: inbox scoping, push subscription CRUD, preference CRUD, and, test_daily_report_schedule_is_owner_co_owner_only(), test_inbox_is_tenant_and_recipient_scoped(), test_mark_read_is_scoped_to_recipient(), test_preferences_crud(), test_push_subscription_register_and_unregister()
 
-### Community 226 - "Community 226"
+### Community 227 - "Community 227"
 Cohesion: 0.50
 Nodes (8): _outbox_event_types(), _owner(), Integration coverage: the real domain-event call sites (reservation lifecycle, c, test_checkin_checkout_enqueue_notifications(), test_guest_restriction_lifecycle_enqueues_notifications(), test_low_stock_movement_enqueues_notification(), test_no_show_enqueues_notification(), test_reservation_lifecycle_enqueues_notifications()
 
-### Community 227 - "Community 227"
+### Community 228 - "Community 228"
 Cohesion: 0.36
 Nodes (7): _complete_onboarding_setup(), API coverage for the expanded onboarding wizard., _register_owner(), test_complete_nine_step_flow_works(), test_each_step_persists(), test_idempotent_step_updates_do_not_duplicate_records(), test_invalid_data_blocks_advancement()
 
-### Community 228 - "Community 228"
+### Community 229 - "Community 229"
 Cohesion: 0.31
 Nodes (4): _reservation(), test_payment_links_api_create_list_and_cancel(), test_payment_links_api_cross_hotel_isolation(), test_payment_links_api_rejects_manager_without_cash_operate()
 
-### Community 229 - "Community 229"
+### Community 230 - "Community 230"
 Cohesion: 0.39
 Nodes (5): _auth(), _client(), test_only_owner_can_use_administration_catalog_and_co_owner_is_denied(), test_owner_can_grant_and_revoke_user_override_then_restore_defaults(), test_user_override_rejects_self_elevation_and_cross_hotel_id_without_disclosure()
 
-### Community 230 - "Community 230"
+### Community 231 - "Community 231"
 Cohesion: 0.56
 Nodes (8): _client(), _close(), test_checkin_checkout_and_force_checkout_use_distinct_action_permissions(), test_laundry_read_and_movement_follow_revocation_and_grant_without_partial_mutation(), test_rate_read_and_update_follow_revocation_and_grant_without_partial_mutation(), test_reservation_read_and_cancel_follow_individual_overrides_without_data_leak(), test_room_read_and_status_update_follow_revocation_and_grant_without_leak_or_mutation(), test_stock_read_movement_and_admin_are_independently_enforced_without_mutation()
 
-### Community 231 - "Community 231"
+### Community 232 - "Community 232"
 Cohesion: 0.25
 Nodes (2): FakeRedis, test_availability_key_shape_and_serialization()
 
-### Community 232 - "Community 232"
+### Community 233 - "Community 233"
 Cohesion: 0.33
 Nodes (7): _make_reservations(), Tests for A2: paginated + orderable reservation listing.  app/services/reservati, A2 hidden cost: additional_guests/guest.companions/guest.tags are     lazy="sele, test_default_limit_caps_result_at_50(), test_order_recent_is_created_at_desc_id_desc(), test_selectin_fan_out_is_bounded_by_limit_not_by_hotel_history(), test_skip_and_limit_page_through_results()
 
-### Community 233 - "Community 233"
+### Community 234 - "Community 234"
 Cohesion: 0.56
 Nodes (7): _role_connection(), _seed_engine(), _seed_session(), test_after_commit_listener_reapplies_hotel_context(), test_master_admin_bypass_sees_all_hotels_subscriptions(), test_no_tenant_context_hides_all_rows(), test_tenant_isolation_blocks_cross_hotel_reads()
 
-### Community 234 - "Community 234"
+### Community 235 - "Community 235"
 Cohesion: 0.25
 Nodes (3): RenderRequester, Protocol, AnalyticsAIProvider
 
-### Community 235 - "Community 235"
+### Community 236 - "Community 236"
 Cohesion: 0.50
 Nodes (7): _claude(), _codex(), _expected(), _instructions(), main(), _roles(), _toml_string()
 
-### Community 236 - "Community 236"
+### Community 237 - "Community 237"
 Cohesion: 0.32
 Nodes (3): delete_company_document(), get_company_document(), _get_document_or_404()
 
-### Community 237 - "Community 237"
+### Community 238 - "Community 238"
 Cohesion: 0.46
 Nodes (7): _enum_value(), _event_to_read(), _group_to_read(), list_movement_groups(), _not_found_or_bad_request(), read_movement_group(), revert_movement_group()
 
-### Community 238 - "Community 238"
+### Community 239 - "Community 239"
 Cohesion: 0.25
 Nodes (7): Activity, DashboardStats, mockActivities, mockReservations, mockRooms, Reservation, Room
 
-### Community 239 - "Community 239"
+### Community 240 - "Community 240"
 Cohesion: 0.32
 Nodes (7): get_timezone_catalog(), is_valid_timezone(), normalize_timezone(), Timezone catalog helpers.  Keeps timezone lookup out of Postgres/Supabase dashbo, Return a stable, sorted catalog of supported IANA timezone names.      The set i, Return True when the timezone exists in the supported catalog., Trim whitespace and validate the timezone name.
 
-### Community 240 - "Community 240"
+### Community 241 - "Community 241"
 Cohesion: 0.46
 Nodes (7): _reservation(), _seed_hotel_rooms_guests(), _slot(), test_allocation_run_creates_movement_group_and_events(), test_mobility_restriction_prefers_lowest_compatible_floor(), test_score_only_breaks_equivalent_room_tie(), test_solver_does_not_move_corporate_manual_or_pre_checkin_reservations()
 
-### Community 241 - "Community 241"
+### Community 242 - "Community 242"
 Cohesion: 0.57
 Nodes (7): _guest(), _hotel(), test_audit_failure_does_not_raise_from_decorated_function(), test_audit_log_has_correct_action_enum_value(), test_audit_log_uses_correct_hotel_id_isolation(), test_modifying_guest_creates_audit_log_with_before_after(), _user()
-
-### Community 242 - "Community 242"
-Cohesion: 0.25
-Nodes (1): test_failed_audit_log_insert_does_not_roll_back_callers_change()
 
 ### Community 243 - "Community 243"
 Cohesion: 0.32
@@ -1038,100 +1038,100 @@ Cohesion: 0.32
 Nodes (7): downgrade(), _install_rls(), add promotions table (versioned, typed conditions) and migrate payment_surcharge, Install the PostgreSQL tenant policy for promotions; no-op elsewhere., Remove the PostgreSQL tenant policy before dropping the table., _remove_rls(), upgrade()
 
 ### Community 252 - "Community 252"
+Cohesion: 0.46
+Nodes (7): downgrade(), _hotel_fk(), Prevent hotel deletion from cascading into audit_logs.  Replaces the audit_logs., _replace_fk(), _replace_postgresql_fk(), _replace_sqlite_fk(), upgrade()
+
+### Community 253 - "Community 253"
 Cohesion: 0.33
 Nodes (2): mercadopago_payment_link_webhook(), _mercadopago_webhook_impl()
 
-### Community 253 - "Community 253"
+### Community 254 - "Community 254"
 Cohesion: 0.48
 Nodes (5): create_payment_surcharge(), deactivate_payment_surcharge(), _get_surcharge_or_404(), _has_per_method_nightly_price(), update_payment_surcharge()
 
-### Community 254 - "Community 254"
+### Community 255 - "Community 255"
 Cohesion: 0.29
 Nodes (6): Schemas for hotel-scoped waitlist entries., WaitlistEntryCreate, WaitlistEntryRead, WaitlistEntryUpdate, WaitlistPromoteRequest, WaitlistPromoteResponse
 
-### Community 255 - "Community 255"
+### Community 256 - "Community 256"
 Cohesion: 0.48
 Nodes (5): _register_owner(), test_initial_state_is_empty(), test_multihotel_isolation_owner_state(), test_onboarding_flow_complete(), test_permissions_headers_applied_to_config()
 
-### Community 256 - "Community 256"
+### Community 257 - "Community 257"
 Cohesion: 0.48
 Nodes (5): _seed_product_with_compatibilities(), test_build_slots_from_db_respects_policy_when_fallback_is_disabled(), test_build_slots_from_db_uses_sellable_product_compatibility_priorities(), test_run_persisted_allocation_respects_published_policy_that_disables_fallback(), test_run_persisted_allocation_uses_upgrade_compatibility_when_exact_inventory_is_unavailable()
 
-### Community 257 - "Community 257"
+### Community 258 - "Community 258"
 Cohesion: 0.71
 Nodes (6): _client_with_db(), _override_auth(), _seed_reservation(), test_company_documents_api_cross_hotel_isolation(), test_company_documents_api_crud_and_status_flow(), test_receptionist_cannot_manage_company_by_default()
 
-### Community 258 - "Community 258"
+### Community 259 - "Community 259"
 Cohesion: 0.57
 Nodes (6): _company(), test_company_base_price_applies_as_reservation_default_but_overridable(), test_company_document_signature_status_flow(), test_company_documents_are_hotel_scoped(), test_corporate_reservation_is_allocation_locked(), _user()
 
-### Community 259 - "Community 259"
+### Community 260 - "Community 260"
 Cohesion: 0.67
 Nodes (6): _auth(), _client(), test_checkin_reuses_explicit_override_contract_and_never_discloses_reason(), test_internal_reservation_and_quote_return_stable_nondisclosing_409_then_audit_override(), test_restriction_api_permissions_tenant_isolation_and_event(), test_restriction_override_reason_rejects_whitespace()
 
-### Community 260 - "Community 260"
+### Community 261 - "Community 261"
 Cohesion: 0.48
 Nodes (6): _alembic(), _engine(), _load_migration(), _seed_legacy_tags(), test_guest_restriction_migration_owns_reversible_postgresql_rls(), test_guest_restriction_upgrade_downgrade_upgrade_backfills_without_touching_tags()
 
-### Community 261 - "Community 261"
+### Community 262 - "Community 262"
 Cohesion: 0.43
 Nodes (6): _assert_migrated_state(), Regression/data-migration guard for 20260727_linen_split.  The owner explicitly, Hand-insert a real 'linen' StockItem plus movements and a laundry     vendor/pri, _run_alembic(), _seed_pre_split_data(), test_linen_split_migrates_real_data_and_survives_upgrade_downgrade_upgrade()
 
-### Community 262 - "Community 262"
+### Community 263 - "Community 263"
 Cohesion: 0.43
 Nodes (5): _build_signature(), This bool-returning shim delegates to the SAME raising validator every     real, test_validate_mercadopago_webhook_signature_accepts_valid_manifest_signature(), test_validate_mercadopago_webhook_signature_rejects_expired_timestamp(), test_validate_mercadopago_webhook_signature_rejects_tampered_data_id()
 
-### Community 263 - "Community 263"
+### Community 264 - "Community 264"
 Cohesion: 0.71
 Nodes (6): _build_client(), _cleanup(), _override_auth(), test_promotion_crud_lifecycle_and_versioning(), test_promotions_are_tenant_isolated_across_hotels(), test_simulate_endpoint_returns_full_breakdown_without_persisting()
 
-### Community 264 - "Community 264"
+### Community 265 - "Community 265"
 Cohesion: 0.48
 Nodes (6): _alembic(), _engine(), _load_migration(), _seed_pre_migration_surcharge(), test_promotions_migration_owns_reversible_postgresql_rls(), test_promotions_upgrade_downgrade_upgrade_preserves_surcharge_data()
 
-### Community 265 - "Community 265"
+### Community 266 - "Community 266"
 Cohesion: 0.48
 Nodes (6): _alembic(), _engine(), _load_migration(), _seed_pre_revision(), test_postgresql_rls_contract_executes_enable_policy_and_downgrade_removal(), test_rbac_expand_contract_round_trip_preserves_safe_legacy_decisions()
 
-### Community 266 - "Community 266"
+### Community 267 - "Community 267"
 Cohesion: 0.29
 Nodes (3): _no_real_db(), Every response must carry baseline security headers so the SPA and API are not m, The unmatched-path SPA fallback still depends on get_db; stub it so this     tes
 
-### Community 267 - "Community 267"
+### Community 268 - "Community 268"
 Cohesion: 0.57
 Nodes (5): _delete_audit(), _seed_category(), test_price_period_delete_soft_deletes_hides_and_audits(), test_reservation_delete_soft_deletes_hides_and_audits(), test_room_delete_soft_deletes_hides_and_audits()
 
-### Community 268 - "Community 268"
+### Community 269 - "Community 269"
 Cohesion: 0.57
 Nodes (6): _add_billing_charge(), _create_checked_in_reservation(), opened_cash_register(), test_checkout_blocked_when_reservation_has_operational_balance(), test_checkout_succeeds_when_operational_balance_is_fully_paid(), test_checkout_succeeds_with_force_even_when_balance_remains()
 
-### Community 269 - "Community 269"
+### Community 270 - "Community 270"
 Cohesion: 0.52
 Nodes (6): _constraint(), downgrade(), Align billing-adjustment enum storage with the runtime enum values.  The allocat, _rename_postgres_values(), _repair_sqlite(), upgrade()
 
-### Community 270 - "Community 270"
+### Community 271 - "Community 271"
 Cohesion: 0.52
 Nodes (6): _constraint(), downgrade(), Align room-movement enum storage with the runtime enum values.  The original all, _rename_postgres_values(), _repair_sqlite(), upgrade()
 
-### Community 271 - "Community 271"
+### Community 272 - "Community 272"
 Cohesion: 0.80
 Nodes (5): build_sql(), _literal(), load_env(), main(), SharedSandboxBootstrapError
 
-### Community 272 - "Community 272"
+### Community 273 - "Community 273"
 Cohesion: 0.33
 Nodes (4): CLIENT_ID, CredentialResponse, GoogleSignInButton(), Window
 
-### Community 273 - "Community 273"
+### Community 274 - "Community 274"
 Cohesion: 0.33
 Nodes (3): backendURL, credentials, StoredSession
 
-### Community 274 - "Community 274"
+### Community 275 - "Community 275"
 Cohesion: 0.40
 Nodes (3): authHeaders(), ensureOnboarding(), hotelId
-
-### Community 275 - "Community 275"
-Cohesion: 0.47
-Nodes (5): BeforeInstallPromptEvent, Event, isIOSDevice(), isStandaloneDisplay(), useInstallPrompt()
 
 ### Community 276 - "Community 276"
 Cohesion: 0.33
@@ -1490,17 +1490,15 @@ Cohesion: 1.00
 Nodes (1): Dependency injection helpers (auth, etc.).
 
 ## Knowledge Gaps
-- **785 isolated node(s):** `guest checkin profile fields  Revision ID: 17f1689785f3 Revises: 20260725_res_ho`, `add hotel scope to core tables  Revision ID: 20260404_add_hotel_scope Revises: c`, `add subscription v2 tables  Revision ID: 20260407_subscription_tables Revises: 2`, `launch security hardening  Revision ID: 20260408_launch_security_hardening Revis`, `add sender metadata to payment link tests  Revision ID: 20260408_payment_link_em` (+780 more)
+- **789 isolated node(s):** `guest checkin profile fields  Revision ID: 17f1689785f3 Revises: 20260725_res_ho`, `add hotel scope to core tables  Revision ID: 20260404_add_hotel_scope Revises: c`, `add subscription v2 tables  Revision ID: 20260407_subscription_tables Revises: 2`, `launch security hardening  Revision ID: 20260408_launch_security_hardening Revis`, `add sender metadata to payment link tests  Revision ID: 20260408_payment_link_em` (+784 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **Thin community `Community 135`** (1 nodes): `OnboardingState`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 - **Thin community `Community 148`** (1 nodes): `BookingAdapter`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 231`** (2 nodes): `FakeRedis`, `test_availability_key_shape_and_serialization()`
+- **Thin community `Community 232`** (2 nodes): `FakeRedis`, `test_availability_key_shape_and_serialization()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 242`** (1 nodes): `test_failed_audit_log_insert_does_not_roll_back_callers_change()`
-  Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 252`** (2 nodes): `mercadopago_payment_link_webhook()`, `_mercadopago_webhook_impl()`
+- **Thin community `Community 253`** (2 nodes): `mercadopago_payment_link_webhook()`, `_mercadopago_webhook_impl()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 - **Thin community `Community 301`** (1 nodes): `credentials`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
@@ -1572,12 +1570,12 @@ Nodes (1): Dependency injection helpers (auth, etc.).
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `Base` connect `Community 1` to `Community 13`, `Community 2`, `Community 161`, `Community 68`, `Community 218`, `Community 8`, `Community 53`, `Community 39`, `Community 40`, `Community 70`, `Community 4`, `Community 58`, `Community 99`, `Community 66`, `Community 3`, `Community 21`, `Community 114`, `Community 111`, `Community 160`, `Community 7`, `Community 329`, `Community 37`, `Community 32`, `Community 43`, `Community 5`, `Community 196`, `Community 54`, `Community 135`, `Community 14`, `Community 9`, `Community 34`, `Community 23`, `Community 221`, `Community 79`, `Community 119`, `Community 276`, `Community 277`, `Community 278`, `Community 197`, `Community 302`, `Community 85`, `Community 279`, `Community 92`, `Community 0`, `Community 73`, `Community 98`, `Community 227`, `Community 168`, `Community 147`, `Community 89`?**
+- **Why does `Base` connect `Community 1` to `Community 13`, `Community 2`, `Community 161`, `Community 68`, `Community 219`, `Community 8`, `Community 53`, `Community 39`, `Community 40`, `Community 70`, `Community 4`, `Community 58`, `Community 99`, `Community 66`, `Community 3`, `Community 22`, `Community 114`, `Community 111`, `Community 160`, `Community 7`, `Community 329`, `Community 37`, `Community 32`, `Community 43`, `Community 5`, `Community 196`, `Community 54`, `Community 135`, `Community 14`, `Community 9`, `Community 34`, `Community 24`, `Community 222`, `Community 79`, `Community 119`, `Community 276`, `Community 277`, `Community 278`, `Community 197`, `Community 302`, `Community 85`, `Community 279`, `Community 92`, `Community 0`, `Community 73`, `Community 98`, `Community 228`, `Community 168`, `Community 147`, `Community 89`?**
   _High betweenness centrality (0.127) - this node is a cross-community bridge._
-- **Why does `HotelConfiguration` connect `Community 1` to `Community 18`, `Community 43`, `Community 8`, `Community 6`, `Community 12`, `Community 9`, `Community 5`, `Community 80`, `Community 13`, `Community 39`, `Community 99`, `Community 58`, `Community 7`, `Community 34`, `Community 283`, `Community 22`, `Community 63`, `Community 54`, `Community 102`, `Community 106`, `Community 3`, `Community 4`, `Community 284`, `Community 85`, `Community 66`, `Community 369`, `Community 73`, `Community 98`, `Community 2`, `Community 261`, `Community 53`, `Community 288`, `Community 168`, `Community 147`, `Community 59`, `Community 48`, `Community 21`, `Community 61`?**
+- **Why does `HotelConfiguration` connect `Community 1` to `Community 18`, `Community 43`, `Community 8`, `Community 6`, `Community 12`, `Community 9`, `Community 5`, `Community 80`, `Community 13`, `Community 39`, `Community 99`, `Community 58`, `Community 7`, `Community 34`, `Community 283`, `Community 23`, `Community 63`, `Community 54`, `Community 102`, `Community 106`, `Community 3`, `Community 4`, `Community 284`, `Community 85`, `Community 66`, `Community 369`, `Community 73`, `Community 98`, `Community 2`, `Community 262`, `Community 53`, `Community 288`, `Community 168`, `Community 147`, `Community 59`, `Community 48`, `Community 22`, `Community 61`?**
   _High betweenness centrality (0.066) - this node is a cross-community bridge._
-- **Why does `Reservation` connect `Community 7` to `Community 81`, `Community 1`, `Community 9`, `Community 3`, `Community 8`, `Community 13`, `Community 39`, `Community 276`, `Community 278`, `Community 277`, `Community 4`, `Community 70`, `Community 99`, `Community 58`, `Community 114`, `Community 37`, `Community 34`, `Community 118`, `Community 134`, `Community 144`, `Community 48`, `Community 21`, `Community 61`?**
-  _High betweenness centrality (0.035) - this node is a cross-community bridge._
+- **Why does `Reservation` connect `Community 7` to `Community 81`, `Community 1`, `Community 9`, `Community 3`, `Community 8`, `Community 13`, `Community 39`, `Community 276`, `Community 278`, `Community 277`, `Community 4`, `Community 70`, `Community 99`, `Community 58`, `Community 114`, `Community 37`, `Community 34`, `Community 118`, `Community 134`, `Community 144`, `Community 48`, `Community 22`, `Community 61`?**
+  _High betweenness centrality (0.034) - this node is a cross-community bridge._
 - **Are the 936 inferred relationships involving `Reservation` (e.g. with `FastAPI routes for Booking management (thin layer over Reservation). Provides ba` and `Calculate pricing for a potential booking without persisting it.     Uses Catego`) actually correct?**
   _`Reservation` has 936 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 937 inferred relationships involving `ReservationStatusEnum` (e.g. with `FastAPI routes for Booking management (thin layer over Reservation). Provides ba` and `Calculate pricing for a potential booking without persisting it.     Uses Catego`) actually correct?**
