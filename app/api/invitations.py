@@ -10,6 +10,7 @@ from app.models.hotel_membership import HotelMembership
 from app.models.hotel_config import HotelConfiguration
 from app.schemas.auth import AuthResponse
 from app.schemas.auth import LoginRequest
+from app.services.membership_service import MembershipInvariantError, validate_membership_change
 
 router = APIRouter(prefix="/api/invitations", tags=["Invitations"])
 
@@ -49,6 +50,8 @@ def accept_invitation(
     email = data.get("email")
     role = data.get("role")
     hotel_id = data.get("hotel_id")
+    if role not in {"co_owner", "manager", "receptionist", "housekeeping"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Rol de invitacion invalido")
     if email.lower() != payload.email.lower():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El email no coincide con la invitación")
 
@@ -111,8 +114,19 @@ def accept_invitation(
             detail="Este acceso fue revocado. Pedí una nueva invitación al hotel.",
         )
     if membership:
-        membership.role = role
-        membership.status = "active"
+        try:
+            validate_membership_change(
+                db,
+                membership,
+                hotel_id=hotel_id,
+                next_role=role,
+                next_status="active",
+            )
+            membership.role = role
+            membership.status = "active"
+        except MembershipInvariantError as exc:
+            db.rollback()
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     else:
         db.add(HotelMembership(hotel_id=hotel_id, user_id=user.id, role=role, status="active"))
 

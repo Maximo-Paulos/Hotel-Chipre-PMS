@@ -3,7 +3,7 @@ HotelMembership model: many-to-many between users and hotels with roles.
 Roles: owner, co_owner, manager, receptionist, housekeeping.
 """
 from datetime import datetime, timezone
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, UniqueConstraint, Index
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, UniqueConstraint, Index, text
 from sqlalchemy.orm import relationship
 
 from app.database import Base
@@ -17,12 +17,22 @@ class HotelMembership(Base):
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     role = Column(String(20), nullable=False, default="owner")  # owner, co_owner, manager, receptionist, housekeeping
     status = Column(String(20), nullable=False, default="active")  # active, invited, revoked
+    # The billing/property owner is a membership-level concept. It is not a
+    # global User role and is unique among active memberships per hotel.
+    is_primary_owner = Column(Boolean, nullable=False, default=False, server_default="0")
     created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
 
     user = relationship("User")
 
     __table_args__ = (
         UniqueConstraint("hotel_id", "user_id", name="uq_membership_user_hotel"),
+        Index(
+            "uq_membership_primary_owner_active",
+            "hotel_id",
+            unique=True,
+            sqlite_where=text("is_primary_owner = 1 AND status = 'active'"),
+            postgresql_where=text("is_primary_owner IS TRUE AND status = 'active'"),
+        ),
         Index("ix_membership_hotel", "hotel_id"),
         Index("ix_membership_user", "user_id"),
     )

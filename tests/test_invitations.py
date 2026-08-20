@@ -11,6 +11,7 @@ import app.models  # noqa
 from app.models.user import User
 from app.models.hotel_config import HotelConfiguration
 from app.models.hotel_membership import HotelMembership
+from app.models.security_audit_log import SecurityAuditLog
 from app.services.security import (
     create_access_token,
     create_signed_token,
@@ -382,6 +383,102 @@ def test_owner_cannot_assign_owner_or_revoke_self(owner_ctx):
 
     revoke_self = client.delete(f"/api/users/{ctx['user_id']}")
     assert revoke_self.status_code == 400
+    membership = db.query(HotelMembership).filter_by(hotel_id=ctx["hotel_id"], user_id=ctx["user_id"]).one()
+    assert membership.role == "owner"
+    assert membership.status == "active"
+
+
+def test_single_active_owner_cannot_be_downgraded_by_invitation(owner_ctx):
+    client, db, ctx = owner_ctx
+    owner = db.get(User, ctx["user_id"])
+    token = _invitation_token(ctx["hotel_id"], owner.email, role="manager")
+
+    response = client.post(
+        f"/api/invitations/{token}/accept",
+        json={"email": owner.email, "password": "must-not-change-role"},
+        headers={"Authorization": f"Bearer {create_access_token(owner.id)}"},
+    )
+
+    assert response.status_code == 409, response.text
+    membership = db.query(HotelMembership).filter_by(
+        hotel_id=ctx["hotel_id"], user_id=owner.id
+    ).one()
+    assert membership.role == "owner"
+    assert membership.status == "active"
+
+
+def test_primary_owner_cannot_be_downgraded_by_invitation_replay(owner_ctx):
+    client, db, ctx = owner_ctx
+    owner = db.get(User, ctx["user_id"])
+    membership = db.query(HotelMembership).filter_by(hotel_id=ctx["hotel_id"], user_id=owner.id).one()
+    membership.is_primary_owner = True
+    db.commit()
+
+    token = _invitation_token(ctx["hotel_id"], owner.email, role="manager")
+    response = client.post(
+        f"/api/invitations/{token}/accept",
+        json={"email": owner.email, "password": "must-not-change-role"},
+        headers={"Authorization": f"Bearer {create_access_token(owner.id)}"},
+    )
+
+    assert response.status_code == 409, response.text
+    db.refresh(membership)
+    assert membership.role == "owner"
+    assert membership.status == "active"
+    assert membership.is_primary_owner is True
+
+
+def test_primary_owner_transfer_requires_reauth_and_writes_audit(owner_ctx):
+    client, db, ctx = owner_ctx
+    owner = db.get(User, ctx["user_id"])
+    owner_membership = db.query(HotelMembership).filter_by(
+        hotel_id=ctx["hotel_id"], user_id=owner.id
+    ).one()
+    owner_membership.is_primary_owner = True
+    target = User(
+        email="target-owner@test.com",
+        password_hash=hash_password("target-password"),
+        role="owner",
+        is_verified=True,
+        is_active=True,
+    )
+    db.add(target)
+    db.flush()
+    db.add(HotelMembership(hotel_id=ctx["hotel_id"], user_id=target.id, role="owner", status="active"))
+    db.commit()
+
+    rejected = client.post(
+        f"/api/users/{target.id}/primary-owner",
+        json={"password": "wrong-password"},
+    )
+    assert rejected.status_code == 401
+    db.refresh(owner_membership)
+    assert owner_membership.is_primary_owner is True
+
+    transferred = client.post(
+        f"/api/users/{target.id}/primary-owner",
+        json={"password": "pw"},
+    )
+    assert transferred.status_code == 200, transferred.text
+    assert transferred.json() == {
+        "hotel_id": ctx["hotel_id"],
+        "primary_owner_user_id": target.id,
+        "transferred": True,
+    }
+
+    db.refresh(owner_membership)
+    target_membership = db.query(HotelMembership).filter_by(
+        hotel_id=ctx["hotel_id"], user_id=target.id
+    ).one()
+    assert owner_membership.is_primary_owner is False
+    assert target_membership.is_primary_owner is True
+    hotel = db.get(HotelConfiguration, ctx["hotel_id"])
+    assert hotel.owner_email == target.email
+    audit = db.query(SecurityAuditLog).filter_by(
+        hotel_id=ctx["hotel_id"], action="membership.primary_owner.transferred"
+    ).one()
+    assert audit.user_id == owner.id
+    assert audit.resource_id == str(target_membership.id)
 
 
 def test_owner_and_co_owner_can_assign_receptionist(owner_ctx):

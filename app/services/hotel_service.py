@@ -68,8 +68,35 @@ def _ensure_membership_and_subscription(db: Session, hotel_id: int, owner_email:
 
     owner = db.query(User).filter(User.email.ilike(owner_email)).first()
     if owner:
-        if not db.query(HotelMembership).filter(HotelMembership.hotel_id == hotel_id, HotelMembership.user_id == owner.id).first():
-            db.add(HotelMembership(hotel_id=hotel_id, user_id=owner.id, role="owner", status="active"))
+        membership = (
+            db.query(HotelMembership)
+            .filter(HotelMembership.hotel_id == hotel_id, HotelMembership.user_id == owner.id)
+            .first()
+        )
+        if membership is None:
+            db.add(
+                HotelMembership(
+                    hotel_id=hotel_id,
+                    user_id=owner.id,
+                    role="owner",
+                    status="active",
+                    is_primary_owner=True,
+                )
+            )
+        elif membership.role == "owner" and membership.status == "active":
+            # Repair legacy rows created before the explicit Primary Owner
+            # field, but never steal an already assigned primary owner.
+            has_primary = (
+                db.query(HotelMembership)
+                .filter(
+                    HotelMembership.hotel_id == hotel_id,
+                    HotelMembership.status == "active",
+                    HotelMembership.is_primary_owner.is_(True),
+                )
+                .first()
+            )
+            if has_primary is None:
+                membership.is_primary_owner = True
 
     settings = get_settings()
     plan_code = settings.DEFAULT_SUBSCRIPTION_PLAN

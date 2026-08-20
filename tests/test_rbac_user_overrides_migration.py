@@ -50,7 +50,6 @@ def _engine(db_path: str):
 
 def _seed_pre_revision(engine) -> None:
     from app.models.hotel_config import HotelConfiguration
-    from app.models.hotel_membership import HotelMembership
 
     SessionLocal = sessionmaker(bind=engine)
     with SessionLocal() as db:
@@ -73,11 +72,16 @@ def _seed_pre_revision(engine) -> None:
                 "(20, 'staff-rbac@example.test', 'synthetic', 1, 1, 'owner', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
             )
         )
-        db.add_all(
-            [
-                HotelMembership(hotel_id=1, user_id=10, role="owner", status="active"),
-                HotelMembership(hotel_id=2, user_id=20, role="receptionist", status="active"),
-            ]
+        # Use SQL here because the ORM model includes columns added after the
+        # revision under test. This fixture must remain a real pre-revision
+        # schema/data set.
+        db.execute(
+            text(
+                "INSERT INTO hotel_memberships "
+                "(hotel_id, user_id, role, status, created_at) VALUES "
+                "(1, 10, 'owner', 'active', CURRENT_TIMESTAMP), "
+                "(2, 20, 'receptionist', 'active', CURRENT_TIMESTAMP)"
+            )
         )
         db.commit()
     with engine.begin() as connection:
