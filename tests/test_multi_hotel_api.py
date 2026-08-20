@@ -163,6 +163,40 @@ def test_room_cap_enforced(client_with_db, monkeypatch):
     get_settings.cache_clear()
 
 
+def test_staff_cap_enforced_for_pending_invites_and_scoped_by_hotel(client_with_db, monkeypatch):
+    client, db, ctx = client_with_db
+    monkeypatch.setenv("SUBSCRIPTION_ENFORCEMENT", "true")
+    get_settings.cache_clear()
+    create_hotel_with_membership(db, 1, ctx["user_id"])
+    create_hotel_with_membership(db, 2, ctx["user_id"])
+
+    def invite(email):
+        return client.post(
+            "/api/users/invite",
+            json={"email": email, "role": "receptionist"},
+        )
+
+    # Starter allows the owner plus two reserved staff slots. Pending
+    # invitations count so callers cannot bypass the cap before acceptance.
+    assert invite("staff-1@test.com").status_code == 201
+    assert invite("staff-2@test.com").status_code == 201
+    status_response = client.get("/api/subscription/status")
+    assert status_response.status_code == 200
+    assert status_response.json()["staff_limit"] == 3
+    assert status_response.json()["staff_in_use"] == 1
+
+    exceeded = invite("staff-3@test.com")
+    assert exceeded.status_code == 403
+    assert "límite de staff" in exceeded.json()["detail"].lower()
+
+    # The same owner can still use an independent tenant's available staff
+    # capacity; the count must never leak across hotel_id boundaries.
+    ctx["hotel_id"] = 2
+    other_hotel_invite = invite("other-hotel-staff@test.com")
+    assert other_hotel_invite.status_code == 201, other_hotel_invite.text
+    get_settings.cache_clear()
+
+
 def test_reset_endpoint_allows_testing_env(client_with_db, monkeypatch):
     client, db, ctx = client_with_db
     # populate some data
