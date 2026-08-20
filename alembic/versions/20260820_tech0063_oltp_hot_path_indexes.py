@@ -11,7 +11,7 @@ from alembic import op
 
 
 revision: str = "20260820_tech0063_oltp_idx"
-down_revision: Union[str, Sequence[str], None] = "20260820_permission_metadata"
+down_revision: Union[str, Sequence[str], None] = "20260820_primary_owner"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
