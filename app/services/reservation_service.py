@@ -784,6 +784,7 @@ def find_available_rooms(
     *,
     hotel_id: Optional[int] = None,
     exclude_reservation_id: Optional[int] = None,
+    lock_for_update: bool = False,
 ) -> list[Room]:
     """
     Find all rooms of a given category that are available in the date range.
@@ -800,13 +801,19 @@ def find_available_rooms(
     if category.hotel_id != hotel_id:
         raise ReservationError("Room category does not belong to the active hotel")
 
-    candidate_rooms = db.query(Room).filter(
+    candidate_query = db.query(Room).filter(
         Room.category_id == category_id,
         Room.hotel_id == hotel_id,
         Room.deleted_at.is_(None),
         Room.is_active == True,
         Room.status.in_([RoomStatusEnum.AVAILABLE, RoomStatusEnum.OCCUPIED, RoomStatusEnum.CLEANING]),
-    ).all()
+    )
+    if lock_for_update:
+        # The caller is about to persist an assignment in this transaction.
+        # Lock only room rows so concurrent auto-assignment requests cannot both
+        # observe the same room as free before either reservation is committed.
+        candidate_query = candidate_query.enable_eagerloads(False).with_for_update()
+    candidate_rooms = candidate_query.all()
 
     if not candidate_rooms:
         return []
@@ -1009,6 +1016,7 @@ def create_reservation(
             data.check_in_date,
             data.check_out_date,
             hotel_id=hotel_id,
+            lock_for_update=True,
         )
         if not available:
             raise ReservationError(
@@ -1466,7 +1474,7 @@ def update_reservation_fields(
         new_room = db.query(Room).filter(
             Room.id == update_data["room_id"],
             Room.hotel_id == hotel_id,
-        ).first()
+        ).enable_eagerloads(False).with_for_update().first()
         if not new_room:
             raise ReservationError("Room not found")
         if new_room.category_id != reservation.category_id:
@@ -1482,6 +1490,9 @@ def update_reservation_fields(
             raise ReservationError("New room is not available for these dates")
         reservation.room_id = update_data["room_id"]
         if previous_room_id != reservation.room_id:
+            # A room selected by staff through the edit endpoint is a manual
+            # decision and must remain stable during later reoptimization.
+            reservation.allocation_locked = True
             from app.models.operations import RoomMoveEvent, RoomMoveTypeEnum
 
             db.add(
