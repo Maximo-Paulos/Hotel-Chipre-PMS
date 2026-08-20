@@ -128,28 +128,25 @@ def list_guests(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_GUEST_VIEW)),
 ):
-    query = db.query(Guest).filter(Guest.hotel_id == context.hotel_id)
-    if search:
-        query = query.filter(
-            (Guest.first_name.ilike(f"%{search}%"))
-            | (Guest.last_name.ilike(f"%{search}%"))
-            | (Guest.document_number.ilike(f"%{search}%"))
-            | (Guest.email.ilike(f"%{search}%"))
-        )
-    # A5: skip/limit pagination is only well-defined with a deterministic
-    # order -- without this, two consecutive page requests have no SQL
-    # guarantee of returning disjoint rows.
-    return query.order_by(Guest.id.asc()).offset(skip).limit(limit).all()
+    return search_guests(
+        db,
+        context.hotel_id,
+        search,
+        skip=skip,
+        limit=limit,
+        default_order_by_id=True,
+    )
 
 
 @router.get("/search", response_model=list[GuestRead])
 def search_guest_records(
     q: str,
-    limit: int = 20,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=200),
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_GUEST_VIEW)),
 ):
-    return search_guests(db, context.hotel_id, q, limit=limit)
+    return search_guests(db, context.hotel_id, q, skip=skip, limit=limit)
 
 
 @router.get("/ledger/export")
