@@ -519,20 +519,33 @@ def add_reservation_guests(
     incoming_new_document_numbers: set[str] = set()
     incoming_new_without_document = 0
 
+    document_numbers = {
+        str(guest_data.document_number or "").strip()
+        for guest_data in guests
+        if str(guest_data.document_number or "").strip()
+    }
+    existing_guests_by_document = {}
+    if document_numbers:
+        existing_guests_by_document = {
+            guest.document_number: guest
+            for guest in (
+                db.query(Guest)
+                .filter(
+                    Guest.hotel_id == context.hotel_id,
+                    Guest.document_number.in_(document_numbers),
+                )
+                .all()
+            )
+            if guest.document_number
+        }
+
     for guest_data in guests:
         document_number = str(guest_data.document_number or "").strip()
         if document_number:
             if document_number in incoming_new_document_numbers:
                 continue
-            existing_guest_id = (
-                db.query(Guest.id)
-                .filter(
-                    Guest.document_number == document_number,
-                    Guest.hotel_id == context.hotel_id,
-                )
-                .limit(1)
-                .scalar()
-            )
+            existing_guest = existing_guests_by_document.get(document_number)
+            existing_guest_id = existing_guest.id if existing_guest else None
             if existing_guest_id:
                 if existing_guest_id not in linked_guest_ids:
                     incoming_existing_guest_ids.add(existing_guest_id)
@@ -557,18 +570,18 @@ def add_reservation_guests(
         )
 
     for guest_data in guests:
-        # Check if guest already exists by DocNum
-        guest = None
-        if guest_data.document_number:
-            guest = db.query(Guest).filter(
-                Guest.document_number == guest_data.document_number,
-                Guest.hotel_id == context.hotel_id,
-            ).first()
-        
+        # Existing document-bearing guests were loaded in one tenant-scoped
+        # query above. Keep the map current for duplicate new documents in the
+        # same request as well.
+        document_number = str(guest_data.document_number or "").strip()
+        guest = existing_guests_by_document.get(document_number) if document_number else None
+
         if not guest:
             guest = Guest(**guest_data.model_dump(exclude={"companions"}), hotel_id=context.hotel_id)
             db.add(guest)
             db.flush()
+            if document_number:
+                existing_guests_by_document[document_number] = guest
         
         # Link if not linked
         if guest not in reservation.additional_guests:

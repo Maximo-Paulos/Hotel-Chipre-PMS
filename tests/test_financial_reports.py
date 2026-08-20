@@ -152,3 +152,38 @@ def test_revenue_report_totals_multiple_completed_transactions_without_crashing(
 
     assert response.status_code == 200
     assert response.json()["collected"]["total"] == 15000.25
+
+
+def test_occupancy_report_uses_fixed_query_count_for_date_range(reports_client):
+    _client, db, _reservation_id = reports_client
+    start_date = date.today()
+    end_date = start_date + timedelta(days=6)
+    query_count = [0]
+
+    from app.api.reports import occupancy_report
+    from app.dependencies.auth import AuthContext
+
+    def count_query(*_args, **_kwargs):
+        query_count[0] += 1
+
+    event.listen(db.get_bind(), "before_cursor_execute", count_query)
+    try:
+        payload = occupancy_report(
+            start_date=start_date,
+            end_date=end_date,
+            db=db,
+            context=AuthContext(
+                hotel_id=1,
+                user_id=1,
+                user_email="owner@test.com",
+                user_role="owner",
+                is_verified=True,
+                permissions=set(),
+            ),
+        )
+    finally:
+        event.remove(db.get_bind(), "before_cursor_execute", count_query)
+
+    assert payload["daily"][0]["occupied"] == 1
+    assert payload["daily"][1]["occupied"] == 0
+    assert query_count[0] <= 3, f"occupancy range should use fixed query count, got {query_count[0]}"
