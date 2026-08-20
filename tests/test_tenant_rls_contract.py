@@ -56,6 +56,15 @@ CORE_COMPOSITE_FK_REQUIREMENTS = (
 )
 
 
+ADDITIVE_RLS_TABLE_CONTRACT = (
+    ("20260724_payment_proofs.py", ("payment_proofs",)),
+    (
+        "20260820_missing_tenant_rls.py",
+        ("hotel_api_keys", "guest_alerts", "reservation_movement_groups"),
+    ),
+)
+
+
 def _load_rls_migration():
     path = Path(__file__).parents[1] / "alembic" / "versions" / "20260724_tenant_rls_context.py"
     spec = importlib.util.spec_from_file_location("tenant_rls_context_migration", path)
@@ -207,12 +216,20 @@ def test_rls_migration_covers_every_hotel_scoped_model_table():
     assert "hotel_memberships" not in migration.TENANT_TABLES
 
 
-def test_new_tenant_table_enables_its_own_rls_policy():
-    path = Path(__file__).parents[1] / "alembic" / "versions" / "20260724_payment_proofs.py"
+@pytest.mark.parametrize("migration_filename,table_names", ADDITIVE_RLS_TABLE_CONTRACT)
+def test_new_tenant_table_enables_its_own_rls_policy(migration_filename, table_names):
+    path = Path(__file__).parents[1] / "alembic" / "versions" / migration_filename
     source = path.read_text(encoding="utf-8")
-    assert '"payment_proofs"' in source
-    assert "tenant_isolation_payment_proofs" in source
+    for table_name in table_names:
+        assert f'"{table_name}"' in source
+    assert "tenant_isolation_" in source
+    assert "ENABLE ROW LEVEL SECURITY" in source
     assert "FORCE ROW LEVEL SECURITY" in source
+    assert "USING (hotel_id = NULLIF(current_setting('app.hotel_id', true), '')::integer)" in source
+    assert "WITH CHECK (hotel_id = NULLIF(current_setting('app.hotel_id', true), '')::integer)" in source
+    assert "DROP POLICY IF EXISTS" in source
+    assert "NO FORCE ROW LEVEL SECURITY" in source
+    assert "DISABLE ROW LEVEL SECURITY" in source
 
 
 def test_user_override_rls_round_trip_records_valid_postgresql_ddl(monkeypatch):
