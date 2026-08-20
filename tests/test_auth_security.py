@@ -725,6 +725,106 @@ def test_google_login_replaces_password_for_unverified_email_squatter(
     assert len(users_with_email) == 1
 
 
+def test_google_unlink_requires_password_and_revokes_previous_bearer_session(
+    client_and_db, monkeypatch
+):
+    client, db, _session_factory = client_and_db
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "test-client-id.apps.googleusercontent.com")
+    get_settings.cache_clear()
+
+    claims = _fake_google_claims("google-unlink@example.com", sub="google-unlink-sub")
+    with patch("app.api.auth.google_id_token.verify_oauth2_token", return_value=claims):
+        google_login = client.post("/api/auth/google", json={"id_token": "google-jwt"})
+    assert google_login.status_code == 200, google_login.text
+
+    auth = google_login.json()
+    user = db.query(User).filter(User.email == claims["email"]).one()
+    user.password_hash = hash_password("Demo123!pass")
+    db.commit()
+    original_token_version = user.token_version
+
+    unlink = client.post(
+        "/api/auth/google/unlink",
+        headers={"Authorization": f"Bearer {auth['access_token']}"},
+        json={"password": "Demo123!pass"},
+    )
+
+    assert unlink.status_code == 200, unlink.text
+    assert unlink.json() == {"unlinked": True}
+    db.refresh(user)
+    assert user.google_sub is None
+    assert user.token_version == original_token_version + 1
+
+    old_session = client.get(
+        "/api/auth/me",
+        headers={"Authorization": f"Bearer {auth['access_token']}"},
+    )
+    assert old_session.status_code == 401, old_session.text
+
+    audit = db.query(SecurityAuditLog).filter_by(action="google_auth.unlinked").one()
+    assert audit.hotel_id == auth["hotel_id"]
+    assert json.loads(audit.details) == {"provider": "google"}
+
+
+def test_google_unlink_rejects_incorrect_password_without_mutating_link(client_and_db, monkeypatch):
+    client, db, _session_factory = client_and_db
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "test-client-id.apps.googleusercontent.com")
+    get_settings.cache_clear()
+
+    claims = _fake_google_claims("google-unlink-wrong@example.com", sub="google-unlink-wrong-sub")
+    with patch("app.api.auth.google_id_token.verify_oauth2_token", return_value=claims):
+        google_login = client.post("/api/auth/google", json={"id_token": "google-jwt"})
+    assert google_login.status_code == 200, google_login.text
+
+    auth = google_login.json()
+    user = db.query(User).filter(User.email == claims["email"]).one()
+    user.password_hash = hash_password("Demo123!pass")
+    db.commit()
+    original_token_version = user.token_version
+    original_google_sub = user.google_sub
+
+    unlink = client.post(
+        "/api/auth/google/unlink",
+        headers={"Authorization": f"Bearer {auth['access_token']}"},
+        json={"password": "WrongPassword!"},
+    )
+
+    assert unlink.status_code == 401, unlink.text
+    db.refresh(user)
+    assert user.google_sub == original_google_sub
+    assert user.token_version == original_token_version
+    assert db.query(SecurityAuditLog).filter_by(action="google_auth.unlinked").count() == 0
+
+
+def test_google_only_account_cannot_unlink_with_unknown_password(client_and_db, monkeypatch):
+    client, db, _session_factory = client_and_db
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "test-client-id.apps.googleusercontent.com")
+    get_settings.cache_clear()
+
+    claims = _fake_google_claims("google-only-unlink@example.com", sub="google-only-unlink-sub")
+    with patch("app.api.auth.google_id_token.verify_oauth2_token", return_value=claims):
+        google_login = client.post("/api/auth/google", json={"id_token": "google-jwt"})
+    assert google_login.status_code == 200, google_login.text
+
+    auth = google_login.json()
+    user = db.query(User).filter(User.email == claims["email"]).one()
+    original_password_hash = user.password_hash
+    original_token_version = user.token_version
+
+    unlink = client.post(
+        "/api/auth/google/unlink",
+        headers={"Authorization": f"Bearer {auth['access_token']}"},
+        json={"password": "PasswordTheGoogleOnlyUserNeverSet"},
+    )
+
+    assert unlink.status_code == 401, unlink.text
+    db.refresh(user)
+    assert user.google_sub == claims["sub"]
+    assert user.password_hash == original_password_hash
+    assert user.token_version == original_token_version
+    assert db.query(SecurityAuditLog).filter_by(action="google_auth.unlinked").count() == 0
+
+
 def test_google_login_rejects_unverified_google_email(client_and_db, monkeypatch):
     client, _db, _session_factory = client_and_db
     monkeypatch.setenv("GOOGLE_CLIENT_ID", "test-client-id.apps.googleusercontent.com")

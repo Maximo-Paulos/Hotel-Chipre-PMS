@@ -9434,6 +9434,64 @@
         }
       }
     },
+    "/api/auth/google/unlink": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Unlink Google",
+        "description": "Remove the Google login only after proving control of the password.\n\nGoogle-only accounts contain a random password hash that was never shown\nto the user, so password verification naturally prevents them from\nremoving their only usable login method until they set a real password.",
+        "operationId": "unlink_google_api_auth_google_unlink_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GoogleUnlinkRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/auth/verify-email": {
       "post": {
         "tags": [
@@ -31526,6 +31584,17 @@
             "type": "boolean",
             "title": "Requires Verification",
             "default": false
+          },
+          "csrf_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Csrf Token"
           }
         },
         "type": "object",
@@ -35665,6 +35734,20 @@
           "id_token"
         ],
         "title": "GoogleAuthRequest"
+      },
+      "GoogleUnlinkRequest": {
+        "properties": {
+          "password": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "password"
+        ],
+        "title": "GoogleUnlinkRequest"
       },
       "GuestCompanionCreate": {
         "properties": {

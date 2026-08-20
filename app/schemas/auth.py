@@ -52,6 +52,10 @@ class GoogleAuthRequest(BaseModel):
     id_token: str = Field(min_length=1)
 
 
+class GoogleUnlinkRequest(BaseModel):
+    password: str = Field(min_length=1)
+
+
 class RequestCode(BaseModel):
     email: str
 
