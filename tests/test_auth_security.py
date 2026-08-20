@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import time
 from unittest.mock import patch
 
+import pyotp
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -17,6 +19,7 @@ from app.database import Base, get_db
 from app.models.hotel_config import HotelConfiguration
 from app.models.hotel_membership import HotelMembership
 from app.models.user import User
+from app.models.user_mfa import UserMfaRecoveryCode, UserMfaSecret
 from app.schemas.onboarding import (
     DepositPolicyPayload,
     HotelIdentityPayload,
@@ -675,3 +678,203 @@ def test_google_login_rejects_invalid_token(client_and_db, monkeypatch):
         response = client.post("/api/auth/google", json={"id_token": "garbage"})
 
     assert response.status_code == 401, response.text
+
+
+def _next_totp_code(secret: str, steps_ahead: int = 1) -> str:
+    current_step = int(time.time()) // 30
+    return pyotp.TOTP(secret).at((current_step + steps_ahead) * 30)
+
+
+def _verified_auth(client: TestClient, email: str, monkeypatch: pytest.MonkeyPatch) -> dict[str, object]:
+    _configure_resend(monkeypatch, [])
+    registered = _register_owner(client, email)
+    verified = client.post(
+        "/api/auth/verify-email",
+        json={"email": email, "code": "123456"},
+    )
+    assert verified.status_code == 200, verified.text
+    return verified.json()
+
+
+def _enroll_and_confirm_mfa(
+    client: TestClient, db, email: str, monkeypatch: pytest.MonkeyPatch
+) -> tuple[dict[str, object], str, list[str]]:
+    auth = _verified_auth(client, email, monkeypatch)
+    headers = _auth_headers(auth)
+    enrollment = client.post("/api/auth/mfa/enroll", headers=headers)
+    assert enrollment.status_code == 200, enrollment.text
+    enrollment_body = enrollment.json()
+    secret = enrollment_body["secret"]
+    confirmation = client.post(
+        "/api/auth/mfa/enroll/confirm",
+        headers=headers,
+        json={"code": pyotp.TOTP(secret).now()},
+    )
+    assert confirmation.status_code == 200, confirmation.text
+    recovery_codes = confirmation.json()["recovery_codes"]
+    user = db.query(User).filter(User.email == email).one()
+    mfa_secret = db.query(UserMfaSecret).filter(UserMfaSecret.user_id == user.id).one()
+    assert mfa_secret.status == "active"
+    return auth, secret, recovery_codes
+
+
+def test_login_without_mfa_keeps_returning_the_normal_auth_response(client_and_db, fixed_code_patch, monkeypatch):
+    client, _db, _session_factory = client_and_db
+    auth = _verified_auth(client, "without-mfa@example.com", monkeypatch)
+
+    login = client.post(
+        "/api/auth/login",
+        json={"email": "without-mfa@example.com", "password": "Demo123!pass"},
+    )
+    assert login.status_code == 200, login.text
+    assert login.json()["access_token"]
+    assert login.json()["user"]["email"] == auth["user"]["email"]
+
+
+def test_mfa_enroll_confirm_uses_encrypted_secret_and_requires_second_login_step(
+    client_and_db, fixed_code_patch, monkeypatch
+):
+    client, db, _session_factory = client_and_db
+    auth, secret, recovery_codes = _enroll_and_confirm_mfa(client, db, "totp-login@example.com", monkeypatch)
+    headers = _auth_headers(auth)
+
+    stored = db.query(UserMfaSecret).one()
+    assert stored.status == "active"
+    assert stored.encrypted_secret != secret
+    assert secret not in stored.encrypted_secret
+    assert len(recovery_codes) == 10
+    stored_codes = db.query(UserMfaRecoveryCode).all()
+    assert len(stored_codes) == 10
+    assert all(code not in row.code_hash for row in stored_codes for code in recovery_codes)
+
+    login = client.post(
+        "/api/auth/login",
+        json={"email": "totp-login@example.com", "password": "Demo123!pass"},
+    )
+    assert login.status_code == 200, login.text
+    challenge = login.json()
+    assert challenge["requires_mfa"] is True
+    assert "access_token" not in challenge
+    assert challenge["expires_in"] == 300
+
+    completed = client.post(
+        "/api/auth/login/mfa",
+        json={"mfa_token": challenge["mfa_token"], "code": _next_totp_code(secret)},
+    )
+    assert completed.status_code == 200, completed.text
+    assert completed.json()["access_token"]
+
+
+def test_mfa_rejects_invalid_and_replayed_totp_codes(client_and_db, fixed_code_patch, monkeypatch):
+    client, db, _session_factory = client_and_db
+    _auth, secret, _recovery_codes = _enroll_and_confirm_mfa(client, db, "totp-replay@example.com", monkeypatch)
+
+    invalid_challenge = client.post(
+        "/api/auth/login",
+        json={"email": "totp-replay@example.com", "password": "Demo123!pass"},
+    ).json()
+    invalid = client.post(
+        "/api/auth/login/mfa",
+        json={"mfa_token": invalid_challenge["mfa_token"], "code": "000000"},
+    )
+    assert invalid.status_code == 401, invalid.text
+
+    challenge = client.post(
+        "/api/auth/login",
+        json={"email": "totp-replay@example.com", "password": "Demo123!pass"},
+    ).json()
+    code = _next_totp_code(secret)
+    first = client.post(
+        "/api/auth/login/mfa",
+        json={"mfa_token": challenge["mfa_token"], "code": code},
+    )
+    assert first.status_code == 200, first.text
+
+    replay = client.post(
+        "/api/auth/login/mfa",
+        json={"mfa_token": challenge["mfa_token"], "code": code},
+    )
+    assert replay.status_code == 401, replay.text
+
+
+def test_recovery_code_is_single_use_and_regeneration_invalidates_old_codes(
+    client_and_db, fixed_code_patch, monkeypatch
+):
+    client, db, _session_factory = client_and_db
+    auth, _secret, recovery_codes = _enroll_and_confirm_mfa(client, db, "totp-recovery@example.com", monkeypatch)
+
+    first_challenge = client.post(
+        "/api/auth/login",
+        json={"email": "totp-recovery@example.com", "password": "Demo123!pass"},
+    ).json()
+    first_login = client.post(
+        "/api/auth/login/mfa",
+        json={"mfa_token": first_challenge["mfa_token"], "code": recovery_codes[0]},
+    )
+    assert first_login.status_code == 200, first_login.text
+    authenticated_headers = _auth_headers(first_login.json())
+
+    second_challenge = client.post(
+        "/api/auth/login",
+        json={"email": "totp-recovery@example.com", "password": "Demo123!pass"},
+    ).json()
+    reused = client.post(
+        "/api/auth/login/mfa",
+        json={"mfa_token": second_challenge["mfa_token"], "code": recovery_codes[0]},
+    )
+    assert reused.status_code == 401, reused.text
+
+    regenerated = client.post(
+        "/api/auth/mfa/recovery-codes/regenerate",
+        headers=authenticated_headers,
+        json={"code": recovery_codes[1]},
+    )
+    assert regenerated.status_code == 200, regenerated.text
+    new_codes = regenerated.json()["recovery_codes"]
+    assert len(new_codes) == 10
+    assert set(new_codes).isdisjoint(recovery_codes)
+
+    old_challenge = client.post(
+        "/api/auth/login",
+        json={"email": "totp-recovery@example.com", "password": "Demo123!pass"},
+    ).json()
+    old_code = client.post(
+        "/api/auth/login/mfa",
+        json={"mfa_token": old_challenge["mfa_token"], "code": recovery_codes[2]},
+    )
+    assert old_code.status_code == 401, old_code.text
+
+    new_challenge = client.post(
+        "/api/auth/login",
+        json={"email": "totp-recovery@example.com", "password": "Demo123!pass"},
+    ).json()
+    new_login = client.post(
+        "/api/auth/login/mfa",
+        json={"mfa_token": new_challenge["mfa_token"], "code": new_codes[0]},
+    )
+    assert new_login.status_code == 200, new_login.text
+
+
+def test_disable_mfa_requires_current_password_and_a_valid_factor(client_and_db, fixed_code_patch, monkeypatch):
+    client, db, _session_factory = client_and_db
+    auth, secret, _recovery_codes = _enroll_and_confirm_mfa(client, db, "totp-disable@example.com", monkeypatch)
+    headers = _auth_headers(auth)
+    code = _next_totp_code(secret)
+
+    wrong_password = client.post(
+        "/api/auth/mfa/disable",
+        headers=headers,
+        json={"password": "wrong password", "code": code},
+    )
+    assert wrong_password.status_code == 401, wrong_password.text
+    assert db.query(UserMfaSecret).one().status == "active"
+
+    disabled = client.post(
+        "/api/auth/mfa/disable",
+        headers=headers,
+        json={"password": "Demo123!pass", "code": code},
+    )
+    assert disabled.status_code == 200, disabled.text
+    assert disabled.json() == {"disabled": True}
+    assert db.query(UserMfaSecret).count() == 0
+    assert db.query(UserMfaRecoveryCode).count() == 0

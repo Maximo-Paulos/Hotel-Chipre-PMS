@@ -93,3 +93,4 @@ invite_limiter = SimpleRateLimiter("invite_user", limit=5, window_seconds=60 * 6
 # could be brute-forced within its TTL. Keyed by "{token_type}:{email}" so
 # validate-reset and reset-password share a budget against the same code.
 code_guess_limiter = SimpleRateLimiter("code_guess", limit=8, window_seconds=15 * 60)
+mfa_code_guess_limiter = SimpleRateLimiter("mfa_code_guess", limit=8, window_seconds=15 * 60)

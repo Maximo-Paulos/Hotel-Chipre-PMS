@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-20T16:02:16.684Z",
+  "generatedAt": "2026-08-20T16:18:05.897Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -14,15 +14,19 @@
       "path": [
         "api_auth_login",
         "api_auth_build_auth_response",
-        "api_auth_pick_default_hotel_id"
+        "api_auth_build_login_response",
+        "api_auth_pick_default_hotel_id",
+        "api_auth_issue_auth_response"
       ],
       "qualifiedPath": [
         "api_auth_login",
         "api_auth_build_auth_response",
-        "api_auth_pick_default_hotel_id"
+        "api_auth_build_login_response",
+        "api_auth_pick_default_hotel_id",
+        "api_auth_issue_auth_response"
       ],
       "depth": 2,
-      "nodeCount": 3,
+      "nodeCount": 5,
       "fileCount": 2,
       "files": [
         "app/api/auth.py",
@@ -180,6 +184,38 @@
         "scripts/agent_ops/verify_preview_providers.py"
       ],
       "criticality": 0.44,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_auth_complete_mfa_login",
+      "name": "complete_mfa_login",
+      "entryPoint": "api_auth_complete_mfa_login",
+      "entryPointId": "api_auth_complete_mfa_login",
+      "path": [
+        "api_auth_complete_mfa_login",
+        "api_auth_allow_mfa_attempt",
+        "api_auth_issue_auth_response",
+        "api_auth_reset_mfa_attempts",
+        "api_auth_mfa_attempt_key",
+        "api_auth_build_auth_response",
+        "api_auth_pick_default_hotel_id"
+      ],
+      "qualifiedPath": [
+        "api_auth_complete_mfa_login",
+        "api_auth_allow_mfa_attempt",
+        "api_auth_issue_auth_response",
+        "api_auth_reset_mfa_attempts",
+        "api_auth_mfa_attempt_key",
+        "api_auth_build_auth_response",
+        "api_auth_pick_default_hotel_id"
+      ],
+      "depth": 3,
+      "nodeCount": 7,
+      "fileCount": 1,
+      "files": [
+        "app/api/auth.py"
+      ],
+      "criticality": 0.43,
       "warnings": []
     },
     {
@@ -521,6 +557,58 @@
       "warnings": []
     },
     {
+      "id": "flow:api_auth_confirm_mfa_enrollment",
+      "name": "confirm_mfa_enrollment",
+      "entryPoint": "api_auth_confirm_mfa_enrollment",
+      "entryPointId": "api_auth_confirm_mfa_enrollment",
+      "path": [
+        "api_auth_confirm_mfa_enrollment",
+        "api_auth_allow_mfa_attempt",
+        "api_auth_reset_mfa_attempts",
+        "api_auth_mfa_attempt_key"
+      ],
+      "qualifiedPath": [
+        "api_auth_confirm_mfa_enrollment",
+        "api_auth_allow_mfa_attempt",
+        "api_auth_reset_mfa_attempts",
+        "api_auth_mfa_attempt_key"
+      ],
+      "depth": 2,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/api/auth.py"
+      ],
+      "criticality": 0.42,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_auth_disable_mfa",
+      "name": "disable_mfa",
+      "entryPoint": "api_auth_disable_mfa",
+      "entryPointId": "api_auth_disable_mfa",
+      "path": [
+        "api_auth_disable_mfa",
+        "api_auth_allow_mfa_attempt",
+        "api_auth_reset_mfa_attempts",
+        "api_auth_mfa_attempt_key"
+      ],
+      "qualifiedPath": [
+        "api_auth_disable_mfa",
+        "api_auth_allow_mfa_attempt",
+        "api_auth_reset_mfa_attempts",
+        "api_auth_mfa_attempt_key"
+      ],
+      "depth": 2,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/api/auth.py"
+      ],
+      "criticality": 0.42,
+      "warnings": []
+    },
+    {
       "id": "flow:agent_ops_verify_preview_bundle_discover",
       "name": "discover",
       "entryPoint": "agent_ops_verify_preview_bundle_discover",
@@ -618,15 +706,19 @@
       "path": [
         "api_auth_google_login",
         "api_auth_build_auth_response",
-        "api_auth_pick_default_hotel_id"
+        "api_auth_build_login_response",
+        "api_auth_pick_default_hotel_id",
+        "api_auth_issue_auth_response"
       ],
       "qualifiedPath": [
         "api_auth_google_login",
         "api_auth_build_auth_response",
-        "api_auth_pick_default_hotel_id"
+        "api_auth_build_login_response",
+        "api_auth_pick_default_hotel_id",
+        "api_auth_issue_auth_response"
       ],
       "depth": 2,
-      "nodeCount": 3,
+      "nodeCount": 5,
       "fileCount": 1,
       "files": [
         "app/api/auth.py"
@@ -658,6 +750,32 @@
       "fileCount": 1,
       "files": [
         "scripts/agent_ops/build_shared_sandbox_bootstrap_sql.py"
+      ],
+      "criticality": 0.42,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_auth_regenerate_mfa_recovery_codes",
+      "name": "regenerate_mfa_recovery_codes",
+      "entryPoint": "api_auth_regenerate_mfa_recovery_codes",
+      "entryPointId": "api_auth_regenerate_mfa_recovery_codes",
+      "path": [
+        "api_auth_regenerate_mfa_recovery_codes",
+        "api_auth_allow_mfa_attempt",
+        "api_auth_reset_mfa_attempts",
+        "api_auth_mfa_attempt_key"
+      ],
+      "qualifiedPath": [
+        "api_auth_regenerate_mfa_recovery_codes",
+        "api_auth_allow_mfa_attempt",
+        "api_auth_reset_mfa_attempts",
+        "api_auth_mfa_attempt_key"
+      ],
+      "depth": 2,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/api/auth.py"
       ],
       "criticality": 0.42,
       "warnings": []
@@ -754,15 +872,19 @@
       "path": [
         "api_auth_reset_password",
         "api_auth_build_auth_response",
-        "api_auth_pick_default_hotel_id"
+        "api_auth_build_login_response",
+        "api_auth_pick_default_hotel_id",
+        "api_auth_issue_auth_response"
       ],
       "qualifiedPath": [
         "api_auth_reset_password",
         "api_auth_build_auth_response",
-        "api_auth_pick_default_hotel_id"
+        "api_auth_build_login_response",
+        "api_auth_pick_default_hotel_id",
+        "api_auth_issue_auth_response"
       ],
       "depth": 2,
-      "nodeCount": 3,
+      "nodeCount": 5,
       "fileCount": 1,
       "files": [
         "app/api/auth.py"
@@ -2061,6 +2183,30 @@
       "warnings": []
     },
     {
+      "id": "flow:services_mfa_service_enroll_user",
+      "name": "enroll_user",
+      "entryPoint": "services_mfa_service_enroll_user",
+      "entryPointId": "services_mfa_service_enroll_user",
+      "path": [
+        "services_mfa_service_enroll_user",
+        "services_mfa_service_encrypt_totp_secret",
+        "services_mfa_service_get_user_mfa_secret"
+      ],
+      "qualifiedPath": [
+        "services_mfa_service_enroll_user",
+        "services_mfa_service_encrypt_totp_secret",
+        "services_mfa_service_get_user_mfa_secret"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/services/mfa_service.py"
+      ],
+      "criticality": 0.3267,
+      "warnings": []
+    },
+    {
       "id": "flow:hooks_usecashregister_invalidatecashregisterqueries",
       "name": "invalidateCashRegisterQueries",
       "entryPoint": "hooks_usecashregister_invalidatecashregisterqueries",
@@ -2582,6 +2728,28 @@
       "fileCount": 1,
       "files": [
         "app/api/stock.py"
+      ],
+      "criticality": 0.285,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_mfa_service_disable_user_mfa",
+      "name": "disable_user_mfa",
+      "entryPoint": "services_mfa_service_disable_user_mfa",
+      "entryPointId": "services_mfa_service_disable_user_mfa",
+      "path": [
+        "services_mfa_service_disable_user_mfa",
+        "services_mfa_service_get_active_mfa_secret"
+      ],
+      "qualifiedPath": [
+        "services_mfa_service_disable_user_mfa",
+        "services_mfa_service_get_active_mfa_secret"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/services/mfa_service.py"
       ],
       "criticality": 0.285,
       "warnings": []
@@ -3290,6 +3458,72 @@
         "alembic/versions/7b14658560e1_restrict_audit_log_hotel_deletion.py"
       ],
       "criticality": 0.28,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_mfa_service_confirm_enrollment",
+      "name": "confirm_enrollment",
+      "entryPoint": "services_mfa_service_confirm_enrollment",
+      "entryPointId": "services_mfa_service_confirm_enrollment",
+      "path": [
+        "services_mfa_service_confirm_enrollment",
+        "services_mfa_service_add_recovery_codes",
+        "services_mfa_service_decrypt_totp_secret",
+        "services_mfa_service_generate_recovery_codes",
+        "services_mfa_service_get_user_mfa_secret",
+        "services_mfa_service_totp_step_for_code",
+        "services_mfa_service_mfasecretunavailableerror"
+      ],
+      "qualifiedPath": [
+        "services_mfa_service_confirm_enrollment",
+        "services_mfa_service_add_recovery_codes",
+        "services_mfa_service_decrypt_totp_secret",
+        "services_mfa_service_generate_recovery_codes",
+        "services_mfa_service_get_user_mfa_secret",
+        "services_mfa_service_totp_step_for_code",
+        "services_mfa_service_mfasecretunavailableerror"
+      ],
+      "depth": 2,
+      "nodeCount": 7,
+      "fileCount": 1,
+      "files": [
+        "app/services/mfa_service.py"
+      ],
+      "criticality": 0.2771,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_mfa_service_consume_mfa_code",
+      "name": "consume_mfa_code",
+      "entryPoint": "services_mfa_service_consume_mfa_code",
+      "entryPointId": "services_mfa_service_consume_mfa_code",
+      "path": [
+        "services_mfa_service_consume_mfa_code",
+        "services_mfa_service_consume_recovery_code",
+        "services_mfa_service_consume_totp_code",
+        "services_mfa_service_get_active_mfa_secret",
+        "services_mfa_service_normalize_recovery_code",
+        "services_mfa_service_decrypt_totp_secret",
+        "services_mfa_service_totp_step_for_code",
+        "services_mfa_service_mfasecretunavailableerror"
+      ],
+      "qualifiedPath": [
+        "services_mfa_service_consume_mfa_code",
+        "services_mfa_service_consume_recovery_code",
+        "services_mfa_service_consume_totp_code",
+        "services_mfa_service_get_active_mfa_secret",
+        "services_mfa_service_normalize_recovery_code",
+        "services_mfa_service_decrypt_totp_secret",
+        "services_mfa_service_totp_step_for_code",
+        "services_mfa_service_mfasecretunavailableerror"
+      ],
+      "depth": 3,
+      "nodeCount": 8,
+      "fileCount": 1,
+      "files": [
+        "app/services/mfa_service.py"
+      ],
+      "criticality": 0.2738,
       "warnings": []
     },
     {
@@ -16366,6 +16600,30 @@
       "fileCount": 1,
       "files": [
         "frontend/src/components/RateCalendarGrid.tsx"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_mfa_service_replace_recovery_codes",
+      "name": "replace_recovery_codes",
+      "entryPoint": "services_mfa_service_replace_recovery_codes",
+      "entryPointId": "services_mfa_service_replace_recovery_codes",
+      "path": [
+        "services_mfa_service_replace_recovery_codes",
+        "services_mfa_service_add_recovery_codes",
+        "services_mfa_service_generate_recovery_codes"
+      ],
+      "qualifiedPath": [
+        "services_mfa_service_replace_recovery_codes",
+        "services_mfa_service_add_recovery_codes",
+        "services_mfa_service_generate_recovery_codes"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/services/mfa_service.py"
       ],
       "criticality": 0.16,
       "warnings": []

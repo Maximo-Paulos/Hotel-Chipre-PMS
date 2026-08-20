@@ -1,12 +1,10 @@
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
-import base64
-import hashlib
 import json
 from urllib.parse import urlencode
 import requests
 
-from cryptography.fernet import Fernet, InvalidToken
+from cryptography.fernet import InvalidToken
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 
@@ -16,21 +14,15 @@ from app.services.external_effects_policy import (
     external_connections_enabled,
     require_external_connections,
 )
+from app.services.encryption import get_encryption_fernet
 
 GOOGLE_IDENTITY_SCOPES = ["openid", "email", "profile"]
 GMAIL_SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send"
 
 
-def _fernet() -> Fernet:
-    raw_key = get_settings().INTEGRATIONS_ENCRYPTION_KEY.encode()
-    try:
-        return Fernet(raw_key)
-    except ValueError:
-        if is_production_mode():
-            raise ValueError("INTEGRATIONS_ENCRYPTION_KEY must be a valid Fernet key in production")
-        # Keep local/dev setups stable even if the env value is not already a Fernet key.
-        derived = base64.urlsafe_b64encode(hashlib.sha256(raw_key).digest())
-        return Fernet(derived)
+def _fernet():
+    """Backward-compatible local name for the shared secret-encryption helper."""
+    return get_encryption_fernet()
 
 
 def encrypt_payload(payload: Dict[str, Any]) -> Dict[str, Any]:

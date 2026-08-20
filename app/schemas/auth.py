@@ -1,4 +1,6 @@
 import email_validator
+from typing import Literal
+
 from pydantic import BaseModel, Field, field_validator
 
 from app.config import is_test_mode
@@ -30,6 +32,19 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: str
     password: str
+
+
+class MfaLoginRequest(BaseModel):
+    mfa_token: str = Field(min_length=1)
+    code: str = Field(min_length=1, max_length=64)
+
+
+class MfaCodeRequest(BaseModel):
+    code: str = Field(min_length=1, max_length=64)
+
+
+class MfaDisableRequest(MfaCodeRequest):
+    password: str = Field(min_length=1)
 
 
 class GoogleAuthRequest(BaseModel):
@@ -71,6 +86,22 @@ class AuthResponse(BaseModel):
     user: UserInfo
     permissions: list[str] = Field(default_factory=list)
     requires_verification: bool = False
+
+
+class MfaChallengeResponse(BaseModel):
+    requires_mfa: Literal[True] = True
+    mfa_token: str
+    expires_in: int
+
+
+class MfaEnrollmentResponse(BaseModel):
+    status: Literal["pending"] = "pending"
+    secret: str
+    otpauth_uri: str
+
+
+class MfaRecoveryCodesResponse(BaseModel):
+    recovery_codes: list[str]
 
 
 class ResetCodeValidationResponse(BaseModel):
