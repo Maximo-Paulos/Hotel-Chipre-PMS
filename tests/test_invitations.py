@@ -132,7 +132,9 @@ def test_invite_returns_token_and_accepts(owner_ctx):
     assert pending_membership is not None
     assert pending_membership.status == "invited"
 
-    accept = client.post(f"/api/invitations/{token}/accept", json={"email": "guest@test.com", "password": "newpw"})
+    accept = client.post(
+        f"/api/invitations/{token}/accept", json={"email": "guest@test.com", "password": "new-password"}
+    )
     assert accept.status_code == 200
     accept_body = accept.json()
     assert accept_body["user"]["is_verified"] is True
@@ -288,6 +290,21 @@ def test_invitation_creates_and_activates_user_when_email_is_new(owner_ctx):
     )
     assert new_membership is not None
     assert new_membership.status == "active"
+
+
+def test_invitation_accept_rejects_password_under_twelve_characters(owner_ctx):
+    client, db, ctx = owner_ctx
+    email = "short-password@test.com"
+    token = _invitation_token(ctx["hotel_id"], email)
+
+    response = client.post(
+        f"/api/invitations/{token}/accept",
+        json={"email": email, "password": "short-pw"},
+    )
+
+    assert response.status_code == 422, response.text
+    assert "12 characters" in response.json()["detail"][0]["msg"]
+    assert db.query(User).filter(User.email == email).first() is None
 
 
 def test_update_role_requires_owner(owner_ctx):
