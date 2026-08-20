@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from datetime import date
 
+import pytest
+
 from app.models.commercial import FxPolicy, RatePlan, RatePlanPrice, SellableProduct, TaxPolicy, TaxRule
 from app.models.hotel_config import HotelConfiguration
 from app.models.ota_core import OTACommissionRule, OTACurrencyRate, OTAProvider
@@ -233,3 +235,57 @@ def test_quote_rate_plan_converts_currency_with_fx_policy_spread(db):
     assert quote.gross_total == 105000.0
     assert quote.commission_amount == 18900.0
     assert quote.net_amount == 86100.0
+
+
+def test_quote_rate_plan_enforces_stay_constraints_and_charged_night_validity(db):
+    rate_plan, _tax_policy, _ = _seed_pricing_foundation(db)
+    rate_plan.min_nights_default = 2
+    rate_plan.max_nights_default = 2
+    db.flush()
+
+    with pytest.raises(ValueError, match="at least 2 nights"):
+        quote_rate_plan_stay(
+            db,
+            hotel_id=51,
+            rate_plan_id=rate_plan.id,
+            check_in=date(2026, 10, 1),
+            check_out=date(2026, 10, 2),
+            occupancy=2,
+            channel_code="booking",
+        )
+
+    with pytest.raises(ValueError, match="at most 2 nights"):
+        quote_rate_plan_stay(
+            db,
+            hotel_id=51,
+            rate_plan_id=rate_plan.id,
+            check_in=date(2026, 10, 1),
+            check_out=date(2026, 10, 4),
+            occupancy=2,
+            channel_code="booking",
+        )
+
+    db.add(
+        RatePlanPrice(
+            hotel_id=51,
+            rate_plan_id=rate_plan.id,
+            sales_channel_code="booking",
+            occupancy=2,
+            currency_code="ARS",
+            base_amount=125.0,
+            valid_from=date(2026, 10, 1),
+            valid_to=date(2026, 10, 2),
+        )
+    )
+    db.flush()
+    quote = quote_rate_plan_stay(
+        db,
+        hotel_id=51,
+        rate_plan_id=rate_plan.id,
+        check_in=date(2026, 10, 1),
+        check_out=date(2026, 10, 3),
+        occupancy=2,
+        channel_code="booking",
+    )
+    assert quote.nights == 2
+    assert quote.subtotal_amount == 250.0

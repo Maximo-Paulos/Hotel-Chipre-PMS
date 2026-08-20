@@ -35,6 +35,18 @@ def test_quote_token_is_signed_and_round_trips_without_pii():
         verify_quote_token(f"{token[:-1]}x")
 
 
+def test_quote_rejects_occupancy_above_category_capacity(db, sample_categories):
+    with pytest.raises(ReservationError, match="admite hasta 2"):
+        build_reservation_quote(
+            db,
+            hotel_id=1,
+            category_id=sample_categories[0].id,
+            check_in_date=date(2030, 1, 10),
+            check_out_date=date(2030, 1, 12),
+            occupancy=3,
+        )
+
+
 def test_reservation_rejects_quote_after_pricing_revision_changes(
     db, sample_categories, sample_rooms, sample_guest, hotel_config
 ):

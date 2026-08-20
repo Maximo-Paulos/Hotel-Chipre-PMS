@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
@@ -66,6 +66,20 @@ def quote_rate_plan_stay(
         raise PricingPolicyError("Rate plan not found for hotel")
 
     nights = (check_out - check_in).days
+    if nights < rate_plan.min_nights_default:
+        raise PricingPolicyError(
+            f"Rate plan requires at least {rate_plan.min_nights_default} nights"
+        )
+    if rate_plan.max_nights_default is not None and nights > rate_plan.max_nights_default:
+        raise PricingPolicyError(
+            f"Rate plan allows at most {rate_plan.max_nights_default} nights"
+        )
+    if occupancy is not None:
+        product = rate_plan.sellable_product
+        if product and not product.min_occupancy <= occupancy <= product.max_occupancy:
+            raise PricingPolicyError(
+                f"Sellable product accepts between {product.min_occupancy} and {product.max_occupancy} guests"
+            )
     price = _select_rate_plan_price(
         db,
         hotel_id=hotel_id,
@@ -158,7 +172,7 @@ def _select_rate_plan_price(
             RatePlanPrice.rate_plan_id == rate_plan_id,
             RatePlanPrice.is_active == True,
             or_(RatePlanPrice.valid_from == None, RatePlanPrice.valid_from <= check_in),
-            or_(RatePlanPrice.valid_to == None, RatePlanPrice.valid_to >= check_out),
+            or_(RatePlanPrice.valid_to == None, RatePlanPrice.valid_to >= check_out - timedelta(days=1)),
         )
         .all()
     )

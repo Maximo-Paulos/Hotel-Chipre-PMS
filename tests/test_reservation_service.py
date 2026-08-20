@@ -37,6 +37,18 @@ class TestConfirmationCode:
 class TestAvailability:
     """Tests for room availability checking."""
 
+    @pytest.mark.parametrize(
+        ("check_in", "check_out"),
+        [(date(2026, 4, 5), date(2026, 4, 1)), (date(2026, 4, 1), date(2026, 4, 1))],
+    )
+    def test_rejects_non_positive_stay_window(
+        self, db, sample_rooms, sample_categories, hotel_config, check_in, check_out
+    ):
+        with pytest.raises(ReservationError, match="Check-out date must be after check-in date"):
+            check_room_availability(db, sample_rooms[0].id, check_in, check_out)
+        with pytest.raises(ReservationError, match="Check-out date must be after check-in date"):
+            find_available_rooms(db, sample_categories[0].id, check_in, check_out)
+
     def test_empty_room_is_available(self, db, sample_rooms, sample_categories, hotel_config):
         """A room with no reservations should be available."""
         room = sample_rooms[0]
