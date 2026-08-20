@@ -6,6 +6,7 @@ import json
 import time
 from dataclasses import dataclass
 import pytest
+import pyotp
 from fastapi.testclient import TestClient
 from starlette.responses import Response
 from sqlalchemy import Boolean, Column, DateTime, Integer, MetaData, String, Table, Text, create_engine, event
@@ -317,6 +318,124 @@ def test_master_login_sets_cookie_and_hydrates_me(master_client, monkeypatch):
     payload = me.json()
     assert payload["user"]["email"] == "platform-admin@example.com"
     assert payload["csrf_token"]
+
+
+def test_master_admin_optional_mfa_enroll_confirm_login_and_disable(master_client, monkeypatch):
+    client, SessionLocal = master_client
+    monkeypatch.setenv("MASTER_ADMIN_PIN", "654321")
+    get_settings.cache_clear()
+
+    db = SessionLocal()
+    try:
+        _seed_platform_admin(db)
+        db.commit()
+    finally:
+        db.close()
+
+    login = client.post(
+        "/api/master-admin/auth/login",
+        json={"email": "platform-admin@example.com", "password": "Master123!", "pin": "654321"},
+    )
+    assert login.status_code == 200, login.text
+    csrf_token = login.cookies.get("master_admin_csrf")
+    assert csrf_token
+    headers = {"X-CSRF-Token": csrf_token}
+
+    reauth_rejected = client.post(
+        "/api/master-admin/mfa/enroll",
+        headers=headers,
+        json={"password": "wrong-password"},
+    )
+    assert reauth_rejected.status_code == 401, reauth_rejected.text
+
+    enroll = client.post(
+        "/api/master-admin/mfa/enroll",
+        headers=headers,
+        json={"password": "Master123!"},
+    )
+    assert enroll.status_code == 200, enroll.text
+    enrollment = enroll.json()
+    assert enrollment["status"] == "pending"
+    assert enrollment["secret"]
+    assert enrollment["otpauth_uri"].startswith("otpauth://totp/")
+
+    invalid_confirm = client.post(
+        "/api/master-admin/mfa/enroll/confirm",
+        headers=headers,
+        json={"code": "not-a-code"},
+    )
+    assert invalid_confirm.status_code == 400, invalid_confirm.text
+
+    totp = pyotp.TOTP(enrollment["secret"])
+    confirm = client.post(
+        "/api/master-admin/mfa/enroll/confirm",
+        headers=headers,
+        json={"code": totp.now()},
+    )
+    assert confirm.status_code == 200, confirm.text
+    recovery_codes = confirm.json()["recovery_codes"]
+    assert len(recovery_codes) == 10
+
+    logout = client.post("/api/master-admin/auth/logout", headers=headers)
+    assert logout.status_code == 200, logout.text
+
+    mfa_login = client.post(
+        "/api/master-admin/auth/login",
+        json={"email": "platform-admin@example.com", "password": "Master123!", "pin": "654321"},
+    )
+    assert mfa_login.status_code == 200, mfa_login.text
+    challenge = mfa_login.json()
+    assert challenge["requires_mfa"] is True
+    assert challenge["expires_in"] == 5 * 60
+    assert "master_admin_session" not in mfa_login.cookies
+    assert client.get("/api/master-admin/auth/me").status_code == 401
+
+    mfa_login_complete = client.post(
+        "/api/master-admin/auth/login/mfa",
+        json={"mfa_token": challenge["mfa_token"], "code": recovery_codes[0]},
+    )
+    assert mfa_login_complete.status_code == 200, mfa_login_complete.text
+    assert mfa_login_complete.cookies.get("master_admin_session")
+    csrf_token = mfa_login_complete.cookies.get("master_admin_csrf")
+    headers = {"X-CSRF-Token": csrf_token}
+
+    wrong_password = client.post(
+        "/api/master-admin/mfa/disable",
+        headers=headers,
+        json={"password": "wrong-password", "code": recovery_codes[1]},
+    )
+    assert wrong_password.status_code == 401, wrong_password.text
+
+    invalid_disable_code = client.post(
+        "/api/master-admin/mfa/disable",
+        headers=headers,
+        json={"password": "Master123!", "code": "not-a-code"},
+    )
+    assert invalid_disable_code.status_code == 401, invalid_disable_code.text
+
+    disable = client.post(
+        "/api/master-admin/mfa/disable",
+        headers=headers,
+        json={"password": "Master123!", "code": recovery_codes[1]},
+    )
+    assert disable.status_code == 200, disable.text
+    assert disable.json() == {"disabled": True}
+
+    no_mfa_login = client.post(
+        "/api/master-admin/auth/login",
+        json={"email": "platform-admin@example.com", "password": "Master123!", "pin": "654321"},
+    )
+    assert no_mfa_login.status_code == 200, no_mfa_login.text
+    assert no_mfa_login.json()["user"]["role"] == "platform_admin"
+
+    db = SessionLocal()
+    try:
+        actions = [event.action for event in db.query(MasterAdminAuditEvent).all()]
+    finally:
+        db.close()
+    assert "master_admin_mfa_enroll" in actions
+    assert "master_admin_mfa_confirm" in actions
+    assert "master_admin_mfa_disable" in actions
 
 
 def test_master_login_cookie_works_on_underscore_alias(master_client, monkeypatch):

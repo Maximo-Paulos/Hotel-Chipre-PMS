@@ -28663,6 +28663,55 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/MasterAdminLoginResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/MfaChallengeResponse"
+                    }
+                  ],
+                  "title": "Response Login Api Master Admin Auth Login Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/master-admin/auth/login/mfa": {
+      "post": {
+        "tags": [
+          "Master Admin"
+        ],
+        "summary": "Complete Mfa Login",
+        "operationId": "complete_mfa_login_api_master_admin_auth_login_mfa_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MasterAdminMfaLoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
                   "$ref": "#/components/schemas/MasterAdminLoginResponse"
                 }
               }
@@ -28714,6 +28763,127 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/MasterAdminSessionResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/master-admin/mfa/enroll": {
+      "post": {
+        "tags": [
+          "Master Admin"
+        ],
+        "summary": "Enroll Mfa",
+        "operationId": "enroll_mfa_api_master_admin_mfa_enroll_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MasterAdminMfaEnrollRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MfaEnrollmentResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/master-admin/mfa/enroll/confirm": {
+      "post": {
+        "tags": [
+          "Master Admin"
+        ],
+        "summary": "Confirm Mfa Enrollment",
+        "operationId": "confirm_mfa_enrollment_api_master_admin_mfa_enroll_confirm_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MasterAdminMfaCodeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MfaRecoveryCodesResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/master-admin/mfa/disable": {
+      "post": {
+        "tags": [
+          "Master Admin"
+        ],
+        "summary": "Disable Mfa",
+        "operationId": "disable_mfa_api_master_admin_mfa_disable_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MasterAdminMfaDisableRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -39773,6 +39943,79 @@
           "expires_at"
         ],
         "title": "MasterAdminLoginResponse"
+      },
+      "MasterAdminMfaCodeRequest": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code"
+        ],
+        "title": "MasterAdminMfaCodeRequest"
+      },
+      "MasterAdminMfaDisableRequest": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Code"
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "password"
+        ],
+        "title": "MasterAdminMfaDisableRequest"
+      },
+      "MasterAdminMfaEnrollRequest": {
+        "properties": {
+          "password": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "password"
+        ],
+        "title": "MasterAdminMfaEnrollRequest"
+      },
+      "MasterAdminMfaLoginRequest": {
+        "properties": {
+          "mfa_token": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Mfa Token"
+          },
+          "code": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mfa_token",
+          "code"
+        ],
+        "title": "MasterAdminMfaLoginRequest"
       },
       "MasterAdminSessionResponse": {
         "properties": {

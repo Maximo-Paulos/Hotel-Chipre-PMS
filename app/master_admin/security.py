@@ -11,10 +11,11 @@ from typing import Any
 from fastapi import HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 
-from app.adapters.rate_limiter import SimpleRateLimiter
+from app.adapters.rate_limiter import SimpleRateLimiter, mfa_code_guess_limiter
 from app.config import get_settings, is_preview_qa_mode, is_production_mode
 from app.models.user import User
-from app.services.security import hash_password, verify_password
+from app.services import mfa_service
+from app.services.security import create_signed_token, decode_signed_token, hash_password, verify_password
 from app.services.tenant_context import set_master_admin_context
 from .models import MasterAdminAuditEvent, MasterAdminAuthLockout, MasterAdminSession
 
@@ -26,6 +27,8 @@ DEFAULT_IDLE_TTL_MINUTES = 8 * 60
 DEFAULT_LOCKOUT_THRESHOLD = 5
 DEFAULT_LOCKOUT_MINUTES = 15
 LOGIN_RATE_LIMITER = SimpleRateLimiter("master_admin_login", limit=5, window_seconds=15 * 60)
+MASTER_ADMIN_MFA_LOGIN_PURPOSE = "master_admin_mfa_login"
+MASTER_ADMIN_MFA_LOGIN_CHALLENGE_MINUTES = 5
 
 
 @dataclass
@@ -363,6 +366,68 @@ def authenticate_master_login(db: Session, email: str, password: str, pin: str) 
 
     reset_login_lockout(db, normalized)
     login_limiter.reset(f"master:{normalized}", db=db)
+    return user
+
+
+def create_master_admin_mfa_challenge(user: User) -> str:
+    """Issue a short-lived, purpose-bound token without creating a session."""
+    return create_signed_token(
+        {
+            "purpose": MASTER_ADMIN_MFA_LOGIN_PURPOSE,
+            "user_id": user.id,
+            "token_version": user.token_version or 0,
+        },
+        expires_minutes=MASTER_ADMIN_MFA_LOGIN_CHALLENGE_MINUTES,
+    )
+
+
+def _master_admin_mfa_attempt_key(action: str, user_id: int) -> str:
+    return f"master_admin:{action}:{user_id}"
+
+
+def allow_master_admin_mfa_attempt(db: Session, action: str, user_id: int) -> None:
+    if not mfa_code_guess_limiter.allow(_master_admin_mfa_attempt_key(action, user_id), db=db):
+        db.commit()
+        raise HTTPException(status_code=429, detail="Demasiados intentos. Espera unos minutos.")
+    db.commit()
+
+
+def reset_master_admin_mfa_attempts(db: Session, action: str, user_id: int) -> None:
+    mfa_code_guess_limiter.reset(_master_admin_mfa_attempt_key(action, user_id), db=db)
+
+
+def authenticate_master_mfa_login(db: Session, mfa_token: str, code: str) -> User:
+    """Verify a master-admin MFA challenge before a master session is issued."""
+    challenge = decode_signed_token(mfa_token)
+    if challenge.get("purpose") != MASTER_ADMIN_MFA_LOGIN_PURPOSE:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Desafio MFA invalido")
+
+    try:
+        user_id = int(challenge["user_id"])
+        token_version = int(challenge["token_version"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Desafio MFA invalido") from exc
+
+    user = db.get(User, user_id)
+    if not user or not user.is_active:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuario no valido")
+    _authorize_user_for_master_panel(user)
+    if token_version != (user.token_version or 0):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Desafio MFA revocado")
+    if not mfa_service.get_active_mfa_secret(db, user.id):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="MFA no esta activo")
+
+    allow_master_admin_mfa_attempt(db, "login", user.id)
+    try:
+        valid = mfa_service.consume_mfa_code(db, user.id, code)
+    except mfa_service.MfaSecretUnavailableError as exc:
+        db.rollback()
+        raise HTTPException(status_code=503, detail="MFA no esta disponible temporalmente") from exc
+    if not valid:
+        db.commit()
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Codigo MFA invalido o ya utilizado")
+
+    reset_master_admin_mfa_attempts(db, "login", user.id)
     return user
 
 

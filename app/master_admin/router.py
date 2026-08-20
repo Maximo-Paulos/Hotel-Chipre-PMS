@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 
+import pyotp
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from json import JSONDecodeError
 from sqlalchemy.orm import Session
@@ -12,6 +13,9 @@ from app.database import get_db
 from app.models.hotel_config import HotelConfiguration
 from app.models.subscription_v2 import Subscription
 from app.models.user import User
+from app.schemas.auth import MfaChallengeResponse, MfaEnrollmentResponse, MfaRecoveryCodesResponse
+from app.services import mfa_service
+from app.services.security import verify_password
 from app.services.subscription_entitlements import get_subscription_snapshot
 from .billing_policy import BillingDecision, evaluate_hotel_write_access, get_policy_payload, update_policy
 from .email_provider import (
@@ -26,6 +30,10 @@ from .schemas import (
     EmailTestRequest,
     MasterAdminLoginRequest,
     MasterAdminLoginResponse,
+    MasterAdminMfaCodeRequest,
+    MasterAdminMfaDisableRequest,
+    MasterAdminMfaEnrollRequest,
+    MasterAdminMfaLoginRequest,
     MasterAdminSessionResponse,
     MasterAdminUserPayload,
     MasterEmailStatusPayload,
@@ -34,11 +42,16 @@ from .schemas import (
 )
 from .security import (
     audit_master_action,
+    allow_master_admin_mfa_attempt,
+    authenticate_master_mfa_login,
     authenticate_master_login,
     clear_master_session_cookies,
+    create_master_admin_mfa_challenge,
     create_master_session,
+    MASTER_ADMIN_MFA_LOGIN_CHALLENGE_MINUTES,
     require_master_admin,
     redact_master_admin_audit_metadata_json,
+    reset_master_admin_mfa_attempts,
     set_master_session_cookies,
 )
 from .stripe import clear_stripe_settings, get_stripe_status, save_stripe_settings, verify_stripe_signature
@@ -60,15 +73,44 @@ def _serialize_user(user: User) -> MasterAdminUserPayload:
     )
 
 
-@router.post("/auth/login", response_model=MasterAdminLoginResponse)
+@router.post("/auth/login", response_model=MasterAdminLoginResponse | MfaChallengeResponse)
 def login(payload: MasterAdminLoginRequest, request: Request, response: Response, db: Session = Depends(get_db)):
     user = authenticate_master_login(db, payload.email, payload.password, payload.pin)
+    if mfa_service.get_active_mfa_secret(db, user.id):
+        challenge = create_master_admin_mfa_challenge(user)
+        db.commit()
+        return MfaChallengeResponse(
+            mfa_token=challenge,
+            expires_in=MASTER_ADMIN_MFA_LOGIN_CHALLENGE_MINUTES * 60,
+        )
+
     session, session_token, csrf_token = create_master_session(db, user, request)
     audit_master_action(
         db,
         actor_user_id=user.id,
         action="master_admin_login",
         metadata={"email": user.email},
+        request=request,
+    )
+    db.commit()
+    set_master_session_cookies(response, session_token, csrf_token)
+    return MasterAdminLoginResponse(user=_serialize_user(user), csrf_token=csrf_token, expires_at=session.expires_at)
+
+
+@router.post("/auth/login/mfa", response_model=MasterAdminLoginResponse)
+def complete_mfa_login(
+    payload: MasterAdminMfaLoginRequest,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+):
+    user = authenticate_master_mfa_login(db, payload.mfa_token, payload.code)
+    session, session_token, csrf_token = create_master_session(db, user, request)
+    audit_master_action(
+        db,
+        actor_user_id=user.id,
+        action="master_admin_login",
+        metadata={"email": user.email, "method": "password+pin+mfa"},
         request=request,
     )
     db.commit()
@@ -90,6 +132,141 @@ def logout(request: Request, response: Response, db: Session = Depends(get_db)):
 def me(request: Request, db: Session = Depends(get_db)):
     context = require_master_admin(request=request, db=db, write=False)
     return MasterAdminSessionResponse(user=_serialize_user(context.user), csrf_token=context.csrf_token)
+
+
+@router.post("/mfa/enroll", response_model=MfaEnrollmentResponse)
+def enroll_mfa(
+    payload: MasterAdminMfaEnrollRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    context = require_master_admin(request=request, db=db, csrf_header=request.headers.get("X-CSRF-Token"), write=True)
+    if not verify_password(payload.password, context.user.password_hash):
+        audit_master_action(
+            db,
+            actor_user_id=context.user.id,
+            action="master_admin_mfa_enroll",
+            outcome="failure",
+            metadata={"reason": "reauth_failed"},
+            request=request,
+        )
+        db.commit()
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Reautenticacion invalida")
+
+    try:
+        _mfa_secret, secret = mfa_service.enroll_user(db, context.user.id)
+    except ValueError as exc:
+        audit_master_action(
+            db,
+            actor_user_id=context.user.id,
+            action="master_admin_mfa_enroll",
+            outcome="failure",
+            metadata={"reason": "already_active"},
+            request=request,
+        )
+        db.commit()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+
+    audit_master_action(
+        db,
+        actor_user_id=context.user.id,
+        action="master_admin_mfa_enroll",
+        metadata={"factor": "totp"},
+        request=request,
+    )
+    db.commit()
+    issuer = (get_settings().HOTEL_NAME or "Hotel PMS").strip() or "Hotel PMS"
+    otpauth_uri = pyotp.TOTP(secret).provisioning_uri(name=context.user.email, issuer_name=issuer)
+    return MfaEnrollmentResponse(secret=secret, otpauth_uri=otpauth_uri)
+
+
+@router.post("/mfa/enroll/confirm", response_model=MfaRecoveryCodesResponse)
+def confirm_mfa_enrollment(
+    payload: MasterAdminMfaCodeRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    context = require_master_admin(request=request, db=db, csrf_header=request.headers.get("X-CSRF-Token"), write=True)
+    allow_master_admin_mfa_attempt(db, "enroll", context.user.id)
+    try:
+        recovery_codes = mfa_service.confirm_enrollment(db, context.user.id, payload.code)
+    except mfa_service.MfaSecretUnavailableError as exc:
+        db.rollback()
+        raise HTTPException(status_code=503, detail="MFA no esta disponible temporalmente") from exc
+    if recovery_codes is None:
+        audit_master_action(
+            db,
+            actor_user_id=context.user.id,
+            action="master_admin_mfa_confirm",
+            outcome="failure",
+            metadata={"reason": "invalid_code"},
+            request=request,
+        )
+        db.commit()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Codigo TOTP invalido o enrolamiento inexistente")
+
+    reset_master_admin_mfa_attempts(db, "enroll", context.user.id)
+    audit_master_action(
+        db,
+        actor_user_id=context.user.id,
+        action="master_admin_mfa_confirm",
+        metadata={"factor": "totp"},
+        request=request,
+    )
+    db.commit()
+    return MfaRecoveryCodesResponse(recovery_codes=recovery_codes)
+
+
+@router.post("/mfa/disable")
+def disable_mfa(
+    payload: MasterAdminMfaDisableRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    context = require_master_admin(request=request, db=db, csrf_header=request.headers.get("X-CSRF-Token"), write=True)
+    if not mfa_service.get_active_mfa_secret(db, context.user.id):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="MFA no esta activo")
+    if not verify_password(payload.password, context.user.password_hash):
+        audit_master_action(
+            db,
+            actor_user_id=context.user.id,
+            action="master_admin_mfa_disable",
+            outcome="failure",
+            metadata={"reason": "reauth_failed"},
+            request=request,
+        )
+        db.commit()
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Reautenticacion invalida")
+
+    allow_master_admin_mfa_attempt(db, "disable", context.user.id)
+    try:
+        valid = mfa_service.consume_mfa_code(db, context.user.id, payload.code)
+    except mfa_service.MfaSecretUnavailableError as exc:
+        db.rollback()
+        raise HTTPException(status_code=503, detail="MFA no esta disponible temporalmente") from exc
+    if not valid:
+        audit_master_action(
+            db,
+            actor_user_id=context.user.id,
+            action="master_admin_mfa_disable",
+            outcome="failure",
+            metadata={"reason": "invalid_code"},
+            request=request,
+        )
+        db.commit()
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Codigo MFA invalido o ya utilizado")
+
+    mfa_service.disable_user_mfa(db, context.user.id)
+    reset_master_admin_mfa_attempts(db, "disable", context.user.id)
+    audit_master_action(
+        db,
+        actor_user_id=context.user.id,
+        action="master_admin_mfa_disable",
+        metadata={"factor": "totp"},
+        request=request,
+    )
+    db.commit()
+    return {"disabled": True}
 
 
 @router.get("/dashboard/summary")
