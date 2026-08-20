@@ -20,8 +20,13 @@ export type AuthResponse = {
   code?: string;
 };
 
+export type RegistrationResponse = {
+  accepted: true;
+  message: string;
+};
+
 export const register = (email: string, password: string, role: string = "owner") =>
-  apiFetch<AuthResponse>("/api/auth/register", {
+  apiFetch<RegistrationResponse>("/api/auth/register", {
     method: "POST",
     data: { email, password, role }
   });

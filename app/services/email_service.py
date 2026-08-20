@@ -72,3 +72,16 @@ def send_verification_success_email(email: str) -> bool:
         "Hotel Chipre PMS"
     )
     return send_platform_email(email, subject, body)
+
+
+def send_generic_auth_notice_email(email: str) -> bool:
+    """Send a neutral notice without revealing whether an account exists."""
+    subject = "Solicitud recibida en Hotel Chipre PMS"
+    body = (
+        "Hola,\n\n"
+        "Recibimos una solicitud relacionada con el acceso a Hotel Chipre PMS. "
+        "Si corresponde, recibiras otro correo con los pasos para continuar.\n\n"
+        "Si no realizaste esta solicitud, puedes ignorar este correo.\n\n"
+        "Hotel Chipre PMS"
+    )
+    return send_platform_email(email, subject, body)

@@ -4,13 +4,11 @@ import { Link, useNavigate } from "react-router-dom";
 import { ApiError } from "../../api/client";
 import { Seo } from "../../components/Seo";
 import { PasswordInput } from "../../components/PasswordInput";
-import { register, requestVerification } from "../../api/auth";
-import { normalizeRole, useSession } from "../../state/session";
+import { register } from "../../api/auth";
 import { storePendingOwner } from "../../state/pendingOwner";
 
 export function RegisterOwnerPage() {
   const navigate = useNavigate();
-  const { login } = useSession();
   const [form, setForm] = useState({ name: "", lastName: "", email: "", password: "", phone: "" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -26,22 +24,6 @@ export function RegisterOwnerPage() {
 
     try {
       const res = await register(form.email, form.password, "owner");
-      if (!res.hotel_id) {
-        throw new ApiError(500, "La respuesta de registro no devolvió un hotel válido.");
-      }
-      const sessionData = {
-        userId: res.user.email,
-        email: res.user.email,
-        hotelId: res.hotel_id,
-        hotelIds: res.hotel_ids?.length ? res.hotel_ids : [res.hotel_id],
-        role: normalizeRole(res.user.role) ?? "owner",
-        baseRole: normalizeRole(res.user.role) ?? "owner",
-        permissions: res.permissions ?? res.user.permissions ?? null,
-        accessToken: res.access_token,
-        isVerified: res.user.is_verified
-      };
-      login(sessionData);
-
       storePendingOwner({
         name: `${form.name} ${form.lastName}`.trim(),
         email: form.email,
@@ -49,10 +31,7 @@ export function RegisterOwnerPage() {
         role: "Owner"
       });
 
-      const codeResp = await requestVerification(form.email);
-      if (codeResp.code) {
-        setInfo(`Codigo generado: ${codeResp.code} (solo modo demo)`);
-      }
+      setInfo(res.message);
 
       navigate("/verify-email", { replace: true });
     } catch (err) {

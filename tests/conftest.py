@@ -105,6 +105,7 @@ def _stub_transactional_auth_email(request, monkeypatch):
     monkeypatch.setattr("app.api.auth.send_verification_email", lambda *a, **k: True)
     monkeypatch.setattr("app.api.auth.send_verification_success_email", lambda *a, **k: True)
     monkeypatch.setattr("app.api.auth.send_reset_password_email", lambda *a, **k: True)
+    monkeypatch.setattr("app.api.auth.send_generic_auth_notice_email", lambda *a, **k: True)
     yield
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.guest import Guest, GuestCompanion, DocumentTypeEnum

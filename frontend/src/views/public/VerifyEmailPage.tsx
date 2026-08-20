@@ -11,8 +11,9 @@ import { normalizeRole, useSession } from "../../state/session";
 export function VerifyEmailPage() {
   const navigate = useNavigate();
   const { session, login } = useSession();
+  const pendingOwner = getPendingOwner();
   const [message, setMessage] = useState<string | null>(null);
-  const [email, setEmail] = useState(session.email || session.userId || "");
+  const [email, setEmail] = useState(session.email || session.userId || pendingOwner?.email || "");
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [sentCode, setSentCode] = useState<string | null>(null);
@@ -57,9 +58,9 @@ export function VerifyEmailPage() {
         accessToken: res.access_token,
         isVerified: true
       });
-      const pendingOwner = getPendingOwner();
-      if (pendingOwner && pendingOwner.email.trim().toLowerCase() === res.user.email.trim().toLowerCase()) {
-        await setOwner(pendingOwner, {
+      const currentPendingOwner = getPendingOwner();
+      if (currentPendingOwner && currentPendingOwner.email.trim().toLowerCase() === res.user.email.trim().toLowerCase()) {
+        await setOwner(currentPendingOwner, {
           userId: res.user.email,
           hotelId: res.hotel_id,
           accessToken: res.access_token
