@@ -586,8 +586,10 @@ def test_self_registration_cannot_grant_platform_admin_role(client_and_db, fixed
     assert forged_admin_action.status_code == 403, forged_admin_action.text
 
 
-def _fake_google_claims(email: str, email_verified: bool = True) -> dict:
-    return {"email": email, "email_verified": email_verified, "sub": "google-sub-123", "name": "Test User"}
+def _fake_google_claims(
+    email: str, email_verified: bool = True, sub: str = "google-sub-123"
+) -> dict:
+    return {"email": email, "email_verified": email_verified, "sub": sub, "name": "Test User"}
 
 
 def test_google_login_returns_503_when_not_configured(client_and_db, monkeypatch):
@@ -624,29 +626,75 @@ def test_google_login_creates_new_user_when_email_unknown(client_and_db, monkeyp
     assert stored_user is not None
     assert stored_user.role == "owner"
     assert stored_user.is_verified is True
+    assert stored_user.google_sub == "google-sub-123"
     # Random unguessable password_hash was set, never handed to the client.
     assert stored_user.password_hash
     assert not verify_password("", stored_user.password_hash)
 
 
-def test_google_login_logs_in_existing_password_user(client_and_db, fixed_code_patch, monkeypatch):
+def test_google_login_relogin_with_same_sub_preserves_password(client_and_db, monkeypatch):
+    client, db, _session_factory = client_and_db
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "test-client-id.apps.googleusercontent.com")
+    get_settings.cache_clear()
+
+    claims = _fake_google_claims("google-relogin@example.com", sub="google-relogin-sub")
+    with patch("app.api.auth.google_id_token.verify_oauth2_token", return_value=claims):
+        first_response = client.post("/api/auth/google", json={"id_token": "first-google-jwt"})
+    assert first_response.status_code == 200, first_response.text
+
+    stored_user = db.query(User).filter(User.email == "google-relogin@example.com").one()
+    original_password_hash = stored_user.password_hash
+
+    with patch("app.api.auth.google_id_token.verify_oauth2_token", return_value=claims):
+        second_response = client.post("/api/auth/google", json={"id_token": "second-google-jwt"})
+
+    assert second_response.status_code == 200, second_response.text
+    db.refresh(stored_user)
+    assert stored_user.google_sub == "google-relogin-sub"
+    assert stored_user.password_hash == original_password_hash
+
+
+def test_google_login_replaces_password_for_unverified_email_squatter(
+    client_and_db, fixed_code_patch, monkeypatch
+):
     client, db, _session_factory = client_and_db
     _configure_resend(monkeypatch, [])
     register = _register_owner(client, "existinguser@example.com")
     assert register["user"]["is_verified"] is False
+    old_access_token = register["access_token"]
+    stored_user = db.query(User).filter(User.email == "existinguser@example.com").one()
+    old_password_hash = stored_user.password_hash
 
     monkeypatch.setenv("GOOGLE_CLIENT_ID", "test-client-id.apps.googleusercontent.com")
     get_settings.cache_clear()
 
     with patch(
         "app.api.auth.google_id_token.verify_oauth2_token",
-        return_value=_fake_google_claims("existinguser@example.com"),
+        return_value=_fake_google_claims("existinguser@example.com", sub="google-victim-sub"),
     ):
         response = client.post("/api/auth/google", json={"id_token": "fake-jwt-from-google"})
 
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["user"]["email"] == "existinguser@example.com"
+    assert body["user"]["is_verified"] is True
+
+    db.refresh(stored_user)
+    assert stored_user.google_sub == "google-victim-sub"
+    assert stored_user.password_hash != old_password_hash
+    assert stored_user.token_version == 1
+
+    password_login = client.post(
+        "/api/auth/login",
+        json={"email": "existinguser@example.com", "password": "Demo123!pass"},
+    )
+    assert password_login.status_code == 401, password_login.text
+
+    old_session = client.get(
+        "/api/auth/me",
+        headers={"Authorization": f"Bearer {old_access_token}"},
+    )
+    assert old_session.status_code == 401, old_session.text
 
     users_with_email = db.query(User).filter(User.email == "existinguser@example.com").all()
     assert len(users_with_email) == 1

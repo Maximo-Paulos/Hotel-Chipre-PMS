@@ -51,7 +51,6 @@ def _engine(db_path: str):
 def _seed_pre_revision(engine) -> None:
     from app.models.hotel_config import HotelConfiguration
     from app.models.hotel_membership import HotelMembership
-    from app.models.user import User
 
     SessionLocal = sessionmaker(bind=engine)
     with SessionLocal() as db:
@@ -59,11 +58,21 @@ def _seed_pre_revision(engine) -> None:
             [
                 HotelConfiguration(id=1, subscription_active=True),
                 HotelConfiguration(id=2, subscription_active=True),
-                User(id=10, email="owner-rbac@example.test", password_hash="synthetic", is_verified=True),
-                User(id=20, email="staff-rbac@example.test", password_hash="synthetic", is_verified=True),
             ]
         )
         db.flush()
+        # Seed only columns present before the migration under test; the
+        # current User ORM model also knows about later columns such as
+        # users.google_sub.
+        db.execute(
+            text(
+                "INSERT INTO users "
+                "(id, email, password_hash, is_active, is_verified, role, token_version, created_at, updated_at) "
+                "VALUES "
+                "(10, 'owner-rbac@example.test', 'synthetic', 1, 1, 'owner', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP), "
+                "(20, 'staff-rbac@example.test', 'synthetic', 1, 1, 'owner', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+            )
+        )
         db.add_all(
             [
                 HotelMembership(hotel_id=1, user_id=10, role="owner", status="active"),

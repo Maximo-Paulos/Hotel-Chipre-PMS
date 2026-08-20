@@ -361,25 +361,57 @@ def google_login(payload: GoogleAuthRequest, db: Session = Depends(get_db)):
     if not claims.get("email_verified"):
         raise HTTPException(status_code=401, detail="El email de Google no esta verificado")
 
-    email = (claims.get("email") or "").lower()
-    if not email:
+    raw_email = claims.get("email")
+    if not isinstance(raw_email, str) or not raw_email.strip():
         raise HTTPException(status_code=401, detail="Token de Google invalido")
+    email = raw_email.strip().lower()
 
-    user = db.query(User).filter(User.email.ilike(email)).first()
-    if not user:
-        # New account, same shape as register(): owner role, hotel seeded.
-        # password_hash is NOT NULL but this account has no usable password
-        # yet (random, never handed out) -- "Olvide mi contrasena" is the
-        # only way in without Google until the user sets one.
-        user = User(
-            email=email,
-            password_hash=hash_password(secrets.token_urlsafe(32)),
-            role="owner",
-            is_verified=True,  # Google already verified this email
-        )
-        db.add(user)
-        db.flush()
-        get_or_create_hotel_for_owner(db, user.email)
+    raw_google_sub = claims.get("sub")
+    if not isinstance(raw_google_sub, str) or not raw_google_sub.strip():
+        raise HTTPException(status_code=401, detail="Token de Google invalido")
+    google_sub = raw_google_sub.strip()
+
+    # The Google subject is the identity key. Never let an email-only match
+    # silently select an account: a password registration can exist before
+    # its owner proves control of that email.
+    # A hit is case (a): the provider subject is already bound, so the
+    # account is logged in directly without changing its password or link.
+    user = db.query(User).filter(User.google_sub == google_sub).first()
+    if user is None:
+        user = db.query(User).filter(User.email.ilike(email)).first()
+        if user is None:
+            # Case (c): no account is associated with either the subject or
+            # email. Create the same Google-owned account as before, now
+            # retaining the subject for future re-logins. The random password
+            # is required by the schema but is never given to the user.
+            user = User(
+                email=email,
+                password_hash=hash_password(secrets.token_urlsafe(32)),
+                google_sub=google_sub,
+                role="owner",
+                is_verified=True,  # Google already verified this email
+            )
+            db.add(user)
+            db.flush()
+            get_or_create_hotel_for_owner(db, user.email)
+        elif not user.is_active:
+            raise HTTPException(status_code=403, detail="Usuario deshabilitado")
+        elif user.google_sub is None:
+            # Case (b): Google has now proved control of an email that was
+            # previously used to create a password account without
+            # verification. Bind the stable subject, replace the password
+            # that may have been chosen by an email squatter, and revoke JWTs
+            # issued before this proof. Google has also verified the email for
+            # this account.
+            user.google_sub = google_sub
+            user.password_hash = hash_password(secrets.token_urlsafe(32))
+            user.token_version = (user.token_version or 0) + 1
+            user.is_verified = True
+        else:
+            # A different Google subject must never overwrite an existing
+            # link or fall back to email-only login. Fail closed on this
+            # inconsistent or already-claimed identity state.
+            raise HTTPException(status_code=409, detail="El email ya esta vinculado a otra cuenta de Google")
 
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Usuario deshabilitado")
