@@ -174,10 +174,18 @@ def _attach_user_session_cookies(
     user: User,
     request: Request,
     response: Response,
-) -> None:
+) -> str:
+    """Set the session cookies and return the raw CSRF token.
+
+    The caller must put the return value on the JSON response
+    (``AuthResponse.csrf_token``): the API and the SPA are cross-site, so
+    the frontend can never read the CSRF cookie itself via
+    ``document.cookie`` -- the response body is the only channel it has.
+    """
     _session, session_token, csrf_token = create_session(db, user, request)
     set_user_session_cookies(response, session_token, csrf_token)
     db.commit()
+    return csrf_token
 
 
 def _audit_security_event(
@@ -227,7 +235,7 @@ def _issue_auth_response(
     db.refresh(user)
     auth_response = _build_auth_response(db, user)
     if request is not None and response is not None:
-        _attach_user_session_cookies(db, user, request, response)
+        auth_response.csrf_token = _attach_user_session_cookies(db, user, request, response)
     return auth_response
 
 
@@ -329,7 +337,7 @@ def register(
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     auth_response = _build_auth_response(db, user)
-    _attach_user_session_cookies(db, user, request, response)
+    auth_response.csrf_token = _attach_user_session_cookies(db, user, request, response)
     return auth_response
 
 
@@ -590,7 +598,7 @@ def verify_email(
     db.commit()
     db.refresh(user)
     auth_response = _build_auth_response(db, user)
-    _attach_user_session_cookies(db, user, request, response)
+    auth_response.csrf_token = _attach_user_session_cookies(db, user, request, response)
     return auth_response
 
 
@@ -802,6 +810,10 @@ def refresh_session(
     auth_response = _build_auth_response(db, user)
     db.commit()
     set_user_session_cookies(response, new_session_token, csrf_cookie)
+    # The CSRF token itself doesn't rotate on refresh (only the session
+    # token does) -- return it anyway so a fresh page load that only has
+    # the access token in memory can still recover it.
+    auth_response.csrf_token = csrf_cookie
     return auth_response
 
 
