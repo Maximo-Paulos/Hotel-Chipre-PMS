@@ -9,6 +9,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
+from sqlalchemy import update
 from sqlalchemy.orm import Session
 
 from app.database import get_session_factory
@@ -67,7 +68,19 @@ class TokenStore:
         if not verify_password(code, token.code_hash):
             return False
         if consume:
-            token.consumed_at = now
+            consumed = db.execute(
+                update(SecurityToken)
+                .where(
+                    SecurityToken.id == token.id,
+                    SecurityToken.token_type == token_type,
+                    SecurityToken.subject_key == normalized_subject,
+                    SecurityToken.consumed_at.is_(None),
+                    SecurityToken.expires_at > now,
+                )
+                .values(consumed_at=now)
+            )
+            if consumed.rowcount == 0:
+                return False
         db.flush()
         return True
 
