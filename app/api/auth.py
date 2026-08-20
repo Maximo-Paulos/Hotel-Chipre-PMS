@@ -40,7 +40,7 @@ from app.services.email_service import (
 from app.master_admin.email_provider import MasterEmailConnectionError
 from app.services import onboarding_service
 from app.services.hotel_service import get_or_create_hotel_for_owner, get_memberships_for_user
-from app.services.security import create_access_token, hash_password, verify_password
+from app.services.security import create_access_token, hash_password, needs_rehash, verify_password
 from app.dependencies.auth import AuthContext, get_auth_context
 from app.config import get_settings
 from app.services.external_effects_policy import (
@@ -230,6 +230,9 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
 
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Usuario deshabilitado")
+
+    if needs_rehash(user.password_hash):
+        user.password_hash = hash_password(payload.password)
 
     user.last_login = datetime.now(timezone.utc)
     db.add(user)

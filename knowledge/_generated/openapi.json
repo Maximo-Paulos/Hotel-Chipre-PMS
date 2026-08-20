@@ -44156,7 +44156,7 @@
           },
           "password": {
             "type": "string",
-            "minLength": 6,
+            "minLength": 12,
             "title": "Password"
           },
           "role": {
@@ -46229,7 +46229,7 @@
           },
           "new_password": {
             "type": "string",
-            "minLength": 6,
+            "minLength": 12,
             "title": "New Password"
           }
         },

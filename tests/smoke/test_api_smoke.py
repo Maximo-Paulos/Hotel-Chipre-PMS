@@ -10,7 +10,7 @@ def _register_owner(client: TestClient, email: str) -> tuple[dict[str, str], int
     with patch("app.api.auth._generate_code", return_value="123456"):
         response = client.post(
             "/api/auth/register",
-            json={"email": email, "password": "Demo123!", "role": "owner"},
+            json={"email": email, "password": "Demo123!pass", "role": "owner"},
         )
     assert response.status_code == 201, response.text
     verify = client.post("/api/auth/verify-email", json={"email": email, "code": "123456"})

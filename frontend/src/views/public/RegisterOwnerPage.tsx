@@ -129,7 +129,7 @@ export function RegisterOwnerPage() {
             <PasswordInput
               value={form.password}
               onChange={(value) => handleChange("password", value)}
-              placeholder="Mínimo 6 caracteres"
+              placeholder="Mínimo 12 caracteres"
               required
               autoComplete="new-password"
             />

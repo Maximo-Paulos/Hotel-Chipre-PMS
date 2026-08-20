@@ -1,7 +1,7 @@
 # Alembic head
 
-Generado: 2026-08-20T14:45:02.898101+00:00
-Commit: `6cbb087`
+Generado: 2026-08-20T15:30:03.097446+00:00
+Commit: `4ef3eca`
 
 ```text
 7b14658560e1 (head)

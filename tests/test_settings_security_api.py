@@ -35,7 +35,7 @@ def security_client():
     app.dependency_overrides[get_db] = override_db
     owner = User(
         email="owner-security@example.test",
-        password_hash=hash_password("Demo123!"),
+        password_hash=hash_password("Demo123!pass"),
         role="owner",
         is_verified=True,
         is_active=True,
@@ -44,7 +44,7 @@ def security_client():
     )
     manager = User(
         email="manager-security@example.test",
-        password_hash=hash_password("Demo123!"),
+        password_hash=hash_password("Demo123!pass"),
         role="manager",
         is_verified=True,
         is_active=True,
