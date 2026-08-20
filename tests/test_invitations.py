@@ -201,7 +201,7 @@ def test_existing_user_invitation_with_own_auth_attaches_without_resetting_accou
         hotel_id=ctx["hotel_id"],
         user_id=victim.id,
         role="receptionist",
-        status="revoked",
+        status="invited",
     )
     db.add(membership)
     db.commit()
@@ -225,6 +225,43 @@ def test_existing_user_invitation_with_own_auth_attaches_without_resetting_accou
     assert membership.status == "active"
     assert membership.role == "manager"
     assert response.json()["user"]["id"] == victim.id
+
+
+def test_revoked_membership_cannot_be_reactivated_by_replaying_old_accept_token(owner_ctx):
+    client, db, ctx = owner_ctx
+    victim = User(
+        email="revoked-member@test.com",
+        password_hash=hash_password("original-password"),
+        role="manager",
+        is_active=True,
+        is_verified=True,
+    )
+    db.add(victim)
+    db.flush()
+    membership = HotelMembership(
+        hotel_id=ctx["hotel_id"],
+        user_id=victim.id,
+        role="receptionist",
+        status="revoked",
+    )
+    db.add(membership)
+    db.commit()
+    # A pre-revoke accept token stays cryptographically valid for up to 7 days
+    # and is independent of membership state; the victim may still hold an
+    # unexpired session for their own account.
+    token = _invitation_token(ctx["hotel_id"], victim.email, role="manager")
+    headers = {"Authorization": f"Bearer {create_access_token(victim.id)}"}
+
+    response = client.post(
+        f"/api/invitations/{token}/accept",
+        json={"email": victim.email, "password": "does-not-matter"},
+        headers=headers,
+    )
+
+    assert response.status_code == 409, response.text
+    assert "revocado" in response.json()["detail"].lower()
+    db.refresh(membership)
+    assert membership.status == "revoked"
 
 
 def test_invitation_creates_and_activates_user_when_email_is_new(owner_ctx):

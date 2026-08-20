@@ -96,6 +96,16 @@ def accept_invitation(
             .filter(HotelMembership.hotel_id == hotel_id, HotelMembership.user_id == user.id)
             .first()
         )
+    if membership and membership.status == "revoked":
+        # An old accept link stays valid for up to 7 days after issuance and is
+        # independent of membership state. Without this check, an authenticated
+        # owner of the account could replay it to self-reactivate access the
+        # hotel owner explicitly revoked. Reactivation must come from a fresh
+        # invite, not a stale accept token.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Este acceso fue revocado. Pedí una nueva invitación al hotel.",
+        )
     if membership:
         membership.role = role
         membership.status = "active"
