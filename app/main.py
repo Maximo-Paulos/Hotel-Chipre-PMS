@@ -130,11 +130,47 @@ def _seed_permission_matrix_once() -> None:
         db.close()
 
 
+def _log_rls_bypass_diagnostic_once() -> None:
+    """TEMPORARY: log whether the app's own DB role bypasses RLS.
+
+    Read-only, logs only the role name and the boolean flag -- never the
+    connection string. Remove this function and its call in lifespan() once
+    the answer has been captured from Render's logs; it exists only to
+    settle a real "needs-verification" item (TECH-0010) without paying for
+    Render Shell access.
+    """
+    from sqlalchemy import text
+
+    from app.database import get_session_factory
+
+    try:
+        db = get_session_factory()()
+    except Exception as exc:  # pragma: no cover - defensive, see docstring
+        LOGGER.warning("rls_bypass_diagnostic: no session factory available: %s", exc)
+        return
+    try:
+        if db.get_bind().dialect.name != "postgresql":
+            return
+        row = db.execute(
+            text("SELECT current_user AS current_user, rolbypassrls FROM pg_roles WHERE rolname = current_user")
+        ).one()
+        LOGGER.warning(
+            "rls_bypass_diagnostic: current_user=%s rolbypassrls=%s",
+            row.current_user,
+            row.rolbypassrls,
+        )
+    except Exception as exc:  # pragma: no cover - defensive, see docstring
+        LOGGER.warning("rls_bypass_diagnostic: query failed: %s", exc)
+    finally:
+        db.close()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize database on application startup."""
     validate_runtime_security()
     init_db()
+    _log_rls_bypass_diagnostic_once()
     _seed_permission_matrix_once()
     yield
 
