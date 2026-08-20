@@ -134,7 +134,7 @@ class HotelAuditEvent(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     hotel_id = Column(Integer, ForeignKey("hotel_configuration.id"), nullable=False)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     action_code = Column(String(80), nullable=False)
     entity_type = Column(String(60), nullable=False)
     entity_id = Column(Integer, nullable=True)
