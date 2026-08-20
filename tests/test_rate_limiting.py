@@ -272,9 +272,13 @@ def test_invitation_preview_and_acceptance_are_rate_limited(client_with_db):
         invitation_preview_limiter.limit = preview_limit
         invitation_accept_limiter.limit = accept_limit
 
-    assert preview_one.status_code == 401
+    # A garbage token is invalid, not an authentication failure -- the new
+    # persisted-invitation lookup (TECH-0031) reports "not found" as 400,
+    # not 401. The rate limit itself (asserted below) is what this test
+    # actually covers.
+    assert preview_one.status_code == 400
     assert preview_two.status_code == 429
-    assert accept_one.status_code == 401
+    assert accept_one.status_code == 400
     assert accept_two.status_code == 429
 
 
