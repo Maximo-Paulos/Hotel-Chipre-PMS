@@ -6,6 +6,7 @@ import logging
 from datetime import datetime, timezone
 import secrets
 
+import pyotp
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token as google_id_token
@@ -15,6 +16,7 @@ from app.adapters.memory_tokens import token_store
 from app.adapters.rate_limiter import (
     code_guess_limiter,
     login_limiter,
+    mfa_code_guess_limiter,
     register_limiter,
     reset_request_limiter,
     verify_request_limiter,
@@ -25,6 +27,12 @@ from app.schemas.auth import (
     AuthResponse,
     GoogleAuthRequest,
     LoginRequest,
+    MfaChallengeResponse,
+    MfaCodeRequest,
+    MfaDisableRequest,
+    MfaEnrollmentResponse,
+    MfaLoginRequest,
+    MfaRecoveryCodesResponse,
     RegisterRequest,
     RequestCode,
     ResetPasswordRequest,
@@ -41,16 +49,19 @@ from app.master_admin.email_provider import MasterEmailConnectionError
 from app.services import onboarding_service
 from app.services.hotel_service import get_or_create_hotel_for_owner, get_memberships_for_user
 from app.services.security import create_access_token, hash_password, needs_rehash, verify_password
-from app.dependencies.auth import AuthContext, get_auth_context
+from app.services.security import create_signed_token, decode_signed_token
+from app.dependencies.auth import AuthContext, get_auth_context, get_current_user
 from app.config import get_settings
 from app.services.external_effects_policy import (
     GoogleLoginDisabled,
     require_google_login,
 )
 from app.services.permission_service import get_effective_permissions
+from app.services import mfa_service
 
 router = APIRouter(prefix="/api/auth", tags=["Auth"])
 LOGGER = logging.getLogger(__name__)
+MFA_LOGIN_CHALLENGE_MINUTES = 5
 
 
 def _generate_code() -> str:
@@ -142,6 +153,48 @@ def _build_auth_response(db: Session, user: User, requested_hotel_id: int | None
     )
 
 
+def _issue_auth_response(db: Session, user: User) -> AuthResponse:
+    user.last_login = datetime.now(timezone.utc)
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return _build_auth_response(db, user)
+
+
+def _build_login_response(db: Session, user: User) -> AuthResponse | MfaChallengeResponse:
+    """Return a session only after the required account MFA factor succeeds."""
+    if mfa_service.get_active_mfa_secret(db, user.id):
+        challenge = create_signed_token(
+            {
+                "purpose": "mfa_login",
+                "user_id": user.id,
+                "token_version": user.token_version or 0,
+            },
+            expires_minutes=MFA_LOGIN_CHALLENGE_MINUTES,
+        )
+        return MfaChallengeResponse(
+            mfa_token=challenge,
+            expires_in=MFA_LOGIN_CHALLENGE_MINUTES * 60,
+        )
+
+    return _issue_auth_response(db, user)
+
+
+def _mfa_attempt_key(action: str, user_id: int) -> str:
+    return f"{action}:{user_id}"
+
+
+def _allow_mfa_attempt(db: Session, action: str, user_id: int) -> None:
+    if not mfa_code_guess_limiter.allow(_mfa_attempt_key(action, user_id), db=db):
+        db.commit()
+        raise HTTPException(status_code=429, detail="Demasiados intentos. Espera unos minutos.")
+    db.commit()
+
+
+def _reset_mfa_attempts(db: Session, action: str, user_id: int) -> None:
+    mfa_code_guess_limiter.reset(_mfa_attempt_key(action, user_id), db=db)
+
+
 def _issue_email_token(db: Session, email: str, token_type: str) -> str:
     code = _generate_code()
     token_store.issue(db, token_type=token_type, subject_key=email, code=code, ttl_minutes=15)
@@ -214,7 +267,7 @@ def request_verify(payload: RequestCode, db: Session = Depends(get_db)):
     return {"sent": True}
 
 
-@router.post("/login", response_model=AuthResponse)
+@router.post("/login", response_model=AuthResponse | MfaChallengeResponse)
 def login(payload: LoginRequest, db: Session = Depends(get_db)):
     key = payload.email.lower()
     settings = get_settings()
@@ -234,15 +287,47 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
     if needs_rehash(user.password_hash):
         user.password_hash = hash_password(payload.password)
 
-    user.last_login = datetime.now(timezone.utc)
     db.add(user)
     db.commit()
     login_limiter.reset(key, db=db)
     db.commit()
-    return _build_auth_response(db, user)
+    return _build_login_response(db, user)
 
 
-@router.post("/google", response_model=AuthResponse)
+@router.post("/login/mfa", response_model=AuthResponse)
+def complete_mfa_login(payload: MfaLoginRequest, db: Session = Depends(get_db)):
+    challenge = decode_signed_token(payload.mfa_token)
+    if challenge.get("purpose") != "mfa_login":
+        raise HTTPException(status_code=401, detail="Desafio MFA invalido")
+
+    try:
+        user_id = int(challenge.get("user_id"))
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=401, detail="Desafio MFA invalido") from exc
+
+    user = db.get(User, user_id)
+    if not user or not user.is_active:
+        raise HTTPException(status_code=401, detail="Usuario no valido")
+    if int(challenge.get("token_version", user.token_version or 0)) != (user.token_version or 0):
+        raise HTTPException(status_code=401, detail="Desafio MFA revocado")
+    if not mfa_service.get_active_mfa_secret(db, user.id):
+        raise HTTPException(status_code=401, detail="MFA no esta activo")
+
+    _allow_mfa_attempt(db, "login", user.id)
+    try:
+        valid = mfa_service.consume_mfa_code(db, user.id, payload.code)
+    except mfa_service.MfaSecretUnavailableError as exc:
+        db.rollback()
+        raise HTTPException(status_code=503, detail="MFA no esta disponible temporalmente") from exc
+    if not valid:
+        db.commit()
+        raise HTTPException(status_code=401, detail="Codigo MFA invalido o ya utilizado")
+
+    _reset_mfa_attempts(db, "login", user.id)
+    return _issue_auth_response(db, user)
+
+
+@router.post("/google", response_model=AuthResponse | MfaChallengeResponse)
 def google_login(payload: GoogleAuthRequest, db: Session = Depends(get_db)):
     """
     "Sign in with Google" via Google Identity Services' ID-token flow: the
@@ -299,11 +384,10 @@ def google_login(payload: GoogleAuthRequest, db: Session = Depends(get_db)):
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Usuario deshabilitado")
 
-    user.last_login = datetime.now(timezone.utc)
     db.add(user)
     db.commit()
     db.refresh(user)
-    return _build_auth_response(db, user)
+    return _build_login_response(db, user)
 
 
 @router.post("/verify-email", response_model=AuthResponse)
@@ -369,7 +453,7 @@ def validate_reset(payload: VerifyCodeRequest, db: Session = Depends(get_db)):
     return ResetCodeValidationResponse(valid=is_valid)
 
 
-@router.post("/reset-password", response_model=AuthResponse)
+@router.post("/reset-password", response_model=AuthResponse | MfaChallengeResponse)
 def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db)):
     key = payload.email.lower()
     if not code_guess_limiter.allow(f"password_reset:{key}", db=db):
@@ -389,7 +473,96 @@ def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db))
     db.add(user)
     db.commit()
     db.refresh(user)
-    return _build_auth_response(db, user)
+    return _build_login_response(db, user)
+
+
+@router.post("/mfa/enroll", response_model=MfaEnrollmentResponse)
+def enroll_mfa(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    try:
+        _mfa_secret, secret = mfa_service.enroll_user(db, user.id)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    db.commit()
+    issuer = (get_settings().HOTEL_NAME or "Hotel PMS").strip() or "Hotel PMS"
+    otpauth_uri = pyotp.TOTP(secret).provisioning_uri(name=user.email, issuer_name=issuer)
+    return MfaEnrollmentResponse(secret=secret, otpauth_uri=otpauth_uri)
+
+
+@router.post("/mfa/enroll/confirm", response_model=MfaRecoveryCodesResponse)
+def confirm_mfa_enrollment(
+    payload: MfaCodeRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    _allow_mfa_attempt(db, "enroll", user.id)
+    try:
+        recovery_codes = mfa_service.confirm_enrollment(db, user.id, payload.code)
+    except mfa_service.MfaSecretUnavailableError as exc:
+        db.rollback()
+        raise HTTPException(status_code=503, detail="MFA no esta disponible temporalmente") from exc
+    if recovery_codes is None:
+        db.commit()
+        raise HTTPException(status_code=400, detail="Codigo TOTP invalido o enrolamiento inexistente")
+    _reset_mfa_attempts(db, "enroll", user.id)
+    db.commit()
+    return MfaRecoveryCodesResponse(recovery_codes=recovery_codes)
+
+
+@router.post("/mfa/disable")
+def disable_mfa(
+    payload: MfaDisableRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    if not mfa_service.get_active_mfa_secret(db, user.id):
+        raise HTTPException(status_code=400, detail="MFA no esta activo")
+    if not verify_password(payload.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Reautenticacion invalida")
+
+    _allow_mfa_attempt(db, "disable", user.id)
+    try:
+        valid = mfa_service.consume_mfa_code(db, user.id, payload.code)
+    except mfa_service.MfaSecretUnavailableError as exc:
+        db.rollback()
+        raise HTTPException(status_code=503, detail="MFA no esta disponible temporalmente") from exc
+    if not valid:
+        db.commit()
+        raise HTTPException(status_code=401, detail="Codigo MFA invalido o ya utilizado")
+
+    mfa_service.disable_user_mfa(db, user.id)
+    _reset_mfa_attempts(db, "disable", user.id)
+    db.commit()
+    return {"disabled": True}
+
+
+@router.post("/mfa/recovery-codes/regenerate", response_model=MfaRecoveryCodesResponse)
+def regenerate_mfa_recovery_codes(
+    payload: MfaCodeRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    mfa_secret = mfa_service.get_active_mfa_secret(db, user.id)
+    if not mfa_secret:
+        raise HTTPException(status_code=400, detail="MFA no esta activo")
+
+    _allow_mfa_attempt(db, "regenerate", user.id)
+    try:
+        valid = mfa_service.consume_mfa_code(db, user.id, payload.code)
+    except mfa_service.MfaSecretUnavailableError as exc:
+        db.rollback()
+        raise HTTPException(status_code=503, detail="MFA no esta disponible temporalmente") from exc
+    if not valid:
+        db.commit()
+        raise HTTPException(status_code=401, detail="Codigo MFA invalido o ya utilizado")
+
+    recovery_codes = mfa_service.replace_recovery_codes(db, user.id, mfa_secret)
+    _reset_mfa_attempts(db, "regenerate", user.id)
+    db.commit()
+    return MfaRecoveryCodesResponse(recovery_codes=recovery_codes)
 
 
 @router.get("/me", response_model=UserInfo)

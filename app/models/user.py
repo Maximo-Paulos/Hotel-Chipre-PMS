@@ -5,6 +5,7 @@ Stores hashed passwords and basic profile flags.
 from datetime import datetime, timezone
 
 from sqlalchemy import Boolean, Column, DateTime, Integer, String
+from sqlalchemy.orm import relationship
 
 from app.database import Base
 
@@ -30,6 +31,20 @@ class User(Base):
         onupdate=lambda: datetime.now(timezone.utc),
     )
     last_login = Column(DateTime, nullable=True)
+
+    mfa_secret = relationship(
+        "UserMfaSecret",
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    mfa_recovery_codes = relationship(
+        "UserMfaRecoveryCode",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
     def __repr__(self) -> str:
         return f"<User(id={self.id}, email='{self.email}', active={self.is_active})>"
