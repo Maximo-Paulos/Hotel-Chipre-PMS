@@ -41,7 +41,6 @@ def _engine(db_path: str):
 def _seed_legacy_tags(engine) -> None:
     from app.models.guest import Guest, GuestTag, GuestTagTypeEnum
     from app.models.hotel_config import HotelConfiguration
-    from app.models.user import User
 
     SessionLocal = sessionmaker(bind=engine)
     with SessionLocal() as db:
@@ -49,10 +48,20 @@ def _seed_legacy_tags(engine) -> None:
             [
                 HotelConfiguration(id=7301, subscription_active=True),
                 HotelConfiguration(id=7302, subscription_active=True),
-                User(id=301, email="migration@example.test", password_hash="synthetic", is_verified=True),
             ]
         )
         db.flush()
+        # This fixture intentionally seeds the schema before the migration
+        # under test. Do not use the current User ORM model here: it includes
+        # columns that do not exist at this historical revision.
+        db.execute(
+            text(
+                "INSERT INTO users "
+                "(id, email, password_hash, is_active, is_verified, role, token_version, created_at, updated_at) "
+                "VALUES (301, 'migration@example.test', 'synthetic', 1, 1, 'owner', 0, "
+                "CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+            )
+        )
         guest_a = Guest(hotel_id=7301, first_name="Legacy", last_name="Active")
         guest_b = Guest(hotel_id=7302, first_name="Legacy", last_name="Other hotel")
         db.add_all([guest_a, guest_b])

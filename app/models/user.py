@@ -16,6 +16,10 @@ class User(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     email = Column(String(200), nullable=False, unique=True, index=True)
     password_hash = Column(String(255), nullable=False)
+    # Stable Google OIDC subject. Email is an attribute that can be spoofed
+    # during password registration; the provider subject is the identity key
+    # used for subsequent Google logins.
+    google_sub = Column(String(255), nullable=True, unique=True, index=True)
     is_active = Column(Boolean, nullable=False, default=True)
     is_verified = Column(Boolean, nullable=False, default=False)
     role = Column(String(50), nullable=False, default="owner")

@@ -1,9 +1,9 @@
 # Alembic head
 
-Generado: 2026-08-20T16:18:19.397690+00:00
-Commit: `dceb376`
+Generado: 2026-08-20T16:49:05.942927+00:00
+Commit: `453cc6c`
 
 ```text
-0c66ee6f32fa (head)
+5e86f1b9ccbb (head)
 ```
 Fuente: `alembic.ini` y `alembic/versions/`.
