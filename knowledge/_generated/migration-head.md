@@ -1,9 +1,9 @@
 # Alembic head
 
-Generado: 2026-08-20T18:36:28.456790+00:00
-Commit: `9d6c97d`
+Generado: 2026-08-20T19:29:47.246591+00:00
+Commit: `897b057`
 
 ```text
-20260820_user_sessions (head)
+20260820_permission_metadata (head)
 ```
 Fuente: `alembic.ini` y `alembic/versions/`.

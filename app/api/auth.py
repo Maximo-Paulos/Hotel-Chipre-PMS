@@ -20,7 +20,9 @@ from app.adapters.rate_limiter import (
     mfa_code_guess_limiter,
     register_limiter,
     reset_request_limiter,
+    reset_request_source_limiter,
     verify_request_limiter,
+    verify_request_source_limiter,
 )
 from app.database import get_db
 from app.models.security_audit_log import SecurityAuditLog
@@ -37,6 +39,7 @@ from app.schemas.auth import (
     MfaLoginRequest,
     MfaRecoveryCodesResponse,
     RegisterRequest,
+    RegistrationResponse,
     RequestCode,
     ResetPasswordRequest,
     ResetCodeValidationResponse,
@@ -46,6 +49,7 @@ from app.schemas.auth import (
 )
 from app.services.email_service import (
     send_reset_password_email,
+    send_generic_auth_notice_email,
     send_verification_email,
     send_verification_success_email,
 )
@@ -295,17 +299,25 @@ def _issue_email_token(db: Session, email: str, token_type: str) -> str:
     return code
 
 
-@router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
+def _request_source(request: Request) -> str:
+    return (request.client.host if request.client else None) or "unknown"
+
+
+def _burn_auth_timing_work() -> None:
+    """Match the one-time-code hash cost on no-account branches."""
+    hash_password(_generate_code())
+
+
+@router.post("/register", response_model=RegistrationResponse, status_code=status.HTTP_201_CREATED)
 def register(
     payload: RegisterRequest,
     request: Request,
-    response: Response,
     db: Session = Depends(get_db),
 ):
     # Registration always uses a fresh, distinct email, so the duplicate-email
     # check below cannot throttle repeated farming/spam from one source the
     # way it can for login/reset. Rate limit by source IP instead.
-    source = (request.client.host if request.client else None) or "unknown"
+    source = _request_source(request)
     if not register_limiter.allow(source, db=db):
         db.commit()
         raise HTTPException(status_code=429, detail="Demasiados registros. Espera unos minutos.")
@@ -313,7 +325,16 @@ def register(
 
     existing = db.query(User).filter(User.email.ilike(payload.email)).first()
     if existing:
-        raise HTTPException(status_code=400, detail="Ya existe un usuario con ese email")
+        # Keep the observable response and provider latency aligned with a new
+        # registration without changing the existing account in any way.
+        hash_password(payload.password)
+        _burn_auth_timing_work()
+        try:
+            send_generic_auth_notice_email(payload.email)
+        except MasterEmailConnectionError as exc:
+            db.rollback()
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        return RegistrationResponse()
 
     # Self-registration always creates a plain owner account. `payload.role`
     # is never trusted here: `require_platform_admin()` authorizes purely on
@@ -337,17 +358,20 @@ def register(
         db.rollback()
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
-    auth_response = _build_auth_response(db, user)
-    auth_response.csrf_token = _attach_user_session_cookies(db, user, request, response)
-    return auth_response
+    return RegistrationResponse()
 
 
 @router.post("/request-verify")
-def request_verify(payload: RequestCode, db: Session = Depends(get_db)):
+def request_verify(payload: RequestCode, request: Request, db: Session = Depends(get_db)):
     key = payload.email.lower()
+    source = _request_source(request)
     if not verify_request_limiter.allow(key, db=db):
         db.commit()
         LOGGER.warning("request_verify rate limit hit email=%s", _mask_email(key))
+        raise HTTPException(status_code=429, detail="Demasiados intentos de verificacion. Espera unos minutos.")
+    if not verify_request_source_limiter.allow(source, db=db):
+        db.commit()
+        LOGGER.warning("request_verify source rate limit hit source=%s", source)
         raise HTTPException(status_code=429, detail="Demasiados intentos de verificacion. Espera unos minutos.")
     db.commit()
 
@@ -355,6 +379,13 @@ def request_verify(payload: RequestCode, db: Session = Depends(get_db)):
     if not user or user.is_verified:
         reason = "not_found" if not user else "already_verified"
         LOGGER.info("request_verify no-op email=%s reason=%s", _mask_email(key), reason)
+        _burn_auth_timing_work()
+        try:
+            send_generic_auth_notice_email(payload.email)
+        except MasterEmailConnectionError as exc:
+            db.rollback()
+            LOGGER.warning("request_verify mail delivery failed error=%s", exc)
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
         return {"sent": True}
 
     code = _issue_email_token(db, payload.email, "email_verification")
@@ -635,11 +666,15 @@ def verify_email(
 
 
 @router.post("/request-reset")
-def request_reset(payload: RequestCode, db: Session = Depends(get_db)):
+def request_reset(payload: RequestCode, request: Request, db: Session = Depends(get_db)):
     key = payload.email.lower()
+    source = _request_source(request)
     settings = get_settings()
     reset_request_limiter.limit = getattr(settings, "RESET_RATE_LIMIT", reset_request_limiter.limit)
     if not reset_request_limiter.allow(key, db=db):
+        db.commit()
+        raise HTTPException(status_code=429, detail="Demasiados intentos de reset. Espera unos minutos.")
+    if not reset_request_source_limiter.allow(source, db=db):
         db.commit()
         raise HTTPException(status_code=429, detail="Demasiados intentos de reset. Espera unos minutos.")
     db.commit()
@@ -650,6 +685,14 @@ def request_reset(payload: RequestCode, db: Session = Depends(get_db)):
         code = _issue_email_token(db, payload.email, "password_reset")
         try:
             send_reset_password_email(payload.email, code)
+            db.commit()
+        except MasterEmailConnectionError as exc:
+            db.rollback()
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+    else:
+        _burn_auth_timing_work()
+        try:
+            send_generic_auth_notice_email(payload.email)
             db.commit()
         except MasterEmailConnectionError as exc:
             db.rollback()

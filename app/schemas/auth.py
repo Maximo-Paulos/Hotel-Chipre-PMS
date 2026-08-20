@@ -30,6 +30,13 @@ class RegisterRequest(BaseModel):
         return validated.normalized
 
 
+class RegistrationResponse(BaseModel):
+    """Neutral response for both accepted and already-registered emails."""
+
+    accepted: Literal[True] = True
+    message: str = "Si el email es elegible, recibiras instrucciones por correo."
+
+
 class LoginRequest(BaseModel):
     email: str
     password: str

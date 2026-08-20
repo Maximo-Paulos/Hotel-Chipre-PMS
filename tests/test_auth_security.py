@@ -324,8 +324,10 @@ def test_register_verify_and_reset_use_resend_provider(client_and_db, fixed_code
     sent_payloads = _configure_resend(monkeypatch, [])
 
     register = _register_owner(client, "owner@example.com")
-    assert "code" not in register
-    assert register["requires_verification"] is True
+    assert register == {
+        "accepted": True,
+        "message": "Si el email es elegible, recibiras instrucciones por correo.",
+    }
 
     request_verify = client.post("/api/auth/request-verify", json={"email": "owner@example.com"})
     assert request_verify.status_code == 200
@@ -345,7 +347,8 @@ def test_register_verify_and_reset_use_resend_provider(client_and_db, fixed_code
 
     reset_unknown = client.post("/api/auth/request-reset", json={"email": "unknown@example.com"})
     assert reset_unknown.status_code == 200
-    assert reset_unknown.json() == {"sent": True}
+    assert reset_unknown.json() == reset_known.json() == {"sent": True}
+    assert sent_payloads[-1]["subject"] == "Solicitud recibida en Hotel Chipre PMS"
 
     reset = client.post(
         "/api/auth/reset-password",
@@ -361,6 +364,33 @@ def test_register_verify_and_reset_use_resend_provider(client_and_db, fixed_code
     assert len(sent_payloads) >= 4
     assert sent_payloads[0]["from"] == "Hotel Chipre PMS <noreply@auth.hotels-pms.com>"
     assert sent_payloads[0]["reply_to"] == ["hotelxpms@gmail.com"]
+
+
+def test_register_is_anti_enumeration_and_does_not_touch_existing_credentials(
+    client_and_db, fixed_code_patch, monkeypatch
+):
+    client, db, _session_factory = client_and_db
+    sent_payloads = _configure_resend(monkeypatch, [])
+
+    first = client.post(
+        "/api/auth/register",
+        json={"email": "same@example.com", "password": "OriginalPass123!"},
+    )
+    duplicate = client.post(
+        "/api/auth/register",
+        json={"email": "same@example.com", "password": "AttackerPass123!"},
+    )
+
+    assert first.status_code == duplicate.status_code == 201
+    assert first.json() == duplicate.json()
+    assert "access_token" not in first.json()
+    assert "access_token" not in duplicate.json()
+    assert len(sent_payloads) == 2
+
+    stored_user = db.query(User).filter(User.email == "same@example.com").one()
+    assert db.query(User).filter(User.email == "same@example.com").count() == 1
+    assert verify_password("OriginalPass123!", stored_user.password_hash)
+    assert not verify_password("AttackerPass123!", stored_user.password_hash)
 
 
 def test_auth_flows_fail_without_connected_mail_provider(client_and_db, fixed_code_patch, monkeypatch):
@@ -395,8 +425,13 @@ def test_unverified_users_cannot_use_operational_endpoints(client_and_db, fixed_
     client, db, _session_factory = client_and_db
     _configure_resend(monkeypatch, [])
 
-    register = _register_owner(client, "blocked@example.com")
-    headers = _auth_headers(register)
+    _register_owner(client, "blocked@example.com")
+    login = client.post(
+        "/api/auth/login",
+        json={"email": "blocked@example.com", "password": "Demo123!pass"},
+    )
+    assert login.status_code == 200, login.text
+    headers = _auth_headers(login.json())
 
     blocked = client.get("/api/onboarding/status", headers=headers)
     assert blocked.status_code == 403
@@ -530,14 +565,14 @@ def test_reset_password_revokes_previously_issued_tokens(client_and_db, fixed_co
     client, db, _session_factory = client_and_db
     _configure_resend(monkeypatch, [])
 
-    register = _register_owner(client, "leaked@example.com")
-    old_token = register["access_token"]
+    _register_owner(client, "leaked@example.com")
 
     verify = client.post(
         "/api/auth/verify-email",
         json={"email": "leaked@example.com", "code": "123456"},
     )
     assert verify.status_code == 200, verify.text
+    old_token = verify.json()["access_token"]
 
     me_before = client.get("/api/auth/me", headers={"Authorization": f"Bearer {old_token}"})
     assert me_before.status_code == 200, me_before.text
@@ -680,11 +715,17 @@ def test_google_login_replaces_password_for_unverified_email_squatter(
 ):
     client, db, _session_factory = client_and_db
     _configure_resend(monkeypatch, [])
-    register = _register_owner(client, "existinguser@example.com")
-    assert register["user"]["is_verified"] is False
-    old_access_token = register["access_token"]
+    _register_owner(client, "existinguser@example.com")
+    old_access_token = None
     stored_user = db.query(User).filter(User.email == "existinguser@example.com").one()
     old_password_hash = stored_user.password_hash
+
+    verify = client.post(
+        "/api/auth/verify-email",
+        json={"email": "existinguser@example.com", "code": "123456"},
+    )
+    assert verify.status_code == 200, verify.text
+    old_access_token = verify.json()["access_token"]
 
     monkeypatch.setenv("GOOGLE_CLIENT_ID", "test-client-id.apps.googleusercontent.com")
     get_settings.cache_clear()

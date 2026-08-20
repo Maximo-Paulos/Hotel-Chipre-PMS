@@ -9237,7 +9237,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AuthResponse"
+                  "$ref": "#/components/schemas/RegistrationResponse"
                 }
               }
             }
@@ -44830,6 +44830,27 @@
           "password"
         ],
         "title": "RegisterRequest"
+      },
+      "RegistrationResponse": {
+        "properties": {
+          "accepted": {
+            "type": "boolean",
+            "enum": [
+              true
+            ],
+            "const": true,
+            "title": "Accepted",
+            "default": true
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "default": "Si el email es elegible, recibiras instrucciones por correo."
+          }
+        },
+        "type": "object",
+        "title": "RegistrationResponse",
+        "description": "Neutral response for both accepted and already-registered emails."
       },
       "RemitoCreate": {
         "properties": {
