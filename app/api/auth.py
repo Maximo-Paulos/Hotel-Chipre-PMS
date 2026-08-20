@@ -968,7 +968,7 @@ def me(
     return UserInfo(
         id=current_user.id,
         email=current_user.email,
-        role=context.user_role or (current_user.role or "owner"),
+        role=context.user_role or "unknown",
         is_verified=current_user.is_verified,
         is_active=current_user.is_active,
         permissions=effective_permissions,

@@ -125,6 +125,7 @@ def seed(db: Session):
                 user_id=demo_user.id,
                 role="owner",
                 status="active",
+                is_primary_owner=True,
             )
         )
 

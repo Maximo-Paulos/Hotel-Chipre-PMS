@@ -4,7 +4,7 @@ User management per hotel (owners/co-owners).
 import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -13,7 +13,13 @@ from app.models.audit_log import AuditActionEnum
 from app.models.user import User
 from app.models.hotel_membership import HotelMembership
 from app.schemas.auth import UserInfo
-from app.services.security import hash_password, create_signed_token
+from app.services.security import hash_password, create_signed_token, verify_password
+from app.services import mfa_service
+from app.services.membership_service import (
+    MembershipInvariantError,
+    transfer_primary_owner,
+    validate_membership_change,
+)
 from app.adapters.rate_limiter import invite_limiter
 from app.config import get_settings
 from app.master_admin.email_provider import MasterEmailConnectionError
@@ -91,6 +97,11 @@ class InviteResponse(BaseModel):
     accept_url: str
 
 
+class PrimaryOwnerTransferPayload(BaseModel):
+    password: str = Field(min_length=1)
+    mfa_code: str | None = Field(default=None, min_length=6, max_length=32)
+
+
 @router.post("/invite", response_model=InviteResponse, status_code=status.HTTP_201_CREATED)
 def invite_user(
     payload: InvitePayload,
@@ -127,8 +138,19 @@ def invite_user(
     )
     before = audit_log_service.model_snapshot(membership)
     if membership:
-        membership.role = role
-        membership.status = "invited"
+        try:
+            validate_membership_change(
+                db,
+                membership,
+                hotel_id=context.hotel_id,
+                next_role=role,
+                next_status="invited",
+            )
+            membership.role = role
+            membership.status = "invited"
+        except MembershipInvariantError as exc:
+            db.rollback()
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
     else:
         membership = HotelMembership(hotel_id=context.hotel_id, user_id=user.id, role=role, status="invited")
         db.add(membership)
@@ -212,7 +234,19 @@ def revoke_user(
         raise HTTPException(status_code=400, detail="No puedes revocar tu propio acceso")
     _assert_manageable_membership(context.user_role, membership, action="revocar")
     before = audit_log_service.model_snapshot(membership)
-    membership.status = "revoked"
+    try:
+        validate_membership_change(
+            db,
+            membership,
+            hotel_id=context.hotel_id,
+            next_role=membership.role,
+            next_status="revoked",
+        )
+        membership.status = "revoked"
+        db.flush()
+    except MembershipInvariantError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     db.commit()
     audit_log_service.safe_create_audit_log(
         db,
@@ -247,8 +281,20 @@ def update_role(
         raise HTTPException(status_code=400, detail="No puedes cambiar tu propio rol")
     _assert_manageable_membership(context.user_role, membership, action="modificar")
     before = audit_log_service.model_snapshot(membership)
-    membership.role = payload.role
-    membership.status = "active"
+    try:
+        validate_membership_change(
+            db,
+            membership,
+            hotel_id=context.hotel_id,
+            next_role=payload.role,
+            next_status="active",
+        )
+        membership.role = payload.role
+        membership.status = "active"
+        db.flush()
+    except MembershipInvariantError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     user = db.get(User, user_id)
     db.commit()
     audit_log_service.safe_create_audit_log(
@@ -265,3 +311,41 @@ def update_role(
         db.refresh(user)
         return _membership_user_info(user, membership.role)
     return _membership_user_info(membership.user, membership.role)
+
+
+@router.post("/{user_id}/primary-owner")
+def transfer_primary_owner_endpoint(
+    user_id: int,
+    payload: PrimaryOwnerTransferPayload,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_roles("owner")),
+):
+    """Transfer billing/property ownership after explicit account reauth."""
+    current_user = db.get(User, context.user_id)
+    if current_user is None or not current_user.is_active:
+        raise HTTPException(status_code=401, detail="Usuario no valido")
+    if not verify_password(payload.password, current_user.password_hash):
+        raise HTTPException(status_code=401, detail="Reautenticacion invalida")
+
+    if mfa_service.get_active_mfa_secret(db, current_user.id):
+        if not payload.mfa_code or not mfa_service.consume_mfa_code(db, current_user.id, payload.mfa_code):
+            db.rollback()
+            raise HTTPException(status_code=403, detail="Se requiere un codigo MFA valido")
+
+    try:
+        target = transfer_primary_owner(
+            db,
+            hotel_id=context.hotel_id,
+            current_user_id=current_user.id,
+            target_user_id=user_id,
+        )
+        db.commit()
+    except MembershipInvariantError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    return {
+        "hotel_id": context.hotel_id,
+        "primary_owner_user_id": target.user_id,
+        "transferred": True,
+    }

@@ -75,7 +75,7 @@ def security_overview(
         current_user=SecurityCurrentUserRead(
             id=user.id,
             email=user.email,
-            role=context.user_role or user.role,
+            role=context.user_role or "unknown",
             last_login=user.last_login,
             token_version=user.token_version or 0,
         ),

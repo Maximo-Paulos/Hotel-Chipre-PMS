@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-20T19:26:12.724Z",
+  "generatedAt": "2026-08-20T19:39:15.682Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -549,34 +549,6 @@
       "warnings": []
     },
     {
-      "id": "flow:master_admin_security_audit_master_action",
-      "name": "audit_master_action",
-      "entryPoint": "master_admin_security_audit_master_action",
-      "entryPointId": "master_admin_security_audit_master_action",
-      "path": [
-        "master_admin_security_audit_master_action",
-        "master_admin_security_json_or_null",
-        "master_admin_security_redact_master_admin_audit_metadata",
-        "master_admin_security_mask_audit_email",
-        "master_admin_security_normalize_audit_metadata_key"
-      ],
-      "qualifiedPath": [
-        "master_admin_security_audit_master_action",
-        "master_admin_security_json_or_null",
-        "master_admin_security_redact_master_admin_audit_metadata",
-        "master_admin_security_mask_audit_email",
-        "master_admin_security_normalize_audit_metadata_key"
-      ],
-      "depth": 2,
-      "nodeCount": 5,
-      "fileCount": 1,
-      "files": [
-        "app/master_admin/security.py"
-      ],
-      "criticality": 0.42,
-      "warnings": []
-    },
-    {
       "id": "flow:master_admin_security_authenticate_master_login",
       "name": "authenticate_master_login",
       "entryPoint": "master_admin_security_authenticate_master_login",
@@ -814,34 +786,6 @@
       "fileCount": 1,
       "files": [
         "scripts/agent_ops/build_shared_sandbox_bootstrap_sql.py"
-      ],
-      "criticality": 0.42,
-      "warnings": []
-    },
-    {
-      "id": "flow:master_admin_security_redact_master_admin_audit_metadata_json",
-      "name": "redact_master_admin_audit_metadata_json",
-      "entryPoint": "master_admin_security_redact_master_admin_audit_metadata_json",
-      "entryPointId": "master_admin_security_redact_master_admin_audit_metadata_json",
-      "path": [
-        "master_admin_security_redact_master_admin_audit_metadata_json",
-        "master_admin_security_json_or_null",
-        "master_admin_security_redact_master_admin_audit_metadata",
-        "master_admin_security_mask_audit_email",
-        "master_admin_security_normalize_audit_metadata_key"
-      ],
-      "qualifiedPath": [
-        "master_admin_security_redact_master_admin_audit_metadata_json",
-        "master_admin_security_json_or_null",
-        "master_admin_security_redact_master_admin_audit_metadata",
-        "master_admin_security_mask_audit_email",
-        "master_admin_security_normalize_audit_metadata_key"
-      ],
-      "depth": 2,
-      "nodeCount": 5,
-      "fileCount": 1,
-      "files": [
-        "app/master_admin/security.py"
       ],
       "criticality": 0.42,
       "warnings": []
@@ -1382,6 +1326,28 @@
       "fileCount": 1,
       "files": [
         "app/api/gemma_chat.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
+      "id": "flow:master_admin_security_audit_master_action",
+      "name": "audit_master_action",
+      "entryPoint": "master_admin_security_audit_master_action",
+      "entryPointId": "master_admin_security_audit_master_action",
+      "path": [
+        "master_admin_security_audit_master_action",
+        "master_admin_security_json_or_null"
+      ],
+      "qualifiedPath": [
+        "master_admin_security_audit_master_action",
+        "master_admin_security_json_or_null"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/master_admin/security.py"
       ],
       "criticality": 0.41,
       "warnings": []
@@ -4738,6 +4704,30 @@
       "fileCount": 1,
       "files": [
         "app/services/tenant_context.py"
+      ],
+      "criticality": 0.2433,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_membership_service_validate_membership_change",
+      "name": "validate_membership_change",
+      "entryPoint": "services_membership_service_validate_membership_change",
+      "entryPointId": "services_membership_service_validate_membership_change",
+      "path": [
+        "services_membership_service_validate_membership_change",
+        "services_membership_service_lock_active_owner_memberships",
+        "services_membership_service_membershipinvarianterror"
+      ],
+      "qualifiedPath": [
+        "services_membership_service_validate_membership_change",
+        "services_membership_service_lock_active_owner_memberships",
+        "services_membership_service_membershipinvarianterror"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/services/membership_service.py"
       ],
       "criticality": 0.2433,
       "warnings": []
@@ -17695,6 +17685,32 @@
       "warnings": []
     },
     {
+      "id": "flow:services_membership_service_transfer_primary_owner",
+      "name": "transfer_primary_owner",
+      "entryPoint": "services_membership_service_transfer_primary_owner",
+      "entryPointId": "services_membership_service_transfer_primary_owner",
+      "path": [
+        "services_membership_service_transfer_primary_owner",
+        "services_membership_service_ensure_active_owner",
+        "services_membership_service_lock_active_owner_memberships",
+        "services_membership_service_membershipinvarianterror"
+      ],
+      "qualifiedPath": [
+        "services_membership_service_transfer_primary_owner",
+        "services_membership_service_ensure_active_owner",
+        "services_membership_service_lock_active_owner_memberships",
+        "services_membership_service_membershipinvarianterror"
+      ],
+      "depth": 1,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/services/membership_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:services_laundry_service_transition_status",
       "name": "transition_status",
       "entryPoint": "services_laundry_service_transition_status",
@@ -18298,6 +18314,28 @@
       "fileCount": 1,
       "files": [
         "alembic/versions/20260820_missing_tenant_rls.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:versions_20260820_primary_owner_upgrade",
+      "name": "upgrade",
+      "entryPoint": "versions_20260820_primary_owner_upgrade",
+      "entryPointId": "versions_20260820_primary_owner_upgrade",
+      "path": [
+        "versions_20260820_primary_owner_upgrade",
+        "versions_20260820_primary_owner_backfill_primary_owners"
+      ],
+      "qualifiedPath": [
+        "versions_20260820_primary_owner_upgrade",
+        "versions_20260820_primary_owner_backfill_primary_owners"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20260820_primary_owner.py"
       ],
       "criticality": 0.16,
       "warnings": []

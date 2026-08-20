@@ -22,6 +22,8 @@ class User(Base):
     google_sub = Column(String(255), nullable=True, unique=True, index=True)
     is_active = Column(Boolean, nullable=False, default=True)
     is_verified = Column(Boolean, nullable=False, default=False)
+    # Platform-plane role only (currently used for platform_admin). Hotel
+    # operational roles live exclusively in HotelMembership per hotel.
     role = Column(String(50), nullable=False, default="owner")
     # Bumped whenever previously issued JWTs must be invalidated server-side
     # (currently: password reset). JWTs are otherwise stateless with no
