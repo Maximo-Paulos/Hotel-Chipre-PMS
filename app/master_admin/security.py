@@ -119,6 +119,87 @@ def _json_or_null(value: Any) -> str | None:
     return json.dumps(value, ensure_ascii=True, sort_keys=True, default=_default)
 
 
+_AUDIT_EMAIL_KEYS = frozenset(
+    {
+        "email",
+        "recipient",
+        "sender_email",
+        "reply_to",
+        "connected_account_email",
+        "account_email",
+        "owner_email",
+        "user_email",
+        "actor_email",
+        "from_email",
+        "to_email",
+    }
+)
+_AUDIT_REDACTED_KEYS = frozenset(
+    {
+        "password",
+        "pin",
+        "token",
+        "secret",
+        "code",
+        "otp",
+        "api_key",
+        "access_token",
+        "refresh_token",
+        "session_token",
+        "csrf_token",
+        "webhook_secret",
+        "stripe_secret_key",
+        "verification_code",
+        "reset_code",
+        "confirmation_code",
+    }
+)
+_AUDIT_REDACTED_VALUE = "[REDACTED]"
+
+
+def _normalize_audit_metadata_key(key: Any) -> str:
+    return str(key).strip().lower().replace("-", "_").replace(" ", "_")
+
+
+def _mask_audit_email(value: Any) -> str:
+    email = str(value)
+    local, separator, domain = email.partition("@")
+    if not separator or not local or not domain:
+        return _AUDIT_REDACTED_VALUE
+    return f"{local[0]}***@{domain}"
+
+
+def redact_master_admin_audit_metadata(value: Any) -> Any:
+    """Redact the small, known set of sensitive audit metadata fields."""
+    if isinstance(value, dict):
+        redacted = {}
+        for key, item in value.items():
+            normalized_key = _normalize_audit_metadata_key(key)
+            if normalized_key in _AUDIT_EMAIL_KEYS:
+                redacted[key] = _mask_audit_email(item)
+            elif normalized_key in _AUDIT_REDACTED_KEYS:
+                redacted[key] = _AUDIT_REDACTED_VALUE
+            else:
+                redacted[key] = redact_master_admin_audit_metadata(item)
+        return redacted
+    if isinstance(value, list):
+        return [redact_master_admin_audit_metadata(item) for item in value]
+    if isinstance(value, tuple):
+        return [redact_master_admin_audit_metadata(item) for item in value]
+    return value
+
+
+def redact_master_admin_audit_metadata_json(value: str | None) -> str | None:
+    """Redact valid persisted audit JSON before returning it to an API caller."""
+    if value is None:
+        return None
+    try:
+        parsed = json.loads(value)
+    except (TypeError, json.JSONDecodeError):
+        return _AUDIT_REDACTED_VALUE
+    return _json_or_null(redact_master_admin_audit_metadata(parsed))
+
+
 def create_master_session(db: Session, user: User, request: Request | None = None) -> tuple[MasterAdminSession, str, str]:
     session_token = _issue_token()
     csrf_token = _issue_token()
@@ -360,7 +441,7 @@ def audit_master_action(
         request_path=request.url.path if request else None,
         request_method=request.method if request else None,
         request_id=request.headers.get("X-Request-Id") if request else None,
-        metadata_json=_json_or_null(metadata),
+        metadata_json=_json_or_null(redact_master_admin_audit_metadata(metadata)),
     )
     db.add(event)
     db.flush()

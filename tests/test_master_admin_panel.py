@@ -189,6 +189,64 @@ def test_master_login_bootstraps_env_account(master_client, monkeypatch):
         db.close()
 
 
+def test_master_audit_redacts_sensitive_metadata_on_storage_and_read(master_client, monkeypatch):
+    client, SessionLocal = master_client
+    monkeypatch.setenv("MASTER_ADMIN_PIN", "654321")
+    get_settings.cache_clear()
+
+    db = SessionLocal()
+    try:
+        admin = _seed_platform_admin(db)
+        master_security.audit_master_action(
+            db,
+            actor_user_id=admin.id,
+            action="sensitive_metadata_test",
+            metadata={
+                "email": "alice@example.com",
+                "recipient": "guest@example.com",
+                "sender_email": "sender@example.com",
+                "reply_to": "reply@example.com",
+                "password": "do-not-store",
+                "token": "token-do-not-store",
+                "secret": "secret-do-not-store",
+                "code": "123456",
+                "plan_code": "pro",
+                "nested": {"access_token": "nested-token-do-not-store"},
+            },
+        )
+        db.commit()
+        event = db.query(MasterAdminAuditEvent).filter(MasterAdminAuditEvent.action == "sensitive_metadata_test").one()
+        stored_metadata_json = event.metadata_json
+        stored_metadata = json.loads(stored_metadata_json or "{}")
+    finally:
+        db.close()
+
+    assert stored_metadata == {
+        "code": "[REDACTED]",
+        "email": "a***@example.com",
+        "nested": {"access_token": "[REDACTED]"},
+        "password": "[REDACTED]",
+        "plan_code": "pro",
+        "recipient": "g***@example.com",
+        "reply_to": "r***@example.com",
+        "secret": "[REDACTED]",
+        "sender_email": "s***@example.com",
+        "token": "[REDACTED]",
+    }
+    assert "do-not-store" not in stored_metadata_json
+
+    login = client.post(
+        "/api/master-admin/auth/login",
+        json={"email": "platform-admin@example.com", "password": "Master123!", "pin": "654321"},
+    )
+    assert login.status_code == 200, login.text
+
+    response = client.get("/api/master-admin/audit/events")
+    assert response.status_code == 200, response.text
+    api_event = next(item for item in response.json()["items"] if item["action"] == "sensitive_metadata_test")
+    assert json.loads(api_event["metadata_json"]) == stored_metadata
+
+
 def test_master_bootstrap_login_does_not_hijack_existing_non_admin_account(master_client, monkeypatch):
     """
     If MASTER_ADMIN_EMAIL happens to collide with a real tenant's login
