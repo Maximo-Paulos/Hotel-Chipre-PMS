@@ -829,6 +829,7 @@ def test_guest_tag_prohibido_alojar_persists(db):
 def test_guest_search_indexes_exist():
     idx_names = {idx.name for idx in Guest.__table__.indexes}
     for expected in (
+        "ix_guest_hotel_first_name",
         "ix_guest_hotel_last_name",
         "ix_guest_hotel_email",
         "ix_guest_hotel_phone",

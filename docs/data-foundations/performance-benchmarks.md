@@ -89,7 +89,7 @@ The benchmark script runs `EXPLAIN (ANALYZE, BUFFERS)` for the hot SQL behind:
 - allocation reservation window
 - transaction balance lookup
 - daily report balance candidates
-- guest last-name search
+- guest first-name and last-name search
 
 Measured plans are pending because the PostgreSQL test database was unreachable from this sandbox. Once network access is available, rerun the benchmark command above and paste the emitted `EXPLAIN` blocks here.
 
@@ -103,7 +103,7 @@ Existing migration coverage:
 
 Added in this task:
 
-- `20260614_pg_perf_guest_trgm` creates `pg_trgm` and GIN trigram indexes on `guests.document_number`, `guests.phone`, `guests.email`, and `guests.last_name` for the `%term%` `ILIKE` guest search hot path.
+- `20260614_pg_perf_guest_trgm` creates `pg_trgm` and GIN trigram indexes on `guests.document_number`, `guests.phone`, `guests.email`, and `guests.last_name`; `20260820_guest_search_first_name_index` adds the corresponding `guests.first_name` indexes for the `%term%` `ILIKE` guest search hot path.
 
 Rationale: the service query uses substring `ILIKE` across those columns. Existing B-tree indexes on `(hotel_id, field)` help exact or prefix patterns, but they do not reliably protect the documented fuzzy/substring search path at larger guest volumes.
 

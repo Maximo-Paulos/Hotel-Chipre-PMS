@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-20T19:39:15.682Z",
+  "generatedAt": "2026-08-20T19:29:06.218Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -4704,30 +4704,6 @@
       "fileCount": 1,
       "files": [
         "app/services/tenant_context.py"
-      ],
-      "criticality": 0.2433,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_membership_service_validate_membership_change",
-      "name": "validate_membership_change",
-      "entryPoint": "services_membership_service_validate_membership_change",
-      "entryPointId": "services_membership_service_validate_membership_change",
-      "path": [
-        "services_membership_service_validate_membership_change",
-        "services_membership_service_lock_active_owner_memberships",
-        "services_membership_service_membershipinvarianterror"
-      ],
-      "qualifiedPath": [
-        "services_membership_service_validate_membership_change",
-        "services_membership_service_lock_active_owner_memberships",
-        "services_membership_service_membershipinvarianterror"
-      ],
-      "depth": 1,
-      "nodeCount": 3,
-      "fileCount": 1,
-      "files": [
-        "app/services/membership_service.py"
       ],
       "criticality": 0.2433,
       "warnings": []
@@ -17495,6 +17471,30 @@
       "warnings": []
     },
     {
+      "id": "flow:services_guest_service_search_guests",
+      "name": "search_guests",
+      "entryPoint": "services_guest_service_search_guests",
+      "entryPointId": "services_guest_service_search_guests",
+      "path": [
+        "services_guest_service_search_guests",
+        "services_guest_service_escape_like_term",
+        "services_guest_service_guest_search_rank"
+      ],
+      "qualifiedPath": [
+        "services_guest_service_search_guests",
+        "services_guest_service_escape_like_term",
+        "services_guest_service_guest_search_rank"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/services/guest_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:api_settings_security_security_overview",
       "name": "security_overview",
       "entryPoint": "api_settings_security_security_overview",
@@ -17680,32 +17680,6 @@
       "fileCount": 1,
       "files": [
         "app/services/payment_proof_service.py"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_membership_service_transfer_primary_owner",
-      "name": "transfer_primary_owner",
-      "entryPoint": "services_membership_service_transfer_primary_owner",
-      "entryPointId": "services_membership_service_transfer_primary_owner",
-      "path": [
-        "services_membership_service_transfer_primary_owner",
-        "services_membership_service_ensure_active_owner",
-        "services_membership_service_lock_active_owner_memberships",
-        "services_membership_service_membershipinvarianterror"
-      ],
-      "qualifiedPath": [
-        "services_membership_service_transfer_primary_owner",
-        "services_membership_service_ensure_active_owner",
-        "services_membership_service_lock_active_owner_memberships",
-        "services_membership_service_membershipinvarianterror"
-      ],
-      "depth": 1,
-      "nodeCount": 4,
-      "fileCount": 1,
-      "files": [
-        "app/services/membership_service.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -18314,28 +18288,6 @@
       "fileCount": 1,
       "files": [
         "alembic/versions/20260820_missing_tenant_rls.py"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
-      "id": "flow:versions_20260820_primary_owner_upgrade",
-      "name": "upgrade",
-      "entryPoint": "versions_20260820_primary_owner_upgrade",
-      "entryPointId": "versions_20260820_primary_owner_upgrade",
-      "path": [
-        "versions_20260820_primary_owner_upgrade",
-        "versions_20260820_primary_owner_backfill_primary_owners"
-      ],
-      "qualifiedPath": [
-        "versions_20260820_primary_owner_upgrade",
-        "versions_20260820_primary_owner_backfill_primary_owners"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "alembic/versions/20260820_primary_owner.py"
       ],
       "criticality": 0.16,
       "warnings": []

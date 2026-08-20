@@ -61,6 +61,8 @@ with e.connect() as c:
             "SELECT * FROM guests WHERE hotel_id=:h AND document_number = :d", {"h": HID, "d": "DOC0001234"})
     explain(c, "guest search by last_name LIKE (trgm)",
             "SELECT * FROM guests WHERE hotel_id=:h AND last_name ILIKE :q", {"h": HID, "q": "%Last42%"})
+    explain(c, "guest search by first_name LIKE (trgm)",
+            "SELECT * FROM guests WHERE hotel_id=:h AND first_name ILIKE :q", {"h": HID, "q": "%Guest42%"})
     explain(c, "guest search by email LIKE (trgm)",
             "SELECT * FROM guests WHERE hotel_id=:h AND email ILIKE :q", {"h": HID, "q": "%g1234%"})
     explain(c, "guest list by hotel_id (index)",

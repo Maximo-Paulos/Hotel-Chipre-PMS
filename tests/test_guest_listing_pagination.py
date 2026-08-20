@@ -120,3 +120,67 @@ def test_list_guests_pagination_stays_scoped_to_hotel_id():
         fastapi_app.dependency_overrides.clear()
         db.close()
         engine.dispose()
+
+
+def test_guest_search_is_partial_ranked_and_searches_phone_without_cross_tenant_leak():
+    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    Base.metadata.create_all(bind=engine)
+    db = TestingSessionLocal()
+
+    def override_get_db():
+        try:
+            yield db
+        finally:
+            pass
+
+    fastapi_app.dependency_overrides[get_db] = override_get_db
+    client = TestClient(fastapi_app)
+    try:
+        db.add(HotelConfiguration(id=HOTEL_A, hotel_name="Hotel A", subscription_active=True))
+        db.add(HotelConfiguration(id=HOTEL_B, hotel_name="Hotel B", subscription_active=True))
+        exact = Guest(
+            hotel_id=HOTEL_A,
+            first_name="5551234",
+            last_name="Exacto",
+            phone="+549115551234",
+        )
+        partial = Guest(
+            hotel_id=HOTEL_A,
+            first_name="Marina",
+            last_name="5551234sson",
+            phone="+549110000000",
+        )
+        other_hotel = Guest(
+            hotel_id=HOTEL_B,
+            first_name="Hotel B",
+            last_name="5551234",
+            phone="+549115551234",
+        )
+        db.add_all([exact, partial, other_hotel])
+        db.commit()
+
+        fastapi_app.dependency_overrides[get_auth_context] = _auth_for(HOTEL_A)
+        response = client.get("/api/guests/", params={"search": "5551234", "limit": 1})
+        assert response.status_code == 200
+        assert [guest["id"] for guest in response.json()] == [exact.id]
+
+        response = client.get("/api/guests/", params={"search": "115551234", "limit": 20})
+        assert response.status_code == 200
+        ids = [guest["id"] for guest in response.json()]
+        assert ids == [exact.id]
+        assert other_hotel.id not in ids
+
+        search_response = client.get(
+            "/api/guests/search",
+            params={"q": "5551234", "skip": 1, "limit": 1},
+        )
+        assert search_response.status_code == 200
+        assert [guest["id"] for guest in search_response.json()] == [partial.id]
+
+        assert client.get("/api/guests/search", params={"q": "5551234", "limit": -1}).status_code == 422
+        assert client.get("/api/guests/search", params={"q": "5551234", "limit": 201}).status_code == 422
+    finally:
+        fastapi_app.dependency_overrides.clear()
+        db.close()
+        engine.dispose()

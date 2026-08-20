@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from typing import Any
 
-from sqlalchemy import or_
+from sqlalchemy import case, or_
 from sqlalchemy.orm import Session
 
 from app.decorators.audit_hooks import audited_change
@@ -145,21 +145,64 @@ def find_or_create_guest(db: Session, payload: GuestCreatePayload) -> tuple[Gues
     return guest, True
 
 
-def search_guests(db: Session, hotel_id: int, search: str, *, limit: int = 20) -> list[Guest]:
+_GUEST_SEARCH_FIELDS = (
+    Guest.first_name,
+    Guest.last_name,
+    Guest.email,
+    Guest.phone,
+    Guest.document_number,
+)
+_MAX_GUEST_SEARCH_LIMIT = 200
+
+
+def _escape_like_term(term: str) -> str:
+    """Treat user-entered LIKE metacharacters as literal search text."""
+    return term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def _guest_search_rank(term: str):
+    """Rank exact field matches before prefixes and general substrings."""
+    escaped_term = _escape_like_term(term)
+    exact_match = or_(*(field.ilike(escaped_term, escape="\\") for field in _GUEST_SEARCH_FIELDS))
+    prefix_match = or_(*(field.ilike(f"{escaped_term}%", escape="\\") for field in _GUEST_SEARCH_FIELDS))
+    return case((exact_match, 0), (prefix_match, 1), else_=2)
+
+
+def search_guests(
+    db: Session,
+    hotel_id: int,
+    search: str,
+    *,
+    skip: int = 0,
+    limit: int = 20,
+    default_order_by_id: bool = False,
+) -> list[Guest]:
+    """Search guests within one hotel using bounded, SQL-side filtering.
+
+    ``skip``/``limit`` are kept here as well as at the API boundary so callers
+    that use the service directly cannot accidentally turn a search into an
+    unbounded result set. The API validates the public range; the service
+    defensively clamps values for internal callers.
+    """
     term = (search or "").strip()
+    safe_skip = max(int(skip or 0), 0)
+    safe_limit = max(1, min(int(limit or 20), _MAX_GUEST_SEARCH_LIMIT))
     query = db.query(Guest).filter(Guest.hotel_id == hotel_id)
+    order_by = (
+        [Guest.id.asc()]
+        if default_order_by_id
+        else [Guest.last_name.asc(), Guest.first_name.asc(), Guest.id.asc()]
+    )
+
     if term:
-        pattern = f"%{term}%"
+        escaped_term = _escape_like_term(term)
+        pattern = f"%{escaped_term}%"
         query = query.filter(
-            or_(
-                Guest.document_number.ilike(pattern),
-                Guest.phone.ilike(pattern),
-                Guest.email.ilike(pattern),
-                Guest.first_name.ilike(pattern),
-                Guest.last_name.ilike(pattern),
-            )
+            or_(*(field.ilike(pattern, escape="\\") for field in _GUEST_SEARCH_FIELDS))
         )
-    return query.order_by(Guest.last_name.asc(), Guest.first_name.asc(), Guest.id.asc()).limit(limit).all()
+        order_by.insert(0, _guest_search_rank(term))
+
+    return query.order_by(*order_by).offset(safe_skip).limit(safe_limit).all()
 
 
 def list_active_tags(db: Session, *, hotel_id: int, guest_id: int) -> list[GuestTag]:
