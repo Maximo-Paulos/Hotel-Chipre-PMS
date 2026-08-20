@@ -500,7 +500,7 @@ def test_owner_cannot_assign_owner_or_revoke_self(owner_ctx):
 def test_single_active_owner_cannot_be_downgraded_by_invitation(owner_ctx):
     client, db, ctx = owner_ctx
     owner = db.get(User, ctx["user_id"])
-    token = _invitation_token(ctx["hotel_id"], owner.email, role="manager")
+    token = _invitation_token(db, ctx, owner.email, role="manager")
 
     response = client.post(
         f"/api/invitations/{token}/accept",
@@ -523,7 +523,7 @@ def test_primary_owner_cannot_be_downgraded_by_invitation_replay(owner_ctx):
     membership.is_primary_owner = True
     db.commit()
 
-    token = _invitation_token(ctx["hotel_id"], owner.email, role="manager")
+    token = _invitation_token(db, ctx, owner.email, role="manager")
     response = client.post(
         f"/api/invitations/{token}/accept",
         json={"email": owner.email, "password": "must-not-change-role"},
