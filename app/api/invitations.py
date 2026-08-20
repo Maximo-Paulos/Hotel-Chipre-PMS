@@ -4,37 +4,53 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies.auth import get_current_user_optional
-from app.services.security import decode_signed_token, hash_password
-from app.models.user import User
-from app.models.hotel_membership import HotelMembership
+from app.models.audit_log import AuditActionEnum
 from app.models.hotel_config import HotelConfiguration
-from app.schemas.auth import AuthResponse
-from app.schemas.auth import LoginRequest
+from app.models.hotel_membership import HotelMembership
+from app.models.invitation import StaffInvitation
+from app.models.user import User
+from app.schemas.auth import AuthResponse, LoginRequest
+from app.services import audit_log_service
+from app.services.invitation_service import (
+    consume_invitation,
+    find_by_token,
+    invitation_snapshot,
+    is_expired,
+    normalize_email,
+)
 from app.services.membership_service import MembershipInvariantError, validate_membership_change
+from app.services.security import hash_password
 
 router = APIRouter(prefix="/api/invitations", tags=["Invitations"])
 
 
+def _available_invitation(token: str, db: Session) -> StaffInvitation:
+    invitation = find_by_token(db, token)
+    if invitation is None or invitation.status != "pending":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token inválido")
+    if is_expired(invitation):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token expirado")
+    return invitation
+
+
 @router.get("/{token}")
 def get_invitation(token: str, db: Session = Depends(get_db)):
-    data = decode_signed_token(token)
-    if data.get("type") != "invite":
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token inválido")
-    hotel = db.get(HotelConfiguration, data.get("hotel_id"))
+    invitation = _available_invitation(token, db)
+    hotel = db.get(HotelConfiguration, invitation.hotel_id)
     return {
-        "email": data.get("email"),
-        "role": data.get("role"),
-        "hotel_id": data.get("hotel_id"),
-        "hotel_name": data.get("hotel_name") or (hotel.hotel_name if hotel else None),
-        "inviter_email": data.get("inviter_email"),
+        "email": invitation.email,
+        "role": invitation.role,
+        "hotel_id": invitation.hotel_id,
+        "hotel_name": hotel.hotel_name if hotel else None,
+        "inviter_email": invitation.inviter_email,
     }
 
 
 class AcceptPayload(LoginRequest):
-    # LoginRequest.password has no min_length -- correct there (must accept
-    # existing passwords predating any length policy change), but this class
-    # sets a *new* credential and must enforce the current minimum itself.
-    password: str = Field(min_length=12)
+    # Existing accounts authenticate with their own bearer token and do not
+    # reset their password. New accounts still require the current password
+    # minimum before a credential is created.
+    password: str | None = Field(default=None, min_length=12)
 
 
 @router.post("/{token}/accept", response_model=AuthResponse)
@@ -44,16 +60,14 @@ def accept_invitation(
     db: Session = Depends(get_db),
     current_user: User | None = Depends(get_current_user_optional),
 ):
-    data = decode_signed_token(token)
-    if data.get("type") != "invite":
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token inválido")
-    email = data.get("email")
-    role = data.get("role")
-    hotel_id = data.get("hotel_id")
-    if role not in {"co_owner", "manager", "receptionist", "housekeeping"}:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Rol de invitacion invalido")
-    if email.lower() != payload.email.lower():
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El email no coincide con la invitación")
+    invitation = _available_invitation(token, db)
+    email = invitation.email
+    role = invitation.role
+    if normalize_email(payload.email) != email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El email no coincide con la invitación",
+        )
 
     user = db.query(User).filter(User.email.ilike(email)).first()
     membership = None
@@ -61,7 +75,10 @@ def accept_invitation(
     if user:
         membership = (
             db.query(HotelMembership)
-            .filter(HotelMembership.hotel_id == hotel_id, HotelMembership.user_id == user.id)
+            .filter(
+                HotelMembership.hotel_id == invitation.hotel_id,
+                HotelMembership.user_id == user.id,
+            )
             .first()
         )
         # /api/users/invite creates an inactive/unverified placeholder before
@@ -83,9 +100,31 @@ def accept_invitation(
                 ),
             )
 
-    if not user:
+    if membership and membership.status == "revoked":
+        # A fresh invitation must be issued after membership revocation. This
+        # also protects against an old valid token being replayed by the user.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Este acceso fue revocado. Pedí una nueva invitación al hotel.",
+        )
+
+    if user is None and not payload.password:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Contraseña requerida")
+    if is_unclaimed_invitation and not payload.password:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Contraseña requerida")
+
+    invitation_before = invitation_snapshot(invitation)
+    # Do this only after identity and membership checks. A rejected attempt by
+    # another account must not burn the legitimate recipient's invitation.
+    if not consume_invitation(db, invitation):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="La invitación ya fue utilizada, revocada o expiró.",
+        )
+
+    if user is None:
         user = User(
-            email=email.lower(),
+            email=email,
             password_hash=hash_password(payload.password),
             role=role,
             is_verified=True,
@@ -97,28 +136,26 @@ def accept_invitation(
         user.password_hash = hash_password(payload.password)
         user.is_verified = True
         user.is_active = True
+
+    if invitation.user_id is None:
+        invitation.user_id = user.id
     if membership is None:
         membership = (
             db.query(HotelMembership)
-            .filter(HotelMembership.hotel_id == hotel_id, HotelMembership.user_id == user.id)
+            .filter(
+                HotelMembership.hotel_id == invitation.hotel_id,
+                HotelMembership.user_id == user.id,
+            )
             .first()
         )
-    if membership and membership.status == "revoked":
-        # An old accept link stays valid for up to 7 days after issuance and is
-        # independent of membership state. Without this check, an authenticated
-        # owner of the account could replay it to self-reactivate access the
-        # hotel owner explicitly revoked. Reactivation must come from a fresh
-        # invite, not a stale accept token.
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Este acceso fue revocado. Pedí una nueva invitación al hotel.",
-        )
+
+    membership_before = audit_log_service.model_snapshot(membership)
     if membership:
         try:
             validate_membership_change(
                 db,
                 membership,
-                hotel_id=hotel_id,
+                hotel_id=invitation.hotel_id,
                 next_role=role,
                 next_status="active",
             )
@@ -128,11 +165,41 @@ def accept_invitation(
             db.rollback()
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     else:
-        db.add(HotelMembership(hotel_id=hotel_id, user_id=user.id, role=role, status="active"))
+        membership = HotelMembership(
+            hotel_id=invitation.hotel_id,
+            user_id=user.id,
+            role=role,
+            status="active",
+        )
+        db.add(membership)
+    db.flush()
 
+    audit_log_service.safe_create_audit_log(
+        db,
+        hotel_id=invitation.hotel_id,
+        table_name="hotel_memberships",
+        record_id=membership.id,
+        action=AuditActionEnum.UPDATE if membership_before else AuditActionEnum.CREATE,
+        actor_user_id=user.id,
+        payload_before=membership_before,
+        payload_after={
+            **(audit_log_service.model_snapshot(membership) or {}),
+            "event": "invitation.accepted",
+        },
+    )
+    audit_log_service.safe_create_audit_log(
+        db,
+        hotel_id=invitation.hotel_id,
+        table_name="staff_invitations",
+        record_id=invitation.id,
+        action=AuditActionEnum.STATUS_CHANGE,
+        actor_user_id=user.id,
+        payload_before={"event": "invitation.pending", **invitation_before},
+        payload_after={"event": "invitation.accepted", **invitation_snapshot(invitation)},
+    )
     db.commit()
     db.refresh(user)
-    # Build auth response
+
     from app.api.auth import _build_auth_response
 
-    return _build_auth_response(db, user, requested_hotel_id=hotel_id)
+    return _build_auth_response(db, user, requested_hotel_id=invitation.hotel_id)

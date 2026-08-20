@@ -9076,6 +9076,147 @@
         }
       }
     },
+    "/api/users/invitations/{invitation_id}/resend": {
+      "post": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Resend Invitation",
+        "operationId": "resend_invitation_api_users_invitations__invitation_id__resend_post",
+        "parameters": [
+          {
+            "name": "invitation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Invitation Id"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InviteResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/invitations/{invitation_id}": {
+      "delete": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Revoke Invitation",
+        "operationId": "revoke_invitation_api_users_invitations__invitation_id__delete",
+        "parameters": [
+          {
+            "name": "invitation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Invitation Id"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/users/{user_id}": {
       "delete": {
         "tags": [
@@ -30119,15 +30260,21 @@
             "title": "Email"
           },
           "password": {
-            "type": "string",
-            "minLength": 12,
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 12
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Password"
           }
         },
         "type": "object",
         "required": [
-          "email",
-          "password"
+          "email"
         ],
         "title": "AcceptPayload"
       },
@@ -38856,6 +39003,10 @@
           "user": {
             "$ref": "#/components/schemas/UserInfo"
           },
+          "invitation_id": {
+            "type": "integer",
+            "title": "Invitation Id"
+          },
           "invite_token": {
             "type": "string",
             "title": "Invite Token"
@@ -38868,6 +39019,7 @@
         "type": "object",
         "required": [
           "user",
+          "invitation_id",
           "invite_token",
           "accept_url"
         ],

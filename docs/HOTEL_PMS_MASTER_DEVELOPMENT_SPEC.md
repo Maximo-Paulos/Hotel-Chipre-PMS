@@ -284,11 +284,13 @@ Depends on: `TECH-0010`
 
 ### TECH-0031 — Invitaciones y ciclo de vida del staff
 
-Status: `AUDIT_REQUIRED`  
+Status: `IN_PROGRESS`
 Priority: `P1`  
 Depends on: `TECH-0030`, `TECH-0040`, `TECH-0060`
 
 **Required:** token hasheado single-use con vencimiento; hotel/rol/invitador; aceptar con cuenta existente o nueva (password/Google/Apple); idempotencia; resend/revoke; límite de staff; baja invalida contexto/sesiones; auditoría completa.
+
+**Auditoría/entrega local 2026-08-20:** confirmados y cerrados en el backend el token persistente hasheado con consumo atómico y vencimiento, metadata hotel/rol/invitador, aceptación password para cuenta existente/nueva, idempotencia por hotel/email, resend/revoke, invalidación de sesiones/JWT al dar de baja y auditoría de invite/accept/resend/revoke/role change. El límite de staff queda `BLOCKED` por el enforcement de entitlements de `TECH-0050`; Google/Apple quedan condicionados a `TECH-0024`. El checkout actual no contiene `app/services/membership_service.py` ni evidencia de la implementación de `TECH-0030`, por lo que su invariante de owner permanece `needs-verification` fuera de este cambio.
 
 ---
 
