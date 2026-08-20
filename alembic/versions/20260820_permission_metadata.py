@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 
 revision: str = "20260820_permission_metadata"
-down_revision: Union[str, None] = "20260820_user_sessions"
+down_revision: Union[str, None] = "70014cb60e2c"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
