@@ -171,6 +171,13 @@ class CashMovement(Base):
         ),
         Index("ix_cash_movements_session_id", "session_id"),
         Index("ix_cash_movements_hotel_id", "hotel_id"),
+        Index(
+            "ix_cash_movements_hotel_session_recorded_at",
+            "hotel_id",
+            "session_id",
+            "recorded_at",
+            "id",
+        ),
     )
 
     def __repr__(self) -> str:

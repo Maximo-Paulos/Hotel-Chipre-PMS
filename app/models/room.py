@@ -106,6 +106,7 @@ class Room(Base):
             name="fk_rooms_hotel_category",
         ),
         Index("ix_room_hotel_id", "hotel_id"),
+        Index("ix_room_hotel_deleted_at", "hotel_id", "deleted_at"),
     )
 
     def __repr__(self) -> str:

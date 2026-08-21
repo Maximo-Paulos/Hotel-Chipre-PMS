@@ -132,6 +132,7 @@ class Transaction(Base):
             sqlite_where=idempotency_key.isnot(None),
             postgresql_where=idempotency_key.isnot(None),
         ),
+        Index("ix_transactions_hotel_status_created_at", "hotel_id", "status", "created_at"),
         UniqueConstraint("hotel_id", "id", name="uq_transaction_hotel_id_id"),
         ForeignKeyConstraint(
             ["hotel_id", "reservation_id"],

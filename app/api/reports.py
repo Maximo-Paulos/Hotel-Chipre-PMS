@@ -253,24 +253,48 @@ def occupancy_report(
         start_date = date.today() - timedelta(days=30)
     if end_date is None:
         end_date = date.today()
+    # The sweep-line below materializes one row per overlapping reservation,
+    # not per day, so an unbounded range on a hotel with a long history could
+    # still pull an unbounded result set into memory. Cap the window instead
+    # of aggregating deltas in SQL, since a portable GREATEST/LEAST clamp
+    # across SQLite and PostgreSQL isn't worth the complexity for a
+    # dashboard report.
+    if (end_date - start_date).days > 366:
+        raise HTTPException(status_code=422, detail="Date range must not exceed 366 days")
 
     reservation_scope = db.query(Reservation).filter(Reservation.hotel_id == context.hotel_id)
     total_rooms = db.query(Room).filter(Room.is_active == True, Room.hotel_id == context.hotel_id).count()
 
+    # Load the overlap candidates once. The previous implementation issued one
+    # COUNT query per day in the requested range, making a 30-day dashboard
+    # request 30 additional round trips. A sweep-line over date deltas keeps
+    # the same half-open stay semantics (check-in included, check-out excluded)
+    # with a fixed query count.
+    occupancy_candidates = reservation_scope.with_entities(
+        Reservation.check_in_date,
+        Reservation.check_out_date,
+    ).filter(
+        Reservation.check_in_date <= end_date,
+        Reservation.check_out_date > start_date,
+        Reservation.status.in_([
+            ReservationStatusEnum.CHECKED_IN,
+            ReservationStatusEnum.FULLY_PAID,
+            ReservationStatusEnum.DEPOSIT_PAID,
+            ReservationStatusEnum.PENDING,
+        ]),
+    ).all()
+    occupancy_deltas: dict[date, int] = {}
+    for candidate in occupancy_candidates:
+        active_from = max(candidate.check_in_date, start_date)
+        active_until = min(candidate.check_out_date, end_date + timedelta(days=1))
+        occupancy_deltas[active_from] = occupancy_deltas.get(active_from, 0) + 1
+        occupancy_deltas[active_until] = occupancy_deltas.get(active_until, 0) - 1
+
     days = []
+    occupied_count = 0
     current = start_date
     while current <= end_date:
-        # Count reservations spanning this date
-        occupied_count = reservation_scope.filter(
-            Reservation.check_in_date <= current,
-            Reservation.check_out_date > current,
-            Reservation.status.in_([
-                ReservationStatusEnum.CHECKED_IN,
-                ReservationStatusEnum.FULLY_PAID,
-                ReservationStatusEnum.DEPOSIT_PAID,
-                ReservationStatusEnum.PENDING,
-            ]),
-        ).count()
+        occupied_count += occupancy_deltas.get(current, 0)
 
         days.append({
             "date": str(current),
