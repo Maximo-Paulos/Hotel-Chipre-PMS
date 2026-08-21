@@ -167,7 +167,7 @@ P3  IA avanzada, apps/store y tecnologías adicionales no esenciales
 
 ### TECH-0000 — Auditoría y matriz de estado actual
 
-Status: `AUDIT_REQUIRED`  
+Status: `VERIFIED`
 Priority: `P0`
 
 **Goal:** producir la autoridad canónica antes de cambiar código.
@@ -182,6 +182,8 @@ Priority: `P0`
 - plan de migraciones y rollout sin reescritura innecesaria.
 
 **Acceptance:** informe enlazado, evidencia por área y cero afirmaciones basadas sólo en documentación histórica.
+
+**Auditoría cerrada 2026-08-21:** `VERIFIED` contra `6fd71f08de84b5c891b9ea9e47d8f802831f964f` (`origin/main`). Se auditaron Auth, sesiones, RBAC, memberships, invitaciones, auditoría hotel/security/master, suscripciones/entitlements, analytics/facts/warehouse, Master Admin, PWA, backups, seguridad cloud, CI/CD, migraciones y tests versionados. El informe canónico con evidencia, duplicaciones, threat model y rollout está en [docs/audits/tech-0000-system-audit.md](audits/tech-0000-system-audit.md). No se modificó código de aplicación.
 
 ---
 
@@ -210,7 +212,7 @@ Depends on: `TECH-0000`
 
 ### TECH-0020 — Contraseñas Argon2id y política segura
 
-Status: `AUDIT_REQUIRED`  
+Status: `VERIFY`
 Priority: `P0`  
 Depends on: `TECH-0000`
 
@@ -222,7 +224,7 @@ Depends on: `TECH-0000`
 
 ### TECH-0021 — Sesiones revocables y dispositivos
 
-Status: `AUDIT_REQUIRED`  
+Status: `VERIFY`
 Priority: `P0`  
 Depends on: `TECH-0020`
 
@@ -236,7 +238,7 @@ Depends on: `TECH-0020`
 
 ### TECH-0022 — Registro, verificación y recuperación
 
-Status: `AUDIT_REQUIRED`  
+Status: `VERIFY`
 Priority: `P0`  
 Depends on: `TECH-0021`
 
@@ -246,7 +248,7 @@ Depends on: `TECH-0021`
 
 ### TECH-0023 — MFA TOTP, recovery codes y step-up
 
-Status: `AUDIT_REQUIRED`  
+Status: `VERIFY`
 Priority: `P0`  
 Depends on: `TECH-0021`
 
@@ -256,7 +258,7 @@ Depends on: `TECH-0021`
 
 ### TECH-0024 — Google OIDC y Sign in with Apple
 
-Status: `AUDIT_REQUIRED`  
+Status: `TODO`
 Priority: `P1`  
 Depends on: `TECH-0021`, `TECH-0022`
 
@@ -278,7 +280,7 @@ Depends on: `TECH-0021`, `TECH-0023`
 
 ### TECH-0030 — Memberships multi-hotel y Primary Owner
 
-Status: `AUDIT_REQUIRED`  
+Status: `VERIFY`
 Priority: `P0`  
 Depends on: `TECH-0010`
 
@@ -288,7 +290,7 @@ Depends on: `TECH-0010`
 
 ### TECH-0031 — Invitaciones y ciclo de vida del staff
 
-Status: `IN_PROGRESS`
+Status: `VERIFY`
 Priority: `P1`  
 Depends on: `TECH-0030`, `TECH-0040`, `TECH-0060`
 
@@ -300,7 +302,7 @@ Depends on: `TECH-0030`, `TECH-0040`, `TECH-0060`
 
 ### TECH-0040 — RBAC granular configurable por hotel
 
-Status: `AUDIT_REQUIRED`  
+Status: `VERIFY`
 Priority: `P0`  
 Depends on: `TECH-0010`, `TECH-0030`
 
@@ -314,7 +316,7 @@ Depends on: `TECH-0010`, `TECH-0030`
 
 ### TECH-0041 — Autorización temporal de una sola acción
 
-Status: `IN_PROGRESS`
+Status: `VERIFY`
 Priority: `P1`  
 Depends on: `TECH-0023`, `TECH-0040`, `TECH-0070`
 
@@ -328,7 +330,7 @@ Depends on: `TECH-0023`, `TECH-0040`, `TECH-0070`
 
 ### TECH-0050 — Catálogo de planes y entitlements
 
-Status: `AUDIT_REQUIRED`  
+Status: `VERIFY`
 Priority: `P1`  
 Depends on: `TECH-0000`
 
@@ -338,7 +340,7 @@ Depends on: `TECH-0000`
 
 ### TECH-0051 — Suscripciones, descuentos y bonificaciones
 
-Status: `AUDIT_REQUIRED`  
+Status: `VERIFY`
 Priority: `P1`  
 Depends on: `TECH-0050`, `TECH-0071`
 
@@ -348,7 +350,7 @@ Depends on: `TECH-0050`, `TECH-0071`
 
 ### TECH-0060 — Búsqueda rápida de huéspedes
 
-Status: `AUDIT_REQUIRED`  
+Status: `VERIFY`
 Priority: `P1`  
 Depends on: `TECH-0010`
 
@@ -358,7 +360,7 @@ Depends on: `TECH-0010`
 
 ### TECH-0061 — Cotización, disponibilidad y tarifas rápidas
 
-Status: `AUDIT_REQUIRED`  
+Status: `VERIFY`
 Priority: `P1`
 
 **Acceptance:** fuente autoritativa; hotel/categoría/fechas/huéspedes/rate plan; disponibilidad, breakdown, total y restricciones coherentes; caché nunca devuelve silenciosamente precio viejo; invalidación y edge cases testeados.
@@ -367,7 +369,7 @@ Priority: `P1`
 
 ### TECH-0062 — Optimización de asignación de habitaciones
 
-Status: `AUDIT_REQUIRED`  
+Status: `VERIFY`
 Priority: `P1`
 
 **Required:** auditar OR-Tools/Celery/Redis actuales; separar asignación rápida de reoptimización completa; jobs asíncronos; categoría/capacidad/huecos/reservas/asignaciones fijas; idempotencia, retries, concurrencia, explicabilidad y auditoría; no bloquear API.
@@ -376,7 +378,7 @@ Priority: `P1`
 
 ### TECH-0063 — Performance y eficiencia OLTP
 
-Status: `AUDIT_REQUIRED`  
+Status: `VERIFY`
 Priority: `P1`
 
 **Required:** índices por queries reales comenzando por hotel cuando corresponda; evitar N+1; selects/payloads acotados; cursor pagination; pool; transacciones cortas; locks; `EXPLAIN ANALYZE BUFFERS`; read models/materialized views; cache versionada e invalidación; p95/p99, locks y crecimiento observables.
@@ -385,7 +387,7 @@ Priority: `P1`
 
 ### TECH-0070 — Audit log del hotel
 
-Status: `AUDIT_REQUIRED`  
+Status: `VERIFY`
 Priority: `P0`  
 Depends on: `TECH-0010`
 
@@ -395,7 +397,7 @@ Depends on: `TECH-0010`
 
 ### TECH-0071 — Master SaaS Control Plane
 
-Status: `AUDIT_REQUIRED`  
+Status: `VERIFY`
 Priority: `P1`  
 Depends on: `TECH-0023`, `TECH-0050`, `TECH-0070`
 
@@ -407,7 +409,7 @@ Depends on: `TECH-0023`, `TECH-0050`, `TECH-0070`
 
 ### TECH-0080 — Data Warehouse foundation
 
-Status: `AUDIT_REQUIRED`  
+Status: `BLOCKED`
 Priority: `P2`  
 Depends on: `TECH-0063`
 
@@ -417,7 +419,7 @@ Depends on: `TECH-0063`
 
 ### TECH-0081 — Hotel Analytics Data Marts
 
-Status: `AUDIT_REQUIRED`  
+Status: `VERIFY`
 Priority: `P2`  
 Depends on: `TECH-0080`
 
@@ -427,7 +429,7 @@ Depends on: `TECH-0080`
 
 ### TECH-0082 — SaaS Owner Data Mart
 
-Status: `AUDIT_REQUIRED`  
+Status: `BLOCKED`
 Priority: `P2`  
 Depends on: `TECH-0080`, `TECH-0071`
 
@@ -542,7 +544,7 @@ el sandbox no permite escribir el índice/git común del worktree
 
 ### TECH-0111 — Secretos, red y protección cloud
 
-Status: `AUDIT_REQUIRED`  
+Status: `VERIFY`
 Priority: `P0`
 
 **Required:** secretos fuera de Git/frontend/logs; rotación; DB/Redis privados; TLS; WAF/DDoS/rate limits; IAM mínimo; KMS; observabilidad; separación dev/staging/prod; pagos mediante proveedor sin almacenar tarjeta/CVV.
@@ -666,6 +668,11 @@ El agente puede preparar IaC, runbooks, checklists y comandos seguros, pero debe
 - Se incorporó el contexto ampliado de producto, analytics, infraestructura, PWA/Capacitor, optimización e IA.
 - Todos los objetivos se convirtieron en bloques ejecutables con prioridad, dependencias y criterios.
 - Este archivo se designó como única entrada recomendada para el agente de desarrollo.
+
+### 2026-08-21
+
+- TECH-0000 cerrado como `VERIFIED` con evidencia del checkout `6fd71f0`; matriz completa y plan publicados en `docs/audits/tech-0000-system-audit.md`.
+- Se actualizaron los estados de los bloques auditados: `VERIFY`, `TODO`, `BLOCKED` y `DEFERRED` según evidencia de código/tests/migraciones. No se resolvieron decisiones abiertas de sección 7.
 
 ## 11. Product Lead Inbox
 
