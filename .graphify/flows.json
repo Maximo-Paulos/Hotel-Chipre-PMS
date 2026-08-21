@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-21T03:52:58.950Z",
+  "generatedAt": "2026-08-21T22:30:57.784Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -615,6 +615,34 @@
       ],
       "depth": 2,
       "nodeCount": 12,
+      "fileCount": 1,
+      "files": [
+        "app/master_admin/security.py"
+      ],
+      "criticality": 0.42,
+      "warnings": []
+    },
+    {
+      "id": "flow:master_admin_security_authenticate_master_mfa_login",
+      "name": "authenticate_master_mfa_login",
+      "entryPoint": "master_admin_security_authenticate_master_mfa_login",
+      "entryPointId": "master_admin_security_authenticate_master_mfa_login",
+      "path": [
+        "master_admin_security_authenticate_master_mfa_login",
+        "master_admin_security_allow_master_admin_mfa_attempt",
+        "master_admin_security_authorize_user_for_master_panel",
+        "master_admin_security_reset_master_admin_mfa_attempts",
+        "master_admin_security_master_admin_mfa_attempt_key"
+      ],
+      "qualifiedPath": [
+        "master_admin_security_authenticate_master_mfa_login",
+        "master_admin_security_allow_master_admin_mfa_attempt",
+        "master_admin_security_authorize_user_for_master_panel",
+        "master_admin_security_reset_master_admin_mfa_attempts",
+        "master_admin_security_master_admin_mfa_attempt_key"
+      ],
+      "depth": 2,
+      "nodeCount": 5,
       "fileCount": 1,
       "files": [
         "app/master_admin/security.py"
@@ -1558,6 +1586,28 @@
       "fileCount": 1,
       "files": [
         "app/master_admin/email_provider.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
+      "id": "flow:master_admin_router_complete_mfa_login",
+      "name": "complete_mfa_login",
+      "entryPoint": "master_admin_router_complete_mfa_login",
+      "entryPointId": "master_admin_router_complete_mfa_login",
+      "path": [
+        "master_admin_router_complete_mfa_login",
+        "master_admin_router_serialize_user"
+      ],
+      "qualifiedPath": [
+        "master_admin_router_complete_mfa_login",
+        "master_admin_router_serialize_user"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/master_admin/router.py"
       ],
       "criticality": 0.41,
       "warnings": []
@@ -3277,88 +3327,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_integration_service_validate_provider_credentials",
-      "name": "validate_provider_credentials",
-      "entryPoint": "services_integration_service_validate_provider_credentials",
-      "entryPointId": "services_integration_service_validate_provider_credentials",
-      "path": [
-        "services_integration_service_validate_provider_credentials",
-        "services_integration_service_validate_gmail_credentials",
-        "services_integration_service_validate_mercadopago_credentials",
-        "services_integration_service_derive_expires_at",
-        "services_integration_service_google_userinfo",
-        "services_integration_service_is_expired",
-        "services_integration_service_refresh_gmail_access_token",
-        "services_integration_service_mercadopago_error_message",
-        "services_integration_service_parse_datetime"
-      ],
-      "qualifiedPath": [
-        "services_integration_service_validate_provider_credentials",
-        "services_integration_service_validate_gmail_credentials",
-        "services_integration_service_validate_mercadopago_credentials",
-        "services_integration_service_derive_expires_at",
-        "services_integration_service_google_userinfo",
-        "services_integration_service_is_expired",
-        "services_integration_service_refresh_gmail_access_token",
-        "services_integration_service_mercadopago_error_message",
-        "services_integration_service_parse_datetime"
-      ],
-      "depth": 3,
-      "nodeCount": 9,
-      "fileCount": 1,
-      "files": [
-        "app/services/integration_service.py"
-      ],
-      "criticality": 0.2911,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_integration_service_verify_connection_health",
-      "name": "verify_connection_health",
-      "entryPoint": "services_integration_service_verify_connection_health",
-      "entryPointId": "services_integration_service_verify_connection_health",
-      "path": [
-        "services_integration_service_verify_connection_health",
-        "services_integration_service_account_label_from_payload",
-        "services_integration_service_decrypt_payload",
-        "services_integration_service_derive_expires_at",
-        "services_integration_service_encrypt_payload",
-        "services_integration_service_seed_catalog",
-        "services_integration_service_validate_gmail_credentials",
-        "services_integration_service_validate_mercadopago_credentials",
-        "services_integration_service_fernet",
-        "services_integration_service_google_userinfo",
-        "services_integration_service_is_expired",
-        "services_integration_service_refresh_gmail_access_token",
-        "services_integration_service_mercadopago_error_message",
-        "services_integration_service_parse_datetime"
-      ],
-      "qualifiedPath": [
-        "services_integration_service_verify_connection_health",
-        "services_integration_service_account_label_from_payload",
-        "services_integration_service_decrypt_payload",
-        "services_integration_service_derive_expires_at",
-        "services_integration_service_encrypt_payload",
-        "services_integration_service_seed_catalog",
-        "services_integration_service_validate_gmail_credentials",
-        "services_integration_service_validate_mercadopago_credentials",
-        "services_integration_service_fernet",
-        "services_integration_service_google_userinfo",
-        "services_integration_service_is_expired",
-        "services_integration_service_refresh_gmail_access_token",
-        "services_integration_service_mercadopago_error_message",
-        "services_integration_service_parse_datetime"
-      ],
-      "depth": 3,
-      "nodeCount": 14,
-      "fileCount": 1,
-      "files": [
-        "app/services/integration_service.py"
-      ],
-      "criticality": 0.2871,
-      "warnings": []
-    },
-    {
       "id": "flow:adapters_paypal_adapter_paypaladapter_execute_payment",
       "name": ".execute_payment",
       "entryPoint": "adapters_paypal_adapter_paypaladapter_execute_payment",
@@ -3376,6 +3344,28 @@
       "fileCount": 1,
       "files": [
         "app/adapters/paypal_adapter.py"
+      ],
+      "criticality": 0.285,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_settings_security_audit_timeline",
+      "name": "audit_timeline",
+      "entryPoint": "api_settings_security_audit_timeline",
+      "entryPointId": "api_settings_security_audit_timeline",
+      "path": [
+        "api_settings_security_audit_timeline",
+        "api_settings_security_validate_audit_timeline_range"
+      ],
+      "qualifiedPath": [
+        "api_settings_security_audit_timeline",
+        "api_settings_security_validate_audit_timeline_range"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/settings_security.py"
       ],
       "criticality": 0.285,
       "warnings": []
@@ -4186,6 +4176,92 @@
       "fileCount": 1,
       "files": [
         "alembic/versions/7b14658560e1_restrict_audit_log_hotel_deletion.py"
+      ],
+      "criticality": 0.28,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_integration_service_validate_provider_credentials",
+      "name": "validate_provider_credentials",
+      "entryPoint": "services_integration_service_validate_provider_credentials",
+      "entryPointId": "services_integration_service_validate_provider_credentials",
+      "path": [
+        "services_integration_service_validate_provider_credentials",
+        "services_integration_service_validate_gmail_credentials",
+        "services_integration_service_validate_mercadopago_credentials",
+        "services_integration_service_derive_expires_at",
+        "services_integration_service_google_userinfo",
+        "services_integration_service_is_expired",
+        "services_integration_service_refresh_gmail_access_token",
+        "services_integration_service_mercadopago_error_message",
+        "services_integration_service_parse_datetime",
+        "services_integration_service_redact_integration_error"
+      ],
+      "qualifiedPath": [
+        "services_integration_service_validate_provider_credentials",
+        "services_integration_service_validate_gmail_credentials",
+        "services_integration_service_validate_mercadopago_credentials",
+        "services_integration_service_derive_expires_at",
+        "services_integration_service_google_userinfo",
+        "services_integration_service_is_expired",
+        "services_integration_service_refresh_gmail_access_token",
+        "services_integration_service_mercadopago_error_message",
+        "services_integration_service_parse_datetime",
+        "services_integration_service_redact_integration_error"
+      ],
+      "depth": 3,
+      "nodeCount": 10,
+      "fileCount": 1,
+      "files": [
+        "app/services/integration_service.py"
+      ],
+      "criticality": 0.28,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_integration_service_verify_connection_health",
+      "name": "verify_connection_health",
+      "entryPoint": "services_integration_service_verify_connection_health",
+      "entryPointId": "services_integration_service_verify_connection_health",
+      "path": [
+        "services_integration_service_verify_connection_health",
+        "services_integration_service_account_label_from_payload",
+        "services_integration_service_decrypt_payload",
+        "services_integration_service_derive_expires_at",
+        "services_integration_service_encrypt_payload",
+        "services_integration_service_redact_integration_error",
+        "services_integration_service_seed_catalog",
+        "services_integration_service_validate_gmail_credentials",
+        "services_integration_service_validate_mercadopago_credentials",
+        "services_integration_service_fernet",
+        "services_integration_service_google_userinfo",
+        "services_integration_service_is_expired",
+        "services_integration_service_refresh_gmail_access_token",
+        "services_integration_service_mercadopago_error_message",
+        "services_integration_service_parse_datetime"
+      ],
+      "qualifiedPath": [
+        "services_integration_service_verify_connection_health",
+        "services_integration_service_account_label_from_payload",
+        "services_integration_service_decrypt_payload",
+        "services_integration_service_derive_expires_at",
+        "services_integration_service_encrypt_payload",
+        "services_integration_service_redact_integration_error",
+        "services_integration_service_seed_catalog",
+        "services_integration_service_validate_gmail_credentials",
+        "services_integration_service_validate_mercadopago_credentials",
+        "services_integration_service_fernet",
+        "services_integration_service_google_userinfo",
+        "services_integration_service_is_expired",
+        "services_integration_service_refresh_gmail_access_token",
+        "services_integration_service_mercadopago_error_message",
+        "services_integration_service_parse_datetime"
+      ],
+      "depth": 3,
+      "nodeCount": 15,
+      "fileCount": 1,
+      "files": [
+        "app/services/integration_service.py"
       ],
       "criticality": 0.28,
       "warnings": []
@@ -5083,6 +5159,30 @@
       "warnings": []
     },
     {
+      "id": "flow:api_settings_security_export_audit_timeline",
+      "name": "export_audit_timeline",
+      "entryPoint": "api_settings_security_export_audit_timeline",
+      "entryPointId": "api_settings_security_export_audit_timeline",
+      "path": [
+        "api_settings_security_export_audit_timeline",
+        "api_settings_security_build_audit_timeline_csv",
+        "api_settings_security_validate_audit_timeline_range"
+      ],
+      "qualifiedPath": [
+        "api_settings_security_export_audit_timeline",
+        "api_settings_security_build_audit_timeline_csv",
+        "api_settings_security_validate_audit_timeline_range"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/api/settings_security.py"
+      ],
+      "criticality": 0.2433,
+      "warnings": []
+    },
+    {
       "id": "flow:api_reservations_modify_reservation",
       "name": "modify_reservation",
       "entryPoint": "api_reservations_modify_reservation",
@@ -5611,50 +5711,6 @@
       "warnings": []
     },
     {
-      "id": "flow:app_config_validate_runtime_security",
-      "name": "validate_runtime_security",
-      "entryPoint": "app_config_validate_runtime_security",
-      "entryPointId": "app_config_validate_runtime_security",
-      "path": [
-        "app_config_validate_runtime_security",
-        "app_config_get_settings",
-        "app_config_gmail_is_active",
-        "app_config_has_value",
-        "app_config_is_preview_qa_mode",
-        "app_config_is_production_mode",
-        "app_config_is_public_https_url",
-        "app_config_mercadopago_is_active",
-        "app_config_normalized_env_value",
-        "app_config_paypal_is_active",
-        "app_config_resend_is_active",
-        "app_config_validate_preview_qa_security",
-        "app_config_settings"
-      ],
-      "qualifiedPath": [
-        "app_config_validate_runtime_security",
-        "app_config_get_settings",
-        "app_config_gmail_is_active",
-        "app_config_has_value",
-        "app_config_is_preview_qa_mode",
-        "app_config_is_production_mode",
-        "app_config_is_public_https_url",
-        "app_config_mercadopago_is_active",
-        "app_config_normalized_env_value",
-        "app_config_paypal_is_active",
-        "app_config_resend_is_active",
-        "app_config_validate_preview_qa_security",
-        "app_config_settings"
-      ],
-      "depth": 2,
-      "nodeCount": 13,
-      "fileCount": 1,
-      "files": [
-        "app/config.py"
-      ],
-      "criticality": 0.2277,
-      "warnings": []
-    },
-    {
       "id": "flow:services_ota_service_otaintegrationservice_process_booking_webhook",
       "name": ".process_booking_webhook",
       "entryPoint": "services_ota_service_otaintegrationservice_process_booking_webhook",
@@ -5910,6 +5966,52 @@
         "app/services/payment_link_test_service.py"
       ],
       "criticality": 0.2256,
+      "warnings": []
+    },
+    {
+      "id": "flow:app_config_validate_runtime_security",
+      "name": "validate_runtime_security",
+      "entryPoint": "app_config_validate_runtime_security",
+      "entryPointId": "app_config_validate_runtime_security",
+      "path": [
+        "app_config_validate_runtime_security",
+        "app_config_cors_contains_wildcard",
+        "app_config_get_settings",
+        "app_config_gmail_is_active",
+        "app_config_has_value",
+        "app_config_is_preview_qa_mode",
+        "app_config_is_production_mode",
+        "app_config_is_public_https_url",
+        "app_config_mercadopago_is_active",
+        "app_config_normalized_env_value",
+        "app_config_paypal_is_active",
+        "app_config_resend_is_active",
+        "app_config_validate_preview_qa_security",
+        "app_config_settings"
+      ],
+      "qualifiedPath": [
+        "app_config_validate_runtime_security",
+        "app_config_cors_contains_wildcard",
+        "app_config_get_settings",
+        "app_config_gmail_is_active",
+        "app_config_has_value",
+        "app_config_is_preview_qa_mode",
+        "app_config_is_production_mode",
+        "app_config_is_public_https_url",
+        "app_config_mercadopago_is_active",
+        "app_config_normalized_env_value",
+        "app_config_paypal_is_active",
+        "app_config_resend_is_active",
+        "app_config_validate_preview_qa_security",
+        "app_config_settings"
+      ],
+      "depth": 2,
+      "nodeCount": 14,
+      "fileCount": 1,
+      "files": [
+        "app/config.py"
+      ],
+      "criticality": 0.2236,
       "warnings": []
     },
     {
@@ -7103,6 +7205,42 @@
       "warnings": []
     },
     {
+      "id": "flow:services_subscription_service_ensure_staff_within_limit",
+      "name": "ensure_staff_within_limit",
+      "entryPoint": "services_subscription_service_ensure_staff_within_limit",
+      "entryPointId": "services_subscription_service_ensure_staff_within_limit",
+      "path": [
+        "services_subscription_service_ensure_staff_within_limit",
+        "services_subscription_service_get_effective_staff_limit",
+        "services_subscription_service_is_enforcement_enabled",
+        "services_subscription_service_require_subscription_active",
+        "services_subscription_service_ensure_subscription",
+        "services_subscription_service_ensure_entitlements_seeded",
+        "services_subscription_service_upsert_plan_entitlement",
+        "services_subscription_service_serialize_value",
+        "services_subscription_service_infer_type"
+      ],
+      "qualifiedPath": [
+        "services_subscription_service_ensure_staff_within_limit",
+        "services_subscription_service_get_effective_staff_limit",
+        "services_subscription_service_is_enforcement_enabled",
+        "services_subscription_service_require_subscription_active",
+        "services_subscription_service_ensure_subscription",
+        "services_subscription_service_ensure_entitlements_seeded",
+        "services_subscription_service_upsert_plan_entitlement",
+        "services_subscription_service_serialize_value",
+        "services_subscription_service_infer_type"
+      ],
+      "depth": 6,
+      "nodeCount": 9,
+      "fileCount": 1,
+      "files": [
+        "app/services/subscription_service.py"
+      ],
+      "criticality": 0.21,
+      "warnings": []
+    },
+    {
       "id": "flow:services_subscription_service_get_effective_room_limit",
       "name": "get_effective_room_limit",
       "entryPoint": "services_subscription_service_get_effective_room_limit",
@@ -7134,34 +7272,6 @@
       "fileCount": 1,
       "files": [
         "app/services/subscription_service.py"
-      ],
-      "criticality": 0.21,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_payment_service_get_reservation_financial_summary",
-      "name": "get_reservation_financial_summary",
-      "entryPoint": "services_payment_service_get_reservation_financial_summary",
-      "entryPointId": "services_payment_service_get_reservation_financial_summary",
-      "path": [
-        "services_payment_service_get_reservation_financial_summary",
-        "services_payment_service_paymenterror",
-        "services_payment_service_recommended_financial_action",
-        "services_payment_service_resolve_reservation_hotel",
-        "services_payment_service_signed_transaction_amount"
-      ],
-      "qualifiedPath": [
-        "services_payment_service_get_reservation_financial_summary",
-        "services_payment_service_paymenterror",
-        "services_payment_service_recommended_financial_action",
-        "services_payment_service_resolve_reservation_hotel",
-        "services_payment_service_signed_transaction_amount"
-      ],
-      "depth": 1,
-      "nodeCount": 5,
-      "fileCount": 1,
-      "files": [
-        "app/services/payment_service.py"
       ],
       "criticality": 0.21,
       "warnings": []
@@ -7432,6 +7542,36 @@
         "app/services/temporary_action_grant_service.py"
       ],
       "criticality": 0.2057,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_payment_service_get_reservation_financial_summary",
+      "name": "get_reservation_financial_summary",
+      "entryPoint": "services_payment_service_get_reservation_financial_summary",
+      "entryPointId": "services_payment_service_get_reservation_financial_summary",
+      "path": [
+        "services_payment_service_get_reservation_financial_summary",
+        "services_payment_service_paymenterror",
+        "services_payment_service_paymentnotfounderror",
+        "services_payment_service_recommended_financial_action",
+        "services_payment_service_resolve_reservation_hotel",
+        "services_payment_service_signed_transaction_amount"
+      ],
+      "qualifiedPath": [
+        "services_payment_service_get_reservation_financial_summary",
+        "services_payment_service_paymenterror",
+        "services_payment_service_paymentnotfounderror",
+        "services_payment_service_recommended_financial_action",
+        "services_payment_service_resolve_reservation_hotel",
+        "services_payment_service_signed_transaction_amount"
+      ],
+      "depth": 1,
+      "nodeCount": 6,
+      "fileCount": 1,
+      "files": [
+        "app/services/payment_service.py"
+      ],
+      "criticality": 0.2017,
       "warnings": []
     },
     {
@@ -7805,44 +7945,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_payment_service_process_payment",
-      "name": "process_payment",
-      "entryPoint": "services_payment_service_process_payment",
-      "entryPointId": "services_payment_service_process_payment",
-      "path": [
-        "services_payment_service_process_payment",
-        "services_payment_service_calculate_payment_surcharge",
-        "services_payment_service_paymenterror",
-        "services_payment_service_resolve_payment_currency",
-        "services_payment_service_resolve_reservation_hotel",
-        "services_payment_service_update_reservation_financials",
-        "services_payment_service_validate_payment_method_enabled",
-        "services_payment_service_payment_method_value",
-        "services_payment_service_sync_reservation_financial_status",
-        "services_payment_service_get_hotel_config"
-      ],
-      "qualifiedPath": [
-        "services_payment_service_process_payment",
-        "services_payment_service_calculate_payment_surcharge",
-        "services_payment_service_paymenterror",
-        "services_payment_service_resolve_payment_currency",
-        "services_payment_service_resolve_reservation_hotel",
-        "services_payment_service_update_reservation_financials",
-        "services_payment_service_validate_payment_method_enabled",
-        "services_payment_service_payment_method_value",
-        "services_payment_service_sync_reservation_financial_status",
-        "services_payment_service_get_hotel_config"
-      ],
-      "depth": 2,
-      "nodeCount": 10,
-      "fileCount": 1,
-      "files": [
-        "app/services/payment_service.py"
-      ],
-      "criticality": 0.195,
-      "warnings": []
-    },
-    {
       "id": "flow:agent_ops_qa_evidence_attestation_main",
       "name": "main",
       "entryPoint": "agent_ops_qa_evidence_attestation_main",
@@ -8052,6 +8154,46 @@
       "fileCount": 1,
       "files": [
         "app/services/notification_service.py"
+      ],
+      "criticality": 0.1927,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_payment_service_process_payment",
+      "name": "process_payment",
+      "entryPoint": "services_payment_service_process_payment",
+      "entryPointId": "services_payment_service_process_payment",
+      "path": [
+        "services_payment_service_process_payment",
+        "services_payment_service_calculate_payment_surcharge",
+        "services_payment_service_paymenterror",
+        "services_payment_service_paymentnotfounderror",
+        "services_payment_service_resolve_payment_currency",
+        "services_payment_service_resolve_reservation_hotel",
+        "services_payment_service_update_reservation_financials",
+        "services_payment_service_validate_payment_method_enabled",
+        "services_payment_service_payment_method_value",
+        "services_payment_service_sync_reservation_financial_status",
+        "services_payment_service_get_hotel_config"
+      ],
+      "qualifiedPath": [
+        "services_payment_service_process_payment",
+        "services_payment_service_calculate_payment_surcharge",
+        "services_payment_service_paymenterror",
+        "services_payment_service_paymentnotfounderror",
+        "services_payment_service_resolve_payment_currency",
+        "services_payment_service_resolve_reservation_hotel",
+        "services_payment_service_update_reservation_financials",
+        "services_payment_service_validate_payment_method_enabled",
+        "services_payment_service_payment_method_value",
+        "services_payment_service_sync_reservation_financial_status",
+        "services_payment_service_get_hotel_config"
+      ],
+      "depth": 2,
+      "nodeCount": 11,
+      "fileCount": 1,
+      "files": [
+        "app/services/payment_service.py"
       ],
       "criticality": 0.1927,
       "warnings": []
@@ -10598,27 +10740,41 @@
       "path": [
         "services_subscription_entitlements_grant_comped",
         "services_subscription_entitlements_actor_payload",
+        "services_subscription_entitlements_as_utc",
+        "services_subscription_entitlements_assert_same_adjustment",
+        "services_subscription_entitlements_default_adjustment_idempotency_key",
+        "services_subscription_entitlements_normalize_adjustment_reason",
         "services_subscription_entitlements_now",
         "services_subscription_entitlements_plan_defaults",
+        "services_subscription_entitlements_record_comped_adjustment",
         "services_subscription_entitlements_record_event",
         "services_subscription_entitlements_sync_legacy_tables",
         "services_subscription_entitlements_upsert_subscription",
+        "services_subscription_entitlements_actor_role",
+        "services_subscription_entitlements_actor_user_id",
         "services_subscription_entitlements_apply_plan",
         "services_subscription_entitlements_ensure_subscription_seed"
       ],
       "qualifiedPath": [
         "services_subscription_entitlements_grant_comped",
         "services_subscription_entitlements_actor_payload",
+        "services_subscription_entitlements_as_utc",
+        "services_subscription_entitlements_assert_same_adjustment",
+        "services_subscription_entitlements_default_adjustment_idempotency_key",
+        "services_subscription_entitlements_normalize_adjustment_reason",
         "services_subscription_entitlements_now",
         "services_subscription_entitlements_plan_defaults",
+        "services_subscription_entitlements_record_comped_adjustment",
         "services_subscription_entitlements_record_event",
         "services_subscription_entitlements_sync_legacy_tables",
         "services_subscription_entitlements_upsert_subscription",
+        "services_subscription_entitlements_actor_role",
+        "services_subscription_entitlements_actor_user_id",
         "services_subscription_entitlements_apply_plan",
         "services_subscription_entitlements_ensure_subscription_seed"
       ],
       "depth": 2,
-      "nodeCount": 9,
+      "nodeCount": 16,
       "fileCount": 1,
       "files": [
         "app/services/subscription_entitlements.py"
@@ -11938,6 +12094,32 @@
       "fileCount": 1,
       "files": [
         "alembic/versions/dee1bd0660f6_ota_allocation_foundation.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
+      "id": "flow:versions_e6aadf684343_add_subscription_adjustment_ledger_upgrade",
+      "name": "upgrade",
+      "entryPoint": "versions_e6aadf684343_add_subscription_adjustment_ledger_upgrade",
+      "entryPointId": "versions_e6aadf684343_add_subscription_adjustment_ledger_upgrade",
+      "path": [
+        "versions_e6aadf684343_add_subscription_adjustment_ledger_upgrade",
+        "versions_e6aadf684343_add_subscription_adjustment_ledger_ensure_subscription_composite_target",
+        "versions_e6aadf684343_add_subscription_adjustment_ledger_install_rls",
+        "versions_e6aadf684343_add_subscription_adjustment_ledger_has_unique"
+      ],
+      "qualifiedPath": [
+        "versions_e6aadf684343_add_subscription_adjustment_ledger_upgrade",
+        "versions_e6aadf684343_add_subscription_adjustment_ledger_ensure_subscription_composite_target",
+        "versions_e6aadf684343_add_subscription_adjustment_ledger_install_rls",
+        "versions_e6aadf684343_add_subscription_adjustment_ledger_has_unique"
+      ],
+      "depth": 2,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/e6aadf684343_add_subscription_adjustment_ledger.py"
       ],
       "criticality": 0.17,
       "warnings": []
@@ -13371,14 +13553,16 @@
       "entryPointId": "api_invitations_accept_invitation",
       "path": [
         "api_invitations_accept_invitation",
-        "api_invitations_available_invitation"
+        "api_invitations_available_invitation",
+        "api_invitations_source_key"
       ],
       "qualifiedPath": [
         "api_invitations_accept_invitation",
-        "api_invitations_available_invitation"
+        "api_invitations_available_invitation",
+        "api_invitations_source_key"
       ],
       "depth": 1,
-      "nodeCount": 2,
+      "nodeCount": 3,
       "fileCount": 1,
       "files": [
         "app/api/invitations.py"
@@ -15389,6 +15573,28 @@
       "warnings": []
     },
     {
+      "id": "flow:versions_e6aadf684343_add_subscription_adjustment_ledger_downgrade",
+      "name": "downgrade",
+      "entryPoint": "versions_e6aadf684343_add_subscription_adjustment_ledger_downgrade",
+      "entryPointId": "versions_e6aadf684343_add_subscription_adjustment_ledger_downgrade",
+      "path": [
+        "versions_e6aadf684343_add_subscription_adjustment_ledger_downgrade",
+        "versions_e6aadf684343_add_subscription_adjustment_ledger_remove_rls"
+      ],
+      "qualifiedPath": [
+        "versions_e6aadf684343_add_subscription_adjustment_ledger_downgrade",
+        "versions_e6aadf684343_add_subscription_adjustment_ledger_remove_rls"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/e6aadf684343_add_subscription_adjustment_ledger.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:services_allocation_learning_service_draft_policy_from_feedback",
       "name": "draft_policy_from_feedback",
       "entryPoint": "services_allocation_learning_service_draft_policy_from_feedback",
@@ -16109,14 +16315,16 @@
       "entryPointId": "api_invitations_get_invitation",
       "path": [
         "api_invitations_get_invitation",
-        "api_invitations_available_invitation"
+        "api_invitations_available_invitation",
+        "api_invitations_source_key"
       ],
       "qualifiedPath": [
         "api_invitations_get_invitation",
-        "api_invitations_available_invitation"
+        "api_invitations_available_invitation",
+        "api_invitations_source_key"
       ],
       "depth": 1,
-      "nodeCount": 2,
+      "nodeCount": 3,
       "fileCount": 1,
       "files": [
         "app/api/invitations.py"

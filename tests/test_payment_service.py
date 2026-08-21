@@ -25,6 +25,7 @@ from app.services.payment_service import (
     process_payment,
     get_reservation_financial_summary,
     PaymentError,
+    PaymentNotFoundError,
 )
 from app.services.cash_register_service import open_session
 
@@ -300,7 +301,7 @@ class TestHotelIsolation:
             payment_method=PaymentMethodEnum.CASH,
             transaction_type=TransactionTypeEnum.FULL_PAYMENT,
         )
-        with pytest.raises(PaymentError, match="does not belong to hotel"):
+        with pytest.raises(PaymentNotFoundError, match="Reservation not found"):
             process_payment(db, payment, hotel_id=2)
 
     def test_payment_methods_are_scoped_by_hotel(self, db, sample_guest, sample_rooms, sample_categories, hotel_config):
