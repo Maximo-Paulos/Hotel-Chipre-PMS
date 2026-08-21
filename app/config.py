@@ -114,8 +114,12 @@ class Settings(BaseSettings):
     MASTER_ADMIN_PIN: str = Field(default="1234", validation_alias=AliasChoices("MASTER_ADMIN_PIN", "MANAGER_PIN"))
     MASTER_ADMIN_COOKIE_SECURE: bool | None = None
     MASTER_ADMIN_SESSION_SECRET: str = ""
+    # Absolute master-admin session lifetime; forces periodic re-login even
+    # with activity. Keep separate from the shorter high-privilege idle TTL.
     MASTER_ADMIN_SESSION_TTL_MINUTES: int = 8 * 60
-    MASTER_ADMIN_IDLE_TTL_MINUTES: int = 8 * 60
+    # Master-admin can access data from every hotel, so expire idle sessions
+    # quickly when a privileged workstation is left unattended.
+    MASTER_ADMIN_IDLE_TTL_MINUTES: int = 20
     MASTER_ADMIN_MAX_ATTEMPTS: int = 5
     MASTER_ADMIN_LOCKOUT_MINUTES: int = 15
 

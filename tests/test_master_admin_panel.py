@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import json
 import time
+from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass
 import pytest
 import pyotp
@@ -162,6 +163,49 @@ def _configure_resend(monkeypatch: pytest.MonkeyPatch, sent_payloads: list[dict]
     monkeypatch.setattr("app.master_admin.stripe.requests.get", fake_get)
     monkeypatch.setattr("app.master_admin.stripe.requests.post", fake_post)
     return payloads
+
+
+def test_master_admin_session_ttl_defaults_to_short_idle_and_eight_hour_absolute(monkeypatch):
+    monkeypatch.delenv("MASTER_ADMIN_SESSION_TTL_MINUTES", raising=False)
+    monkeypatch.delenv("MASTER_ADMIN_IDLE_TTL_MINUTES", raising=False)
+    get_settings.cache_clear()
+    fixed_now = datetime(2026, 8, 21, 12, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr(master_security, "_now", lambda: fixed_now)
+
+    assert master_security.DEFAULT_IDLE_TTL_MINUTES == 20
+    assert master_security._idle_expiry(fixed_now) == fixed_now + timedelta(minutes=20)
+    assert master_security._session_expiry() == fixed_now + timedelta(hours=8)
+    assert master_security._session_max_age_seconds() == 8 * 60 * 60
+
+
+def test_master_admin_session_ttls_are_configurable_by_environment(monkeypatch):
+    monkeypatch.setenv("MASTER_ADMIN_SESSION_TTL_MINUTES", "240")
+    monkeypatch.setenv("MASTER_ADMIN_IDLE_TTL_MINUTES", "25")
+    get_settings.cache_clear()
+    fixed_now = datetime(2026, 8, 21, 12, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr(master_security, "_now", lambda: fixed_now)
+
+    assert master_security._session_expiry() == fixed_now + timedelta(hours=4)
+    assert master_security._session_max_age_seconds() == 4 * 60 * 60
+    assert master_security._idle_expiry(fixed_now) == fixed_now + timedelta(minutes=25)
+
+
+def test_master_admin_absolute_ttl_expires_recently_active_session(master_client, monkeypatch):
+    _, SessionLocal = master_client
+    fixed_now = datetime(2026, 8, 21, 12, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr(master_security, "_now", lambda: fixed_now)
+    db = SessionLocal()
+    try:
+        user = _seed_platform_admin(db)
+        session, session_token, _ = master_security.create_master_session(db, user)
+        session.expires_at = fixed_now - timedelta(seconds=1)
+        session.last_seen_at = fixed_now - timedelta(seconds=1)
+        db.flush()
+
+        assert master_security._load_session(db, session_token) is None
+        assert session.revoked_at == fixed_now
+    finally:
+        db.close()
 
 
 def test_master_login_bootstraps_env_account(master_client, monkeypatch):
