@@ -460,6 +460,7 @@ def require_master_admin(
     db: Session,
     csrf_header: str | None = None,
     write: bool = False,
+    allow_mfa_setup: bool = False,
 ) -> MasterAdminContext:
     session_token = request.cookies.get(SESSION_COOKIE_NAME)
     if not session_token:
@@ -473,6 +474,12 @@ def require_master_admin(
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sesion master invalida")
     _authorize_user_for_master_panel(user)
+
+    if not mfa_service.get_active_mfa_secret(db, user.id) and not allow_mfa_setup:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="MFA obligatorio para Master Admin: configura TOTP antes de operar",
+        )
 
     expected_csrf = request.cookies.get(CSRF_COOKIE_NAME)
     if write:

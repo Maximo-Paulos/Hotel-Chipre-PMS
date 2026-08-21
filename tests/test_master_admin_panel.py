@@ -24,6 +24,8 @@ import app.master_admin.security as master_security
 from app.models.hotel_config import HotelConfiguration
 from app.models.subscription_v2 import Subscription
 from app.models.user import User
+from app.models.user_mfa import UserMfaSecret
+from app.services import mfa_service
 from app.services.security import hash_password
 
 
@@ -95,7 +97,12 @@ def _clear_settings_cache():
     get_settings.cache_clear()
 
 
-def _seed_platform_admin(db, email: str = "platform-admin@example.com") -> User:
+def _seed_platform_admin(
+    db,
+    email: str = "platform-admin@example.com",
+    *,
+    with_mfa: bool = True,
+) -> User:
     user = db.query(User).filter(User.email == email).first()
     if not user:
         user = User(
@@ -107,7 +114,43 @@ def _seed_platform_admin(db, email: str = "platform-admin@example.com") -> User:
         )
         db.add(user)
         db.flush()
+    if with_mfa and not mfa_service.get_active_mfa_secret(db, user.id):
+        db.add(
+            UserMfaSecret(
+                user_id=user.id,
+                encrypted_secret=mfa_service.encrypt_totp_secret(pyotp.random_base32()),
+                status=mfa_service.MFA_ACTIVE,
+            )
+        )
+        db.flush()
     return user
+
+
+def _complete_master_login(client: TestClient, SessionLocal, *, email: str = "platform-admin@example.com"):
+    response = client.post(
+        "/api/master-admin/auth/login",
+        json={"email": email, "password": "Master123!", "pin": "654321"},
+    )
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    if payload.get("requires_mfa"):
+        db = SessionLocal()
+        try:
+            user = db.query(User).filter(User.email == email).one()
+            mfa_secret = db.query(UserMfaSecret).filter(UserMfaSecret.user_id == user.id).one()
+            secret = mfa_service.decrypt_totp_secret(mfa_secret.encrypted_secret)
+            # Each test account is synthetic. Resetting its replay marker keeps
+            # repeated helper logins deterministic without weakening production code.
+            mfa_secret.last_used_step = None
+            db.commit()
+        finally:
+            db.close()
+        response = client.post(
+            "/api/master-admin/auth/login/mfa",
+            json={"mfa_token": payload["mfa_token"], "code": pyotp.TOTP(secret).now()},
+        )
+        assert response.status_code == 200, response.text
+    return response
 
 
 def _seed_hotel(db, hotel_id: int = 1, name: str = "Hotel Uno") -> HotelConfiguration:
@@ -280,11 +323,7 @@ def test_master_audit_redacts_sensitive_metadata_on_storage_and_read(master_clie
     }
     assert "do-not-store" not in stored_metadata_json
 
-    login = client.post(
-        "/api/master-admin/auth/login",
-        json={"email": "platform-admin@example.com", "password": "Master123!", "pin": "654321"},
-    )
-    assert login.status_code == 200, login.text
+    login = _complete_master_login(client, SessionLocal)
 
     response = client.get("/api/master-admin/audit/events")
     assert response.status_code == 200, response.text
@@ -347,11 +386,7 @@ def test_master_login_sets_cookie_and_hydrates_me(master_client, monkeypatch):
     finally:
         db.close()
 
-    response = client.post(
-        "/api/master-admin/auth/login",
-        json={"email": "platform-admin@example.com", "password": "Master123!", "pin": "654321"},
-    )
-    assert response.status_code == 200, response.text
+    response = _complete_master_login(client, SessionLocal)
     payload = response.json()
     assert payload["user"]["role"] == "platform_admin"
     assert "master_admin_session" in response.cookies
@@ -364,14 +399,14 @@ def test_master_login_sets_cookie_and_hydrates_me(master_client, monkeypatch):
     assert payload["csrf_token"]
 
 
-def test_master_admin_optional_mfa_enroll_confirm_login_and_disable(master_client, monkeypatch):
+def test_master_admin_mfa_is_mandatory_and_cannot_be_bypassed(master_client, monkeypatch):
     client, SessionLocal = master_client
     monkeypatch.setenv("MASTER_ADMIN_PIN", "654321")
     get_settings.cache_clear()
 
     db = SessionLocal()
     try:
-        _seed_platform_admin(db)
+        _seed_platform_admin(db, with_mfa=False)
         db.commit()
     finally:
         db.close()
@@ -381,6 +416,7 @@ def test_master_admin_optional_mfa_enroll_confirm_login_and_disable(master_clien
         json={"email": "platform-admin@example.com", "password": "Master123!", "pin": "654321"},
     )
     assert login.status_code == 200, login.text
+    assert login.json()["requires_mfa_setup"] is True
     csrf_token = login.cookies.get("master_admin_csrf")
     assert csrf_token
     headers = {"X-CSRF-Token": csrf_token}
@@ -423,6 +459,14 @@ def test_master_admin_optional_mfa_enroll_confirm_login_and_disable(master_clien
     logout = client.post("/api/master-admin/auth/logout", headers=headers)
     assert logout.status_code == 200, logout.text
 
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.email == "platform-admin@example.com").one()
+        db.query(UserMfaSecret).filter(UserMfaSecret.user_id == user.id).one().last_used_step = None
+        db.commit()
+    finally:
+        db.close()
+
     mfa_login = client.post(
         "/api/master-admin/auth/login",
         json={"email": "platform-admin@example.com", "password": "Master123!", "pin": "654321"},
@@ -434,9 +478,10 @@ def test_master_admin_optional_mfa_enroll_confirm_login_and_disable(master_clien
     assert "master_admin_session" not in mfa_login.cookies
     assert client.get("/api/master-admin/auth/me").status_code == 401
 
+    totp_code = pyotp.TOTP(enrollment["secret"]).now()
     mfa_login_complete = client.post(
         "/api/master-admin/auth/login/mfa",
-        json={"mfa_token": challenge["mfa_token"], "code": recovery_codes[0]},
+        json={"mfa_token": challenge["mfa_token"], "code": totp_code},
     )
     assert mfa_login_complete.status_code == 200, mfa_login_complete.text
     assert mfa_login_complete.cookies.get("master_admin_session")
@@ -470,7 +515,9 @@ def test_master_admin_optional_mfa_enroll_confirm_login_and_disable(master_clien
         json={"email": "platform-admin@example.com", "password": "Master123!", "pin": "654321"},
     )
     assert no_mfa_login.status_code == 200, no_mfa_login.text
-    assert no_mfa_login.json()["user"]["role"] == "platform_admin"
+    assert no_mfa_login.json()["requires_mfa_setup"] is True
+    assert client.get("/api/master-admin/auth/me").status_code == 403
+    assert client.get("/api/master-admin/dashboard/summary").status_code == 403
 
     db = SessionLocal()
     try:
@@ -494,11 +541,7 @@ def test_master_login_cookie_works_on_underscore_alias(master_client, monkeypatc
     finally:
         db.close()
 
-    response = client.post(
-        "/api/master-admin/auth/login",
-        json={"email": "platform-admin@example.com", "password": "Master123!", "pin": "654321"},
-    )
-    assert response.status_code == 200, response.text
+    response = _complete_master_login(client, SessionLocal)
     assert "Path=/api/" in response.headers.get("set-cookie", "")
 
     me = client.get("/api/master_admin/auth/me")
@@ -535,11 +578,7 @@ def test_master_dashboard_summary_counts_subscriptions_across_hotels(master_clie
     finally:
         db.close()
 
-    login = client.post(
-        "/api/master-admin/auth/login",
-        json={"email": "platform-admin@example.com", "password": "Master123!", "pin": "654321"},
-    )
-    assert login.status_code == 200, login.text
+    login = _complete_master_login(client, SessionLocal)
 
     summary = client.get("/api/master-admin/dashboard/summary")
     assert summary.status_code == 200, summary.text
@@ -581,11 +620,7 @@ def test_require_master_admin_sets_master_admin_rls_context(master_client, monke
 
     monkeypatch.setattr(master_security, "set_master_admin_context", _spy)
 
-    login = client.post(
-        "/api/master-admin/auth/login",
-        json={"email": "platform-admin@example.com", "password": "Master123!", "pin": "654321"},
-    )
-    assert login.status_code == 200, login.text
+    login = _complete_master_login(client, SessionLocal)
     # login doesn't call require_master_admin (it's the endpoint that creates
     # the session), so the spy should still be empty here.
     assert calls == []
@@ -681,11 +716,7 @@ def test_master_policy_update_exempts_hotel_and_user(master_client, monkeypatch)
     finally:
         db.close()
 
-    login = client.post(
-        "/api/master-admin/auth/login",
-        json={"email": "platform-admin@example.com", "password": "Master123!", "pin": "654321"},
-    )
-    assert login.status_code == 200, login.text
+    login = _complete_master_login(client, SessionLocal)
     csrf_token = login.cookies.get("master_admin_csrf")
     assert csrf_token
 
@@ -741,11 +772,7 @@ def test_master_retired_email_actions_are_csrf_protected_and_audited(master_clie
     finally:
         db.close()
 
-    login = client.post(
-        "/api/master-admin/auth/login",
-        json={"email": "platform-admin@example.com", "password": "Master123!", "pin": "654321"},
-    )
-    assert login.status_code == 200, login.text
+    login = _complete_master_login(client, SessionLocal)
     csrf_token = login.cookies.get("master_admin_csrf")
     assert csrf_token
 
@@ -836,11 +863,7 @@ def test_master_email_status_and_test_mail(master_client, monkeypatch):
     finally:
         db.close()
 
-    login = client.post(
-        "/api/master-admin/auth/login",
-        json={"email": "platform-admin@example.com", "password": "Master123!", "pin": "654321"},
-    )
-    assert login.status_code == 200, login.text
+    login = _complete_master_login(client, SessionLocal)
     csrf_token = login.cookies.get("master_admin_csrf")
     assert csrf_token
 
@@ -881,11 +904,7 @@ def test_master_session_hint_cookie_is_cleared_on_logout(master_client, monkeypa
     finally:
         db.close()
 
-    login = client.post(
-        "/api/master-admin/auth/login",
-        json={"email": "platform-admin@example.com", "password": "Master123!", "pin": "654321"},
-    )
-    assert login.status_code == 200, login.text
+    login = _complete_master_login(client, SessionLocal)
     assert login.cookies.get("master_admin_session_hint") == "1"
 
     csrf_token = login.cookies.get("master_admin_csrf")
@@ -908,11 +927,7 @@ def test_master_stripe_connect_and_webhook_signature_is_verified(master_client, 
     finally:
         db.close()
 
-    login = client.post(
-        "/api/master-admin/auth/login",
-        json={"email": "platform-admin@example.com", "password": "Master123!", "pin": "654321"},
-    )
-    assert login.status_code == 200, login.text
+    login = _complete_master_login(client, SessionLocal)
     csrf_token = login.cookies.get("master_admin_csrf")
     assert csrf_token
 
@@ -970,11 +985,7 @@ def test_master_stripe_webhook_retry_of_same_event_is_idempotent_not_500(master_
     finally:
         db.close()
 
-    login = client.post(
-        "/api/master-admin/auth/login",
-        json={"email": "platform-admin@example.com", "password": "Master123!", "pin": "654321"},
-    )
-    assert login.status_code == 200, login.text
+    login = _complete_master_login(client, SessionLocal)
     csrf_token = login.cookies.get("master_admin_csrf")
 
     connect = client.post(

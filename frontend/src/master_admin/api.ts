@@ -82,6 +82,34 @@ export type MasterAdminLoginResponse = {
   expires_at: string;
 };
 
+export type MasterAdminMfaChallengeResponse = {
+  requires_mfa: true;
+  mfa_token: string;
+  expires_in: number;
+};
+
+export type MasterAdminMfaSetupResponse = {
+  requires_mfa_setup: true;
+  user: MasterAdminUser;
+  csrf_token: string;
+  expires_at: string;
+};
+
+export type MasterAdminLoginResult =
+  | MasterAdminLoginResponse
+  | MasterAdminMfaChallengeResponse
+  | MasterAdminMfaSetupResponse;
+
+export type MasterAdminMfaEnrollment = {
+  status: "pending";
+  secret: string;
+  otpauth_uri: string;
+};
+
+export type MasterAdminMfaRecoveryCodes = {
+  recovery_codes: string[];
+};
+
 export type MasterBillingPolicy = {
   policy_key: string;
   enabled: boolean;
