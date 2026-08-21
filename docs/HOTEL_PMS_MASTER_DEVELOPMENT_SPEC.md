@@ -437,10 +437,23 @@ Depends on: `TECH-0080`, `TECH-0071`
 
 ### TECH-0090 — PWA y responsive operacional
 
-Status: `AUDIT_REQUIRED`  
+Status: `VERIFY`
 Priority: `P2`
 
 **Acceptance:** desktop/mobile/tablet; manifest/icons/installability; auth instalada; offline explícito sin datos falsamente actuales; pantallas críticas y UX completa verificadas.
+
+**Auditoría y evidencia — 2026-08-21:**
+
+- `code_sha`: `f85b8286e9cc7a7391e361b1cc18869ecad608bc` (`feat(pwa): consolidate installability and offline UX`).
+- Se auditó `frontend/public/manifest.webmanifest`, `frontend/public/sw.js`, `frontend/index.html`, el registro de service worker en `frontend/src/main.tsx` y el shell operativo en `frontend/src/ui/AppShell.tsx`.
+- Manifest consolidado: `name`, `short_name`, `lang`, `id`, `start_url`, `scope`, `display=standalone`, `theme_color` y `background_color` consistentes; iconos PNG reales de `192x192` y `512x512`, más variantes `maskable` de ambos tamaños generadas localmente desde el asset de marca existente.
+- Service worker auditado: sólo cachea shell estático; `/api` y `/health` quedan fuera de caché, no hay persistencia de respuestas operativas ni cola offline de escrituras. Esto evita mostrar reservas, habitaciones o cobros cacheados como si fueran actuales.
+- UX offline consolidada: `AppShell` muestra un banner global cuando `navigator.onLine` es falso y advierte que los datos pueden estar desactualizados, que reservas/check-in/out/cobros requieren conexión y que no se reintentan escrituras automáticamente. El error de backend también dejó de describir el modo offline de forma ambigua.
+- Responsive auditado sin rediseño: la cobertura existente de `frontend/e2e/responsive-smoke.spec.ts` contempla viewports de 375/390/430 px, targets táctiles y ausencia de overflow; reservas ya usa cards en mobile y tabla controlada en desktop/tablet. No se encontró un bug concreto adicional que justificara tocar dashboard, reservas o check-in.
+- Validación ejecutada en este checkout: `npm run lint` ✅, `npm run typecheck` ✅, `npm run build` ✅ y `npm run test:pwa` ✅ (3 pruebas). `test:pwa` verifica metadata, dimensiones/archivos de iconos, exclusión de API/health del service worker y presencia del mensaje stale/offline.
+- No hubo migraciones ni cambios de deploy/hosting/cuentas. La compatibilidad de tipos de `PushSubscriptionOptions` se ajustó en `frontend/src/hooks/usePushSubscription.ts` para que el typecheck actual no quede bloqueado por `Uint8Array<ArrayBufferLike>`.
+
+**`needs-verification` pendiente:** no se ejecutó Lighthouse ni una sesión de navegador real en desktop/mobile/tablet en este entorno. Antes de marcar `VERIFIED`, validar sobre un preview autorizado: Application/Manifest y Service Worker en Chrome, instalación desde `app.hotels-pms.com`, login y navegación autenticada desde la PWA instalada, desconexión con datos previamente cargados (banner visible y sin mutaciones silenciosas), reconexión, y recorridos dashboard/reservas/check-in en viewport desktop, tablet y teléfono. Confirmar además instalación/auth en Safari iOS y Chrome Android si esos dispositivos están en alcance.
 
 ---
 

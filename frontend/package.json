@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 5173",
     "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "test:pwa": "node --test pwa-manifest.test.mjs",
     "test:build-meta": "node --test build-meta.test.mjs",
     "preview": "vite preview",
     "lint": "eslint \"src/**/*.{ts,tsx}\" --max-warnings=0",

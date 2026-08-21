@@ -10,6 +10,7 @@ import { useDialogA11y } from "../hooks/useDialogA11y";
 import { useInstallPrompt } from "../hooks/useInstallPrompt";
 import { useUnreadNotificationCount } from "../hooks/useNotifications";
 import { useOnboardingStatus } from "../hooks/useOnboardingStatus";
+import { useOnlineStatus } from "../hooks/useOnlineStatus";
 import { useEffectivePermissions } from "../hooks/usePermissions";
 import { useReservationDrawer } from "../hooks/useReservationDrawer";
 import { useSubscriptionStatus } from "../hooks/useSubscription";
@@ -144,6 +145,7 @@ export function AppShell() {
   const [alertsOpen, setAlertsOpen] = useState(false);
   const mobileMenuPanelRef = useDialogA11y(mobileMenuOpen, () => setMobileMenuOpen(false));
   const installPrompt = useInstallPrompt();
+  const isOnline = useOnlineStatus();
   const unreadNotifications = useUnreadNotificationCount();
 
   useCrossTabSync();
@@ -255,6 +257,18 @@ export function AppShell() {
         <span className="min-w-0 break-all text-slate-200">Usuario {session.email || session.userId || "Sin sesion"}</span>
       </div>
 
+      {!isOnline && (
+        <div
+          className="border-b border-amber-300 bg-amber-100 px-4 py-3 text-sm text-amber-950 sm:px-6"
+          data-testid="offline-banner"
+          role="status"
+          aria-live="assertive"
+        >
+          <strong>Sin conexión.</strong> Los datos visibles pueden estar desactualizados. Las acciones de reservas, check-in/out y
+          cobros requieren conexión y no se guardan para reintentar automáticamente.
+        </div>
+      )}
+
       {session.role && session.baseRole && session.role !== session.baseRole && (
         <div
           className="border-b border-sky-200 bg-sky-50 px-6 py-2 text-sm text-sky-900"
@@ -303,10 +317,10 @@ export function AppShell() {
       {onboardingError && (
         <div className="border-b border-rose-200 bg-rose-50 px-6 py-2 text-sm text-rose-900">
           {onboardingError.status === 402
-            ? "Suscripcion inactiva. Reactiva el plan para seguir usando el sistema."
-            : onboardingError.status === 403
-              ? "Debes verificar tu email para continuar."
-              : "Sin conexion con el backend. Seguimos en modo offline para no bloquear la UI."}
+              ? "Suscripcion inactiva. Reactiva el plan para seguir usando el sistema."
+              : onboardingError.status === 403
+                ? "Debes verificar tu email para continuar."
+                : "No se pudo conectar con el backend. Los datos visibles pueden estar desactualizados; las acciones de escritura requieren reconexión."}
         </div>
       )}
 
