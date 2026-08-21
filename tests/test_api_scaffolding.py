@@ -649,11 +649,93 @@ def test_add_reservation_guests_bulk_loads_existing_documents(api_client):
     bulk_document_selects = [
         statement
         for statement in statements
-        if "from guests" in statement.lower() and "document_number in (" in statement.lower()
+        if "from guests" in statement.lower()
+        and (
+            "guests.document_number in (" in statement.lower()
+            or "trim(guests.document_number) in (" in statement.lower()
+        )
     ]
     assert len(bulk_document_selects) == 1, (
         "existing guests should be loaded with one document-number IN query"
     )
+
+
+def test_add_reservation_guests_matches_existing_document_despite_whitespace(api_client):
+    """A legacy row with untrimmed whitespace must still be found by the
+    bulk lookup, and a freshly created row must store the trimmed value --
+    otherwise the lookup miss falls through to an insert of the exact same
+    raw value and collides with uq_guest_document_per_hotel."""
+    client, SessionLocal = api_client
+
+    with SessionLocal() as db:
+        primary_guest = Guest(
+            first_name="Primary",
+            last_name="Guest",
+            document_type=DocumentTypeEnum.DNI,
+            document_number="TECH63-WS-PRIMARY",
+            hotel_id=1,
+        )
+        category = RoomCategory(
+            hotel_id=1,
+            name="TECH63 WS Category",
+            code="TECH63WS",
+            base_price_per_night=100.0,
+            max_occupancy=4,
+        )
+        # Simulate a legacy row stored with raw whitespace before this
+        # endpoint normalized values.
+        existing_guest = Guest(
+            first_name="Existing",
+            last_name="WithSpace",
+            document_type=DocumentTypeEnum.DNI,
+            document_number="  TECH63-WS-1  ",
+            hotel_id=1,
+        )
+        db.add_all([primary_guest, category, existing_guest])
+        db.flush()
+        reservation = Reservation(
+            confirmation_code="TECH63-WS-RES-001",
+            hotel_id=1,
+            guest_id=primary_guest.id,
+            category_id=category.id,
+            check_in_date=date.today() + timedelta(days=1),
+            check_out_date=date.today() + timedelta(days=3),
+            total_amount=400.0,
+            amount_paid=0.0,
+            deposit_amount=0.0,
+            subtotal_amount=400.0,
+            tax_amount=0.0,
+            fee_amount=0.0,
+            commission_amount=0.0,
+            net_amount=400.0,
+            currency_code="ARS",
+            status=ReservationStatusEnum.PENDING,
+            num_adults=1,
+        )
+        db.add(reservation)
+        db.commit()
+        reservation_id = reservation.id
+        existing_guest_id = existing_guest.id
+
+    response = client.post(
+        f"/api/reservations/{reservation_id}/guests",
+        json=[
+            {
+                "first_name": "Existing",
+                "last_name": "WithSpace",
+                "document_type": DocumentTypeEnum.DNI.value,
+                "document_number": "TECH63-WS-1",
+            }
+        ],
+    )
+
+    assert response.status_code == 200, response.text
+    additional_guests = response.json()["additional_guests"]
+    assert len(additional_guests) == 1
+    assert additional_guests[0]["id"] == existing_guest_id
+
+    with SessionLocal() as db:
+        assert db.query(Guest).filter(Guest.hotel_id == 1, Guest.first_name == "Existing").count() == 1
 
 
 def test_release_no_guarantee_endpoint_forbidden_for_unauthorized_role(api_client):

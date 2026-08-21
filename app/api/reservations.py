@@ -6,6 +6,7 @@ import logging
 from datetime import date
 from typing import Literal
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -526,17 +527,21 @@ def add_reservation_guests(
     }
     existing_guests_by_document = {}
     if document_numbers:
+        # Compare and key by the trimmed value on both sides: legacy rows
+        # created before this endpoint normalized whitespace can still have
+        # raw, untrimmed document_number values stored, and a mismatch here
+        # would miss the existing guest and then collide on insert instead.
         existing_guests_by_document = {
-            guest.document_number: guest
+            guest.document_number.strip(): guest
             for guest in (
                 db.query(Guest)
                 .filter(
                     Guest.hotel_id == context.hotel_id,
-                    Guest.document_number.in_(document_numbers),
+                    func.trim(Guest.document_number).in_(document_numbers),
                 )
                 .all()
             )
-            if guest.document_number
+            if guest.document_number and guest.document_number.strip()
         }
 
     for guest_data in guests:
@@ -577,7 +582,13 @@ def add_reservation_guests(
         guest = existing_guests_by_document.get(document_number) if document_number else None
 
         if not guest:
-            guest = Guest(**guest_data.model_dump(exclude={"companions"}), hotel_id=context.hotel_id)
+            guest_fields = guest_data.model_dump(exclude={"companions"})
+            if document_number:
+                # Store the same normalized value we looked up by, so this
+                # row matches on the next request instead of silently
+                # drifting back into the whitespace-mismatch this fixes.
+                guest_fields["document_number"] = document_number
+            guest = Guest(**guest_fields, hotel_id=context.hotel_id)
             db.add(guest)
             db.flush()
             if document_number:
