@@ -620,7 +620,7 @@ El agente puede investigar y recomendar, pero no decidir silenciosamente:
 - obligatoriedad/calendario MFA Owners;
 - claves para TOTP/OAuth y estrategia RLS;
 - Primary Owner/recovery y retención de auditoría;
-- BigQuery frente a facts actuales/ClickHouse y umbrales de warehouse;
+- BigQuery frente a facts actuales/ClickHouse y umbrales de warehouse; ver la [propuesta de opciones y recomendación de TECH-0080](decisions/tech-0080-warehouse-options.md). La decisión sigue abierta hasta elección humana;
 - alcance inicial de PWA, Capacitor, passkeys y apps;
 - región, HA, RPO/RTO, presupuesto y fecha de migración cloud;
 - proveedor/ventana del pentest.
