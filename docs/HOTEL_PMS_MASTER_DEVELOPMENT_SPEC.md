@@ -504,10 +504,28 @@ Priority: `P0`
 
 ### TECH-0112 — CI/CD y ambientes seguros
 
-Status: `AUDIT_REQUIRED`  
+Status: `BLOCKED`
 Priority: `P0`
 
 **Required:** feature branch→PR→tests→preview→staging→verificación→main→producción; DB y secretos separados; migraciones controladas; rollback; releases atadas a SHA; agentes no empujan experimentos directamente a usuarios reales.
+
+**Auditoría/implementación 2026-08-21:** el código versionado de PR/tests,
+preview trusted, gates de evidencia y build SHA-only quedó implementado y
+documentado en [`docs/ci-cd-runbook.md`](ci-cd-runbook.md). El commit de
+implementación es `292d53ca24e5cdcb392ecb75d6eba63c4a9eea15`. Se agregó la
+validación reusable `scripts/agent_ops/verify_release_sha.py`, tests negativos,
+la comprobación de migraciones sobre DB descartable en PR y el manifest de
+artifacts inmutables del build. La evidencia de esta entrega debe asociarse al
+SHA completo del commit de implementación en el PR.
+
+El bloque completo permanece `BLOCKED`: este checkout no prueba un ambiente
+staging formal, DB/secrets staging separados, branch protection ni aprobación
+humana de producción; además `render.yaml` todavía declara `autoDeploy: true`.
+Crear/configurar esos recursos o cambiar la cuenta GitHub/proveedores está
+fuera de la autorización de esta tarea. No se ejecutaron deploys, migraciones
+cloud, cambios de secrets, billing ni cutovers. Rollback de aplicación,
+rollback/forward-fix de Alembic y el drill por ambiente quedan documentados,
+pero requieren autorización y una infraestructura staging real.
 
 ---
 

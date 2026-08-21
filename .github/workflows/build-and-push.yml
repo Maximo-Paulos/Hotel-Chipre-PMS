@@ -10,6 +10,7 @@ env:
 
 jobs:
   build-and-push:
+    if: github.ref_name == github.event.repository.default_branch
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -35,20 +36,65 @@ jobs:
 
       - name: Build backend image
         run: |
-          docker build -f Dockerfile.backend -t $REGISTRY/${{ env.IMAGE_NAME_BACKEND }}:${{ github.sha }} .
-          docker tag $REGISTRY/${{ env.IMAGE_NAME_BACKEND }}:${{ github.sha }} $REGISTRY/${{ env.IMAGE_NAME_BACKEND }}:latest
+          docker build \
+            --build-arg VCS_REF="${GITHUB_SHA}" \
+            -f Dockerfile.backend \
+            -t "$REGISTRY/${{ env.IMAGE_NAME_BACKEND }}:${GITHUB_SHA}" \
+            .
 
       - name: Build frontend image
         run: |
-          docker build -f Dockerfile.frontend -t $REGISTRY/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.sha }} .
-          docker tag $REGISTRY/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.sha }} $REGISTRY/${{ env.IMAGE_NAME_FRONTEND }}:latest
+          docker build \
+            --build-arg VCS_REF="${GITHUB_SHA}" \
+            -f Dockerfile.frontend \
+            -t "$REGISTRY/${{ env.IMAGE_NAME_FRONTEND }}:${GITHUB_SHA}" \
+            .
+
+      - name: Verify image labels and create immutable release manifest
+        run: |
+          for image in \
+            "$REGISTRY/${{ env.IMAGE_NAME_BACKEND }}:${GITHUB_SHA}" \
+            "$REGISTRY/${{ env.IMAGE_NAME_FRONTEND }}:${GITHUB_SHA}"; do
+            observed="$(docker inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$image")"
+            test "$observed" = "$GITHUB_SHA"
+          done
+          python - <<'PY'
+          import json
+          import os
+
+          repository = os.environ["GITHUB_REPOSITORY"].lower()
+          sha = os.environ["GITHUB_SHA"]
+          manifest = {
+              "schema_version": 1,
+              "repository": os.environ["GITHUB_REPOSITORY"],
+              "environment": "build",
+              "code_sha": sha,
+              "artifact_refs": {
+                  "backend": f"ghcr.io/{repository}-backend:{sha}",
+                  "frontend": f"ghcr.io/{repository}-frontend:{sha}",
+              },
+          }
+          with open("release-manifest.json", "w", encoding="utf-8") as handle:
+              json.dump(manifest, handle, indent=2, sort_keys=True)
+              handle.write("\n")
+          PY
+          python scripts/agent_ops/verify_release_sha.py release-manifest.json \
+            --expected-sha "$GITHUB_SHA" \
+            --expected-repository "$GITHUB_REPOSITORY" \
+            --expected-environment build
 
       - name: Push backend image
         run: |
-          docker push $REGISTRY/${{ env.IMAGE_NAME_BACKEND }}:${{ github.sha }}
-          docker push $REGISTRY/${{ env.IMAGE_NAME_BACKEND }}:latest
+          docker push "$REGISTRY/${{ env.IMAGE_NAME_BACKEND }}:${GITHUB_SHA}"
 
       - name: Push frontend image
         run: |
-          docker push $REGISTRY/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.sha }}
-          docker push $REGISTRY/${{ env.IMAGE_NAME_FRONTEND }}:latest
+          docker push "$REGISTRY/${{ env.IMAGE_NAME_FRONTEND }}:${GITHUB_SHA}"
+
+      - name: Upload immutable release manifest
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-manifest-${{ github.sha }}
+          path: release-manifest.json
+          if-no-files-found: error
+          retention-days: 30
