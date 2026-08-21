@@ -15,8 +15,11 @@ from app.models.subscription import (
     HotelEntitlementOverride,
 )
 from app.models.hotel_config import HotelConfiguration
+from app.models.hotel_membership import HotelMembership
 from app.models.room import Room
+from app.models.subscription_v2 import Subscription
 from app.services.hotel_service import ensure_plans_seeded
+from app.services.subscription_entitlements import PLAN_CATALOG
 
 # Default entitlements per plan code (beyond room limit which mirrors room_limit)
 DEFAULT_ENTITLEMENTS: dict[str, dict[str, Any]] = {
@@ -241,6 +244,75 @@ def ensure_room_within_limit(db: Session, hotel_id: int):
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,
                 detail=f"Superás el límite de habitaciones de tu plan ({limit}). Actualizá el plan para agregar más.",
             )
+
+
+def get_effective_staff_limit(db: Session, hotel_id: int) -> int | None:
+    """Return the active plan's staff limit, with a legacy-table fallback."""
+    subscription = (
+        db.query(Subscription)
+        .filter(Subscription.hotel_id == hotel_id)
+        .first()
+    )
+    if subscription:
+        if subscription.staff_limit is not None:
+            return int(subscription.staff_limit)
+        plan_code = subscription.plan
+    else:
+        legacy_subscription = (
+            db.query(HotelSubscription)
+            .filter(HotelSubscription.hotel_id == hotel_id)
+            .first()
+        )
+        plan_code = legacy_subscription.plan.code if legacy_subscription and legacy_subscription.plan else "starter"
+
+    plan = PLAN_CATALOG.get(plan_code) or PLAN_CATALOG["starter"]
+    limit = plan.get("staff_limit")
+    return int(limit) if limit is not None else None
+
+
+def get_staff_usage(db: Session, hotel_id: int, *, include_pending: bool = False) -> int:
+    """Count tenant-scoped staff memberships without counting revoked access."""
+    statuses = ["active", "invited"] if include_pending else ["active"]
+    return int(
+        db.query(func.count())
+        .select_from(HotelMembership)
+        .filter(
+            HotelMembership.hotel_id == hotel_id,
+            HotelMembership.status.in_(statuses),
+        )
+        .scalar()
+        or 0
+    )
+
+
+def ensure_staff_within_limit(
+    db: Session,
+    hotel_id: int,
+    *,
+    exclude_membership_id: int | None = None,
+) -> None:
+    """Enforce the plan staff cap for new memberships and invitations."""
+    require_subscription_active(db, hotel_id, "invitar personal")
+    limit = get_effective_staff_limit(db, hotel_id)
+    if limit is None or not is_enforcement_enabled():
+        return
+
+    staff_query = (
+        db.query(HotelMembership.id)
+        .filter(
+            HotelMembership.hotel_id == hotel_id,
+            HotelMembership.status.in_(["active", "invited"]),
+        )
+    )
+    if exclude_membership_id is not None:
+        staff_query = staff_query.filter(HotelMembership.id != exclude_membership_id)
+
+    current = staff_query.count()
+    if current >= limit:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Superás el límite de staff de tu plan ({limit}). Actualizá el plan para invitar más integrantes.",
+        )
 
 
 def set_subscription_plan(db: Session, hotel_id: int, plan_code: str) -> dict:

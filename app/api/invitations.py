@@ -20,6 +20,7 @@ from app.services.invitation_service import (
 )
 from app.services.membership_service import MembershipInvariantError, validate_membership_change
 from app.services.security import hash_password
+from app.services.subscription_service import ensure_staff_within_limit
 
 router = APIRouter(prefix="/api/invitations", tags=["Invitations"])
 
@@ -106,6 +107,13 @@ def accept_invitation(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Este acceso fue revocado. Pedí una nueva invitación al hotel.",
+        )
+
+    if not membership or membership.status != "active":
+        ensure_staff_within_limit(
+            db,
+            invitation.hotel_id,
+            exclude_membership_id=membership.id if membership and membership.status == "invited" else None,
         )
 
     if user is None and not payload.password:

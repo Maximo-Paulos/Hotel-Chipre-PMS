@@ -30,6 +30,7 @@ from app.services.subscription_service import (
     delete_entitlement_override,
     entitlements_payload,
     ensure_subscription,
+    get_staff_usage,
     set_entitlement_override,
 )
 
@@ -49,6 +50,7 @@ def _remaining_trial_days(trial_end_at) -> int | None:
 def _serialize_status_payload(db: Session, hotel_id: int) -> dict:
     snapshot = get_subscription_snapshot(db, hotel_id)
     rooms = db.query(Room).filter(Room.hotel_id == hotel_id, Room.is_active.is_(True)).count()
+    staff = get_staff_usage(db, hotel_id)
     payload = {
         "hotel_id": hotel_id,
         "status": snapshot["status"],
@@ -56,6 +58,7 @@ def _serialize_status_payload(db: Session, hotel_id: int) -> dict:
         "room_limit": snapshot["room_limit"],
         "staff_limit": snapshot.get("staff_limit"),
         "rooms_in_use": rooms,
+        "staff_in_use": staff,
         "can_write": snapshot["can_write"],
         "enforcement_enabled": snapshot["enforcement_enabled"],
         "available_plans": plan_catalog(),
@@ -87,6 +90,7 @@ def subscription_status(
             "room_limit": 15,
             "staff_limit": 3,
             "rooms_in_use": 0,
+            "staff_in_use": 0,
             "available_plans": [fallback_plan],
             "can_write": True,
             "enforcement_enabled": False,

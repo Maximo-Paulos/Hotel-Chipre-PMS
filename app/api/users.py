@@ -34,6 +34,7 @@ from app.master_admin.email_provider import MasterEmailConnectionError
 from app.services.email_service import mailer
 from app.models.hotel_config import HotelConfiguration
 from app.services import audit_log_service
+from app.services.subscription_service import ensure_staff_within_limit
 
 router = APIRouter(prefix="/api/users", tags=["Users"])
 
@@ -158,6 +159,7 @@ def invite_user(
     if role not in {"owner", "co_owner", "manager", "receptionist", "housekeeping"}:
         raise HTTPException(status_code=400, detail="Rol inválido")
     _assert_assignable_role(context.user_role, role)
+    ensure_staff_within_limit(db, context.hotel_id)
 
     user = db.query(User).filter(User.email.ilike(email)).first()
     if not user:
