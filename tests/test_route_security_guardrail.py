@@ -50,6 +50,7 @@ PUBLIC_ALLOWLIST = (
     PublicRoute("/api/payment-links/mercadopago/webhook", "MercadoPago machine webhook verifies x-signature."),
     PublicRoute("/payment-links/mercadopago/webhook", "MercadoPago machine webhook verifies x-signature."),
     PublicRoute("/api/master-admin/auth/login", "Master-admin login is the unauthenticated session bootstrap."),
+    PublicRoute("/api/master-admin/auth/login/mfa", "Master-admin MFA completion is protected by a short-lived signed challenge."),
     PublicRoute("/api/master-admin/email/oauth/gmail/callback", "Retired external OAuth callback always returns 410 Gone."),
     PublicRoute("/api/master-admin/stripe/webhook", "Stripe machine webhook verifies Stripe-Signature."),
     PublicRoute("/api/seed", "Demo utility; handler is gated by TESTING/DEMO_MODE."),

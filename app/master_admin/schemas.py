@@ -11,6 +11,23 @@ class MasterAdminLoginRequest(BaseModel):
     pin: str = Field(min_length=6, max_length=32)
 
 
+class MasterAdminMfaLoginRequest(BaseModel):
+    mfa_token: str = Field(min_length=1)
+    code: str = Field(min_length=1, max_length=64)
+
+
+class MasterAdminMfaEnrollRequest(BaseModel):
+    password: str = Field(min_length=1, max_length=200)
+
+
+class MasterAdminMfaCodeRequest(BaseModel):
+    code: str = Field(min_length=1, max_length=64)
+
+
+class MasterAdminMfaDisableRequest(MasterAdminMfaCodeRequest):
+    password: str = Field(min_length=1, max_length=200)
+
+
 class MasterAdminUserPayload(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -89,4 +106,3 @@ class MasterStripeConnectRequest(BaseModel):
     stripe_secret_key: str = Field(min_length=1)
     webhook_secret: str | None = None
     enabled: bool = True
-
