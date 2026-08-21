@@ -22,8 +22,12 @@ from .models import MasterAdminAuditEvent, MasterAdminAuthLockout, MasterAdminSe
 SESSION_COOKIE_NAME = "master_admin_session"
 CSRF_COOKIE_NAME = "master_admin_csrf"
 SESSION_HINT_COOKIE_NAME = "master_admin_session_hint"
+# Absolute lifetime caps continuous access to the high-privilege control plane
+# and forces periodic re-authentication even when the administrator is active.
 DEFAULT_SESSION_TTL_MINUTES = 8 * 60
-DEFAULT_IDLE_TTL_MINUTES = 8 * 60
+# This panel can access data from every hotel, so short idle expiry limits the
+# exposure window when a master-admin workstation is left unattended.
+DEFAULT_IDLE_TTL_MINUTES = 20
 DEFAULT_LOCKOUT_THRESHOLD = 5
 DEFAULT_LOCKOUT_MINUTES = 15
 LOGIN_RATE_LIMITER = SimpleRateLimiter("master_admin_login", limit=5, window_seconds=15 * 60)
