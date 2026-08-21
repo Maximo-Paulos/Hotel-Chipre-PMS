@@ -39,7 +39,7 @@ def _engine(db_path: str):
 
 
 def _seed_legacy_tags(engine) -> None:
-    from app.models.guest import Guest, GuestTag, GuestTagTypeEnum
+    from app.models.guest import Guest, GuestRatingEnum, GuestTag, GuestTagTypeEnum
     from app.models.hotel_config import HotelConfiguration
 
     SessionLocal = sessionmaker(bind=engine)
@@ -52,8 +52,9 @@ def _seed_legacy_tags(engine) -> None:
         )
         db.flush()
         # This fixture intentionally seeds the schema before the migration
-        # under test. Do not use the current User ORM model here: it includes
-        # columns that do not exist at this historical revision.
+        # under test. Do not use current ORM ``add()`` for User or Guest here:
+        # their mappers include columns that do not exist at this historical
+        # revision (including TECH-0110's later soft-delete columns).
         db.execute(
             text(
                 "INSERT INTO users "
@@ -62,22 +63,37 @@ def _seed_legacy_tags(engine) -> None:
                 "CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
             )
         )
-        guest_a = Guest(hotel_id=7301, first_name="Legacy", last_name="Active")
-        guest_b = Guest(hotel_id=7302, first_name="Legacy", last_name="Other hotel")
-        db.add_all([guest_a, guest_b])
-        db.flush()
+        guest_table = Guest.__table__
+        guest_a_id = db.execute(
+            guest_table.insert().values(
+                hotel_id=7301,
+                first_name="Legacy",
+                last_name="Active",
+                rating=GuestRatingEnum.NORMAL,
+                terms_accepted=False,
+            )
+        ).inserted_primary_key[0]
+        guest_b_id = db.execute(
+            guest_table.insert().values(
+                hotel_id=7302,
+                first_name="Legacy",
+                last_name="Other hotel",
+                rating=GuestRatingEnum.NORMAL,
+                terms_accepted=False,
+            )
+        ).inserted_primary_key[0]
         db.add_all(
             [
                 GuestTag(
                     hotel_id=7301,
-                    guest_id=guest_a.id,
+                    guest_id=guest_a_id,
                     tag_type=GuestTagTypeEnum.PROHIBIDO_ALOJAR,
                     note="Legacy detail",
                     created_by_user_id=301,
                 ),
-                GuestTag(
-                    hotel_id=7301,
-                    guest_id=guest_a.id,
+                    GuestTag(
+                        hotel_id=7301,
+                        guest_id=guest_a_id,
                     tag_type=GuestTagTypeEnum.PROHIBIDO_ALOJAR,
                     note="Expired legacy detail",
                     expires_at="2020-01-01 00:00:00",
@@ -86,7 +102,7 @@ def _seed_legacy_tags(engine) -> None:
             ]
         )
         db.commit()
-        return guest_a.id, guest_b.id
+        return guest_a_id, guest_b_id
 
 
 def _load_migration():
