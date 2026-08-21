@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 revision: str = "20260821_apple_sign_in"
-down_revision: Union[str, None] = "20260820_tech0063_oltp_idx"
+down_revision: Union[str, None] = "20260821_tech0110_operational_soft_delete"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
