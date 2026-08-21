@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 from fastapi.testclient import TestClient
+from starlette.responses import Response
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -156,6 +157,26 @@ def test_global_revocation_invalidates_all_sessions(session_user: User, db: Sess
     assert user_session_service.list_active_sessions(db, session_user.id) == []
     for _session, token, csrf in sessions:
         assert user_session_service.validate_and_touch_session(db, token, csrf, csrf) is None
+
+
+def test_user_session_cookie_cannot_disable_secure_in_production(monkeypatch):
+    monkeypatch.setattr(
+        user_session_service,
+        "get_settings",
+        lambda: type("ProductionSettings", (), {"USER_SESSION_COOKIE_SECURE": False})(),
+    )
+    monkeypatch.setattr(user_session_service, "is_production_mode", lambda settings=None: True)
+    response = Response()
+
+    user_session_service.set_user_session_cookies(response, "session-token", "csrf-token")
+
+    cookie_headers = [
+        value.decode("latin-1").lower()
+        for key, value in response.raw_headers
+        if key.lower() == b"set-cookie"
+    ]
+    assert cookie_headers
+    assert all("secure" in header for header in cookie_headers)
 
 
 def test_login_json_and_bearer_contract_remain_unchanged_while_cookie_is_additive(session_client):

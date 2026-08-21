@@ -31,7 +31,7 @@ def get_mongo_db() -> Any | None:
         _mongo_db = client[settings.MONGO_DB]
         return _mongo_db
     except Exception as exc:  # pragma: no cover - defensive runtime fallback
-        logger.warning("mongo.unavailable", extra={"error": str(exc)})
+        logger.warning("mongo.unavailable", extra={"error_type": type(exc).__name__})
         _mongo_db = None
         return None
 
@@ -48,5 +48,5 @@ def mongo_healthcheck() -> dict[str, Any]:
         db.command("ping")
         return {"status": "ok", "enabled": True, "connected": True, "error": None}
     except Exception as exc:  # pragma: no cover - defensive runtime fallback
-        logger.warning("mongo.healthcheck_failed", extra={"error": str(exc)})
-        return {"status": "error", "enabled": True, "connected": False, "error": str(exc)}
+        logger.warning("mongo.healthcheck_failed", extra={"error_type": type(exc).__name__})
+        return {"status": "error", "enabled": True, "connected": False, "error": "MongoDB healthcheck failed"}

@@ -14,7 +14,7 @@ from app.models.hotel_config import HotelConfiguration
 from app.models.payment_link_test import PaymentLinkTest
 from app.schemas.payment_link_test import PaymentLinkTestCreate
 from app.services.hotel_outbound_email_service import HotelOutboundEmailError, ensure_hotel_gmail_ready, send_hotel_email
-from app.services.integration_service import get_connection_payload
+from app.services.integration_service import get_connection_payload, redact_integration_error
 from app.services.external_effects_policy import (
     ExternalEffectsDisabled,
     InboundProviderEventsDisabled,
@@ -62,8 +62,8 @@ def _friendly_mercadopago_error(detail: object, status_code: int | None = None) 
                 "Mercado Pago rechazo la prueba porque el Access Token conectado para este hotel no tiene permisos "
                 "validos. Vuelve a conectar Mercado Pago con un Access Token real de la cuenta que va a cobrar la seña."
             )
-        return message or "Mercado Pago rechazo la prueba."
-    return str(detail)
+        return redact_integration_error(message, fallback="Mercado Pago rechazo la prueba.")
+    return "Mercado Pago rechazo la prueba."
 
 
 def _status_from_payment(status: str | None) -> str:
@@ -305,7 +305,7 @@ def create_mercadopago_payment_link_test(db: Session, hotel_id: int, payload: Pa
         try:
             detail = response.json()
         except Exception:
-            detail = response.text
+            detail = None
         raise PaymentLinkTestError(_friendly_mercadopago_error(detail, response.status_code))
 
     data = response.json()
@@ -345,7 +345,7 @@ def create_mercadopago_payment_link_test(db: Session, hotel_id: int, payload: Pa
     except Exception as exc:
         record.sender_channel = "not_sent"
         record.sender_email = None
-        record.last_error = f"No se pudo enviar el email: {exc}"
+        record.last_error = "No se pudo enviar el email"
 
     db.flush()
     return record

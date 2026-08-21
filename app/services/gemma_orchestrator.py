@@ -371,7 +371,12 @@ class GemmaOrchestrator:
             )
             return self._attach_action_runs(db=db, session=session, hotel_id=hotel_id, user_id=user_id, payload=payload)
         except GemmaChatError as exc:
-            LOGGER.warning("Gemma local payload error for hotel_id=%s intent=%s: %s", hotel_id, intent.intent_type, exc)
+            LOGGER.warning(
+                "Gemma local payload error for hotel_id=%s intent=%s error_type=%s",
+                hotel_id,
+                intent.intent_type,
+                type(exc).__name__,
+            )
             payload = self._fallback_with_runtime_issue(
                 intent=intent,
                 message=message,
@@ -382,7 +387,12 @@ class GemmaOrchestrator:
             )
             return self._attach_action_runs(db=db, session=session, hotel_id=hotel_id, user_id=user_id, payload=payload)
         except Exception as exc:
-            LOGGER.exception("Gemma local unexpected failure for hotel_id=%s intent=%s", hotel_id, intent.intent_type)
+            LOGGER.error(
+                "Gemma local unexpected failure for hotel_id=%s intent=%s error_type=%s",
+                hotel_id,
+                intent.intent_type,
+                type(exc).__name__,
+            )
             payload = self._fallback_with_runtime_issue(
                 intent=intent,
                 message=message,

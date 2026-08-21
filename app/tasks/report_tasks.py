@@ -73,7 +73,12 @@ def _send_report_for_hotel(db, hotel_id: int, report_date: date, *, kind: str) -
     try:
         send_hotel_email(db, hotel_id, to=recipients, subject=subject, body=body)
     except HotelOutboundEmailError as exc:
-        logger.warning("report_tasks: %s report email failed for hotel %s: %s", kind, hotel_id, exc)
+        logger.warning(
+            "report_tasks: %s report email failed for hotel %s error_type=%s",
+            kind,
+            hotel_id,
+            type(exc).__name__,
+        )
         return False
     return True
 
@@ -112,7 +117,12 @@ def _run_scheduled_reports(
             except Exception as exc:  # one hotel must never abort the rest
                 failed += 1
                 db.rollback()
-                logger.warning("report_tasks: %s report errored for hotel %s: %s", kind, hotel_id, exc)
+                logger.warning(
+                    "report_tasks: %s report errored for hotel %s error_type=%s",
+                    kind,
+                    hotel_id,
+                    type(exc).__name__,
+                )
     finally:
         db.close()
 

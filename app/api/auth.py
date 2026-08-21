@@ -394,8 +394,12 @@ def request_verify(payload: RequestCode, request: Request, db: Session = Depends
         db.commit()
     except MasterEmailConnectionError as exc:
         db.rollback()
-        LOGGER.warning("request_verify mail delivery failed email=%s error=%s", _mask_email(key), exc)
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        LOGGER.warning(
+            "request_verify mail delivery failed email=%s error_type=%s",
+            _mask_email(key),
+            type(exc).__name__,
+        )
+        raise HTTPException(status_code=503, detail="No se pudo enviar el correo de verificacion") from exc
     return {"sent": True}
 
 

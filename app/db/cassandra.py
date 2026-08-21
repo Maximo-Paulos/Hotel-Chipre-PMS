@@ -30,7 +30,7 @@ def get_cassandra_session() -> Any | None:
         _cassandra_session = cluster.connect(settings.CASSANDRA_KEYSPACE)
         return _cassandra_session
     except Exception as exc:  # pragma: no cover - defensive runtime fallback
-        logger.warning("cassandra.unavailable", extra={"error": str(exc)})
+        logger.warning("cassandra.unavailable", extra={"error_type": type(exc).__name__})
         _cassandra_session = None
         return None
 
@@ -47,5 +47,5 @@ def cassandra_healthcheck() -> dict[str, Any]:
         session.execute("SELECT now() FROM system.local")
         return {"status": "ok", "enabled": True, "connected": True, "error": None}
     except Exception as exc:  # pragma: no cover - defensive runtime fallback
-        logger.warning("cassandra.healthcheck_failed", extra={"error": str(exc)})
-        return {"status": "error", "enabled": True, "connected": False, "error": str(exc)}
+        logger.warning("cassandra.healthcheck_failed", extra={"error_type": type(exc).__name__})
+        return {"status": "error", "enabled": True, "connected": False, "error": "Cassandra healthcheck failed"}

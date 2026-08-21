@@ -14,6 +14,7 @@ from app.services.integration_service import (
     decrypt_payload,
     encrypt_payload,
     get_connection_record,
+    redact_integration_error,
     validate_gmail_credentials,
 )
 from app.services.external_effects_policy import (
@@ -56,11 +57,12 @@ def ensure_hotel_gmail_ready(db: Session, hotel_id: int) -> HotelOutboundIdentit
         payload = decrypt_payload(connection.auth_payload)
         validated = validate_gmail_credentials(payload)
     except ValueError as exc:
+        safe_error = redact_integration_error(exc)
         connection.status = 'error'
-        connection.last_error = str(exc)
+        connection.last_error = safe_error
         connection.last_checked_at = datetime.now(timezone.utc)
         db.flush()
-        raise HotelOutboundEmailError(str(exc)) from exc
+        raise HotelOutboundEmailError(safe_error) from exc
 
     connection.auth_payload = encrypt_payload(validated)
     connection.status = 'connected'
@@ -148,12 +150,7 @@ def send_hotel_email(
     if not response.ok:
         connection.status = 'error'
         connection.last_checked_at = datetime.now(timezone.utc)
-        try:
-            payload = response.json()
-            detail = payload.get('error', {}).get('message') or payload.get('error_description') or payload.get('message')
-        except Exception:
-            detail = response.text
-        connection.last_error = str(detail or 'Google rechazo el envio del correo del hotel.')
+        connection.last_error = 'Google rechazo el envio del correo del hotel.'
         db.flush()
         raise HotelOutboundEmailError(connection.last_error)
 

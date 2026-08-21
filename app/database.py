@@ -186,8 +186,8 @@ def _backfill_not_null_nulls(engine) -> None:
                     )
             except Exception as exc:
                 LOGGER.warning(
-                    "schema self-heal: could not backfill %s.%s: %s",
-                    table.name, col.name, exc,
+                    "schema self-heal: could not backfill %s.%s error_type=%s",
+                    table.name, col.name, type(exc).__name__,
                 )
 
 
@@ -244,8 +244,8 @@ def _sync_missing_columns(engine) -> None:
                 # default still heals the drift, so retry once without it.
                 if default_sql is None:
                     LOGGER.warning(
-                        "schema self-heal: could not add %s.%s: %s",
-                        table.name, col.name, exc,
+                        "schema self-heal: could not add %s.%s error_type=%s",
+                        table.name, col.name, type(exc).__name__,
                     )
                     continue
             try:
@@ -257,8 +257,8 @@ def _sync_missing_columns(engine) -> None:
                 )
             except Exception as exc:
                 LOGGER.warning(
-                    "schema self-heal: could not add %s.%s: %s",
-                    table.name, col.name, exc,
+                    "schema self-heal: could not add %s.%s error_type=%s",
+                    table.name, col.name, type(exc).__name__,
                 )
 
 

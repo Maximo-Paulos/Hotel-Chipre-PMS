@@ -53,10 +53,12 @@ def _issue_token() -> str:
 
 def _session_cookie_secure() -> bool:
     settings = get_settings()
+    if is_production_mode(settings) or is_preview_qa_mode(settings):
+        return True
     configured = getattr(settings, "USER_SESSION_COOKIE_SECURE", None)
     if configured is not None:
         return bool(configured)
-    return is_production_mode() or is_preview_qa_mode()
+    return False
 
 
 def _session_cookie_samesite() -> str:

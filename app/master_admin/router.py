@@ -407,11 +407,11 @@ def email_test(payload: EmailTestRequest, request: Request, db: Session = Depend
             actor_user_id=context.user.id,
             action="master_admin_email_test",
             outcome="failed",
-            metadata={"recipient": str(payload.recipient), "error": str(exc)},
+            metadata={"recipient": str(payload.recipient), "error_type": type(exc).__name__},
             request=request,
         )
         db.commit()
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise HTTPException(status_code=503, detail="No se pudo enviar el correo de prueba") from exc
     audit_master_action(
         db,
         actor_user_id=context.user.id,

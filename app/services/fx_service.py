@@ -46,7 +46,7 @@ async def _get_async(url: str) -> Optional[dict | list]:
             response.raise_for_status()
             return response.json()
     except Exception as exc:  # noqa: BLE001
-        logger.warning("DolarAPI fetch failed for %s: %s", url, exc)
+        logger.warning("DolarAPI fetch failed error_type=%s", type(exc).__name__)
         return None
 
 
@@ -168,5 +168,5 @@ def get_rate_sync(rate_type: str = "oficial") -> Optional[float]:
         _cache.setdefault("fetched_at", time.monotonic())
         return data.get("venta")
     except Exception as exc:  # noqa: BLE001
-        logger.warning("DolarAPI sync fetch failed for %s: %s", rate_type, exc)
+        logger.warning("DolarAPI sync fetch failed rate_type=%s error_type=%s", rate_type, type(exc).__name__)
         return None

@@ -50,7 +50,7 @@ def create_mercadopago_test(
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
         db.rollback()
-        raise HTTPException(status_code=502, detail=f"No se pudo crear el link de pago: {exc}")
+        raise HTTPException(status_code=502, detail="No se pudo crear el link de pago") from exc
 
 
 @router.post("/mercadopago/{test_id}/refresh", response_model=PaymentLinkTestRead)
@@ -70,7 +70,7 @@ def refresh_test(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
     except Exception as exc:
         db.rollback()
-        raise HTTPException(status_code=502, detail=f"No se pudo refrescar el estado del pago: {exc}")
+        raise HTTPException(status_code=502, detail="No se pudo refrescar el estado del pago") from exc
 
 
 @router.post("/mercadopago/{test_id}/cancel", response_model=PaymentLinkTestRead)
@@ -90,7 +90,7 @@ def cancel_test(
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
         db.rollback()
-        raise HTTPException(status_code=502, detail=f"No se pudo cancelar el link de pago: {exc}")
+        raise HTTPException(status_code=502, detail="No se pudo cancelar el link de pago") from exc
 
 
 @router.post("/mercadopago/webhook")
@@ -150,7 +150,7 @@ async def mercadopago_webhook(
         return {"status": "error", "reason": str(exc)}
     except Exception as exc:
         db.rollback()
-        return {"status": "error", "reason": f"{exc}"}
+        return {"status": "error", "reason": "No se pudo actualizar el link de pago"}
 
     if not record:
         return {"status": "ignored", "reason": "payment_link_not_found"}

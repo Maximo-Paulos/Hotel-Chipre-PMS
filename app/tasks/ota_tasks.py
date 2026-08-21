@@ -97,15 +97,15 @@ def push_availability_update(
                 try:
                     results["booking"] = _push_to_booking(availability, category_id)
                 except Exception as e:
-                    logger.error(f"Failed to push to Booking.com: {e}")
-                    results["booking"] = {"error": str(e)}
+                    logger.error("Failed to push to Booking.com error_type=%s", type(e).__name__)
+                    results["booking"] = {"error": "Booking.com availability push failed"}
 
             if config.enable_expedia_sync:
                 try:
                     results["expedia"] = _push_to_expedia(availability, category_id)
                 except Exception as e:
-                    logger.error(f"Failed to push to Expedia: {e}")
-                    results["expedia"] = {"error": str(e)}
+                    logger.error("Failed to push to Expedia error_type=%s", type(e).__name__)
+                    results["expedia"] = {"error": "Expedia availability push failed"}
 
             return results
 
@@ -113,7 +113,7 @@ def push_availability_update(
             db.close()
 
     except Exception as exc:
-        logger.error(f"push_availability_update failed: {exc}")
+        logger.error("push_availability_update failed error_type=%s", type(exc).__name__)
         raise self.retry(exc=exc)
 
 
@@ -150,7 +150,7 @@ def _push_to_booking(availability: list[dict], category_id: int) -> dict:
             )
             return {
                 "status_code": response.status_code,
-                "response": response.text[:500],  # Truncate for logging
+                "response": "provider response omitted",
             }
     except httpx.ConnectError:
         logger.warning("Booking.com API unreachable (expected in development)")
@@ -192,7 +192,7 @@ def _push_to_expedia(availability: list[dict], category_id: int) -> dict:
             )
             return {
                 "status_code": response.status_code,
-                "response": response.text[:500],
+                "response": "provider response omitted",
             }
     except httpx.ConnectError:
         logger.warning("Expedia API unreachable (expected in development)")
@@ -253,5 +253,5 @@ def sync_all_availability(self, days_ahead: int = 90, database_url: Optional[str
             db.close()
 
     except Exception as exc:
-        logger.error(f"sync_all_availability failed: {exc}")
+        logger.error("sync_all_availability failed error_type=%s", type(exc).__name__)
         raise self.retry(exc=exc)

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-20T21:48:38.718Z",
+  "generatedAt": "2026-08-20T20:25:24.599Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -48,9 +48,7 @@
         "api_auth_register",
         "api_auth_attach_user_session_cookies",
         "api_auth_build_auth_response",
-        "api_auth_burn_auth_timing_work",
         "api_auth_issue_email_token",
-        "api_auth_request_source",
         "api_auth_pick_default_hotel_id",
         "api_auth_generate_code"
       ],
@@ -58,14 +56,12 @@
         "api_auth_register",
         "api_auth_attach_user_session_cookies",
         "api_auth_build_auth_response",
-        "api_auth_burn_auth_timing_work",
         "api_auth_issue_email_token",
-        "api_auth_request_source",
         "api_auth_pick_default_hotel_id",
         "api_auth_generate_code"
       ],
       "depth": 2,
-      "nodeCount": 8,
+      "nodeCount": 6,
       "fileCount": 2,
       "files": [
         "app/api/auth.py",
@@ -909,20 +905,16 @@
       "entryPointId": "api_auth_request_reset",
       "path": [
         "api_auth_request_reset",
-        "api_auth_burn_auth_timing_work",
         "api_auth_issue_email_token",
-        "api_auth_request_source",
         "api_auth_generate_code"
       ],
       "qualifiedPath": [
         "api_auth_request_reset",
-        "api_auth_burn_auth_timing_work",
         "api_auth_issue_email_token",
-        "api_auth_request_source",
         "api_auth_generate_code"
       ],
       "depth": 2,
-      "nodeCount": 5,
+      "nodeCount": 3,
       "fileCount": 1,
       "files": [
         "app/api/auth.py"
@@ -937,22 +929,18 @@
       "entryPointId": "api_auth_request_verify",
       "path": [
         "api_auth_request_verify",
-        "api_auth_burn_auth_timing_work",
         "api_auth_issue_email_token",
         "api_auth_mask_email",
-        "api_auth_request_source",
         "api_auth_generate_code"
       ],
       "qualifiedPath": [
         "api_auth_request_verify",
-        "api_auth_burn_auth_timing_work",
         "api_auth_issue_email_token",
         "api_auth_mask_email",
-        "api_auth_request_source",
         "api_auth_generate_code"
       ],
       "depth": 2,
-      "nodeCount": 6,
+      "nodeCount": 4,
       "fileCount": 1,
       "files": [
         "app/api/auth.py"
@@ -1377,32 +1365,6 @@
       "warnings": []
     },
     {
-      "id": "flow:api_permissions_approve_temporary_action_grant",
-      "name": "approve_temporary_action_grant",
-      "entryPoint": "api_permissions_approve_temporary_action_grant",
-      "entryPointId": "api_permissions_approve_temporary_action_grant",
-      "path": [
-        "api_permissions_approve_temporary_action_grant",
-        "api_permissions_raise_temporary_grant_http_error",
-        "api_permissions_temporary_grant_actor",
-        "api_permissions_temporary_grant_response"
-      ],
-      "qualifiedPath": [
-        "api_permissions_approve_temporary_action_grant",
-        "api_permissions_raise_temporary_grant_http_error",
-        "api_permissions_temporary_grant_actor",
-        "api_permissions_temporary_grant_response"
-      ],
-      "depth": 1,
-      "nodeCount": 4,
-      "fileCount": 1,
-      "files": [
-        "app/api/permissions.py"
-      ],
-      "criticality": 0.41,
-      "warnings": []
-    },
-    {
       "id": "flow:api_gemma_chat_archive_chat_session",
       "name": "archive_chat_session",
       "entryPoint": "api_gemma_chat_archive_chat_session",
@@ -1486,30 +1448,6 @@
       "fileCount": 1,
       "files": [
         "app/master_admin/email_provider.py"
-      ],
-      "criticality": 0.41,
-      "warnings": []
-    },
-    {
-      "id": "flow:api_permissions_consume_temporary_action_grant",
-      "name": "consume_temporary_action_grant",
-      "entryPoint": "api_permissions_consume_temporary_action_grant",
-      "entryPointId": "api_permissions_consume_temporary_action_grant",
-      "path": [
-        "api_permissions_consume_temporary_action_grant",
-        "api_permissions_raise_temporary_grant_http_error",
-        "api_permissions_temporary_grant_actor"
-      ],
-      "qualifiedPath": [
-        "api_permissions_consume_temporary_action_grant",
-        "api_permissions_raise_temporary_grant_http_error",
-        "api_permissions_temporary_grant_actor"
-      ],
-      "depth": 1,
-      "nodeCount": 3,
-      "fileCount": 1,
-      "files": [
-        "app/api/permissions.py"
       ],
       "criticality": 0.41,
       "warnings": []
@@ -1615,32 +1553,6 @@
       "warnings": []
     },
     {
-      "id": "flow:api_permissions_create_temporary_action_grant",
-      "name": "create_temporary_action_grant",
-      "entryPoint": "api_permissions_create_temporary_action_grant",
-      "entryPointId": "api_permissions_create_temporary_action_grant",
-      "path": [
-        "api_permissions_create_temporary_action_grant",
-        "api_permissions_raise_temporary_grant_http_error",
-        "api_permissions_temporary_grant_actor",
-        "api_permissions_temporary_grant_response"
-      ],
-      "qualifiedPath": [
-        "api_permissions_create_temporary_action_grant",
-        "api_permissions_raise_temporary_grant_http_error",
-        "api_permissions_temporary_grant_actor",
-        "api_permissions_temporary_grant_response"
-      ],
-      "depth": 1,
-      "nodeCount": 4,
-      "fileCount": 1,
-      "files": [
-        "app/api/permissions.py"
-      ],
-      "criticality": 0.41,
-      "warnings": []
-    },
-    {
       "id": "flow:master_admin_router_dashboard_summary",
       "name": "dashboard_summary",
       "entryPoint": "master_admin_router_dashboard_summary",
@@ -1702,32 +1614,6 @@
       "fileCount": 1,
       "files": [
         "app/services/security.py"
-      ],
-      "criticality": 0.41,
-      "warnings": []
-    },
-    {
-      "id": "flow:api_permissions_deny_temporary_action_grant",
-      "name": "deny_temporary_action_grant",
-      "entryPoint": "api_permissions_deny_temporary_action_grant",
-      "entryPointId": "api_permissions_deny_temporary_action_grant",
-      "path": [
-        "api_permissions_deny_temporary_action_grant",
-        "api_permissions_raise_temporary_grant_http_error",
-        "api_permissions_temporary_grant_actor",
-        "api_permissions_temporary_grant_response"
-      ],
-      "qualifiedPath": [
-        "api_permissions_deny_temporary_action_grant",
-        "api_permissions_raise_temporary_grant_http_error",
-        "api_permissions_temporary_grant_actor",
-        "api_permissions_temporary_grant_response"
-      ],
-      "depth": 1,
-      "nodeCount": 4,
-      "fileCount": 1,
-      "files": [
-        "app/api/permissions.py"
       ],
       "criticality": 0.41,
       "warnings": []
@@ -1842,28 +1728,6 @@
       "fileCount": 1,
       "files": [
         "app/dependencies/api_key_auth.py"
-      ],
-      "criticality": 0.41,
-      "warnings": []
-    },
-    {
-      "id": "flow:state_session_initialsession",
-      "name": "initialSession",
-      "entryPoint": "state_session_initialsession",
-      "entryPointId": "state_session_initialsession",
-      "path": [
-        "state_session_initialsession",
-        "state_session_readstoredcsrftoken"
-      ],
-      "qualifiedPath": [
-        "state_session_initialsession",
-        "state_session_readstoredcsrftoken"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "frontend/src/state/session.tsx"
       ],
       "criticality": 0.41,
       "warnings": []
@@ -2020,28 +1884,6 @@
       "qualifiedPath": [
         "api_permissions_preview_effective_permissions",
         "api_permissions_target_membership_or_404"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "app/api/permissions.py"
-      ],
-      "criticality": 0.41,
-      "warnings": []
-    },
-    {
-      "id": "flow:api_permissions_read_pending_temporary_action_grants",
-      "name": "read_pending_temporary_action_grants",
-      "entryPoint": "api_permissions_read_pending_temporary_action_grants",
-      "entryPointId": "api_permissions_read_pending_temporary_action_grants",
-      "path": [
-        "api_permissions_read_pending_temporary_action_grants",
-        "api_permissions_temporary_grant_response"
-      ],
-      "qualifiedPath": [
-        "api_permissions_read_pending_temporary_action_grants",
-        "api_permissions_temporary_grant_response"
       ],
       "depth": 1,
       "nodeCount": 2,
@@ -2260,28 +2102,6 @@
       "fileCount": 1,
       "files": [
         "app/master_admin/stripe.py"
-      ],
-      "criticality": 0.41,
-      "warnings": []
-    },
-    {
-      "id": "flow:state_session_sessionfromauthresponse",
-      "name": "sessionFromAuthResponse",
-      "entryPoint": "state_session_sessionfromauthresponse",
-      "entryPointId": "state_session_sessionfromauthresponse",
-      "path": [
-        "state_session_sessionfromauthresponse",
-        "state_session_normalizerole"
-      ],
-      "qualifiedPath": [
-        "state_session_sessionfromauthresponse",
-        "state_session_normalizerole"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "frontend/src/state/session.tsx"
       ],
       "criticality": 0.41,
       "warnings": []
@@ -2677,60 +2497,6 @@
       "warnings": []
     },
     {
-      "id": "flow:api_client_apifetch",
-      "name": "apiFetch",
-      "entryPoint": "api_client_apifetch",
-      "entryPointId": "api_client_apifetch",
-      "path": [
-        "api_client_apifetch",
-        "api_client_apierror",
-        "api_client_buildauthheaders",
-        "api_client_buildurl",
-        "api_client_formaterrordetail",
-        "api_client_handleunauthorized",
-        "api_client_requestwithrefresh",
-        "api_client_safejson",
-        "api_client_hasvalidsession",
-        "api_client_normalizehotelid",
-        "api_client_ispublicauthpath",
-        "api_client_makeapierror",
-        "api_client_mergesession",
-        "api_client_refreshsession",
-        "api_client_requestheaders",
-        "api_client_setclientsession",
-        "api_client_istokenexpired",
-        "api_client_jwtexpms"
-      ],
-      "qualifiedPath": [
-        "api_client_apifetch",
-        "api_client_apierror",
-        "api_client_buildauthheaders",
-        "api_client_buildurl",
-        "api_client_formaterrordetail",
-        "api_client_handleunauthorized",
-        "api_client_requestwithrefresh",
-        "api_client_safejson",
-        "api_client_hasvalidsession",
-        "api_client_normalizehotelid",
-        "api_client_ispublicauthpath",
-        "api_client_makeapierror",
-        "api_client_mergesession",
-        "api_client_refreshsession",
-        "api_client_requestheaders",
-        "api_client_setclientsession",
-        "api_client_istokenexpired",
-        "api_client_jwtexpms"
-      ],
-      "depth": 4,
-      "nodeCount": 18,
-      "fileCount": 1,
-      "files": [
-        "frontend/src/api/client.ts"
-      ],
-      "criticality": 0.3289,
-      "warnings": []
-    },
-    {
       "id": "flow:services_mfa_service_enroll_user",
       "name": "enroll_user",
       "entryPoint": "services_mfa_service_enroll_user",
@@ -3108,88 +2874,6 @@
         "app/services/integration_service.py"
       ],
       "criticality": 0.295,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_integration_service_validate_provider_credentials",
-      "name": "validate_provider_credentials",
-      "entryPoint": "services_integration_service_validate_provider_credentials",
-      "entryPointId": "services_integration_service_validate_provider_credentials",
-      "path": [
-        "services_integration_service_validate_provider_credentials",
-        "services_integration_service_validate_gmail_credentials",
-        "services_integration_service_validate_mercadopago_credentials",
-        "services_integration_service_derive_expires_at",
-        "services_integration_service_google_userinfo",
-        "services_integration_service_is_expired",
-        "services_integration_service_refresh_gmail_access_token",
-        "services_integration_service_mercadopago_error_message",
-        "services_integration_service_parse_datetime"
-      ],
-      "qualifiedPath": [
-        "services_integration_service_validate_provider_credentials",
-        "services_integration_service_validate_gmail_credentials",
-        "services_integration_service_validate_mercadopago_credentials",
-        "services_integration_service_derive_expires_at",
-        "services_integration_service_google_userinfo",
-        "services_integration_service_is_expired",
-        "services_integration_service_refresh_gmail_access_token",
-        "services_integration_service_mercadopago_error_message",
-        "services_integration_service_parse_datetime"
-      ],
-      "depth": 3,
-      "nodeCount": 9,
-      "fileCount": 1,
-      "files": [
-        "app/services/integration_service.py"
-      ],
-      "criticality": 0.2911,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_integration_service_verify_connection_health",
-      "name": "verify_connection_health",
-      "entryPoint": "services_integration_service_verify_connection_health",
-      "entryPointId": "services_integration_service_verify_connection_health",
-      "path": [
-        "services_integration_service_verify_connection_health",
-        "services_integration_service_account_label_from_payload",
-        "services_integration_service_decrypt_payload",
-        "services_integration_service_derive_expires_at",
-        "services_integration_service_encrypt_payload",
-        "services_integration_service_seed_catalog",
-        "services_integration_service_validate_gmail_credentials",
-        "services_integration_service_validate_mercadopago_credentials",
-        "services_integration_service_fernet",
-        "services_integration_service_google_userinfo",
-        "services_integration_service_is_expired",
-        "services_integration_service_refresh_gmail_access_token",
-        "services_integration_service_mercadopago_error_message",
-        "services_integration_service_parse_datetime"
-      ],
-      "qualifiedPath": [
-        "services_integration_service_verify_connection_health",
-        "services_integration_service_account_label_from_payload",
-        "services_integration_service_decrypt_payload",
-        "services_integration_service_derive_expires_at",
-        "services_integration_service_encrypt_payload",
-        "services_integration_service_seed_catalog",
-        "services_integration_service_validate_gmail_credentials",
-        "services_integration_service_validate_mercadopago_credentials",
-        "services_integration_service_fernet",
-        "services_integration_service_google_userinfo",
-        "services_integration_service_is_expired",
-        "services_integration_service_refresh_gmail_access_token",
-        "services_integration_service_mercadopago_error_message",
-        "services_integration_service_parse_datetime"
-      ],
-      "depth": 3,
-      "nodeCount": 14,
-      "fileCount": 1,
-      "files": [
-        "app/services/integration_service.py"
-      ],
-      "criticality": 0.2871,
       "warnings": []
     },
     {
@@ -3913,6 +3597,46 @@
       "warnings": []
     },
     {
+      "id": "flow:api_client_apifetch",
+      "name": "apiFetch",
+      "entryPoint": "api_client_apifetch",
+      "entryPointId": "api_client_apifetch",
+      "path": [
+        "api_client_apifetch",
+        "api_client_apierror",
+        "api_client_buildauthheaders",
+        "api_client_buildurl",
+        "api_client_formaterrordetail",
+        "api_client_handleunauthorized",
+        "api_client_safejson",
+        "api_client_hasvalidsession",
+        "api_client_normalizehotelid",
+        "api_client_istokenexpired",
+        "api_client_jwtexpms"
+      ],
+      "qualifiedPath": [
+        "api_client_apifetch",
+        "api_client_apierror",
+        "api_client_buildauthheaders",
+        "api_client_buildurl",
+        "api_client_formaterrordetail",
+        "api_client_handleunauthorized",
+        "api_client_safejson",
+        "api_client_hasvalidsession",
+        "api_client_normalizehotelid",
+        "api_client_istokenexpired",
+        "api_client_jwtexpms"
+      ],
+      "depth": 4,
+      "nodeCount": 11,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/api/client.ts"
+      ],
+      "criticality": 0.2809,
+      "warnings": []
+    },
+    {
       "id": "flow:versions_70014cb60e2c_allow_system_actors_in_hotel_audit_downgrade",
       "name": "downgrade",
       "entryPoint": "versions_70014cb60e2c_allow_system_actors_in_hotel_audit_downgrade",
@@ -4025,6 +3749,92 @@
       "warnings": []
     },
     {
+      "id": "flow:services_integration_service_validate_provider_credentials",
+      "name": "validate_provider_credentials",
+      "entryPoint": "services_integration_service_validate_provider_credentials",
+      "entryPointId": "services_integration_service_validate_provider_credentials",
+      "path": [
+        "services_integration_service_validate_provider_credentials",
+        "services_integration_service_validate_gmail_credentials",
+        "services_integration_service_validate_mercadopago_credentials",
+        "services_integration_service_derive_expires_at",
+        "services_integration_service_google_userinfo",
+        "services_integration_service_is_expired",
+        "services_integration_service_refresh_gmail_access_token",
+        "services_integration_service_mercadopago_error_message",
+        "services_integration_service_parse_datetime",
+        "services_integration_service_redact_integration_error"
+      ],
+      "qualifiedPath": [
+        "services_integration_service_validate_provider_credentials",
+        "services_integration_service_validate_gmail_credentials",
+        "services_integration_service_validate_mercadopago_credentials",
+        "services_integration_service_derive_expires_at",
+        "services_integration_service_google_userinfo",
+        "services_integration_service_is_expired",
+        "services_integration_service_refresh_gmail_access_token",
+        "services_integration_service_mercadopago_error_message",
+        "services_integration_service_parse_datetime",
+        "services_integration_service_redact_integration_error"
+      ],
+      "depth": 3,
+      "nodeCount": 10,
+      "fileCount": 1,
+      "files": [
+        "app/services/integration_service.py"
+      ],
+      "criticality": 0.28,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_integration_service_verify_connection_health",
+      "name": "verify_connection_health",
+      "entryPoint": "services_integration_service_verify_connection_health",
+      "entryPointId": "services_integration_service_verify_connection_health",
+      "path": [
+        "services_integration_service_verify_connection_health",
+        "services_integration_service_account_label_from_payload",
+        "services_integration_service_decrypt_payload",
+        "services_integration_service_derive_expires_at",
+        "services_integration_service_encrypt_payload",
+        "services_integration_service_redact_integration_error",
+        "services_integration_service_seed_catalog",
+        "services_integration_service_validate_gmail_credentials",
+        "services_integration_service_validate_mercadopago_credentials",
+        "services_integration_service_fernet",
+        "services_integration_service_google_userinfo",
+        "services_integration_service_is_expired",
+        "services_integration_service_refresh_gmail_access_token",
+        "services_integration_service_mercadopago_error_message",
+        "services_integration_service_parse_datetime"
+      ],
+      "qualifiedPath": [
+        "services_integration_service_verify_connection_health",
+        "services_integration_service_account_label_from_payload",
+        "services_integration_service_decrypt_payload",
+        "services_integration_service_derive_expires_at",
+        "services_integration_service_encrypt_payload",
+        "services_integration_service_redact_integration_error",
+        "services_integration_service_seed_catalog",
+        "services_integration_service_validate_gmail_credentials",
+        "services_integration_service_validate_mercadopago_credentials",
+        "services_integration_service_fernet",
+        "services_integration_service_google_userinfo",
+        "services_integration_service_is_expired",
+        "services_integration_service_refresh_gmail_access_token",
+        "services_integration_service_mercadopago_error_message",
+        "services_integration_service_parse_datetime"
+      ],
+      "depth": 3,
+      "nodeCount": 15,
+      "fileCount": 1,
+      "files": [
+        "app/services/integration_service.py"
+      ],
+      "criticality": 0.28,
+      "warnings": []
+    },
+    {
       "id": "flow:services_mfa_service_confirm_enrollment",
       "name": "confirm_enrollment",
       "entryPoint": "services_mfa_service_confirm_enrollment",
@@ -4114,34 +3924,6 @@
       "fileCount": 1,
       "files": [
         "app/services/cash_register_service.py"
-      ],
-      "criticality": 0.27,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_temporary_action_grant_service_request_grant",
-      "name": "request_grant",
-      "entryPoint": "services_temporary_action_grant_service_request_grant",
-      "entryPointId": "services_temporary_action_grant_service_request_grant",
-      "path": [
-        "services_temporary_action_grant_service_request_grant",
-        "services_temporary_action_grant_service_active_membership",
-        "services_temporary_action_grant_service_audit",
-        "services_temporary_action_grant_service_temporarygrantauthorizationerror",
-        "services_temporary_action_grant_service_status_value"
-      ],
-      "qualifiedPath": [
-        "services_temporary_action_grant_service_request_grant",
-        "services_temporary_action_grant_service_active_membership",
-        "services_temporary_action_grant_service_audit",
-        "services_temporary_action_grant_service_temporarygrantauthorizationerror",
-        "services_temporary_action_grant_service_status_value"
-      ],
-      "depth": 2,
-      "nodeCount": 5,
-      "fileCount": 1,
-      "files": [
-        "app/services/temporary_action_grant_service.py"
       ],
       "criticality": 0.27,
       "warnings": []
@@ -4628,30 +4410,6 @@
       "fileCount": 1,
       "files": [
         "scripts/seed_e2e_backend.py"
-      ],
-      "criticality": 0.2533,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_email_service_send_generic_auth_notice_email",
-      "name": "send_generic_auth_notice_email",
-      "entryPoint": "services_email_service_send_generic_auth_notice_email",
-      "entryPointId": "services_email_service_send_generic_auth_notice_email",
-      "path": [
-        "services_email_service_send_generic_auth_notice_email",
-        "services_email_service_send_platform_email",
-        "services_email_service_mailer_send"
-      ],
-      "qualifiedPath": [
-        "services_email_service_send_generic_auth_notice_email",
-        "services_email_service_send_platform_email",
-        "services_email_service_mailer_send"
-      ],
-      "depth": 2,
-      "nodeCount": 3,
-      "fileCount": 1,
-      "files": [
-        "app/services/email_service.py"
       ],
       "criticality": 0.2533,
       "warnings": []
@@ -5421,50 +5179,6 @@
       "warnings": []
     },
     {
-      "id": "flow:app_config_validate_runtime_security",
-      "name": "validate_runtime_security",
-      "entryPoint": "app_config_validate_runtime_security",
-      "entryPointId": "app_config_validate_runtime_security",
-      "path": [
-        "app_config_validate_runtime_security",
-        "app_config_get_settings",
-        "app_config_gmail_is_active",
-        "app_config_has_value",
-        "app_config_is_preview_qa_mode",
-        "app_config_is_production_mode",
-        "app_config_is_public_https_url",
-        "app_config_mercadopago_is_active",
-        "app_config_normalized_env_value",
-        "app_config_paypal_is_active",
-        "app_config_resend_is_active",
-        "app_config_validate_preview_qa_security",
-        "app_config_settings"
-      ],
-      "qualifiedPath": [
-        "app_config_validate_runtime_security",
-        "app_config_get_settings",
-        "app_config_gmail_is_active",
-        "app_config_has_value",
-        "app_config_is_preview_qa_mode",
-        "app_config_is_production_mode",
-        "app_config_is_public_https_url",
-        "app_config_mercadopago_is_active",
-        "app_config_normalized_env_value",
-        "app_config_paypal_is_active",
-        "app_config_resend_is_active",
-        "app_config_validate_preview_qa_security",
-        "app_config_settings"
-      ],
-      "depth": 2,
-      "nodeCount": 13,
-      "fileCount": 1,
-      "files": [
-        "app/config.py"
-      ],
-      "criticality": 0.2277,
-      "warnings": []
-    },
-    {
       "id": "flow:services_ota_service_otaintegrationservice_process_booking_webhook",
       "name": ".process_booking_webhook",
       "entryPoint": "services_ota_service_otaintegrationservice_process_booking_webhook",
@@ -5720,6 +5434,52 @@
         "app/services/payment_link_test_service.py"
       ],
       "criticality": 0.2256,
+      "warnings": []
+    },
+    {
+      "id": "flow:app_config_validate_runtime_security",
+      "name": "validate_runtime_security",
+      "entryPoint": "app_config_validate_runtime_security",
+      "entryPointId": "app_config_validate_runtime_security",
+      "path": [
+        "app_config_validate_runtime_security",
+        "app_config_cors_contains_wildcard",
+        "app_config_get_settings",
+        "app_config_gmail_is_active",
+        "app_config_has_value",
+        "app_config_is_preview_qa_mode",
+        "app_config_is_production_mode",
+        "app_config_is_public_https_url",
+        "app_config_mercadopago_is_active",
+        "app_config_normalized_env_value",
+        "app_config_paypal_is_active",
+        "app_config_resend_is_active",
+        "app_config_validate_preview_qa_security",
+        "app_config_settings"
+      ],
+      "qualifiedPath": [
+        "app_config_validate_runtime_security",
+        "app_config_cors_contains_wildcard",
+        "app_config_get_settings",
+        "app_config_gmail_is_active",
+        "app_config_has_value",
+        "app_config_is_preview_qa_mode",
+        "app_config_is_production_mode",
+        "app_config_is_public_https_url",
+        "app_config_mercadopago_is_active",
+        "app_config_normalized_env_value",
+        "app_config_paypal_is_active",
+        "app_config_resend_is_active",
+        "app_config_validate_preview_qa_security",
+        "app_config_settings"
+      ],
+      "depth": 2,
+      "nodeCount": 14,
+      "fileCount": 1,
+      "files": [
+        "app/config.py"
+      ],
+      "criticality": 0.2236,
       "warnings": []
     },
     {
@@ -7181,38 +6941,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_temporary_action_grant_service_consume_grant",
-      "name": "consume_grant",
-      "entryPoint": "services_temporary_action_grant_service_consume_grant",
-      "entryPointId": "services_temporary_action_grant_service_consume_grant",
-      "path": [
-        "services_temporary_action_grant_service_consume_grant",
-        "services_temporary_action_grant_service_active_membership",
-        "services_temporary_action_grant_service_audit",
-        "services_temporary_action_grant_service_expire_stale_grants",
-        "services_temporary_action_grant_service_utcnow",
-        "services_temporary_action_grant_service_temporarygrantauthorizationerror",
-        "services_temporary_action_grant_service_status_value"
-      ],
-      "qualifiedPath": [
-        "services_temporary_action_grant_service_consume_grant",
-        "services_temporary_action_grant_service_active_membership",
-        "services_temporary_action_grant_service_audit",
-        "services_temporary_action_grant_service_expire_stale_grants",
-        "services_temporary_action_grant_service_utcnow",
-        "services_temporary_action_grant_service_temporarygrantauthorizationerror",
-        "services_temporary_action_grant_service_status_value"
-      ],
-      "depth": 2,
-      "nodeCount": 7,
-      "fileCount": 1,
-      "files": [
-        "app/services/temporary_action_grant_service.py"
-      ],
-      "criticality": 0.2057,
-      "warnings": []
-    },
-    {
       "id": "flow:services_reservation_service_mark_reservation_no_show",
       "name": "mark_reservation_no_show",
       "entryPoint": "services_reservation_service_mark_reservation_no_show",
@@ -7475,42 +7203,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_temporary_action_grant_service_deny_grant",
-      "name": "deny_grant",
-      "entryPoint": "services_temporary_action_grant_service_deny_grant",
-      "entryPointId": "services_temporary_action_grant_service_deny_grant",
-      "path": [
-        "services_temporary_action_grant_service_deny_grant",
-        "services_temporary_action_grant_service_audit",
-        "services_temporary_action_grant_service_grant_for_actor",
-        "services_temporary_action_grant_service_require_approver",
-        "services_temporary_action_grant_service_temporarygrantstateerror",
-        "services_temporary_action_grant_service_status_value",
-        "services_temporary_action_grant_service_temporarygrantnotfounderror",
-        "services_temporary_action_grant_service_active_membership",
-        "services_temporary_action_grant_service_temporarygrantauthorizationerror"
-      ],
-      "qualifiedPath": [
-        "services_temporary_action_grant_service_deny_grant",
-        "services_temporary_action_grant_service_audit",
-        "services_temporary_action_grant_service_grant_for_actor",
-        "services_temporary_action_grant_service_require_approver",
-        "services_temporary_action_grant_service_temporarygrantstateerror",
-        "services_temporary_action_grant_service_status_value",
-        "services_temporary_action_grant_service_temporarygrantnotfounderror",
-        "services_temporary_action_grant_service_active_membership",
-        "services_temporary_action_grant_service_temporarygrantauthorizationerror"
-      ],
-      "depth": 2,
-      "nodeCount": 9,
-      "fileCount": 1,
-      "files": [
-        "app/services/temporary_action_grant_service.py"
-      ],
-      "criticality": 0.1978,
-      "warnings": []
-    },
-    {
       "id": "flow:agent_ops_check_qa_evidence_main",
       "name": "main",
       "entryPoint": "agent_ops_check_qa_evidence_main",
@@ -7542,42 +7234,6 @@
       "fileCount": 1,
       "files": [
         "scripts/agent_ops/check_qa_evidence.py"
-      ],
-      "criticality": 0.1978,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_temporary_action_grant_service_revoke_grant",
-      "name": "revoke_grant",
-      "entryPoint": "services_temporary_action_grant_service_revoke_grant",
-      "entryPointId": "services_temporary_action_grant_service_revoke_grant",
-      "path": [
-        "services_temporary_action_grant_service_revoke_grant",
-        "services_temporary_action_grant_service_audit",
-        "services_temporary_action_grant_service_grant_for_actor",
-        "services_temporary_action_grant_service_require_approver",
-        "services_temporary_action_grant_service_temporarygrantstateerror",
-        "services_temporary_action_grant_service_status_value",
-        "services_temporary_action_grant_service_temporarygrantnotfounderror",
-        "services_temporary_action_grant_service_active_membership",
-        "services_temporary_action_grant_service_temporarygrantauthorizationerror"
-      ],
-      "qualifiedPath": [
-        "services_temporary_action_grant_service_revoke_grant",
-        "services_temporary_action_grant_service_audit",
-        "services_temporary_action_grant_service_grant_for_actor",
-        "services_temporary_action_grant_service_require_approver",
-        "services_temporary_action_grant_service_temporarygrantstateerror",
-        "services_temporary_action_grant_service_status_value",
-        "services_temporary_action_grant_service_temporarygrantnotfounderror",
-        "services_temporary_action_grant_service_active_membership",
-        "services_temporary_action_grant_service_temporarygrantauthorizationerror"
-      ],
-      "depth": 2,
-      "nodeCount": 9,
-      "fileCount": 1,
-      "files": [
-        "app/services/temporary_action_grant_service.py"
       ],
       "criticality": 0.1978,
       "warnings": []
@@ -7750,46 +7406,6 @@
       "fileCount": 1,
       "files": [
         "app/services/analytics_ai_providers.py"
-      ],
-      "criticality": 0.1927,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_temporary_action_grant_service_approve_grant",
-      "name": "approve_grant",
-      "entryPoint": "services_temporary_action_grant_service_approve_grant",
-      "entryPointId": "services_temporary_action_grant_service_approve_grant",
-      "path": [
-        "services_temporary_action_grant_service_approve_grant",
-        "services_temporary_action_grant_service_audit",
-        "services_temporary_action_grant_service_grant_for_actor",
-        "services_temporary_action_grant_service_require_approver",
-        "services_temporary_action_grant_service_temporarygrantmfaerror",
-        "services_temporary_action_grant_service_temporarygrantstateerror",
-        "services_temporary_action_grant_service_utcnow",
-        "services_temporary_action_grant_service_status_value",
-        "services_temporary_action_grant_service_temporarygrantnotfounderror",
-        "services_temporary_action_grant_service_active_membership",
-        "services_temporary_action_grant_service_temporarygrantauthorizationerror"
-      ],
-      "qualifiedPath": [
-        "services_temporary_action_grant_service_approve_grant",
-        "services_temporary_action_grant_service_audit",
-        "services_temporary_action_grant_service_grant_for_actor",
-        "services_temporary_action_grant_service_require_approver",
-        "services_temporary_action_grant_service_temporarygrantmfaerror",
-        "services_temporary_action_grant_service_temporarygrantstateerror",
-        "services_temporary_action_grant_service_utcnow",
-        "services_temporary_action_grant_service_status_value",
-        "services_temporary_action_grant_service_temporarygrantnotfounderror",
-        "services_temporary_action_grant_service_active_membership",
-        "services_temporary_action_grant_service_temporarygrantauthorizationerror"
-      ],
-      "depth": 2,
-      "nodeCount": 11,
-      "fileCount": 1,
-      "files": [
-        "app/services/temporary_action_grant_service.py"
       ],
       "criticality": 0.1927,
       "warnings": []
@@ -7994,40 +7610,6 @@
         "scripts/agent_ops/trusted_release_gate.py"
       ],
       "criticality": 0.1909,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_audit_timeline_service_list_audit_timeline",
-      "name": "list_audit_timeline",
-      "entryPoint": "services_audit_timeline_service_list_audit_timeline",
-      "entryPointId": "services_audit_timeline_service_list_audit_timeline",
-      "path": [
-        "services_audit_timeline_service_list_audit_timeline",
-        "services_audit_timeline_service_details_for_row",
-        "services_audit_timeline_service_safe_resource_id",
-        "services_audit_timeline_service_source_filters",
-        "services_audit_timeline_service_summary",
-        "services_audit_timeline_service_parse_redacted_json",
-        "services_audit_timeline_service_redact_value",
-        "services_audit_timeline_service_redact_text"
-      ],
-      "qualifiedPath": [
-        "services_audit_timeline_service_list_audit_timeline",
-        "services_audit_timeline_service_details_for_row",
-        "services_audit_timeline_service_safe_resource_id",
-        "services_audit_timeline_service_source_filters",
-        "services_audit_timeline_service_summary",
-        "services_audit_timeline_service_parse_redacted_json",
-        "services_audit_timeline_service_redact_value",
-        "services_audit_timeline_service_redact_text"
-      ],
-      "depth": 4,
-      "nodeCount": 8,
-      "fileCount": 1,
-      "files": [
-        "app/services/audit_timeline_service.py"
-      ],
-      "criticality": 0.19,
       "warnings": []
     },
     {
@@ -10376,41 +9958,27 @@
       "path": [
         "services_subscription_entitlements_grant_comped",
         "services_subscription_entitlements_actor_payload",
-        "services_subscription_entitlements_as_utc",
-        "services_subscription_entitlements_assert_same_adjustment",
-        "services_subscription_entitlements_default_adjustment_idempotency_key",
-        "services_subscription_entitlements_normalize_adjustment_reason",
         "services_subscription_entitlements_now",
         "services_subscription_entitlements_plan_defaults",
-        "services_subscription_entitlements_record_comped_adjustment",
         "services_subscription_entitlements_record_event",
         "services_subscription_entitlements_sync_legacy_tables",
         "services_subscription_entitlements_upsert_subscription",
-        "services_subscription_entitlements_actor_role",
-        "services_subscription_entitlements_actor_user_id",
         "services_subscription_entitlements_apply_plan",
         "services_subscription_entitlements_ensure_subscription_seed"
       ],
       "qualifiedPath": [
         "services_subscription_entitlements_grant_comped",
         "services_subscription_entitlements_actor_payload",
-        "services_subscription_entitlements_as_utc",
-        "services_subscription_entitlements_assert_same_adjustment",
-        "services_subscription_entitlements_default_adjustment_idempotency_key",
-        "services_subscription_entitlements_normalize_adjustment_reason",
         "services_subscription_entitlements_now",
         "services_subscription_entitlements_plan_defaults",
-        "services_subscription_entitlements_record_comped_adjustment",
         "services_subscription_entitlements_record_event",
         "services_subscription_entitlements_sync_legacy_tables",
         "services_subscription_entitlements_upsert_subscription",
-        "services_subscription_entitlements_actor_role",
-        "services_subscription_entitlements_actor_user_id",
         "services_subscription_entitlements_apply_plan",
         "services_subscription_entitlements_ensure_subscription_seed"
       ],
       "depth": 2,
-      "nodeCount": 16,
+      "nodeCount": 9,
       "fileCount": 1,
       "files": [
         "app/services/subscription_entitlements.py"
@@ -11730,32 +11298,6 @@
       "fileCount": 1,
       "files": [
         "alembic/versions/dee1bd0660f6_ota_allocation_foundation.py"
-      ],
-      "criticality": 0.17,
-      "warnings": []
-    },
-    {
-      "id": "flow:versions_e6aadf684343_add_subscription_adjustment_ledger_upgrade",
-      "name": "upgrade",
-      "entryPoint": "versions_e6aadf684343_add_subscription_adjustment_ledger_upgrade",
-      "entryPointId": "versions_e6aadf684343_add_subscription_adjustment_ledger_upgrade",
-      "path": [
-        "versions_e6aadf684343_add_subscription_adjustment_ledger_upgrade",
-        "versions_e6aadf684343_add_subscription_adjustment_ledger_ensure_subscription_composite_target",
-        "versions_e6aadf684343_add_subscription_adjustment_ledger_install_rls",
-        "versions_e6aadf684343_add_subscription_adjustment_ledger_has_unique"
-      ],
-      "qualifiedPath": [
-        "versions_e6aadf684343_add_subscription_adjustment_ledger_upgrade",
-        "versions_e6aadf684343_add_subscription_adjustment_ledger_ensure_subscription_composite_target",
-        "versions_e6aadf684343_add_subscription_adjustment_ledger_install_rls",
-        "versions_e6aadf684343_add_subscription_adjustment_ledger_has_unique"
-      ],
-      "depth": 2,
-      "nodeCount": 4,
-      "fileCount": 1,
-      "files": [
-        "alembic/versions/e6aadf684343_add_subscription_adjustment_ledger.py"
       ],
       "criticality": 0.17,
       "warnings": []
@@ -13178,6 +12720,28 @@
       "fileCount": 1,
       "files": [
         "frontend/src/views/protected/analytics/AnalyticsPages.tsx"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_invitations_accept_invitation",
+      "name": "accept_invitation",
+      "entryPoint": "api_invitations_accept_invitation",
+      "entryPointId": "api_invitations_accept_invitation",
+      "path": [
+        "api_invitations_accept_invitation",
+        "api_invitations_source_key"
+      ],
+      "qualifiedPath": [
+        "api_invitations_accept_invitation",
+        "api_invitations_source_key"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/invitations.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -14895,28 +14459,6 @@
       "warnings": []
     },
     {
-      "id": "flow:versions_0f85dca5b98b_add_temporary_action_grants_downgrade",
-      "name": "downgrade",
-      "entryPoint": "versions_0f85dca5b98b_add_temporary_action_grants_downgrade",
-      "entryPointId": "versions_0f85dca5b98b_add_temporary_action_grants_downgrade",
-      "path": [
-        "versions_0f85dca5b98b_add_temporary_action_grants_downgrade",
-        "versions_0f85dca5b98b_add_temporary_action_grants_remove_rls"
-      ],
-      "qualifiedPath": [
-        "versions_0f85dca5b98b_add_temporary_action_grants_downgrade",
-        "versions_0f85dca5b98b_add_temporary_action_grants_remove_rls"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "alembic/versions/0f85dca5b98b_add_temporary_action_grants.py"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
       "id": "flow:versions_20260408_launch_security_hardening_downgrade",
       "name": "downgrade",
       "entryPoint": "versions_20260408_launch_security_hardening_downgrade",
@@ -15158,28 +14700,6 @@
       "fileCount": 1,
       "files": [
         "alembic/versions/d4f8c21e7b10_extend_payment_link_tests_states.py"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
-      "id": "flow:versions_e6aadf684343_add_subscription_adjustment_ledger_downgrade",
-      "name": "downgrade",
-      "entryPoint": "versions_e6aadf684343_add_subscription_adjustment_ledger_downgrade",
-      "entryPointId": "versions_e6aadf684343_add_subscription_adjustment_ledger_downgrade",
-      "path": [
-        "versions_e6aadf684343_add_subscription_adjustment_ledger_downgrade",
-        "versions_e6aadf684343_add_subscription_adjustment_ledger_remove_rls"
-      ],
-      "qualifiedPath": [
-        "versions_e6aadf684343_add_subscription_adjustment_ledger_downgrade",
-        "versions_e6aadf684343_add_subscription_adjustment_ledger_remove_rls"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "alembic/versions/e6aadf684343_add_subscription_adjustment_ledger.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -15894,6 +15414,28 @@
       "fileCount": 1,
       "files": [
         "app/services/guest_profile.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_invitations_get_invitation",
+      "name": "get_invitation",
+      "entryPoint": "api_invitations_get_invitation",
+      "entryPointId": "api_invitations_get_invitation",
+      "path": [
+        "api_invitations_get_invitation",
+        "api_invitations_source_key"
+      ],
+      "qualifiedPath": [
+        "api_invitations_get_invitation",
+        "api_invitations_source_key"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/invitations.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -18476,28 +18018,6 @@
       "fileCount": 1,
       "files": [
         "app/services/waitlist_service.py"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
-      "id": "flow:versions_0f85dca5b98b_add_temporary_action_grants_upgrade",
-      "name": "upgrade",
-      "entryPoint": "versions_0f85dca5b98b_add_temporary_action_grants_upgrade",
-      "entryPointId": "versions_0f85dca5b98b_add_temporary_action_grants_upgrade",
-      "path": [
-        "versions_0f85dca5b98b_add_temporary_action_grants_upgrade",
-        "versions_0f85dca5b98b_add_temporary_action_grants_install_rls"
-      ],
-      "qualifiedPath": [
-        "versions_0f85dca5b98b_add_temporary_action_grants_upgrade",
-        "versions_0f85dca5b98b_add_temporary_action_grants_install_rls"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "alembic/versions/0f85dca5b98b_add_temporary_action_grants.py"
       ],
       "criticality": 0.16,
       "warnings": []

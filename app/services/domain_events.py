@@ -144,7 +144,7 @@ def _get_redis_client() -> redis.Redis | None:
     try:
         return redis.Redis.from_url(settings.REDIS_URL, decode_responses=True)
     except Exception as exc:  # pragma: no cover - defensive config fallback
-        logger.warning("realtime_events.redis_unavailable", extra={"error": str(exc)})
+        logger.warning("realtime_events.redis_unavailable", extra={"error_type": type(exc).__name__})
         return None
 
 

@@ -140,7 +140,10 @@ def _positive_id(value: Any, field: str) -> int:
 def _unavailable(message: str, exc: Exception | None = None):
     if _required():
         raise AnalyticsWarehouseUnavailable(message) from exc
-    logger.warning("analytics_warehouse.degraded", extra={"error": message})
+    logger.warning(
+        "analytics_warehouse.degraded",
+        extra={"error_type": type(exc).__name__ if exc is not None else "unavailable"},
+    )
 
 
 @dataclass(slots=True)

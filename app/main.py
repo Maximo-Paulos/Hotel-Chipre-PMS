@@ -118,13 +118,19 @@ def _seed_permission_matrix_once() -> None:
     try:
         db = get_session_factory()()
     except Exception as exc:  # pragma: no cover - defensive, see docstring
-        LOGGER.warning("permission matrix seed: no session factory available: %s", exc)
+        LOGGER.warning(
+            "permission matrix seed: no session factory available error_type=%s",
+            type(exc).__name__,
+        )
         return
     try:
         ensure_permission_matrix_seeded(db)
         db.commit()
     except Exception as exc:  # pragma: no cover - defensive, see docstring
-        LOGGER.warning("permission matrix seed: deferred to first request: %s", exc)
+        LOGGER.warning(
+            "permission matrix seed: deferred to first request error_type=%s",
+            type(exc).__name__,
+        )
         db.rollback()
     finally:
         db.close()
@@ -191,22 +197,22 @@ async def security_headers(request: Request, call_next):
         response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
     return response
 
-# CORS: local dev + production domains (add CORS_ORIGINS env var for extra origins)
+# CORS: local dev origins and Vercel previews are development/QA conveniences.
+# Production must use explicit origins from CORS_ORIGINS only.
 _base_origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
 ]
-_extra = get_settings().CORS_ORIGINS
+_runtime_settings = get_settings()
+_extra = _runtime_settings.CORS_ORIGINS
 _extra_entries = [o.strip() for o in _extra.split(",") if o.strip()]
-# Wildcard is incompatible with allow_credentials=True in the browser spec
-# (the server must echo a concrete Origin). When operators set CORS_ORIGINS=*
-# we widen the regex instead of shipping a literal "*" that silently fails.
 _wildcard = any(entry == "*" for entry in _extra_entries)
 _extra_origins = [entry for entry in _extra_entries if entry != "*"]
-allowed_origins = _base_origins + _extra_origins
-_allow_origin_regex = r".*" if _wildcard else r"https://.*\.vercel\.app"
+_production = is_production_mode(_runtime_settings)
+allowed_origins = ([] if _production else _base_origins) + _extra_origins
+_allow_origin_regex = None if _production else (r".*" if _wildcard else r"https://.*\.vercel\.app")
 
 app.add_middleware(
     CORSMiddleware,

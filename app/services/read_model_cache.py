@@ -47,7 +47,7 @@ def _get_redis_client() -> redis.Redis | None:
     try:
         return redis.Redis.from_url(_settings().REDIS_URL, decode_responses=True)
     except Exception as exc:  # pragma: no cover - defensive runtime fallback
-        logger.warning("read_model_cache.redis_unavailable", extra={"error": str(exc)})
+        logger.warning("read_model_cache.redis_unavailable", extra={"error_type": type(exc).__name__})
         return None
 
 
@@ -67,7 +67,7 @@ def _store_json(key: str, payload: Any, ttl_seconds: int) -> None:
     try:
         client.setex(key, ttl_seconds, json.dumps(jsonable_encoder(payload), ensure_ascii=True, sort_keys=True))
     except Exception as exc:  # pragma: no cover - defensive runtime fallback
-        logger.warning("read_model_cache.store_failed", extra={"key": key, "error": str(exc)})
+        logger.warning("read_model_cache.store_failed", extra={"key": key, "error_type": type(exc).__name__})
 
 
 def _get_cached_or_compute(key: str, ttl_seconds: int, producer: Callable[[], T]) -> T:
@@ -78,7 +78,7 @@ def _get_cached_or_compute(key: str, ttl_seconds: int, producer: Callable[[], T]
             if cached is not None:
                 return cached
         except Exception as exc:  # pragma: no cover - defensive runtime fallback
-            logger.warning("read_model_cache.read_failed", extra={"key": key, "error": str(exc)})
+            logger.warning("read_model_cache.read_failed", extra={"key": key, "error_type": type(exc).__name__})
 
     payload = producer()
     _store_json(key, payload, ttl_seconds)
@@ -201,5 +201,5 @@ def _invalidate_hotel_cache_prefixes(hotel_id: int, families: tuple[str, ...]) -
     except Exception as exc:  # pragma: no cover - defensive runtime fallback
         logger.warning(
             "read_model_cache.invalidate_failed",
-            extra={"hotel_id": hotel_id, "families": ",".join(families), "error": str(exc)},
+            extra={"hotel_id": hotel_id, "families": ",".join(families), "error_type": type(exc).__name__},
         )

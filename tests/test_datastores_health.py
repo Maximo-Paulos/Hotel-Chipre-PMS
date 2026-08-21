@@ -103,6 +103,24 @@ def test_redis_health_is_active_for_distributed_locks_when_cache_is_off(monkeypa
     assert payload["distributed_locks_enabled"] is True
 
 
+def test_postgres_healthcheck_does_not_return_or_log_connection_error(monkeypatch: pytest.MonkeyPatch, caplog):
+    secret_dsn = "postgresql://app:supersecret@db.example/hotel"
+
+    def fail_to_create_session_factory():
+        raise RuntimeError(secret_dsn)
+
+    monkeypatch.setattr(db_module, "get_session_factory", fail_to_create_session_factory)
+
+    with caplog.at_level("WARNING"):
+        import app.api.health as health_module
+        result = health_module._postgres_healthcheck()
+
+    assert result["status"] == "error"
+    assert result["error"] == "PostgreSQL healthcheck failed"
+    assert secret_dsn not in caplog.text
+    assert secret_dsn not in str(result)
+
+
 def test_import_app_main_succeeds_when_optional_drivers_are_missing():
     script = r"""
 import builtins

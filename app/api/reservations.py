@@ -186,11 +186,12 @@ def _trigger_reoptimization_bg(hotel_id: int, trigger_type: str = "new_reservati
         set_tenant_hotel_context(db, hotel_id)
         run_persisted_allocation(db, hotel_id=hotel_id, trigger_type=trigger_type)
         db.commit()
-    except Exception:
-        logger.exception(
+    except Exception as exc:
+        logger.error(
             "Background reservation reoptimization failed for hotel_id=%s trigger_type=%s",
             hotel_id,
             trigger_type,
+            extra={"error_type": type(exc).__name__},
         )
         if db is not None:
             db.rollback()
@@ -330,7 +331,7 @@ def list_reservations(
     try:
         return [_to_read(r) for r in reservations]
     except Exception as exc:
-        logger.exception("Reservation serialization failed for hotel_id=%s", context.hotel_id)
+        logger.error("Reservation serialization failed for hotel_id=%s error_type=%s", context.hotel_id, type(exc).__name__)
         raise HTTPException(status_code=500, detail="No se pudieron serializar las reservas") from exc
 
 
@@ -344,7 +345,7 @@ def list_pending_actions(
     try:
         return list_pending_reservation_actions(db, hotel_id=context.hotel_id, limit=safe_limit)
     except PaymentError as exc:
-        logger.exception("Pending actions failed for hotel_id=%s", context.hotel_id)
+        logger.error("Pending actions failed for hotel_id=%s error_type=%s", context.hotel_id, type(exc).__name__)
         raise HTTPException(
             status_code=500,
             detail=f"No se pudieron calcular las acciones pendientes: {exc}",
@@ -619,8 +620,8 @@ def cancel_reservation(
             from app.services.payment_link_service import cancel_active_links_for_reservation
 
             cancel_active_links_for_reservation(db, context.hotel_id, r.id, reason="reservation cancelled")
-        except Exception:  # best-effort; never block the cancellation
-            logger.exception("Failed cancelling payment links for reservation %s", r.id)
+        except Exception as exc:  # best-effort; never block the cancellation
+            logger.error("Failed cancelling payment links for reservation %s error_type=%s", r.id, type(exc).__name__)
         db.commit()
         db.refresh(r)
         audit_log_service.safe_create_audit_log(

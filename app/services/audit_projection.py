@@ -16,4 +16,4 @@ def project_audit_to_mongo(doc: dict[str, Any]) -> None:
     try:
         db.audit_logs.insert_one(doc)
     except Exception as exc:  # pragma: no cover - defensive projection isolation
-        logger.debug("audit_projection.mongo_insert_failed", extra={"error": str(exc)})
+        logger.debug("audit_projection.mongo_insert_failed", extra={"error_type": type(exc).__name__})

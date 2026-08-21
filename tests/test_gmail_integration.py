@@ -12,6 +12,7 @@ from app.services.integration_service import (
     GMAIL_SEND_SCOPE,
     build_redirect_url,
     encrypt_payload,
+    redact_integration_error,
     validate_gmail_credentials,
     verify_connection_health,
 )
@@ -25,6 +26,17 @@ def _enable_mocked_external_effects(monkeypatch):
     get_settings.cache_clear()
     yield
     get_settings.cache_clear()
+
+
+def test_integration_error_redaction_hides_credentials_and_dsn_passwords():
+    secret = "super-secret-token"
+    message = f"access_token={secret}; database=postgresql://hotel:db-password@db.example/pms"
+
+    redacted = redact_integration_error(message)
+
+    assert secret not in redacted
+    assert "db-password" not in redacted
+    assert "[REDACTED]" in redacted
 
 
 class _Response:

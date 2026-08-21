@@ -102,11 +102,7 @@ def _create_mercadopago_preference(db: Session, hotel_id: int, link: PaymentLink
         timeout=20,
     )
     if not response.ok:
-        try:
-            detail = response.json()
-        except Exception:
-            detail = response.text
-        raise PaymentLinkError(f"Mercado Pago rechazo la creacion del link: {detail}")
+        raise PaymentLinkError("Mercado Pago rechazo la creacion del link.")
     data = response.json()
     checkout_url = data.get("init_point") or data.get("sandbox_init_point")
     if not checkout_url:

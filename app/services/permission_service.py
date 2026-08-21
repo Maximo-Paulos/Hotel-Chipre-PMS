@@ -380,8 +380,8 @@ def publish_permission_invalidation(hotel_id: int) -> None:
         )
     except RealtimeEventsUnavailable:
         logger.warning("permission_invalidation.realtime_unavailable", extra={"hotel_id": hotel_id})
-    except Exception:
-        logger.exception("permission_invalidation.failed", extra={"hotel_id": hotel_id})
+    except Exception as exc:
+        logger.error("permission_invalidation.failed", extra={"hotel_id": hotel_id, "error_type": type(exc).__name__})
 
 
 def get_effective_permission_details(

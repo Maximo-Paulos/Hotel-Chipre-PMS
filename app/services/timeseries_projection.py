@@ -132,7 +132,7 @@ def project_room_state_event(
             row,
         )
     except Exception as exc:  # pragma: no cover - defensive datastore isolation
-        logger.warning("cassandra.room_state_projection_failed", extra={"error": str(exc)})
+        logger.warning("cassandra.room_state_projection_failed", extra={"error_type": type(exc).__name__})
 
 
 def project_daily_rate_change(
@@ -157,4 +157,4 @@ def project_daily_rate_change(
             row,
         )
     except Exception as exc:  # pragma: no cover - defensive datastore isolation
-        logger.warning("cassandra.daily_rate_projection_failed", extra={"error": str(exc)})
+        logger.warning("cassandra.daily_rate_projection_failed", extra={"error_type": type(exc).__name__})

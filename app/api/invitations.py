@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import Field
 from sqlalchemy.orm import Session
 
@@ -6,6 +6,7 @@ from app.database import get_db
 from app.dependencies.auth import get_current_user_optional
 from app.models.audit_log import AuditActionEnum
 from app.models.hotel_config import HotelConfiguration
+from app.adapters.rate_limiter import invitation_accept_limiter, invitation_preview_limiter
 from app.models.hotel_membership import HotelMembership
 from app.models.invitation import StaffInvitation
 from app.models.user import User
@@ -25,6 +26,10 @@ from app.services.subscription_service import ensure_staff_within_limit
 router = APIRouter(prefix="/api/invitations", tags=["Invitations"])
 
 
+def _source_key(request: Request) -> str:
+    return (request.client.host if request.client else None) or "unknown"
+
+
 def _available_invitation(token: str, db: Session) -> StaffInvitation:
     invitation = find_by_token(db, token)
     if invitation is None or invitation.status != "pending":
@@ -35,7 +40,12 @@ def _available_invitation(token: str, db: Session) -> StaffInvitation:
 
 
 @router.get("/{token}")
-def get_invitation(token: str, db: Session = Depends(get_db)):
+def get_invitation(token: str, request: Request, db: Session = Depends(get_db)):
+    key = _source_key(request)
+    if not invitation_preview_limiter.allow(key, db=db):
+        db.commit()
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Demasiadas consultas de invitación")
+    db.commit()
     invitation = _available_invitation(token, db)
     hotel = db.get(HotelConfiguration, invitation.hotel_id)
     return {
@@ -58,9 +68,15 @@ class AcceptPayload(LoginRequest):
 def accept_invitation(
     token: str,
     payload: AcceptPayload,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User | None = Depends(get_current_user_optional),
 ):
+    key = _source_key(request)
+    if not invitation_accept_limiter.allow(key, db=db):
+        db.commit()
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Demasiados intentos de invitación")
+    db.commit()
     invitation = _available_invitation(token, db)
     email = invitation.email
     role = invitation.role

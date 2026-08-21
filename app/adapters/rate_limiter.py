@@ -95,6 +95,8 @@ reset_request_source_limiter = SimpleRateLimiter(
     "password_reset_source", limit=5, window_seconds=15 * 60
 )
 invite_limiter = SimpleRateLimiter("invite_user", limit=5, window_seconds=60 * 60)
+invitation_preview_limiter = SimpleRateLimiter("invitation_preview", limit=30, window_seconds=15 * 60)
+invitation_accept_limiter = SimpleRateLimiter("invitation_accept", limit=10, window_seconds=15 * 60)
 
 # Throttles guesses of the 6-digit one-time codes themselves (as opposed to
 # how often a new code can be requested). Without this, /verify-email,

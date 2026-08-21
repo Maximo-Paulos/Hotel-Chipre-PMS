@@ -154,7 +154,7 @@ class GemmaService:
             parsed = self._extract_policy_payload(payload)
             return self._sanitize_remote_policy(parsed, seed=seed, provider=provider)
         except Exception as exc:
-            LOGGER.warning("Gemma suggestion fallback triggered: %s", exc)
+            LOGGER.warning("Gemma suggestion fallback triggered error_type=%s", type(exc).__name__)
             return self._build_fallback_draft(
                 seed,
                 source_kind="fallback",
@@ -202,7 +202,7 @@ class GemmaService:
             parsed = self._extract_policy_payload(payload)
             return self._sanitize_remote_policy(parsed, seed=seed, provider=provider)
         except Exception as exc:
-            LOGGER.warning("Gemma feedback suggestion fallback triggered: %s", exc)
+            LOGGER.warning("Gemma feedback suggestion fallback triggered error_type=%s", type(exc).__name__)
             return self._build_fallback_draft(
                 seed,
                 source_kind="fallback",
