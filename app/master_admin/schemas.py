@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
@@ -39,6 +40,15 @@ class MasterAdminUserPayload(BaseModel):
 
 
 class MasterAdminLoginResponse(BaseModel):
+    user: MasterAdminUserPayload
+    csrf_token: str
+    expires_at: datetime
+
+
+class MasterAdminMfaSetupResponse(BaseModel):
+    """A primary-authenticated session that may only configure mandatory MFA."""
+
+    requires_mfa_setup: Literal[True] = True
     user: MasterAdminUserPayload
     csrf_token: str
     expires_at: datetime

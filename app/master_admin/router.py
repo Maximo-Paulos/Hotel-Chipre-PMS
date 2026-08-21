@@ -34,6 +34,7 @@ from .schemas import (
     MasterAdminMfaDisableRequest,
     MasterAdminMfaEnrollRequest,
     MasterAdminMfaLoginRequest,
+    MasterAdminMfaSetupResponse,
     MasterAdminSessionResponse,
     MasterAdminUserPayload,
     MasterEmailStatusPayload,
@@ -73,7 +74,7 @@ def _serialize_user(user: User) -> MasterAdminUserPayload:
     )
 
 
-@router.post("/auth/login", response_model=MasterAdminLoginResponse | MfaChallengeResponse)
+@router.post("/auth/login", response_model=MasterAdminLoginResponse | MfaChallengeResponse | MasterAdminMfaSetupResponse)
 def login(payload: MasterAdminLoginRequest, request: Request, response: Response, db: Session = Depends(get_db)):
     user = authenticate_master_login(db, payload.email, payload.password, payload.pin)
     if mfa_service.get_active_mfa_secret(db, user.id):
@@ -89,12 +90,13 @@ def login(payload: MasterAdminLoginRequest, request: Request, response: Response
         db,
         actor_user_id=user.id,
         action="master_admin_login",
-        metadata={"email": user.email},
+        outcome="mfa_setup_required",
+        metadata={"reason": "mfa_not_configured"},
         request=request,
     )
     db.commit()
     set_master_session_cookies(response, session_token, csrf_token)
-    return MasterAdminLoginResponse(user=_serialize_user(user), csrf_token=csrf_token, expires_at=session.expires_at)
+    return MasterAdminMfaSetupResponse(user=_serialize_user(user), csrf_token=csrf_token, expires_at=session.expires_at)
 
 
 @router.post("/auth/login/mfa", response_model=MasterAdminLoginResponse)
@@ -120,7 +122,13 @@ def complete_mfa_login(
 
 @router.post("/auth/logout")
 def logout(request: Request, response: Response, db: Session = Depends(get_db)):
-    context = require_master_admin(request=request, db=db, csrf_header=request.headers.get("X-CSRF-Token"), write=True)
+    context = require_master_admin(
+        request=request,
+        db=db,
+        csrf_header=request.headers.get("X-CSRF-Token"),
+        write=True,
+        allow_mfa_setup=True,
+    )
     context.session.revoked_at = datetime.now(timezone.utc)
     clear_master_session_cookies(response)
     audit_master_action(db, actor_user_id=context.user.id, action="master_admin_logout", request=request)
@@ -140,7 +148,13 @@ def enroll_mfa(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    context = require_master_admin(request=request, db=db, csrf_header=request.headers.get("X-CSRF-Token"), write=True)
+    context = require_master_admin(
+        request=request,
+        db=db,
+        csrf_header=request.headers.get("X-CSRF-Token"),
+        write=True,
+        allow_mfa_setup=True,
+    )
     if not verify_password(payload.password, context.user.password_hash):
         audit_master_action(
             db,
@@ -186,7 +200,13 @@ def confirm_mfa_enrollment(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    context = require_master_admin(request=request, db=db, csrf_header=request.headers.get("X-CSRF-Token"), write=True)
+    context = require_master_admin(
+        request=request,
+        db=db,
+        csrf_header=request.headers.get("X-CSRF-Token"),
+        write=True,
+        allow_mfa_setup=True,
+    )
     allow_master_admin_mfa_attempt(db, "enroll", context.user.id)
     try:
         recovery_codes = mfa_service.confirm_enrollment(db, context.user.id, payload.code)

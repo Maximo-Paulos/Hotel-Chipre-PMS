@@ -254,6 +254,10 @@ Depends on: `TECH-0021`
 
 **Required:** alta TOTP con reauth y confirmación; secreto cifrado; replay protection; recovery codes hasheados single-use; desactivación segura; step-up corto ligado a usuario/sesión/hotel/propósito; MFA obligatorio para Master Admin y política gradual para Owners/permisos críticos.
 
+**Cierre del gap MFA obligatorio Master Admin (2026-08-21):** el gap de obligatoriedad quedó cerrado en el código de trabajo. El login Master Admin con password+PIN sin TOTP sólo emite un estado `requires_mfa_setup` de setup-only; `auth/me` y toda operación del panel quedan bloqueadas server-side hasta confirmar TOTP. Con TOTP activo, el login entrega un challenge corto y no crea sesión hasta validar el segundo factor. La sesión queda bloqueada para operar inmediatamente después de desactivar MFA. Owners/hoteles/staff normales no fueron modificados.
+
+**Evidencia:** `code_sha` base `7775b7b665948d72bf9adebe00de61255d528571` (cambios aún sin commit por bloqueo de escritura en el metadata Git compartido del worktree); archivos `app/master_admin/router.py`, `app/master_admin/security.py`, `app/master_admin/schemas.py`, `frontend/src/master_admin/{api.ts,layout.tsx,pages/LoginPage.tsx,session.tsx}` y `tests/test_master_admin_panel.py`; Graphify actualizado, `portable-check` OK y `py_compile` de los módulos tocados OK. El comando requerido `.venv/bin/python -m pytest -q` no pudo iniciar porque el venv no tiene `pytest`; la instalación desde `requirements.txt` quedó bloqueada por DNS sin acceso a PyPI. Por eso el estado permanece `VERIFY` y no `VERIFIED` hasta repetir la suite completa en un entorno con dependencias.
+
 ---
 
 ### TECH-0024 — Google OIDC y Sign in with Apple

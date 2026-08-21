@@ -43,7 +43,7 @@ export function MasterAdminProtectedShell() {
   const location = useLocation();
 
   useEffect(() => {
-    if (status === "anonymous") {
+    if (status === "anonymous" || status === "mfa_setup_required") {
       navigate("/adminpmsmaster/login", { replace: true, state: { from: location.pathname } });
     }
   }, [location.pathname, navigate, status]);
@@ -60,7 +60,7 @@ export function MasterAdminProtectedShell() {
     );
   }
 
-  if (status === "anonymous") {
+  if (status !== "authenticated") {
     return <Navigate to="/adminpmsmaster/login" replace />;
   }
 
