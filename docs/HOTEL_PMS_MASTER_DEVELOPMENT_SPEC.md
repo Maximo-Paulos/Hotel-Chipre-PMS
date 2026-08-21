@@ -486,10 +486,44 @@ Depends on: `TECH-0100`, `TECH-0041`
 
 ### TECH-0110 — Backups, recuperación y continuidad
 
-Status: `AUDIT_REQUIRED`  
+Status: `IN_PROGRESS`
 Priority: `P1`
 
 **Required:** backups automáticos, PITR, retención, copia/backup inmutable cuando corresponda, archivos versionados/soft delete, RPO/RTO, restore drills, runbooks y alertas. Un backup no cuenta como verificado hasta restaurarlo.
+
+**Evidencia local — 2026-08-21:**
+
+- SHA base auditado: `6fd71f08de84b5c891b9ea9e47d8f802831f964f`.
+
+- `app/models/guest.py` y `app/models/payment.py` incorporan el envelope nullable
+  `deleted_at`/`deleted_by_user_id` e índices tenant-scoped; reservas, habitaciones,
+  documentos, tarifas y stock ya tenían soft-delete operativo. La migración
+  `alembic/versions/20260821_tech0110_operational_soft_delete.py` es aditiva,
+  reversible y no cambia el ledger ni agrega endpoints de borrado.
+- `scripts/backup/verify_local_backup_restore.py` implementa dump → restore
+  descartable para SQLite y PostgreSQL local-only; compara conteos de
+  `guests`, `reservations`, `payments` y `audit_logs` y valida integridad SQLite.
+- Resultado reproducible local: `status=verified`, `integrity_check=ok`,
+  `foreign_key_check=ok`, conteos de tablas fuente/restaurada iguales. El
+  resultado ejecutado con fixture sintético fue `audit_logs=1`, `guests=1`,
+  `payments=0`, `reservations=0`; el comando y la limitación del entorno quedan en
+  `docs/runbooks/backups-and-continuity.md`.
+- `render.yaml` permite confirmar sólo que Render ejecuta Alembic pre-deploy y
+  que su Key Value declara `journal-snapshot`; el repo no declara backup/PITR de
+  PostgreSQL. Disponibilidad, retención, inmutabilidad, alertas y plan Supabase
+  quedan `needs-verification` en la consola del proveedor.
+
+**Pendiente de acción humana:** confirmar RPO/RTO/retención contratados, activar o
+ajustar PITR si corresponde, definir copia inmutable, configurar alertas, y
+ejecutar/firma un restore drill real sobre un destino aislado de
+Render/Supabase. No se restauró producción ni se modificaron cuentas, secretos,
+billing o cutovers.
+
+**Runbook:** `docs/runbooks/backups-and-continuity.md`.
+
+**Cierre de entrega:** commit convencional, push y PR quedan pendientes porque
+el sandbox no permite escribir el índice/git común del worktree
+(`/Users/maximopaulos/AI-Workspace/projects/Hotel-Chipre-PMS/.git`).
 
 ---
 

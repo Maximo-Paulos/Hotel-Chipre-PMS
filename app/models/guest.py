@@ -115,6 +115,12 @@ class Guest(Base):
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
     )
+    # TECH-0110: preserve the guest row for audit/retention workflows instead
+    # of physically deleting identity and legal-record data.
+    deleted_at = Column(DateTime, nullable=True)
+    deleted_by_user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
     # Relationships
     companions = relationship("GuestCompanion", back_populates="guest", lazy="selectin", cascade="all, delete-orphan")
@@ -134,6 +140,7 @@ class Guest(Base):
         Index("ix_guest_hotel_email", "hotel_id", "email"),
         Index("ix_guest_hotel_phone", "hotel_id", "phone"),
         Index("ix_guest_hotel_document_number", "hotel_id", "document_number"),
+        Index("ix_guest_hotel_deleted_at", "hotel_id", "deleted_at"),
     )
 
     @property

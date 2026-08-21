@@ -15,7 +15,7 @@ import enum
 from sqlalchemy import (
     Boolean, CheckConstraint, Column, DateTime, Float, ForeignKey,
     ForeignKeyConstraint, Integer, JSON, Numeric, String, Text,
-    UniqueConstraint, func,
+    Index, UniqueConstraint, func,
 )
 from sqlalchemy.orm import relationship
 
@@ -159,6 +159,12 @@ class Payment(Base):
     processed_at = Column(DateTime, nullable=True)
     updated_at = Column(DateTime, nullable=False, server_default=func.now(), onupdate=func.now())
     expires_at = Column(DateTime, nullable=True)
+    # TECH-0110: keep payment evidence available for retention/audit workflows.
+    # No delete endpoint is introduced by this schema change.
+    deleted_at = Column(DateTime, nullable=True)
+    deleted_by_user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
     payment_link = relationship("PaymentLink", back_populates="payments")
     webhook_events = relationship("PaymentWebhookEvent", back_populates="payment")
@@ -181,6 +187,7 @@ class Payment(Base):
             "hotel_id", "provider", "external_payment_id",
             name="uq_payment_external_per_hotel_provider",
         ),
+        Index("ix_payment_hotel_deleted_at", "hotel_id", "deleted_at"),
     )
 
 
