@@ -1,8 +1,12 @@
 """Tenant-scoped security overview and current-user session revocation."""
 
+import csv
+import json
 from datetime import date, datetime, timedelta, timezone
+from io import StringIO
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -25,6 +29,15 @@ from app.services.audit_timeline_service import list_audit_timeline
 
 router = APIRouter(prefix="/api/settings/security", tags=["Settings Security"])
 _SECURITY_ROLES = ("owner", "co_owner")
+_AUDIT_TIMELINE_EXPORT_MAX_ROWS = 5_000
+_AUDIT_TIMELINE_CSV_FIELDS = (
+    "source",
+    "action",
+    "actor_user_id",
+    "created_at",
+    "summary",
+    "details",
+)
 
 
 def _current_user(db: Session, context: AuthContext) -> User:
@@ -46,6 +59,31 @@ def _safe_resource_id(event: SecurityAuditLog) -> str | None:
     }:
         return event.resource_id
     return None
+
+
+def _validate_audit_timeline_range(from_date: date | None, to_date: date | None) -> None:
+    if from_date is not None and to_date is not None and to_date < from_date:
+        raise HTTPException(status_code=422, detail="to must be greater than or equal to from")
+
+
+def _build_audit_timeline_csv(items: list[dict]) -> str:
+    output = StringIO(newline="")
+    writer = csv.DictWriter(output, fieldnames=_AUDIT_TIMELINE_CSV_FIELDS, lineterminator="\n")
+    writer.writeheader()
+    for item in items:
+        writer.writerow(
+            {
+                "source": item["source"],
+                "action": item["action"],
+                "actor_user_id": item["actor_user_id"],
+                "created_at": item["created_at"].isoformat(),
+                "summary": item["summary"],
+                # ``list_audit_timeline`` has already applied the shared
+                # redaction policy before this serializer sees the details.
+                "details": json.dumps(item["details"], ensure_ascii=False, sort_keys=True),
+            }
+        )
+    return output.getvalue()
 
 
 @router.get("/overview", response_model=SecurityOverviewRead)
@@ -120,8 +158,7 @@ def audit_timeline(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_roles(*_SECURITY_ROLES)),
 ):
-    if from_date is not None and to_date is not None and to_date < from_date:
-        raise HTTPException(status_code=422, detail="to must be greater than or equal to from")
+    _validate_audit_timeline_range(from_date, to_date)
 
     items, total = list_audit_timeline(
         db,
@@ -138,6 +175,35 @@ def audit_timeline(
         limit=limit,
         offset=offset,
         has_more=offset + len(items) < total,
+    )
+
+
+@router.get(
+    "/audit-timeline/export",
+    response_class=Response,
+    responses={200: {"content": {"text/csv": {}}}},
+)
+def export_audit_timeline(
+    from_date: date | None = Query(default=None, alias="from"),
+    to_date: date | None = Query(default=None, alias="to"),
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_roles(*_SECURITY_ROLES)),
+):
+    """Export the redacted unified timeline, capped at 5,000 rows per request."""
+
+    _validate_audit_timeline_range(from_date, to_date)
+    items, _total = list_audit_timeline(
+        db,
+        hotel_id=context.hotel_id,
+        limit=_AUDIT_TIMELINE_EXPORT_MAX_ROWS,
+        offset=0,
+        from_date=from_date,
+        to_date=to_date,
+    )
+    return Response(
+        content=_build_audit_timeline_csv(items),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="audit-timeline-{context.hotel_id}.csv"'},
     )
 
 
