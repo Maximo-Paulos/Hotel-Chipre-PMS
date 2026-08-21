@@ -33,6 +33,18 @@ services:
         value: "false"
       - key: GOOGLE_LOGIN_ENABLED
         value: "false"
+      - key: APPLE_LOGIN_ENABLED
+        value: "false"
+      - key: APPLE_CLIENT_ID
+        sync: false
+      - key: APPLE_TEAM_ID
+        sync: false
+      - key: APPLE_KEY_ID
+        sync: false
+      - key: APPLE_PRIVATE_KEY_PATH
+        sync: false
+      - key: APPLE_REDIRECT_URI
+        sync: false
       - key: DATABASE_URL
         sync: false   # set manually in Render dashboard (Supabase connection string)
       - key: JWT_SECRET
@@ -138,6 +150,8 @@ services:
         value: "false"
       - key: GOOGLE_LOGIN_ENABLED
         value: "false"
+      - key: APPLE_LOGIN_ENABLED
+        value: "false"
       - key: EMAIL_PROVIDER
         value: "null"
       - key: AI_ENABLED
@@ -202,6 +216,8 @@ services:
       - key: CONNECTIONS_ENABLED
         value: "false"
       - key: GOOGLE_LOGIN_ENABLED
+        value: "false"
+      - key: APPLE_LOGIN_ENABLED
         value: "false"
       - key: EMAIL_PROVIDER
         value: "null"

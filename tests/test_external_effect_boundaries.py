@@ -5,13 +5,13 @@ from __future__ import annotations
 import pytest
 from fastapi import HTTPException
 
-from app.api.auth import google_login
+from app.api.auth import apple_login, google_login
 from app.api.ota_webhooks import _guarded_json_payload
 from app.api.payment_link_tests import mercadopago_webhook as payment_test_webhook
 from app.api.payment_links import _mercadopago_webhook_impl
 from app.config import Settings, get_settings
 from app.master_admin.router import stripe_webhook
-from app.schemas.auth import GoogleAuthRequest
+from app.schemas.auth import AppleAuthRequest, GoogleAuthRequest
 from app.schemas.payment_link_test import PaymentLinkTestCreate
 from app.services.email.providers import EmailProviderError, ResendEmailProvider
 from app.services.external_effects_policy import ExternalEffectsDisabled
@@ -47,6 +47,7 @@ def _closed_provider_lanes(monkeypatch):
     monkeypatch.setenv("EXTERNAL_EFFECTS_ENABLED", "false")
     monkeypatch.setenv("INBOUND_PROVIDER_EVENTS_ENABLED", "false")
     monkeypatch.setenv("GOOGLE_LOGIN_ENABLED", "false")
+    monkeypatch.setenv("APPLE_LOGIN_ENABLED", "false")
     monkeypatch.setenv("CONNECTIONS_ENABLED", "false")
     get_settings.cache_clear()
     yield
@@ -113,6 +114,16 @@ def test_google_login_stops_before_transport_or_db(monkeypatch):
     )
     with pytest.raises(HTTPException) as raised:
         google_login(GoogleAuthRequest(id_token="provider-token"), db=ExplodingDB())
+    assert raised.value.status_code == 503
+
+
+def test_apple_login_stops_before_jwks_or_db(monkeypatch):
+    monkeypatch.setattr(
+        "app.api.auth.verify_apple_id_token",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("Apple JWKS must not be called")),
+    )
+    with pytest.raises(HTTPException) as raised:
+        apple_login(AppleAuthRequest(id_token="provider-token"), db=ExplodingDB())
     assert raised.value.status_code == 503
 
 

@@ -37,6 +37,16 @@ export const loginWithGoogle = (idToken: string) =>
     data: { id_token: idToken }
   });
 
+export const loginWithApple = (
+  idToken: string,
+  nonce?: string,
+  user?: { name?: { firstName?: string; lastName?: string } }
+) =>
+  apiFetch<AuthResponse>("/api/auth/apple", {
+    method: "POST",
+    data: { id_token: idToken, nonce, user }
+  });
+
 export const requestVerification = (email: string) =>
   apiFetch<{ sent: boolean; code?: string }>("/api/auth/request-verify", {
     method: "POST",

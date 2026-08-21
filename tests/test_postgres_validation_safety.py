@@ -57,6 +57,7 @@ def _bootstrap_environment() -> dict[str, str]:
         "CONNECTIONS_ENABLED": "false",
         "EXTERNAL_EFFECTS_ENABLED": "false",
         "GOOGLE_LOGIN_ENABLED": "false",
+        "APPLE_LOGIN_ENABLED": "false",
         "INBOUND_PROVIDER_EVENTS_ENABLED": "false",
         "EMAIL_PROVIDER": "null",
         "GEMMA_ENABLED": "false",

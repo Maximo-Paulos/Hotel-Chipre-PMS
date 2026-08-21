@@ -6,9 +6,11 @@ import json
 import logging
 from datetime import datetime, timezone
 import secrets
+from urllib.parse import parse_qs
 
 import pyotp
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi.responses import RedirectResponse
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token as google_id_token
 from sqlalchemy.orm import Session
@@ -29,6 +31,9 @@ from app.models.security_audit_log import SecurityAuditLog
 from app.models.user import User
 from app.schemas.auth import (
     AuthResponse,
+    AppleAuthRequest,
+    AppleUnlinkRequest,
+    AppleUserPayload,
     GoogleAuthRequest,
     GoogleUnlinkRequest,
     LoginRequest,
@@ -59,9 +64,18 @@ from app.services.hotel_service import get_or_create_hotel_for_owner, get_member
 from app.services.security import create_access_token, hash_password, needs_rehash, verify_password
 from app.services.security import create_signed_token, decode_signed_token
 from app.dependencies.auth import AuthContext, get_auth_context, get_current_user
-from app.config import get_settings
+from app.config import get_settings, is_production_mode
+from app.services.apple_auth_service import (
+    AppleTokenError,
+    build_apple_authorization_url,
+    create_apple_client_secret,
+    exchange_apple_code,
+    verify_apple_id_token,
+)
 from app.services.external_effects_policy import (
+    AppleLoginDisabled,
     GoogleLoginDisabled,
+    require_apple_login,
     require_google_login,
 )
 from app.services.permission_service import get_effective_permissions
@@ -83,6 +97,7 @@ from app.services.user_session_service import (
 router = APIRouter(prefix="/api/auth", tags=["Auth"])
 LOGGER = logging.getLogger(__name__)
 MFA_LOGIN_CHALLENGE_MINUTES = 5
+APPLE_STATE_COOKIE = "apple_oauth_nonce"
 
 
 def _generate_code() -> str:
@@ -631,6 +646,250 @@ def unlink_google(
         user=user,
         action="google_auth.unlinked",
         details={"provider": "google"},
+    )
+    db.add(user)
+    db.commit()
+    return {"unlinked": True}
+
+
+def _apple_full_name(payload: AppleUserPayload | None) -> str | None:
+    if not payload or not payload.name:
+        return None
+    parts = [payload.name.first_name, payload.name.last_name]
+    value = " ".join(part.strip() for part in parts if isinstance(part, str) and part.strip())
+    return value[:255] or None
+
+
+def _apple_login_config(*, require_client_secret: bool = False) -> tuple[str, object]:
+    try:
+        require_apple_login()
+    except AppleLoginDisabled as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    settings = get_settings()
+    client_id = (settings.APPLE_CLIENT_ID or "").strip()
+    required = {
+        "APPLE_CLIENT_ID": client_id,
+    }
+    if require_client_secret:
+        required.update(
+            {
+                "APPLE_TEAM_ID": (settings.APPLE_TEAM_ID or "").strip(),
+                "APPLE_KEY_ID": (settings.APPLE_KEY_ID or "").strip(),
+                "APPLE_PRIVATE_KEY_PATH": (settings.APPLE_PRIVATE_KEY_PATH or "").strip(),
+                "APPLE_REDIRECT_URI": (settings.APPLE_REDIRECT_URI or "").strip(),
+            }
+        )
+    missing = [name for name, value in required.items() if not value]
+    if missing:
+        raise HTTPException(
+            status_code=503,
+            detail="Login con Apple no esta configurado: " + ", ".join(missing),
+        )
+    return client_id, settings
+
+
+def _complete_apple_login(
+    payload: AppleAuthRequest,
+    *,
+    request: Request | None,
+    response: Response | None,
+    db: Session,
+):
+    client_id, _settings = _apple_login_config()
+    if not payload.nonce:
+        raise HTTPException(status_code=401, detail="Nonce de Apple requerido")
+    try:
+        claims = verify_apple_id_token(
+            payload.id_token,
+            client_id=client_id,
+            expected_nonce=payload.nonce,
+        )
+    except AppleTokenError as exc:
+        raise HTTPException(status_code=401, detail="Token de Apple invalido") from exc
+
+    apple_sub = str(claims["sub"]).strip()
+    raw_email = claims.get("email")
+    email = raw_email.strip().lower() if isinstance(raw_email, str) and raw_email.strip() else None
+    user = db.query(User).filter(User.apple_sub == apple_sub).first()
+    apple_audit_action = "apple_auth.linked"
+    apple_audit_details: dict[str, object] = {
+        "account_state": "existing",
+        "provider": "apple",
+    }
+    if user is None:
+        if not email:
+            raise HTTPException(status_code=401, detail="Token de Apple no contiene email para una cuenta nueva")
+        # Match Google's account-reclamation rule exactly: email is only a
+        # lookup attribute, and the existing password is invalidated when the
+        # provider proves control of an unlinked local account.
+        user = db.query(User).filter(User.email.ilike(email)).first()
+        if user is None:
+            user = User(
+                email=email,
+                password_hash=hash_password(secrets.token_urlsafe(32)),
+                apple_sub=apple_sub,
+                display_name=_apple_full_name(payload.user),
+                role="owner",
+                is_verified=True,
+            )
+            db.add(user)
+            db.flush()
+            get_or_create_hotel_for_owner(db, user.email)
+            apple_audit_details["account_state"] = "created"
+        elif not user.is_active:
+            raise HTTPException(status_code=403, detail="Usuario deshabilitado")
+        elif user.apple_sub is None:
+            user.apple_sub = apple_sub
+            user.password_hash = hash_password(secrets.token_urlsafe(32))
+            user.token_version = (user.token_version or 0) + 1
+            user.is_verified = True
+            if not user.display_name:
+                user.display_name = _apple_full_name(payload.user)
+            apple_audit_action = "apple_auth.account_reclaimed"
+            apple_audit_details = {
+                "password_invalidated": True,
+                "provider": "apple",
+            }
+        else:
+            raise HTTPException(status_code=409, detail="El email ya esta vinculado a otra cuenta de Apple")
+
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="Usuario deshabilitado")
+
+    _audit_security_event(db, user=user, action=apple_audit_action, details=apple_audit_details)
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return _build_login_response(db, user, request=request, response=response)
+
+
+@router.post("/apple", response_model=AuthResponse | MfaChallengeResponse)
+def apple_login(
+    payload: AppleAuthRequest,
+    request: Request = None,
+    response: Response = None,
+    db: Session = Depends(get_db),
+):
+    """Complete Sign in with Apple from Apple JS SDK or another OIDC client."""
+    return _complete_apple_login(payload, request=request, response=response, db=db)
+
+
+@router.get("/apple/start")
+def apple_start(request: Request):
+    """Start Apple's form_post redirect flow with a signed state and nonce."""
+    _client_id, settings = _apple_login_config(require_client_secret=True)
+    nonce = secrets.token_urlsafe(32)
+    state = create_signed_token(
+        {"purpose": "apple_login", "nonce": nonce},
+        expires_minutes=10,
+    )
+    redirect_url = build_apple_authorization_url(
+        client_id=settings.APPLE_CLIENT_ID,
+        redirect_uri=settings.APPLE_REDIRECT_URI,
+        state=state,
+        nonce=nonce,
+    )
+    result = RedirectResponse(url=redirect_url, status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+    result.set_cookie(
+        APPLE_STATE_COOKIE,
+        nonce,
+        max_age=600,
+        httponly=True,
+        secure=is_production_mode(settings),
+        samesite="lax",
+        path="/api/auth/apple",
+    )
+    return result
+
+
+@router.post("/apple/callback", response_model=AuthResponse | MfaChallengeResponse)
+async def apple_callback(
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+):
+    """Complete Apple's server-side form_post redirect flow."""
+    _client_id, settings = _apple_login_config(require_client_secret=True)
+    try:
+        form_values = parse_qs((await request.body()).decode("utf-8"), keep_blank_values=True)
+    except UnicodeDecodeError as exc:
+        raise HTTPException(status_code=400, detail="Respuesta de Apple invalida") from exc
+
+    def form_value(name: str) -> str:
+        values = form_values.get(name) or []
+        return str(values[0]) if values else ""
+
+    state = form_value("state").strip()
+    if not state:
+        raise HTTPException(status_code=400, detail="state requerido")
+    state_payload = decode_signed_token(state)
+    if state_payload.get("purpose") != "apple_login":
+        raise HTTPException(status_code=400, detail="state invalido")
+    nonce = str(state_payload.get("nonce") or "").strip()
+    if not nonce or request.cookies.get(APPLE_STATE_COOKIE) != nonce:
+        raise HTTPException(status_code=400, detail="state invalido")
+    if form_value("error"):
+        raise HTTPException(status_code=401, detail="Autorizacion de Apple rechazada")
+
+    id_token = form_value("id_token").strip()
+    code = form_value("code").strip()
+    if code:
+        try:
+            client_secret = create_apple_client_secret(
+                client_id=settings.APPLE_CLIENT_ID,
+                team_id=settings.APPLE_TEAM_ID,
+                key_id=settings.APPLE_KEY_ID,
+                private_key_path=settings.APPLE_PRIVATE_KEY_PATH,
+            )
+            token_body = exchange_apple_code(
+                client_id=settings.APPLE_CLIENT_ID,
+                client_secret=client_secret,
+                code=code,
+                redirect_uri=settings.APPLE_REDIRECT_URI,
+            )
+            id_token = str(token_body["id_token"])
+        except AppleTokenError as exc:
+            raise HTTPException(status_code=401, detail="No se pudo validar la respuesta de Apple") from exc
+    if not id_token:
+        raise HTTPException(status_code=400, detail="id_token requerido")
+
+    user_payload = None
+    raw_user = form_value("user")
+    if isinstance(raw_user, str) and raw_user.strip():
+        try:
+            user_payload = AppleUserPayload.model_validate(json.loads(raw_user))
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="Datos de usuario de Apple invalidos")
+    result = _complete_apple_login(
+        AppleAuthRequest(id_token=id_token, nonce=nonce, user=user_payload),
+        request=request,
+        response=response,
+        db=db,
+    )
+    response.delete_cookie(APPLE_STATE_COOKIE, path="/api/auth/apple")
+    return result
+
+
+@router.post("/apple/unlink")
+def unlink_apple(
+    payload: AppleUnlinkRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Remove the Apple login only after proving control of the password."""
+    if not user.apple_sub:
+        raise HTTPException(status_code=400, detail="La cuenta no tiene un login de Apple vinculado")
+    if not verify_password(payload.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Reautenticacion invalida")
+    user.apple_sub = None
+    user.token_version = (user.token_version or 0) + 1
+    revoke_all_sessions(db, user.id)
+    _audit_security_event(
+        db,
+        user=user,
+        action="apple_auth.unlinked",
+        details={"provider": "apple"},
     )
     db.add(user)
     db.commit()

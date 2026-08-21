@@ -174,7 +174,7 @@ async def normalize_master_admin_prefix(request: Request, call_next):
 # dev and preview QA run over plain HTTP.
 _CSP = (
     "default-src 'self'; "
-    "script-src 'self'; "
+    "script-src 'self' https://appleid.cdn-apple.com; "
     "style-src 'self' 'unsafe-inline'; "
     "img-src 'self' data: https:; "
     "font-src 'self' data:; "

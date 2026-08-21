@@ -95,6 +95,7 @@ class Settings(BaseSettings):
     EXTERNAL_EFFECTS_ENABLED: bool | None = None
     INBOUND_PROVIDER_EVENTS_ENABLED: bool | None = None
     GOOGLE_LOGIN_ENABLED: bool | None = None
+    APPLE_LOGIN_ENABLED: bool | None = None
 
     # OTA Credentials
     BOOKING_API_URL: str = "https://supply-xml.booking.com/hotels/xml"
@@ -156,6 +157,14 @@ class Settings(BaseSettings):
     # Client ID is needed -- no secret -- because the frontend gets a signed
     # JWT straight from Google and the backend just verifies its signature.
     GOOGLE_CLIENT_ID: str = ""
+
+    # Sign in with Apple. The private key is never stored in this repository;
+    # production points APPLE_PRIVATE_KEY_PATH at a mounted secret file.
+    APPLE_CLIENT_ID: str = ""
+    APPLE_TEAM_ID: str = ""
+    APPLE_KEY_ID: str = ""
+    APPLE_PRIVATE_KEY_PATH: str = ""
+    APPLE_REDIRECT_URI: str = "http://127.0.0.1:8040/api/auth/apple/callback"
 
     # Auth
     JWT_SECRET: str = "change-me"
@@ -274,6 +283,8 @@ def _validate_preview_qa_security(runtime_settings: Settings) -> None:
         errors.append("INBOUND_PROVIDER_EVENTS_ENABLED must be explicitly false in preview QA")
     if runtime_settings.GOOGLE_LOGIN_ENABLED is not False:
         errors.append("GOOGLE_LOGIN_ENABLED must be explicitly false in preview QA")
+    if runtime_settings.APPLE_LOGIN_ENABLED is not False:
+        errors.append("APPLE_LOGIN_ENABLED must be explicitly false in preview QA")
     if runtime_settings.AI_ENABLED is not False:
         errors.append("AI_ENABLED must be explicitly false in preview QA")
     if runtime_settings.GEMMA_ENABLED:
@@ -390,6 +401,7 @@ def validate_runtime_security(settings: Settings | None = None) -> None:
         "EXTERNAL_EFFECTS_ENABLED",
         "INBOUND_PROVIDER_EVENTS_ENABLED",
         "GOOGLE_LOGIN_ENABLED",
+        "APPLE_LOGIN_ENABLED",
     ):
         if getattr(runtime_settings, flag_name) is None:
             errors.append(f"{flag_name} must be explicitly true or false in production")
@@ -414,6 +426,7 @@ def validate_runtime_security(settings: Settings | None = None) -> None:
         sandbox_false_values = {
             "INBOUND_PROVIDER_EVENTS_ENABLED": runtime_settings.INBOUND_PROVIDER_EVENTS_ENABLED,
             "GOOGLE_LOGIN_ENABLED": runtime_settings.GOOGLE_LOGIN_ENABLED,
+            "APPLE_LOGIN_ENABLED": runtime_settings.APPLE_LOGIN_ENABLED,
             "CONNECTIONS_ENABLED": runtime_settings.CONNECTIONS_ENABLED,
             "AI_ENABLED": runtime_settings.AI_ENABLED,
             "GEMMA_ENABLED": runtime_settings.GEMMA_ENABLED,
@@ -515,6 +528,20 @@ def validate_runtime_security(settings: Settings | None = None) -> None:
 
     if runtime_settings.GOOGLE_LOGIN_ENABLED is True and not _has_value(runtime_settings.GOOGLE_CLIENT_ID):
         errors.append("GOOGLE_CLIENT_ID must be configured when GOOGLE_LOGIN_ENABLED=true")
+
+    if runtime_settings.APPLE_LOGIN_ENABLED is True:
+        apple_required = {
+            "APPLE_CLIENT_ID": runtime_settings.APPLE_CLIENT_ID,
+            "APPLE_TEAM_ID": runtime_settings.APPLE_TEAM_ID,
+            "APPLE_KEY_ID": runtime_settings.APPLE_KEY_ID,
+            "APPLE_PRIVATE_KEY_PATH": runtime_settings.APPLE_PRIVATE_KEY_PATH,
+            "APPLE_REDIRECT_URI": runtime_settings.APPLE_REDIRECT_URI,
+        }
+        for name, value in apple_required.items():
+            if not _has_value(value):
+                errors.append(f"{name} must be configured when APPLE_LOGIN_ENABLED=true")
+        if _has_value(runtime_settings.APPLE_REDIRECT_URI) and not _is_public_https_url(runtime_settings.APPLE_REDIRECT_URI):
+            errors.append("APPLE_REDIRECT_URI must be a public https URL when APPLE_LOGIN_ENABLED=true")
 
     if errors:
         raise RuntimeError("Invalid production security configuration: " + "; ".join(errors))

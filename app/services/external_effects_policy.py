@@ -21,6 +21,10 @@ class GoogleLoginDisabled(RuntimeError):
     """Raised when Google Identity login is disabled for this runtime."""
 
 
+class AppleLoginDisabled(RuntimeError):
+    """Raised when Sign in with Apple is disabled for this runtime."""
+
+
 def external_effects_enabled(settings: Settings | None = None) -> bool:
     return (settings or get_settings()).EXTERNAL_EFFECTS_ENABLED is True
 
@@ -31,6 +35,10 @@ def inbound_provider_events_enabled(settings: Settings | None = None) -> bool:
 
 def google_login_enabled(settings: Settings | None = None) -> bool:
     return (settings or get_settings()).GOOGLE_LOGIN_ENABLED is True
+
+
+def apple_login_enabled(settings: Settings | None = None) -> bool:
+    return (settings or get_settings()).APPLE_LOGIN_ENABLED is True
 
 
 def external_connections_enabled(settings: Settings | None = None) -> bool:
@@ -74,3 +82,15 @@ def require_google_login(settings: Settings | None = None) -> None:
         require_external_connections("Google login", runtime_settings)
     except ExternalEffectsDisabled as exc:
         raise GoogleLoginDisabled(str(exc)) from exc
+
+
+def require_apple_login(settings: Settings | None = None) -> None:
+    runtime_settings = settings or get_settings()
+    if not apple_login_enabled(runtime_settings):
+        raise AppleLoginDisabled(
+            "Apple login is disabled by APPLE_LOGIN_ENABLED"
+        )
+    try:
+        require_external_connections("Apple login", runtime_settings)
+    except ExternalEffectsDisabled as exc:
+        raise AppleLoginDisabled(str(exc)) from exc

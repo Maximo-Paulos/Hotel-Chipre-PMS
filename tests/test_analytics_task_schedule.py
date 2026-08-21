@@ -41,6 +41,7 @@ def _safe_worker_env() -> dict[str, str]:
         "EXTERNAL_EFFECTS_ENABLED": "false",
         "INBOUND_PROVIDER_EVENTS_ENABLED": "false",
         "GOOGLE_LOGIN_ENABLED": "false",
+        "APPLE_LOGIN_ENABLED": "false",
         "CONNECTIONS_ENABLED": "false",
         "EMAIL_PROVIDER": "null",
         "AI_ENABLED": "false",

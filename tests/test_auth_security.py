@@ -46,6 +46,7 @@ def _enable_mocked_auth_providers(monkeypatch):
     monkeypatch.setenv("EXTERNAL_EFFECTS_ENABLED", "true")
     monkeypatch.setenv("CONNECTIONS_ENABLED", "true")
     monkeypatch.setenv("GOOGLE_LOGIN_ENABLED", "true")
+    monkeypatch.setenv("APPLE_LOGIN_ENABLED", "true")
     get_settings.cache_clear()
     yield
     get_settings.cache_clear()
@@ -636,6 +637,16 @@ def _fake_google_claims(
     return {"email": email, "email_verified": email_verified, "sub": sub, "name": "Test User"}
 
 
+def _fake_apple_claims(email: str, sub: str = "apple-sub-123") -> dict:
+    return {
+        "email": email,
+        "email_verified": True,
+        "sub": sub,
+        "iss": "https://appleid.apple.com",
+        "aud": "com.example.hotel-chipre",
+    }
+
+
 def test_google_login_returns_503_when_not_configured(client_and_db, monkeypatch):
     client, _db, _session_factory = client_and_db
     monkeypatch.delenv("GOOGLE_CLIENT_ID", raising=False)
@@ -892,6 +903,113 @@ def test_google_login_rejects_invalid_token(client_and_db, monkeypatch):
         response = client.post("/api/auth/google", json={"id_token": "garbage"})
 
     assert response.status_code == 401, response.text
+
+
+def test_apple_login_creates_account_and_persists_first_authorization_name(client_and_db, monkeypatch):
+    client, db, _session_factory = client_and_db
+    monkeypatch.setenv("APPLE_CLIENT_ID", "com.example.hotel-chipre")
+    get_settings.cache_clear()
+    claims = _fake_apple_claims("relay@privaterelay.appleid.com")
+    with patch("app.api.auth.verify_apple_id_token", return_value=claims) as verify:
+        response = client.post(
+            "/api/auth/apple",
+            json={
+                "id_token": "apple-jwt",
+                "nonce": "nonce-1",
+                "user": {"name": {"firstName": "Apple", "lastName": "Owner"}},
+            },
+        )
+    assert response.status_code == 200, response.text
+    verify.assert_called_once()
+    stored = db.query(User).filter(User.email == "relay@privaterelay.appleid.com").one()
+    assert stored.apple_sub == "apple-sub-123"
+    assert stored.display_name == "Apple Owner"
+    audit = db.query(SecurityAuditLog).filter_by(action="apple_auth.linked").one()
+    assert json.loads(audit.details) == {"account_state": "created", "provider": "apple"}
+
+
+def test_apple_login_reclaims_matching_local_email_like_google(client_and_db, monkeypatch):
+    client, db, _session_factory = client_and_db
+    existing = User(
+        email="existing-apple@example.com",
+        password_hash=hash_password("Demo123!pass"),
+        role="owner",
+        is_verified=True,
+    )
+    db.add(existing)
+    db.flush()
+    db.add(HotelConfiguration(id=1, owner_email=existing.email, hotel_name="Apple Hotel", subscription_active=True))
+    db.add(HotelMembership(hotel_id=1, user_id=existing.id, role="owner", status="active"))
+    db.commit()
+    old_hash = existing.password_hash
+    monkeypatch.setenv("APPLE_CLIENT_ID", "com.example.hotel-chipre")
+    get_settings.cache_clear()
+    with patch(
+        "app.api.auth.verify_apple_id_token",
+        return_value=_fake_apple_claims(existing.email, sub="apple-victim-sub"),
+    ):
+        response = client.post("/api/auth/apple", json={"id_token": "apple-jwt", "nonce": "nonce-2"})
+    assert response.status_code == 200, response.text
+    db.refresh(existing)
+    assert existing.apple_sub == "apple-victim-sub"
+    assert existing.password_hash != old_hash
+    assert existing.token_version == 1
+    audit = db.query(SecurityAuditLog).filter_by(action="apple_auth.account_reclaimed").one()
+    assert json.loads(audit.details) == {"password_invalidated": True, "provider": "apple"}
+
+
+def test_apple_login_rejects_different_subject_claiming_linked_email(client_and_db, monkeypatch):
+    client, _db, _session_factory = client_and_db
+    monkeypatch.setenv("APPLE_CLIENT_ID", "com.example.hotel-chipre")
+    get_settings.cache_clear()
+    with patch(
+        "app.api.auth.verify_apple_id_token",
+        return_value=_fake_apple_claims("same-apple@example.com", sub="apple-first-sub"),
+    ):
+        first = client.post("/api/auth/apple", json={"id_token": "first", "nonce": "nonce-3"})
+    assert first.status_code == 200, first.text
+    with patch(
+        "app.api.auth.verify_apple_id_token",
+        return_value=_fake_apple_claims("same-apple@example.com", sub="apple-second-sub"),
+    ):
+        second = client.post("/api/auth/apple", json={"id_token": "second", "nonce": "nonce-4"})
+    assert second.status_code == 409, second.text
+
+
+def test_apple_login_rejects_invalid_verified_token(client_and_db, monkeypatch):
+    from app.services.apple_auth_service import AppleTokenError
+
+    client, _db, _session_factory = client_and_db
+    monkeypatch.setenv("APPLE_CLIENT_ID", "com.example.hotel-chipre")
+    get_settings.cache_clear()
+    with patch("app.api.auth.verify_apple_id_token", side_effect=AppleTokenError("bad token")):
+        response = client.post("/api/auth/apple", json={"id_token": "invalid", "nonce": "nonce-5"})
+    assert response.status_code == 401, response.text
+
+
+def test_apple_unlink_requires_password_and_revokes_session(client_and_db, monkeypatch):
+    client, db, _session_factory = client_and_db
+    monkeypatch.setenv("APPLE_CLIENT_ID", "com.example.hotel-chipre")
+    get_settings.cache_clear()
+    with patch(
+        "app.api.auth.verify_apple_id_token",
+        return_value=_fake_apple_claims("apple-unlink@example.com", sub="apple-unlink-sub"),
+    ):
+        login = client.post("/api/auth/apple", json={"id_token": "apple-jwt", "nonce": "nonce-6"})
+    assert login.status_code == 200, login.text
+    auth = login.json()
+    user = db.query(User).filter(User.email == "apple-unlink@example.com").one()
+    user.password_hash = hash_password("Demo123!pass")
+    db.commit()
+    unlink = client.post(
+        "/api/auth/apple/unlink",
+        headers={"Authorization": f"Bearer {auth['access_token']}"},
+        json={"password": "Demo123!pass"},
+    )
+    assert unlink.status_code == 200, unlink.text
+    db.refresh(user)
+    assert user.apple_sub is None
+    assert db.query(SecurityAuditLog).filter_by(action="apple_auth.unlinked").one()
 
 
 def _next_totp_code(secret: str, steps_ahead: int = 1) -> str:

@@ -7,6 +7,7 @@ def test_validate_runtime_security_rejects_default_production_secrets():
         EXTERNAL_EFFECTS_ENABLED=True,
         INBOUND_PROVIDER_EVENTS_ENABLED=True,
         GOOGLE_LOGIN_ENABLED=False,
+        APPLE_LOGIN_ENABLED=False,
         JWT_SECRET="change-me",
         MASTER_ADMIN_PIN="1234",
         APP_BASE_URL="http://localhost:8040",
@@ -32,6 +33,32 @@ def test_validate_runtime_security_rejects_default_production_secrets():
         raise AssertionError("Production security validation should reject insecure defaults")
 
 
+def test_validate_runtime_security_rejects_incomplete_apple_configuration():
+    settings = Settings(
+        APP_ENV="production",
+        EXTERNAL_EFFECTS_ENABLED=True,
+        INBOUND_PROVIDER_EVENTS_ENABLED=True,
+        GOOGLE_LOGIN_ENABLED=False,
+        APPLE_LOGIN_ENABLED=True,
+        JWT_SECRET="super-secret-value-for-production-1234567890",
+        MASTER_ADMIN_PIN="654321",
+        APP_BASE_URL="https://hotel-chipre.example.com",
+        DISTRIBUTED_LOCK_REQUIRED=True,
+        INTEGRATIONS_ENCRYPTION_KEY="fRb9jE74bWw5gAKpNwZrl_uCWhsx2Nl7fNL1jK5vLG8=",
+        EMAIL_PROVIDER="null",
+    )
+    try:
+        validate_runtime_security(settings)
+    except RuntimeError as exc:
+        message = str(exc)
+        assert "APPLE_CLIENT_ID" in message
+        assert "APPLE_TEAM_ID" in message
+        assert "APPLE_KEY_ID" in message
+        assert "APPLE_PRIVATE_KEY_PATH" in message
+    else:
+        raise AssertionError("Production must reject incomplete Apple credentials")
+
+
 def test_validate_runtime_security_rejects_missing_mp_webhook_when_mp_configured():
     """MERCADOPAGO_WEBHOOK_SECRET is required only when MP_ACCESS_TOKEN is set."""
     settings = Settings(
@@ -39,6 +66,7 @@ def test_validate_runtime_security_rejects_missing_mp_webhook_when_mp_configured
         EXTERNAL_EFFECTS_ENABLED=True,
         INBOUND_PROVIDER_EVENTS_ENABLED=True,
         GOOGLE_LOGIN_ENABLED=False,
+        APPLE_LOGIN_ENABLED=False,
         JWT_SECRET="super-secret-value-for-production-1234567890",
         MASTER_ADMIN_PIN="654321",
         APP_BASE_URL="https://hotel-chipre.example.com",
@@ -68,6 +96,7 @@ def test_validate_runtime_security_ignores_incomplete_optional_integrations():
         EXTERNAL_EFFECTS_ENABLED=False,
         INBOUND_PROVIDER_EVENTS_ENABLED=False,
         GOOGLE_LOGIN_ENABLED=False,
+        APPLE_LOGIN_ENABLED=False,
         CONNECTIONS_ENABLED=False,
         AI_ENABLED=False,
         AI_PROVIDER="disabled",
@@ -101,6 +130,7 @@ def test_validate_runtime_security_rejects_localhost_redirect_when_service_confi
         EXTERNAL_EFFECTS_ENABLED=True,
         INBOUND_PROVIDER_EVENTS_ENABLED=False,
         GOOGLE_LOGIN_ENABLED=False,
+        APPLE_LOGIN_ENABLED=False,
         JWT_SECRET="super-secret-value-for-production-1234567890",
         MASTER_ADMIN_PIN="654321",
         APP_BASE_URL="https://hotel-chipre.example.com",
@@ -129,6 +159,7 @@ def test_validate_runtime_security_accepts_strong_production_settings():
         EXTERNAL_EFFECTS_ENABLED=False,
         INBOUND_PROVIDER_EVENTS_ENABLED=False,
         GOOGLE_LOGIN_ENABLED=False,
+        APPLE_LOGIN_ENABLED=False,
         CONNECTIONS_ENABLED=False,
         AI_ENABLED=False,
         AI_PROVIDER="disabled",
@@ -159,6 +190,7 @@ def test_validate_runtime_security_rejects_unsafe_production_sandbox_profile():
         "EXTERNAL_EFFECTS_ENABLED": False,
         "INBOUND_PROVIDER_EVENTS_ENABLED": False,
         "GOOGLE_LOGIN_ENABLED": False,
+        "APPLE_LOGIN_ENABLED": False,
         "CONNECTIONS_ENABLED": False,
         "AI_ENABLED": False,
         "AI_PROVIDER": "disabled",
@@ -200,6 +232,7 @@ def test_validate_runtime_security_rejects_insecure_cookie_override_and_cors_wil
         "EXTERNAL_EFFECTS_ENABLED": False,
         "INBOUND_PROVIDER_EVENTS_ENABLED": False,
         "GOOGLE_LOGIN_ENABLED": False,
+        "APPLE_LOGIN_ENABLED": False,
         "CONNECTIONS_ENABLED": False,
         "AI_ENABLED": False,
         "AI_PROVIDER": "disabled",

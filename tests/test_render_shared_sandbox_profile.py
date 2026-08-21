@@ -10,6 +10,7 @@ SAFE_VALUES = {
     "INBOUND_PROVIDER_EVENTS_ENABLED": "false",
     "CONNECTIONS_ENABLED": "false",
     "GOOGLE_LOGIN_ENABLED": "false",
+    "APPLE_LOGIN_ENABLED": "false",
     "EMAIL_PROVIDER": "null",
     "AI_ENABLED": "false",
     "AI_PROVIDER": "disabled",

@@ -20,6 +20,11 @@ class User(Base):
     # during password registration; the provider subject is the identity key
     # used for subsequent Google logins.
     google_sub = Column(String(255), nullable=True, unique=True, index=True)
+    # Stable Apple OIDC subject. Apple relay email addresses are attributes;
+    # this provider subject remains the identity key for subsequent logins.
+    apple_sub = Column(String(255), nullable=True, unique=True, index=True)
+    # Apple sends the user's name only during the first authorization.
+    display_name = Column(String(255), nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)
     is_verified = Column(Boolean, nullable=False, default=False)
     # Platform-plane role only (currently used for platform_admin). Hotel

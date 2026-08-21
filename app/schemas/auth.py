@@ -63,6 +63,27 @@ class GoogleUnlinkRequest(BaseModel):
     password: str = Field(min_length=1)
 
 
+class AppleUserName(BaseModel):
+    first_name: str | None = Field(default=None, alias="firstName")
+    last_name: str | None = Field(default=None, alias="lastName")
+
+    model_config = {"populate_by_name": True}
+
+
+class AppleUserPayload(BaseModel):
+    name: AppleUserName | None = None
+
+
+class AppleAuthRequest(BaseModel):
+    id_token: str = Field(min_length=1)
+    nonce: str | None = Field(default=None, min_length=1, max_length=255)
+    user: AppleUserPayload | None = None
+
+
+class AppleUnlinkRequest(BaseModel):
+    password: str = Field(min_length=1)
+
+
 class RequestCode(BaseModel):
     email: str
 
