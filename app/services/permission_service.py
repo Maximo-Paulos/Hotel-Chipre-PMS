@@ -454,10 +454,15 @@ def _audit(db: Session, *, hotel_id: int, actor_user_id: int | None, action: str
     )
 
 
-def _validate_mutable(role: str, code: str, allowed: bool) -> str:
+def _validate_permission_code(code: str) -> str:
     canonical = canonical_permission_code(code)
     if canonical not in _CANONICAL_DEFINITIONS:
         raise ValueError("Permiso invalido")
+    return canonical
+
+
+def _validate_mutable(role: str, code: str, allowed: bool) -> str:
+    canonical = _validate_permission_code(code)
     invariant = immutable_permission_decision(role, canonical)
     if invariant is not None:
         raise ValueError("El permiso esta bloqueado por una regla de seguridad")
@@ -561,6 +566,149 @@ def set_user_override(
     db.flush()
     invalidate_effective_permission_cache(db, hotel_id, target_user_id)
     return row
+
+
+def _role_default_allowed(db: Session, role: str, permission_code: str) -> bool:
+    default = db.query(RolePermissionDefault).filter_by(
+        role=role,
+        permission_code=permission_code,
+    ).one_or_none()
+    if default is None:
+        raise ValueError("No existe un default de catalogo para ese rol y permiso")
+    return bool(default.allowed)
+
+
+def _assert_owner_management_restore(role: str, permission_code: str, default_allowed: bool) -> None:
+    """Never restore a corrupted owner-management default to a deny decision."""
+    if (
+        role == ROLE_OWNER
+        and permission_code == PERMISSION_PERMISSION_MANAGE
+        and not default_allowed
+    ):
+        raise ValueError("No se puede dejar al owner sin permisos para gestionar el hotel")
+
+
+def restore_role_override(
+    db: Session,
+    hotel_id: int,
+    role: str,
+    code: str,
+    actor_user_id: int | None,
+    expected_version: int,
+) -> dict[str, object]:
+    """Delete one hotel-role override so resolution falls back to its default."""
+    if role not in ROLE_CODES:
+        raise ValueError("Rol invalido")
+    canonical = _validate_permission_code(code)
+    ensure_permission_matrix_seeded(db)
+    row = db.query(HotelPermissionOverride).filter_by(
+        hotel_id=hotel_id,
+        role=role,
+        permission_code=canonical,
+    ).one_or_none()
+    if row is None:
+        raise LookupError("Override no encontrado")
+    if row.version != expected_version:
+        raise PermissionVersionConflict("El permiso fue modificado por otra solicitud")
+
+    default_allowed = _role_default_allowed(db, role, canonical)
+    _assert_owner_management_restore(role, canonical, default_allowed)
+    before = {
+        "role": row.role,
+        "permission_code": row.permission_code,
+        "allowed": bool(row.allowed),
+        "version": row.version,
+    }
+    after = {
+        "role": role,
+        "permission_code": canonical,
+        "allowed": default_allowed,
+        "source": "role_default",
+    }
+    db.delete(row)
+    _audit(
+        db,
+        hotel_id=hotel_id,
+        actor_user_id=actor_user_id,
+        action="permission.override.restored",
+        resource_type="permission_override",
+        resource_id=f"{role}:{canonical}",
+        before=before,
+        after=after,
+    )
+    db.flush()
+    invalidate_effective_permission_cache(db, hotel_id)
+    return {
+        "hotel_id": hotel_id,
+        "role": role,
+        "permission_code": canonical,
+        "allowed": default_allowed,
+        "source": "role_default",
+        "restored": True,
+    }
+
+
+def restore_user_override(
+    db: Session,
+    hotel_id: int,
+    target_user_id: int,
+    actor_user_id: int | None,
+    code: str,
+    expected_version: int,
+) -> dict[str, object]:
+    """Delete one user override so resolution falls back to the user's role default."""
+    membership = _active_membership(db, hotel_id, target_user_id)
+    if membership is None:
+        raise LookupError("Usuario no encontrado")
+    canonical = _validate_permission_code(code)
+    ensure_permission_matrix_seeded(db)
+    row = db.query(UserPermissionOverride).filter_by(
+        hotel_id=hotel_id,
+        user_id=target_user_id,
+        permission_code=canonical,
+    ).one_or_none()
+    if row is None:
+        raise LookupError("Override no encontrado")
+    if row.version != expected_version:
+        raise PermissionVersionConflict("El permiso fue modificado por otra solicitud")
+
+    default_allowed = _role_default_allowed(db, membership.role, canonical)
+    _assert_owner_management_restore(membership.role, canonical, default_allowed)
+    before = {
+        "user_id": row.user_id,
+        "permission_code": row.permission_code,
+        "allowed": bool(row.allowed),
+        "version": row.version,
+    }
+    after = {
+        "user_id": target_user_id,
+        "role": membership.role,
+        "permission_code": canonical,
+        "allowed": default_allowed,
+        "source": "role_default",
+    }
+    db.delete(row)
+    _audit(
+        db,
+        hotel_id=hotel_id,
+        actor_user_id=actor_user_id,
+        action="permission.user_override.restored",
+        resource_type="user_permission_override",
+        resource_id=f"{target_user_id}:{canonical}",
+        before=before,
+        after=after,
+    )
+    db.flush()
+    invalidate_effective_permission_cache(db, hotel_id, target_user_id)
+    return {
+        "hotel_id": hotel_id,
+        "user_id": target_user_id,
+        "role": membership.role,
+        "permission_code": canonical,
+        "allowed": default_allowed,
+        "source": "role_default",
+        "restored": True,
+    }
 
 
 def restore_role_defaults(db: Session, hotel_id: int, role: str, actor_user_id: int | None) -> int:

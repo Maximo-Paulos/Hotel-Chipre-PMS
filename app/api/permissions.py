@@ -29,7 +29,9 @@ from app.services.permission_service import (
     get_role_profiles,
     publish_permission_invalidation,
     PermissionVersionConflict,
+    restore_role_override,
     restore_role_defaults,
+    restore_user_override,
     restore_user_defaults,
     set_role_override,
     set_user_override,
@@ -108,6 +110,19 @@ def _target_membership_or_404(db: Session, hotel_id: int, user_id: int) -> Hotel
         # Deliberately identical for an unknown user and another hotel's user.
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
     return membership
+
+
+def _assert_manageable_membership(actor_role: str | None, membership: HotelMembership, *, action: str) -> None:
+    """Keep permission exceptions aligned with the staff-management boundary."""
+    managed_roles = {
+        "owner": {"co_owner", "manager", "receptionist", "housekeeping"},
+        "co_owner": {"manager", "receptionist", "housekeeping"},
+    }
+    if membership.role not in managed_roles.get(actor_role or "", set()):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"No tenes permisos para {action} este usuario",
+        )
 
 
 @router.get("/effective")
@@ -213,6 +228,48 @@ def update_permission_override(
     return _update_role_override(payload, db, context)
 
 
+@router.delete("/overrides/role/{role}/{permission_code}")
+@router.delete("/role-overrides/{role}/{permission_code}")
+def restore_role_permission_override(
+    role: str,
+    permission_code: str,
+    expected_version: int = Query(
+        ..., ge=1, description="Version actual del override que se va a restaurar"
+    ),
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_roles("owner", "co_owner")),
+):
+    _validate_role(role)
+    code = _validate_code(permission_code)
+    try:
+        restored = restore_role_override(
+            db,
+            context.hotel_id,
+            role,
+            code,
+            actor_user_id=context.user_id,
+            expected_version=expected_version,
+        )
+        db.commit()
+    except PermissionVersionConflict as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except StaleDataError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="El permiso fue modificado por otra solicitud",
+        ) from exc
+    except LookupError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    publish_permission_invalidation(context.hotel_id)
+    return restored
+
+
 @router.delete("/role-overrides/{role}")
 def restore_role_permission_defaults(
     role: str,
@@ -294,6 +351,54 @@ def update_user_override(
         "updated_by_user_id": override.updated_by_user_id,
         "updated_at": override.updated_at,
     }
+
+
+@router.delete("/overrides/user/{user_id}/{permission_code}")
+@router.delete("/user-overrides/{user_id}/{permission_code}")
+def restore_user_permission_override(
+    user_id: int,
+    permission_code: str,
+    expected_version: int = Query(
+        ..., ge=1, description="Version actual del override que se va a restaurar"
+    ),
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_roles("owner", "co_owner")),
+):
+    if user_id == context.user_id:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="No puedes modificar tus propios permisos",
+        )
+    membership = _target_membership_or_404(db, context.hotel_id, user_id)
+    _assert_manageable_membership(context.user_role, membership, action="restaurar permisos de")
+    code = _validate_code(permission_code)
+    try:
+        restored = restore_user_override(
+            db,
+            context.hotel_id,
+            user_id,
+            actor_user_id=context.user_id,
+            code=code,
+            expected_version=expected_version,
+        )
+        db.commit()
+    except PermissionVersionConflict as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except StaleDataError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="El permiso fue modificado por otra solicitud",
+        ) from exc
+    except LookupError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    publish_permission_invalidation(context.hotel_id)
+    return restored
 
 
 @router.delete("/user-overrides/{user_id}")
