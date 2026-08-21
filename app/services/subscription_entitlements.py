@@ -5,16 +5,18 @@ Keeps legacy tables loosely in sync to avoid breaking existing flows.
 from __future__ import annotations
 
 import json
+import hashlib
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Tuple
 
 from fastapi import HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.models.hotel_config import HotelConfiguration
 from app.models.subscription import SubscriptionPlan, HotelSubscription
-from app.models.subscription_v2 import Subscription, SubscriptionEvent
+from app.models.subscription_v2 import Subscription, SubscriptionAdjustment, SubscriptionEvent
 
 # Minimal catalog for the new plans
 PLAN_CATALOG: Dict[str, Dict[str, Any]] = {
@@ -107,6 +109,123 @@ def _record_event(db: Session, sub: Subscription, event_type: str, payload: Dict
 
 def _actor_payload(actor: Dict[str, Any] | None) -> Dict[str, Any]:
     return actor or {}
+
+
+def _normalize_adjustment_reason(reason: str | None) -> str:
+    normalized = (reason or "").strip()
+    if not normalized:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El motivo del ajuste es obligatorio")
+    return normalized
+
+
+def _actor_user_id(actor: Dict[str, Any] | None) -> int | None:
+    raw_user_id = _actor_payload(actor).get("user_id")
+    try:
+        return int(raw_user_id) if raw_user_id is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _actor_role(actor: Dict[str, Any] | None) -> str | None:
+    payload = _actor_payload(actor)
+    role = payload.get("user_role") or payload.get("source")
+    return str(role)[:50] if role is not None else None
+
+
+def _default_adjustment_idempotency_key(
+    hotel_id: int,
+    plan_code: str,
+    reason: str,
+    valid_until: datetime | None,
+) -> str:
+    """Make retries of the same comped request resolve to one ledger row."""
+    payload = json.dumps(
+        {
+            "hotel_id": hotel_id,
+            "adjustment_type": "override",
+            "plan_code": plan_code,
+            "reason": reason,
+            "valid_until": valid_until.isoformat() if valid_until else None,
+        },
+        sort_keys=True,
+    )
+    return f"auto-{hashlib.sha256(payload.encode('utf-8')).hexdigest()}"
+
+
+def _assert_same_adjustment(
+    existing: SubscriptionAdjustment,
+    *,
+    plan_code: str,
+    reason: str,
+    valid_until: datetime | None,
+) -> None:
+    if (
+        existing.adjustment_type != "override"
+        or existing.plan_code != plan_code
+        or existing.reason != reason
+        or _as_utc(existing.valid_until) != _as_utc(valid_until)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="La clave de idempotencia ya fue usada para otro ajuste",
+        )
+
+
+def _record_comped_adjustment(
+    db: Session,
+    *,
+    sub: Subscription,
+    reason: str,
+    plan_code: str,
+    actor: Dict[str, Any] | None,
+    valid_until: datetime | None,
+    idempotency_key: str,
+) -> tuple[SubscriptionAdjustment, bool]:
+    existing = (
+        db.query(SubscriptionAdjustment)
+        .filter(
+            SubscriptionAdjustment.hotel_id == sub.hotel_id,
+            SubscriptionAdjustment.idempotency_key == idempotency_key,
+        )
+        .first()
+    )
+    if existing:
+        _assert_same_adjustment(existing, plan_code=plan_code, reason=reason, valid_until=valid_until)
+        return existing, False
+
+    adjustment = SubscriptionAdjustment(
+        hotel_id=sub.hotel_id,
+        subscription_id=sub.id,
+        adjustment_type="override",
+        plan_code=plan_code,
+        reason=reason,
+        actor_user_id=_actor_user_id(actor),
+        actor_role=_actor_role(actor),
+        valid_from=_now(),
+        valid_until=valid_until,
+        idempotency_key=idempotency_key,
+    )
+    try:
+        # The unique constraint is the concurrency boundary. A retry that
+        # races another transaction is resolved inside a SAVEPOINT so the
+        # caller's outer subscription transaction remains usable.
+        with db.begin_nested():
+            db.add(adjustment)
+            db.flush()
+    except IntegrityError:
+        existing = (
+            db.query(SubscriptionAdjustment)
+            .filter(
+                SubscriptionAdjustment.hotel_id == sub.hotel_id,
+                SubscriptionAdjustment.idempotency_key == idempotency_key,
+            )
+            .first()
+        )
+        if existing is None:
+            raise
+        _assert_same_adjustment(existing, plan_code=plan_code, reason=reason, valid_until=valid_until)
+        return existing, False
+    return adjustment, True
 
 
 def ensure_subscription_seed(db: Session, hotel_id: int, plan_code: str = "starter", status_value: str = "active") -> Tuple[Subscription | None, bool]:
@@ -227,17 +346,68 @@ def grant_comped(
     plan_code: str = "ultra",
     reason: str | None = None,
     actor: Dict[str, Any] | None = None,
+    valid_until: datetime | None = None,
+    idempotency_key: str | None = None,
 ) -> Subscription:
     if plan_code not in PLAN_CATALOG:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plan no encontrado")
+
+    reason = _normalize_adjustment_reason(reason)
+    valid_until = _as_utc(valid_until)
+    if valid_until is not None and valid_until <= _now():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="La vigencia del ajuste debe ser futura")
+    idempotency_key = (idempotency_key or "").strip() or _default_adjustment_idempotency_key(
+        hotel_id,
+        plan_code,
+        reason,
+        valid_until,
+    )
+
+    existing = (
+        db.query(SubscriptionAdjustment)
+        .filter(
+            SubscriptionAdjustment.hotel_id == hotel_id,
+            SubscriptionAdjustment.idempotency_key == idempotency_key,
+        )
+        .first()
+    )
+    if existing:
+        _assert_same_adjustment(existing, plan_code=plan_code, reason=reason, valid_until=valid_until)
+        sub = db.get(Subscription, existing.subscription_id)
+        if sub is None:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="El ajuste apunta a una suscripcion inexistente")
+        return sub
 
     sub = _upsert_subscription(db, hotel_id, plan_code, "comped")
     sub.can_write_cache = True
     sub.grace_until = None
     if sub.trial_started_at and not sub.trial_end_at:
         sub.trial_end_at = _now()
+    adjustment, created = _record_comped_adjustment(
+        db,
+        sub=sub,
+        reason=reason,
+        plan_code=plan_code,
+        actor=actor,
+        valid_until=valid_until,
+        idempotency_key=idempotency_key,
+    )
+    if not created:
+        return sub
+
     _sync_legacy_tables(db, hotel_id, plan_code, sub.room_limit or _plan_defaults(plan_code)["room_limit"], status_value="active")
-    _record_event(db, sub, "comped_granted", {"reason": reason, **_actor_payload(actor)})
+    _record_event(
+        db,
+        sub,
+        "comped_granted",
+        {
+            "adjustment_id": adjustment.id,
+            "idempotency_key": idempotency_key,
+            "reason": reason,
+            "valid_until": valid_until.isoformat() if valid_until else None,
+            **_actor_payload(actor),
+        },
+    )
     db.flush()
     return sub
 

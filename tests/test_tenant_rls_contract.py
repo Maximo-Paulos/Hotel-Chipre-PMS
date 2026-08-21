@@ -62,6 +62,10 @@ ADDITIVE_RLS_TABLE_CONTRACT = (
         "20260820_missing_tenant_rls.py",
         ("hotel_api_keys", "guest_alerts", "reservation_movement_groups"),
     ),
+    (
+        "e6aadf684343_add_subscription_adjustment_ledger.py",
+        ("subscription_adjustments",),
+    ),
 )
 
 
@@ -212,6 +216,7 @@ def test_rls_migration_covers_every_hotel_scoped_model_table():
         "notification_outbox",
         "daily_report_schedules",
         "temporary_action_grants",
+        "subscription_adjustments",
     }
     assert set(migration.TENANT_TABLES) == expected
     assert "hotel_memberships" not in migration.TENANT_TABLES

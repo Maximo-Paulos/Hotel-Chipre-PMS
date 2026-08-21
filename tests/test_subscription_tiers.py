@@ -4,6 +4,7 @@ import json
 from datetime import datetime, timedelta, timezone
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
@@ -17,7 +18,7 @@ from app.master_admin.models import MasterAdminAuditEvent
 from app.models.hotel_config import HotelConfiguration
 from app.models.hotel_membership import HotelMembership
 from app.models.subscription import HotelSubscription
-from app.models.subscription_v2 import Subscription, SubscriptionEvent
+from app.models.subscription_v2 import Subscription, SubscriptionAdjustment, SubscriptionEvent
 from app.models.user import User
 from app.services.security import create_access_token, hash_password
 from app.services.subscription_entitlements import (
@@ -197,6 +198,71 @@ def test_comped_override_records_audit_event(client):
             "plan_code": "ultra",
             "reason": "pilot-comp",
         }
+        adjustment = db.query(SubscriptionAdjustment).filter_by(hotel_id=7).one()
+        assert adjustment.adjustment_type == "override"
+        assert adjustment.plan_code == "ultra"
+        assert adjustment.reason == "pilot-comp"
+        assert adjustment.actor_user_id == admin_user.id
+        assert adjustment.actor_role == "platform_admin"
+        assert adjustment.valid_until is None
+        assert adjustment.idempotency_key
+    finally:
+        db.close()
+
+
+def test_comped_override_is_idempotent_and_keeps_one_append_only_adjustment(client):
+    _, SessionLocal = client
+    db = SessionLocal()
+    try:
+        _ensure_hotel(db, hotel_id=71)
+        valid_until = datetime.now(timezone.utc) + timedelta(days=30)
+        first = grant_comped(
+            db,
+            hotel_id=71,
+            plan_code="ultra",
+            reason="pilot-comp",
+            actor={"source": "test"},
+            valid_until=valid_until,
+            idempotency_key="comped-71-pilot-001",
+        )
+        second = grant_comped(
+            db,
+            hotel_id=71,
+            plan_code="ultra",
+            reason="pilot-comp",
+            actor={"source": "retry"},
+            valid_until=valid_until,
+            idempotency_key="comped-71-pilot-001",
+        )
+        db.commit()
+
+        assert first.id == second.id
+        adjustment = db.query(SubscriptionAdjustment).filter_by(hotel_id=71).one()
+        assert adjustment.valid_until is not None
+        assert abs((adjustment.valid_until.replace(tzinfo=timezone.utc) - valid_until).total_seconds()) < 1
+        assert db.query(SubscriptionAdjustment).filter_by(hotel_id=71).count() == 1
+        assert db.query(SubscriptionEvent).filter_by(hotel_id=71, event_type="comped_granted").count() == 1
+    finally:
+        db.close()
+
+
+def test_subscription_adjustment_preserves_history_when_hotel_delete_is_attempted(client):
+    _, SessionLocal = client
+    db = SessionLocal()
+    try:
+        hotel = HotelConfiguration(id=72, hotel_name="Adjustment Hotel", subscription_active=True)
+        db.add(hotel)
+        db.flush()
+        grant_comped(db, hotel_id=72, plan_code="pro", reason="support-credit", actor={"source": "test"})
+        db.commit()
+
+        db.delete(hotel)
+        with pytest.raises(IntegrityError):
+            db.commit()
+        db.rollback()
+
+        assert db.get(HotelConfiguration, 72) is not None
+        assert db.query(SubscriptionAdjustment).filter_by(hotel_id=72).count() == 1
     finally:
         db.close()
 
