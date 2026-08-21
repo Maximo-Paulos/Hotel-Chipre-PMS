@@ -35,6 +35,10 @@ class PaymentError(Exception):
     pass
 
 
+class PaymentNotFoundError(PaymentError):
+    """A payment target is absent from the caller's tenant scope."""
+
+
 DEFAULT_DEPOSIT_PERCENTAGE = 30.0
 
 
@@ -231,22 +235,23 @@ def process_payment(
     fabricated for money nobody actually collected.
     """
     # 1. Validate reservation
+    reservation_query = db.query(Reservation).filter(Reservation.id == request.reservation_id)
+    if hotel_id is not None:
+        reservation_query = reservation_query.filter(Reservation.hotel_id == hotel_id)
     reservation = (
-        db.query(Reservation)
-        .filter(Reservation.id == request.reservation_id)
+        reservation_query
         .enable_eagerloads(False)
         .with_for_update()
         .first()
     )
 
     if not reservation:
-        raise PaymentError(f"Reservation {request.reservation_id} not found")
+        raise PaymentNotFoundError("Reservation not found")
 
-    existing_tx = (
-        db.query(Transaction.hotel_id)
-        .filter(Transaction.reservation_id == request.reservation_id)
-        .first()
-    )
+    existing_tx_query = db.query(Transaction.hotel_id).filter(Transaction.reservation_id == request.reservation_id)
+    if hotel_id is not None:
+        existing_tx_query = existing_tx_query.filter(Transaction.hotel_id == hotel_id)
+    existing_tx = existing_tx_query.first()
     existing_tx_hotel_id = existing_tx[0] if existing_tx else None
 
     resolved_hotel_id = _resolve_reservation_hotel(
@@ -522,15 +527,17 @@ def get_reservation_financial_summary(db: Session, hotel_id: Optional[int], rese
     Get a full financial summary for a reservation.
     Returns total, paid, balance, deposit required, and all transactions.
     """
-    reservation = db.query(Reservation).filter(Reservation.id == reservation_id).first()
+    reservation_query = db.query(Reservation).filter(Reservation.id == reservation_id)
+    if hotel_id is not None:
+        reservation_query = reservation_query.filter(Reservation.hotel_id == hotel_id)
+    reservation = reservation_query.first()
     if not reservation:
-        raise PaymentError(f"Reservation {reservation_id} not found")
+        raise PaymentNotFoundError("Reservation not found")
 
-    existing_tx = (
-        db.query(Transaction.hotel_id)
-        .filter(Transaction.reservation_id == reservation_id)
-        .first()
-    )
+    existing_tx_query = db.query(Transaction.hotel_id).filter(Transaction.reservation_id == reservation_id)
+    if hotel_id is not None:
+        existing_tx_query = existing_tx_query.filter(Transaction.hotel_id == hotel_id)
+    existing_tx = existing_tx_query.first()
     existing_tx_hotel_id = existing_tx[0] if existing_tx else None
 
     resolved_hotel_id = _resolve_reservation_hotel(

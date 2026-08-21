@@ -29,10 +29,13 @@ from app.main import app as fastapi_app
 from app.models.cash_register import CashSession, CashSessionStatusEnum
 from app.models.guest import Guest
 from app.models.hotel_config import HotelConfiguration
+from app.models.hotel_membership import HotelMembership
+from app.models.invitation import StaffInvitation
 from app.models.payment import PaymentLink
 from app.models.payment_proof import PaymentProof, PaymentProofBlob
 from app.models.reservation import Reservation, ReservationSourceEnum, ReservationStatusEnum
 from app.models.room import Room, RoomCategory
+from app.models.security_audit_log import SecurityAuditLog
 from app.models.stock import StockItem, StockLocation
 from app.models.user import User
 
@@ -60,6 +63,32 @@ def two_hotel_client():
             HotelConfiguration(id=HOTEL_B, hotel_name="Hotel B", subscription_active=True),
             User(id=HOTEL_A, email="owner-a@test.com", password_hash="x", is_active=True, is_verified=True),
             User(id=HOTEL_B, email="owner-b@test.com", password_hash="x", is_active=True, is_verified=True),
+        ]
+    )
+    db.flush()
+    db.add_all(
+        [
+            HotelMembership(hotel_id=HOTEL_A, user_id=HOTEL_A, role="owner", status="active"),
+            HotelMembership(hotel_id=HOTEL_B, user_id=HOTEL_B, role="owner", status="active"),
+            StaffInvitation(
+                hotel_id=HOTEL_B,
+                user_id=HOTEL_B,
+                email="invite-b@test.com",
+                role="receptionist",
+                inviter_user_id=HOTEL_B,
+                inviter_email="owner-b@test.com",
+                token_hash="b" * 64,
+                status="pending",
+                expires_at=datetime(2026, 12, 31, tzinfo=timezone.utc),
+            ),
+            SecurityAuditLog(
+                hotel_id=HOTEL_B,
+                user_id=HOTEL_B,
+                action="tenant-b.secret-event",
+                resource_type="reservation",
+                resource_id="reservation-b",
+                details="Hotel B private audit detail",
+            ),
         ]
     )
     db.flush()
@@ -139,6 +168,7 @@ def two_hotel_client():
         "stock_location_b": stock_location_b.id, "cash_session_b": cash_b.id,
         "payment_link_b": link_b.id, "payment_proof_b": proof_b.id,
         "category_a": cat_a.id, "reservation_a": res_a.id,
+        "invitation_b": db.query(StaffInvitation).filter_by(hotel_id=HOTEL_B).one().id,
     }
 
     auth_state = {"hotel_id": HOTEL_A, "role": "owner", "user_id": HOTEL_A}
@@ -183,7 +213,26 @@ def test_reservation_read_denied_across_hotels(two_hotel_client):
 def test_reservation_financial_summary_denied_across_hotels(two_hotel_client):
     client, ids = two_hotel_client
     resp = client.get(f"/api/payments/summary/{ids['reservation_b']}")
-    assert resp.status_code in (400, 403, 404), resp.text
+    assert resp.status_code == 404, resp.text
+    assert "RES-B" not in resp.text
+    assert str(HOTEL_B) not in resp.text
+
+
+def test_payment_write_denied_across_hotels_without_foreign_error_leak(two_hotel_client):
+    client, ids = two_hotel_client
+    resp = client.post(
+        "/api/payments/",
+        headers={"Idempotency-Key": "cross-hotel-payment"},
+        json={
+            "reservation_id": ids["reservation_b"],
+            "amount": 1,
+            "payment_method": "cash",
+            "transaction_type": "partial_payment",
+        },
+    )
+    assert resp.status_code == 404, resp.text
+    assert "RES-B" not in resp.text
+    assert str(HOTEL_B) not in resp.text
 
 
 def test_guest_read_denied_across_hotels(two_hotel_client):
@@ -254,6 +303,37 @@ def test_payment_proof_approve_denied_across_hotels(two_hotel_client):
     client, ids = two_hotel_client
     resp = client.post(f"/api/payment-proofs/{ids['payment_proof_b']}/approve")
     assert resp.status_code in (400, 403, 404), resp.text
+
+
+def test_payment_link_query_param_cannot_select_foreign_reservation(two_hotel_client):
+    client, ids = two_hotel_client
+    resp = client.get(f"/api/payment-links?reservation_id={ids['reservation_b']}")
+    assert resp.status_code == 200, resp.text
+    assert resp.json() == []
+
+
+def test_invitation_path_cannot_select_foreign_hotel(two_hotel_client):
+    client, ids = two_hotel_client
+    resp = client.post(f"/api/users/invitations/{ids['invitation_b']}/resend")
+    assert resp.status_code == 404, resp.text
+    assert "Hotel B" not in resp.text
+
+
+def test_permission_target_path_cannot_select_foreign_membership(two_hotel_client):
+    client, _ids = two_hotel_client
+    resp = client.get(f"/api/permissions/user-overrides/{HOTEL_B}")
+    assert resp.status_code == 404, resp.text
+    assert "Hotel B" not in resp.text
+
+
+def test_security_audit_events_are_tenant_scoped(two_hotel_client):
+    client, _ids = two_hotel_client
+    resp = client.get("/api/settings/security/events")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["hotel_id"] == HOTEL_A
+    assert all(event["action"] != "tenant-b.secret-event" for event in body["events"])
+    assert "Hotel B private audit detail" not in resp.text
 
 
 def test_daily_rate_category_write_denied_across_hotels(two_hotel_client):

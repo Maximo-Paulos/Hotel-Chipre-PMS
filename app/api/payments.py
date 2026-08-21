@@ -12,6 +12,7 @@ from app.services.payment_service import (
     process_payment,
     get_reservation_financial_summary,
     PaymentError,
+    PaymentNotFoundError,
 )
 from app.services.permission_service import PERMISSION_CASH_OPERATE
 
@@ -37,6 +38,8 @@ def make_payment(
         db.commit()
         db.refresh(transaction)
         return transaction
+    except PaymentNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except PaymentError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -49,5 +52,7 @@ def financial_summary(
 ):
     try:
         return get_reservation_financial_summary(db, context.hotel_id, reservation_id)
+    except PaymentNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except PaymentError as e:
         raise HTTPException(status_code=404, detail=str(e))

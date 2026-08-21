@@ -187,7 +187,7 @@ Priority: `P0`
 
 ### TECH-0010 — Aislamiento multi-hotel exhaustivo
 
-Status: `AUDIT_REQUIRED`  
+Status: `VERIFY`
 Priority: `P0`  
 Depends on: `TECH-0000`
 
@@ -201,6 +201,10 @@ Depends on: `TECH-0000`
 - [ ] jobs, audit, analytics, invitaciones, archivos e integraciones scoped;
 - [ ] política fail-closed y 403/404 coherente;
 - [ ] estrategia RLS decidida y documentada.
+
+**Auditoría de cierre local 2026-08-21:** se inventariaron 418 registros de ruta en `app/api/` (375 handlers únicos). La resolución normal deriva `hotel_id` de la membership activa en `app/dependencies/auth.py:105-150`; los recursos hijos se filtran server-side por `(id, hotel_id)`. Se encontró y corrigió un gap en los dos endpoints financieros (`app/services/payment_service.py` y `app/api/payments.py`): antes cargaban una reserva por ID global y devolvían 400 con información del tenant ajeno; ahora el lookup es tenant-scoped y responde 404 genérico. La regresión está en `tests/test_cross_hotel_id_collision_api.py` e incluye reservas, huéspedes, habitaciones, caja/pagos, invitaciones, permisos/RBAC y audit log, incluyendo path y query-param.
+
+**Evidencia 2.2:** estado `VERIFY`, fecha 2026-08-21; SHA de commit pendiente porque Git no pudo escribir el lock de índice fuera del workspace writable; archivos/fix y matriz en `app/services/payment_service.py`, `app/api/payments.py`, `tests/test_cross_hotel_id_collision_api.py` y `docs/audits/tech-0010-tenant-isolation-audit.md`; migraciones: ninguna; validación: sintaxis Python 3.12 de archivos modificados; `.venv/bin/python -m pytest -q` bloqueado por `No module named pytest` después de fallar la instalación desde PyPI por DNS/red; ambiente: worktree local `codex/tech0010-isolation-audit-closure`, base `origin/main`/`6fd71f0`; E2E cloud/RLS real no ejecutados ni modificados. Faltan pruebas negativas dedicadas para las familias marcadas `VERIFY` en la matriz, por lo que TECH-0010 no se declara `VERIFIED`.
 
 ---
 
