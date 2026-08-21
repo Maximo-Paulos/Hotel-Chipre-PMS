@@ -262,13 +262,21 @@ Depends on: `TECH-0021`
 
 ### TECH-0024 — Google OIDC y Sign in with Apple
 
-Status: `TODO`
+Status: `VERIFY`
 Priority: `P1`  
 Depends on: `TECH-0021`, `TECH-0022`
 
 **Goal:** agregar proveedores sin delegar la cuenta de negocio.
 
 **Required:** identidad interna estable; provider `sub`; linking/unlinking con reauth; evitar account takeover por email coincidente; email relay/nombre de Apple; redirects por ambiente; invitaciones compatibles.
+
+**Entrega y validación 2026-08-21 (PR #77, mergeado a main):** agregado el flujo Apple OIDC sobre el patrón existente de Google: `app/services/apple_auth_service.py` valida firma RS256 mediante JWKS de Apple, issuer, audience, expiración, `sub`, email verificado y nonce; `app/api/auth.py` agrega `POST /api/auth/apple`, `GET /api/auth/apple/start`, `POST /api/auth/apple/callback` y `POST /api/auth/apple/unlink`; `app/models/user.py` extiende la identidad interna con `apple_sub` y guarda el nombre inicial en `display_name`; la migración es `alembic/versions/20260821_apple_sign_in.py` (chain corregido sobre el head real, doble-head detectado y arreglado). La recuperación por email coincide con Google: sólo vincula el `sub` estable, invalida la contraseña previa y sube `token_version`; un `sub` distinto no puede reclamar el email. `frontend/src/components/AppleSignInButton.tsx`, `frontend/src/api/auth.ts` y `frontend/src/views/public/LoginPage.tsx` agregan el botón Apple JS SDK con nonce y captura del nombre de primera autorización. Configuración agregada en `app/config.py`, `.env.example` y `render.yaml`, siempre sin valores reales y con `sync:false` para secretos de Render. No se agregó dependencia: se reutilizan `PyJWT`, `cryptography` y `httpx` existentes.
+
+Durante la verificación se encontraron y corrigieron 2 bugs reales del primer borrador: `_apple_full_name` se llamaba con el payload completo del request en vez de `payload.user` (`AttributeError` en creación y en reclamo de cuenta existente), y la migración encadenaba sobre un revision desactualizado (doble head de Alembic). También se detectó que `qa/preview-manifest.example.json` y `qa_bootstrap_contract.py` necesitaban `APPLE_LOGIN_ENABLED` junto a `GOOGLE_LOGIN_ENABLED` — su ausencia rompía 13 tests no relacionados (contratos de preview-manifest/release-evidence/trusted-release-gate).
+
+**Evidencia:** `.venv/bin/python -m pytest -q` completo → 1665 passed, 0 failed (incluye 5 tests Apple-específicos: validación negativa de token, creación de cuenta, reclamo, rechazo de subject distinto, unlink). `npm run lint` limpio. `npm run typecheck` tiene 1 falla preexistente en `usePushSubscription.ts` no relacionada a este cambio (ya resuelta en el merge de TECH-0090). Alembic single head confirmado. Graphify regenerado, `portable-check` OK. Permanece `VERIFY` (no `VERIFIED`) porque falta E2E real contra credenciales de Apple Developer.
+
+**Pendiente humano:** crear/configurar la app de Apple Developer, Service ID/redirect URI y credenciales reales (`APPLE_CLIENT_ID`, `APPLE_TEAM_ID`, `APPLE_KEY_ID` y el `.p8` montado en `APPLE_PRIVATE_KEY_PATH`), cargar sus valores sólo como secretos del entorno autorizado, y ejecutar la prueba real de autorización. No se desplegó, no se crearon cuentas cloud y no se rotaron secretos.
 
 ---
 

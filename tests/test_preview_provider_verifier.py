@@ -73,6 +73,7 @@ def fixtures() -> tuple[VerificationConfig, ProviderClients, dict[str, FakeApi]]
         "CONNECTIONS_ENABLED": "false",
         "EXTERNAL_EFFECTS_ENABLED": "false",
         "GOOGLE_LOGIN_ENABLED": "false",
+        "APPLE_LOGIN_ENABLED": "false",
         "INBOUND_PROVIDER_EVENTS_ENABLED": "false",
         "CORS_ORIGINS": APP_URL,
         "DATABASE_URL": preview_db_url,

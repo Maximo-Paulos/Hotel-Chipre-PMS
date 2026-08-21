@@ -115,6 +115,7 @@ class FakeRender:
             "CONNECTIONS_ENABLED": "false",
             "EXTERNAL_EFFECTS_ENABLED": "false",
             "GOOGLE_LOGIN_ENABLED": "false",
+            "APPLE_LOGIN_ENABLED": "false",
             "INBOUND_PROVIDER_EVENTS_ENABLED": "false",
             "CORS_ORIGINS": evidence["app_url"],
             "DATABASE_URL": (

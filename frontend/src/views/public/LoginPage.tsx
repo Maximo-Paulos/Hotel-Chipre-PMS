@@ -4,8 +4,9 @@ import { Link, useNavigate } from "react-router-dom";
 import { ApiError } from "../../api/client";
 import { Seo } from "../../components/Seo";
 import { GoogleSignInButton } from "../../components/GoogleSignInButton";
+import { AppleSignInButton } from "../../components/AppleSignInButton";
 import { PasswordInput } from "../../components/PasswordInput";
-import { login as loginApi, loginWithGoogle, type AuthResponse } from "../../api/auth";
+import { login as loginApi, loginWithApple, loginWithGoogle, type AuthResponse } from "../../api/auth";
 import { getOnboardingStatus } from "../../api/onboarding";
 import { defaultPathForRole, normalizeRole, useSession, type SessionState } from "../../state/session";
 
@@ -102,6 +103,24 @@ export function LoginPage() {
     }
   };
 
+  const handleAppleCredential = async (
+    idToken: string,
+    nonce: string,
+    user?: { name?: { firstName?: string; lastName?: string } }
+  ) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await loginWithApple(idToken, nonce, user);
+      await completeAuth(res);
+    } catch (err) {
+      if (err instanceof ApiError) setError(err.message);
+      else setError("No se pudo iniciar sesion con Apple");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
       <Seo title="Ingresar | Hotel Chipre PMS" description="Accede al sistema de gestión hotelera Hotel Chipre PMS." noindex />
@@ -161,6 +180,9 @@ export function LoginPage() {
             <div className="flex-grow border-t border-slate-200" />
           </div>
           <GoogleSignInButton onCredential={handleGoogleCredential} />
+          <div className="mt-3">
+            <AppleSignInButton disabled={loading} onCredential={handleAppleCredential} />
+          </div>
         </div>
         <div className="mt-4 flex items-center justify-between text-sm">
           <Link to="/forgot-password" className="text-brand-700 hover:underline">

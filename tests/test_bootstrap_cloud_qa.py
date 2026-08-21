@@ -55,6 +55,7 @@ def _bootstrap_values() -> dict[str, str]:
         "CONNECTIONS_ENABLED": "false",
         "EXTERNAL_EFFECTS_ENABLED": "false",
         "GOOGLE_LOGIN_ENABLED": "false",
+        "APPLE_LOGIN_ENABLED": "false",
         "INBOUND_PROVIDER_EVENTS_ENABLED": "false",
         "PAYPAL_MODE": "sandbox",
         "AI_ENABLED": "false",
