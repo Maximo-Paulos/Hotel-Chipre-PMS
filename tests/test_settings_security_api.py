@@ -1,6 +1,8 @@
 """Security settings API is tenant-scoped, redacted and revokes real JWTs."""
 
+import csv
 from datetime import datetime, timezone
+from io import StringIO
 
 import pytest
 from fastapi.testclient import TestClient
@@ -305,6 +307,114 @@ def test_unified_audit_timeline_supports_inclusive_date_filters_and_role_guard(s
         headers=_headers(token_for(manager, "manager")),
     )
     assert forbidden.status_code == 403
+
+
+def test_unified_audit_timeline_csv_export_filters_and_redacts(security_client):
+    client, db, owner, _manager, token_for = security_client
+    db.add_all(
+        [
+            AuditLog(
+                hotel_id=1,
+                table_name="rooms",
+                record_id=9,
+                action=AuditActionEnum.UPDATE,
+                actor_user_id=owner.id,
+                created_at=datetime(2026, 8, 19, 12, tzinfo=timezone.utc),
+                payload_after=(
+                    '{"status":"clean", "password_hash":"csv-hash-secret", '
+                    '"access_token":"csv-token-secret", "visible":"ok"}'
+                ),
+            ),
+            SecurityAuditLog(
+                hotel_id=1,
+                user_id=owner.id,
+                action="auth.login.success",
+                resource_type="user_session",
+                resource_id="csv-session-secret",
+                details=(
+                    '{"token":"csv-security-token", "email":"csv-secret@example.test", '
+                    '"provider":"password"}'
+                ),
+                created_at=datetime(2026, 8, 19, 13, tzinfo=timezone.utc),
+            ),
+            AuditLog(
+                hotel_id=1,
+                table_name="rooms",
+                record_id=10,
+                action=AuditActionEnum.CREATE,
+                actor_user_id=owner.id,
+                created_at=datetime(2026, 8, 20, 12, tzinfo=timezone.utc),
+            ),
+        ]
+    )
+    db.commit()
+
+    response = client.get(
+        "/api/settings/security/audit-timeline/export",
+        params={"from": "2026-08-19", "to": "2026-08-19"},
+        headers=_headers(token_for(owner, "owner")),
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.headers["content-type"].startswith("text/csv")
+    assert response.headers["content-disposition"] == 'attachment; filename="audit-timeline-1.csv"'
+    rows = list(csv.DictReader(StringIO(response.text)))
+    assert [row["action"] for row in rows] == ["auth.login.success", "update"]
+    assert set(rows[0]) == {
+        "source",
+        "action",
+        "actor_user_id",
+        "created_at",
+        "summary",
+        "details",
+    }
+    assert "2026-08-20" not in response.text
+    for secret in (
+        "csv-hash-secret",
+        "csv-token-secret",
+        "csv-security-token",
+        "csv-secret@example.test",
+        "csv-session-secret",
+        "password_hash",
+        "access_token",
+    ):
+        assert secret not in response.text
+    assert "[REDACTED]" in response.text
+
+    forbidden = client.get(
+        "/api/settings/security/audit-timeline/export",
+        headers=_headers(token_for(_manager, "manager")),
+    )
+    assert forbidden.status_code == 403
+
+
+def test_unified_audit_timeline_csv_export_caps_rows(security_client):
+    client, db, owner, _manager, token_for = security_client
+    db.add_all(
+        [
+            SecurityAuditLog(
+                hotel_id=1,
+                user_id=owner.id,
+                action=f"bulk.event.{index}",
+                resource_type="permission",
+                resource_id=str(index),
+                created_at=datetime(2026, 8, 19, tzinfo=timezone.utc).replace(microsecond=index),
+            )
+            for index in range(5001)
+        ]
+    )
+    db.commit()
+
+    response = client.get(
+        "/api/settings/security/audit-timeline/export",
+        params={"from": "2026-08-19", "to": "2026-08-19"},
+        headers=_headers(token_for(owner, "owner")),
+    )
+
+    assert response.status_code == 200, response.text
+    rows = list(csv.DictReader(StringIO(response.text)))
+    assert len(rows) == 5000
+    assert rows[0]["action"] == "bulk.event.5000"
 
 
 def test_revoke_all_invalidates_the_callers_previous_token(security_client):

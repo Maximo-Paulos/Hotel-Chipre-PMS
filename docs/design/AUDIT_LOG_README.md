@@ -378,6 +378,17 @@ Parameters:
 - `date_from`, `date_to`
 - `format` (json, csv, pdf)
 
+### Unified Timeline CSV Export (TECH-0070)
+```
+GET /api/settings/security/audit-timeline/export?from=YYYY-MM-DD&to=YYYY-MM-DD
+```
+
+The endpoint is restricted to `owner` and `co_owner`, applies the same inclusive
+date filters and redaction rules as the JSON timeline, and returns a downloadable
+CSV. Each request exports at most 5,000 rows; when the filtered timeline is
+larger, the export contains the first 5,000 rows in the unified descending order.
+Export pagination across multiple requests is intentionally out of scope.
+
 ---
 
 ## Entity Snapshots (to_audit_dict())
