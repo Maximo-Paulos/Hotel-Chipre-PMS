@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies.auth import AuthContext, require_roles
+from app.dependencies.auth import AuthContext, require_permission, require_roles
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.audit_log import AuditActionEnum
 from app.models.room import Room, RoomCategory, RoomStatusEnum
@@ -29,6 +29,7 @@ from app.services.checkin_service import perform_checkin, perform_checkout, Chec
 from app.services.guest_restriction_service import GuestProhibitedError, get_active_guest_restrictions
 from app.services.graph_projection import project_company_link, project_reservation_assignment
 from app.services import audit_log_service
+from app.services.permission_service import PERMISSION_RESERVATION_CREATE
 
 router = APIRouter(prefix="/api/bookings", tags=["Bookings"])
 
@@ -119,7 +120,7 @@ def price_quote(
     target_currency: str | None = None,
     occupancy: int = Query(1, gt=0),
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager", "receptionist")),
+    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_CREATE)),
 ):
     """
     Calculate pricing for a potential booking without persisting it.

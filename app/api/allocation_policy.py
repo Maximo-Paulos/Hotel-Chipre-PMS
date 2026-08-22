@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies.auth import AuthContext, require_permission, require_roles
+from app.dependencies.auth import AuthContext, require_permission
 from app.services.permission_service import PERMISSION_CONFIG_MANAGE
 from app.schemas.allocation_policy import (
     AllocationExplanationRead,
@@ -133,7 +133,7 @@ def get_policy_versions(
 def create_version(
     payload: AllocationPolicyVersionCreate,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner")),
+    context: AuthContext = Depends(require_permission(PERMISSION_CONFIG_MANAGE)),
 ):
     try:
         settings = get_active_policy_settings(db, context.hotel_id)
@@ -159,7 +159,7 @@ def create_version(
 def publish_version(
     version_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner")),
+    context: AuthContext = Depends(require_permission(PERMISSION_CONFIG_MANAGE)),
 ):
     try:
         settings = get_active_policy_settings(db, context.hotel_id)
@@ -196,7 +196,7 @@ def get_policy_suggestions(
 def create_suggestion(
     payload: AllocationPolicySuggestionCreate,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner")),
+    context: AuthContext = Depends(require_permission(PERMISSION_CONFIG_MANAGE)),
 ):
     suggestion = create_policy_suggestion_draft(
         db,
@@ -217,7 +217,7 @@ def review_suggestion(
     suggestion_id: int,
     payload: AllocationPolicySuggestionReviewRequest,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner")),
+    context: AuthContext = Depends(require_permission(PERMISSION_CONFIG_MANAGE)),
 ):
     try:
         suggestion = review_policy_suggestion(
@@ -239,7 +239,7 @@ def apply_suggestion(
     suggestion_id: int,
     payload: AllocationPolicySuggestionApplyRequest,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner")),
+    context: AuthContext = Depends(require_permission(PERMISSION_CONFIG_MANAGE)),
 ):
     try:
         suggestion, version = apply_policy_suggestion(
@@ -264,7 +264,7 @@ def apply_suggestion(
 def create_questionnaire_draft(
     payload: AllocationQuestionnaireDraftRequest,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner")),
+    context: AuthContext = Depends(require_permission(PERMISSION_CONFIG_MANAGE)),
 ):
     draft = draft_policy_from_questionnaire(
         db,
@@ -285,7 +285,7 @@ def create_questionnaire_draft(
 def create_feedback_draft(
     payload: AllocationFeedbackDraftRequest,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner")),
+    context: AuthContext = Depends(require_permission(PERMISSION_CONFIG_MANAGE)),
 ):
     draft = draft_policy_from_feedback(
         db,

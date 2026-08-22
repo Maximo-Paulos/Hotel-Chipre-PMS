@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies.auth import AuthContext, require_permission, require_roles
+from app.dependencies.auth import AuthContext, require_permission
 from app.models.operations import RoomMoveEvent, RoomMovementGroup
 from app.services.room_movement_group_service import (
     RoomMovementGroupError,
@@ -15,7 +15,7 @@ from app.services.room_movement_group_service import (
     list_groups,
     revert_group,
 )
-from app.services.permission_service import PERMISSION_RESERVATION_ROOM_MOVE
+from app.services.permission_service import PERMISSION_RESERVATION_MOVE, PERMISSION_RESERVATION_ROOM_MOVE
 
 
 router = APIRouter(prefix="/api/movement-groups", tags=["Movement Groups"])
@@ -156,7 +156,7 @@ def read_movement_group(
 def revert_movement_group(
     group_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_MOVE)),
 ):
     try:
         result = revert_group(
