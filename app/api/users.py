@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies.auth import get_auth_context, AuthContext, require_roles
+from app.dependencies.auth import AuthContext, get_auth_context, require_permission, require_roles
 from app.models.audit_log import AuditActionEnum
 from app.models.user import User
 from app.models.hotel_membership import HotelMembership
@@ -16,6 +16,7 @@ from app.models.invitation import StaffInvitation
 from app.schemas.auth import UserInfo
 from app.services.security import hash_password, create_signed_token, verify_password
 from app.services import mfa_service
+from app.services.permission_service import PERMISSION_HOTEL_PROPERTY_MANAGE
 from app.services.invitation_service import (
     invitation_snapshot,
     issue_invitation,
@@ -566,7 +567,7 @@ def transfer_primary_owner_endpoint(
     user_id: int,
     payload: PrimaryOwnerTransferPayload,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner")),
+    context: AuthContext = Depends(require_permission(PERMISSION_HOTEL_PROPERTY_MANAGE)),
 ):
     """Transfer billing/property ownership after explicit account reauth."""
     current_user = db.get(User, context.user_id)
