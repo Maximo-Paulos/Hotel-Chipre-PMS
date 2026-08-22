@@ -64,15 +64,20 @@ def verify_apple_id_token(
 def build_apple_authorization_url(
     *, client_id: str, redirect_uri: str, state: str, nonce: str
 ) -> str:
-    return f"{APPLE_AUTHORIZE_URL}?{urlencode({
-        'client_id': client_id,
-        'redirect_uri': redirect_uri,
-        'response_type': 'code id_token',
-        'response_mode': 'form_post',
-        'scope': 'name email',
-        'state': state,
-        'nonce': nonce,
-    })}"
+    # Multi-line dict literal nested inside an f-string expression needs
+    # Python 3.12 (PEP 701); Render runs 3.11, where this is a SyntaxError
+    # ("unterminated string literal") that crashes app.main at import time
+    # and takes the whole backend down. Build the params separately instead.
+    params = {
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
+        "response_type": "code id_token",
+        "response_mode": "form_post",
+        "scope": "name email",
+        "state": state,
+        "nonce": nonce,
+    }
+    return f"{APPLE_AUTHORIZE_URL}?{urlencode(params)}"
 
 
 def _read_private_key(path_value: str) -> str:
