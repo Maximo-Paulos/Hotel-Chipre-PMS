@@ -134,7 +134,8 @@ def test_daily_report_totals_a_completed_transaction_without_crashing(reports_cl
     client, db, reservation_id = reports_client
     _make_completed_transaction(db, reservation_id=reservation_id, amount="15000.50")
 
-    response = client.get("/api/reports/daily", params={"report_date": date.today().isoformat()})
+    report_date = datetime.now(timezone.utc).date()
+    response = client.get("/api/reports/daily", params={"report_date": report_date.isoformat()})
 
     assert response.status_code == 200
     assert response.json()["revenue"]["total"] == 15000.5
@@ -145,9 +146,10 @@ def test_revenue_report_totals_multiple_completed_transactions_without_crashing(
     _make_completed_transaction(db, reservation_id=reservation_id, amount="10000.00")
     _make_completed_transaction(db, reservation_id=reservation_id, amount="5000.25")
 
+    report_date = datetime.now(timezone.utc).date()
     response = client.get(
         "/api/reports/revenue",
-        params={"start_date": date.today().isoformat(), "end_date": date.today().isoformat()},
+        params={"start_date": report_date.isoformat(), "end_date": report_date.isoformat()},
     )
 
     assert response.status_code == 200
