@@ -1,5 +1,34 @@
 # Estado exhaustivo del sistema — Hotel Chipre PMS
 
+## 0. Actualización de campaña — 2026-08-21/22 (`confirmed` para código/tests locales; no re-verifica secciones 8-9 de este documento)
+
+Entre el 2026-08-21 y 2026-08-22 se cerraron 16 PRs contra `main` (squash merge, cada uno con suite completa verde antes de mergear). HEAD resultante en esta actualización: `6460092` (más `e130dd5` del fix de test flaky posterior). `pytest -q` completo: **1709 passed, 0 failed, 22 skipped, 12 xfailed, 1 xpassed**. `alembic heads`: un solo head (`20260821_apple_sign_in`). Frontend `lint`/`typecheck`/`build`: limpios.
+
+**Cerrado esta campaña (ver `docs/HOTEL_PMS_MASTER_DEVELOPMENT_SPEC.md` sección 6 para el detalle por ítem y evidencia):**
+
+- TECH-0040 (restore-defaults RBAC), TECH-0070 (export CSV audit), TECH-0071 (TTL sesión master admin) — arrastrados de la campaña anterior, mergeados ahora (#69-#71).
+- TECH-0010 — fix de seguridad real: fuga cross-tenant en lookup de pagos (#75). Queda `VERIFY` parcial, no `VERIFIED` — ver matriz de auditoría.
+- TECH-0000 — matriz de auditoría formal VERIFIED/VERIFY/TODO/BLOCKED/DEFERRED para los 33 TECH-XXXX, con threat model P0 (#79, `docs/audits/tech-0000-system-audit.md`).
+- TECH-0023 — MFA TOTP obligatorio para Master Admin, cerraba un gap real (antes era opcional) (#74).
+- TECH-0024 — Sign in with Apple implementado simétrico a Google OIDC (#77). Pendiente humano: credenciales reales de Apple Developer.
+- TECH-0090 — gaps de PWA cerrados: manifest/iconos maskable, banner offline explícito (#72).
+- TECH-0110 — soft-delete + script de restore drill local (#76). Pendiente humano: restore drill real contra Render/Supabase.
+- TECH-0112 — artifacts Docker atados a SHA, validador de release manifest (#73). Queda `BLOCKED`: falta ambiente staging real y branch protection (acción humana).
+- TECH-0080/81/82 — NO se resolvió la decisión (sigue en sección 7); se produjo `docs/decisions/tech-0080-warehouse-options.md` con 4 opciones evaluadas y recomendación, para que el Product Lead decida (#78).
+
+**Deuda arquitectónica encontrada por la auditoría TECH-0000 y consolidada donde fue seguro (sin decisión unilateral de arquitectura):**
+
+- JWT bearer + cookie de sesión coexistían como dos mecanismos de auth válidos — **se encontró y cerró un bug de seguridad real**: logout/revoke no invalidaba el JWT bearer emitido en el mismo login (#83). El corte final (retirar JWT vs. mantener híbrido) sigue abierto — `docs/decisions/jwt-cookie-consolidation-plan.md`.
+- RBAC por rol (`require_roles`) y por permiso (`require_permission`) coexistían — se migraron 21 rutas sin ambigüedad al mecanismo canónico, con test de regresión que fija el mismo conjunto de roles que antes; 51 rutas quedaron sin tocar por falta de permiso equivalente exacto en el catálogo (#81, `docs/audits/tech-0000-rbac-consolidation.md`).
+- Suscripciones legacy y v2 no tenían una única autoridad de escritura — se corrigieron 3 caminos de código que escribían sólo legacy sin sincronizar v2; NO se migraron datos productivos (#82, `docs/decisions/subscription-model-consolidation-plan.md`).
+- Audit log fragmentado en 3 tablas (`AuditLog`/`SecurityAuditLog`/`MasterAdminAuditEvent`) — confirmado que es separación deliberada de trust boundary, no duplicado accidental; se formalizó el contrato canónico (#80, `docs/architecture/audit-log-contract.md`).
+
+**No tocado deliberadamente:** TECH-0025, 0091, 0092, 0100, 0101, 0120, 0130 permanecen `DEFERRED` — el spec mismo lo exige (sección 2, regla 5: no crear sistema paralelo; regla 10: nada de despliegue/cuentas cloud/secretos/cutover sin autorización humana explícita). Las decisiones de sección 7 (BigQuery vs. alternativas, sesiones mobile, MFA obligatorio para owners, etc.) siguen esperando al Product Lead; donde fue posible se dejó un documento de propuesta, nunca una decisión tomada por el agente.
+
+**No verificado en esta actualización** (las secciones 8 y 9 de abajo describen el estado cloud/QA del 2026-07-18/23 y NO fueron re-comprobadas ahora — antes de confiar en ellas para un despliegue, re-verificar Vercel/Render/Supabase en vivo): URLs públicas, estado del servicio Render, proyecto Supabase QA, previews aislados. El hallazgo de login lento reportado durante esta sesión fue diagnosticado en vivo (logs de Render) como cold-start del plan Free tras inactividad — no una regresión de código.
+
+---
+
 Auditoría base: commit `bf14bf5` revisado el 2026-07-23 (`confirmed` para inventarios, Graphify portátil, agentes/skills y validaciones del setup). La configuración live de Vercel/Render y las superficies públicas fueron comprobadas de forma read-only; la sesión Supabase está activa, pero el proyecto QA todavía no fue creado. La evidencia de proveedor permanece separada del código versionado.
 Fuentes principales: `app/main.py`, `app/config.py`, `app/models/`, `app/api/`, `app/services/`, `frontend/src/router.tsx`, `render.yaml`, `vercel.json`, Alembic y `.graphify/`.
 Artefactos reproducibles: [OpenAPI](../_generated/api-surface.md), [rutas frontend](../_generated/frontend-routes.md), [migración head](../_generated/migration-head.md), [superficies cloud](../_generated/cloud-surfaces.md), [resumen Graphify](../_generated/graphify-summary.md).
