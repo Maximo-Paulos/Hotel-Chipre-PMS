@@ -148,6 +148,29 @@ def test_manager_cannot_read_security_settings(security_client):
     assert response.status_code == 403
 
 
+@pytest.mark.parametrize("method", ["PUT", "PATCH", "DELETE"])
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/settings/security/events",
+        "/api/settings/security/audit-timeline",
+        "/api/settings/security/audit-timeline/export",
+        "/api/master-admin/audit/events",
+    ],
+)
+def test_audit_surfaces_do_not_expose_mutating_methods(security_client, method, path):
+    """Audit evidence is readable only; there is no ordinary mutation route."""
+    client, _db, owner, _manager, token_for = security_client
+
+    response = client.request(
+        method,
+        path,
+        headers=_headers(token_for(owner, "owner")),
+    )
+
+    assert response.status_code == 405
+
+
 def test_unified_audit_timeline_combines_sources_orders_redacts_and_isolates_tenant(security_client):
     client, db, owner, _manager, token_for = security_client
     now = datetime.now(timezone.utc)

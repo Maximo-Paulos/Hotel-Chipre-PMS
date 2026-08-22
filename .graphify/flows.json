@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-21T22:30:57.784Z",
+  "generatedAt": "2026-08-21T23:58:09.439Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -72,6 +72,82 @@
         "frontend/src/api/auth.ts"
       ],
       "criticality": 0.495,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_auth_apple_callback",
+      "name": "apple_callback",
+      "entryPoint": "api_auth_apple_callback",
+      "entryPointId": "api_auth_apple_callback",
+      "path": [
+        "api_auth_apple_callback",
+        "api_auth_apple_login_config",
+        "api_auth_complete_apple_login",
+        "api_auth_apple_full_name",
+        "api_auth_audit_security_event",
+        "api_auth_build_login_response",
+        "api_auth_issue_auth_response",
+        "api_auth_attach_user_session_cookies",
+        "api_auth_build_auth_response",
+        "api_auth_pick_default_hotel_id"
+      ],
+      "qualifiedPath": [
+        "api_auth_apple_callback",
+        "api_auth_apple_login_config",
+        "api_auth_complete_apple_login",
+        "api_auth_apple_full_name",
+        "api_auth_audit_security_event",
+        "api_auth_build_login_response",
+        "api_auth_issue_auth_response",
+        "api_auth_attach_user_session_cookies",
+        "api_auth_build_auth_response",
+        "api_auth_pick_default_hotel_id"
+      ],
+      "depth": 5,
+      "nodeCount": 10,
+      "fileCount": 1,
+      "files": [
+        "app/api/auth.py"
+      ],
+      "criticality": 0.45,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_auth_apple_login",
+      "name": "apple_login",
+      "entryPoint": "api_auth_apple_login",
+      "entryPointId": "api_auth_apple_login",
+      "path": [
+        "api_auth_apple_login",
+        "api_auth_complete_apple_login",
+        "api_auth_apple_full_name",
+        "api_auth_apple_login_config",
+        "api_auth_audit_security_event",
+        "api_auth_build_login_response",
+        "api_auth_issue_auth_response",
+        "api_auth_attach_user_session_cookies",
+        "api_auth_build_auth_response",
+        "api_auth_pick_default_hotel_id"
+      ],
+      "qualifiedPath": [
+        "api_auth_apple_login",
+        "api_auth_complete_apple_login",
+        "api_auth_apple_full_name",
+        "api_auth_apple_login_config",
+        "api_auth_audit_security_event",
+        "api_auth_build_login_response",
+        "api_auth_issue_auth_response",
+        "api_auth_attach_user_session_cookies",
+        "api_auth_build_auth_response",
+        "api_auth_pick_default_hotel_id"
+      ],
+      "depth": 5,
+      "nodeCount": 10,
+      "fileCount": 1,
+      "files": [
+        "app/api/auth.py"
+      ],
+      "criticality": 0.45,
       "warnings": []
     },
     {
@@ -705,6 +781,30 @@
       "warnings": []
     },
     {
+      "id": "flow:services_apple_auth_service_create_apple_client_secret",
+      "name": "create_apple_client_secret",
+      "entryPoint": "services_apple_auth_service_create_apple_client_secret",
+      "entryPointId": "services_apple_auth_service_create_apple_client_secret",
+      "path": [
+        "services_apple_auth_service_create_apple_client_secret",
+        "services_apple_auth_service_read_private_key",
+        "services_apple_auth_service_appletokenerror"
+      ],
+      "qualifiedPath": [
+        "services_apple_auth_service_create_apple_client_secret",
+        "services_apple_auth_service_read_private_key",
+        "services_apple_auth_service_appletokenerror"
+      ],
+      "depth": 2,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/services/apple_auth_service.py"
+      ],
+      "criticality": 0.42,
+      "warnings": []
+    },
+    {
       "id": "flow:api_auth_disable_mfa",
       "name": "disable_mfa",
       "entryPoint": "api_auth_disable_mfa",
@@ -846,6 +946,70 @@
       "fileCount": 1,
       "files": [
         "scripts/agent_ops/build_shared_sandbox_bootstrap_sql.py"
+      ],
+      "criticality": 0.42,
+      "warnings": []
+    },
+    {
+      "id": "flow:agent_ops_verify_release_sha_main",
+      "name": "main",
+      "entryPoint": "agent_ops_verify_release_sha_main",
+      "entryPointId": "agent_ops_verify_release_sha_main",
+      "path": [
+        "agent_ops_verify_release_sha_main",
+        "agent_ops_verify_release_sha_validate_manifest",
+        "agent_ops_verify_release_sha_non_empty"
+      ],
+      "qualifiedPath": [
+        "agent_ops_verify_release_sha_main",
+        "agent_ops_verify_release_sha_validate_manifest",
+        "agent_ops_verify_release_sha_non_empty"
+      ],
+      "depth": 2,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "scripts/agent_ops/verify_release_sha.py"
+      ],
+      "criticality": 0.42,
+      "warnings": []
+    },
+    {
+      "id": "flow:backup_verify_local_backup_restore_main",
+      "name": "main",
+      "entryPoint": "backup_verify_local_backup_restore_main",
+      "entryPointId": "backup_verify_local_backup_restore_main",
+      "path": [
+        "backup_verify_local_backup_restore_main",
+        "backup_verify_local_backup_restore_drillerror",
+        "backup_verify_local_backup_restore_run_postgres",
+        "backup_verify_local_backup_restore_run_sqlite",
+        "backup_verify_local_backup_restore_sqlite_path",
+        "backup_verify_local_backup_restore_validate_tables",
+        "backup_verify_local_backup_restore_pg_command",
+        "backup_verify_local_backup_restore_pg_count",
+        "backup_verify_local_backup_restore_postgres_parts",
+        "backup_verify_local_backup_restore_run_pg_command",
+        "backup_verify_local_backup_restore_sqlite_counts"
+      ],
+      "qualifiedPath": [
+        "backup_verify_local_backup_restore_main",
+        "backup_verify_local_backup_restore_drillerror",
+        "backup_verify_local_backup_restore_run_postgres",
+        "backup_verify_local_backup_restore_run_sqlite",
+        "backup_verify_local_backup_restore_sqlite_path",
+        "backup_verify_local_backup_restore_validate_tables",
+        "backup_verify_local_backup_restore_pg_command",
+        "backup_verify_local_backup_restore_pg_count",
+        "backup_verify_local_backup_restore_postgres_parts",
+        "backup_verify_local_backup_restore_run_pg_command",
+        "backup_verify_local_backup_restore_sqlite_counts"
+      ],
+      "depth": 2,
+      "nodeCount": 11,
+      "fileCount": 1,
+      "files": [
+        "scripts/backup/verify_local_backup_restore.py"
       ],
       "criticality": 0.42,
       "warnings": []
@@ -1499,6 +1663,28 @@
       "warnings": []
     },
     {
+      "id": "flow:api_auth_apple_start",
+      "name": "apple_start",
+      "entryPoint": "api_auth_apple_start",
+      "entryPointId": "api_auth_apple_start",
+      "path": [
+        "api_auth_apple_start",
+        "api_auth_apple_login_config"
+      ],
+      "qualifiedPath": [
+        "api_auth_apple_start",
+        "api_auth_apple_login_config"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/auth.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
       "id": "flow:api_permissions_approve_temporary_action_grant",
       "name": "approve_temporary_action_grant",
       "entryPoint": "api_permissions_approve_temporary_action_grant",
@@ -1940,6 +2126,28 @@
       "fileCount": 1,
       "files": [
         "alembic/versions/f3bdaadd3d15_master_admin_rls_bypass.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_apple_auth_service_exchange_apple_code",
+      "name": "exchange_apple_code",
+      "entryPoint": "services_apple_auth_service_exchange_apple_code",
+      "entryPointId": "services_apple_auth_service_exchange_apple_code",
+      "path": [
+        "services_apple_auth_service_exchange_apple_code",
+        "services_apple_auth_service_appletokenerror"
+      ],
+      "qualifiedPath": [
+        "services_apple_auth_service_exchange_apple_code",
+        "services_apple_auth_service_appletokenerror"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/services/apple_auth_service.py"
       ],
       "criticality": 0.41,
       "warnings": []
@@ -2575,6 +2783,28 @@
       "warnings": []
     },
     {
+      "id": "flow:api_auth_unlink_apple",
+      "name": "unlink_apple",
+      "entryPoint": "api_auth_unlink_apple",
+      "entryPointId": "api_auth_unlink_apple",
+      "path": [
+        "api_auth_unlink_apple",
+        "api_auth_audit_security_event"
+      ],
+      "qualifiedPath": [
+        "api_auth_unlink_apple",
+        "api_auth_audit_security_event"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/auth.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
       "id": "flow:api_auth_unlink_google",
       "name": "unlink_google",
       "entryPoint": "api_auth_unlink_google",
@@ -2782,6 +3012,28 @@
       "fileCount": 1,
       "files": [
         "app/services/payment_webhook_service.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_apple_auth_service_verify_apple_id_token",
+      "name": "verify_apple_id_token",
+      "entryPoint": "services_apple_auth_service_verify_apple_id_token",
+      "entryPointId": "services_apple_auth_service_verify_apple_id_token",
+      "path": [
+        "services_apple_auth_service_verify_apple_id_token",
+        "services_apple_auth_service_appletokenerror"
+      ],
+      "qualifiedPath": [
+        "services_apple_auth_service_verify_apple_id_token",
+        "services_apple_auth_service_appletokenerror"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/services/apple_auth_service.py"
       ],
       "criticality": 0.41,
       "warnings": []
@@ -3040,6 +3292,38 @@
         "app/services/hotel_api_key_service.py"
       ],
       "criticality": 0.3267,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_external_effects_policy_require_apple_login",
+      "name": "require_apple_login",
+      "entryPoint": "services_external_effects_policy_require_apple_login",
+      "entryPointId": "services_external_effects_policy_require_apple_login",
+      "path": [
+        "services_external_effects_policy_require_apple_login",
+        "services_external_effects_policy_apple_login_enabled",
+        "services_external_effects_policy_applelogindisabled",
+        "services_external_effects_policy_require_external_connections",
+        "services_external_effects_policy_externaleffectsdisabled",
+        "services_external_effects_policy_require_external_effects",
+        "services_external_effects_policy_external_effects_enabled"
+      ],
+      "qualifiedPath": [
+        "services_external_effects_policy_require_apple_login",
+        "services_external_effects_policy_apple_login_enabled",
+        "services_external_effects_policy_applelogindisabled",
+        "services_external_effects_policy_require_external_connections",
+        "services_external_effects_policy_externaleffectsdisabled",
+        "services_external_effects_policy_require_external_effects",
+        "services_external_effects_policy_external_effects_enabled"
+      ],
+      "depth": 3,
+      "nodeCount": 7,
+      "fileCount": 1,
+      "files": [
+        "app/services/external_effects_policy.py"
+      ],
+      "criticality": 0.3229,
       "warnings": []
     },
     {
