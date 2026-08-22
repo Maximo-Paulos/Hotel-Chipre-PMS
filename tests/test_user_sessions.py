@@ -263,14 +263,26 @@ def test_session_listing_individual_revoke_logout_and_revoke_all(session_client)
     other_id = next(item["id"] for item in listed.json() if item["id"] != current_session.id)
     revoked = client.delete(f"/api/auth/sessions/{other_id}", headers=headers)
     assert revoked.status_code == 200, revoked.text
-    assert len(client.get("/api/auth/sessions", headers=headers).json()) == 1
+    db.refresh(user)
+    assert user.token_version == 1
+    assert client.get("/api/auth/me", headers=headers).status_code == 401
 
+    # The current cookie session remains active and can issue a fresh bearer
+    # after the targeted server-side revoke invalidates the old JWT plane.
     csrf = client.cookies.get(user_session_service.USER_CSRF_COOKIE_NAME)
+    refreshed = client.post("/api/auth/session/refresh", headers={"X-CSRF-Token": csrf})
+    assert refreshed.status_code == 200, refreshed.text
+    fresh_headers = _bearer_headers(refreshed.json())
+    assert len(client.get("/api/auth/sessions", headers=fresh_headers).json()) == 1
+
     logged_out = client.post("/api/auth/logout", headers={"X-CSRF-Token": csrf})
     assert logged_out.status_code == 200, logged_out.text
     db.refresh(current_session)
     assert current_session.revoked_at is not None
-    assert client.get("/api/auth/me", headers=headers).status_code == 200
+    db.refresh(user)
+    assert user.token_version == 2
+    assert client.get("/api/auth/me", headers=headers).status_code == 401
+    assert client.get("/api/auth/me", headers=fresh_headers).status_code == 401
 
     # Re-create a browser session and verify the pre-existing token_version
     # control also revokes the server-side session plane.

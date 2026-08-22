@@ -1,6 +1,18 @@
 """
 Strict authentication/context helpers.
 
+Authentication has two intentionally explicit normal-user planes during the
+TECH-0021 transition:
+
+* Bearer JWT is still supported by the web SPA and first-party native/automation
+  API clients. ``token_version`` is the user-scoped JWT revocation control.
+* The browser session lifecycle uses an opaque, server-side ``UserSession``
+  cookie plus CSRF; operational browser requests still carry the bearer JWT,
+  and the cookie-backed refresh path issues a replacement. The row is
+  independently rotatable and revocable.
+
+Public booking/WhatsApp API routes and inbound provider webhooks use their own
+API-key/secret/signature boundaries and do not fall through to this JWT plane.
 Every operational request must resolve to a real authenticated user plus an
 active hotel membership. We never fall back to hotel 1 or fabricate a hotel
 context from headers alone.
