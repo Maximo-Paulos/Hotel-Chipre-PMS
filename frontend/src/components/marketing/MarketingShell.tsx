@@ -86,6 +86,12 @@ export function MarketingShell({ children }: MarketingShellProps) {
             <a href={loginUrl} className="text-slate-600 hover:text-brand-700">
               Ingresar
             </a>
+            <Link to="/terms" className="text-slate-600 hover:text-brand-700">
+              Términos y Condiciones
+            </Link>
+            <Link to="/privacy" className="text-slate-600 hover:text-brand-700">
+              Política de Privacidad
+            </Link>
           </div>
         </div>
       </footer>

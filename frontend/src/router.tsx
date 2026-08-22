@@ -11,7 +11,9 @@ import { FunctionsPage } from "./views/public/FunctionsPage";
 import { MarketingHomePage } from "./views/public/MarketingHomePage";
 import { PmsHoteleroPage } from "./views/public/PmsHoteleroPage";
 import { PricingPage as PricingPageView } from "./views/public/PricingPage";
+import { PrivacyPage } from "./views/public/PrivacyPage";
 import { SoftwareParaHotelesPage } from "./views/public/SoftwareParaHotelesPage";
+import { TermsPage } from "./views/public/TermsPage";
 import {
   MasterAdminProtectedShell,
   MasterAdminRoot
@@ -314,6 +316,22 @@ const publicRoutes = [
     element: (
       <MarketingRedirect>
         <FaqPage />
+      </MarketingRedirect>
+    )
+  },
+  {
+    path: "/terms",
+    element: (
+      <MarketingRedirect>
+        <TermsPage />
+      </MarketingRedirect>
+    )
+  },
+  {
+    path: "/privacy",
+    element: (
+      <MarketingRedirect>
+        <PrivacyPage />
       </MarketingRedirect>
     )
   },
