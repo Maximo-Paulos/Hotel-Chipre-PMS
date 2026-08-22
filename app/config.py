@@ -187,7 +187,11 @@ class Settings(BaseSettings):
     WEB_PUSH_VAPID_PRIVATE_KEY: str = ""
     WEB_PUSH_VAPID_SUBJECT: str = ""  # mailto: or https: contact per the Web Push spec
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    # `extra: ignore` because .env is shared with the Vite frontend and carries
+    # keys this model does not declare (VITE_*). Without it, pydantic-settings
+    # refuses to build Settings and the backend cannot boot from the .env the
+    # repo's own .env.example documents.
+    model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 
 
 @lru_cache()

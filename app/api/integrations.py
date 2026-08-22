@@ -1,4 +1,5 @@
 import html
+import json
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -109,31 +110,38 @@ def _oauth_state_token(request: Request, integration_id: int, context: AuthConte
 
 
 def _oauth_callback_page(*, status: str, message: str, provider: str, integration_id: int, web_origin: str) -> HTMLResponse:
-    safe_message = message.replace("\\", "\\\\").replace("'", "\\'")
     rendered_message = html.escape(message)
     target_origin = web_origin if web_origin.startswith(("http://", "https://")) else "*"
+    # `message` carries provider-supplied text (OAuth error_description), so it
+    # is never interpolated into JS by hand: quote-escaping alone still lets a
+    # literal "</script>" close the block and inject markup. Serialize the
+    # whole payload as JSON and neutralize "</" for the HTML parser.
+    payload_json = json.dumps(
+        {
+            "type": "integration-oauth-result",
+            "provider": provider,
+            "integrationId": integration_id,
+            "status": status,
+            "message": message,
+        }
+    ).replace("</", "<\\/")
+    target_origin_json = json.dumps(target_origin).replace("</", "<\\/")
     return HTMLResponse(
         f"""
         <!doctype html>
         <html lang="es">
           <head>
             <meta charset="utf-8" />
-            <title>Conexión {provider}</title>
+            <title>Conexión {html.escape(provider)}</title>
           </head>
           <body style="font-family: Arial, sans-serif; padding: 24px;">
             <p id="message">{rendered_message}</p>
             <script>
               (function () {{
-                var payload = {{
-                  type: 'integration-oauth-result',
-                  provider: '{provider}',
-                  integrationId: {integration_id},
-                  status: '{status}',
-                  message: '{safe_message}'
-                }};
+                var payload = {payload_json};
                 try {{
                   if (window.opener && !window.opener.closed) {{
-                    window.opener.postMessage(payload, '{target_origin}');
+                    window.opener.postMessage(payload, {target_origin_json});
                     window.close();
                     return;
                   }}
