@@ -35,7 +35,10 @@ def safe_preview_settings(**overrides: object) -> Settings:
         "MASTER_ADMIN_COOKIE_SECURE": True,
     }
     values.update(overrides)
-    return Settings(**values)
+    # _env_file=None so the developer's local .env cannot leak live credentials
+    # (AI_BASE_URL, provider keys) into a fixture that exists to assert they are
+    # absent.
+    return Settings(_env_file=None, **values)
 
 
 def test_preview_runtime_accepts_explicitly_disabled_external_effects() -> None:

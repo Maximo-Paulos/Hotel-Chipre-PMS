@@ -1,0 +1,12 @@
+[mcp_servers.render]
+url = "https://mcp.render.com/mcp"
+bearer_token_env_var = "RENDER_API_KEY"
+
+[mcp_servers.vercel]
+url = "https://mcp.vercel.com"
+bearer_token_env_var = "VERCEL_API_KEY"
+
+[mcp_servers.supabase]
+command = "npx"
+args = ["-y", "@supabase/mcp-server-supabase@latest", "--read-only", "--project-ref=ezkljznogqpmrjxyvklr"]
+env_vars = ["SUPABASE_ACCESS_TOKEN"]
