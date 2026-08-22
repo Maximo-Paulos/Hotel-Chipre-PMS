@@ -8,6 +8,7 @@ from app.models.hotel_config import HotelConfiguration
 from app.models.hotel_membership import HotelMembership
 from app.models.subscription import SubscriptionPlan, HotelSubscription
 from app.config import get_settings
+from app.services.subscription_entitlements import PLAN_CATALOG, ensure_subscription_seed
 
 
 def ensure_plans_seeded(db: Session):
@@ -100,9 +101,22 @@ def _ensure_membership_and_subscription(db: Session, hotel_id: int, owner_email:
 
     settings = get_settings()
     plan_code = settings.DEFAULT_SUBSCRIPTION_PLAN
-    plan = db.query(SubscriptionPlan).filter(SubscriptionPlan.code == plan_code).first()
-    if plan and not db.query(HotelSubscription).filter(HotelSubscription.hotel_id == hotel_id).first():
-        db.add(HotelSubscription(hotel_id=hotel_id, plan_id=plan.id, status="active"))
+    legacy_subscription = (
+        db.query(HotelSubscription)
+        .filter(HotelSubscription.hotel_id == hotel_id)
+        .first()
+    )
+    if legacy_subscription is None:
+        # New hotel bootstrap must go through the v2 service. It creates the
+        # v2 source row and its intentional legacy compatibility projection in
+        # one transaction, instead of leaving only HotelSubscription behind.
+        canonical_plan = plan_code if plan_code in PLAN_CATALOG else "starter"
+        ensure_subscription_seed(
+            db,
+            hotel_id,
+            plan_code=canonical_plan,
+            status_value="active",
+        )
     db.flush()
 
 
