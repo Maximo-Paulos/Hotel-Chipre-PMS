@@ -1185,6 +1185,11 @@ def delete_session(
     session = revoke_session(db, session_id, user.id)
     if session is None:
         raise HTTPException(status_code=404, detail="Sesion no encontrada")
+    # ``token_version`` is the current JWT revocation primitive and is scoped
+    # to the user, not to a UserSession row. Keep a server-side session revoke
+    # from leaving the bearer token issued alongside that session usable.
+    user.token_version = (user.token_version or 0) + 1
+    db.add(user)
     db.commit()
     return {"revoked": True, "session_id": session_id}
 
@@ -1208,6 +1213,13 @@ def logout(
         if validated is not None:
             session, _new_session_token = validated
             revoke_session(db, session.id, session.user_id)
+            user = db.get(User, session.user_id)
+            if user is not None:
+                # Logout must revoke the JWT emitted by the same login too.
+                # Other cookie sessions remain intact and can transparently
+                # refresh a new JWT with the incremented version.
+                user.token_version = (user.token_version or 0) + 1
+                db.add(user)
             db.commit()
 
     clear_user_session_cookies(response)
