@@ -19,7 +19,13 @@ from app.models.hotel_membership import HotelMembership
 from app.models.room import Room
 from app.models.subscription_v2 import Subscription
 from app.services.hotel_service import ensure_plans_seeded
-from app.services.subscription_entitlements import PLAN_CATALOG
+from app.services.subscription_entitlements import (
+    PLAN_CATALOG,
+    change_subscription_plan,
+    clear_room_limit_override,
+    ensure_subscription_seed,
+    set_room_limit_override,
+)
 
 # Default entitlements per plan code (beyond room limit which mirrors room_limit)
 DEFAULT_ENTITLEMENTS: dict[str, dict[str, Any]] = {
@@ -143,17 +149,13 @@ def ensure_subscription(db: Session, hotel_id: int) -> HotelSubscription:
     sub = db.query(HotelSubscription).filter(HotelSubscription.hotel_id == hotel_id).first()
     if sub:
         return sub
-    plan = db.query(SubscriptionPlan).filter(SubscriptionPlan.code == "starter").first()
-    if not plan:
-        plan = SubscriptionPlan(code="starter", name="Starter", room_limit=15)
-        db.add(plan)
-        db.flush()
-        ensure_entitlements_seeded(db)
-    sub = HotelSubscription(hotel_id=hotel_id, plan_id=plan.id, status="active")
-    db.add(sub)
-    config = db.get(HotelConfiguration, hotel_id)
-    if config:
-        config.subscription_active = True
+
+    # Route new subscription creation through the v2 service so the canonical
+    # row and the legacy compatibility projection are created together.
+    ensure_subscription_seed(db, hotel_id, plan_code="starter", status_value="active")
+    sub = db.query(HotelSubscription).filter(HotelSubscription.hotel_id == hotel_id).first()
+    if sub is None:
+        raise RuntimeError("No se pudo inicializar la suscripción del hotel")
     db.flush()
     return sub
 
@@ -316,38 +318,30 @@ def ensure_staff_within_limit(
 
 
 def set_subscription_plan(db: Session, hotel_id: int, plan_code: str) -> dict:
-    plan = db.query(SubscriptionPlan).filter(SubscriptionPlan.code == plan_code).first()
-    if not plan:
+    # Keep this compatibility entry point on the same v2 write path as the
+    # active API/onboarding flows. It used to mutate HotelSubscription only.
+    if plan_code not in PLAN_CATALOG:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plan no encontrado")
 
-    ensure_entitlements_seeded(db)
     rooms_in_use = (
         db.query(func.count())
         .select_from(Room)
         .filter(Room.hotel_id == hotel_id, Room.is_active.is_(True))
         .scalar()
     )
-    if plan.room_limit < rooms_in_use and is_enforcement_enabled():
+    if PLAN_CATALOG[plan_code]["room_limit"] < rooms_in_use and is_enforcement_enabled():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Tenés {rooms_in_use} habitaciones activas y el plan '{plan.code}' permite hasta {plan.room_limit}.",
+            detail=f"Tenés {rooms_in_use} habitaciones activas y el plan '{plan_code}' permite hasta {PLAN_CATALOG[plan_code]['room_limit']}.",
         )
 
-    sub = ensure_subscription(db, hotel_id)
-    sub.plan_id = plan.id
-    sub.status = "active"
-    sub.room_limit_override = None
-
-    config = db.get(HotelConfiguration, hotel_id)
-    if config:
-        config.subscription_active = True
-
-    db.flush()
+    snapshot = change_subscription_plan(db, hotel_id, plan_code)
+    plan = PLAN_CATALOG[plan_code]
     return {
         "hotel_id": hotel_id,
-        "status": sub.status,
-        "plan": plan.code,
-        "room_limit": plan.room_limit,
+        "status": snapshot["status"],
+        "plan": plan_code,
+        "room_limit": plan["room_limit"],
         "rooms_in_use": rooms_in_use,
     }
 
@@ -355,6 +349,12 @@ def set_subscription_plan(db: Session, hotel_id: int, plan_code: str) -> dict:
 def set_entitlement_override(db: Session, hotel_id: int, code: str, value: Any, value_type: str | None = None):
     """Create/update a hotel-specific entitlement override and return merged payload."""
     serialized, kind = _serialize_value(value, value_type)
+    if code == "rooms.max_active":
+        try:
+            room_limit = int(value)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El límite de habitaciones debe ser entero")
+        set_room_limit_override(db, hotel_id, room_limit)
     override = (
         db.query(HotelEntitlementOverride)
         .filter(HotelEntitlementOverride.hotel_id == hotel_id, HotelEntitlementOverride.code == code)
@@ -371,6 +371,8 @@ def set_entitlement_override(db: Session, hotel_id: int, code: str, value: Any, 
 
 
 def delete_entitlement_override(db: Session, hotel_id: int, code: str):
+    if code == "rooms.max_active":
+        clear_room_limit_override(db, hotel_id)
     override = (
         db.query(HotelEntitlementOverride)
         .filter(HotelEntitlementOverride.hotel_id == hotel_id, HotelEntitlementOverride.code == code)

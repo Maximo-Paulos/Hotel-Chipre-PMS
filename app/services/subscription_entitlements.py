@@ -96,6 +96,47 @@ def _sync_legacy_tables(db: Session, hotel_id: int, plan_code: str, room_limit: 
     if config:
         config.subscription_active = status_value in WRITE_OK_STATUSES
 
+    db.flush()
+
+
+def _legacy_status_for_v2(status_value: str) -> str:
+    return "active" if status_value in WRITE_OK_STATUSES else "paused"
+
+
+def set_room_limit_override(db: Session, hotel_id: int, room_limit: int) -> Subscription:
+    """Apply the room cap through v2 and refresh its legacy projection."""
+    sub, _ = ensure_subscription_seed(db, hotel_id)
+    if sub is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="No se pudo inicializar la suscripción")
+    sub.room_limit = room_limit
+    _sync_legacy_tables(
+        db,
+        hotel_id,
+        sub.plan,
+        room_limit,
+        status_value=_legacy_status_for_v2(sub.status),
+    )
+    db.flush()
+    return sub
+
+
+def clear_room_limit_override(db: Session, hotel_id: int) -> Subscription:
+    """Restore the canonical plan room cap and refresh its legacy projection."""
+    sub, _ = ensure_subscription_seed(db, hotel_id)
+    if sub is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="No se pudo inicializar la suscripción")
+    room_limit = _plan_defaults(sub.plan)["room_limit"]
+    sub.room_limit = room_limit
+    _sync_legacy_tables(
+        db,
+        hotel_id,
+        sub.plan,
+        room_limit,
+        status_value=_legacy_status_for_v2(sub.status),
+    )
+    db.flush()
+    return sub
+
 
 def _record_event(db: Session, sub: Subscription, event_type: str, payload: Dict[str, Any] | None = None) -> None:
     event = SubscriptionEvent(

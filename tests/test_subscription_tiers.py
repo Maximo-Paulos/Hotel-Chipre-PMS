@@ -21,12 +21,19 @@ from app.models.subscription import HotelSubscription
 from app.models.subscription_v2 import Subscription, SubscriptionAdjustment, SubscriptionEvent
 from app.models.user import User
 from app.services.security import create_access_token, hash_password
+from app.services.hotel_service import _ensure_membership_and_subscription
 from app.services.subscription_entitlements import (
     get_subscription_snapshot,
     grant_comped,
     plan_catalog,
     start_trial,
     suspend_subscription,
+)
+from app.services.subscription_service import (
+    delete_entitlement_override,
+    ensure_subscription,
+    set_entitlement_override,
+    set_subscription_plan,
 )
 
 
@@ -341,5 +348,63 @@ def test_manual_transitions_emit_events(client):
             for event in db.query(SubscriptionEvent).filter(SubscriptionEvent.hotel_id == 9).order_by(SubscriptionEvent.id.asc())
         ]
         assert event_types == ["trial_started", "subscription_suspended", "comped_granted"]
+    finally:
+        db.close()
+
+
+def test_legacy_compatibility_bootstrap_also_creates_v2_subscription(client):
+    _, SessionLocal = client
+    db = SessionLocal()
+    try:
+        _ensure_hotel(db, hotel_id=73)
+
+        legacy = ensure_subscription(db, hotel_id=73)
+        v2 = db.query(Subscription).filter(Subscription.hotel_id == 73).one()
+
+        assert legacy.plan.code == "starter"
+        assert v2.plan == "starter"
+        assert v2.status == "active"
+    finally:
+        db.close()
+
+
+def test_hotel_bootstrap_and_legacy_plan_entry_point_use_v2_write_path(client):
+    _, SessionLocal = client
+    db = SessionLocal()
+    try:
+        _ensure_hotel(db, hotel_id=74)
+        _ensure_membership_and_subscription(db, hotel_id=74, owner_email="missing-owner@test.com")
+
+        initial = db.query(Subscription).filter(Subscription.hotel_id == 74).one()
+        assert initial.plan == "starter"
+
+        result = set_subscription_plan(db, hotel_id=74, plan_code="pro")
+        db.expire_all()
+        v2 = db.query(Subscription).filter(Subscription.hotel_id == 74).one()
+        legacy = db.query(HotelSubscription).filter(HotelSubscription.hotel_id == 74).one()
+
+        assert result["plan"] == "pro"
+        assert v2.plan == "pro"
+        assert legacy.plan.code == "pro"
+    finally:
+        db.close()
+
+
+def test_room_limit_override_updates_v2_and_legacy_projection(client):
+    _, SessionLocal = client
+    db = SessionLocal()
+    try:
+        _ensure_hotel(db, hotel_id=75)
+        ensure_subscription(db, hotel_id=75)
+
+        set_entitlement_override(db, 75, "rooms.max_active", 7, "int")
+        v2 = db.query(Subscription).filter(Subscription.hotel_id == 75).one()
+        legacy = db.query(HotelSubscription).filter(HotelSubscription.hotel_id == 75).one()
+        assert v2.room_limit == 7
+        assert legacy.room_limit_override == 7
+
+        delete_entitlement_override(db, 75, "rooms.max_active")
+        assert v2.room_limit == 15
+        assert legacy.room_limit_override == 15
     finally:
         db.close()
