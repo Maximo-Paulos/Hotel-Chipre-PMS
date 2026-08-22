@@ -233,6 +233,23 @@ def _audit_security_event(
         )
 
 
+def _run_notification_cycle_best_effort() -> None:
+    """No Celery beat runs in this deployment (no worker/beat/Redis
+    provisioned -- see app/scripts/run_notification_cycle.py), so this is the
+    trigger: piggyback pending-outbox delivery and due-daily-report
+    generation on every successful login instead of a standing schedule.
+    Best-effort and synchronous is deliberate here -- login traffic on a
+    single-hotel instance is low enough that the extra DB/email round-trip is
+    negligible, and a failure here must never fail the login itself."""
+    try:
+        from app.tasks.notification_tasks import generate_daily_reports, process_outbox
+
+        generate_daily_reports()
+        process_outbox()
+    except Exception:
+        LOGGER.warning("auth.notification_cycle_trigger_failed", exc_info=True)
+
+
 def _issue_auth_response(
     db: Session,
     user: User,
@@ -256,6 +273,7 @@ def _issue_auth_response(
     auth_response = _build_auth_response(db, user)
     if request is not None and response is not None:
         auth_response.csrf_token = _attach_user_session_cookies(db, user, request, response)
+    _run_notification_cycle_best_effort()
     return auth_response
 
 
