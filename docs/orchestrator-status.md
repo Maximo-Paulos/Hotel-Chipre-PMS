@@ -5,6 +5,31 @@ Complementa (no reemplaza) a `docs/roadmap.md`, `docs/business-requirements-mast
 
 ---
 
+## Campaña 2026-08-21/22 — cierre del backlog maestro accionable
+
+### Contexto
+Sesión maratónica sobre `docs/HOTEL_PMS_MASTER_DEVELOPMENT_SPEC.md`: cerrar todo TECH-XXXX en estado `TODO`/`AUDIT_REQUIRED`, usando codex CLI (`codex exec`) como agente principal por worktree y Claude para verificar/commitear/mergear (el sandbox de codex no tiene red ni permiso de escritura sobre el `.git` compartido del worktree — no puede pushear ni commitear, solo dejar el working tree listo).
+
+### Resultado
+**18 PRs mergeados a `main`** (squash, cada uno con suite completa verde antes de mergear). HEAD final: `4d2f6c2`. `pytest -q`: **1711 passed, 0 failed**. `alembic heads`: un solo head. Frontend lint/typecheck/build limpios.
+
+- TECH-0040, 0070, 0071 — arrastrados de la campaña anterior (36 PRs, #33-#68), quedaban pusheados sin mergear.
+- TECH-0010 — fix real: fuga cross-tenant en lookup de pagos (enumeración de reservas de otro hotel vía mensaje de error distinguible).
+- TECH-0000 — matriz de auditoría formal (VERIFIED/VERIFY/TODO/BLOCKED/DEFERRED) para los 33 TECH-XXXX, con threat model P0.
+- TECH-0023, 0024, 0090, 0110, 0112 — MFA obligatorio Master Admin, Sign in with Apple, gaps de PWA, soft-delete + restore drill local, SHA-pinning de releases.
+- TECH-0080/81/82 — no se resolvió la decisión (sigue abierta en sección 7); se dejó documento de opciones con recomendación.
+- Deuda encontrada por la auditoría TECH-0000, consolidada donde fue seguro sin decidir arquitectura unilateralmente: contrato canónico de audit logs, 21 rutas RBAC migradas de rol a permiso (51 quedaron sin tocar por ambigüedad real), fix de sincronización legacy/v2 de suscripciones, y **un bug de seguridad real**: el JWT bearer sobrevivía al logout/revoke de sesión.
+- Repo raíz (`/Users/maximopaulos/AI-Workspace/projects/Hotel-Chipre-PMS`, checkout no-worktree) estaba parado en una rama de 400+ commits atrás con 13 archivos sin commitear. Se revisó cada uno contra `main` actual: 4 seguían siendo gaps reales (XSS en popup de callback OAuth, crash de `pydantic-settings` por `.env` compartido con el frontend, fuga de `.env` local en un fixture de test, config MCP) y se rescataron; el resto ya estaba superado por trabajo posterior (invitaciones, CORS, rate-limit de códigos, dependencias de frontend) y se descartó. Se encontró y borró un `.env.bak` con secretos reales que nunca llegó a git. El checkout quedó en `main` actualizado.
+- Bug de test flaky encontrado de rebote (no causado por esta campaña): `test_financial_reports.py` comparaba `date.today()` local contra `datetime.now(timezone.utc)` — corregido.
+
+### No tocado, por diseño
+TECH-0025, 0091, 0092, 0100, 0101, 0120, 0130 permanecen `DEFERRED` — el spec mismo lo exige (sección 2, regla 5: no crear sistema paralelo; regla 10: nada de despliegue/cuentas cloud/secretos/cutover sin autorización humana). Las decisiones de sección 7 y las acciones de sección 8 del spec siguen sin resolver — no le corresponde al agente resolverlas.
+
+### Lección operativa
+`codex exec` en sandbox `workspace-write` no tiene salida de red ni permiso de escribir el `.git` compartido de un worktree (vive fuera del `workdir` permitido) — todo intento de `git push`/`gh pr create` desde dentro del sandbox falla. Patrón que funcionó: dejar que codex complete el trabajo y deje el working tree sin commitear, después Claude corre la suite real (con `.venv` symlinkeado al del repo raíz, no copiado — copiar con `cp -a` arrastra el symlink y puede terminar commiteado por accidente si se hace `git add -A` sin excluirlo), commitea, pushea y abre el PR. Rebases sucesivos contra `main` en movimiento generan casi siempre conflicto solo en archivos generados (`.graphify/`, `knowledge/_generated/`) — resolver con `--ours`; un conflicto real en el spec o en código requiere lectura manual. Migraciones Alembic nuevas necesitan reencadenar `down_revision` sobre el head real después de cada rebase que trajo otra migración (doble head si no).
+
+---
+
 ## Pase de seguridad 2026-07-04 — verificación de webhooks de pago
 
 Revisión focalizada de la verificación de firma/origen en los webhooks que mutan estado de pago
