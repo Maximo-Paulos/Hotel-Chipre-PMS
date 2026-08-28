@@ -38,6 +38,7 @@ PUBLIC_ALLOWLIST = (
     PublicRoute("/openapi.json", "OpenAPI schema; no tenant data."),
     PublicRoute("/redoc", "OpenAPI UI; schema metadata only, no tenant data."),
     PublicRoute("/api/auth/*", "Authentication bootstrap flows are unauthenticated by design."),
+    PublicRoute("/api/public/inquiries", "Public marketing inquiry capture validates consent, honeypot, and rate limits."),
     PublicRoute("/api/invitations/*", "Invitation accept/preview is protected by signed invitation tokens."),
     PublicRoute("/api/integrations/oauth/*/callback", "OAuth provider callback is protected by signed OAuth state."),
     PublicRoute("/api/webhooks/booking/*", "OTA machine webhook; scoped by hotel id and stored webhook secret."),

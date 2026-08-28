@@ -12,5 +12,6 @@ Disallow: /invitations/accept
 Disallow: /verify-email
 Disallow: /forgot-password
 Disallow: /reset-password
+Disallow: /gracias
 
 Sitemap: https://hotels-pms.com/sitemap.xml

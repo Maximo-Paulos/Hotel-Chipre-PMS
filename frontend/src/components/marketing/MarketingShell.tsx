@@ -1,16 +1,32 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 
 import { BrandMark } from "../brand/BrandMark";
 import { resolveAppUrl } from "../../config/publicUrls";
 import { useDialogA11y } from "../../hooks/useDialogA11y";
 import { marketingRoutes } from "../../content/marketing";
 
+import { Breadcrumbs, type BreadcrumbItem } from "./Breadcrumbs";
+import { MarketingMobileCta } from "./MarketingMobileCta";
+
+const breadcrumbLabels: Record<string, string> = {
+  "/precios": "Precios",
+  "/funciones": "El sistema",
+  "/pms-hotelero": "PMS hotelero",
+  "/software-para-hoteles": "Software para hoteles",
+  "/faq": "Preguntas frecuentes",
+  "/contacto": "Contacto",
+  "/gracias": "Gracias",
+  "/terms": "Términos y Condiciones",
+  "/privacy": "Política de Privacidad"
+};
+
 type MarketingShellProps = {
   children: ReactNode;
 };
 
 export function MarketingShell({ children }: MarketingShellProps) {
+  const location = useLocation();
   const loginUrl = resolveAppUrl("/login");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -26,6 +42,10 @@ export function MarketingShell({ children }: MarketingShellProps) {
   }, []);
 
   const closeMobileMenu = () => setMobileMenuOpen(false);
+  const breadcrumbLabel = breadcrumbLabels[location.pathname];
+  const breadcrumbs: BreadcrumbItem[] = breadcrumbLabel
+    ? [{ label: "Inicio", to: "/" }, { label: breadcrumbLabel }]
+    : [];
 
   return (
     <div className="min-h-screen bg-paper font-sans text-ink-900">
@@ -109,7 +129,9 @@ export function MarketingShell({ children }: MarketingShellProps) {
         )}
       </header>
 
-      <main id="contenido">{children}</main>
+      {breadcrumbs.length > 0 ? <Breadcrumbs items={breadcrumbs} /> : null}
+
+      <main id="contenido" className="pb-24 md:pb-0">{children}</main>
 
       <footer className="border-t border-ink-200 bg-white">
         <div className="mx-auto grid w-full max-w-6xl gap-10 px-5 py-14 sm:px-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] lg:px-10">
@@ -133,6 +155,9 @@ export function MarketingShell({ children }: MarketingShellProps) {
               <Link to="/faq" className="text-ink-600 hover:text-ink-900">
                 Preguntas
               </Link>
+              <Link to="/contacto" className="text-ink-600 hover:text-ink-900">
+                Contacto
+              </Link>
               <a href={loginUrl} className="text-ink-600 hover:text-ink-900">
                 Ingresar
               </a>
@@ -155,6 +180,8 @@ export function MarketingShell({ children }: MarketingShellProps) {
           </div>
         </div>
       </footer>
+
+      <MarketingMobileCta />
     </div>
   );
 }

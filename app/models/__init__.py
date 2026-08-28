@@ -91,6 +91,7 @@ from app.models.payment import (
 from app.models.payment_proof import PaymentProof, PaymentProofBlob, PaymentProofStatusEnum
 from app.models.security_token import SecurityToken
 from app.models.rate_limit_event import RateLimitEvent
+from app.models.public_inquiry import PublicInquiry, PublicInquiryNotificationStatus
 from app.models.ai_assistant import AIAssistantSession, AIAssistantMessage, AIAssistantActionRun, AIAssistantInsight
 from app.models.whatsapp_crm import (
     WhatsAppChannel,

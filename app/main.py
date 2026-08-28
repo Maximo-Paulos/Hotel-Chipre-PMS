@@ -60,6 +60,7 @@ from app.api import (
     hotel_api_keys,
     public_booking,
     public_marketing,
+    public_inquiries,
     whatsapp_hooks,
     whatsapp_crm,
     whatsapp_meta_webhook,
@@ -348,6 +349,7 @@ app.include_router(promotions.router)
 app.include_router(hotel_api_keys.router)
 app.include_router(public_booking.router)
 app.include_router(public_marketing.router)
+app.include_router(public_inquiries.router)
 app.include_router(whatsapp_hooks.router)
 app.include_router(whatsapp_crm.router)
 app.include_router(whatsapp_meta_webhook.router)

@@ -257,7 +257,8 @@ export const faqItems = [
 export const marketingRoutes = [
   { label: "El sistema", to: "/funciones" },
   { label: "Precios", to: "/precios" },
-  { label: "Preguntas", to: "/faq" }
+  { label: "Preguntas", to: "/faq" },
+  { label: "Contacto", to: "/contacto" }
 ];
 
 /* ---------------------------------------------------------------------------

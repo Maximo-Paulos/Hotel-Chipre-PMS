@@ -88,6 +88,8 @@ Variables de entorno:
 - `RESEND_API_KEY=<resend key>`
 - `SYSTEM_EMAIL_FROM="Hotel Chipre PMS <noreply@auth.hotels-pms.com>"`
 - `SYSTEM_EMAIL_REPLY_TO=hotelxpms@gmail.com`
+- `PUBLIC_INQUIRY_RECIPIENT_EMAIL=<destinatario comercial verificado>`
+- `PUBLIC_INQUIRY_RATE_LIMIT=5`
 - `ANALYTICS_EXPORTS_DIR=/var/exports/analytics`
 - Transfer-proof bytes are stored in the private `payment_proof_blobs` table; expose them only through the authenticated, tenant-scoped proof endpoint.
 - `AI_ENABLED=false` until the hotel-specific IA provider is configured

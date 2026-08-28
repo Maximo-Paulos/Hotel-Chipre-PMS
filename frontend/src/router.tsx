@@ -6,14 +6,17 @@ import { useOnboardingStatus } from "./hooks/useOnboardingStatus";
 import { useSession } from "./state/session";
 import { AppShell } from "./ui/AppShell";
 import { PermissionGate } from "./components/PermissionGate";
+import { ContactPage } from "./views/public/ContactPage";
 import { FaqPage } from "./views/public/FaqPage";
 import { FunctionsPage } from "./views/public/FunctionsPage";
 import { MarketingHomePage } from "./views/public/MarketingHomePage";
+import { MarketingNotFoundPage } from "./views/public/MarketingNotFoundPage";
 import { PmsHoteleroPage } from "./views/public/PmsHoteleroPage";
 import { PricingPage as PricingPageView } from "./views/public/PricingPage";
 import { PrivacyPage } from "./views/public/PrivacyPage";
 import { SoftwareParaHotelesPage } from "./views/public/SoftwareParaHotelesPage";
 import { TermsPage } from "./views/public/TermsPage";
+import { ThankYouPage } from "./views/public/ThankYouPage";
 import {
   MasterAdminProtectedShell,
   MasterAdminRoot
@@ -334,6 +337,22 @@ const publicRoutes = [
     )
   },
   {
+    path: "/contacto",
+    element: (
+      <MarketingRedirect>
+        <ContactPage />
+      </MarketingRedirect>
+    )
+  },
+  {
+    path: "/gracias",
+    element: (
+      <MarketingRedirect>
+        <ThankYouPage />
+      </MarketingRedirect>
+    )
+  },
+  {
     path: "/terms",
     element: (
       <MarketingRedirect>
@@ -534,5 +553,5 @@ export const router = createBrowserRouter([
       ]
     : []),
   ...publicRoutes,
-  { path: "*", element: APP_HOST ? <Navigate to="/dashboard" replace /> : <Navigate to="/" replace /> }
+  { path: "*", element: APP_HOST ? <Navigate to="/dashboard" replace /> : <MarketingNotFoundPage /> }
 ]);

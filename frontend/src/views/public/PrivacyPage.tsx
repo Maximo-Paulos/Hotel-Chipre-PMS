@@ -27,8 +27,7 @@ export function PrivacyPage() {
         <Section title="1. Responsable del tratamiento">
           <p>
             Esta Política de Privacidad describe cómo{" "}
-            <strong>Paulos Francisco José A. (CUIT 20-20569548-7)</strong>, con domicilio
-            legal en <strong>[Domicilio legal pendiente de completar]</strong>{" "}
+            <strong>Paulos Francisco José A. (CUIT 20-20569548-7)</strong>{" "}
             (&laquo;nosotros&raquo;), trata los datos personales en el marco de Hotel
             Chipre PMS (&laquo;el Servicio&raquo;), disponible en{" "}
             <a className="text-brand-700 underline" href="https://hotels-pms.com">
@@ -86,6 +85,18 @@ export function PrivacyPage() {
             contrato), para cumplir obligaciones legales y fiscales, y para proteger la
             seguridad de la plataforma (interés legítimo). No usamos tus datos de cuenta
             con fines de publicidad de terceros.
+          </p>
+        </Section>
+
+        <Section title="Datos de consultas comerciales">
+          <p>
+            Si completás el formulario de contacto, recolectamos tu nombre, correo
+            electrónico, empresa y teléfono cuando los brindes, además del mensaje,
+            la ruta desde la que se envió y la constancia de consentimiento. Usamos
+            esos datos para recibir, conservar y responder la consulta, y para intentar
+            notificar al destinatario comercial configurado. Conservamos la consulta
+            durante el tiempo necesario para gestionarla y cumplir obligaciones
+            aplicables.
           </p>
         </Section>
 
