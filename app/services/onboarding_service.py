@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.models.hotel_config import HotelConfiguration
 from app.models.onboarding import OnboardingState
-from app.models.room import Room, RoomCategory, RoomStatusEnum
+from app.models.room import Room, RoomCategory
 from app.schemas.onboarding import (
     DepositPolicyPayload,
     HotelIdentityPayload,
@@ -29,6 +29,14 @@ from app.services.subscription_entitlements import (
     get_subscription_snapshot,
     start_trial,
 )
+from app.services.hotel_configuration_service import (
+    set_deposit_policy as apply_deposit_policy,
+    set_identity,
+    set_ota_channels,
+    set_payment_methods,
+)
+from app.services.staff_invitation_service import normalize_staff_role, provision_staff_invitation
+from app.services.room_catalog_service import upsert_categories as upsert_catalog_categories, upsert_rooms as upsert_catalog_rooms
 
 
 class OnboardingError(Exception):
@@ -68,12 +76,6 @@ def _get_or_create_config(db: Session, hotel_id: int) -> HotelConfiguration:
     db.add(config)
     db.flush()
     return config
-
-
-def _merge_extra_policies(config: HotelConfiguration, **updates) -> None:
-    current = config.get_extra_policies()
-    current.update(updates)
-    config.set_extra_policies(current)
 
 
 def _serialize_categories(db: Session, hotel_id: int) -> list[dict]:
@@ -300,11 +302,11 @@ def set_hotel_identity(db: Session, payload: HotelIdentityPayload, hotel_id: Opt
     state.set_hotel_identity(identity_payload)
     state.identity_set = True
 
-    config.hotel_name = payload.name
-    config.hotel_timezone = payload.timezone
-    config.default_currency = payload.currency
-    _merge_extra_policies(
+    set_identity(
         config,
+        name=payload.name,
+        timezone=payload.timezone,
+        currency=payload.currency,
         languages=payload.languages,
         jurisdiction_code=payload.jurisdiction_code,
     )
@@ -317,17 +319,15 @@ def set_deposit_policy(db: Session, payload: DepositPolicyPayload, hotel_id: Opt
     state = get_or_create_state(db, hid)
     config = _get_or_create_config(db, hid)
 
-    policy_payload = payload.model_dump()
-    policy_payload["allow_cancellation_after_checkin"] = False
-    state.set_deposit_policy(policy_payload)
+    state.set_deposit_policy(payload.model_dump())
     state.policy_set = True
 
-    config.deposit_percentage = payload.deposit_percentage
-    config.free_cancellation_hours = payload.free_cancellation_hours
-    config.cancellation_penalty_percentage = payload.cancellation_penalty_percentage
-    config.allow_cancellation_after_checkin = False
-    config.enable_full_payment = True
-    config.enable_deposit_payment = True
+    apply_deposit_policy(
+        config,
+        deposit_percentage=payload.deposit_percentage,
+        free_cancellation_hours=payload.free_cancellation_hours,
+        cancellation_penalty_percentage=payload.cancellation_penalty_percentage,
+    )
     db.flush()
     return _status_from_state(db, state)
 
@@ -341,16 +341,11 @@ def upsert_payment_methods(db: Session, payload: PaymentMethodsPayload, hotel_id
     state.set_payment_methods(payment_payload)
     state.payments_set = True
 
-    config.enable_mercado_pago = payload.mercado_pago.enabled
-    config.enable_paypal = payload.paypal.enabled
-    config.enable_credit_card = payload.stripe.enabled
-    _merge_extra_policies(
+    set_payment_methods(
         config,
-        payment_methods={
-            "mercado_pago": {"enabled": payload.mercado_pago.enabled},
-            "paypal": {"enabled": payload.paypal.enabled},
-            "stripe": {"enabled": payload.stripe.enabled},
-        },
+        mercado_pago=payload.mercado_pago.enabled,
+        paypal=payload.paypal.enabled,
+        credit_card=payload.stripe.enabled,
     )
     db.flush()
     return _status_from_state(db, state)
@@ -365,15 +360,11 @@ def upsert_ota_channels(db: Session, payload: OTAChannelsPayload, hotel_id: Opti
     state.set_ota_channels(ota_payload)
     state.ota_set = True
 
-    config.enable_booking_sync = payload.booking.enabled
-    config.enable_expedia_sync = payload.expedia.enabled
-    _merge_extra_policies(
+    set_ota_channels(
         config,
-        ota_channels={
-            "booking": {"enabled": payload.booking.enabled},
-            "expedia": {"enabled": payload.expedia.enabled},
-            "despegar": {"enabled": payload.despegar.enabled},
-        },
+        booking=payload.booking.enabled,
+        expedia=payload.expedia.enabled,
+        despegar=payload.despegar.enabled,
     )
     db.flush()
     return _status_from_state(db, state)
@@ -386,8 +377,8 @@ def set_subscription_choice(db: Session, payload: SubscriptionChoicePayload, hot
     if payload.plan_code not in ALLOWED_SUBSCRIPTION_PLANS:
         raise OnboardingError("Plan de suscripción inválido")
 
-    payment_methods = state.get_payment_methods()
-    stripe_enabled = bool((payment_methods.get("stripe") or {}).get("enabled"))
+    config = _get_or_create_config(db, hid)
+    stripe_enabled = bool(config.enable_credit_card)
     if stripe_enabled and payload.plan_code not in {"pro", "ultra"}:
         raise OnboardingError("Stripe solo está disponible para planes Pro o Ultra")
 
@@ -413,22 +404,7 @@ def upsert_categories(
     hid = resolve_hotel_id(db, hotel_id)
     state = get_or_create_state(db, hid)
 
-    existing = {c.code.lower(): c for c in db.query(RoomCategory).filter(RoomCategory.hotel_id == hid).all()}
-    created = 0
-    updated = 0
-    for cat in categories:
-        data = cat.model_dump()
-        code_key = data["code"].lower()
-        if code_key in existing:
-            obj = existing[code_key]
-            for field, value in data.items():
-                setattr(obj, field, value)
-            updated += 1
-        else:
-            obj = RoomCategory(hotel_id=hid, **data)
-            db.add(obj)
-            created += 1
-    db.flush()
+    created, updated = upsert_catalog_categories(db, hotel_id=hid, categories=categories)
 
     status_payload = _status_from_state(db, state)
     status_payload["created"] = created
@@ -444,38 +420,10 @@ def upsert_rooms(
     hid = resolve_hotel_id(db, hotel_id)
     state = get_or_create_state(db, hid)
 
-    categories = {c.code.lower(): c for c in db.query(RoomCategory).filter(RoomCategory.hotel_id == hid).all()}
-    missing_codes = sorted({r.category_code.lower() for r in rooms if r.category_code.lower() not in categories})
-    if missing_codes:
-        raise OnboardingError(f"Missing categories for codes: {', '.join(missing_codes)}")
-
-    existing_rooms = {r.room_number: r for r in db.query(Room).filter(Room.hotel_id == hid).all()}
-    created = 0
-    updated = 0
-
-    for room_payload in rooms:
-        code_key = room_payload.category_code.lower()
-        category_id = categories[code_key].id
-        if room_payload.room_number in existing_rooms:
-            room = existing_rooms[room_payload.room_number]
-            room.floor = room_payload.floor
-            room.category_id = category_id
-            room.is_active = True
-            if room.status is None:
-                room.status = RoomStatusEnum.AVAILABLE.value
-            updated += 1
-        else:
-            room = Room(
-                hotel_id=hid,
-                room_number=room_payload.room_number,
-                floor=room_payload.floor,
-                category_id=category_id,
-                status=RoomStatusEnum.AVAILABLE.value,
-            )
-            db.add(room)
-            created += 1
-
-    db.flush()
+    try:
+        created, updated = upsert_catalog_rooms(db, hotel_id=hid, rooms=rooms)
+    except ValueError as exc:
+        raise OnboardingError(str(exc)) from exc
     status_payload = _status_from_state(db, state)
     status_payload["created"] = created
     status_payload["updated"] = updated
@@ -486,11 +434,31 @@ def store_staff(
     db: Session,
     staff: Iterable[StaffMember],
     hotel_id: Optional[int] = None,
+    actor_user_id: int | None = None,
+    actor_email: str | None = None,
 ) -> dict:
     hid = resolve_hotel_id(db, hotel_id)
     state = get_or_create_state(db, hid)
-    staff_list = [member.model_dump() for member in staff]
+    staff_members = list(staff)
+    staff_list = [member.model_dump() for member in staff_members]
     state.set_staff(staff_list)
+    inviter_email = actor_email or state.owner_email
+    if inviter_email:
+        for member in staff_members:
+            if not member.email:
+                continue
+            try:
+                normalized_role = normalize_staff_role(member.role)
+                provision_staff_invitation(
+                    db,
+                    hotel_id=hid,
+                    email=member.email,
+                    role=normalized_role,
+                    inviter_user_id=actor_user_id,
+                    inviter_email=inviter_email,
+                )
+            except ValueError as exc:
+                raise OnboardingError(str(exc)) from exc
     db.flush()
     return _status_from_state(db, state)
 

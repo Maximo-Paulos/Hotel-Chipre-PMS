@@ -4,7 +4,7 @@ V72 §8.5 — Pricing service.
 Priority for a given (hotel, category, date):
   1. DailyRate explicit row            — highest specificity
   2. PricePeriod (highest priority)    — season / bulk definition
-  3. CategoryPricing.price_*           — flat fallback per payment method
+  3. RoomCategory.base_price_per_night — configured category fallback
 
 For per-method prices on a DailyRate row:
   explicit override column > DailyRate.price > period / category fallback
@@ -22,10 +22,9 @@ from sqlalchemy.orm import Session
 from app.models.daily_rate import DailyRate, PricePeriod
 from app.models.hotel_config import HotelConfiguration
 from app.models.commercial import RatePlan, RatePlanPrice, TaxPolicy, TaxRule
-from app.models.pricing import CategoryPricing
 from app.models.room import RoomCategory
 
-# Payment method column names on DailyRate / CategoryPricing
+# Payment method column names on DailyRate / PricePeriod
 _METHOD_COLS: dict[str, str] = {
     "cash": "price_cash",
     "transfer": "price_transfer",
@@ -33,6 +32,15 @@ _METHOD_COLS: dict[str, str] = {
     "paypal": "price_paypal",
     "credit_card": "price_credit_card",
 }
+
+
+def _period_price(period: PricePeriod, payment_method: Optional[str]) -> float:
+    if payment_method:
+        column = _METHOD_COLS.get(payment_method)
+        override = getattr(period, column, None) if column else None
+        if override is not None:
+            return float(override)
+    return float(period.price_per_night)
 
 
 def get_price_for_date(
@@ -45,12 +53,11 @@ def get_price_for_date(
     """Return the price for a single night.
 
     Priority: DailyRate explicit > PricePeriod (highest priority first)
-              > CategoryPricing base price.
+              > RoomCategory base price.
 
     If *payment_method* is supplied the per-method column is checked first on
     the winning DailyRate row; if it is NULL the row's base ``price`` is used.
-    PricePeriod and CategoryPricing always use their single price / method
-    column (no per-method override on PricePeriod by design).
+    PricePeriod per-method overrides fall back to its base price.
     """
     # 1. Explicit DailyRate
     daily: Optional[DailyRate] = (
@@ -86,30 +93,9 @@ def get_price_for_date(
         .first()
     )
     if period is not None:
-        return float(period.price_per_night)
+        return _period_price(period, payment_method)
 
-    # 3. CategoryPricing flat fallback
-    cat_pricing: Optional[CategoryPricing] = (
-        db.query(CategoryPricing)
-        .join(RoomCategory, RoomCategory.id == CategoryPricing.category_id)
-        .filter(CategoryPricing.category_id == category_id, RoomCategory.hotel_id == hotel_id)
-        .first()
-    )
-    if cat_pricing is not None:
-        if payment_method:
-            col = _METHOD_COLS.get(payment_method)
-            if col:
-                override = getattr(cat_pricing, col, None)
-                if override is not None:
-                    return float(override)
-        # CategoryPricing has no single base_price; use cash as best guess
-        for col in ("price_cash", "price_transfer", "price_mercadopago",
-                    "price_paypal", "price_credit_card"):
-            val = getattr(cat_pricing, col, None)
-            if val is not None:
-                return float(val)
-
-    # 4. RoomCategory.base_price_per_night — final fallback so the resolver is the
+    # 3. RoomCategory.base_price_per_night — final fallback so the resolver is the
     #    single source of truth shared by the rate calendar, reservation pricing and
     #    the rooms inventory view (never silently returns 0 when a base price exists).
     category: Optional[RoomCategory] = (
@@ -136,7 +122,7 @@ def resolve_rate_calendar(
 
     Returns one dict per date with the resolved base ``price``, the per-method
     override columns (when the winning row carries them) and the ``source`` that
-    won: ``daily_rate`` | ``price_period`` | ``category_pricing`` | ``category_base``
+    won: ``daily_rate`` | ``price_period`` | ``category_base``
     | ``none``. ``daily_rate_id`` is set only when an explicit DailyRate row exists.
 
     If ``payment_method`` is supplied, ``price`` is the effective price for that
@@ -167,12 +153,6 @@ def resolve_rate_calendar(
         .order_by(PricePeriod.priority.desc(), PricePeriod.id.desc())
         .all()
     )
-    cat_pricing: Optional[CategoryPricing] = (
-        db.query(CategoryPricing)
-        .join(RoomCategory, RoomCategory.id == CategoryPricing.category_id)
-        .filter(CategoryPricing.category_id == category_id, RoomCategory.hotel_id == hotel_id)
-        .first()
-    )
     category: Optional[RoomCategory] = (
         db.query(RoomCategory)
         .filter(RoomCategory.id == category_id, RoomCategory.hotel_id == hotel_id)
@@ -183,18 +163,6 @@ def resolve_rate_calendar(
         if category is not None and category.base_price_per_night is not None
         else None
     )
-
-    cat_pricing_value: Optional[float] = None
-    if cat_pricing is not None:
-        method_column = _METHOD_COLS.get(payment_method) if payment_method else None
-        columns = ((method_column,) if method_column else ()) + (
-            "price_cash", "price_transfer", "price_mercadopago", "price_paypal", "price_credit_card"
-        )
-        for col in columns:
-            val = getattr(cat_pricing, col, None)
-            if val is not None:
-                cat_pricing_value = float(val)
-                break
 
     def _period_for(target: date) -> Optional[PricePeriod]:
         # periods is ordered by priority desc, id desc → first cover wins
@@ -230,11 +198,8 @@ def resolve_rate_calendar(
 
         period = _period_for(current)
         if period is not None:
-            price = float(period.price_per_night)
+            price = _period_price(period, payment_method)
             source = "price_period"
-        elif cat_pricing_value is not None:
-            price = cat_pricing_value
-            source = "category_pricing"
         elif base_price is not None:
             price = base_price
             source = "category_base"
@@ -245,11 +210,14 @@ def resolve_rate_calendar(
         result.append({
             "date": current,
             "price": round(price, 2),
-            "price_cash": None,
-            "price_transfer": None,
-            "price_mercadopago": None,
-            "price_paypal": None,
-            "price_credit_card": None,
+            "price_cash": getattr(period, "price_cash", None) if period is not None else None,
+            "price_transfer": getattr(period, "price_transfer", None) if period is not None else None,
+            "price_mercadopago": getattr(period, "price_mercadopago", None) if period is not None else None,
+            "price_paypal": getattr(period, "price_paypal", None) if period is not None else None,
+            "price_credit_card": getattr(period, "price_credit_card", None) if period is not None else None,
+            "price_debit_card": getattr(period, "price_debit_card", None) if period is not None else None,
+            "price_booking": getattr(period, "price_booking", None) if period is not None else None,
+            "price_expedia": getattr(period, "price_expedia", None) if period is not None else None,
             "source": source,
             "daily_rate_id": None,
         })
@@ -324,18 +292,24 @@ def apply_price_period(
     if period is None:
         raise ValueError(f"PricePeriod {period_id} not found for hotel={hotel_id} category={category_id}")
 
+    # Load the complete target range once. The previous loop issued one
+    # DailyRate SELECT per date, which made applying a long season an N+1.
+    existing_by_date = {
+        row.date: row
+        for row in db.query(DailyRate)
+        .filter(
+            DailyRate.hotel_id == hotel_id,
+            DailyRate.category_id == category_id,
+            DailyRate.date >= period.start_date,
+            DailyRate.date <= period.end_date,
+        )
+        .all()
+    }
+
     count = 0
     current = period.start_date
     while current <= period.end_date:
-        existing = (
-            db.query(DailyRate)
-            .filter(
-                DailyRate.hotel_id == hotel_id,
-                DailyRate.category_id == category_id,
-                DailyRate.date == current,
-            )
-            .first()
-        )
+        existing = existing_by_date.get(current)
         if existing is None:
             db.add(
                 DailyRate(
@@ -475,17 +449,6 @@ def build_pricing_revision(
         }
         for row in periods
     ]
-
-    category_pricing = (
-        db.query(CategoryPricing)
-        .join(RoomCategory, RoomCategory.id == CategoryPricing.category_id)
-        .filter(CategoryPricing.category_id == category_id, RoomCategory.hotel_id == hotel_id)
-        .first()
-    )
-    source["category_pricing"] = {
-        column.name: getattr(category_pricing, column.name)
-        for column in CategoryPricing.__table__.columns
-    } if category_pricing is not None else None
 
     if rate_plan_id is not None:
         rate_plan = (

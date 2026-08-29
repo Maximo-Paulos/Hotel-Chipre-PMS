@@ -35,6 +35,10 @@ def _install_rls(connection) -> None:
     op.execute('ALTER TABLE "temporary_action_grants" ENABLE ROW LEVEL SECURITY')
     op.execute('ALTER TABLE "temporary_action_grants" FORCE ROW LEVEL SECURITY')
     op.execute(
+        'DROP POLICY IF EXISTS "tenant_isolation_temporary_action_grants" '
+        'ON "temporary_action_grants"'
+    )
+    op.execute(
         '''CREATE POLICY "tenant_isolation_temporary_action_grants"
            ON "temporary_action_grants"
            USING (hotel_id = NULLIF(current_setting('app.hotel_id', true), '')::integer)

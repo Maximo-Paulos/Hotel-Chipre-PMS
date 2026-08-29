@@ -18,6 +18,7 @@ from app.models.hotel_config import HotelConfiguration
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.services.permission_service import (
+    DEFAULT_MATRIX,
     PERMISSION_CASH_APPROVE_DIFFERENCE,
     PERMISSION_CASH_OPERATE,
     PERMISSION_GUEST_CREATE,
@@ -27,6 +28,7 @@ from app.services.permission_service import (
     PERMISSION_REPORTS_FINANCIAL_VIEW,
     PERMISSION_REPORTS_OPERATIONAL_VIEW,
     PERMISSION_ROOM_CLEANING_STATUS,
+    ROLE_CODES,
     get_effective_permissions,
 )
 
@@ -224,3 +226,34 @@ def test_housekeeping_cleaning_transition_rejects_active_reservation(role_client
     assert response.status_code == 409
     db.refresh(room)
     assert room.status == RoomStatusEnum.AVAILABLE
+
+
+SECTION_VIEW_PERMISSION_ROLE_CONTRACTS = (
+    ("analytics:view", {"owner", "co_owner"}),
+    ("analytics:advanced:view", {"owner", "co_owner"}),
+    ("analytics:ai:view", {"owner", "co_owner"}),
+    ("dashboard:view", {"owner", "co_owner", "manager", "receptionist"}),
+    ("occupancy:view", {"owner", "co_owner", "manager", "receptionist"}),
+    ("waitlist:view", {"owner", "co_owner", "manager", "receptionist"}),
+    ("waitlist:manage", {"owner", "co_owner", "manager", "receptionist"}),
+    ("cash:view", {"owner", "co_owner", "receptionist"}),
+    ("company:view", {"owner", "co_owner"}),
+    ("settings:users:view", {"owner", "co_owner"}),
+    ("settings:users:manage", {"owner", "co_owner"}),
+    ("settings:integrations:view", {"owner", "co_owner"}),
+    ("settings:integrations:manage", {"owner", "co_owner"}),
+    ("settings:subscription:view", {"owner", "co_owner"}),
+    ("settings:security:view", {"owner", "co_owner"}),
+    ("settings:sessions:view", {"owner", "co_owner"}),
+    ("settings:notifications:view", {"owner", "co_owner", "manager", "receptionist"}),
+    ("settings:assistant:view", {"owner", "co_owner", "manager"}),
+    ("settings:tests:view", {"owner", "co_owner"}),
+)
+
+
+def test_new_section_permissions_match_current_frontend_role_gates_exactly():
+    for permission_code, expected_roles in SECTION_VIEW_PERMISSION_ROLE_CONTRACTS:
+        default_roles = {
+            role for role in ROLE_CODES if DEFAULT_MATRIX[role].get(permission_code, False)
+        }
+        assert default_roles == expected_roles, permission_code

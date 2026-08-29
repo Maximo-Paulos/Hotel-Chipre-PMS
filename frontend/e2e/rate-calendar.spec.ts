@@ -1,5 +1,10 @@
 import { expect, test } from "@playwright/test";
 
+const ownerCredentials = {
+  email: process.env.E2E_OWNER_EMAIL || "owner@e2e.com",
+  password: process.env.E2E_OWNER_PASSWORD || "E2ePass1234!"
+};
+
 const mockCategories = [
   {
     id: 7,
@@ -274,7 +279,7 @@ const mockDailyRates = [
     price_cash: null,
     price_transfer: null,
     price_mercadopago: null,
-    source: "category_pricing",
+    source: "category_base",
     daily_rate_id: null
   }
 ];
@@ -295,57 +300,17 @@ test("rate calendar page renders annual editor and integrated channel view", asy
     const request = route.request();
     const url = new URL(request.url());
 
-    if (url.pathname.endsWith("/api/auth/login")) {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          access_token: "test-token",
-          token_type: "bearer",
-          hotel_id: 1,
-          hotel_ids: [1],
-          user: {
-            id: 1,
-            email: "owner@example.com",
-            role: "manager",
-            is_verified: true,
-            is_active: true
-          }
-        })
-      });
-      return;
-    }
-
-    if (url.pathname.endsWith("/api/onboarding/status")) {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          hotel_id: 1,
-          completed: true,
-          steps: {},
-          missing_steps: [],
-          counts: {}
-        })
-      });
-      return;
-    }
-
-    if (url.pathname.endsWith("/api/subscription/status")) {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          hotel_id: 1,
-          status: "active",
-          plan: "pro",
-          room_limit: 40,
-          staff_limit: 8,
-          rooms_in_use: 10,
-          can_write: true,
-          limits: []
-        })
-      });
+    // Authentication, effective permissions, onboarding, and subscription are
+    // deliberately exercised against the seeded E2E backend. Only the rate
+    // calendar payloads below are synthetic because this test covers their
+    // richer OTA/channel rendering.
+    if (
+      url.pathname.endsWith("/api/auth/login") ||
+      url.pathname.endsWith("/api/onboarding/status") ||
+      url.pathname.endsWith("/api/permissions/effective") ||
+      url.pathname.endsWith("/api/subscription/status")
+    ) {
+      await route.fallback();
       return;
     }
 
@@ -454,17 +419,28 @@ test("rate calendar page renders annual editor and integrated channel view", asy
     });
   });
 
+  const effectivePermissionsResponsePromise = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === "/api/permissions/effective" && response.ok()
+  );
   await page.goto("/login", { waitUntil: "domcontentloaded" });
-  await page.locator('input[type="email"]').fill("owner@example.com");
-  await page.locator('input[type="password"]').fill("demo-password");
+  await page.locator('input[type="email"]').fill(ownerCredentials.email);
+  await page.locator('input[type="password"]').fill(ownerCredentials.password);
   await page.getByTestId("login-submit").click();
 
   await page.waitForURL("**/dashboard");
+  const effectivePermissionsResponse = await effectivePermissionsResponsePromise;
+  const effectivePermissions = (await effectivePermissionsResponse.json()) as {
+    role: string;
+    permissions: string[];
+  };
+  expect(effectivePermissions.role).toBe("owner");
+  expect(effectivePermissions.permissions).toEqual(expect.arrayContaining(["rates:read", "rates:update"]));
   // B6.1: Tarifas now lives inside the collapsed "Mas operacion" sidebar
   // group. A closed <details> removes its content from the accessibility
   // tree, so open it via a plain href locator (which still finds hidden DOM
   // nodes) before using the accessible-role locator to click.
   const tarifasHrefLink = page.locator('aside nav a[href="/operacion/tarifas"]');
+  await expect(tarifasHrefLink).toHaveCount(1);
   const tarifasGroup = tarifasHrefLink.locator("xpath=ancestor::details[1]");
   if ((await tarifasGroup.count()) > 0 && !(await tarifasGroup.evaluate((el) => (el as HTMLDetailsElement).open))) {
     await tarifasGroup.locator("summary").first().click();
@@ -510,8 +486,9 @@ test("rate calendar page renders annual editor and integrated channel view", asy
   await expect(page.getByText("Falta mapeo").first()).toBeVisible();
   await expect(page.getByText("US$ 42")).toBeVisible();
 
-  await page.getByLabel("Desde").fill("2026-05-07");
-  await page.getByLabel("Hasta").fill("2026-05-09");
+  const rateEditor = page.getByTestId("rate-editor");
+  await rateEditor.getByLabel("Desde").fill("2026-05-07");
+  await rateEditor.getByLabel("Hasta").fill("2026-05-09");
   await page.getByRole("button", { name: "Días de semana" }).click();
   await page.getByRole("button", { name: "Vie" }).click();
   await page.getByLabel("Precio base *").fill("50000");

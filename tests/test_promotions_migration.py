@@ -11,6 +11,8 @@ from pathlib import Path
 from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.orm import sessionmaker
 
+from tests.migration_helpers import insert_historical_hotel_config
+
 
 PRE_REVISION = "20260813_guest_restrictions"
 REVISION = "20260818_promotions"
@@ -38,13 +40,11 @@ def _engine(db_path: str):
 
 
 def _seed_pre_migration_surcharge(engine) -> None:
-    from app.models.hotel_config import HotelConfiguration
     from app.models.payment_surcharge import PaymentSurcharge, PaymentSurchargeTypeEnum
 
+    insert_historical_hotel_config(engine, 8401)
     SessionLocal = sessionmaker(bind=engine)
     with SessionLocal() as db:
-        db.add(HotelConfiguration(id=8401, subscription_active=True))
-        db.flush()
         db.add(
             PaymentSurcharge(
                 hotel_id=8401,

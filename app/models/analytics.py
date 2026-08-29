@@ -145,7 +145,7 @@ class HotelAuditEvent(Base):
     __table_args__ = (
         Index("ix_hotel_audit_events_hotel_created", "hotel_id", "created_at"),
         Index("ix_hotel_audit_events_hotel_action", "hotel_id", "action_code"),
-        Index("ix_hotel_audit_events_entity", "entity_type", "entity_id"),
+        Index("ix_hotel_audit_events_entity", "hotel_id", "entity_type", "entity_id"),
     )
 
 

@@ -4,8 +4,6 @@ import { Link } from "react-router-dom";
 
 import { getHotelConfig, updateHotelConfig, type HotelConfig } from "../../api/config";
 import {
-  listRoomCategories,
-  listRooms,
   createRoomCategory,
   updateRoomCategory,
   createRoom,
@@ -16,6 +14,8 @@ import {
 import { useSession } from "../../state/session";
 import { hasValidSession } from "../../api/client";
 import { useTimezones } from "../../hooks/useTimezones";
+import { useRooms } from "../../hooks/useRooms";
+import { queryKeys } from "../../api/queryKeys";
 import { usePaymentSurcharges, usePaymentSurchargeMutations } from "../../hooks/usePaymentSurcharges";
 import { type PaymentSurchargeType } from "../../api/paymentSurcharges";
 
@@ -45,6 +45,7 @@ export function SettingsHotelPage() {
   const { session } = useSession();
   const qc = useQueryClient();
   const timezonesQuery = useTimezones();
+  const { categoriesQuery, roomsQuery } = useRooms({ includeCategories: true });
   const [form, setForm] = useState<Partial<HotelConfig>>({});
   const [error, setError] = useState<string | null>(null);
 
@@ -75,18 +76,6 @@ export function SettingsHotelPage() {
     if (configQuery.data) setForm(configQuery.data);
   }, [configQuery.data]);
 
-  const categoriesQuery = useQuery({
-    queryKey: ["room-categories", session.hotelId],
-    enabled: hasValidSession(session),
-    queryFn: () => listRoomCategories(session)
-  });
-
-  const roomsQuery = useQuery({
-    queryKey: ["rooms", session.hotelId],
-    enabled: hasValidSession(session),
-    queryFn: () => listRooms(session)
-  });
-
   const updateConfigMutation = useMutation({
     mutationFn: (payload: Partial<HotelConfig>) => updateHotelConfig(payload, session),
     onSuccess: (data) => {
@@ -99,7 +88,7 @@ export function SettingsHotelPage() {
   const createCategoryMutation = useMutation({
     mutationFn: (payload: Omit<RoomCategory, "id">) => createRoomCategory(payload, session),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["room-categories", session.hotelId] });
+      qc.invalidateQueries({ queryKey: queryKeys.roomCategories(session.hotelId) });
       setCategoryForm({ name: "", code: "", description: "", base_price_per_night: 0, max_occupancy: 1, amenities: "" });
       setError(null);
     },
@@ -109,7 +98,7 @@ export function SettingsHotelPage() {
   const updateCategoryMutation = useMutation({
     mutationFn: ({ id, payload }: { id: number; payload: Partial<Omit<RoomCategory, "id">> }) => updateRoomCategory(id, payload, session),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["room-categories", session.hotelId] });
+      qc.invalidateQueries({ queryKey: queryKeys.roomCategories(session.hotelId) });
       setEditingCategoryId(null);
       setCategoryEdit({});
       setError(null);
@@ -121,7 +110,7 @@ export function SettingsHotelPage() {
     mutationFn: (payload: { room_number: string; floor: number; category_id: number; notes?: string }) =>
       createRoom({ ...payload, status: "available", is_active: true }, session),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["rooms", session.hotelId] });
+      qc.invalidateQueries({ queryKey: queryKeys.rooms(session.hotelId) });
       setRoomForm({ room_number: "", floor: 1, category_id: 0, notes: "" });
       setError(null);
     },
@@ -132,7 +121,7 @@ export function SettingsHotelPage() {
     mutationFn: ({ id, payload }: { id: number; payload: Partial<{ room_number: string; floor: number; category_id: number; status: RoomStatus; is_active: boolean; notes?: string }> }) =>
       updateRoom(id, payload, session),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["rooms", session.hotelId] });
+      qc.invalidateQueries({ queryKey: queryKeys.rooms(session.hotelId) });
       setEditingRoomId(null);
       setRoomEdit({});
       setError(null);
@@ -196,6 +185,18 @@ export function SettingsHotelPage() {
               Cancelación gratis (horas)
               <input type="number" min={0} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" value={form.free_cancellation_hours ?? 0} onChange={(e) => handleChange("free_cancellation_hours", parseInt(e.target.value || "0", 10))} />
             </label>
+            <label className="text-sm font-semibold text-slate-700">
+              Penalidad por cancelación (%)
+              <input type="number" min={0} max={100} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" value={form.cancellation_penalty_percentage ?? 0} onChange={(e) => handleChange("cancellation_penalty_percentage", parseFloat(e.target.value || "0"))} />
+            </label>
+            <label className="text-sm font-semibold text-slate-700">
+              Idiomas (separados por coma)
+              <input className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" value={(form.languages ?? []).join(", ")} onChange={(e) => handleChange("languages", e.target.value.split(",").map((item) => item.trim()).filter(Boolean))} />
+            </label>
+            <label className="text-sm font-semibold text-slate-700">
+              Jurisdicción
+              <input maxLength={3} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm uppercase" value={form.jurisdiction_code ?? "AR"} onChange={(e) => handleChange("jurisdiction_code", e.target.value.toUpperCase())} />
+            </label>
           </div>
 
           {ownerOnly && (
@@ -224,28 +225,10 @@ export function SettingsHotelPage() {
           )}
 
           {ownerOnly && (
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="rounded-lg border border-slate-200 p-4">
-                <h3 className="text-sm font-semibold text-slate-800">Visibilidad y permisos</h3>
-                <label className="text-sm font-semibold text-slate-700">
-                  Días pasados visibles
-                  <input type="range" min={0} max={90} value={form.receptionist_view_past_days ?? 0} onChange={(e) => handleChange("receptionist_view_past_days", parseInt(e.target.value, 10))} className="mt-1 w-full" />
-                  <span className="text-xs text-slate-600">{form.receptionist_view_past_days ?? 0} días</span>
-                </label>
-                <label className="text-sm font-semibold text-slate-700">
-                  Días futuros visibles
-                  <input type="range" min={0} max={365} value={form.receptionist_view_future_days ?? 30} onChange={(e) => handleChange("receptionist_view_future_days", parseInt(e.target.value, 10))} className="mt-1 w-full" />
-                  <span className="text-xs text-slate-600">{form.receptionist_view_future_days ?? 30} días</span>
-                </label>
-              </div>
-              <div className="rounded-lg border border-slate-200 p-4">
-                <h3 className="text-sm font-semibold text-slate-800">Alertas</h3>
-                <label className="text-sm font-semibold text-slate-700">
-                  Canales en stop-sell (JSON)
-                  <textarea className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" rows={2} value={form.stop_sell_channels ?? ""} onChange={(e) => handleChange("stop_sell_channels", e.target.value)} />
-                </label>
-              </div>
-            </div>
+            <label className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-slate-700">
+              <input type="checkbox" checked={Boolean(form.allow_overbooking)} onChange={(event) => handleChange("allow_overbooking", event.target.checked)} className="mt-0.5" />
+              <span><span className="block font-semibold text-amber-900">Permitir sobreventa</span><span className="block text-xs text-amber-800">Si no hay habitaciones libres, la reserva queda explícitamente en lista de espera.</span></span>
+            </label>
           )}
 
           {/* Categorías */}
@@ -253,7 +236,7 @@ export function SettingsHotelPage() {
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-semibold text-slate-800">Categorías de habitación</h3>
-                <p className="text-xs text-slate-500">Agregar y editar categorías para este hotel.</p>
+                <p className="text-xs text-slate-500">Agregar y editar categorías para este hotel. El precio efectivo prioriza tarifa diaria, luego precio por temporada y finalmente precio base.</p>
               </div>
             </div>
             <div className="mt-3 grid gap-3 md:grid-cols-3">
@@ -290,6 +273,7 @@ export function SettingsHotelPage() {
                       <div>
                         <p className="font-semibold text-slate-900">{c.name} ({c.code})</p>
                         <p className="text-xs text-slate-600">Ocupación: {c.max_occupancy} · Precio base: {c.base_price_per_night}</p>
+                        <p className="text-xs font-medium text-emerald-700">Precio efectivo hoy: {c.current_rate ?? c.base_price_per_night} · gana {c.current_rate_source === "daily_rate" ? "tarifa diaria" : c.current_rate_source === "price_period" ? "precio por temporada" : "precio base"}</p>
                         {c.description && <p className="text-xs text-slate-600">{c.description}</p>}
                         {c.amenities && <p className="text-xs text-slate-500">Amenities: {c.amenities}</p>}
                       </div>

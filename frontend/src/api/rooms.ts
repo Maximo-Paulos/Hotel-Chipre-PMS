@@ -10,6 +10,7 @@ export type RoomCategory = {
   base_price_per_night: number;
   /** Today's effective nightly rate from the single source of truth (Tarifas/daily_rate). */
   current_rate?: number | null;
+  current_rate_source?: "daily_rate" | "price_period" | "category_base" | "none" | null;
   max_occupancy: number;
   amenities?: string | null;
 };

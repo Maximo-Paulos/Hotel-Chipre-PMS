@@ -880,7 +880,7 @@ function PaymentsStep({
         providers={[
           { key: "mercado_pago", label: "Mercado Pago" },
           { key: "paypal", label: "PayPal" },
-          { key: "stripe", label: "Stripe (solo Pro / Ultra)" }
+          { key: "stripe", label: "Tarjeta de crédito / Stripe (solo Pro / Ultra)" }
         ]}
         values={form}
         onChange={setForm}

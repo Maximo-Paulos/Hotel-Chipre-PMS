@@ -19,7 +19,7 @@ const PAGES: Array<{ path: string; shot: string; marker: RegExp }> = [
   { path: "/operacion/stock", shot: "stock", marker: /stock/i },
   { path: "/settings/api-keys", shot: "api-keys", marker: /API/i },
   { path: "/settings/permissions", shot: "permisos", marker: /permis/i },
-  { path: "/settings/whatsapp", shot: "whatsapp", marker: /whatsapp/i },
+  { path: "/settings/connections", shot: "connections", marker: /conexiones/i },
   { path: "/habitaciones", shot: "rooms-bloqueos", marker: /habitaci/i },
   { path: "/reservas", shot: "reservas-asignacion", marker: /reserva/i },
   { path: "/huespedes", shot: "guests-tags", marker: /huesped/i }

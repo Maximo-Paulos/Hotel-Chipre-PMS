@@ -60,11 +60,15 @@ ADDITIVE_RLS_TABLE_CONTRACT = (
     ("20260724_payment_proofs.py", ("payment_proofs",)),
     (
         "20260820_missing_tenant_rls.py",
-        ("hotel_api_keys", "guest_alerts", "reservation_movement_groups"),
+        ("hotel_api_keys",),
     ),
     (
         "e6aadf684343_add_subscription_adjustment_ledger.py",
         ("subscription_adjustments",),
+    ),
+    (
+        "3bc5882f756d_add_role_visibility_windows.py",
+        ("hotel_role_visibility_window",),
     ),
 )
 
@@ -217,6 +221,7 @@ def test_rls_migration_covers_every_hotel_scoped_model_table():
         "daily_report_schedules",
         "temporary_action_grants",
         "subscription_adjustments",
+        "hotel_role_visibility_window",
     }
     assert set(migration.TENANT_TABLES) == expected
     assert "hotel_memberships" not in migration.TENANT_TABLES
@@ -260,17 +265,19 @@ def test_user_override_rls_round_trip_records_valid_postgresql_ddl(monkeypatch):
     migration._remove_user_override_rls(connection)
 
     ddl = output.getvalue()
-    expected_in_order = (
-        'ALTER TABLE "user_permission_overrides" ENABLE ROW LEVEL SECURITY',
-        'ALTER TABLE "user_permission_overrides" FORCE ROW LEVEL SECURITY',
-        'CREATE POLICY "tenant_isolation_user_permission_overrides"',
-        "USING (hotel_id = NULLIF(current_setting('app.hotel_id', true), '')::integer)",
-        "WITH CHECK (hotel_id = NULLIF(current_setting('app.hotel_id', true), '')::integer)",
-        'DROP POLICY IF EXISTS "tenant_isolation_user_permission_overrides"',
-        'ALTER TABLE "user_permission_overrides" NO FORCE ROW LEVEL SECURITY',
-        'ALTER TABLE "user_permission_overrides" DISABLE ROW LEVEL SECURITY',
-    )
-    positions = [ddl.index(fragment) for fragment in expected_in_order]
+    enable_pos = ddl.index('ALTER TABLE "user_permission_overrides" ENABLE ROW LEVEL SECURITY')
+    force_pos = ddl.index('ALTER TABLE "user_permission_overrides" FORCE ROW LEVEL SECURITY')
+    drop_before_create = ddl.index('DROP POLICY IF EXISTS "tenant_isolation_user_permission_overrides"')
+    create_pos = ddl.index('CREATE POLICY "tenant_isolation_user_permission_overrides"')
+    using_pos = ddl.index("USING (hotel_id = NULLIF(current_setting('app.hotel_id', true), '')::integer)")
+    check_pos = ddl.index("WITH CHECK (hotel_id = NULLIF(current_setting('app.hotel_id', true), '')::integer)")
+    drop_before_disable = ddl.rindex('DROP POLICY IF EXISTS "tenant_isolation_user_permission_overrides"')
+    no_force_pos = ddl.index('ALTER TABLE "user_permission_overrides" NO FORCE ROW LEVEL SECURITY')
+    disable_pos = ddl.index('ALTER TABLE "user_permission_overrides" DISABLE ROW LEVEL SECURITY')
+    positions = [
+        enable_pos, force_pos, drop_before_create, create_pos, using_pos,
+        check_pos, drop_before_disable, no_force_pos, disable_pos,
+    ]
     assert positions == sorted(positions)
 
 

@@ -13,6 +13,7 @@ from app.models.ota_core import OTAReservationLink, OTAReservationLifecycleEnum
 from app.models.reservation import Reservation, ReservationSourceEnum, ReservationStatusEnum
 from app.models.transaction import Transaction, TransactionStatusEnum, TransactionTypeEnum
 from app.services.payment_service import get_reservation_financial_summary
+from app.services.reservation_service import active_reservations, active_reservations_select
 
 
 class ReservationActionError(Exception):
@@ -123,7 +124,8 @@ def _candidate_reservation_ids(db: Session, *, hotel_id: int) -> list[int]:
     """
     cutoff = date.today() - timedelta(days=_ACTIVE_WINDOW_DAYS)
     rows = db.execute(
-        select(
+        active_reservations_select(hotel_id)
+        .with_only_columns(
             Reservation.id,
             Reservation.status,
             Reservation.source,
@@ -136,7 +138,7 @@ def _candidate_reservation_ids(db: Session, *, hotel_id: int) -> list[int]:
             Reservation.total_amount,
             Reservation.check_in_date,
         )
-        .where(Reservation.hotel_id == hotel_id, Reservation.check_out_date >= cutoff)
+        .where(Reservation.check_out_date >= cutoff)
         .order_by(Reservation.check_in_date, Reservation.id)
     ).all()
     if not rows:
@@ -518,11 +520,7 @@ def _dedupe_candidates(candidates: list[_ActionCandidate]) -> list[_ActionCandid
 
 
 def _get_reservation_or_error(db: Session, *, hotel_id: int, reservation_id: int) -> Reservation:
-    reservation = (
-        db.query(Reservation)
-        .filter(Reservation.id == reservation_id, Reservation.hotel_id == hotel_id)
-        .first()
-    )
+    reservation = active_reservations(db, hotel_id).filter(Reservation.id == reservation_id).first()
     if reservation is None:
         raise ReservationActionError(f"Reservation {reservation_id} not found")
     return reservation

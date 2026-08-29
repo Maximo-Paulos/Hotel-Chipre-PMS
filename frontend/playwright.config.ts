@@ -165,6 +165,12 @@ export default defineConfig({
         APP_ENV: "test",
         DATABASE_URL: e2eDatabaseURL,
         E2E_RESET_DATABASE: "true",
+        // Keep local E2E deterministic even when the developer's .env enables
+        // provider traffic. Payment-link tests must exercise the persisted
+        // local_only artifact and never call an external gateway.
+        EXTERNAL_EFFECTS_ENABLED: "false",
+        CONNECTIONS_ENABLED: "false",
+        INBOUND_PROVIDER_EVENTS_ENABLED: "false",
         REALTIME_EVENTS_ENABLED: "false",
         CLICKHOUSE_ENABLED: "false",
         JWT_SECRET: jwtSecret,

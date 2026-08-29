@@ -15,10 +15,14 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
+# `guest_alerts` and `reservation_movement_groups` were never created by the
+# schema and have no ORM models. Their real tables are `guest_restrictions`
+# (created and protected by `20260813_guest_restrictions`) and
+# `room_movement_groups` (created by `20260612_v72_gaps_phase3` and protected
+# by `20260724_tenant_rls_context`), respectively. Neither phantom belongs in
+# this inventory.
 _TABLES = (
     "hotel_api_keys",
-    "guest_alerts",
-    "reservation_movement_groups",
 )
 
 
@@ -28,6 +32,7 @@ def _install_rls(connection, table_name: str) -> None:
         return
     op.execute(f'ALTER TABLE "{table_name}" ENABLE ROW LEVEL SECURITY')
     op.execute(f'ALTER TABLE "{table_name}" FORCE ROW LEVEL SECURITY')
+    op.execute(f'DROP POLICY IF EXISTS "tenant_isolation_{table_name}" ON "{table_name}"')
     op.execute(
         f'''CREATE POLICY "tenant_isolation_{table_name}"
            ON "{table_name}"

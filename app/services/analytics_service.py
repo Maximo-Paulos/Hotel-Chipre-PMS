@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
@@ -44,12 +45,14 @@ from app.schemas.analytics_api import (
 from app.services.analytics_ai_providers import build_analytics_ai_config, get_analytics_ai_provider
 from app.services.analytics_contracts import build_analytics_window, calculate_physical_room_nights_for_hotel, calculate_pickup_30d_count
 from app.services.analytics_facts import refresh_fact_reservation_daily, refresh_fact_room_occupancy_daily
+from app.services.reservation_service import active_reservations
 from app.services.subscription_entitlements import get_subscription_snapshot
 from app.services.timezones import normalize_timezone
 
 MONEY_QUANTUM = Decimal("0.01")
 PLAN_ORDER = {"starter": 0, "pro": 1, "ultra": 2}
 AI_MONTHLY_QUOTA_FALLBACK = 20
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -480,9 +483,8 @@ def get_company_fact_detail(db: Session, *, hotel_id: int, company_id: int, date
         .all()
     )
     reservations = (
-        db.query(Reservation)
+        active_reservations(db, hotel_id)
         .filter(
-            Reservation.hotel_id == hotel_id,
             Reservation.company_id == company_id,
         )
         .order_by(Reservation.check_in_date.asc(), Reservation.id.asc())
@@ -859,22 +861,19 @@ def _company_lookup_map(db: Session, hotel_id: int) -> dict[int, Company]:
 
 
 def _ensure_facts_materialized(db: Session, hotel_id: int, date_from: date, date_to: date) -> None:
-    """Self-heal FactReservationDaily/FactRoomOccupancyDaily when nothing has
-    ever populated them for this window.
+    """Optionally self-heal empty fact windows for free/single-service hosts.
 
     These tables are meant to be kept fresh by a scheduled job (Celery beat
-    -> analytics.refresh_fact_*), but that job is never triggered anywhere in
-    this codebase -- no beat entry, no signal on reservation/payment writes,
-    no manual call outside tests. A deployment without a worker wired up to
-    call it (or one where it simply never ran for a given window) silently
-    reports $0 revenue/occupancy forever even with real paid reservations.
-    Rather than duplicate the aggregation logic, reuse the exact same
-    idempotent refresh functions synchronously, once, only when the window
-    has zero rows. ponytail: no distributed lock -- both fact tables have a
-    (hotel_id, ..., stay_date) unique constraint, so a losing concurrent
-    request just rolls back and reads what the winner wrote; add a lock only
-    if refresh cost/contention becomes measurable.
+    -> analytics.refresh_fact_*). Until that worker exists, the bounded
+    synchronous fallback keeps the free single-service deployment useful.
+    It is explicitly configurable and only runs when both fact tables are
+    empty for the requested window. A concurrent loser is harmless because
+    both fact tables have a unique constraint and the refresh is idempotent.
     """
+    settings = get_settings()
+    if not bool(getattr(settings, "SYNC_FACT_REFRESH_ENABLED", True)):
+        return
+
     already_materialized = (
         db.query(FactReservationDaily.id)
         .filter(FactReservationDaily.hotel_id == hotel_id, FactReservationDaily.stay_date.between(date_from, date_to))
@@ -885,9 +884,23 @@ def _ensure_facts_materialized(db: Session, hotel_id: int, date_from: date, date
     )
     if already_materialized:
         return
+
+    max_days = max(int(getattr(settings, "SYNC_FACT_REFRESH_MAX_DAYS", 31)), 1)
+    refresh_date_from = max(date_from, date_to - timedelta(days=max_days - 1))
+    logger.warning(
+        "analytics.sync_fact_refresh.inline",
+        extra={
+            "hotel_id": hotel_id,
+            "requested_date_from": date_from.isoformat(),
+            "requested_date_to": date_to.isoformat(),
+            "refresh_date_from": refresh_date_from.isoformat(),
+            "refresh_date_to": date_to.isoformat(),
+            "max_days": max_days,
+        },
+    )
     try:
-        refresh_fact_reservation_daily(db, hotel_id=hotel_id, date_from=date_from, date_to=date_to)
-        refresh_fact_room_occupancy_daily(db, hotel_id=hotel_id, date_from=date_from, date_to=date_to)
+        refresh_fact_reservation_daily(db, hotel_id=hotel_id, date_from=refresh_date_from, date_to=date_to)
+        refresh_fact_room_occupancy_daily(db, hotel_id=hotel_id, date_from=refresh_date_from, date_to=date_to)
         db.commit()
     except IntegrityError:
         db.rollback()
@@ -930,9 +943,8 @@ def build_starter_summary_payload(db: Session, *, hotel_id: int, date_from: date
         .all()
     )
     arrivals = (
-        db.query(Reservation)
+        active_reservations(db, hotel_id)
         .filter(
-            Reservation.hotel_id == hotel_id,
             Reservation.check_in_date == window.date_to,
             Reservation.status.notin_([ReservationStatusEnum.CANCELLED, ReservationStatusEnum.NO_SHOW]),
         )
@@ -1319,8 +1331,8 @@ def build_operations_payload(
         .all()
     )
     reservations = (
-        db.query(Reservation)
-        .filter(Reservation.hotel_id == hotel_id, Reservation.check_in_date.between(window.date_from, window.date_to))
+        active_reservations(db, hotel_id)
+        .filter(Reservation.check_in_date.between(window.date_from, window.date_to))
         .all()
     )
     facts = _load_reservation_facts(db, hotel_id, window.date_from, window.date_to)

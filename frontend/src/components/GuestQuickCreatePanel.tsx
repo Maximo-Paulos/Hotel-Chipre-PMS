@@ -123,7 +123,7 @@ export default function GuestQuickCreatePanel({
 }: GuestQuickCreatePanelProps) {
   const { session } = useSession();
   const { hasPermission } = useEffectivePermissions();
-  const canViewGuests = hasPermission("guest:view");
+  const canViewGuests = hasPermission("guest:read");
   const canCreateGuests = hasPermission("guest:create");
   const guestMutation = useGuestCreate();
 

@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 
 from app.models.room import Room, RoomStatusEnum
 from app.models.reservation import Reservation, ReservationStatusEnum
+from app.services.reservation_service import _active_reservations_without_hotel, active_reservations
 
 
 class AllocationError(Exception):
@@ -511,9 +512,11 @@ def apply_allocation_result(
     updated = []
     pending_moves: list[tuple[Reservation, int, int | None]] = []
     for reservation_id, room_id in result.assignments.items():
-        reservation_query = db.query(Reservation).filter(Reservation.id == reservation_id)
-        if hotel_id is not None:
-            reservation_query = reservation_query.filter(Reservation.hotel_id == hotel_id)
+        reservation_query = (
+            active_reservations(db, hotel_id)
+            if hotel_id is not None
+            else _active_reservations_without_hotel(db)
+        ).filter(Reservation.id == reservation_id)
         reservation = reservation_query.first()
         if reservation and (hotel_id is None or getattr(reservation, "hotel_id", None) == hotel_id):
             previous_room_id = reservation.room_id
@@ -588,7 +591,11 @@ def build_slots_from_db(
     has_hotel_context = hotel_id is not None
 
     # Load active reservations in the window
-    reservations_query = db.query(Reservation).filter(
+    reservations_query = (
+        active_reservations(db, hotel_id)
+        if has_hotel_context
+        else _active_reservations_without_hotel(db)
+    ).filter(
         Reservation.status.notin_([
             ReservationStatusEnum.CANCELLED,
             ReservationStatusEnum.CHECKED_OUT,
@@ -596,8 +603,6 @@ def build_slots_from_db(
         Reservation.check_in_date < end_date,
         Reservation.check_out_date > start_date,
     )
-    if has_hotel_context:
-        reservations_query = reservations_query.filter(Reservation.hotel_id == hotel_id)
 
     reservation_rows = reservations_query.all()
     reservation_ids = [reservation.id for reservation in reservation_rows]

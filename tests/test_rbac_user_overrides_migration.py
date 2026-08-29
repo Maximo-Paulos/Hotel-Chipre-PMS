@@ -13,6 +13,8 @@ from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 
+from tests.migration_helpers import insert_historical_hotel_config
+
 
 PRE_REVISION = "20260812_external_effects"
 REVISION = "20260813_rbac_overrides"
@@ -49,17 +51,9 @@ def _engine(db_path: str):
 
 
 def _seed_pre_revision(engine) -> None:
-    from app.models.hotel_config import HotelConfiguration
-
+    insert_historical_hotel_config(engine, 1, 2)
     SessionLocal = sessionmaker(bind=engine)
     with SessionLocal() as db:
-        db.add_all(
-            [
-                HotelConfiguration(id=1, subscription_active=True),
-                HotelConfiguration(id=2, subscription_active=True),
-            ]
-        )
-        db.flush()
         # Seed only columns present before the migration under test; the
         # current User ORM model also knows about later columns such as
         # users.google_sub.

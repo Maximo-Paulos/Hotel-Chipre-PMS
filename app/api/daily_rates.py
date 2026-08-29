@@ -32,6 +32,7 @@ from app.services.pricing_service import (
     resolve_rate_calendar,
 )
 from app.services.timeseries_projection import project_daily_rate_change
+from app.services.read_model_cache import invalidate_hotel_operational_caches
 from app.services.permission_service import PERMISSION_RATES_READ, PERMISSION_RATES_UPDATE
 
 router = APIRouter(prefix="/api/rates", tags=["Daily Rates"])
@@ -69,7 +70,7 @@ class DailyRateFallbackOut(BaseModel):
     price_mercadopago: Optional[float] = None
     price_paypal: Optional[float] = None
     price_credit_card: Optional[float] = None
-    source: str  # "daily_rate" | "price_period" | "category_pricing" | "none"
+    source: str  # "daily_rate" | "price_period" | "category_base" | "none"
     daily_rate_id: Optional[int] = None
 
 
@@ -115,7 +116,15 @@ class PricePeriodIn(BaseModel):
     start_date: date
     end_date: date
     price_per_night: float = Field(..., ge=0)
-    priority: int = Field(0, ge=0)
+    price_cash: Optional[float] = Field(None, ge=0)
+    price_transfer: Optional[float] = Field(None, ge=0)
+    price_mercadopago: Optional[float] = Field(None, ge=0)
+    price_paypal: Optional[float] = Field(None, ge=0)
+    price_credit_card: Optional[float] = Field(None, ge=0)
+    price_debit_card: Optional[float] = Field(None, ge=0)
+    price_booking: Optional[float] = Field(None, ge=0)
+    price_expedia: Optional[float] = Field(None, ge=0)
+    priority: int = Field(0, ge=-100000)
     is_active: bool = True
 
 
@@ -124,7 +133,15 @@ class PricePeriodPatch(BaseModel):
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     price_per_night: Optional[float] = Field(None, ge=0)
-    priority: Optional[int] = Field(None, ge=0)
+    price_cash: Optional[float] = Field(None, ge=0)
+    price_transfer: Optional[float] = Field(None, ge=0)
+    price_mercadopago: Optional[float] = Field(None, ge=0)
+    price_paypal: Optional[float] = Field(None, ge=0)
+    price_credit_card: Optional[float] = Field(None, ge=0)
+    price_debit_card: Optional[float] = Field(None, ge=0)
+    price_booking: Optional[float] = Field(None, ge=0)
+    price_expedia: Optional[float] = Field(None, ge=0)
+    priority: Optional[int] = Field(None, ge=-100000)
     is_active: Optional[bool] = None
 
 
@@ -136,6 +153,14 @@ class PricePeriodOut(BaseModel):
     start_date: date
     end_date: date
     price_per_night: float
+    price_cash: Optional[float] = None
+    price_transfer: Optional[float] = None
+    price_mercadopago: Optional[float] = None
+    price_paypal: Optional[float] = None
+    price_credit_card: Optional[float] = None
+    price_debit_card: Optional[float] = None
+    price_booking: Optional[float] = None
+    price_expedia: Optional[float] = None
     priority: int
     is_active: bool
     created_at: datetime
@@ -171,8 +196,6 @@ def _resolve_source(
     target_date: date,
 ) -> str:
     from app.models.daily_rate import DailyRate, PricePeriod
-    from app.models.pricing import CategoryPricing
-    from app.models.room import RoomCategory
 
     if db.query(DailyRate).filter(
         DailyRate.hotel_id == hotel_id,
@@ -189,13 +212,6 @@ def _resolve_source(
         PricePeriod.end_date >= target_date,
     ).first():
         return "price_period"
-    if db.query(CategoryPricing).join(
-        RoomCategory, RoomCategory.id == CategoryPricing.category_id
-    ).filter(
-        CategoryPricing.category_id == category_id,
-        RoomCategory.hotel_id == hotel_id,
-    ).first():
-        return "category_pricing"
     return "none"
 
 
@@ -310,6 +326,7 @@ def upsert_daily_rate(
         row.price,
         row.updated_at,
     )
+    invalidate_hotel_operational_caches(context.hotel_id)
     return row
 
 
@@ -407,6 +424,7 @@ def bulk_upsert_daily_rates(
             payload.price,
             changed_at,
         )
+    invalidate_hotel_operational_caches(context.hotel_id)
     return BulkRateOut(created=created, updated=updated)
 
 
@@ -518,6 +536,7 @@ def bulk_update_daily_rate_field(
             projected_price,
             changed_at,
         )
+    invalidate_hotel_operational_caches(context.hotel_id)
     return BulkRateOut(created=created, updated=updated)
 
 
@@ -570,6 +589,14 @@ def create_price_period(
         start_date=payload.start_date,
         end_date=payload.end_date,
         price_per_night=payload.price_per_night,
+        price_cash=payload.price_cash,
+        price_transfer=payload.price_transfer,
+        price_mercadopago=payload.price_mercadopago,
+        price_paypal=payload.price_paypal,
+        price_credit_card=payload.price_credit_card,
+        price_debit_card=payload.price_debit_card,
+        price_booking=payload.price_booking,
+        price_expedia=payload.price_expedia,
         priority=payload.priority,
         is_active=payload.is_active,
     )
@@ -585,6 +612,7 @@ def create_price_period(
         actor_user_id=context.user_id,
         payload_after=audit_log_service.model_snapshot(period),
     )
+    invalidate_hotel_operational_caches(context.hotel_id)
     return period
 
 
@@ -620,6 +648,10 @@ def update_price_period(
         period.end_date = payload.end_date
     if payload.price_per_night is not None:
         period.price_per_night = payload.price_per_night
+    for field in ("price_cash", "price_transfer", "price_mercadopago", "price_paypal", "price_credit_card", "price_debit_card", "price_booking", "price_expedia"):
+        value = getattr(payload, field)
+        if value is not None:
+            setattr(period, field, value)
     if payload.priority is not None:
         period.priority = payload.priority
     if payload.is_active is not None:
@@ -642,6 +674,7 @@ def update_price_period(
         payload_before=before,
         payload_after=audit_log_service.model_snapshot(period),
     )
+    invalidate_hotel_operational_caches(context.hotel_id)
     return period
 
 
@@ -681,6 +714,7 @@ def delete_price_period(
         payload_before=before,
         payload_after=audit_log_service.model_snapshot(period),
     )
+    invalidate_hotel_operational_caches(context.hotel_id)
 
 
 @router.post(
@@ -727,4 +761,5 @@ def apply_period_to_daily_rates(
             changed_at,
         )
         current += timedelta(days=1)
+    invalidate_hotel_operational_caches(context.hotel_id)
     return ApplyPeriodOut(applied_dates=count)

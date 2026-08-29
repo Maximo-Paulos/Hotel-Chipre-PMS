@@ -9,6 +9,7 @@ import {
   type RoomBlockReasonCode
 } from "../api/roomBlocks";
 import { hasValidSession } from "../api/client";
+import { queryKeys } from "../api/queryKeys";
 import { useSession } from "../state/session";
 
 const roomBlocksKey = (hotelId: number | null) => ["room-blocks", hotelId];
@@ -37,7 +38,7 @@ export function useRoomBlocks(options?: { enabled?: boolean }) {
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: roomBlocksKey(session.hotelId) });
-    queryClient.invalidateQueries({ queryKey: ["rooms", session.hotelId] });
+    queryClient.invalidateQueries({ queryKey: queryKeys.rooms(session.hotelId) });
   };
 
   const createBlockMutation = useMutation({

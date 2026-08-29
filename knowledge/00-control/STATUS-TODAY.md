@@ -1,5 +1,11 @@
 # Estado exhaustivo del sistema — Hotel Chipre PMS
 
+## -1. Infraestructura cloud (no código) — 2026-08-23
+
+`confirmed` por verificación directa (DNS-over-HTTPS, consolas de Google/Render, bundle desplegado). Detalle completo: `docs/audits/infra-2026-08-23.md`.
+
+Correo corporativo y OAuth de Google quedaron operativos en producción (Workspace, SPF/DKIM/DMARC en raíz y en `auth.`, app OAuth publicada sin revisión humana, login Google end-to-end probado sin duplicados). Riesgos abiertos que sí importan para roadmap/negocio: **Render en plan Free (cold start ~32s)**, **toda la infra colgando de una sola cuenta Gmail personal**, **`RESEND_API_KEY` expuesta pendiente de rotar**, **trial de Workspace vence 2026-09-05** (pago antes o se corta `support@`/`security@`/`billing@`/`privacy@`). Apple Sign In sigue sin auditar (código ya arreglado en `48d46c8`, cuenta developer no auditada).
+
 ## 0. Actualización de campaña — 2026-08-21/22 (`confirmed` para código/tests locales; no re-verifica secciones 8-9 de este documento)
 
 Entre el 2026-08-21 y 2026-08-22 se cerraron 16 PRs contra `main` (squash merge, cada uno con suite completa verde antes de mergear). HEAD resultante en esta actualización: `6460092` (más `e130dd5` del fix de test flaky posterior). `pytest -q` completo: **1709 passed, 0 failed, 22 skipped, 12 xfailed, 1 xpassed**. `alembic heads`: un solo head (`20260821_apple_sign_in`). Frontend `lint`/`typecheck`/`build`: limpios.

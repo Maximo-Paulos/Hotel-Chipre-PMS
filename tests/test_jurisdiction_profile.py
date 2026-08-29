@@ -38,10 +38,10 @@ def test_missing_field_computation_uses_profile(db, hotel_config):
     db.add(guest)
     db.flush()
 
-    hotel_config.set_extra_policies({"jurisdiction_code": "AR"})
+    hotel_config.jurisdiction_code = "AR"
     db.flush()
     assert validate_guest_for_checkin(db, guest, hotel_config) == []
 
-    hotel_config.set_extra_policies({"jurisdiction_code": "UY"})
+    hotel_config.jurisdiction_code = "UY"
     db.flush()
     assert "Nationality is required" in validate_guest_for_checkin(db, guest, hotel_config)

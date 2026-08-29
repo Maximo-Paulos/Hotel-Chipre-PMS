@@ -250,6 +250,10 @@ def _install_user_override_rls(connection) -> None:
     op.execute('ALTER TABLE "user_permission_overrides" ENABLE ROW LEVEL SECURITY')
     op.execute('ALTER TABLE "user_permission_overrides" FORCE ROW LEVEL SECURITY')
     op.execute(
+        'DROP POLICY IF EXISTS "tenant_isolation_user_permission_overrides" '
+        'ON "user_permission_overrides"'
+    )
+    op.execute(
         '''CREATE POLICY "tenant_isolation_user_permission_overrides"
            ON "user_permission_overrides"
            USING (hotel_id = NULLIF(current_setting('app.hotel_id', true), '')::integer)

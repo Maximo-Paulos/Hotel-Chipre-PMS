@@ -133,7 +133,6 @@ class Guest(Base):
             name="uq_guest_document_per_hotel",
         ),
         UniqueConstraint("hotel_id", "id", name="uq_guest_hotel_id_id"),
-        Index("ix_guest_hotel_id", "hotel_id"),
         # Search indexes (v72 §2.4 — must search fast by name, phone, email, document)
         Index("ix_guest_hotel_first_name", "hotel_id", "first_name"),
         Index("ix_guest_hotel_last_name", "hotel_id", "last_name"),

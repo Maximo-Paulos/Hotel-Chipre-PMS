@@ -58,7 +58,7 @@ def seed_operational_reservation(
         config.require_document_for_checkin = True
         config.require_terms_acceptance = True
         config.hotel_name = f"Smoke Hotel {hotel_id}"
-        config.set_extra_policies({"jurisdiction_code": "AR"})
+        config.jurisdiction_code = "AR"
 
         category = RoomCategory(
             hotel_id=hotel_id,

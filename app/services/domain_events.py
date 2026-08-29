@@ -31,6 +31,7 @@ SUPPORTED_DOMAINS = frozenset(
         "payments",
         "reservations",
         "rooms",
+        "security",
         "settings",
         "stock",
         "users",

@@ -11,6 +11,7 @@ import {
 } from "../../api/apiKeys";
 import { hasValidSession } from "../../api/client";
 import { useSession } from "../../state/session";
+import { queryKeys } from "../../api/queryKeys";
 
 const purposeLabels: Record<ApiKeyPurpose, string> = {
   whatsapp_bot: "WhatsApp bot",
@@ -40,7 +41,7 @@ export function SettingsApiKeysPage() {
   // reflect the real user, not the "Cambiar vista" preview role.
   const canManage = ["owner", "co_owner"].includes(session.baseRole ?? "");
   const keysQuery = useQuery({
-    queryKey: ["api-keys", session.hotelId],
+    queryKey: queryKeys.apiKeys(session.hotelId),
     enabled: hasValidSession(session) && canManage,
     queryFn: () => listApiKeys(session)
   });
@@ -49,12 +50,12 @@ export function SettingsApiKeysPage() {
     onSuccess: (res) => {
       setIssuedKey(res);
       setForm(emptyForm);
-      qc.invalidateQueries({ queryKey: ["api-keys", session.hotelId] });
+      qc.invalidateQueries({ queryKey: queryKeys.apiKeys(session.hotelId) });
     }
   });
   const revokeMutation = useMutation({
     mutationFn: (keyId: number) => revokeApiKey(keyId, session),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["api-keys", session.hotelId] })
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.apiKeys(session.hotelId) })
   });
 
   if (!hasValidSession(session)) {

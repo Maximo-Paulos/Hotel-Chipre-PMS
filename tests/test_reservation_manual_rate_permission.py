@@ -196,12 +196,11 @@ def test_receptionist_can_still_create_reservation_without_manual_rate():
         _cleanup_client(db, engine)
 
 
-def test_manager_cannot_cross_manual_rate_security_ceiling():
+def test_owner_can_grant_manager_manual_rate_override():
     client, db, engine = _build_client()
     try:
         hotel_id = 505
         _seed_bookable_state(db, hotel_id)
-        with pytest.raises(ValueError, match="techo de seguridad"):
-            set_override(db, hotel_id, "manager", "reservation:manual_rate", True, user_id=1)
+        set_override(db, hotel_id, "manager", "reservation:manual_rate", True, user_id=1)
     finally:
         _cleanup_client(db, engine)

@@ -3,22 +3,20 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { listRoomCategories, listRooms, updateRoomCleaningStatus, updateRoomStatus, type Room, type RoomCategory, type RoomStatus } from "../api/rooms";
 import { hasValidSession } from "../api/client";
 import { useSession } from "../state/session";
-
-const roomsKey = (hotelId: number | null) => ["rooms", hotelId];
-const categoriesKey = (hotelId: number | null) => ["room-categories", hotelId];
+import { queryKeys } from "../api/queryKeys";
 
 export function useRooms(options?: { includeCategories?: boolean }) {
   const { session } = useSession();
 
   const roomsQuery = useQuery<Room[]>({
-    queryKey: roomsKey(session.hotelId),
+    queryKey: queryKeys.rooms(session.hotelId),
     queryFn: () => listRooms(session),
     enabled: hasValidSession(session),
     staleTime: 1000 * 15
   });
 
   const categoriesQuery = useQuery<RoomCategory[]>({
-    queryKey: categoriesKey(session.hotelId),
+    queryKey: queryKeys.roomCategories(session.hotelId),
     queryFn: () => listRoomCategories(session),
     enabled: hasValidSession(session) && (options?.includeCategories ?? true),
     staleTime: 1000 * 60
@@ -30,7 +28,7 @@ export function useRooms(options?: { includeCategories?: boolean }) {
     mutationFn: ({ roomId, status, notes }: { roomId: number; status: RoomStatus; notes?: string }) =>
       updateRoomStatus(roomId, status, notes, session),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: roomsKey(session.hotelId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.rooms(session.hotelId) });
     }
   });
 
@@ -38,7 +36,7 @@ export function useRooms(options?: { includeCategories?: boolean }) {
     mutationFn: ({ roomId, status, notes }: { roomId: number; status: "cleaning" | "available"; notes?: string }) =>
       updateRoomCleaningStatus(roomId, status, notes, session),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: roomsKey(session.hotelId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.rooms(session.hotelId) });
     }
   });
 

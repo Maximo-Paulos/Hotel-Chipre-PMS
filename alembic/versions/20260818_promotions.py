@@ -27,6 +27,7 @@ def _install_rls(connection) -> None:
         return
     op.execute('ALTER TABLE "promotions" ENABLE ROW LEVEL SECURITY')
     op.execute('ALTER TABLE "promotions" FORCE ROW LEVEL SECURITY')
+    op.execute('DROP POLICY IF EXISTS "tenant_isolation_promotions" ON "promotions"')
     op.execute(
         '''CREATE POLICY "tenant_isolation_promotions"
            ON "promotions"

@@ -99,7 +99,7 @@ export type DailyRateOut = DailyRatePrices & {
 // or none), and `daily_rate_id` is set only when an explicit row exists.
 export type DailyRateRangeRow = DailyRatePrices & {
   date: string;
-  source: "daily_rate" | "price_period" | "category_pricing" | "none";
+  source: "daily_rate" | "price_period" | "category_base" | "none";
   daily_rate_id: number | null;
 };
 
@@ -164,3 +164,34 @@ export const bulkUpdateDailyRateField = (
     data: payload,
     session
   });
+
+export type PricePeriod = {
+  id: number;
+  hotel_id: number;
+  category_id: number;
+  name: string;
+  start_date: string;
+  end_date: string;
+  price_per_night: number;
+  priority: number;
+  is_active: boolean;
+  created_at: string;
+};
+
+export type PricePeriodInput = Omit<Pick<PricePeriod, "category_id" | "name" | "start_date" | "end_date" | "price_per_night" | "priority" | "is_active">, "category_id"> & {
+  category_id: number;
+};
+
+export const listPricePeriods = (categoryId: number, session?: SessionLike) => {
+  const search = new URLSearchParams({ category_id: String(categoryId), active_only: "false" });
+  return apiFetch<PricePeriod[]>(`/api/rates/periods?${search.toString()}`, { session });
+};
+
+export const createPricePeriod = (payload: PricePeriodInput, session?: SessionLike) =>
+  apiFetch<PricePeriod>("/api/rates/periods", { method: "POST", data: payload, session });
+
+export const updatePricePeriod = (periodId: number, payload: Partial<PricePeriodInput>, session?: SessionLike) =>
+  apiFetch<PricePeriod>(`/api/rates/periods/${periodId}`, { method: "PATCH", data: payload, session });
+
+export const deletePricePeriod = (periodId: number, session?: SessionLike) =>
+  apiFetch<void>(`/api/rates/periods/${periodId}`, { method: "DELETE", session });

@@ -9,6 +9,7 @@ from app.database import get_db
 from app.dependencies.auth import AuthContext, require_permission
 from app.schemas.rate_calendar import RateCalendarResponse
 from app.services.rate_calendar_service import get_daily_calendar
+from app.services.read_model_cache import get_cached_rate_calendar_payload
 from app.services.permission_service import PERMISSION_RATES_READ
 
 
@@ -29,12 +30,18 @@ def get_daily_rate_calendar(
         raise HTTPException(status_code=422, detail="Date range cannot exceed 366 days")
 
     try:
-        return get_daily_calendar(
-            db,
+        return get_cached_rate_calendar_payload(
             hotel_id=context.hotel_id,
             category_id=category_id,
             date_from=date_from,
             date_to=date_to,
+            producer=lambda: get_daily_calendar(
+                db,
+                hotel_id=context.hotel_id,
+                category_id=category_id,
+                date_from=date_from,
+                date_to=date_to,
+            ),
         )
     except ValueError as exc:
         if str(exc) == "Category not found":

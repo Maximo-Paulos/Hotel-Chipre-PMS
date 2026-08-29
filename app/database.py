@@ -3,6 +3,7 @@ Database engine and session management.
 Supports both PostgreSQL (production) and SQLite (testing).
 """
 import logging
+import time
 
 from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.orm import sessionmaker, DeclarativeBase, Session
@@ -11,6 +12,48 @@ from typing import Generator
 from app.config import get_settings, is_preview_qa_mode, is_production_mode
 
 LOGGER = logging.getLogger(__name__)
+_SLOW_QUERY_START_KEY = "_slow_query_start_times"
+
+
+def _slow_query_threshold_ms() -> float:
+    try:
+        return max(float(getattr(get_settings(), "SLOW_QUERY_LOG_MS", 0) or 0), 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _install_slow_query_listener(engine) -> None:
+    """Log slow SQL without echoing bound values or changing normal runs."""
+
+    @event.listens_for(engine, "before_cursor_execute")
+    def _before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+        conn.info.setdefault(_SLOW_QUERY_START_KEY, []).append(time.perf_counter())
+
+    @event.listens_for(engine, "after_cursor_execute")
+    def _after_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+        starts = conn.info.get(_SLOW_QUERY_START_KEY)
+        started = starts.pop() if starts else None
+        if started is None:
+            return
+        threshold_ms = _slow_query_threshold_ms()
+        if threshold_ms <= 0:
+            return
+        duration_ms = (time.perf_counter() - started) * 1000.0
+        if duration_ms >= threshold_ms:
+            # Deliberately omit ``parameters``: SQL values can contain guest PII.
+            LOGGER.warning(
+                "slow query duration_ms=%.2f statement=%s",
+                duration_ms,
+                statement,
+            )
+
+    @event.listens_for(engine, "handle_error")
+    def _handle_query_error(exception_context):
+        # ``after_cursor_execute`` is not called for failed statements; avoid
+        # carrying an old start time into the next statement on this connection.
+        starts = exception_context.connection.info.get(_SLOW_QUERY_START_KEY)
+        if starts:
+            starts.pop()
 
 
 class Base(DeclarativeBase):
@@ -78,6 +121,7 @@ def get_engine(database_url: str | None = None):
             pool_recycle=1800,    # recycle every 30 min
         )
 
+    _install_slow_query_listener(engine)
     return engine
 
 

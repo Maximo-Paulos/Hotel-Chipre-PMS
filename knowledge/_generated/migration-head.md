@@ -1,9 +1,9 @@
 # Alembic head
 
-Generado: 2026-08-22T00:03:32.031682+00:00
-Commit: `8a53fc3`
+Generado: 2026-08-28T23:49:04.684560+00:00
+Commit: `16e8a3e`
 
 ```text
-20260821_apple_sign_in (head)
+20260828_query_shape_indexes (head)
 ```
 Fuente: `alembic.ini` y `alembic/versions/`.

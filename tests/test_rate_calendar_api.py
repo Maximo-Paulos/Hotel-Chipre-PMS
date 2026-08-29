@@ -175,8 +175,8 @@ def test_success_returns_expected_schema():
     client, db, engine = _build_client()
     try:
         category = _seed_hotel(db, 1, "H1")
-        # Rate calendar is pricing config -- manager's ceiling excludes
-        # reports:financial:view.
+        # Rate calendar is pricing config -- manager's default matrix does not
+        # grant reports:financial:view.
         fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner")
         response = client.get(
             "/api/rate-calendar/daily",

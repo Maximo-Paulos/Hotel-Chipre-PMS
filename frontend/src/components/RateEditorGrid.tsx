@@ -42,7 +42,7 @@ const INTEGER_LABEL = new Intl.NumberFormat("es-AR");
 const SOURCE_LABEL: Record<DailyRateRangeRow["source"], string> = {
   daily_rate: "Precio fijado para esta fecha",
   price_period: "Heredado de un período de precios",
-  category_pricing: "Heredado del precio base de la categoría",
+  category_base: "Heredado del precio base de la categoría",
   none: "Sin precio configurado"
 };
 

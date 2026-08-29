@@ -17,6 +17,8 @@ from app.schemas.permission import (
     TemporaryActionGrantConsumeRequest,
     TemporaryActionGrantRequest,
     UserPermissionOverrideRequest,
+    VisibilityWindowRead,
+    VisibilityWindowUpdate,
 )
 from app.services.permission_service import (
     PERMISSION_DEFINITIONS,
@@ -27,6 +29,7 @@ from app.services.permission_service import (
     get_matrix,
     get_permission_catalog,
     get_role_profiles,
+    list_visibility_windows,
     publish_permission_invalidation,
     PermissionVersionConflict,
     restore_role_override,
@@ -35,6 +38,7 @@ from app.services.permission_service import (
     restore_user_defaults,
     set_role_override,
     set_user_override,
+    set_visibility_window,
 )
 from app.services.temporary_action_grant_service import (
     TemporaryGrantActor,
@@ -226,6 +230,54 @@ def update_permission_override(
     context: AuthContext = Depends(require_permission_administrator),
 ):
     return _update_role_override(payload, db, context)
+
+
+def _visibility_window_response(row, role: str | None = None) -> dict:
+    return {
+        "role": row.role if row is not None else role,
+        "past_hours": row.past_hours if row is not None else None,
+        "future_hours": row.future_hours if row is not None else None,
+        "updated_by_user_id": row.updated_by_user_id if row is not None else None,
+        "updated_at": row.updated_at if row is not None else None,
+    }
+
+
+@router.get("/visibility-windows")
+def read_visibility_windows(
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission_administrator),
+):
+    configured = {row.role: row for row in list_visibility_windows(db, context.hotel_id)}
+    return {
+        "hotel_id": context.hotel_id,
+        "windows": [
+            _visibility_window_response(configured.get(role), role)
+            for role in ROLE_CODES
+        ],
+    }
+
+
+@router.put("/visibility-windows", response_model=VisibilityWindowRead)
+def update_visibility_window(
+    payload: VisibilityWindowUpdate,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission_administrator),
+):
+    try:
+        row = set_visibility_window(
+            db,
+            context.hotel_id,
+            payload.role,
+            payload.past_hours,
+            payload.future_hours,
+            context.user_id,
+        )
+        db.commit()
+        db.refresh(row)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    return _visibility_window_response(row)
 
 
 @router.delete("/overrides/role/{role}/{permission_code}")

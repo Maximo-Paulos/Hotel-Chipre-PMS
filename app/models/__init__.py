@@ -13,6 +13,7 @@ from app.models.reservation import (
 )
 from app.models.transaction import Transaction, PaymentMethodEnum, TransactionStatusEnum
 from app.models.hotel_config import HotelConfiguration
+from app.models.hotel_role_visibility_window import HotelRoleVisibilityWindow
 from app.models.company import Company
 from app.models.ota import OTAReservationMapping, OTAWebhookCredential
 from app.models.ota_core import (
@@ -164,6 +165,7 @@ __all__ = [
     "ReservationNoShowPolicyAppliedEnum",
     "Transaction", "PaymentMethodEnum", "TransactionStatusEnum",
     "HotelConfiguration",
+    "HotelRoleVisibilityWindow",
     "Company",
     "OTAReservationMapping",
     "OTAWebhookCredential",

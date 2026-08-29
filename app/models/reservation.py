@@ -365,11 +365,19 @@ class Reservation(Base):
         CheckConstraint("num_children >= 0", name="ck_reservation_children_positive"),
         Index("ix_reservation_dates", "check_in_date", "check_out_date"),
         Index("ix_reservation_hotel_id", "hotel_id"),
+        Index("ix_reservation_hotel_deleted_at", "hotel_id", "deleted_at"),
         # A2: recent-order paging (created_at DESC) scoped per hotel.
         Index("ix_reservation_hotel_created_at", "hotel_id", "created_at"),
         # B2: occupancy grid overlap query (hotel_id + date range), room_id
         # included so per-room lookups can use it too.
         Index("ix_reservation_hotel_room_dates", "hotel_id", "room_id", "check_in_date", "check_out_date"),
+        # Kept in the model because the v72 migration already installs these
+        # indexes on existing databases.
+        Index("ix_reservation_hotel_status_checkin", "hotel_id", "status", "check_in_date"),
+        Index(
+            "ix_reservation_hotel_room_status_dates",
+            "hotel_id", "room_id", "status", "check_in_date", "check_out_date",
+        ),
         Index("ix_reservation_hotel_check_in", "hotel_id", "check_in_date"),
         Index("ix_reservation_hotel_check_out", "hotel_id", "check_out_date"),
         Index("ix_reservation_sellable_product_id", "sellable_product_id"),

@@ -41,7 +41,7 @@ import { startOfCurrentMonthIso, startOfCurrentWeekIso, todayIso } from "../../u
 
 // Mobile task-based tabs -- desktop keeps showing every section at once
 // regardless of mobileTab. "vendors" (lavaderos/precios/catálogo) is only
-// offered to users who actually hold laundry:manage_vendors -- mirrors the
+// offered to users who actually hold laundry:vendor_manage -- mirrors the
 // existing (tested, see housekeeping-laundry-journey.spec.ts) desktop
 // behavior of never revealing that panel exists to housekeeping at all,
 // rather than showing a permission-denied explanation for it.
@@ -88,8 +88,8 @@ export function LaundryPage() {
   const { hasPermission } = useEffectivePermissions();
   const queryClient = useQueryClient();
   const enabled = hasValidSession(session);
-  const manageVendors = hasPermission("laundry:manage_vendors");
-  const operateRemitos = hasPermission("laundry:operate_remitos");
+  const manageVendors = hasPermission("laundry:vendor_manage");
+  const operateRemitos = hasPermission("laundry:remito_manage");
   // Financial visibility (spend report + settlements), not vendor operations
   // -- owner/co-owner only by default now, matching the backend gate on
   // GET .../spend, GET .../settlements and the mark-paid POST (see
@@ -264,7 +264,7 @@ export function LaundryPage() {
 
   // Spend report: GET /api/laundry/vendors/{id}/spend is per-vendor only,
   // gated by reports:financial:view -- owner/co-owner by default, not
-  // laundry:manage_vendors (a manager keeps vendor/price/remito management
+  // laundry:vendor_manage (a manager keeps vendor/price/remito management
   // but not this money visibility, see viewFinancial above).
   // A hotel realistically has 1-3 laundries (see plan D3), so N small
   // parallel requests summed client-side is simpler than adding and testing
@@ -1281,10 +1281,10 @@ export function LaundryPage() {
             </form>
 
             {/* GET /api/laundry/items/{id}/current and .../items/summary both
-                accept laundry:operate_remitos OR laundry:manage_vendors (see
+                accept laundry:remito_manage OR laundry:vendor_manage (see
                 app/api/laundry_vendor.py) -- housekeeping holds the former,
                 so this is not manageVendors-gated (a prior version of this
-                comment incorrectly claimed the backend required stock:operate,
+                comment incorrectly claimed the backend required stock:movement,
                 which does not apply to this linen-specific endpoint at all). */}
             <div className={showSection("available") ? "" : "hidden"}>
               <HouseStockPanel

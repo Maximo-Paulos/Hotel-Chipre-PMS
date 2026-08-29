@@ -31,6 +31,7 @@ from app.services.permission_service import (
     ROLE_CODES,
     resolve as resolve_permission,
 )
+from app.services.reservation_service import active_reservations
 
 logger = logging.getLogger(__name__)
 
@@ -90,9 +91,8 @@ def _flag_future_active_reservations(db: Session, *, hotel_id: int, guest_id: in
     guest for manual review. Past reservations are left untouched."""
     today = date.today()
     reservations = (
-        db.query(Reservation)
+        active_reservations(db, hotel_id)
         .filter(
-            Reservation.hotel_id == hotel_id,
             Reservation.guest_id == guest_id,
             Reservation.check_in_date >= today,
             ~Reservation.status.in_(_INACTIVE_RESERVATION_STATUSES),

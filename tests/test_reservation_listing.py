@@ -135,3 +135,29 @@ def test_selectin_fan_out_is_bounded_by_limit_not_by_hotel_history(db, sample_gu
         f"expected a small, limit-bounded query count, got {query_counts[0]} "
         "queries for a limit=50 page out of 120 reservations"
     )
+
+
+def test_listing_uses_one_scalar_reservation_query(db, sample_guest, sample_rooms, hotel_config):
+    _make_reservations(db, sample_guest, sample_rooms, hotel_id=1, count=3)
+
+    statements: list[str] = []
+    engine = db.get_bind()
+
+    def capture(_conn, _cursor, statement, _parameters, _context, _executemany):
+        statements.append(statement)
+
+    event.listen(engine, "before_cursor_execute", capture)
+    try:
+        results = list_reservations(db, hotel_id=1, limit=3)
+    finally:
+        event.remove(engine, "before_cursor_execute", capture)
+
+    reservation_selects = [
+        statement.lower()
+        for statement in statements
+        if "from reservations" in statement.lower()
+    ]
+    assert len(results) == 3
+    assert len(reservation_selects) == 1
+    assert " join rooms " not in reservation_selects[0]
+    assert " join room_categories " not in reservation_selects[0]

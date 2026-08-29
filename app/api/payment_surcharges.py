@@ -19,10 +19,8 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.dependencies.auth import AuthContext, require_permission
 from app.models.audit_log import AuditActionEnum
-from app.models.daily_rate import DailyRate
+from app.models.daily_rate import DailyRate, PricePeriod
 from app.models.payment_surcharge import PaymentSurcharge, PaymentSurchargeTypeEnum
-from app.models.pricing import CategoryPricing
-from app.models.room import RoomCategory
 from app.services import audit_log_service
 from app.services.permission_service import (
     PERMISSION_CASH_OPERATE,
@@ -57,11 +55,9 @@ def _has_per_method_nightly_price(db: Session, *, hotel_id: int, payment_method:
         is not None
     ):
         return True
-    category_column = getattr(CategoryPricing, column_name)
     return (
-        db.query(CategoryPricing.category_id)
-        .join(RoomCategory, RoomCategory.id == CategoryPricing.category_id)
-        .filter(RoomCategory.hotel_id == hotel_id, category_column.is_not(None))
+        db.query(PricePeriod.id)
+        .filter(PricePeriod.hotel_id == hotel_id, PricePeriod.deleted_at.is_(None), getattr(PricePeriod, column_name).is_not(None))
         .first()
         is not None
     )
@@ -164,7 +160,7 @@ def create_payment_surcharge(
             status_code=409,
             detail=(
                 f"El hotel ya tiene una tarifa nocturna especifica para el metodo "
-                f"'{payload.payment_method}' (DailyRate/CategoryPricing). No se puede "
+                f"'{payload.payment_method}' (DailyRate/PricePeriod). No se puede "
                 "configurar tambien un recargo para el mismo metodo (doble ajuste)."
             ),
         )

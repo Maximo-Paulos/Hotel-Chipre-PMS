@@ -777,6 +777,8 @@ def test_analytics_home_self_heals_when_derived_facts_were_never_materialized(ap
     # /api/analytics/home silently reports $0 revenue/occupancy despite real
     # paid reservations. Unlike _seed_analytics_data, this test deliberately
     # never calls refresh_fact_* -- exactly the "no worker ever ran" state.
+    # The inline fallback is intentionally bounded, so the requested window
+    # stays within its 31-day limit while still containing the reservation.
     client, SessionLocal, headers, plan_state = api_client
     plan_state["plan"] = "pro"
 
@@ -834,7 +836,7 @@ def test_analytics_home_self_heals_when_derived_facts_were_never_materialized(ap
 
     resp = client.get(
         "/api/analytics/home",
-        params={"date_from": "2026-01-01", "date_to": "2026-07-26"},
+        params={"date_from": "2026-04-20", "date_to": "2026-05-20"},
         headers=headers,
     )
     assert resp.status_code == 200, resp.text

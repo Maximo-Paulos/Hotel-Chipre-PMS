@@ -52,10 +52,18 @@ def _install_rls(connection) -> None:
     op.execute('ALTER TABLE "subscription_adjustments" ENABLE ROW LEVEL SECURITY')
     op.execute('ALTER TABLE "subscription_adjustments" FORCE ROW LEVEL SECURITY')
     op.execute(
+        'DROP POLICY IF EXISTS "tenant_isolation_subscription_adjustments" '
+        'ON "subscription_adjustments"'
+    )
+    op.execute(
         '''CREATE POLICY "tenant_isolation_subscription_adjustments"
            ON "subscription_adjustments"
            USING (hotel_id = NULLIF(current_setting('app.hotel_id', true), '')::integer)
            WITH CHECK (hotel_id = NULLIF(current_setting('app.hotel_id', true), '')::integer)'''
+    )
+    op.execute(
+        'DROP POLICY IF EXISTS "master_admin_bypass_subscription_adjustments" '
+        'ON "subscription_adjustments"'
     )
     op.execute(
         '''CREATE POLICY "master_admin_bypass_subscription_adjustments"

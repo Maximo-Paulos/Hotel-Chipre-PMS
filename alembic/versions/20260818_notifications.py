@@ -37,6 +37,7 @@ def _install_rls(connection, table_name: str) -> None:
         return
     op.execute(f'ALTER TABLE "{table_name}" ENABLE ROW LEVEL SECURITY')
     op.execute(f'ALTER TABLE "{table_name}" FORCE ROW LEVEL SECURITY')
+    op.execute(f'DROP POLICY IF EXISTS "tenant_isolation_{table_name}" ON "{table_name}"')
     op.execute(
         f'''CREATE POLICY "tenant_isolation_{table_name}"
            ON "{table_name}"

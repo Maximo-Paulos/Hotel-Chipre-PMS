@@ -17,7 +17,7 @@ import sys
 import tempfile
 
 from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker
+from tests.migration_helpers import insert_historical_hotel_config
 
 
 PRE_LINEN_SPLIT_REVISION = "513720cf2551"
@@ -36,18 +36,9 @@ def _seed_pre_split_data(engine) -> None:
     """Hand-insert a real 'linen' StockItem plus movements and a laundry
     vendor/price/remito referencing it -- the exact shape a hotel with the
     previous loop's StockItem.kind='linen' deploy would have."""
-    # HotelConfiguration has dozens of NOT NULL columns with Python-side (not
-    # server-side) defaults -- the ORM is the only column-agnostic way to
-    # seed one; unlike linen_*, its schema is untouched by this migration.
-    from app.models.hotel_config import HotelConfiguration
-
-    SessionLocal = sessionmaker(bind=engine)
-    session = SessionLocal()
-    try:
-        session.add(HotelConfiguration(id=1, subscription_active=True))
-        session.commit()
-    finally:
-        session.close()
+    # Seed the historical table shape explicitly; the current ORM includes
+    # authority columns introduced after this migration's target revision.
+    insert_historical_hotel_config(engine, 1)
 
     with engine.begin() as conn:
         # 100: exclusive to linen. 101: shared with a general-supply movement.

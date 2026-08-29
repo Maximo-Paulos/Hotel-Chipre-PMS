@@ -25,9 +25,11 @@ import { UserBadge, roleLabels } from "./UserBadge";
 type NavItem = {
   label: string;
   to: string;
-  requiresRole?: Array<"owner" | "co_owner" | "manager" | "housekeeping" | "receptionist">;
   requiresAnyPermission?: string[];
   requiresAllPermissions?: string[];
+  // Presentation-only narrowing for the role preview. This is deliberately
+  // not an authorization check; PermissionGate uses the real baseRole.
+  hideForPreviewRoles?: Array<"owner" | "co_owner" | "manager" | "housekeeping" | "receptionist">;
   minPlan?: "starter" | "pro" | "ultra";
 };
 
@@ -43,11 +45,11 @@ type NavSection = {
 // search away regardless of which menu group it would have lived in, so the
 // menu no longer has to list every route to keep it reachable.
 const dailyNav: NavItem[] = [
-  { label: "Planilla", to: "/operacion/planilla", requiresRole: ["owner", "co_owner", "manager", "receptionist"] },
-  { label: "Reservas", to: "/reservas", requiresRole: ["owner", "co_owner", "manager", "receptionist"], requiresAnyPermission: ["reservation:create", "checkin:perform"] },
-  { label: "Huespedes", to: "/huespedes", requiresAnyPermission: ["guest:view"] },
-  { label: "Habitaciones", to: "/habitaciones" },
-  { label: "Caja", to: "/caja", requiresAnyPermission: ["cash:operate"] },
+  { label: "Planilla", to: "/operacion/planilla", requiresAnyPermission: ["occupancy:view"], hideForPreviewRoles: ["housekeeping"] },
+  { label: "Reservas", to: "/reservas", requiresAnyPermission: ["reservation:read"], hideForPreviewRoles: ["housekeeping"] },
+  { label: "Huespedes", to: "/huespedes", requiresAnyPermission: ["guest:read"], hideForPreviewRoles: ["housekeeping"] },
+  { label: "Habitaciones", to: "/habitaciones", requiresAnyPermission: ["room:read"] },
+  { label: "Caja", to: "/caja", requiresAnyPermission: ["cash:view"], hideForPreviewRoles: ["housekeeping"] },
 ];
 
 // Grouping criterion: "Analitica" is every reporting/dashboard page a manager
@@ -60,50 +62,45 @@ const groupedNav: NavSection[] = [
   {
     title: "Analitica",
     items: [
-      { label: "Resumen", to: "/analytics", requiresRole: ["owner", "co_owner"] },
-      { label: "Habitaciones", to: "/analytics/rooms", requiresRole: ["owner", "co_owner"], minPlan: "pro" },
-      { label: "Segmentos", to: "/analytics/segments", requiresRole: ["owner", "co_owner"], minPlan: "pro" },
-      { label: "Canales", to: "/analytics/channels", requiresRole: ["owner", "co_owner"], minPlan: "pro" },
-      { label: "Operación", to: "/analytics/operations", requiresRole: ["owner", "co_owner", "manager"], requiresAnyPermission: ["reports:operational:view"], minPlan: "pro" },
-      { label: "Chat IA", to: "/analytics/ai-chat", requiresRole: ["owner", "co_owner"], minPlan: "ultra" },
-      { label: "Room events", to: "/operacion/room-state-events", requiresRole: ["owner", "co_owner", "manager"], requiresAnyPermission: ["reports:operational:view"], minPlan: "pro" }
+      { label: "Resumen", to: "/analytics", requiresAnyPermission: ["analytics:view"], hideForPreviewRoles: ["housekeeping"] },
+      { label: "Habitaciones", to: "/analytics/rooms", requiresAnyPermission: ["analytics:advanced:view"], hideForPreviewRoles: ["housekeeping"], minPlan: "pro" },
+      { label: "Segmentos", to: "/analytics/segments", requiresAnyPermission: ["analytics:advanced:view"], hideForPreviewRoles: ["housekeeping"], minPlan: "pro" },
+      { label: "Canales", to: "/analytics/channels", requiresAnyPermission: ["analytics:advanced:view"], hideForPreviewRoles: ["housekeeping"], minPlan: "pro" },
+      { label: "Operación", to: "/analytics/operations", requiresAnyPermission: ["reports:operational:view"], hideForPreviewRoles: ["housekeeping"], minPlan: "pro" },
+      { label: "Chat IA", to: "/analytics/ai-chat", requiresAnyPermission: ["analytics:ai:view"], hideForPreviewRoles: ["housekeeping"], minPlan: "ultra" },
+      { label: "Room events", to: "/operacion/room-state-events", requiresAnyPermission: ["reports:operational:view"], hideForPreviewRoles: ["housekeeping"], minPlan: "pro" }
     ]
   },
   {
     title: "Mas operacion",
     items: [
-      { label: "Dashboard", to: "/dashboard", requiresRole: ["owner", "co_owner", "manager", "receptionist"] },
-      { label: "Reportes", to: "/reportes", requiresAnyPermission: ["reports:operational:view"] },
-      { label: "Lista de espera", to: "/operacion/lista-espera", requiresRole: ["owner", "co_owner", "manager", "receptionist"] },
-      { label: "Lavanderia", to: "/operacion/lavanderia", requiresAnyPermission: ["laundry:operate_remitos", "laundry:manage_vendors"] },
-      { label: "Stock", to: "/operacion/stock", requiresAnyPermission: ["stock:operate"] },
-      { label: "Tarifas", to: "/operacion/tarifas", requiresRole: ["owner", "co_owner", "manager"] },
-      { label: "Promociones", to: "/operacion/promociones", requiresRole: ["owner", "co_owner", "manager"], requiresAnyPermission: ["promotions:read"] },
-      { label: "Onboarding", to: "/onboarding", requiresRole: ["owner", "co_owner"] },
+      { label: "Dashboard", to: "/dashboard", requiresAnyPermission: ["dashboard:view"], hideForPreviewRoles: ["housekeeping"] },
+      { label: "Reportes", to: "/reportes", requiresAnyPermission: ["reports:operational:view"], hideForPreviewRoles: ["housekeeping"] },
+      { label: "Lista de espera", to: "/operacion/lista-espera", requiresAnyPermission: ["waitlist:view"], hideForPreviewRoles: ["housekeeping"] },
+      { label: "Lavanderia", to: "/operacion/lavanderia", requiresAnyPermission: ["laundry:read"] },
+      { label: "Stock", to: "/operacion/stock", requiresAnyPermission: ["stock:read"], hideForPreviewRoles: ["housekeeping"] },
+      { label: "Tarifas", to: "/operacion/tarifas", requiresAnyPermission: ["rates:read"], hideForPreviewRoles: ["housekeeping"] },
+      { label: "Promociones", to: "/operacion/promociones", requiresAnyPermission: ["promotions:read"], hideForPreviewRoles: ["housekeeping"] },
+      { label: "Onboarding", to: "/onboarding", requiresAnyPermission: ["hotel_settings:update"], hideForPreviewRoles: ["housekeeping"] },
     ],
   },
   {
     title: "Configuracion",
     items: [
-      { label: "Usuarios", to: "/settings/users", requiresRole: ["owner", "co_owner"] },
-      { label: "Asistente", to: "/settings/assistant", requiresRole: ["owner", "co_owner", "manager"] },
-      { label: "Suscripcion", to: "/settings/subscription", requiresRole: ["owner", "co_owner"] },
-      { label: "Empresas", to: "/settings/companies", requiresRole: ["owner", "co_owner"], minPlan: "pro" },
-      { label: "API Keys", to: "/settings/api-keys", requiresRole: ["owner", "co_owner"], requiresAnyPermission: ["apikey:manage"] },
-      { label: "Permisos", to: "/settings/permissions", requiresRole: ["owner", "co_owner"], requiresAnyPermission: ["permissions:manage"] },
-      { label: "WhatsApp", to: "/settings/whatsapp", requiresRole: ["owner", "co_owner"] },
-      { label: "Conexiones", to: "/settings/connections", requiresRole: ["owner", "co_owner"] },
-      { label: "Pruebas", to: "/settings/tests", requiresRole: ["owner", "co_owner"] },
-      { label: "Hotel", to: "/settings/hotel", requiresRole: ["owner", "co_owner"] },
-      { label: "Seguridad", to: "/settings/security", requiresRole: ["owner", "co_owner"] },
-      { label: "Dispositivos", to: "/settings/sessions", requiresRole: ["owner", "co_owner"] },
-      // No requiresAnyPermission gate (push/preferences are per-user, not
-      // permission-scoped) but excluded from housekeeping's nav on purpose --
-      // housekeeping's menu is deliberately minimal (see role-journey.spec.ts
-      // "housekeeping stays inside rooms and laundry without loading
-      // restricted data surfaces"); the route itself has no PermissionGate,
-      // so this only hides the link, it doesn't block direct navigation.
-      { label: "Notificaciones", to: "/settings/notifications", requiresRole: ["owner", "co_owner", "manager", "receptionist"] },
+      { label: "Usuarios", to: "/settings/users", requiresAnyPermission: ["settings:users:view"], hideForPreviewRoles: ["housekeeping"] },
+      { label: "Asistente", to: "/settings/assistant", requiresAnyPermission: ["settings:assistant:view"], hideForPreviewRoles: ["housekeeping"] },
+      { label: "Suscripcion", to: "/settings/subscription", requiresAnyPermission: ["settings:subscription:view"], hideForPreviewRoles: ["housekeeping"] },
+      { label: "Empresas", to: "/settings/companies", requiresAnyPermission: ["company:view"], hideForPreviewRoles: ["housekeeping"], minPlan: "pro" },
+      { label: "API Keys", to: "/settings/api-keys", requiresAnyPermission: ["apikey:manage"], hideForPreviewRoles: ["housekeeping"] },
+      { label: "Permisos", to: "/settings/permissions", requiresAnyPermission: ["permissions:manage"], hideForPreviewRoles: ["housekeeping"] },
+      { label: "Conexiones", to: "/settings/connections", requiresAnyPermission: ["settings:integrations:view"], hideForPreviewRoles: ["housekeeping"] },
+      { label: "Pruebas", to: "/settings/tests", requiresAnyPermission: ["settings:tests:view"], hideForPreviewRoles: ["housekeeping"] },
+      { label: "Hotel", to: "/settings/hotel", requiresAnyPermission: ["hotel_settings:read"], hideForPreviewRoles: ["housekeeping"] },
+      { label: "Seguridad", to: "/settings/security", requiresAnyPermission: ["settings:security:view"], hideForPreviewRoles: ["housekeeping"] },
+      { label: "Dispositivos", to: "/settings/sessions", requiresAnyPermission: ["settings:sessions:view"], hideForPreviewRoles: ["housekeeping"] },
+      // Housekeeping's menu is deliberately minimal even if an administrator
+      // grants it another read permission: it stays inside rooms and laundry.
+      { label: "Notificaciones", to: "/settings/notifications", requiresAnyPermission: ["settings:notifications:view"], hideForPreviewRoles: ["housekeeping"] },
     ],
   },
 ];
@@ -189,7 +186,7 @@ export function AppShell() {
   const filterItems = useMemo(() => {
     return (items: NavItem[]) =>
       items
-        .filter((item) => !item.requiresRole || (role ? item.requiresRole.includes(role) : false))
+        .filter((item) => !item.hideForPreviewRoles || (role ? !item.hideForPreviewRoles.includes(role) : false))
         .filter((item) => !item.requiresAnyPermission || hasAnyPermission(item.requiresAnyPermission))
         .filter((item) => !item.requiresAllPermissions || hasAllPermissions(item.requiresAllPermissions))
         .filter((item) => !item.minPlan || (subscription?.plan ? (planRank[subscription.plan as keyof typeof planRank] ?? 0) >= (planRank[item.minPlan] ?? 0) : false))

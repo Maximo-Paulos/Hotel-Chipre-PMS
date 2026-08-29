@@ -215,8 +215,8 @@ def test_manager_has_no_access_to_commercial_configuration():
         assert create_resp.status_code == 201, create_resp.text
 
         # Commercial config (products/rate plans/tax/fx policies) is priced,
-        # revenue-facing configuration -- manager's ceiling excludes
-        # reports:financial:view, so it's denied read as well as write.
+        # revenue-facing configuration -- manager's default matrix does not
+        # grant reports:financial:view, so it's denied read as well as write.
         fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "manager")
         list_resp = client.get("/api/commercial/products")
         assert list_resp.status_code == 403, list_resp.text

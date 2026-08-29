@@ -7,10 +7,11 @@ import json
 import logging
 import string
 import random
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from decimal import Decimal
 from datetime import date, datetime, timedelta, timezone
-from typing import Optional
+from typing import TYPE_CHECKING, Any, Optional
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -27,18 +28,22 @@ from app.models.reservation import (
     ReservationOutcomeEnum,
     ReservationStatusEnum,
     ReservationSourceEnum,
+    reservation_additional_guests,
 )
 from app.models.hotel_config import HotelConfiguration
-from app.models.pricing import CategoryPricing
+from app.models.hotel_role_visibility_window import HotelRoleVisibilityWindow
 from app.models.operations import ReservationStatusHistory
 from app.schemas.reservation import ReservationCreate, ReservationUpdate
 from app.services.financial_ledger import billing_adjustment_totals_by_reservation, completed_paid_amounts_by_reservation
-from app.services.analytics_facts import touch_reservation_fact_window
 from app.services.pricing_policy_service import PricingPolicyError, StayPricingQuote, quote_rate_plan_stay
 from app.services.pricing_service import build_pricing_revision, get_price_for_date
 from app.services.quote_token_service import QuoteTokenError, verify_quote_token
 from app.services.read_model_cache import invalidate_hotel_operational_caches
 from app.services.room_block_service import blocked_room_ids_for_range, list_active_blocks, room_has_active_block
+from app.services.timezones import normalize_timezone
+
+if TYPE_CHECKING:
+    from app.dependencies.auth import AuthContext
 
 
 logger = logging.getLogger(__name__)
@@ -47,6 +52,155 @@ logger = logging.getLogger(__name__)
 class ReservationError(Exception):
     """Custom exception for reservation business logic errors."""
     pass
+
+
+@dataclass(slots=True)
+class _ReservationGuestProjection:
+    id: int
+    first_name: str
+    last_name: str
+    document_type: Any = None
+    document_number: str | None = None
+
+
+@dataclass(slots=True)
+class _ReservationListProjection:
+    """Only the scalar/read-model fields needed by the reservation list API."""
+
+    id: int
+    hotel_id: int
+    confirmation_code: str
+    guest_id: int
+    guest: _ReservationGuestProjection | None
+    room_id: int | None
+    category_id: int
+    company_id: int | None
+    sellable_product_id: int | None
+    rate_plan_id: int | None
+    tax_policy_id: int | None
+    check_in_date: date
+    check_out_date: date
+    actual_check_in: Any
+    actual_check_out: Any
+    total_amount: Any
+    amount_paid: Any
+    deposit_amount: Any
+    subtotal_amount: Any
+    tax_amount: Any
+    fee_amount: Any
+    commission_amount: Any
+    net_amount: Any
+    currency_code: str
+    fx_rate_snapshot: float | None
+    quoted_amount_ars: Any
+    quoted_amount_usd: Any
+    status: ReservationStatusEnum
+    source: ReservationSourceEnum
+    source_provider_code: str | None
+    external_id: str | None
+    external_confirmation_code: str | None
+    payment_collection_model: str
+    settlement_status: str
+    num_adults: int
+    num_children: int
+    notes: str | None
+    created_at: Any
+    updated_at: Any
+    allocation_status: str
+    requires_manual_review: bool
+    mobility_restriction: bool
+    is_wait_listed: bool
+    wait_list_reason: str | None
+    version: int
+    additional_guests: list[_ReservationGuestProjection] = field(default_factory=list)
+
+    @property
+    def balance_due(self):
+        return max(Decimal("0"), Decimal(str(self.total_amount or 0)) - Decimal(str(self.amount_paid or 0)))
+
+    @property
+    def nights(self) -> int:
+        return (self.check_out_date - self.check_in_date).days
+
+
+def active_reservations(db: Session, hotel_id: int):
+    """Single place that decides which reservations 'exist'.
+
+    Soft-deleted rows must never reach aggregation, availability or allocation.
+    Restore/audit paths intentionally bypass this helper.
+    """
+    return db.query(Reservation).filter(
+        Reservation.hotel_id == hotel_id,
+        Reservation.deleted_at.is_(None),
+    )
+
+
+def _hotel_today_and_timezone(db: Session, hotel_id: int) -> tuple[date, ZoneInfo]:
+    """Resolve the local calendar date from the hotel's stored IANA timezone."""
+    config = db.get(HotelConfiguration, hotel_id)
+    timezone_name = config.hotel_timezone if config is not None else "UTC"
+    try:
+        timezone_name = normalize_timezone(timezone_name)
+        hotel_timezone = ZoneInfo(timezone_name)
+    except (AttributeError, ValueError):
+        # A legacy invalid configuration must not make a reservation list
+        # unreadable. UTC is the narrow, deterministic fallback.
+        logger.warning(
+            "Invalid hotel timezone while resolving reservation visibility hotel_id=%s",
+            hotel_id,
+        )
+        hotel_timezone = ZoneInfo("UTC")
+    local_today = datetime.now(hotel_timezone).date()
+    return local_today, hotel_timezone
+
+
+def visible_reservations(db: Session, context: "AuthContext"):
+    """Active reservations intersecting the caller role's visibility window.
+
+    This helper is for user-facing reads only. Background jobs, analytics
+    refreshes, allocation, and OTA processing deliberately use
+    :func:`active_reservations` so they retain the full reservation history.
+    """
+    query = active_reservations(db, context.hotel_id)
+    window = (
+        db.query(HotelRoleVisibilityWindow)
+        .filter_by(hotel_id=context.hotel_id, role=context.user_role)
+        .one_or_none()
+    )
+    if window is None or (window.past_hours is None and window.future_hours is None):
+        return query
+
+    local_today, hotel_timezone = _hotel_today_and_timezone(db, context.hotel_id)
+    local_midnight = datetime.combine(local_today, datetime.min.time(), tzinfo=hotel_timezone)
+    window_start = (
+        (local_midnight - timedelta(hours=window.past_hours)).date()
+        if window.past_hours is not None
+        else None
+    )
+    window_end = (
+        (local_midnight + timedelta(hours=window.future_hours)).date()
+        if window.future_hours is not None
+        else None
+    )
+
+    if window_start is not None:
+        query = query.filter(Reservation.check_out_date >= window_start)
+    if window_end is not None:
+        query = query.filter(Reservation.check_in_date <= window_end)
+    return query
+
+
+def active_reservations_select(hotel_id: int):
+    """Select form of :func:`active_reservations` for explicit-column queries."""
+    return select(Reservation).where(
+        Reservation.hotel_id == hotel_id,
+        Reservation.deleted_at.is_(None),
+    )
+
+
+def _active_reservations_without_hotel(db: Session):
+    """Keep legacy system-wide callers from including soft-deleted rows."""
+    return db.query(Reservation).filter(Reservation.deleted_at.is_(None))
 
 
 _MANUAL_TELEPHONIC_CHANNELS = {
@@ -129,6 +283,8 @@ def _touch_facts(db: Session, hotel_id: int | None, date_from: date | None, date
     """
     if hotel_id is None or date_from is None or date_to is None:
         return
+    from app.services.analytics_facts import touch_reservation_fact_window
+
     touch_reservation_fact_window(db, hotel_id=hotel_id, date_from=date_from, date_to=date_to)
 
 
@@ -574,14 +730,6 @@ def _calendar_pricing_source(
     ).first():
         return "price_period"
 
-    if db.query(CategoryPricing.category_id).join(
-        RoomCategory, RoomCategory.id == CategoryPricing.category_id
-    ).filter(
-        CategoryPricing.category_id == category_id,
-        RoomCategory.hotel_id == hotel_id,
-    ).first():
-        return "category_pricing"
-
     return None
 
 
@@ -787,10 +935,8 @@ def check_room_availability(
     if room_has_active_block(db, hotel_id=hotel_id, room_id=room_id, start_date=check_in, end_date=check_out):
         return False
 
-    query = db.query(Reservation).filter(
+    query = active_reservations(db, hotel_id).filter(
         Reservation.room_id == room_id,
-        Reservation.hotel_id == hotel_id,
-        Reservation.deleted_at.is_(None),
         Reservation.status.notin_([
             ReservationStatusEnum.CANCELLED,
             ReservationStatusEnum.CHECKED_OUT,
@@ -854,10 +1000,8 @@ def find_available_rooms(
         end_date=check_out,
         room_ids=candidate_room_ids,
     )
-    occupied_query = db.query(Reservation.room_id).filter(
-        Reservation.hotel_id == hotel_id,
+    occupied_query = active_reservations(db, hotel_id).with_entities(Reservation.room_id).filter(
         Reservation.room_id.in_(candidate_room_ids),
-        Reservation.deleted_at.is_(None),
         Reservation.status.notin_([
             ReservationStatusEnum.CANCELLED,
             ReservationStatusEnum.CHECKED_OUT,
@@ -1047,10 +1191,17 @@ def create_reservation(
             lock_for_update=True,
         )
         if not available:
-            raise ReservationError(
-                f"No rooms available in category {category.name} for the requested dates"
-            )
-        room_id = available[0].id
+            config = db.get(HotelConfiguration, hotel_id)
+            if config is not None and config.allow_overbooking:
+                room_id = None
+                is_wait_listed = True
+                wait_list_reason = wait_list_reason or "Overbooking permitido por la configuración del hotel"
+            else:
+                raise ReservationError(
+                    f"No rooms available in category {category.name} for the requested dates"
+                )
+        else:
+            room_id = available[0].id
 
     # Corporate deferred billing (v72 §3.5): "a cobrar" / pago a N días.
     # The reservation is settled later (off-system invoicing), so we flag it as
@@ -1202,7 +1353,12 @@ def transition_reservation_status(
     Transition a reservation to a new status following the state machine rules.
     Raises ReservationError if the transition is invalid.
     """
-    resolved_hotel_id = _resolve_hotel_id(hotel_id, room=reservation.room if hasattr(reservation, "room") else None)
+    # A newly-created Reservation may have room_id set while its relationship
+    # is not populated yet. Its own tenant key is the authoritative fallback.
+    resolved_hotel_id = _resolve_hotel_id(
+        hotel_id or reservation.hotel_id,
+        room=reservation.room if hasattr(reservation, "room") else None,
+    )
     if reservation.hotel_id not in (None, resolved_hotel_id):
         raise ReservationError("Cross-hotel status transition is not allowed")
     reservation.hotel_id = reservation.hotel_id or resolved_hotel_id
@@ -1244,10 +1400,18 @@ def list_reservations(
     skip: int = 0,
     limit: int = 50,
     order: str = "recent",
-) -> list[Reservation]:
-    query = db.query(Reservation).filter(
-        Reservation.hotel_id == hotel_id,
-        Reservation.deleted_at.is_(None),
+    *,
+    context: "AuthContext | None" = None,
+) -> list[_ReservationListProjection]:
+    if context is not None and context.hotel_id != hotel_id:
+        raise ValueError("El contexto autenticado no pertenece al hotel solicitado")
+    query = visible_reservations(db, context) if context is not None else active_reservations(db, hotel_id)
+    # Keep the tenant predicate owned by active/visible_reservations and load
+    # only fields needed by ReservationRead. Hydrating Reservation would also
+    # trigger six joined relationships plus two selectin loaders.
+    query = query.outerjoin(
+        Guest,
+        (Guest.id == Reservation.guest_id) & (Guest.hotel_id == hotel_id),
     )
     if status_filter:
         query = query.filter(Reservation.status == status_filter)
@@ -1262,8 +1426,7 @@ def list_reservations(
             # code or guest last name. Guest is joined scoped to the same
             # hotel_id so a search can never leak a match from another hotel.
             like = f"%{term}%"
-            query = query.join(Guest, Guest.id == Reservation.guest_id).filter(
-                Guest.hotel_id == hotel_id,
+            query = query.filter(
                 (Reservation.confirmation_code.ilike(like)) | (Guest.last_name.ilike(like)),
             )
     # A2: "recent" (created_at DESC, id DESC) is the new default -- dashboards
@@ -1274,13 +1437,167 @@ def list_reservations(
         query = query.order_by(Reservation.check_in_date.asc())
     else:
         query = query.order_by(Reservation.created_at.desc(), Reservation.id.desc())
-    return query.offset(max(skip, 0)).limit(max(limit, 1)).all()
+    rows = query.with_entities(
+        Reservation.id,
+        Reservation.hotel_id,
+        Reservation.confirmation_code,
+        Reservation.guest_id,
+        Reservation.room_id,
+        Reservation.category_id,
+        Reservation.company_id,
+        Reservation.sellable_product_id,
+        Reservation.rate_plan_id,
+        Reservation.tax_policy_id,
+        Reservation.check_in_date,
+        Reservation.check_out_date,
+        Reservation.actual_check_in,
+        Reservation.actual_check_out,
+        Reservation.total_amount,
+        Reservation.amount_paid,
+        Reservation.deposit_amount,
+        Reservation.subtotal_amount,
+        Reservation.tax_amount,
+        Reservation.fee_amount,
+        Reservation.commission_amount,
+        Reservation.net_amount,
+        Reservation.currency_code,
+        Reservation.fx_rate_snapshot,
+        Reservation.quoted_amount_ars,
+        Reservation.quoted_amount_usd,
+        Reservation.status,
+        Reservation.source,
+        Reservation.source_provider_code,
+        Reservation.external_id,
+        Reservation.external_confirmation_code,
+        Reservation.payment_collection_model,
+        Reservation.settlement_status,
+        Reservation.num_adults,
+        Reservation.num_children,
+        Reservation.notes,
+        Reservation.created_at,
+        Reservation.updated_at,
+        Reservation.allocation_status,
+        Reservation.requires_manual_review,
+        Reservation.mobility_restriction,
+        Reservation.is_wait_listed,
+        Reservation.wait_list_reason,
+        Reservation.version,
+        Guest.id.label("guest_profile_id"),
+        Guest.first_name.label("guest_first_name"),
+        Guest.last_name.label("guest_last_name"),
+        Guest.document_type.label("guest_document_type"),
+        Guest.document_number.label("guest_document_number"),
+    ).offset(max(skip, 0)).limit(max(limit, 1)).all()
+
+    reservation_ids = [row.id for row in rows]
+    additional_by_reservation: dict[int, list[_ReservationGuestProjection]] = {}
+    if reservation_ids:
+        additional_rows = (
+            db.query(
+                reservation_additional_guests.c.reservation_id,
+                Guest.id,
+                Guest.first_name,
+                Guest.last_name,
+                Guest.document_type,
+                Guest.document_number,
+            )
+            .join(
+                Guest,
+                (Guest.id == reservation_additional_guests.c.guest_id)
+                & (Guest.hotel_id == hotel_id),
+            )
+            .filter(reservation_additional_guests.c.reservation_id.in_(reservation_ids))
+            .order_by(
+                reservation_additional_guests.c.reservation_id.asc(),
+                Guest.id.asc(),
+            )
+            .all()
+        )
+        for row in additional_rows:
+            additional_by_reservation.setdefault(row.reservation_id, []).append(
+                _ReservationGuestProjection(
+                    id=row.id,
+                    first_name=row.first_name,
+                    last_name=row.last_name,
+                    document_type=row.document_type,
+                    document_number=row.document_number,
+                )
+            )
+
+    return [
+        _ReservationListProjection(
+            id=row.id,
+            hotel_id=row.hotel_id,
+            confirmation_code=row.confirmation_code,
+            guest_id=row.guest_id,
+            guest=(
+                _ReservationGuestProjection(
+                    id=row.guest_profile_id,
+                    first_name=row.guest_first_name,
+                    last_name=row.guest_last_name,
+                    document_type=row.guest_document_type,
+                    document_number=row.guest_document_number,
+                )
+                if row.guest_profile_id is not None
+                else None
+            ),
+            room_id=row.room_id,
+            category_id=row.category_id,
+            company_id=row.company_id,
+            sellable_product_id=row.sellable_product_id,
+            rate_plan_id=row.rate_plan_id,
+            tax_policy_id=row.tax_policy_id,
+            check_in_date=row.check_in_date,
+            check_out_date=row.check_out_date,
+            actual_check_in=row.actual_check_in,
+            actual_check_out=row.actual_check_out,
+            total_amount=row.total_amount,
+            amount_paid=row.amount_paid,
+            deposit_amount=row.deposit_amount,
+            subtotal_amount=row.subtotal_amount,
+            tax_amount=row.tax_amount,
+            fee_amount=row.fee_amount,
+            commission_amount=row.commission_amount,
+            net_amount=row.net_amount,
+            currency_code=row.currency_code,
+            fx_rate_snapshot=row.fx_rate_snapshot,
+            quoted_amount_ars=row.quoted_amount_ars,
+            quoted_amount_usd=row.quoted_amount_usd,
+            status=row.status,
+            source=row.source,
+            source_provider_code=row.source_provider_code,
+            external_id=row.external_id,
+            external_confirmation_code=row.external_confirmation_code,
+            payment_collection_model=row.payment_collection_model,
+            settlement_status=row.settlement_status,
+            num_adults=row.num_adults,
+            num_children=row.num_children,
+            notes=row.notes,
+            created_at=row.created_at,
+            updated_at=row.updated_at,
+            allocation_status=row.allocation_status,
+            requires_manual_review=row.requires_manual_review,
+            mobility_restriction=row.mobility_restriction,
+            is_wait_listed=row.is_wait_listed,
+            wait_list_reason=row.wait_list_reason,
+            version=row.version,
+            additional_guests=additional_by_reservation.get(row.id, []),
+        )
+        for row in rows
+    ]
 
 
-def get_occupancy_grid(db: Session, hotel_id: int, date_from: date, date_to: date) -> dict:
+def get_occupancy_grid(
+    db: Session,
+    hotel_id: int,
+    date_from: date,
+    date_to: date,
+    *,
+    context: "AuthContext | None" = None,
+) -> dict:
     """B2: occupancy grid data for the planilla — rooms x days.
 
-    Explicit-column ``select()`` throughout: Room/RoomCategory/Reservation all
+    Explicit-column query throughout: Room/RoomCategory/Reservation all
     carry lazy="selectin" relationships (see A2's fan-out fix) that a plain
     ORM `.query(Reservation).all()` would trigger per-row. This stays at a
     fixed, small query count regardless of how many rooms/reservations exist
@@ -1306,8 +1623,17 @@ def get_occupancy_grid(db: Session, hotel_id: int, date_from: date, date_to: dat
 
     # Overlap test: a stay overlaps [date_from, date_to) unless it ends at/
     # before date_from or starts at/after date_to. Cancelled/deleted excluded.
-    reservation_rows = db.execute(
-        select(
+    if context is not None and context.hotel_id != hotel_id:
+        raise ValueError("El contexto autenticado no pertenece al hotel solicitado")
+    reservation_scope = (
+        visible_reservations(db, context)
+        if context is not None
+        else active_reservations(db, hotel_id)
+    )
+    reservation_rows = (
+        reservation_scope
+        .join(Guest, Guest.id == Reservation.guest_id)
+        .with_entities(
             Reservation.id,
             Reservation.room_id,
             Reservation.confirmation_code,
@@ -1321,16 +1647,14 @@ def get_occupancy_grid(db: Session, hotel_id: int, date_from: date, date_to: dat
             Guest.first_name,
             Guest.last_name,
         )
-        .join(Guest, Guest.id == Reservation.guest_id)
-        .where(
-            Reservation.hotel_id == hotel_id,
+        .filter(
             Guest.hotel_id == hotel_id,
-            Reservation.deleted_at.is_(None),
             Reservation.status != ReservationStatusEnum.CANCELLED,
             Reservation.check_in_date < date_to,
             Reservation.check_out_date > date_from,
         )
-    ).all()
+        .all()
+    )
 
     reservation_ids = [row.id for row in reservation_rows]
     # Same bulk pattern as operational_report_service.daily_report: confirmed
@@ -1393,12 +1717,8 @@ def get_occupancy_grid(db: Session, hotel_id: int, date_from: date, date_to: dat
 
 def get_reservation_by_id(db: Session, reservation_id: int, hotel_id: int) -> Reservation | None:
     return (
-        db.query(Reservation)
-        .filter(
-            Reservation.id == reservation_id,
-            Reservation.hotel_id == hotel_id,
-            Reservation.deleted_at.is_(None),
-        )
+        active_reservations(db, hotel_id)
+        .filter(Reservation.id == reservation_id)
         .first()
     )
 

@@ -77,20 +77,13 @@ def test_config_defaults_include_permissions(ctx):
     r = client.get("/api/config/")
     assert r.status_code == 200
     body = r.json()
-    assert body["receptionist_view_past_days"] == 0
-    assert body["receptionist_view_future_days"] == 7
-    assert body["allow_revenue_manager"] is True
-    assert body["allow_revenue_receptionist"] is False
+    assert "allow_revenue_manager" not in body
+    assert "allow_revenue_receptionist" not in body
 
 
 def test_config_update_permissions(ctx):
     client, db = ctx
-    payload = {
-        "receptionist_view_past_days": 2,
-        "receptionist_view_future_days": 10,
-        "allow_revenue_manager": False,
-        "allow_revenue_receptionist": True,
-    }
+    payload = {"allow_overbooking": True}
     r = client.patch("/api/config/", json=payload)
     assert r.status_code == 200
     body = r.json()
@@ -137,16 +130,16 @@ def test_manager_without_config_manage_permission_is_denied(ctx):
     fastapi_app.dependency_overrides[get_auth_context_target()] = _override_role("manager")
 
     assert client.get("/api/config/").status_code == 403
-    assert client.patch("/api/config/", json={"receptionist_view_future_days": 5}).status_code == 403
+    assert client.patch("/api/config/", json={"hotel_name": "Otro hotel"}).status_code == 403
     assert client.get("/api/config/email/status").status_code == 403
 
 
-def test_manager_cannot_cross_config_manage_security_ceiling(ctx):
+def test_owner_can_grant_manager_config_manage_override(ctx):
     client, db = ctx
-    with pytest.raises(ValueError, match="techo de seguridad"):
-        set_override(db, 1, "manager", PERMISSION_CONFIG_MANAGE, True, user_id=None)
+    set_override(db, 1, "manager", PERMISSION_CONFIG_MANAGE, True, user_id=None)
+    assert resolve(db, 1, "manager", PERMISSION_CONFIG_MANAGE) is True
     fastapi_app.dependency_overrides[get_auth_context_target()] = _override_role("manager")
 
-    assert client.get("/api/config/").status_code == 403
-    assert client.patch("/api/config/", json={"receptionist_view_future_days": 5}).status_code == 403
-    assert client.get("/api/config/email/status").status_code == 403
+    assert client.get("/api/config/").status_code == 200
+    assert client.patch("/api/config/", json={"hotel_name": "Otro hotel"}).status_code == 200
+    assert client.get("/api/config/email/status").status_code == 200

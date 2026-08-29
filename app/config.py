@@ -36,8 +36,13 @@ class Settings(BaseSettings):
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/1"
     READ_MODEL_CACHE_ENABLED: bool = True
+    READ_MODEL_CACHE_FAILURE_COOLDOWN_SECONDS: float = 30.0
     READ_MODEL_AVAILABILITY_TTL_SECONDS: int = 15
     READ_MODEL_ANALYTICS_TTL_SECONDS: int = 60
+    SYNC_FACT_REFRESH_ENABLED: bool = True
+    SYNC_FACT_REFRESH_MAX_DAYS: int = 31
+    # Disabled by default; bound SQL parameters are never included in logs.
+    SLOW_QUERY_LOG_MS: float = 0
     DISTRIBUTED_LOCK_ENABLED: bool = True
     DISTRIBUTED_LOCK_REQUIRED: bool = False
     DISTRIBUTED_LOCK_DEFAULT_TTL_SECONDS: int = 60

@@ -4,7 +4,7 @@ No global/singleton: one row per hotel (id == hotel_id).
 Admin Panel controls: deposit %, enabled gateways, cancellation policy, etc.
 """
 import json
-from sqlalchemy import Column, Integer, Float, Boolean, String, Text, DateTime
+from sqlalchemy import Column, Integer, Float, Boolean, String, Text, DateTime, JSON
 from datetime import datetime, timezone
 
 from app.database import Base
@@ -38,6 +38,7 @@ class HotelConfiguration(Base):
     # OTA toggles
     enable_booking_sync = Column(Boolean, nullable=False, default=True)
     enable_expedia_sync = Column(Boolean, nullable=False, default=True)
+    enable_despegar_sync = Column(Boolean, nullable=False, default=False)
 
     # Public API controls
     public_api_rate_limit_per_minute = Column(Integer, nullable=True)
@@ -56,30 +57,20 @@ class HotelConfiguration(Base):
     hotel_timezone = Column(String(100), nullable=False, default="America/Argentina/Buenos_Aires")
     default_currency = Column(String(3), nullable=False, default="ARS")
 
-    # Display / permissions (scaffolding)
-    receptionist_view_past_days = Column(Integer, nullable=False, default=0)
-    receptionist_view_future_days = Column(Integer, nullable=False, default=7)
-    allow_revenue_manager = Column(Boolean, nullable=False, default=True)
-    allow_revenue_receptionist = Column(Boolean, nullable=False, default=False)
+    # Identity fields collected by onboarding and edited in Settings.
+    languages = Column(JSON, nullable=False, default=lambda: ["es"])
+    jurisdiction_code = Column(String(3), nullable=False, default="AR")
 
-    # Operations / availability
-    sync_interval_minutes = Column(Integer, nullable=False, default=5)
-    safety_buffer_rooms = Column(Integer, nullable=False, default=0)
+    # Operations / availability. This is a real policy consumed by reservation
+    # creation; unlike the retired scaffolding below it has an operator surface.
     allow_overbooking = Column(Boolean, nullable=False, default=False)
-    max_overallocation_pct = Column(Float, nullable=False, default=0.0)
 
-    # No-show and OTA push
+    # No-show policy
     no_show_cutoff_hours = Column(Integer, nullable=False, default=24)
-    ota_autopush_enabled = Column(Boolean, nullable=False, default=False)
 
-    # Payment validation
-    card_validation_enabled = Column(Boolean, nullable=False, default=False)
-    payment_retry_attempts = Column(Integer, nullable=False, default=2)
-    auth_amount_pct = Column(Float, nullable=False, default=0.0)
-
-    # Notifications / stop-sell (stored as JSON/text for flexibility)
-    stop_sell_channels = Column(Text, nullable=True)  # JSON array of channel codes
-    event_notifications = Column(Text, nullable=True)  # JSON array of {event, channel, quiet_hours}
+    # Dedicated authority for the operational report recipient list. Other
+    # wizard input remains in onboarding_state and extra_policies as history.
+    operational_report_recipients = Column(JSON, nullable=True)
 
     # Additional policies as JSON
     extra_policies = Column(Text, nullable=True)  # Flexible JSON for future policies

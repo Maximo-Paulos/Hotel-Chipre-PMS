@@ -10,13 +10,12 @@ import {
 } from "../api/integrations";
 import { hasValidSession } from "../api/client";
 import { useSession } from "../state/session";
-
-const integrationsKey = ["integrations"];
+import { queryKeys } from "../api/queryKeys";
 
 export const useIntegrations = () => {
   const { session } = useSession();
   return useQuery<IntegrationStatus>({
-    queryKey: [...integrationsKey, session.hotelId, session.userId],
+    queryKey: [...queryKeys.integrations(session.hotelId), session.userId],
     queryFn: () => fetchIntegrations(session),
     enabled: hasValidSession(session)
   });
@@ -28,7 +27,7 @@ export const useConnectIntegration = () => {
   return useMutation({
     mutationFn: ({ id, payload }: { id: number; payload?: Record<string, unknown> }) =>
       connectIntegration(id, payload, session),
-    onSuccess: () => client.invalidateQueries({ queryKey: integrationsKey })
+    onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.integrations(session.hotelId) })
   });
 };
 
@@ -37,7 +36,7 @@ export const useRevokeIntegration = () => {
   const { session } = useSession();
   return useMutation({
     mutationFn: (id: number) => revokeIntegration(id, session),
-    onSuccess: () => client.invalidateQueries({ queryKey: integrationsKey })
+    onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.integrations(session.hotelId) })
   });
 };
 
@@ -46,7 +45,7 @@ export const useRefreshIntegration = () => {
   const { session } = useSession();
   return useMutation({
     mutationFn: (id: number) => refreshIntegration(id, session),
-    onSuccess: () => client.invalidateQueries({ queryKey: integrationsKey })
+    onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.integrations(session.hotelId) })
   });
 };
 
@@ -55,6 +54,6 @@ export const useFinalizeIntegrationOAuth = () => {
   const { session } = useSession();
   return useMutation({
     mutationFn: ({ id, code }: { id: number; code: string }) => finalizeIntegrationOAuth(id, code, session),
-    onSuccess: () => client.invalidateQueries({ queryKey: integrationsKey })
+    onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.integrations(session.hotelId) })
   });
 };

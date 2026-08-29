@@ -27,7 +27,12 @@ def get_cassandra_session() -> Any | None:
 
         hosts = _contact_points(settings.CASSANDRA_HOSTS) or ["localhost"]
         cluster = Cluster(contact_points=hosts, connect_timeout=2, control_connection_timeout=2)
-        _cassandra_session = cluster.connect(settings.CASSANDRA_KEYSPACE)
+        session = cluster.connect()
+        from app.services.timeseries_projection import ensure_cassandra_schema
+
+        ensure_cassandra_schema(session)
+        session.set_keyspace(settings.CASSANDRA_KEYSPACE)
+        _cassandra_session = session
         return _cassandra_session
     except Exception as exc:  # pragma: no cover - defensive runtime fallback
         logger.warning("cassandra.unavailable", extra={"error_type": type(exc).__name__})

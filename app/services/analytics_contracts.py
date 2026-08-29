@@ -22,6 +22,7 @@ from app.models.reservation import (
     ReservationStatusEnum,
 )
 from app.models.room import Room
+from app.services.reservation_service import active_reservations
 from app.services.timezones import normalize_timezone
 
 MONEY_QUANTUM = Decimal("0.01")
@@ -384,11 +385,7 @@ def calculate_pickup_30d_count(
     hotel_timezone: str | None = None,
 ) -> int:
     timezone_name = hotel_timezone or _hotel_timezone(db, hotel_id)
-    reservations = (
-        db.query(Reservation)
-        .filter(Reservation.hotel_id == hotel_id)
-        .all()
-    )
+    reservations = active_reservations(db, hotel_id).all()
     return calculate_pickup_30d_count_from_rows(
         reservations,
         date_from=date_from,

@@ -29,8 +29,22 @@ def upgrade() -> None:
         with op.batch_alter_table("hotel_configuration", recreate="always") as batch_op:
             batch_op.add_column(sa.Column("owner_email", sa.String(length=200), nullable=True))
             batch_op.add_column(sa.Column("subscription_active", sa.Boolean(), nullable=False))
-            batch_op.add_column(sa.Column("receptionist_view_past_days", sa.Integer(), nullable=False))
-            batch_op.add_column(sa.Column("receptionist_view_future_days", sa.Integer(), nullable=False))
+            batch_op.add_column(
+                sa.Column(
+                    "receptionist_view_past_days",
+                    sa.Integer(),
+                    nullable=False,
+                    server_default=sa.text("0"),
+                )
+            )
+            batch_op.add_column(
+                sa.Column(
+                    "receptionist_view_future_days",
+                    sa.Integer(),
+                    nullable=False,
+                    server_default=sa.text("7"),
+                )
+            )
             batch_op.add_column(sa.Column("allow_revenue_manager", sa.Boolean(), nullable=False))
             batch_op.add_column(sa.Column("allow_revenue_receptionist", sa.Boolean(), nullable=False))
             batch_op.add_column(sa.Column("sync_interval_minutes", sa.Integer(), nullable=False))
@@ -57,8 +71,14 @@ def upgrade() -> None:
         )
         op.add_column('hotel_configuration', sa.Column('owner_email', sa.String(length=200), nullable=True))
         op.add_column('hotel_configuration', sa.Column('subscription_active', sa.Boolean(), nullable=False))
-        op.add_column('hotel_configuration', sa.Column('receptionist_view_past_days', sa.Integer(), nullable=False))
-        op.add_column('hotel_configuration', sa.Column('receptionist_view_future_days', sa.Integer(), nullable=False))
+        op.add_column(
+            'hotel_configuration',
+            sa.Column('receptionist_view_past_days', sa.Integer(), nullable=False, server_default='0'),
+        )
+        op.add_column(
+            'hotel_configuration',
+            sa.Column('receptionist_view_future_days', sa.Integer(), nullable=False, server_default='7'),
+        )
         op.add_column('hotel_configuration', sa.Column('allow_revenue_manager', sa.Boolean(), nullable=False))
         op.add_column('hotel_configuration', sa.Column('allow_revenue_receptionist', sa.Boolean(), nullable=False))
         op.add_column('hotel_configuration', sa.Column('sync_interval_minutes', sa.Integer(), nullable=False))

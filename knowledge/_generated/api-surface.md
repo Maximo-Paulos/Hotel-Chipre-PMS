@@ -1,6 +1,8 @@
 # Inventario OpenAPI
 
-Generado: 2026-08-22T00:03:31.847162+00:00
-Commit: `8a53fc3`
+Generado: 2026-08-28T23:49:04.520765+00:00
+Commit: `16e8a3e`
 
-Estado: **needs-verification** — no se pudo importar FastAPI: `ModuleNotFoundError("No module named 'pyotp'")`.
+Contrato generado desde `app.main:app`: **359 paths**, **426 operaciones**.
+
+El contrato completo está en [openapi.json](openapi.json). No editarlo a mano.

@@ -28,6 +28,8 @@ from app.services.operational_report_service import (
     redact_daily_report_financials,
     redact_nightly_summary_financials,
 )
+from app.services.read_model_cache import get_cached_daily_report_payload
+from app.services.reservation_service import active_reservations, visible_reservations
 from app.services.permission_service import (
     PERMISSION_REPORTS_FINANCIAL_VIEW,
     PERMISSION_REPORTS_OPERATIONAL_VIEW,
@@ -45,7 +47,13 @@ def operational_daily_report(
 ):
     if report_date is None:
         report_date = date.today()
-    report = build_daily_operational_report(db, context.hotel_id, report_date)
+    report = DailyOperationalReportRead.model_validate(
+        get_cached_daily_report_payload(
+            hotel_id=context.hotel_id,
+            report_date=report_date,
+            producer=lambda: build_daily_operational_report(db, context.hotel_id, report_date),
+        )
+    )
     if resolve(db, context.hotel_id, context.user_role, PERMISSION_REPORTS_FINANCIAL_VIEW, user_id=context.user_id):
         return report
     return redact_daily_report_financials(report)
@@ -123,7 +131,7 @@ def daily_report(
 
     next_day = report_date + timedelta(days=1)
 
-    reservation_scope = db.query(Reservation).filter(Reservation.hotel_id == context.hotel_id)
+    reservation_scope = visible_reservations(db, context)
 
     arrivals = reservation_scope.filter(
         Reservation.check_in_date == report_date,
@@ -262,7 +270,7 @@ def occupancy_report(
     if (end_date - start_date).days > 366:
         raise HTTPException(status_code=422, detail="Date range must not exceed 366 days")
 
-    reservation_scope = db.query(Reservation).filter(Reservation.hotel_id == context.hotel_id)
+    reservation_scope = active_reservations(db, context.hotel_id)
     total_rooms = db.query(Room).filter(Room.is_active == True, Room.hotel_id == context.hotel_id).count()
 
     # Load the overlap candidates once. The previous implementation issued one
@@ -328,7 +336,7 @@ def revenue_report(
     if end_date is None:
         end_date = date.today()
 
-    reservation_scope = db.query(Reservation).filter(Reservation.hotel_id == context.hotel_id)
+    reservation_scope = active_reservations(db, context.hotel_id)
 
     day_start = datetime(start_date.year, start_date.month, start_date.day, 0, 0, 0)
     day_end = datetime(end_date.year, end_date.month, end_date.day, 23, 59, 59)

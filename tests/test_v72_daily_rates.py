@@ -2,7 +2,7 @@
 V72 §13 — Daily Rate Management tests.
 
 Tests cover:
-  - get_price_for_date: DailyRate lookup, PricePeriod fallback, CategoryPricing fallback
+  - get_price_for_date: DailyRate lookup, PricePeriod fallback, category-base fallback
   - apply_price_period: creates rows, always upserts, count returned
   - DailyRate uniqueness constraint
   - PricePeriod → correct number of DailyRate rows generated
@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import pytest
 from datetime import date
+from sqlalchemy import event
 from sqlalchemy.exc import IntegrityError
 
 from app.models.daily_rate import DailyRate, PricePeriod
@@ -120,12 +121,12 @@ class TestGetPriceForDate:
         price = get_price_for_date(
             db, hotel_id=1, category_id=category.id, target_date=date(2026, 11, 10)
         )
-        # No active period and no CategoryPricing → falls back to the category
+        # No active period → falls back to the category
         # base_price_per_night (single source of truth), not 0.
         assert price == category.base_price_per_night
 
-    def test_falls_back_to_category_pricing_when_no_period(self, db, sample_categories):
-        """Tier-3: CategoryPricing used when neither DailyRate nor PricePeriod exists."""
+    def test_legacy_category_pricing_is_ignored_when_no_period(self, db, sample_categories):
+        """Archived CategoryPricing rows no longer override the category base."""
         category = sample_categories[2]
         db.add(CategoryPricing(
             category_id=category.id,
@@ -136,10 +137,10 @@ class TestGetPriceForDate:
         price = get_price_for_date(
             db, hotel_id=1, category_id=category.id, target_date=date(2026, 12, 25)
         )
-        assert price == 250.0
+        assert price == category.base_price_per_night
 
     def test_falls_back_to_category_base_when_no_calendar_pricing(self, db, sample_categories):
-        """Final tier: with no DailyRate/PricePeriod/CategoryPricing the resolver
+        """Final tier: with no DailyRate or PricePeriod the resolver
         returns the category base_price_per_night (single source of truth)."""
         category = sample_categories[0]
         price = get_price_for_date(
@@ -237,6 +238,32 @@ def test_prices_for_range_rejects_non_positive_stay_window(db, sample_categories
 # ---------------------------------------------------------------------------
 
 class TestApplyPricePeriod:
+    def test_existing_rates_are_loaded_in_one_range_query(self, db, sample_categories):
+        category = sample_categories[0]
+        period = _make_period(
+            db, 1, category.id,
+            start=date(2026, 8, 1), end=date(2026, 8, 25),
+            price=160.0,
+        )
+
+        statements: list[str] = []
+        engine = db.get_bind()
+
+        def capture(_conn, _cursor, statement, _parameters, _context, _executemany):
+            statements.append(statement)
+
+        event.listen(engine, "before_cursor_execute", capture)
+        try:
+            assert apply_price_period(db, hotel_id=1, category_id=category.id, period_id=period.id) == 25
+        finally:
+            event.remove(engine, "before_cursor_execute", capture)
+
+        daily_rate_selects = [
+            statement for statement in statements
+            if "from daily_rates" in statement.lower()
+        ]
+        assert len(daily_rate_selects) == 1
+
     def test_creates_daily_rate_rows_for_each_date(self, db, sample_categories):
         """apply_price_period materialises one DailyRate per day in the period."""
         category = sample_categories[0]
@@ -498,19 +525,9 @@ class TestPricePeriodModel:
 
 class TestResolveRateCalendar:
     def test_batched_resolver_uses_selected_payment_method(self, db, sample_categories):
-        from app.models.pricing import CategoryPricing
         from app.services.pricing_service import get_price_for_date, resolve_rate_calendar
 
         category = sample_categories[0]
-        db.add(
-            CategoryPricing(
-                category_id=category.id,
-                price_cash=100.0,
-                price_transfer=150.0,
-                price_mercadopago=165.0,
-            )
-        )
-        db.flush()
 
         rows = resolve_rate_calendar(
             db,
@@ -521,14 +538,13 @@ class TestResolveRateCalendar:
             payment_method="transfer",
         )
 
-        assert rows[0]["price"] == 150.0
+        assert rows[0]["price"] == category.base_price_per_night
         assert rows[0]["price"] == get_price_for_date(
             db, 1, category.id, date(2026, 9, 1), payment_method="transfer"
         )
 
     def test_batched_matches_per_date_and_reports_sources(self, db, sample_categories):
         from datetime import timedelta
-        from app.models.pricing import CategoryPricing
         from app.services.pricing_service import get_price_for_date, resolve_rate_calendar
 
         category = sample_categories[0]  # base_price_per_night = 100

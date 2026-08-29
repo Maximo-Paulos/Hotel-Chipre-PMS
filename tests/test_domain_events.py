@@ -78,6 +78,51 @@ def test_publish_domain_event_rejects_unknown_domain_or_sensitive_payload():
             payload={},
         )
 
+
+def test_security_permission_domain_accepts_effective_permissions_family():
+    assert domain_events.validate_event_input(
+        hotel_id=42,
+        domain="security",
+        event_type="permissions.changed",
+        payload={"family": "effective_permissions"},
+    ) == {"family": "effective_permissions"}
+
+
+def test_permission_invalidation_publishes_without_error_logging(monkeypatch, caplog):
+    from app.services import permission_service
+
+    fake = FakeRedis()
+    monkeypatch.setattr(domain_events, "_settings", lambda: _settings(DISTRIBUTED_LOCK_REQUIRED=True))
+    monkeypatch.setattr(domain_events, "_get_redis_client", lambda: fake)
+
+    with caplog.at_level("WARNING", logger="app.services.permission_service"):
+        permission_service.publish_permission_invalidation(42)
+
+    assert len(fake.published) == 1
+    payload = json.loads(fake.published[0][1])
+    assert payload["domain"] == "security"
+    assert payload["event_type"] == "permissions.changed"
+    assert payload["payload"] == {"family": "effective_permissions"}
+    assert not any(record.levelno >= 40 for record in caplog.records)
+
+
+def test_permission_invalidation_degrades_to_warning_for_unexpected_backend_failure(monkeypatch, caplog):
+    from app.services import permission_service
+
+    def fail_to_publish(**_kwargs):
+        raise ConnectionError("redis unavailable")
+
+    monkeypatch.setattr(domain_events, "publish_domain_event", fail_to_publish)
+
+    with caplog.at_level("WARNING", logger="app.services.permission_service"):
+        permission_service.publish_permission_invalidation(42)
+
+    assert any(
+        record.message == "permission_invalidation.failed" and record.levelno == 30
+        for record in caplog.records
+    )
+    assert not any(record.levelno >= 40 for record in caplog.records)
+
     with pytest.raises(ValueError, match="payload key"):
         domain_events.validate_event_input(
             hotel_id=42,

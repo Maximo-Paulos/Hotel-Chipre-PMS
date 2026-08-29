@@ -21,7 +21,6 @@ from app.schemas.onboarding import (
 from app.services import onboarding_service
 from app.services.permission_service import PERMISSION_HOTEL_SETTINGS_UPDATE
 from app.services.onboarding_service import OnboardingError
-from app.services.subscription_service import ensure_room_within_limit
 
 router = APIRouter(prefix="/api/onboarding", tags=["Onboarding"])
 
@@ -74,7 +73,6 @@ def set_rooms(
     context: AuthContext = Depends(require_permission(PERMISSION_HOTEL_SETTINGS_UPDATE)),
 ):
     try:
-        ensure_room_within_limit(db, context.hotel_id)
         status_data = onboarding_service.upsert_rooms(db, payload.rooms, hotel_id=context.hotel_id)
         db.commit()
         return status_data
@@ -135,9 +133,19 @@ def set_staff(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_HOTEL_SETTINGS_UPDATE)),
 ):
-    status_data = onboarding_service.store_staff(db, payload.staff, hotel_id=context.hotel_id)
-    db.commit()
-    return status_data
+    try:
+        status_data = onboarding_service.store_staff(
+            db,
+            payload.staff,
+            hotel_id=context.hotel_id,
+            actor_user_id=context.user_id,
+            actor_email=context.user_email,
+        )
+        db.commit()
+        return status_data
+    except OnboardingError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post("/finish", response_model=OnboardingStatus)

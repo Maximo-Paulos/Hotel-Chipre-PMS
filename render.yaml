@@ -106,6 +106,14 @@ services:
           type: keyvalue
           name: hotel-chipre-pms-redis
           property: connectionString
+      # The current live web service is on Render Free and has no Redis.
+      # Flip this to true when the paid Redis service is actually available.
+      - key: READ_MODEL_CACHE_ENABLED
+        value: "false"
+      # The Blueprint includes beat; the current free service was created
+      # manually outside this file and keeps the default true fallback.
+      - key: SYNC_FACT_REFRESH_ENABLED
+        value: "false"
       - key: DISTRIBUTED_LOCK_ENABLED
         value: "true"
       - key: DISTRIBUTED_LOCK_REQUIRED
@@ -164,6 +172,8 @@ services:
         value: disabled
       - key: PAYPAL_MODE
         value: sandbox
+      - key: SYNC_FACT_REFRESH_ENABLED
+        value: "false"
       - key: DATABASE_URL
         sync: false
       - key: REDIS_URL
@@ -231,6 +241,8 @@ services:
         value: disabled
       - key: PAYPAL_MODE
         value: sandbox
+      - key: SYNC_FACT_REFRESH_ENABLED
+        value: "false"
       - key: DATABASE_URL
         sync: false
       - key: REDIS_URL

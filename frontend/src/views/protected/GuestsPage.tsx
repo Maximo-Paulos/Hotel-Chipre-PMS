@@ -91,10 +91,10 @@ const isProhibidoTag = (tag: GuestTag) => tag.tag_type === "prohibido_alojar";
 export function GuestsPage() {
   const { session } = useSession();
   const { hasPermission } = useEffectivePermissions();
-  const canEditGuest = hasPermission("guest:edit");
-  const canManageTags = hasPermission("guest:tags");
+  const canEditGuest = hasPermission("guest:update");
+  const canManageTags = hasPermission("guest:tags_manage");
   const canCheckIn = hasPermission("checkin:perform");
-  const canOverrideProhibido = hasPermission("checkin:override_prohibido");
+  const canOverrideProhibido = hasPermission("reservation:prohibition_override");
   const { openReservation } = useReservationDrawer();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");

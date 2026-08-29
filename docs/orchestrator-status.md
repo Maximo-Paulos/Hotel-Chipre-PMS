@@ -5,6 +5,23 @@ Complementa (no reemplaza) a `docs/roadmap.md`, `docs/business-requirements-mast
 
 ---
 
+## Sesión 2026-08-23 — auditoría de infraestructura (dominio, correo, OAuth)
+
+Auditoría completa de cuentas/servicios cloud (no código). Detalle completo: [docs/audits/infra-2026-08-23.md](audits/infra-2026-08-23.md).
+
+**Cerrado:** correo corporativo Google Workspace operativo (`maximo@` + 4 grupos + alias `no-reply@`, 1 sola licencia paga); SPF+DKIM 2048+DMARC (`p=none`) en raíz y en `auth.` (Resend) verificados por DNS-over-HTTPS sin tocar el MX de Resend; app OAuth de Google pasada a Producción sin revisión humana (0 scopes sensibles); `maximo@hotels-pms.com` copropietario del proyecto GCP y propietario verificado de Search Console; login con Google probado end-to-end y test antiduplicados (2 cuentas Google distintas vinculadas a usuarios existentes id 5/27, sin fila nueva); primer envío de correo real (reset de password) confirmado Delivered en Resend; `/privacy` y `/terms` verificados en el bundle desplegado. Producción no se tocó (sin cambios de env vars ni redeploys).
+
+**Bloqueantes reales que quedan:**
+- Backend en Render plan Free — 32,5 s de cold start medido. Decisión de negocio pendiente.
+- `RESEND_API_KEY` quedó visible en pantalla en el panel de Render — rotar por higiene.
+- Toda la infra (Cloudflare, Vercel, Render, Supabase, dominio) sigue con dueño único `maximopaulos1@gmail.com`.
+- Workspace en trial 14 días: vence 2026-09-05; si no se paga se corta `support@`/`security@`/`billing@`/`privacy@` (ya publicados en legales). Primera factura 1-oct-2026, US$5,88/mes.
+- Apple Sign In sin auditar (sesión no iniciada); investigación previa (Return URL, Services ID sugerido) queda documentada para no repetirla.
+
+Ver el documento completo para DNS, seguridad de plataforma (headers, RLS de Supabase, falso positivo de linter revisado) y lista de pendientes.
+
+---
+
 ## Campaña 2026-08-21/22 — cierre del backlog maestro accionable
 
 ### Contexto

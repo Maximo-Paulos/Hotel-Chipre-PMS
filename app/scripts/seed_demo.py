@@ -20,7 +20,6 @@ from app.models import (
     HotelMembership,
     RoomCategory,
     Room,
-    CategoryPricing,
     OnboardingState,
     User,
 )
@@ -80,8 +79,6 @@ def seed(db: Session):
             db.add(cat)
             db.flush()
         cat_objs[code] = cat
-        if not db.query(CategoryPricing).filter_by(category_id=cat.id).first():
-            db.add(CategoryPricing(category_id=cat.id))
 
     # Rooms
     rooms = [

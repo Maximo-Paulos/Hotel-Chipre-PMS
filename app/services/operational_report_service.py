@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Iterable
@@ -29,6 +28,7 @@ from app.services.financial_ledger import (
     billing_adjustment_totals_by_reservation,
     completed_paid_amounts_by_reservation,
 )
+from app.services.reservation_service import active_reservations
 
 
 logger = logging.getLogger(__name__)
@@ -129,10 +129,9 @@ def _active_room_blocks(db: Session, hotel_id: int, report_date: date) -> list[A
 
 def _available_with_review(db: Session, hotel_id: int, report_date: date) -> list[AvailableWithReviewItem]:
     reservations = (
-        db.query(Reservation)
+        active_reservations(db, hotel_id)
         .outerjoin(Room, Reservation.room_id == Room.id)
         .filter(
-            Reservation.hotel_id == hotel_id,
             Reservation.requires_manual_review.is_(True),
             Reservation.status.in_(ACTIVE_RESERVATION_STATUSES),
             Reservation.check_out_date > report_date,
@@ -233,7 +232,7 @@ def _alerts(
 
 
 def daily_report(db: Session, hotel_id: int, report_date: date) -> DailyOperationalReportRead:
-    reservation_scope = db.query(Reservation).filter(Reservation.hotel_id == hotel_id)
+    reservation_scope = active_reservations(db, hotel_id)
 
     arrivals = (
         reservation_scope.filter(
@@ -401,11 +400,7 @@ def operational_report_recipients(db: Session, hotel_id: int) -> list[str]:
     if not hotel:
         return []
     recipients: list[str] = []
-    try:
-        policies = hotel.get_extra_policies()
-    except (TypeError, ValueError, json.JSONDecodeError):
-        policies = {}
-    configured = policies.get("operational_report_recipients") if isinstance(policies, dict) else None
+    configured = hotel.operational_report_recipients
     if isinstance(configured, list):
         recipients.extend(str(item).strip().lower() for item in configured if str(item).strip())
     if hotel.owner_email:

@@ -12,6 +12,11 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
 from app.models.hotel_membership import HotelMembership
+from app.models.hotel_role_visibility_window import (
+    HotelRoleVisibilityWindow,
+    VISIBILITY_WINDOW_HOURS,
+    VISIBILITY_WINDOW_ROLES,
+)
 from app.models.permission import (
     HotelPermissionOverride,
     Permission,
@@ -82,10 +87,32 @@ PERMISSION_HOTEL_SECURITY_MANAGE = "hotel_settings:security_manage"
 PERMISSION_COMPANY_MANAGE = "company:manage"
 PERMISSION_CASH_OPERATE = "cash:operate"
 PERMISSION_CASH_APPROVE_DIFFERENCE = "cash:approve_difference"
-PERMISSION_REPORTS_VIEW = "reports:view"
 PERMISSION_REPORTS_OPERATIONAL_VIEW = "reports:operational:view"
 PERMISSION_REPORTS_FINANCIAL_VIEW = "reports:financial:view"
 PERMISSION_APIKEY_MANAGE = "apikey:manage"
+
+# Section visibility and management permissions used by the next frontend
+# navigation/route gate. They are separate from the existing action
+# permissions so visibility never implies mutation.
+PERMISSION_ANALYTICS_VIEW = "analytics:view"
+PERMISSION_ANALYTICS_ADVANCED_VIEW = "analytics:advanced:view"
+PERMISSION_ANALYTICS_AI_VIEW = "analytics:ai:view"
+PERMISSION_DASHBOARD_VIEW = "dashboard:view"
+PERMISSION_OCCUPANCY_VIEW = "occupancy:view"
+PERMISSION_WAITLIST_VIEW = "waitlist:view"
+PERMISSION_WAITLIST_MANAGE = "waitlist:manage"
+PERMISSION_CASH_VIEW = "cash:view"
+PERMISSION_COMPANY_VIEW = "company:view"
+PERMISSION_SETTINGS_USERS_VIEW = "settings:users:view"
+PERMISSION_SETTINGS_USERS_MANAGE = "settings:users:manage"
+PERMISSION_SETTINGS_INTEGRATIONS_VIEW = "settings:integrations:view"
+PERMISSION_SETTINGS_INTEGRATIONS_MANAGE = "settings:integrations:manage"
+PERMISSION_SETTINGS_SUBSCRIPTION_VIEW = "settings:subscription:view"
+PERMISSION_SETTINGS_SECURITY_VIEW = "settings:security:view"
+PERMISSION_SETTINGS_SESSIONS_VIEW = "settings:sessions:view"
+PERMISSION_SETTINGS_NOTIFICATIONS_VIEW = "settings:notifications:view"
+PERMISSION_SETTINGS_ASSISTANT_VIEW = "settings:assistant:view"
+PERMISSION_SETTINGS_TESTS_VIEW = "settings:tests:view"
 
 # Import-compatible legacy constants. Existing routes and the current frontend
 # may keep requesting these during the expand/contract window; resolution
@@ -116,57 +143,271 @@ LEGACY_PERMISSION_ALIASES: dict[str, str] = {
     PERMISSION_LAUNDRY_OPERATE_REMITOS: PERMISSION_LAUNDRY_REMITO_MANAGE,
 }
 
-_CANONICAL_DEFINITIONS: dict[str, tuple[str, str]] = {
-    PERMISSION_PERMISSION_MANAGE: ("security", "Administer role and employee permissions"),
-    PERMISSION_GUEST_READ: ("guests", "Read guest profile data"),
-    PERMISSION_GUEST_CREATE: ("guests", "Create guest profiles"),
-    PERMISSION_GUEST_UPDATE: ("guests", "Update guest profiles"),
-    PERMISSION_GUEST_TAGS_MANAGE: ("guests", "Manage guest tags"),
-    PERMISSION_GUEST_PROHIBITION_READ: ("guests", "Read lodging prohibition status"),
-    PERMISSION_GUEST_PROHIBITION_MANAGE: ("guests", "Create and resolve lodging prohibitions"),
-    PERMISSION_GUEST_EXPORT: ("guests", "Export guest ledger data"),
-    PERMISSION_RESERVATION_READ: ("reservations", "Read reservations"),
-    PERMISSION_RESERVATION_CREATE: ("reservations", "Create reservations"),
-    PERMISSION_RESERVATION_UPDATE: ("reservations", "Update reservations"),
-    PERMISSION_RESERVATION_CANCEL: ("reservations", "Cancel reservations"),
-    PERMISSION_RESERVATION_CHARGE: ("reservations", "Add reservation charges"),
-    PERMISSION_RESERVATION_MOVE: ("reservations", "Move reservations between rooms"),
-    PERMISSION_RESERVATION_MANUAL_RATE: ("rates", "Override the quoted reservation rate"),
-    PERMISSION_RESERVATION_PROHIBITION_OVERRIDE: ("guests", "Override a lodging prohibition with reason"),
-    PERMISSION_ROOM_READ: ("rooms", "Read rooms and operational state"),
-    PERMISSION_ROOM_STATUS_UPDATE: ("rooms", "Update room cleaning status"),
-    PERMISSION_ROOM_BLOCK_CREATE: ("rooms", "Create room blocks"),
-    PERMISSION_ROOM_BLOCK_RELEASE: ("rooms", "Release room blocks"),
-    PERMISSION_CHECKIN_PERFORM: ("checkin", "Perform check-in"),
-    PERMISSION_CHECKOUT_PERFORM: ("checkin", "Perform checkout"),
-    PERMISSION_CHECKOUT_FORCE: ("checkin", "Force an exceptional checkout"),
-    PERMISSION_STOCK_READ: ("stock", "Read stock"),
-    PERMISSION_STOCK_MOVE: ("stock", "Record stock movements"),
-    PERMISSION_STOCK_ADJUST: ("stock", "Adjust stock after a physical count"),
-    PERMISSION_STOCK_ADMIN: ("stock", "Manage stock catalog and locations"),
-    PERMISSION_LAUNDRY_READ: ("laundry", "Read laundry operation"),
-    PERMISSION_LAUNDRY_MOVE: ("laundry", "Record linen movements"),
-    PERMISSION_LAUNDRY_VENDOR_MANAGE: ("laundry", "Manage laundry vendors"),
-    PERMISSION_LAUNDRY_REMITO_MANAGE: ("laundry", "Create and receive laundry remitos"),
-    PERMISSION_LAUNDRY_PRICE_MANAGE: ("laundry", "Manage vendor prices"),
-    PERMISSION_RATES_READ: ("rates", "Read hotel rates"),
-    PERMISSION_RATES_UPDATE: ("rates", "Update hotel rates"),
-    PERMISSION_PROMOTIONS_READ: ("promotions", "Read promotions"),
-    PERMISSION_PROMOTIONS_MANAGE: ("promotions", "Manage promotions"),
-    PERMISSION_HOTEL_SETTINGS_READ: ("hotel_settings", "Read hotel settings"),
-    PERMISSION_HOTEL_SETTINGS_UPDATE: ("hotel_settings", "Update operational hotel settings"),
-    PERMISSION_HOTEL_PROPERTY_MANAGE: ("hotel_settings", "Transfer or change property ownership"),
-    PERMISSION_HOTEL_SECURITY_MANAGE: ("security", "Manage security secrets and connections"),
-    PERMISSION_COMPANY_MANAGE: ("companies", "Manage companies and documents"),
-    PERMISSION_CASH_OPERATE: ("cash", "Operate cash register sessions and movements"),
-    PERMISSION_CASH_APPROVE_DIFFERENCE: ("cash", "Approve cash close differences"),
-    PERMISSION_REPORTS_OPERATIONAL_VIEW: ("reports", "Read operational reports"),
-    PERMISSION_REPORTS_FINANCIAL_VIEW: ("reports", "Read financial reports"),
-    PERMISSION_APIKEY_MANAGE: ("security", "Manage public hotel API keys"),
+_CANONICAL_DEFINITIONS: dict[str, tuple[str, str, str]] = {
+    PERMISSION_PERMISSION_MANAGE: (
+        "security", "Administer role and employee permissions",
+        "Permite abrir la administración de permisos y asignar o revocar permisos de roles y empleados. No permite saltear las reglas de seguridad ni otorgar permisos exclusivos del owner.",
+    ),
+    PERMISSION_GUEST_READ: (
+        "guests", "Read guest profile data",
+        "Permite abrir los perfiles de huéspedes y consultar sus datos. No permite crear, editar, exportar ni administrar restricciones.",
+    ),
+    PERMISSION_GUEST_CREATE: (
+        "guests", "Create guest profiles",
+        "Permite dar de alta perfiles de huéspedes. No permite editar datos existentes ni exportar el padrón.",
+    ),
+    PERMISSION_GUEST_UPDATE: (
+        "guests", "Update guest profiles",
+        "Permite editar datos de perfiles de huéspedes. No permite crearlos, exportarlos ni administrar restricciones.",
+    ),
+    PERMISSION_GUEST_TAGS_MANAGE: (
+        "guests", "Manage guest tags",
+        "Permite crear, editar y quitar etiquetas de huéspedes. No permite cambiar los datos principales del perfil ni exportar el padrón.",
+    ),
+    PERMISSION_GUEST_PROHIBITION_READ: (
+        "guests", "Read lodging prohibition status",
+        "Permite consultar si un huésped tiene una prohibición de alojamiento. No permite crear, resolver ni saltear esa prohibición.",
+    ),
+    PERMISSION_GUEST_PROHIBITION_MANAGE: (
+        "guests", "Create and resolve lodging prohibitions",
+        "Permite crear y resolver prohibiciones de alojamiento. No permite saltear una prohibición vigente sin el permiso específico.",
+    ),
+    PERMISSION_GUEST_EXPORT: (
+        "guests", "Export guest ledger data",
+        "Permite exportar el libro de huéspedes dentro del alcance del hotel. No permite editar perfiles ni modificar el historial exportado.",
+    ),
+    PERMISSION_RESERVATION_READ: (
+        "reservations", "Read reservations",
+        "Permite abrir y consultar reservas. No permite crearlas, editarlas, cancelarlas ni moverlas.",
+    ),
+    PERMISSION_RESERVATION_CREATE: (
+        "reservations", "Create reservations",
+        "Permite crear reservas. No permite modificar, cancelar o mover reservas existentes.",
+    ),
+    PERMISSION_RESERVATION_UPDATE: (
+        "reservations", "Update reservations",
+        "Permite editar datos de reservas. No permite cancelarlas, moverlas ni fijar una tarifa manual salvo que tengas esos permisos.",
+    ),
+    PERMISSION_RESERVATION_CANCEL: (
+        "reservations", "Cancel reservations",
+        "Permite cancelar reservas. No permite crearlas, editarlas ni moverlas.",
+    ),
+    PERMISSION_RESERVATION_CHARGE: (
+        "reservations", "Add reservation charges",
+        "Permite agregar cargos o consumos a una reserva. No permite cambiar sus fechas, habitación ni tarifa.",
+    ),
+    PERMISSION_RESERVATION_MOVE: (
+        "reservations", "Move reservations between rooms",
+        "Permite mover una reserva de habitación. No permite editar otros datos ni cambiar su tarifa.",
+    ),
+    PERMISSION_RESERVATION_MANUAL_RATE: (
+        "rates", "Override the quoted reservation rate",
+        "Permite fijar una tarifa manual al cotizar o editar una reserva. No permite cambiar la configuración general de tarifas.",
+    ),
+    PERMISSION_RESERVATION_PROHIBITION_OVERRIDE: (
+        "guests", "Override a lodging prohibition with reason",
+        "Permite alojar excepcionalmente a un huésped con prohibición, dejando el motivo correspondiente. No permite crear ni resolver la prohibición.",
+    ),
+    PERMISSION_ROOM_READ: (
+        "rooms", "Read rooms and operational state",
+        "Permite consultar habitaciones y su estado operativo. No permite cambiar estados ni crear o liberar bloqueos.",
+    ),
+    PERMISSION_ROOM_STATUS_UPDATE: (
+        "rooms", "Update room cleaning status",
+        "Permite actualizar el estado de limpieza de una habitación. No permite modificar reservas ni administrar bloqueos.",
+    ),
+    PERMISSION_ROOM_BLOCK_CREATE: (
+        "rooms", "Create room blocks",
+        "Permite crear bloqueos operativos de habitaciones. No permite liberar bloqueos existentes.",
+    ),
+    PERMISSION_ROOM_BLOCK_RELEASE: (
+        "rooms", "Release room blocks",
+        "Permite liberar bloqueos de habitaciones. No permite crear nuevos bloqueos ni cambiar reservas.",
+    ),
+    PERMISSION_CHECKIN_PERFORM: (
+        "checkin", "Perform check-in",
+        "Permite realizar el check-in de una reserva. No permite forzar un checkout ni saltear validaciones de alojamiento.",
+    ),
+    PERMISSION_CHECKOUT_PERFORM: (
+        "checkin", "Perform checkout",
+        "Permite realizar el checkout de una reserva. No permite forzar un checkout excepcional.",
+    ),
+    PERMISSION_CHECKOUT_FORCE: (
+        "checkin", "Force an exceptional checkout",
+        "Permite ejecutar un checkout excepcional cuando el flujo normal no alcanza. No permite modificar reservas fuera de ese proceso.",
+    ),
+    PERMISSION_STOCK_READ: (
+        "stock", "Read stock",
+        "Permite consultar existencias, artículos y ubicaciones. No permite registrar movimientos ni ajustar cantidades.",
+    ),
+    PERMISSION_STOCK_MOVE: (
+        "stock", "Record stock movements",
+        "Permite registrar movimientos operativos de stock. No permite corregir diferencias de inventario ni administrar el catálogo.",
+    ),
+    PERMISSION_STOCK_ADJUST: (
+        "stock", "Adjust stock after a physical count",
+        "Permite ajustar existencias después de un conteo físico. No permite administrar el catálogo ni cambiar reservas.",
+    ),
+    PERMISSION_STOCK_ADMIN: (
+        "stock", "Manage stock catalog and locations",
+        "Permite administrar artículos y ubicaciones de stock. No permite ajustar existencias salvo que tengas el permiso específico.",
+    ),
+    PERMISSION_LAUNDRY_READ: (
+        "laundry", "Read laundry operation",
+        "Permite consultar la operación de lavandería y la ropa blanca. No permite registrar movimientos ni administrar proveedores.",
+    ),
+    PERMISSION_LAUNDRY_MOVE: (
+        "laundry", "Record linen movements",
+        "Permite registrar movimientos de ropa blanca. No permite administrar proveedores ni sus precios.",
+    ),
+    PERMISSION_LAUNDRY_VENDOR_MANAGE: (
+        "laundry", "Manage laundry vendors",
+        "Permite administrar proveedores de lavandería. No permite modificar sus precios salvo que tengas el permiso específico.",
+    ),
+    PERMISSION_LAUNDRY_REMITO_MANAGE: (
+        "laundry", "Create and receive laundry remitos",
+        "Permite crear y recibir remitos de lavandería. No permite administrar proveedores ni precios.",
+    ),
+    PERMISSION_LAUNDRY_PRICE_MANAGE: (
+        "laundry", "Manage vendor prices",
+        "Permite administrar precios de proveedores de lavandería. No permite crear o recibir remitos.",
+    ),
+    PERMISSION_RATES_READ: (
+        "rates", "Read hotel rates",
+        "Permite abrir la pantalla de Tarifas y ver los precios por día y categoría. No permite modificarlos: para eso hace falta 'Editar tarifas'.",
+    ),
+    PERMISSION_RATES_UPDATE: (
+        "rates", "Update hotel rates",
+        "Permite modificar las tarifas del hotel por día y categoría. No permite administrar promociones ni fijar una tarifa manual en una reserva.",
+    ),
+    PERMISSION_PROMOTIONS_READ: (
+        "promotions", "Read promotions",
+        "Permite consultar las promociones del hotel. No permite crearlas, editarlas ni activarlas.",
+    ),
+    PERMISSION_PROMOTIONS_MANAGE: (
+        "promotions", "Manage promotions",
+        "Permite crear, editar y administrar promociones. No permite cambiar las tarifas generales.",
+    ),
+    PERMISSION_HOTEL_SETTINGS_READ: (
+        "hotel_settings", "Read hotel settings",
+        "Permite consultar la configuración operativa del hotel. No permite modificarla.",
+    ),
+    PERMISSION_HOTEL_SETTINGS_UPDATE: (
+        "hotel_settings", "Update operational hotel settings",
+        "Permite modificar la configuración operativa del hotel. No permite transferir la propiedad ni administrar secretos de seguridad.",
+    ),
+    PERMISSION_HOTEL_PROPERTY_MANAGE: (
+        "hotel_settings", "Transfer or change property ownership",
+        "Permite transferir o cambiar la propiedad del hotel. No permite administrar otros permisos críticos ni secretos de seguridad.",
+    ),
+    PERMISSION_HOTEL_SECURITY_MANAGE: (
+        "security", "Manage security secrets and connections",
+        "Permite administrar secretos y conexiones de seguridad del hotel. No permite transferir la propiedad.",
+    ),
+    PERMISSION_COMPANY_MANAGE: (
+        "companies", "Manage companies and documents",
+        "Permite crear, editar y administrar empresas y sus documentos. No implica acceso automático a otras configuraciones del hotel.",
+    ),
+    PERMISSION_CASH_OPERATE: (
+        "cash", "Operate cash register sessions and movements",
+        "Permite abrir, operar y cerrar sesiones de caja y registrar movimientos. No permite aprobar diferencias de cierre.",
+    ),
+    PERMISSION_CASH_APPROVE_DIFFERENCE: (
+        "cash", "Approve cash close differences",
+        "Permite aprobar diferencias al cerrar caja. No permite operar sesiones ni registrar movimientos por sí solo.",
+    ),
+    PERMISSION_REPORTS_OPERATIONAL_VIEW: (
+        "reports", "Read operational reports",
+        "Permite consultar reportes operativos del hotel. No permite consultar reportes financieros ni modificar datos.",
+    ),
+    PERMISSION_REPORTS_FINANCIAL_VIEW: (
+        "reports", "Read financial reports",
+        "Permite consultar reportes financieros del hotel. No permite modificar cobros, caja ni reservas.",
+    ),
+    PERMISSION_APIKEY_MANAGE: (
+        "security", "Manage public hotel API keys",
+        "Permite administrar las claves API públicas del hotel. No permite administrar secretos internos ni transferir la propiedad.",
+    ),
+    PERMISSION_ANALYTICS_VIEW: (
+        "analytics", "Read analytics overview",
+        "Permite abrir el resumen de analítica y consultar métricas del hotel. No permite acceder a vistas avanzadas ni usar el asistente de IA.",
+    ),
+    PERMISSION_ANALYTICS_ADVANCED_VIEW: (
+        "analytics", "Read advanced analytics views",
+        "Permite abrir las vistas avanzadas de analítica, como habitaciones, segmentos y canales. No permite cambiar datos operativos.",
+    ),
+    PERMISSION_ANALYTICS_AI_VIEW: (
+        "analytics", "Use analytics AI assistant",
+        "Permite abrir el asistente de IA de analítica y consultar sus respuestas. No permite aplicar cambios críticos de forma automática.",
+    ),
+    PERMISSION_DASHBOARD_VIEW: (
+        "dashboard", "Read dashboard overview",
+        "Permite abrir el tablero principal y consultar el resumen operativo. No permite modificar reservas, caja ni configuración.",
+    ),
+    PERMISSION_OCCUPANCY_VIEW: (
+        "operations", "Read occupancy planning",
+        "Permite abrir la planilla de ocupación y consultar disponibilidad operativa. No permite modificar reservas ni asignaciones.",
+    ),
+    PERMISSION_WAITLIST_VIEW: (
+        "operations", "Read waitlist",
+        "Permite consultar la lista de espera. No permite crear, editar ni quitar entradas.",
+    ),
+    PERMISSION_WAITLIST_MANAGE: (
+        "operations", "Manage waitlist entries",
+        "Permite crear, editar y administrar entradas de la lista de espera. No permite modificar reservas confirmadas.",
+    ),
+    PERMISSION_CASH_VIEW: (
+        "cash", "Read cash register",
+        "Permite abrir y consultar la caja del hotel. No permite operar sesiones ni registrar movimientos; para eso hace falta 'Operar caja'.",
+    ),
+    PERMISSION_COMPANY_VIEW: (
+        "companies", "Read companies and documents",
+        "Permite consultar empresas y sus documentos. No permite crearlos, editarlos ni administrarlos.",
+    ),
+    PERMISSION_SETTINGS_USERS_VIEW: (
+        "settings", "Read staff users and roles",
+        "Permite abrir la sección de usuarios y consultar personas, roles y estados. No permite invitar, editar ni desactivar usuarios.",
+    ),
+    PERMISSION_SETTINGS_USERS_MANAGE: (
+        "settings", "Manage staff users and roles",
+        "Permite administrar usuarios, roles e invitaciones del hotel. No permite cambiar secretos de seguridad ni transferir la propiedad.",
+    ),
+    PERMISSION_SETTINGS_INTEGRATIONS_VIEW: (
+        "settings", "Read integration connections",
+        "Permite consultar las conexiones e integraciones configuradas. No permite conectarlas, desconectarlas ni cambiar credenciales.",
+    ),
+    PERMISSION_SETTINGS_INTEGRATIONS_MANAGE: (
+        "settings", "Manage integration connections",
+        "Permite administrar conexiones e integraciones del hotel. No permite modificar otros secretos de seguridad.",
+    ),
+    PERMISSION_SETTINGS_SUBSCRIPTION_VIEW: (
+        "settings", "Read subscription and plan details",
+        "Permite consultar el plan, la suscripción y los límites del hotel. No permite cambiar el plan ni aplicar ajustes de facturación.",
+    ),
+    PERMISSION_SETTINGS_SECURITY_VIEW: (
+        "settings", "Read security settings",
+        "Permite abrir la configuración de seguridad y consultar su estado. No permite modificar secretos, sesiones ni políticas.",
+    ),
+    PERMISSION_SETTINGS_SESSIONS_VIEW: (
+        "settings", "Read active sessions",
+        "Permite consultar las sesiones activas del hotel. No permite revocarlas ni cambiar credenciales.",
+    ),
+    PERMISSION_SETTINGS_NOTIFICATIONS_VIEW: (
+        "settings", "Read notifications",
+        "Permite abrir y consultar las notificaciones del hotel. No permite cambiar preferencias ni enviar mensajes.",
+    ),
+    PERMISSION_SETTINGS_ASSISTANT_VIEW: (
+        "settings", "Read and use the operations assistant",
+        "Permite abrir el asistente de operaciones y consultar sugerencias. No permite aplicar cambios críticos sin un flujo explícito y autorizado.",
+    ),
+    PERMISSION_SETTINGS_TESTS_VIEW: (
+        "settings", "Read test tools and settings",
+        "Permite abrir las herramientas de prueba del hotel y consultar sus resultados. No permite ejecutar efectos externos sin las protecciones correspondientes.",
+    ),
 }
 
 PERMISSION_DEFINITIONS: dict[str, str] = {
-    code: description for code, (_module, description) in _CANONICAL_DEFINITIONS.items()
+    code: description for code, (_module, description, _help_es) in _CANONICAL_DEFINITIONS.items()
 }
 for _legacy_code, _canonical_code in LEGACY_PERMISSION_ALIASES.items():
     PERMISSION_DEFINITIONS[_legacy_code] = f"Legacy alias for {_canonical_code}"
@@ -182,6 +423,11 @@ PERMISSION_DEFINITIONS.update(
 
 def canonical_permission_code(code: str) -> str:
     return LEGACY_PERMISSION_ALIASES.get(code, code)
+
+
+def _permission_help_es(code: str) -> str:
+    """Return canonical help text for both current and legacy codes."""
+    return _CANONICAL_DEFINITIONS[canonical_permission_code(code)][2]
 
 
 def _role_permissions(*allowed_codes: str) -> dict[str, bool]:
@@ -225,6 +471,9 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
         PERMISSION_RATES_UPDATE, PERMISSION_PROMOTIONS_READ,
         PERMISSION_PROMOTIONS_MANAGE, PERMISSION_REPORTS_OPERATIONAL_VIEW,
         PERMISSION_COMPANY_MANAGE,
+        PERMISSION_DASHBOARD_VIEW, PERMISSION_OCCUPANCY_VIEW,
+        PERMISSION_WAITLIST_VIEW, PERMISSION_WAITLIST_MANAGE,
+        PERMISSION_SETTINGS_NOTIFICATIONS_VIEW, PERMISSION_SETTINGS_ASSISTANT_VIEW,
     ),
     ROLE_RECEPTIONIST: _role_permissions(
         PERMISSION_GUEST_READ, PERMISSION_GUEST_CREATE, PERMISSION_GUEST_UPDATE,
@@ -234,29 +483,14 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
         PERMISSION_RESERVATION_CHARGE, PERMISSION_ROOM_READ,
         PERMISSION_ROOM_BLOCK_CREATE, PERMISSION_CHECKIN_PERFORM,
         PERMISSION_CHECKOUT_PERFORM, PERMISSION_CASH_OPERATE,
+        PERMISSION_DASHBOARD_VIEW, PERMISSION_OCCUPANCY_VIEW,
+        PERMISSION_WAITLIST_VIEW, PERMISSION_WAITLIST_MANAGE,
+        PERMISSION_CASH_VIEW, PERMISSION_SETTINGS_NOTIFICATIONS_VIEW,
     ),
     ROLE_HOUSEKEEPING: _role_permissions(
         PERMISSION_ROOM_READ, PERMISSION_ROOM_STATUS_UPDATE, PERMISSION_LAUNDRY_READ,
         PERMISSION_LAUNDRY_MOVE, PERMISSION_LAUNDRY_REMITO_MANAGE,
     ),
-}
-
-# Product lanes limit configurable grants. Non-delegable invariants below are
-# checked first even if a stale row is inserted by hand.
-ROLE_PERMISSION_CEILINGS: dict[str, frozenset[str]] = {
-    ROLE_OWNER: frozenset(_CANONICAL_DEFINITIONS),
-    ROLE_CO_OWNER: frozenset(_OPERATIONS),
-    ROLE_MANAGER: frozenset(code for code, allowed in DEFAULT_MATRIX[ROLE_MANAGER].items() if allowed),
-    ROLE_RECEPTIONIST: frozenset(
-        {
-            *(code for code, allowed in DEFAULT_MATRIX[ROLE_RECEPTIONIST].items() if allowed),
-            PERMISSION_GUEST_PROHIBITION_MANAGE,
-            PERMISSION_RESERVATION_PROHIBITION_OVERRIDE,
-            PERMISSION_RESERVATION_MOVE,
-            PERMISSION_ROOM_BLOCK_RELEASE,
-        }
-    ),
-    ROLE_HOUSEKEEPING: frozenset(code for code, allowed in DEFAULT_MATRIX[ROLE_HOUSEKEEPING].items() if allowed),
 }
 
 _OWNER_ONLY = frozenset(
@@ -277,11 +511,8 @@ def immutable_permission_decision(role: str | None, code: str) -> tuple[bool, st
 
 
 def can_role_hold_permission(role: str | None, permission_code: str) -> bool:
-    canonical = canonical_permission_code(permission_code)
-    invariant = immutable_permission_decision(role, canonical)
-    if invariant is not None:
-        return invariant[0]
-    return canonical in ROLE_PERMISSION_CEILINGS.get(role or "", frozenset())
+    invariant = immutable_permission_decision(role, permission_code)
+    return True if invariant is None else invariant[0]
 
 
 def _insert_if_missing(db: Session, table, values, conflict_columns: list[str]) -> None:
@@ -381,7 +612,7 @@ def publish_permission_invalidation(hotel_id: int) -> None:
     except RealtimeEventsUnavailable:
         logger.warning("permission_invalidation.realtime_unavailable", extra={"hotel_id": hotel_id})
     except Exception as exc:
-        logger.error("permission_invalidation.failed", extra={"hotel_id": hotel_id, "error_type": type(exc).__name__})
+        logger.warning("permission_invalidation.failed", extra={"hotel_id": hotel_id, "error_type": type(exc).__name__})
 
 
 def get_effective_permission_details(
@@ -415,8 +646,6 @@ def get_effective_permission_details(
         if invariant is not None:
             allowed, reason = invariant
             details[code] = {"allowed": allowed, "source": "invariant", "locked": True, "lock_reason": reason}
-        elif not can_role_hold_permission(role, code):
-            details[code] = {"allowed": False, "source": "invariant", "locked": True, "lock_reason": "role_ceiling"}
         elif code in user_overrides:
             details[code] = {"allowed": user_overrides[code], "source": "user_override", "locked": False, "lock_reason": None}
         elif code in role_overrides:
@@ -454,6 +683,75 @@ def _audit(db: Session, *, hotel_id: int, actor_user_id: int | None, action: str
     )
 
 
+def get_visibility_window(
+    db: Session, hotel_id: int, role: str
+) -> HotelRoleVisibilityWindow | None:
+    """Return one tenant-scoped role window, or ``None`` for no limit."""
+    return (
+        db.query(HotelRoleVisibilityWindow)
+        .filter_by(hotel_id=hotel_id, role=role)
+        .one_or_none()
+    )
+
+
+def list_visibility_windows(db: Session, hotel_id: int) -> list[HotelRoleVisibilityWindow]:
+    """Return configured windows for one hotel only."""
+    return (
+        db.query(HotelRoleVisibilityWindow)
+        .filter(
+            HotelRoleVisibilityWindow.hotel_id == hotel_id,
+            HotelRoleVisibilityWindow.role.in_(VISIBILITY_WINDOW_ROLES),
+        )
+        .all()
+    )
+
+
+def set_visibility_window(
+    db: Session,
+    hotel_id: int,
+    role: str,
+    past_hours: int | None,
+    future_hours: int | None,
+    actor_user_id: int | None,
+) -> HotelRoleVisibilityWindow:
+    """Upsert one role window and record the security-sensitive change."""
+    if role not in VISIBILITY_WINDOW_ROLES:
+        raise ValueError("Rol invalido")
+    for value in (past_hours, future_hours):
+        if value is not None and value not in VISIBILITY_WINDOW_HOURS:
+            raise ValueError("La ventana debe ser 12, 24, 48, 72, 168 horas o Siempre")
+
+    row = get_visibility_window(db, hotel_id, role)
+    before = None if row is None else {
+        "past_hours": row.past_hours,
+        "future_hours": row.future_hours,
+    }
+    if row is None:
+        row = HotelRoleVisibilityWindow(hotel_id=hotel_id, role=role)
+        db.add(row)
+
+    row.past_hours = past_hours
+    row.future_hours = future_hours
+    row.updated_by_user_id = actor_user_id
+    row.updated_at = datetime.now(timezone.utc)
+    _audit(
+        db,
+        hotel_id=hotel_id,
+        actor_user_id=actor_user_id,
+        action="permission.visibility_window.updated",
+        resource_type="hotel_role_visibility_window",
+        resource_id=role,
+        before=before,
+        after={
+            "role": role,
+            "past_hours": past_hours,
+            "future_hours": future_hours,
+        },
+    )
+    db.flush()
+    return row
+
+
 def _validate_permission_code(code: str) -> str:
     canonical = canonical_permission_code(code)
     if canonical not in _CANONICAL_DEFINITIONS:
@@ -466,8 +764,6 @@ def _validate_mutable(role: str, code: str, allowed: bool) -> str:
     invariant = immutable_permission_decision(role, canonical)
     if invariant is not None:
         raise ValueError("El permiso esta bloqueado por una regla de seguridad")
-    if allowed and not can_role_hold_permission(role, canonical):
-        raise ValueError("El permiso excede el techo de seguridad del rol")
     return canonical
 
 
@@ -752,13 +1048,14 @@ def get_permission_catalog(db: Session | None = None) -> list[dict[str, object]]
             for row in db.query(Permission).filter(Permission.code.in_(_CANONICAL_DEFINITIONS)).all()
         }
     result = []
-    for code, (module, description) in _CANONICAL_DEFINITIONS.items():
+    for code, (module, description, help_es) in _CANONICAL_DEFINITIONS.items():
         metadata = metadata_by_code.get(code)
         result.append(
             {
                 "code": code,
                 "module": module,
                 "description": description,
+                "help_es": help_es,
                 "legacy_aliases": sorted(alias for alias, target in LEGACY_PERMISSION_ALIASES.items() if target == code),
                 "locked": code in _OWNER_ONLY,
                 "lock_reason": "owner_only" if code in _OWNER_ONLY else None,
@@ -775,16 +1072,20 @@ def get_matrix(db: Session, hotel_id: int) -> dict[str, dict[str, dict[str, obje
     for role in ROLE_CODES:
         canonical = get_effective_permission_details(db, hotel_id, role)
         role_result = {}
-        for code, description in PERMISSION_DEFINITIONS.items():
+        for code, (module, description, help_es) in _CANONICAL_DEFINITIONS.items():
             detail = dict(canonical[canonical_permission_code(code)])
             source = detail["source"]
             if source == "role_override":
                 source = "override"
             elif source == "role_default":
                 source = "default"
-            elif source == "invariant" and detail.get("lock_reason") == "role_ceiling":
-                source = "ceiling"
-            role_result[code] = {"allowed": detail["allowed"], "source": source, "description": description}
+            role_result[code] = {
+                "allowed": detail["allowed"],
+                "source": source,
+                "description": description,
+                "module": module,
+                "help_es": help_es,
+            }
         matrix[role] = role_result
     return matrix
 
@@ -800,6 +1101,7 @@ def get_role_profiles(db: Session, hotel_id: int) -> dict[str, dict[str, dict[st
                 **detail,
                 "description": _CANONICAL_DEFINITIONS[code][1],
                 "module": _CANONICAL_DEFINITIONS[code][0],
+                "help_es": _CANONICAL_DEFINITIONS[code][2],
             }
             for code, detail in details.items()
         }

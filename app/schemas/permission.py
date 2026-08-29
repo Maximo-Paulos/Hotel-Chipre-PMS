@@ -1,4 +1,26 @@
+from datetime import datetime
+from typing import Literal
+
 from pydantic import BaseModel, Field
+
+
+VisibilityWindowHours = Literal[12, 24, 48, 72, 168]
+
+
+class VisibilityWindowUpdate(BaseModel):
+    """Set both sides of one role's reservation visibility window."""
+
+    role: str = Field(min_length=1, max_length=20)
+    past_hours: VisibilityWindowHours | None
+    future_hours: VisibilityWindowHours | None
+
+
+class VisibilityWindowRead(BaseModel):
+    role: str
+    past_hours: VisibilityWindowHours | None
+    future_hours: VisibilityWindowHours | None
+    updated_by_user_id: int | None = None
+    updated_at: datetime | None = None
 
 
 class RolePermissionOverrideRequest(BaseModel):

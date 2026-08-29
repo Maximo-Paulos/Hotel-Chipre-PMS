@@ -64,7 +64,6 @@ class DailyRate(Base):
 
     __table_args__ = (
         UniqueConstraint("hotel_id", "category_id", "date", name="uq_daily_rate"),
-        Index("ix_daily_rate_hotel_cat_date", "hotel_id", "category_id", "date"),
     )
 
     def __repr__(self) -> str:
@@ -92,6 +91,17 @@ class PricePeriod(Base):
     start_date = Column(Date, nullable=False)
     end_date = Column(Date, nullable=False)
     price_per_night = Column(Float, nullable=False)
+    # Legacy category-pricing rows are folded into these optional seasonal
+    # overrides by the retirement migration. They are also useful for future
+    # per-method seasonal prices without introducing another pricing layer.
+    price_cash = Column(Float, nullable=True)
+    price_transfer = Column(Float, nullable=True)
+    price_mercadopago = Column(Float, nullable=True)
+    price_paypal = Column(Float, nullable=True)
+    price_credit_card = Column(Float, nullable=True)
+    price_debit_card = Column(Float, nullable=True)
+    price_booking = Column(Float, nullable=True)
+    price_expedia = Column(Float, nullable=True)
     priority = Column(Integer, nullable=False, default=0)  # higher wins on overlap
     is_active = Column(Boolean, nullable=False, default=True)
     created_at = Column(

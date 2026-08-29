@@ -13,6 +13,7 @@ from app.models.audit_log import AuditActionEnum
 from app.models.guest import Guest, GuestRatingEnum, GuestTag, GuestTagTypeEnum
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.security_audit_log import SecurityAuditLog
+from app.services.reservation_service import active_reservations
 
 
 class GuestServiceError(Exception):
@@ -252,8 +253,8 @@ def quick_profile(
     guest = _get_guest(db, hotel_id, guest_id)
 
     base_query = (
-        db.query(Reservation)
-        .filter(Reservation.hotel_id == hotel_id, Reservation.guest_id == guest_id)
+        active_reservations(db, hotel_id)
+        .filter(Reservation.guest_id == guest_id)
         .order_by(Reservation.check_out_date.desc(), Reservation.id.desc())
     )
 

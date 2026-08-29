@@ -90,3 +90,9 @@ frontend/e2e/screenshots/
 frontend/tsconfig.node.tsbuildinfo
 _e2e.db
 _verify*.db
+
+# Local .env backups — these hold real secrets and must never be committed.
+.env.bak
+.env.bak*
+# Timestamped local database backups (the bare *.db rule misses these).
+*.db.bak-*

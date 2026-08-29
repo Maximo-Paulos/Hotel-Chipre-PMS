@@ -44,9 +44,9 @@ export function RoomsPage() {
   const { hasPermission } = useEffectivePermissions();
   const isHousekeeping = session.baseRole === "housekeeping";
   const canManageRoomStatus = ["owner", "co_owner", "manager"].includes(session.baseRole ?? "");
-  const canToggleCleaningStatus = hasPermission("room:cleaning_status");
-  const canCreateBlocks = hasPermission("room_block:create");
-  const canReleaseBlocks = hasPermission("room_block:release");
+  const canToggleCleaningStatus = hasPermission("room:status_update");
+  const canCreateBlocks = hasPermission("room:block_create");
+  const canReleaseBlocks = hasPermission("room:block_release");
   const { roomsQuery, categoriesQuery, updateStatusMutation, updateCleaningStatusMutation } = useRooms({
     includeCategories: !isHousekeeping
   });

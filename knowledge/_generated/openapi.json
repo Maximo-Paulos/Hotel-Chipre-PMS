@@ -1150,231 +1150,6 @@
         }
       }
     },
-    "/api/rooms/categories/pricing/all": {
-      "get": {
-        "tags": [
-          "Rooms"
-        ],
-        "summary": "Get All Category Pricing",
-        "operationId": "get_all_category_pricing_api_rooms_categories_pricing_all_get",
-        "parameters": [
-          {
-            "name": "x-hotel-id",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Hotel-Id"
-            }
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/CategoryPricingRead"
-                  },
-                  "title": "Response Get All Category Pricing Api Rooms Categories Pricing All Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/rooms/categories/{category_id}/pricing": {
-      "get": {
-        "tags": [
-          "Rooms"
-        ],
-        "summary": "Get Category Pricing",
-        "operationId": "get_category_pricing_api_rooms_categories__category_id__pricing_get",
-        "parameters": [
-          {
-            "name": "category_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Category Id"
-            }
-          },
-          {
-            "name": "x-hotel-id",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Hotel-Id"
-            }
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CategoryPricingSchema"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "Rooms"
-        ],
-        "summary": "Update Category Pricing",
-        "operationId": "update_category_pricing_api_rooms_categories__category_id__pricing_post",
-        "parameters": [
-          {
-            "name": "category_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Category Id"
-            }
-          },
-          {
-            "name": "x-hotel-id",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Hotel-Id"
-            }
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CategoryPricingSchema"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CategoryPricingSchema"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/rooms/": {
       "post": {
         "tags": [
@@ -6085,7 +5860,7 @@
           "Bookings"
         ],
         "summary": "Price Quote",
-        "description": "Calculate pricing for a potential booking without persisting it.\nUses CategoryPricing (cash) when present, otherwise the base category price.",
+        "description": "Calculate pricing for a potential booking without persisting it.\nUses the canonical daily/seasonal rate resolver and then the category base price.",
         "operationId": "price_quote_api_bookings_price_quote_get",
         "parameters": [
           {
@@ -9703,6 +9478,164 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/GoogleUnlinkRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/apple": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Apple Login",
+        "description": "Complete Sign in with Apple from Apple JS SDK or another OIDC client.",
+        "operationId": "apple_login_api_auth_apple_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppleAuthRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/AuthResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/MfaChallengeResponse"
+                    }
+                  ],
+                  "title": "Response Apple Login Api Auth Apple Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/apple/start": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Apple Start",
+        "description": "Start Apple's form_post redirect flow with a signed state and nonce.",
+        "operationId": "apple_start_api_auth_apple_start_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/apple/callback": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Apple Callback",
+        "description": "Complete Apple's server-side form_post redirect flow.",
+        "operationId": "apple_callback_api_auth_apple_callback_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/AuthResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/MfaChallengeResponse"
+                    }
+                  ],
+                  "title": "Response Apple Callback Api Auth Apple Callback Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/apple/unlink": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Unlink Apple",
+        "description": "Remove the Apple login only after proving control of the password.",
+        "operationId": "unlink_apple_api_auth_apple_unlink_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppleUnlinkRequest"
               }
             }
           }
@@ -15114,6 +15047,142 @@
             "content": {
               "application/json": {
                 "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/permissions/visibility-windows": {
+      "get": {
+        "tags": [
+          "Permissions"
+        ],
+        "summary": "Read Visibility Windows",
+        "operationId": "read_visibility_windows_api_permissions_visibility_windows_get",
+        "parameters": [
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Permissions"
+        ],
+        "summary": "Update Visibility Window",
+        "operationId": "update_visibility_window_api_permissions_visibility_windows_put",
+        "parameters": [
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VisibilityWindowUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisibilityWindowRead"
+                }
               }
             }
           },
@@ -29124,6 +29193,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/MfaChallengeResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/MasterAdminMfaSetupResponse"
                     }
                   ],
                   "title": "Response Login Api Master Admin Auth Login Post"
@@ -32898,6 +32970,101 @@
         ],
         "title": "AnalyticsStarterSummaryRead"
       },
+      "AppleAuthRequest": {
+        "properties": {
+          "id_token": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Id Token"
+          },
+          "nonce": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nonce"
+          },
+          "user": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AppleUserPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id_token"
+        ],
+        "title": "AppleAuthRequest"
+      },
+      "AppleUnlinkRequest": {
+        "properties": {
+          "password": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "password"
+        ],
+        "title": "AppleUnlinkRequest"
+      },
+      "AppleUserName": {
+        "properties": {
+          "firstName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Firstname"
+          },
+          "lastName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lastname"
+          }
+        },
+        "type": "object",
+        "title": "AppleUserName"
+      },
+      "AppleUserPayload": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AppleUserName"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "title": "AppleUserPayload"
+      },
       "ApplyPeriodOut": {
         "properties": {
           "applied_dates": {
@@ -34527,201 +34694,6 @@
           "categories"
         ],
         "title": "CategoriesPayload"
-      },
-      "CategoryPricingRead": {
-        "properties": {
-          "price_cash": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Price Cash"
-          },
-          "price_transfer": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Price Transfer"
-          },
-          "price_mercadopago": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Price Mercadopago"
-          },
-          "price_paypal": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Price Paypal"
-          },
-          "price_credit_card": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Price Credit Card"
-          },
-          "price_debit_card": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Price Debit Card"
-          },
-          "price_booking": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Price Booking"
-          },
-          "price_expedia": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Price Expedia"
-          },
-          "category_id": {
-            "type": "integer",
-            "title": "Category Id"
-          }
-        },
-        "type": "object",
-        "required": [
-          "category_id"
-        ],
-        "title": "CategoryPricingRead"
-      },
-      "CategoryPricingSchema": {
-        "properties": {
-          "price_cash": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Price Cash"
-          },
-          "price_transfer": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Price Transfer"
-          },
-          "price_mercadopago": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Price Mercadopago"
-          },
-          "price_paypal": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Price Paypal"
-          },
-          "price_credit_card": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Price Credit Card"
-          },
-          "price_debit_card": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Price Debit Card"
-          },
-          "price_booking": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Price Booking"
-          },
-          "price_expedia": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Price Expedia"
-          }
-        },
-        "type": "object",
-        "title": "CategoryPricingSchema"
       },
       "CheckInRequest": {
         "properties": {
@@ -38876,6 +38848,10 @@
             "type": "boolean",
             "title": "Enable Expedia Sync"
           },
+          "enable_despegar_sync": {
+            "type": "boolean",
+            "title": "Enable Despegar Sync"
+          },
           "require_document_for_checkin": {
             "type": "boolean",
             "title": "Require Document For Checkin"
@@ -38896,79 +38872,38 @@
             "type": "string",
             "title": "Default Currency"
           },
-          "receptionist_view_past_days": {
-            "type": "integer",
-            "title": "Receptionist View Past Days"
+          "languages": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Languages"
           },
-          "receptionist_view_future_days": {
-            "type": "integer",
-            "title": "Receptionist View Future Days"
-          },
-          "allow_revenue_manager": {
-            "type": "boolean",
-            "title": "Allow Revenue Manager"
-          },
-          "allow_revenue_receptionist": {
-            "type": "boolean",
-            "title": "Allow Revenue Receptionist"
-          },
-          "sync_interval_minutes": {
-            "type": "integer",
-            "title": "Sync Interval Minutes"
-          },
-          "safety_buffer_rooms": {
-            "type": "integer",
-            "title": "Safety Buffer Rooms"
+          "jurisdiction_code": {
+            "type": "string",
+            "title": "Jurisdiction Code"
           },
           "allow_overbooking": {
             "type": "boolean",
             "title": "Allow Overbooking"
           },
-          "max_overallocation_pct": {
-            "type": "number",
-            "title": "Max Overallocation Pct"
-          },
           "no_show_cutoff_hours": {
             "type": "integer",
             "title": "No Show Cutoff Hours"
           },
-          "ota_autopush_enabled": {
-            "type": "boolean",
-            "title": "Ota Autopush Enabled"
-          },
-          "card_validation_enabled": {
-            "type": "boolean",
-            "title": "Card Validation Enabled"
-          },
-          "payment_retry_attempts": {
-            "type": "integer",
-            "title": "Payment Retry Attempts"
-          },
-          "auth_amount_pct": {
-            "type": "number",
-            "title": "Auth Amount Pct"
-          },
-          "stop_sell_channels": {
+          "operational_report_recipients": {
             "anyOf": [
               {
-                "type": "string"
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Stop Sell Channels"
-          },
-          "event_notifications": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Event Notifications"
+            "title": "Operational Report Recipients"
           },
           "extra_policies": {
             "anyOf": [
@@ -39011,27 +38946,16 @@
           "allow_cancellation_after_checkin",
           "enable_booking_sync",
           "enable_expedia_sync",
+          "enable_despegar_sync",
           "require_document_for_checkin",
           "require_terms_acceptance",
           "hotel_name",
           "hotel_timezone",
           "default_currency",
-          "receptionist_view_past_days",
-          "receptionist_view_future_days",
-          "allow_revenue_manager",
-          "allow_revenue_receptionist",
-          "sync_interval_minutes",
-          "safety_buffer_rooms",
+          "languages",
+          "jurisdiction_code",
           "allow_overbooking",
-          "max_overallocation_pct",
           "no_show_cutoff_hours",
-          "ota_autopush_enabled",
-          "card_validation_enabled",
-          "payment_retry_attempts",
-          "auth_amount_pct",
-          "stop_sell_channels",
-          "event_notifications",
-          "extra_policies",
           "updated_at"
         ],
         "title": "HotelConfigRead"
@@ -39197,6 +39121,17 @@
             ],
             "title": "Enable Expedia Sync"
           },
+          "enable_despegar_sync": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enable Despegar Sync"
+          },
           "require_document_for_checkin": {
             "anyOf": [
               {
@@ -39252,79 +39187,32 @@
             ],
             "title": "Default Currency"
           },
-          "receptionist_view_past_days": {
+          "languages": {
             "anyOf": [
               {
-                "type": "integer",
-                "maximum": 365.0,
-                "minimum": 0.0
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Receptionist View Past Days"
+            "title": "Languages"
           },
-          "receptionist_view_future_days": {
+          "jurisdiction_code": {
             "anyOf": [
               {
-                "type": "integer",
-                "maximum": 365.0,
-                "minimum": 0.0
+                "type": "string",
+                "maxLength": 3,
+                "minLength": 2
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Receptionist View Future Days"
-          },
-          "allow_revenue_manager": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Allow Revenue Manager"
-          },
-          "allow_revenue_receptionist": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Allow Revenue Receptionist"
-          },
-          "sync_interval_minutes": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "maximum": 1440.0,
-                "minimum": 1.0
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Sync Interval Minutes"
-          },
-          "safety_buffer_rooms": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "maximum": 50.0,
-                "minimum": 0.0
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Safety Buffer Rooms"
+            "title": "Jurisdiction Code"
           },
           "allow_overbooking": {
             "anyOf": [
@@ -39336,19 +39224,6 @@
               }
             ],
             "title": "Allow Overbooking"
-          },
-          "max_overallocation_pct": {
-            "anyOf": [
-              {
-                "type": "number",
-                "maximum": 100.0,
-                "minimum": 0.0
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Max Overallocation Pct"
           },
           "no_show_cutoff_hours": {
             "anyOf": [
@@ -39363,75 +39238,19 @@
             ],
             "title": "No Show Cutoff Hours"
           },
-          "ota_autopush_enabled": {
+          "operational_report_recipients": {
             "anyOf": [
               {
-                "type": "boolean"
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Ota Autopush Enabled"
-          },
-          "card_validation_enabled": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Card Validation Enabled"
-          },
-          "payment_retry_attempts": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "maximum": 10.0,
-                "minimum": 0.0
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Payment Retry Attempts"
-          },
-          "auth_amount_pct": {
-            "anyOf": [
-              {
-                "type": "number",
-                "maximum": 100.0,
-                "minimum": 0.0
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Auth Amount Pct"
-          },
-          "stop_sell_channels": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Stop Sell Channels"
-          },
-          "event_notifications": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Event Notifications"
+            "title": "Operational Report Recipients"
           },
           "extra_policies": {
             "anyOf": [
@@ -40593,6 +40412,39 @@
           "code"
         ],
         "title": "MasterAdminMfaLoginRequest"
+      },
+      "MasterAdminMfaSetupResponse": {
+        "properties": {
+          "requires_mfa_setup": {
+            "type": "boolean",
+            "enum": [
+              true
+            ],
+            "const": true,
+            "title": "Requires Mfa Setup",
+            "default": true
+          },
+          "user": {
+            "$ref": "#/components/schemas/MasterAdminUserPayload"
+          },
+          "csrf_token": {
+            "type": "string",
+            "title": "Csrf Token"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user",
+          "csrf_token",
+          "expires_at"
+        ],
+        "title": "MasterAdminMfaSetupResponse",
+        "description": "A primary-authenticated session that may only configure mandatory MFA."
       },
       "MasterAdminSessionResponse": {
         "properties": {
@@ -43508,9 +43360,105 @@
             "minimum": 0.0,
             "title": "Price Per Night"
           },
+          "price_cash": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Cash"
+          },
+          "price_transfer": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Transfer"
+          },
+          "price_mercadopago": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Mercadopago"
+          },
+          "price_paypal": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Paypal"
+          },
+          "price_credit_card": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Credit Card"
+          },
+          "price_debit_card": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Debit Card"
+          },
+          "price_booking": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Booking"
+          },
+          "price_expedia": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Expedia"
+          },
           "priority": {
             "type": "integer",
-            "minimum": 0.0,
+            "minimum": -100000.0,
             "title": "Priority",
             "default": 0
           },
@@ -43561,6 +43509,94 @@
           "price_per_night": {
             "type": "number",
             "title": "Price Per Night"
+          },
+          "price_cash": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Cash"
+          },
+          "price_transfer": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Transfer"
+          },
+          "price_mercadopago": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Mercadopago"
+          },
+          "price_paypal": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Paypal"
+          },
+          "price_credit_card": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Credit Card"
+          },
+          "price_debit_card": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Debit Card"
+          },
+          "price_booking": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Booking"
+          },
+          "price_expedia": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Expedia"
           },
           "priority": {
             "type": "integer",
@@ -43641,11 +43677,107 @@
             ],
             "title": "Price Per Night"
           },
+          "price_cash": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Cash"
+          },
+          "price_transfer": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Transfer"
+          },
+          "price_mercadopago": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Mercadopago"
+          },
+          "price_paypal": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Paypal"
+          },
+          "price_credit_card": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Credit Card"
+          },
+          "price_debit_card": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Debit Card"
+          },
+          "price_booking": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Booking"
+          },
+          "price_expedia": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Expedia"
+          },
           "priority": {
             "anyOf": [
               {
                 "type": "integer",
-                "minimum": 0.0
+                "minimum": -100000.0
               },
               {
                 "type": "null"
@@ -48934,6 +49066,17 @@
               }
             ],
             "title": "Current Rate"
+          },
+          "current_rate_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Rate Source"
           }
         },
         "type": "object",
@@ -52357,6 +52500,134 @@
           "code"
         ],
         "title": "VerifyCodeRequest"
+      },
+      "VisibilityWindowRead": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "title": "Role"
+          },
+          "past_hours": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "enum": [
+                  12,
+                  24,
+                  48,
+                  72,
+                  168
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Past Hours"
+          },
+          "future_hours": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "enum": [
+                  12,
+                  24,
+                  48,
+                  72,
+                  168
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Future Hours"
+          },
+          "updated_by_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated By User Id"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "role",
+          "past_hours",
+          "future_hours"
+        ],
+        "title": "VisibilityWindowRead"
+      },
+      "VisibilityWindowUpdate": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Role"
+          },
+          "past_hours": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "enum": [
+                  12,
+                  24,
+                  48,
+                  72,
+                  168
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Past Hours"
+          },
+          "future_hours": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "enum": [
+                  12,
+                  24,
+                  48,
+                  72,
+                  168
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Future Hours"
+          }
+        },
+        "type": "object",
+        "required": [
+          "role",
+          "past_hours",
+          "future_hours"
+        ],
+        "title": "VisibilityWindowUpdate",
+        "description": "Set both sides of one role's reservation visibility window."
       },
       "WaitlistEntryCreate": {
         "properties": {

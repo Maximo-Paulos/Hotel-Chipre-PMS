@@ -12,7 +12,6 @@ from app.database import get_db
 from app.models.audit_log import AuditActionEnum
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.reservation import Reservation, ReservationStatusEnum
-from app.models.pricing import CategoryPricing
 from app.schemas.room import (
     RoomCreate,
     RoomHousekeepingRead,
@@ -21,20 +20,20 @@ from app.schemas.room import (
     RoomCategoryOperationalRead,
     RoomCategoryRead,
     RoomCategoryUpdate,
-    CategoryPricingSchema,
-    CategoryPricingRead,
     RoomUpdate,
     RoomStatusUpdateResponse,
 )
 from app.services.reservation_service import ReservationError, find_available_rooms
-from app.services.pricing_service import get_price_for_date
+from app.services.pricing_service import resolve_rate_calendar
 from app.dependencies.auth import AuthContext, require_permission
 from app.services.allocation_runtime_service import run_persisted_allocation
 from app.services.read_model_cache import get_cached_availability_payload, invalidate_hotel_operational_caches
 from app.services.subscription_service import ensure_room_within_limit
+from app.services.room_catalog_service import create_category as create_category_service, create_room as create_room_service
 from app.services.analytics_service import record_hotel_audit_event
 from app.services import audit_log_service
 from app.services.timeseries_projection import project_room_state_event
+from app.services.room_state_service import change_room_status
 from app.services.distributed_lock import DistributedLockBusy, DistributedLockUnavailable
 from app.services.permission_service import (
     PERMISSION_HOTEL_SETTINGS_UPDATE,
@@ -88,8 +87,7 @@ def create_category(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_HOTEL_SETTINGS_UPDATE)),
 ):
-    category = RoomCategory(**data.model_dump(), hotel_id=context.hotel_id)
-    db.add(category)
+    category = create_category_service(db, hotel_id=context.hotel_id, data=data, actor_user_id=context.user_id)
     try:
         db.flush()
     except IntegrityError:
@@ -98,15 +96,6 @@ def create_category(
             status_code=409,
             detail="Ya existe una categoría con ese código en este hotel",
         )
-    record_hotel_audit_event(
-        db,
-        hotel_id=context.hotel_id,
-        user_id=context.user_id or 0,
-        action_code="analytics.variable_cost.updated",
-        entity_type="room_category",
-        entity_id=category.id,
-        after={"room_category_id": category.id, "variable_cost_per_night": float(category.variable_cost_per_night or 0)},
-    )
     db.commit()
     db.refresh(category)
     return category
@@ -146,9 +135,9 @@ def _attach_current_rate(db: Session, hotel_id: int, category: RoomCategory) -> 
     """Resolve today's effective rate from the single source of truth and attach it
     as a transient attribute so RoomCategoryRead serialises it. This keeps the rooms
     inventory view in sync with the Tarifas calendar and reservation pricing."""
-    category.current_rate = get_price_for_date(
-        db, hotel_id, category.id, date.today()
-    )
+    resolution = resolve_rate_calendar(db, hotel_id, category.id, date.today(), date.today())[0]
+    category.current_rate = resolution["price"]
+    category.current_rate_source = resolution["source"]
     return category
 
 
@@ -189,69 +178,6 @@ def get_category(
     return _attach_current_rate(db, context.hotel_id, category)
 
 
-@router.get("/categories/pricing/all", response_model=list[CategoryPricingRead])
-def get_all_category_pricing(
-    db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_RATES_READ)),
-):
-    return (
-        db.query(CategoryPricing)
-        .join(RoomCategory, RoomCategory.id == CategoryPricing.category_id)
-        .filter(RoomCategory.hotel_id == context.hotel_id)
-        .all()
-    )
-
-
-@router.get("/categories/{category_id}/pricing", response_model=CategoryPricingSchema)
-def get_category_pricing(
-    category_id: int,
-    db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_RATES_READ)),
-):
-    pricing = (
-        db.query(CategoryPricing)
-        .join(RoomCategory, RoomCategory.id == CategoryPricing.category_id)
-        .filter(CategoryPricing.category_id == category_id, RoomCategory.hotel_id == context.hotel_id)
-        .first()
-    )
-    if not pricing:
-        raise HTTPException(status_code=404, detail="Pricing config not found")
-    return pricing
-
-
-@router.post("/categories/{category_id}/pricing", response_model=CategoryPricingSchema)
-def update_category_pricing(
-    category_id: int,
-    data: CategoryPricingSchema,
-    db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_RATES_UPDATE)),
-):
-    category = (
-        db.query(RoomCategory)
-        .filter(RoomCategory.id == category_id, RoomCategory.hotel_id == context.hotel_id)
-        .first()
-    )
-    if not category:
-        raise HTTPException(status_code=404, detail="Category not found")
-    pricing = (
-        db.query(CategoryPricing)
-        .join(RoomCategory, RoomCategory.id == CategoryPricing.category_id)
-        .filter(CategoryPricing.category_id == category_id, RoomCategory.hotel_id == context.hotel_id)
-        .first()
-    )
-    if not pricing:
-        pricing = CategoryPricing(category_id=category_id)
-        db.add(pricing)
-    
-    for k, v in data.model_dump().items():
-        setattr(pricing, k, v)
-    
-    db.commit()
-    db.refresh(pricing)
-    return pricing
-
-
-
 @router.post("/", response_model=RoomRead, status_code=status.HTTP_201_CREATED)
 def create_room(
     data: RoomCreate,
@@ -261,10 +187,7 @@ def create_room(
     category = db.query(RoomCategory).filter(RoomCategory.id == data.category_id, RoomCategory.hotel_id == context.hotel_id).first()
     if not category:
         raise HTTPException(status_code=404, detail="Category not found")
-    # Validate room limit for the hotel's subscription
-    ensure_room_within_limit(db, category.hotel_id)
-    room = Room(**data.model_dump(), hotel_id=context.hotel_id)
-    db.add(room)
+    room = create_room_service(db, hotel_id=context.hotel_id, data=data, actor_user_id=context.user_id)
     try:
         db.commit()
     except IntegrityError:
@@ -380,8 +303,11 @@ def update_room(
     if payload.get("is_active") is True and room.is_active is False:
         ensure_room_within_limit(db, room.hotel_id)
 
+    status_changed = "status" in payload and payload["status"] != room.status
     for field in ("room_number", "floor", "status", "is_active", "score", "is_accessible", "description", "notes"):
         if field in payload:
+            if status_changed and field in {"status", "notes"}:
+                continue
             setattr(room, field, payload[field])
 
     # When deactivating, ensure no active reservations remain assigned
@@ -394,6 +320,18 @@ def update_room(
         ).count()
         if active_res > 0:
             raise HTTPException(status_code=400, detail="Room has active reservations and cannot be deactivated")
+
+    if status_changed:
+        change_room_status(
+            db,
+            room=room,
+            hotel_id=context.hotel_id,
+            status=payload["status"],
+            notes=payload.get("notes"),
+            actor_user_id=context.user_id,
+            source="rooms.generic.patch",
+        )
+        return room
 
     db.commit()
     db.refresh(room)
@@ -425,47 +363,15 @@ def update_room_status(
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
 
-    before = audit_log_service.model_snapshot(room)
-    room.status = data.status
-    if data.notes is not None:
-        room.notes = data.notes
-    db.commit()
-    db.refresh(room)
-    audit_log_service.safe_create_audit_log(
+    realloc_result = change_room_status(
         db,
+        room=room,
         hotel_id=context.hotel_id,
-        table_name="rooms",
-        record_id=room.id,
-        action=AuditActionEnum.STATUS_CHANGE,
+        status=data.status,
+        notes=data.notes,
         actor_user_id=context.user_id,
-        payload_before=before,
-        payload_after=audit_log_service.model_snapshot(room),
+        source="rooms.status.patch",
     )
-    invalidate_hotel_operational_caches(context.hotel_id)
-    project_room_state_event(
-        context.hotel_id,
-        room.id,
-        data.status.value,
-        datetime.now(timezone.utc),
-        {"source": "rooms.status.patch", "notes": data.notes},
-    )
-    
-    # If room was moved to an unavailable state, trigger reallocation
-    realloc_result = None
-    if data.status in (RoomStatusEnum.CLEANING, RoomStatusEnum.MAINTENANCE, RoomStatusEnum.BLOCKED):
-        try:
-            result = run_persisted_allocation(
-                db,
-                hotel_id=context.hotel_id,
-                trigger_type=f"room_status_{data.status.value}",
-                apply=True,
-            )
-            if result.solver_result.assignments or result.solver_result.unassigned_reservations:
-                db.commit()
-                realloc_result = _serialize_reallocation_result(result)
-        except Exception as e:
-            realloc_result = {"error": str(e)}
-    
     return {"room": room, "reallocation": realloc_result}
 
 

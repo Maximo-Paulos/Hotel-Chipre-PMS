@@ -61,6 +61,10 @@ def upgrade() -> None:
         op.execute('ALTER TABLE "laundry_vendor_settlements" ENABLE ROW LEVEL SECURITY')
         op.execute('ALTER TABLE "laundry_vendor_settlements" FORCE ROW LEVEL SECURITY')
         op.execute(
+            'DROP POLICY IF EXISTS "tenant_isolation_laundry_vendor_settlements" '
+            'ON "laundry_vendor_settlements"'
+        )
+        op.execute(
             '''CREATE POLICY "tenant_isolation_laundry_vendor_settlements" ON "laundry_vendor_settlements"
                 USING (hotel_id = NULLIF(current_setting('app.hotel_id', true), '')::integer)
                 WITH CHECK (hotel_id = NULLIF(current_setting('app.hotel_id', true), '')::integer)'''

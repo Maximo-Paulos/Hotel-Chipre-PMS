@@ -36,6 +36,7 @@ from app.services.email_service import mailer
 from app.models.hotel_config import HotelConfiguration
 from app.services import audit_log_service
 from app.services.subscription_service import ensure_staff_within_limit
+from app.services.staff_invitation_service import provision_staff_invitation
 
 router = APIRouter(prefix="/api/users", tags=["Users"])
 
@@ -160,65 +161,29 @@ def invite_user(
     if role not in {"owner", "co_owner", "manager", "receptionist", "housekeeping"}:
         raise HTTPException(status_code=400, detail="Rol inválido")
     _assert_assignable_role(context.user_role, role)
-    ensure_staff_within_limit(db, context.hotel_id)
-
-    user = db.query(User).filter(User.email.ilike(email)).first()
-    if not user:
-        user = User(
+    try:
+        provision = provision_staff_invitation(
+            db,
+            hotel_id=context.hotel_id,
             email=email,
-            password_hash=hash_password(secrets.token_urlsafe(32)),
             role=role,
-            is_active=False,
-            is_verified=False,
+            inviter_user_id=context.user_id,
+            inviter_email=context.user_email or "",
         )
-        db.add(user)
-        db.flush()
+    except MembershipInvariantError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    membership = (
-        db.query(HotelMembership)
-        .filter(HotelMembership.hotel_id == context.hotel_id, HotelMembership.user_id == user.id)
-        .first()
-    )
-    before = audit_log_service.model_snapshot(membership)
-    if membership:
-        try:
-            validate_membership_change(
-                db,
-                membership,
-                hotel_id=context.hotel_id,
-                next_role=role,
-                next_status="invited",
-            )
-            membership.role = role
-            membership.status = "invited"
-        except MembershipInvariantError as exc:
-            db.rollback()
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
-    else:
-        membership = HotelMembership(hotel_id=context.hotel_id, user_id=user.id, role=role, status="invited")
-        db.add(membership)
-
-    db.flush()
-    existing_invitation = (
-        db.query(StaffInvitation)
-        .filter(
-            StaffInvitation.hotel_id == context.hotel_id,
-            StaffInvitation.email == email,
-            StaffInvitation.status == "pending",
-        )
-        .order_by(StaffInvitation.id.desc())
-        .first()
-    )
-    invitation_before = invitation_snapshot(existing_invitation) if existing_invitation else None
-    invitation, token, reused = issue_invitation(
-        db,
-        hotel_id=context.hotel_id,
-        user_id=user.id,
-        email=email,
-        role=role,
-        inviter_user_id=context.user_id,
-        inviter_email=context.user_email or "",
-    )
+    user = provision.user
+    membership = provision.membership
+    invitation = provision.invitation
+    token = provision.token
+    reused = provision.reused
+    before = provision.membership_before
+    invitation_before = provision.invitation_before
     if membership:
         audit_log_service.safe_create_audit_log(
             db,

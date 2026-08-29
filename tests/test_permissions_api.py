@@ -9,6 +9,8 @@ from app.main import app as fastapi_app
 from app.models.security_audit_log import SecurityAuditLog
 from app.models.hotel_config import HotelConfiguration
 from app.services.permission_service import (
+    _CANONICAL_DEFINITIONS,
+    LEGACY_PERMISSION_ALIASES,
     PERMISSION_APIKEY_MANAGE,
     PERMISSION_GUEST_CREATE,
     PERMISSION_GUEST_EDIT,
@@ -84,13 +86,40 @@ def test_permissions_matrix_available_to_permission_manager_only():
         engine.dispose()
 
 
-def test_permission_catalog_exposes_owner_only_and_normal_metadata():
+def test_permissions_matrix_exposes_only_canonical_rows_with_ui_metadata():
+    client, db, engine = _client_with_db()
+    fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner")
+    try:
+        response = client.get("/api/permissions/matrix")
+
+        assert response.status_code == 200
+        matrix = response.json()["matrix"]
+        canonical_codes = set(_CANONICAL_DEFINITIONS)
+        legacy_codes = set(LEGACY_PERMISSION_ALIASES)
+
+        assert len(canonical_codes) == 65
+        for cells in matrix.values():
+            assert len(cells) == len(canonical_codes)
+            assert set(cells) == canonical_codes
+            assert set(cells).isdisjoint(legacy_codes)
+            for code, cell in cells.items():
+                assert cell["module"] == _CANONICAL_DEFINITIONS[code][0]
+                assert cell["help_es"] == _CANONICAL_DEFINITIONS[code][2]
+    finally:
+        fastapi_app.dependency_overrides.clear()
+        db.close()
+        engine.dispose()
+
+
+def test_permission_catalog_exposes_owner_only_normal_metadata_and_help_text():
     client, db, engine = _client_with_db()
     fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner")
     try:
         response = client.get("/api/permissions/catalog")
         assert response.status_code == 200
         catalog = {row["code"]: row for row in response.json()["permissions"]}
+        assert catalog
+        assert all(isinstance(row["help_es"], str) and row["help_es"].strip() for row in catalog.values())
 
         for code in (
             PERMISSION_PERMISSION_MANAGE,
@@ -106,6 +135,15 @@ def test_permission_catalog_exposes_owner_only_and_normal_metadata():
             assert catalog[code]["critical"] is False
             assert catalog[code]["step_up_required"] is False
             assert catalog[code]["delegable"] is True
+            assert catalog[code]["help_es"]
+
+        matrix = client.get("/api/permissions/matrix")
+        assert matrix.status_code == 200
+        assert matrix.json()["matrix"]["manager"][PERMISSION_RESERVATION_CREATE]["help_es"]
+
+        profiles = client.get("/api/permissions/role-overrides")
+        assert profiles.status_code == 200
+        assert profiles.json()["matrix"]["manager"][PERMISSION_RESERVATION_CREATE]["help_es"]
     finally:
         fastapi_app.dependency_overrides.clear()
         db.close()
@@ -216,7 +254,7 @@ def test_permission_denied_is_audited():
         engine.dispose()
 
 
-def test_permission_override_rejects_grant_above_role_ceiling():
+def test_permission_override_can_grant_permission_missing_from_role_default():
     client, db, engine = _client_with_db()
     fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner", user_id=99)
     try:
@@ -229,8 +267,8 @@ def test_permission_override_rejects_grant_above_role_ceiling():
             },
         )
 
-        assert response.status_code == 422
-        assert "techo de seguridad" in response.json()["detail"]
+        assert response.status_code == 200, response.text
+        assert response.json()["allowed"] is True
     finally:
         fastapi_app.dependency_overrides.clear()
         db.close()

@@ -9,7 +9,10 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 import app.database as db_module
+import app.db.cassandra as cassandra_module
 import app.main as main_module
+import app.services.timeseries_projection as timeseries_module
+from app.config import get_settings
 from app.database import Base, get_db
 from app.dependencies.auth import AuthContext, get_auth_context
 from app.models.daily_rate import DailyRate
@@ -172,3 +175,45 @@ def test_cassandra_partition_keys_and_row_shape():
     }
     assert "PRIMARY KEY ((hotel_id, event_date), occurred_at, room_id)" in cql
     assert "PRIMARY KEY ((hotel_id, rate_date), changed_at, category_id)" in cql
+
+
+def test_cassandra_session_bootstraps_schema_before_binding_keyspace(monkeypatch: pytest.MonkeyPatch):
+    pytest.importorskip("cassandra.cluster")
+    calls: list[tuple[str, object]] = []
+
+    class FakeSession:
+        keyspace = None
+
+        def execute(self, statement, parameters=None):
+            calls.append(("execute", statement if parameters is None else (statement, parameters)))
+
+        def set_keyspace(self, keyspace):
+            calls.append(("set_keyspace", keyspace))
+            self.keyspace = keyspace
+
+    class FakeCluster:
+        def __init__(self, **kwargs):
+            calls.append(("cluster", kwargs))
+
+        def connect(self, *args):
+            calls.append(("connect", args))
+            return FakeSession()
+
+    monkeypatch.setenv("CASSANDRA_ENABLED", "true")
+    monkeypatch.setenv("CASSANDRA_HOSTS", "127.0.0.1")
+    monkeypatch.setenv("CASSANDRA_KEYSPACE", "hotel_pms")
+    get_settings.cache_clear()
+    monkeypatch.setattr("cassandra.cluster.Cluster", FakeCluster)
+    monkeypatch.setattr(cassandra_module, "_cassandra_session", None)
+    monkeypatch.setattr(timeseries_module, "_schema_initialized", False)
+
+    try:
+        session = cassandra_module.get_cassandra_session()
+
+        assert session is not None
+        assert calls[1] == ("connect", ())
+        assert [call[1] for call in calls if call[0] == "execute"] == _schema_statements("hotel_pms")
+        assert calls[-1] == ("set_keyspace", "hotel_pms")
+        assert session.keyspace == "hotel_pms"
+    finally:
+        get_settings.cache_clear()

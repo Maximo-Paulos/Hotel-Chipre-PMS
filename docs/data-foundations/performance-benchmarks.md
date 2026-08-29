@@ -168,3 +168,27 @@ Still pending CO-LOCATED measurement (heavier reservation/availability/report se
 that the remote pooler cannot seed within practical time): availability, allocation
 candidate build, daily report. Their queries already use composite indexes
 (verified in tests/test_postgres_validation.py EXPLAIN tests).
+
+## Query-shape and cache work (2026-08-28)
+
+Migration `20260828_query_shape_indexes` adds the requested benchmark candidates
+`rooms(hotel_id, category_id)` and `reservations(hotel_id, deleted_at)`, reconciles
+the two V72 reservation indexes in the model, and makes the audit-event entity index
+tenant-leading. It removes the duplicate guest, daily-rate, and reservation hotel
+indexes with inspector guards and a reversible downgrade.
+
+The rate calendar, daily operational report, and occupancy grid now use the existing
+fail-open read-model cache. Reservation, room-block, room, and daily-rate writes
+invalidate the affected hotel's operational cache families. The occupancy-grid key
+also includes role visibility so cached responses cannot cross visibility policies.
+
+The ORM hot paths use explicit projections or bounded batch queries. Query-count
+regression tests cover rate-calendar reservations, period daily rates, analytics
+category/company loads, and reservation listing. PostgreSQL `EXPLAIN (ANALYZE)` and
+before/after latency remain unmeasured in this checkout because both the local Docker
+socket and the configured PostgreSQL endpoint were inaccessible; therefore index-use
+confirmation is still pending and no new index is claimed as confirmed here.
+
+Slow-query visibility is available through `SLOW_QUERY_LOG_MS`, default `0` (disabled).
+When enabled, SQLAlchemy logs duration and statement text only; bound parameter values
+are intentionally excluded because they may contain guest PII.

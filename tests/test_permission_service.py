@@ -13,7 +13,9 @@ from app.services.permission_service import (
     PERMISSION_CHECKIN_PERFORM,
     PERMISSION_GUEST_CREATE,
     PERMISSION_GUEST_EDIT,
+    PERMISSION_GUEST_READ,
     PERMISSION_GUEST_TAGS,
+    PERMISSION_GUEST_UPDATE,
     PERMISSION_GUEST_VIEW,
     PERMISSION_DEFINITIONS,
     PERMISSION_RESERVATION_CREATE,
@@ -67,8 +69,11 @@ def test_default_permissions_seeded_for_owner_manager_reception_housekeeping(db)
     assert rows[("owner", PERMISSION_REPORTS_FINANCIAL_VIEW)] is True
     assert rows[("co_owner", PERMISSION_REPORTS_FINANCIAL_VIEW)] is True
     assert rows[("housekeeping", PERMISSION_ROOM_CLEANING_STATUS)] is True
-    assert can_role_hold_permission("manager", PERMISSION_STOCK_ADJUST) is False
-    assert can_role_hold_permission("manager", PERMISSION_RESERVATION_MANUAL_RATE) is False
+    # Defaults remain conservative, but they are editable starting values
+    # rather than a permanent ceiling for an explicit owner override.
+    assert rows[("manager", PERMISSION_STOCK_ADJUST)] is False
+    assert can_role_hold_permission("manager", PERMISSION_STOCK_ADJUST) is True
+    assert can_role_hold_permission("manager", PERMISSION_RESERVATION_MANUAL_RATE) is True
 
 
 def test_permission_override_can_deny_receptionist_guest_edit(db):
@@ -91,26 +96,18 @@ def test_housekeeping_cannot_create_reservation_by_default(db):
     assert resolve(db, 1, "housekeeping", PERMISSION_RESERVATION_CREATE) is False
 
 
-def test_role_ceiling_ignores_a_stale_privilege_escalating_override(db):
+def test_owner_override_can_grant_permission_missing_from_role_default(db):
     _seed_hotel(db, 1)
     seed_default_permissions(db)
-    db.add(
-        HotelPermissionOverride(
-            hotel_id=1,
-            role="housekeeping",
-            permission_code=PERMISSION_GUEST_VIEW,
-            allowed=True,
-        )
-    )
-    db.flush()
-
     assert resolve(db, 1, "housekeeping", PERMISSION_GUEST_VIEW) is False
+
+    set_override(db, 1, "housekeeping", PERMISSION_GUEST_VIEW, True, user_id=None)
+
+    assert resolve(db, 1, "housekeeping", PERMISSION_GUEST_VIEW) is True
     matrix = get_matrix(db, 1)
-    assert matrix["housekeeping"][PERMISSION_GUEST_VIEW] == {
-        "allowed": False,
-        "source": "ceiling",
-        "description": "View guest profile data",
-    }
+    assert matrix["housekeeping"][PERMISSION_GUEST_READ]["allowed"] is True
+    assert matrix["housekeeping"][PERMISSION_GUEST_READ]["source"] == "override"
+    assert matrix["housekeeping"][PERMISSION_GUEST_READ]["help_es"]
 
 
 def test_override_in_hotel_a_does_not_affect_hotel_b(db):
@@ -131,8 +128,8 @@ def test_get_matrix_includes_hotel_overrides(db):
 
     matrix = get_matrix(db, 1)
 
-    assert matrix["receptionist"][PERMISSION_GUEST_EDIT]["allowed"] is False
-    assert matrix["receptionist"][PERMISSION_GUEST_EDIT]["source"] == "override"
+    assert matrix["receptionist"][PERMISSION_GUEST_UPDATE]["allowed"] is False
+    assert matrix["receptionist"][PERMISSION_GUEST_UPDATE]["source"] == "override"
 
 
 def test_resolve_seeds_the_matrix_once_per_engine_not_per_call(db):

@@ -27,7 +27,7 @@ PATTERN = re.compile(r'("(?:label|message_summary)"\s*:\s*")([^"\\]*)(")')
 # App route segments known to appear in code/commit-message text, not real
 # filesystem paths. Extend this list if a new top-level route segment shows
 # up in a future portable-check failure.
-KNOWN_ROUTE_PREFIXES = ("/api/", "/operacion/", "/item")
+KNOWN_ROUTE_PREFIXES = ("/api/", "/operacion/", "/item", "/terms", "/privacy")
 
 
 def normalize_instruction_paths() -> int:

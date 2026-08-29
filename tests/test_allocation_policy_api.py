@@ -159,7 +159,7 @@ def test_allocation_policy_api_suggestions_are_scoped_and_manager_has_no_access(
         assert [item["input_summary"] for item in list_h1.json()] == ["Hotel prioriza evitar huecos de una noche"]
 
         # Allocation policy config is "sensitive configuration" -- manager's
-        # ceiling excludes config:manage, so it's denied read as well as write.
+        # default matrix does not grant config:manage, so it's denied read as well as write.
         fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "manager")
         denied_read = client.get("/api/allocation/policy/suggestions")
         assert denied_read.status_code == 403, denied_read.text

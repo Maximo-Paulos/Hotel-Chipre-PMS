@@ -11,6 +11,7 @@ from app.schemas.hotel_config import HotelConfigRead, HotelConfigUpdate
 from app.services.email_service import mailer
 from app.services.payment_service import get_hotel_config
 from app.services.permission_service import PERMISSION_CONFIG_MANAGE
+from app.services.hotel_configuration_service import apply_configuration_update
 
 router = APIRouter(prefix="/api/config", tags=["Hotel Configuration"])
 
@@ -33,8 +34,7 @@ def update_configuration(
 ):
     config = get_hotel_config(db, context.hotel_id)
     update_data = data.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(config, field, value)
+    apply_configuration_update(config, update_data)
     db.commit()
     db.refresh(config)
     return config

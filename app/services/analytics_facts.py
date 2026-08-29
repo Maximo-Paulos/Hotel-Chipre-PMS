@@ -6,8 +6,9 @@ from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, noload
 
 from app.models.analytics import (
     AnalyticsExportJob,
@@ -39,6 +40,7 @@ from app.services.analytics_contracts import (
     calculate_physical_room_nights,
     resolve_guest_segment,
 )
+from app.services.reservation_service import active_reservations
 from app.services.timezones import normalize_timezone
 
 
@@ -76,9 +78,8 @@ def detect_no_shows(
     cutoff_hours = int(getattr(hotel, "no_show_cutoff_hours", 24) or 24)
 
     candidates = (
-        db.query(Reservation)
+        active_reservations(db, hotel_id)
         .filter(
-            Reservation.hotel_id == hotel_id,
             Reservation.status.in_(
                 [
                     ReservationStatusEnum.PENDING,
@@ -152,9 +153,18 @@ def refresh_fact_reservation_daily(
     )
 
     reservations = (
-        db.query(Reservation)
+        active_reservations(db, hotel_id)
+        .options(
+            noload(Reservation.guest),
+            noload(Reservation.additional_guests),
+            noload(Reservation.room),
+            noload(Reservation.category),
+            noload(Reservation.sellable_product),
+            noload(Reservation.rate_plan),
+            noload(Reservation.tax_policy),
+            noload(Reservation.transactions),
+        )
         .filter(
-            Reservation.hotel_id == hotel_id,
             Reservation.check_in_date <= date_to,
             Reservation.check_out_date > date_from,
             Reservation.status != ReservationStatusEnum.CANCELLED,
@@ -163,12 +173,35 @@ def refresh_fact_reservation_daily(
         .all()
     )
 
+    category_ids = {reservation.category_id for reservation in reservations}
+    categories_by_id = {
+        category.id: category
+        for category in (
+            db.query(RoomCategory.id, RoomCategory.variable_cost_per_night)
+            .filter(RoomCategory.hotel_id == hotel_id, RoomCategory.id.in_(category_ids))
+            .all()
+            if category_ids
+            else []
+        )
+    }
+    company_ids = {reservation.company_id for reservation in reservations if reservation.company_id is not None}
+    companies_by_id = {
+        company.id: company
+        for company in (
+            db.query(Company)
+            .filter(Company.hotel_id == hotel_id, Company.id.in_(company_ids))
+            .all()
+            if company_ids
+            else []
+        )
+    }
+
     inserted = 0
     for reservation in reservations:
-        category = db.get(RoomCategory, reservation.category_id)
+        category = categories_by_id.get(reservation.category_id)
         if category is None:
             continue
-        company = db.get(Company, reservation.company_id) if reservation.company_id else None
+        company = companies_by_id.get(reservation.company_id) if reservation.company_id else None
         stay_dates = _reservation_dates_in_window(reservation, date_from=date_from, date_to=date_to)
         if not stay_dates:
             continue
@@ -260,9 +293,18 @@ def refresh_fact_room_occupancy_daily(
     )
 
     reservations = (
-        db.query(Reservation)
+        active_reservations(db, hotel_id)
+        .options(
+            noload(Reservation.guest),
+            noload(Reservation.additional_guests),
+            noload(Reservation.room),
+            noload(Reservation.category),
+            noload(Reservation.sellable_product),
+            noload(Reservation.rate_plan),
+            noload(Reservation.tax_policy),
+            noload(Reservation.transactions),
+        )
         .filter(
-            Reservation.hotel_id == hotel_id,
             Reservation.check_in_date <= date_to,
             Reservation.check_out_date > date_from,
             Reservation.status != ReservationStatusEnum.CANCELLED,
@@ -270,14 +312,19 @@ def refresh_fact_room_occupancy_daily(
         .order_by(Reservation.check_in_date.asc(), Reservation.id.asc())
         .all()
     )
-    rooms = (
-        db.query(Room)
-        .filter(Room.hotel_id == hotel_id)
+    rooms = db.execute(
+        select(Room.id, Room.category_id, Room.is_active)
+        .where(Room.hotel_id == hotel_id)
         .order_by(Room.id.asc())
-        .all()
-    )
+    ).all()
 
-    reservation_map = _occupied_nightly_fact_map(db, reservations, date_from=date_from, date_to=date_to)
+    reservation_map = _occupied_nightly_fact_map(
+        db,
+        reservations,
+        hotel_id=hotel_id,
+        date_from=date_from,
+        date_to=date_to,
+    )
     room_events = _room_state_events_map(db, hotel_id=hotel_id, date_from=date_from, date_to=date_to)
 
     inserted = 0
@@ -415,9 +462,8 @@ def calculate_pickup_30d(
     anchor_date = date_to
     pickup_window_end = anchor_date + timedelta(days=29)
     rows = (
-        db.query(Reservation)
+        active_reservations(db, hotel_id)
         .filter(
-            Reservation.hotel_id == hotel_id,
             Reservation.status != ReservationStatusEnum.CANCELLED,
         )
         .all()
@@ -566,10 +612,33 @@ def _occupied_nightly_fact_map(
     db: Session,
     reservations: list[Reservation],
     *,
+    hotel_id: int,
     date_from: date,
     date_to: date,
 ) -> dict[tuple[int, date], object]:
     room_map: dict[tuple[int, date], object] = {}
+    category_ids = {reservation.category_id for reservation in reservations}
+    categories_by_id = {
+        category.id: category
+        for category in (
+            db.query(RoomCategory.id, RoomCategory.variable_cost_per_night)
+            .filter(RoomCategory.hotel_id == hotel_id, RoomCategory.id.in_(category_ids))
+            .all()
+            if category_ids
+            else []
+        )
+    }
+    company_ids = {reservation.company_id for reservation in reservations if reservation.company_id is not None}
+    companies_by_id = {
+        company.id: company
+        for company in (
+            db.query(Company)
+            .filter(Company.hotel_id == hotel_id, Company.id.in_(company_ids))
+            .all()
+            if company_ids
+            else []
+        )
+    }
     for reservation in reservations:
         if reservation.room_id is None:
             continue
@@ -578,10 +647,10 @@ def _occupied_nightly_fact_map(
         stay_dates = _reservation_dates_in_window(reservation, date_from=date_from, date_to=date_to)
         if not stay_dates:
             continue
-        category = reservation.category or db.get(RoomCategory, reservation.category_id)
+        category = categories_by_id.get(reservation.category_id)
         if category is None:
             continue
-        company = db.get(Company, reservation.company_id) if reservation.company_id else None
+        company = companies_by_id.get(reservation.company_id) if reservation.company_id else None
         policy = _resolve_no_show_policy(reservation)
         row_kind = _reservation_row_kind(reservation, policy)
         totals = _reservation_monetary_totals(

@@ -26,6 +26,7 @@ from app.services.guest_service import (
     search_guests,
     set_rating,
 )
+from app.services.reservation_service import active_reservations
 from app.models.audit_log import AuditActionEnum
 from app.services import audit_log_service
 from app.services.permission_service import (
@@ -160,10 +161,9 @@ def export_guest_ledger(
         raise HTTPException(status_code=400, detail="to_date must be after from_date")
 
     reservations = (
-        db.query(Reservation)
+        active_reservations(db, context.hotel_id)
         .join(Guest, Guest.id == Reservation.guest_id)
         .filter(
-            Reservation.hotel_id == context.hotel_id,
             Reservation.status != ReservationStatusEnum.CANCELLED,
             Reservation.check_in_date < to_date,
             Reservation.check_out_date > from_date,

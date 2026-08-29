@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { listGuests } from "../../api/guests";
-import { listRoomCategories, listRooms } from "../../api/rooms";
 import {
   cancelWaitlistEntry,
   createWaitlistEntry,
@@ -13,6 +12,7 @@ import {
 } from "../../api/waitlist";
 import { hasValidSession } from "../../api/client";
 import { useSession } from "../../state/session";
+import { useRooms } from "../../hooks/useRooms";
 
 const waitlistStatusLabel: Record<WaitlistStatus, string> = {
   waiting: "En espera",
@@ -50,6 +50,7 @@ export function WaitlistPage() {
   const [promoteNotes, setPromoteNotes] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const enabled = hasValidSession(session);
+  const { categoriesQuery, roomsQuery } = useRooms({ includeCategories: true });
 
   const waitlistQuery = useQuery({
     queryKey: ["waitlist", session.hotelId, statusFilter],
@@ -65,18 +66,6 @@ export function WaitlistPage() {
     queryFn: () => listGuests({ limit: 200 }, session),
     enabled,
     staleTime: 60 * 1000
-  });
-  const categoriesQuery = useQuery({
-    queryKey: ["room-categories", session.hotelId],
-    queryFn: () => listRoomCategories(session),
-    enabled,
-    staleTime: 60 * 1000
-  });
-  const roomsQuery = useQuery({
-    queryKey: ["rooms", session.hotelId],
-    queryFn: () => listRooms(session),
-    enabled,
-    staleTime: 15 * 1000
   });
 
   const invalidateWaitlist = () => {

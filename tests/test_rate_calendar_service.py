@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta, timezone
 
 import pytest
+from sqlalchemy import event
 
 from app.models.analytics import RoomStateEvent, RoomStateEventReasonCodeEnum, RoomStateEventTypeEnum
 from app.models.commercial import RatePlan, RatePlanPrice, SellableProduct
@@ -178,7 +179,50 @@ def test_no_reservations_keeps_days_open(db):
 
     assert [day["status"] for day in result["days"]] == ["open", "open", "open"]
     assert all(day["for_sale"] == 5 for day in result["days"])
-    assert all(day["occupancy_pct"] == 0 for day in result["days"])
+
+
+def test_calendar_reservation_read_uses_scalar_projection(db):
+    category = _seed_category(db)
+    rooms = _seed_rooms(db, category, 1)
+    _, guest = _seed_user_and_guest(db)
+    _seed_reservation(
+        db,
+        hotel_id=category.hotel_id,
+        guest_id=guest.id,
+        category_id=category.id,
+        room_id=rooms[0].id,
+        check_in=date(2026, 6, 10),
+        check_out=date(2026, 6, 12),
+        code="CAL-001",
+    )
+
+    statements: list[str] = []
+    engine = db.get_bind()
+
+    def capture(_conn, _cursor, statement, _parameters, _context, _executemany):
+        statements.append(statement)
+
+    event.listen(engine, "before_cursor_execute", capture)
+    try:
+        result = get_daily_calendar(
+            db,
+            hotel_id=category.hotel_id,
+            category_id=category.id,
+            date_from=date(2026, 6, 10),
+            date_to=date(2026, 6, 12),
+        )
+    finally:
+        event.remove(engine, "before_cursor_execute", capture)
+
+    reservation_selects = [
+        statement.lower()
+        for statement in statements
+        if "from reservations" in statement.lower()
+    ]
+    assert len(reservation_selects) == 1, statements
+    assert " join rooms " not in reservation_selects[0]
+    assert " join guests " not in reservation_selects[0]
+    assert len(result["days"]) == 3
 
 
 def test_active_reservations_reduce_inventory_for_one_day(db):

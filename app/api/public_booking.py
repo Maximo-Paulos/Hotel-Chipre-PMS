@@ -26,6 +26,7 @@ from app.schemas.reservation import ReservationCreate
 from app.services.payment_link_service import PaymentLinkError, create_link
 from app.services.reservation_service import (
     ReservationError,
+    active_reservations,
     compute_reservation_pricing,
     create_reservation,
     find_available_rooms,
@@ -169,11 +170,8 @@ def public_reservation_status_by_code(
     Scoped to the API key's hotel; codes belonging to other hotels return 404.
     """
     reservation = (
-        db.query(Reservation)
-        .filter(
-            Reservation.confirmation_code == confirmation_code,
-            Reservation.hotel_id == context.hotel_id,
-        )
+        active_reservations(db, context.hotel_id)
+        .filter(Reservation.confirmation_code == confirmation_code)
         .first()
     )
     if reservation is None:
@@ -193,11 +191,8 @@ def public_reservation_status(
     return 404 so cross-hotel existence is never leaked.
     """
     reservation = (
-        db.query(Reservation)
-        .filter(
-            Reservation.id == reservation_id,
-            Reservation.hotel_id == context.hotel_id,
-        )
+        active_reservations(db, context.hotel_id)
+        .filter(Reservation.id == reservation_id)
         .first()
     )
     if reservation is None:

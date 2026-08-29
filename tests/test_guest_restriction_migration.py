@@ -12,6 +12,8 @@ from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 
+from tests.migration_helpers import insert_historical_hotel_config
+
 
 PRE_REVISION = "20260813_rbac_overrides"
 REVISION = "20260813_guest_restrictions"
@@ -40,17 +42,10 @@ def _engine(db_path: str):
 
 def _seed_legacy_tags(engine) -> None:
     from app.models.guest import Guest, GuestRatingEnum, GuestTag, GuestTagTypeEnum
-    from app.models.hotel_config import HotelConfiguration
 
     SessionLocal = sessionmaker(bind=engine)
     with SessionLocal() as db:
-        db.add_all(
-            [
-                HotelConfiguration(id=7301, subscription_active=True),
-                HotelConfiguration(id=7302, subscription_active=True),
-            ]
-        )
-        db.flush()
+        insert_historical_hotel_config(engine, 7301, 7302)
         # This fixture intentionally seeds the schema before the migration
         # under test. Do not use current ORM ``add()`` for User or Guest here:
         # their mappers include columns that do not exist at this historical

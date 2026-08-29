@@ -124,7 +124,7 @@ def price_quote(
 ):
     """
     Calculate pricing for a potential booking without persisting it.
-    Uses CategoryPricing (cash) when present, otherwise the base category price.
+    Uses the canonical daily/seasonal rate resolver and then the category base price.
     """
     if guest_id is not None:
         active = get_active_guest_restrictions(db, hotel_id=context.hotel_id, guest_id=guest_id)

@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 type InfoTipProps = {
   content: React.ReactNode;
   label?: string;
+  tone?: "dark" | "light";
 };
 
 type PopoverPosition = {
@@ -13,7 +14,7 @@ type PopoverPosition = {
 
 const POPOVER_WIDTH = 360;
 
-export function InfoTip({ content, label = "Más información" }: InfoTipProps) {
+export function InfoTip({ content, label = "Más información", tone = "dark" }: InfoTipProps) {
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState<PopoverPosition | null>(null);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
@@ -79,7 +80,11 @@ export function InfoTip({ content, label = "Más información" }: InfoTipProps) 
         aria-label={label}
         aria-describedby={open ? popoverId : undefined}
         onClick={() => setOpen((current) => !current)}
-        className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-400 text-[11px] font-semibold text-slate-200 transition hover:border-white hover:text-white"
+        className={`inline-flex h-5 w-5 items-center justify-center rounded-full border text-[11px] font-semibold transition ${
+          tone === "light"
+            ? "border-slate-300 text-slate-600 hover:border-slate-600 hover:text-slate-900"
+            : "border-slate-400 text-slate-200 hover:border-white hover:text-white"
+        }`}
       >
         i
       </button>

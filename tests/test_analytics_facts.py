@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
+from types import SimpleNamespace
 
 import pytest
+from sqlalchemy import event
 
+from app.config import Settings
 from app.models.analytics import (
     FactReservationDaily,
     FactRoomOccupancyDaily,
@@ -30,6 +33,67 @@ from app.services.analytics_facts import (
     refresh_fact_reservation_daily,
     refresh_fact_room_occupancy_daily,
 )
+from app.services import analytics_service
+
+
+def test_sync_fact_refresh_defaults_to_enabled():
+    assert Settings(_env_file=None).SYNC_FACT_REFRESH_ENABLED is True
+
+
+def test_inline_fact_refresh_can_be_disabled(monkeypatch, db):
+    monkeypatch.setattr(
+        analytics_service,
+        "get_settings",
+        lambda: SimpleNamespace(
+            SYNC_FACT_REFRESH_ENABLED=False,
+            SYNC_FACT_REFRESH_MAX_DAYS=3,
+        ),
+    )
+
+    def fail_if_called(*_args, **_kwargs):
+        raise AssertionError("inline fact refresh must be disabled")
+
+    monkeypatch.setattr(analytics_service, "refresh_fact_reservation_daily", fail_if_called)
+    monkeypatch.setattr(analytics_service, "refresh_fact_room_occupancy_daily", fail_if_called)
+
+    analytics_service._ensure_facts_materialized(
+        db,
+        hotel_id=1,
+        date_from=date(2026, 1, 1),
+        date_to=date(2026, 1, 10),
+    )
+
+
+def test_inline_fact_refresh_is_bounded_and_logged(monkeypatch, caplog, db):
+    monkeypatch.setattr(
+        analytics_service,
+        "get_settings",
+        lambda: SimpleNamespace(
+            SYNC_FACT_REFRESH_ENABLED=True,
+            SYNC_FACT_REFRESH_MAX_DAYS=3,
+        ),
+    )
+    refresh_ranges = []
+
+    def record_refresh(*_args, date_from, date_to, **_kwargs):
+        refresh_ranges.append((date_from, date_to))
+
+    monkeypatch.setattr(analytics_service, "refresh_fact_reservation_daily", record_refresh)
+    monkeypatch.setattr(analytics_service, "refresh_fact_room_occupancy_daily", record_refresh)
+
+    with caplog.at_level("WARNING", logger="app.services.analytics_service"):
+        analytics_service._ensure_facts_materialized(
+            db,
+            hotel_id=1,
+            date_from=date(2026, 1, 1),
+            date_to=date(2026, 1, 10),
+        )
+
+    assert refresh_ranges == [
+        (date(2026, 1, 8), date(2026, 1, 10)),
+        (date(2026, 1, 8), date(2026, 1, 10)),
+    ]
+    assert sum(record.message == "analytics.sync_fact_refresh.inline" for record in caplog.records) == 1
 
 
 def test_detect_no_shows_marks_reservation(db, hotel_config, sample_guest, sample_categories, sample_rooms):
@@ -123,12 +187,25 @@ def test_refresh_fact_reservation_daily_materializes_rows(db, hotel_config, samp
     db.add(reservation)
     db.flush()
 
-    result = refresh_fact_reservation_daily(
-        db,
-        hotel_id=hotel_config.id,
-        date_from=date(2026, 4, 1),
-        date_to=date(2026, 4, 2),
-    )
+    statements: list[str] = []
+    engine = db.get_bind()
+
+    def capture(_conn, _cursor, statement, _parameters, _context, _executemany):
+        statements.append(statement)
+
+    event.listen(engine, "before_cursor_execute", capture)
+    try:
+        result = refresh_fact_reservation_daily(
+            db,
+            hotel_id=hotel_config.id,
+            date_from=date(2026, 4, 1),
+            date_to=date(2026, 4, 2),
+        )
+    finally:
+        event.remove(engine, "before_cursor_execute", capture)
+
+    assert sum("room_categories.id in" in statement.lower() for statement in statements) == 1
+    assert sum("companies.id in" in statement.lower() for statement in statements) == 1
 
     assert result.inserted == 2
     rows = db.query(FactReservationDaily).order_by(FactReservationDaily.stay_date.asc()).all()
@@ -197,12 +274,25 @@ def test_refresh_fact_room_occupancy_daily_handles_blocking_events(
     )
     db.flush()
 
-    result = refresh_fact_room_occupancy_daily(
-        db,
-        hotel_id=hotel_config.id,
-        date_from=date(2026, 4, 1),
-        date_to=date(2026, 4, 2),
-    )
+    statements: list[str] = []
+    engine = db.get_bind()
+
+    def capture(_conn, _cursor, statement, _parameters, _context, _executemany):
+        statements.append(statement)
+
+    event.listen(engine, "before_cursor_execute", capture)
+    try:
+        result = refresh_fact_room_occupancy_daily(
+            db,
+            hotel_id=hotel_config.id,
+            date_from=date(2026, 4, 1),
+            date_to=date(2026, 4, 2),
+        )
+    finally:
+        event.remove(engine, "before_cursor_execute", capture)
+
+    assert sum("room_categories.id in" in statement.lower() for statement in statements) == 1
+    assert sum("companies.id in" in statement.lower() for statement in statements) == 0
 
     assert result.inserted == len(sample_rooms) * 2
     rows = (

@@ -7,15 +7,23 @@ import {
   getCategoryDailyRates,
   getRateCalendarDaily,
   upsertDailyRate,
+  listPricePeriods,
+  createPricePeriod,
+  updatePricePeriod,
+  deletePricePeriod,
   type BulkRateResult,
   type BulkRateField,
   type BulkRateFieldMode,
   type DailyRateOut,
   type DailyRatePrices,
   type DailyRateRangeRow,
-  type RateCalendarResponse
+  type RateCalendarResponse,
+  type PricePeriod,
+  type PricePeriodInput
 } from "../api/rate-calendar";
 import { useSession } from "../state/session";
+
+export type { PricePeriodInput } from "../api/rate-calendar";
 
 export { formatLocalIsoDate, todayIso, addDaysIso } from "../utils/date";
 
@@ -111,4 +119,28 @@ export function useBulkUpdateRateField(categoryId: number | null) {
       queryClient.invalidateQueries({ queryKey: ["category-daily-rates", session.hotelId ?? null, categoryId] });
     }
   });
+}
+
+export function usePricePeriods(categoryId: number | null) {
+  const { session } = useSession();
+  return useQuery<PricePeriod[]>({
+    queryKey: ["price-periods", session.hotelId ?? null, categoryId],
+    queryFn: () => listPricePeriods(categoryId as number, session),
+    enabled: hasValidSession(session) && typeof categoryId === "number" && categoryId > 0,
+    staleTime: 60_000
+  });
+}
+
+export function usePricePeriodMutations(categoryId: number | null) {
+  const { session } = useSession();
+  const queryClient = useQueryClient();
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ["price-periods", session.hotelId ?? null, categoryId] });
+    queryClient.invalidateQueries({ queryKey: ["rate-calendar", session.hotelId ?? null, categoryId] });
+    queryClient.invalidateQueries({ queryKey: ["category-daily-rates", session.hotelId ?? null, categoryId] });
+  };
+  const create = useMutation({ mutationFn: (payload: PricePeriodInput) => createPricePeriod(payload, session), onSuccess: invalidate });
+  const update = useMutation({ mutationFn: ({ id, payload }: { id: number; payload: Partial<PricePeriodInput> }) => updatePricePeriod(id, payload, session), onSuccess: invalidate });
+  const remove = useMutation({ mutationFn: (id: number) => deletePricePeriod(id, session), onSuccess: invalidate });
+  return { create, update, remove };
 }

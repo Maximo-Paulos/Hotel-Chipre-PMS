@@ -2,8 +2,12 @@ from sqlalchemy import Column, Integer, Float, ForeignKey
 from app.database import Base
 
 class CategoryPricing(Base):
-    """Specific pricing configuration for a room category based on payment method and channel."""
-    __tablename__ = "category_pricing"
+    """Archived legacy pricing shape kept for migration/test compatibility.
+
+    Runtime pricing no longer reads this table. Existing rows are renamed and
+    folded into ``price_periods`` by the retirement migration.
+    """
+    __tablename__ = "category_pricing_legacy"
 
     category_id = Column(Integer, ForeignKey("room_categories.id"), primary_key=True)
     

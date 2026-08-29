@@ -54,6 +54,7 @@ from app.services.reservation_service import (
     update_reservation_fields,
     register_company_settlement,
 )
+from app.services.read_model_cache import get_cached_occupancy_grid_payload
 from app.services.guest_restriction_service import GuestProhibitedError, RestrictionOverridePermissionError
 from app.services.reservation_operations_service import (
     ReservationOperationsError,
@@ -328,6 +329,7 @@ def list_reservations(
         skip=skip,
         limit=limit,
         order=order,
+        context=context,
     )
     try:
         return [_to_read(r) for r in reservations]
@@ -365,11 +367,18 @@ def occupancy_grid(
         raise HTTPException(status_code=422, detail="date_to must be greater than date_from")
     if (date_to - date_from).days > 92:
         raise HTTPException(status_code=422, detail="Date range cannot exceed 92 days")
-    grid = get_occupancy_grid(
-        db,
+    grid = get_cached_occupancy_grid_payload(
         hotel_id=context.hotel_id,
         date_from=date_from,
         date_to=date_to,
+        role=context.user_role,
+        producer=lambda: get_occupancy_grid(
+            db,
+            hotel_id=context.hotel_id,
+            date_from=date_from,
+            date_to=date_to,
+            context=context,
+        ),
     )
     if context.user_role != "housekeeping":
         return grid

@@ -59,7 +59,7 @@ const DOMAIN_QUERY_PREFIXES: Record<SyncDomain, string[]> = {
     "daily-rates",
     "rate-calendar"
   ],
-  settings: ["hotel-config", "permissions-matrix", "api-keys", "whatsapp-settings", "subscription"],
+  settings: ["hotel-config", "permissions-matrix", "api-keys", "subscription"],
   stock: ["stock-items", "stock-locations", "stock-low", "stock-current"],
   users: ["users"]
 };

@@ -20,7 +20,12 @@ from app.models.guest import Guest, GuestTag, GuestTagTypeEnum
 from app.models.operations import BillingAdjustment
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.hotel_config import HotelConfiguration
-from app.services.reservation_service import transition_reservation_status, ReservationError
+from app.services.reservation_service import (
+    ReservationError,
+    _active_reservations_without_hotel,
+    active_reservations,
+    transition_reservation_status,
+)
 from app.services.jurisdiction_profile import compute_missing_guest_fields
 from app.models.room import Room, RoomStatusEnum
 from app.services.guest_profile import get_guest_profile, validate_primary_guest_record
@@ -68,8 +73,7 @@ def _notify_reservation_event(db: Session, *, hotel_id: int, reservation: Reserv
 def _resolve_jurisdiction_code(config: HotelConfiguration | None) -> str:
     if not config:
         return "AR"
-    extra_policies = config.get_extra_policies()
-    return str(extra_policies.get("jurisdiction_code") or "AR").strip().upper()
+    return str(config.jurisdiction_code or "AR").strip().upper()
 
 
 def validate_guest_for_checkin(
@@ -101,9 +105,11 @@ def validate_guest_for_checkin(
 
 
 def _load_reservation(db: Session, reservation_id: int, hotel_id: int | None) -> tuple[Reservation, int]:
-    reservation_q = db.query(Reservation).filter(Reservation.id == reservation_id)
-    if hotel_id is not None:
-        reservation_q = reservation_q.filter(Reservation.hotel_id == hotel_id)
+    reservation_q = (
+        active_reservations(db, hotel_id)
+        if hotel_id is not None
+        else _active_reservations_without_hotel(db)
+    ).filter(Reservation.id == reservation_id)
     reservation = reservation_q.first()
 
     if not reservation:
@@ -334,9 +340,11 @@ def perform_checkout(
     3. Transition to checked_out
     4. Record actual check-out timestamp
     """
-    reservation_q = db.query(Reservation).filter(Reservation.id == reservation_id)
-    if hotel_id is not None:
-        reservation_q = reservation_q.filter(Reservation.hotel_id == hotel_id)
+    reservation_q = (
+        active_reservations(db, hotel_id)
+        if hotel_id is not None
+        else _active_reservations_without_hotel(db)
+    ).filter(Reservation.id == reservation_id)
     reservation = reservation_q.first()
 
     if not reservation:

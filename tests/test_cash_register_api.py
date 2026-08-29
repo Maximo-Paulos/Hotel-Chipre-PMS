@@ -42,9 +42,8 @@ def client_with_db():
         ]
     )
     db.flush()
-    # Cash register is a reception/finance lane, not a manager permission
-    # (manager's ceiling excludes cash:operate per the role matrix) -- see
-    # ROLE_PERMISSION_CEILINGS in app/services/permission_service.py.
+    # Cash register is a reception/finance lane; manager does not receive
+    # cash:operate in the default matrix.
     ctx = {"hotel_id": 1, "role": "receptionist", "user_id": 50}
 
     def override_get_db():

@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import date, datetime, time, timedelta, timezone
+from decimal import Decimal
 
-from sqlalchemy import or_
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.models.analytics import RoomStateEvent
@@ -12,6 +13,7 @@ from app.models.hotel_config import HotelConfiguration
 from app.models.ota_core import OTAInventoryRule, OTAPriceRule, OTAProvider, OTARatePlanMapping, OTARoomMapping
 from app.models.reservation import Reservation, ReservationSourceEnum, ReservationStatusEnum
 from app.models.room import Room, RoomCategory
+from app.services.reservation_service import active_reservations
 
 
 # §13 calendar cell states (derived, no persistence).
@@ -56,11 +58,12 @@ def get_daily_calendar(
     if (date_to - date_from).days > 366:
         raise ValueError("Date range cannot exceed 366 days")
 
-    category = (
-        db.query(RoomCategory)
-        .filter(RoomCategory.id == category_id, RoomCategory.hotel_id == hotel_id)
-        .first()
-    )
+    category = db.execute(
+        select(RoomCategory.id, RoomCategory.name, RoomCategory.code).where(
+            RoomCategory.id == category_id,
+            RoomCategory.hotel_id == hotel_id,
+        )
+    ).one_or_none()
     if not category:
         raise ValueError("Category not found")
 
@@ -101,23 +104,30 @@ def get_daily_calendar(
         )
     rate_plan_ids = [plan.id for plan in rate_plans]
 
-    rooms = (
-        db.query(Room)
-        .filter(
+    room_rows = db.execute(
+        select(Room.id).where(
             Room.hotel_id == hotel_id,
             Room.category_id == category_id,
             Room.is_active == True,
         )
         .order_by(Room.id.asc())
-        .all()
-    )
-    room_ids = [room.id for room in rooms]
-    total_rooms = len(rooms)
+    ).all()
+    room_ids = [row.id for row in room_rows]
+    total_rooms = len(room_rows)
 
+    # This report only needs six scalar values. Do not hydrate Reservation's
+    # joined/selectin relationship graph for every reservation in the window.
     reservations = (
-        db.query(Reservation)
+        active_reservations(db, hotel_id)
+        .with_entities(
+            Reservation.check_in_date,
+            Reservation.check_out_date,
+            Reservation.total_amount,
+            Reservation.amount_paid,
+            Reservation.source,
+            Reservation.requires_manual_review,
+        )
         .filter(
-            Reservation.hotel_id == hotel_id,
             Reservation.category_id == category_id,
             Reservation.status.in_(_ACTIVE_RESERVATION_STATUSES),
             Reservation.check_in_date <= date_to,
@@ -215,7 +225,9 @@ def get_daily_calendar(
     # §13 cell states derived from the reservations touching each day.
     cell_state_flags_by_day: dict[date, set[str]] = defaultdict(set)
     for reservation in reservations:
-        has_balance = reservation.balance_due > 0
+        total_amount = Decimal(str(reservation.total_amount or 0))
+        amount_paid = Decimal(str(reservation.amount_paid or 0))
+        has_balance = max(Decimal("0"), total_amount - amount_paid) > 0
         is_ota = reservation.source in _OTA_SOURCES
         states: set[str] = set()
         if has_balance:

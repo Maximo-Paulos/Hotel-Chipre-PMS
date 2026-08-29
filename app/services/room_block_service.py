@@ -103,6 +103,8 @@ def create_block(
     reason_note: str | None = None,
     created_by_user_id: int | None = None,
 ) -> RoomBlock:
+    from app.services.reservation_service import active_reservations
+
     _validate_range(starts_at, ends_at, is_indefinite)
 
     room = db.query(Room).filter(Room.id == room_id, Room.hotel_id == hotel_id).first()
@@ -111,9 +113,9 @@ def create_block(
 
     conflict_window_end = ends_at or date.max
     protected_reservations = (
-        db.query(Reservation.id)
+        active_reservations(db, hotel_id)
+        .with_entities(Reservation.id)
         .filter(
-            Reservation.hotel_id == hotel_id,
             Reservation.room_id == room_id,
             Reservation.status.notin_([ReservationStatusEnum.CANCELLED, ReservationStatusEnum.CHECKED_OUT]),
             Reservation.check_in_date < conflict_window_end,

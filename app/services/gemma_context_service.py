@@ -14,6 +14,7 @@ from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.room import Room
 from app.services.allocation_policy_service import get_active_policy_settings
 from app.services.reservation_action_service import list_pending_reservation_actions
+from app.services.reservation_service import active_reservations
 
 
 _ACTIVE_RESERVATION_STATUSES = (
@@ -52,9 +53,8 @@ def build_gemma_hotel_context(
     room_status_counts = {_enum_value(status): int(count) for status, count in room_status_rows}
 
     recent_reservations = (
-        db.query(Reservation)
+        active_reservations(db, hotel_id)
         .filter(
-            Reservation.hotel_id == hotel_id,
             Reservation.check_in_date >= lookback_start,
             Reservation.check_in_date <= today,
             Reservation.status != ReservationStatusEnum.CANCELLED,
@@ -62,9 +62,8 @@ def build_gemma_hotel_context(
         .all()
     )
     upcoming_reservations = (
-        db.query(Reservation)
+        active_reservations(db, hotel_id)
         .filter(
-            Reservation.hotel_id == hotel_id,
             Reservation.check_out_date > today,
             Reservation.check_in_date <= horizon_end,
             Reservation.status.in_(_ACTIVE_RESERVATION_STATUSES),

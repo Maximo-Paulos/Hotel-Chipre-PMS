@@ -1,5 +1,7 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
+const backendURL = (process.env.E2E_BACKEND_URL || "http://127.0.0.1:8040").replace(/\/$/, "");
+
 type Persona = {
   label: string;
   email: string;
@@ -54,6 +56,32 @@ async function login(page: Page, persona: Persona) {
     housekeeping: "Housekeeping"
   };
   await expect(page.getByTestId("session-role")).toHaveText(roleLabel[persona.label]);
+}
+
+type ApiSession = {
+  hotelId: number;
+  userId: string;
+  accessToken: string;
+  csrfToken?: string;
+};
+
+async function readApiSession(page: Page, credentials: { email: string; password: string }): Promise<ApiSession> {
+  // Use a fresh API login only for owner-authorized setup/cleanup. The browser
+  // session remains the user journey under test, and no secrets are logged.
+  const response = await page.request.post(`${backendURL}/api/auth/login`, { data: credentials });
+  expect(response.ok()).toBeTruthy();
+  const payload = (await response.json()) as {
+    hotel_id: number;
+    user: { email: string };
+    access_token: string;
+    csrf_token?: string;
+  };
+  return {
+    hotelId: payload.hotel_id,
+    userId: payload.user.email,
+    accessToken: payload.access_token,
+    csrfToken: payload.csrf_token
+  };
 }
 
 async function operationalNavigation(page: Page): Promise<Locator> {
@@ -211,9 +239,86 @@ test("owner receives the financial report", async ({ page }) => {
   await expect(page.getByTestId("financial-report")).toBeVisible();
 });
 
-// D2 (Via D lavanderia): laundry:manage_vendors is owner/co_owner/manager
+test("owner can grant receptionist rates read without granting rate edits", async ({ page }) => {
+  const owner: Persona = {
+    label: "owner",
+    email: process.env.E2E_OWNER_EMAIL || "owner@e2e.com",
+    password: process.env.E2E_OWNER_PASSWORD || "E2ePass1234!",
+    landingPath: "/dashboard",
+    allowedPath: "/reportes",
+    allowedHeading: /^Reportes$/,
+    forbiddenNavPaths: []
+  };
+  const receptionist = personas.find((persona) => persona.label === "receptionist")!;
+
+  await login(page, owner);
+  const ownerSession = await readApiSession(page, owner);
+  const headers = {
+    "X-Hotel-Id": String(ownerSession.hotelId),
+    "X-User-Id": ownerSession.userId,
+    Authorization: `Bearer ${ownerSession.accessToken}`,
+    "X-CSRF-Token": String(ownerSession.csrfToken || ""),
+    "Content-Type": "application/json"
+  };
+  const grantResponse = await page.request.put(`${backendURL}/api/permissions/override`, {
+    headers,
+    data: { role: "receptionist", permission_code: "rates:read", allowed: true }
+  });
+  expect(grantResponse.ok()).toBeTruthy();
+  const grant = (await grantResponse.json()) as { version: number };
+
+  try {
+    await login(page, receptionist);
+    await page.goto("/operacion/tarifas");
+    await expect(page).toHaveURL(/\/operacion\/tarifas$/);
+    await expect(page.getByTestId("rate-calendar-page")).toBeVisible();
+    await expect(page.getByTestId("rate-calendar-grid")).toBeVisible();
+    await expect(page.getByTestId("rate-editor-save")).toBeDisabled();
+    await expect(page.getByTestId("rate-editor-grid").locator("input").first()).toBeDisabled();
+  } finally {
+    const restoreResponse = await page.request.delete(
+      `${backendURL}/api/permissions/role-overrides/receptionist/${encodeURIComponent("rates:read")}?expected_version=${grant.version}`,
+      { headers }
+    );
+    expect(restoreResponse.ok()).toBeTruthy();
+  }
+
+  await page.goto("/operacion/tarifas");
+  await expect(page).toHaveURL(/\/dashboard$/);
+});
+
+test("permissions screen shows the catalog help text in an InfoTip", async ({ page }) => {
+  const owner: Persona = {
+    label: "owner",
+    email: process.env.E2E_OWNER_EMAIL || "owner@e2e.com",
+    password: process.env.E2E_OWNER_PASSWORD || "E2ePass1234!",
+    landingPath: "/dashboard",
+    allowedPath: "/reportes",
+    allowedHeading: /^Reportes$/,
+    forbiddenNavPaths: []
+  };
+
+  await login(page, owner);
+  const catalogResponsePromise = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === "/api/permissions/catalog" && response.ok()
+  );
+  await page.goto("/settings/permissions");
+  const catalogResponse = await catalogResponsePromise;
+  const catalog = (await catalogResponse.json()) as {
+    permissions: Array<{ description: string; help_es: string }>;
+  };
+  const permission = catalog.permissions.find((item) => item.help_es.trim());
+  expect(permission).toBeDefined();
+
+  const infoButton = page.getByRole("button", { name: `Más información sobre ${permission!.description}` }).first();
+  await expect(infoButton).toBeVisible();
+  await infoButton.click();
+  await expect(page.getByRole("tooltip")).toContainText(permission!.help_es);
+});
+
+// D2 (Via D lavanderia): laundry:vendor_manage is owner/co_owner/manager
 // only (vendor setup + pricing); housekeeping only holds
-// laundry:operate_remitos (create/list remitos, see balance). The "Nuevo
+// laundry:remito_manage (create/list remitos, see balance). The "Nuevo
 // lavadero" panel was shown to everyone regardless and its POST always
 // 403'd for housekeeping.
 test("housekeeping can create remitos but not manage laundry vendors", async ({ page }) => {
@@ -237,7 +342,7 @@ test("manager keeps laundry vendor management", async ({ page }) => {
   await expect(main.getByRole("button", { name: "Crear lavadero" })).toBeVisible();
 });
 
-// PERMISSION_STOCK_ADJUST is owner/co_owner only; manager has PERMISSION_STOCK_OPERATE
+// PERMISSION_STOCK_ADJUST is owner/co_owner only; manager has PERMISSION_STOCK_MOVE
 // (in/out movements) but not adjustments (see _ensure_adjustment_permission in
 // app/api/stock.py). StockPage offered the "Ajuste" movement-type option to
 // manager regardless, which always 403s on submit.

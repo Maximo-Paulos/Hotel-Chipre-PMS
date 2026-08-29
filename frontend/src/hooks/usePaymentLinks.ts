@@ -27,7 +27,18 @@ export function usePaymentLinkCreate(reservationId?: number) {
   const { session } = useSession();
   return useMutation({
     mutationFn: (payload: PaymentLinkCreatePayload) => createPaymentLink(payload, session),
-    onSuccess: () => qc.invalidateQueries({ queryKey: linksKey(session.hotelId, reservationId) })
+    onSuccess: (created: PaymentLink) => {
+      const key = linksKey(session.hotelId, reservationId);
+      // The POST response is already the persisted source of truth. Publish it
+      // immediately so a successful local-only request is visible even when
+      // the edit form's initial list request is still in flight; the refetch
+      // below reconciles the cache with the canonical server ordering.
+      qc.setQueryData<PaymentLink[]>(key, (current) => [
+        created,
+        ...(current ?? []).filter((link) => link.id !== created.id)
+      ]);
+      void qc.invalidateQueries({ queryKey: key });
+    }
   });
 }
 
