@@ -104,7 +104,9 @@ def test_neo4j_reservation_assignment_lands_nodes(monkeypatch: pytest.MonkeyPatc
     _enable(monkeypatch, "neo4j")
     monkeypatch.setenv("NEO4J_URI", os.getenv("NOSQL_SMOKE_NEO4J_URI", "bolt://127.0.0.1:7687"))
     monkeypatch.setenv("NEO4J_USER", os.getenv("NOSQL_SMOKE_NEO4J_USER", "neo4j"))
-    monkeypatch.setenv("NEO4J_PASSWORD", os.getenv("NOSQL_SMOKE_NEO4J_PASSWORD", "neo4j"))
+    # Neo4j refuses "neo4j" as a password (it is the shipped default), so the
+    # local stack uses the same value docker-compose.yml sets.
+    monkeypatch.setenv("NEO4J_PASSWORD", os.getenv("NOSQL_SMOKE_NEO4J_PASSWORD", "hotelpms_local"))
     get_settings.cache_clear()
 
     from app.db.neo4j import get_neo4j_driver, neo4j_healthcheck

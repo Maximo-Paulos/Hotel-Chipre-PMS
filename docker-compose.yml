@@ -56,7 +56,7 @@ services:
     image: neo4j:5
     restart: unless-stopped
     environment:
-      NEO4J_AUTH: neo4j/neo4j
+      NEO4J_AUTH: neo4j/hotelpms_local
     ports:
       - "7474:7474"
       - "7687:7687"
@@ -64,7 +64,8 @@ services:
       - neo4j_data:/data
       - neo4j_logs:/logs
     healthcheck:
-      test: ["CMD-SHELL", "cypher-shell 'RETURN 1' || exit 1"]
+      # Must pass credentials: the stack no longer runs Neo4j without auth.
+      test: ["CMD-SHELL", "cypher-shell -u neo4j -p hotelpms_local 'RETURN 1' || exit 1"]
       interval: 10s
       timeout: 10s
       retries: 10
@@ -94,7 +95,7 @@ services:
       CASSANDRA_ENABLED: "false"
       NEO4J_URI: bolt://neo4j:7687
       NEO4J_USER: neo4j
-      NEO4J_PASSWORD: neo4j
+      NEO4J_PASSWORD: hotelpms_local
       NEO4J_ENABLED: "false"
     ports:
       - "8000:8000"
