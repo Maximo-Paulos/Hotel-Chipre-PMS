@@ -18,6 +18,7 @@ from app.services.permission_service import (
     PERMISSION_GUEST_UPDATE,
     PERMISSION_GUEST_VIEW,
     PERMISSION_DEFINITIONS,
+    PERMISSION_OCCUPANCY_VIEW,
     PERMISSION_RESERVATION_CREATE,
     PERMISSION_RESERVATION_MANUAL_RATE,
     PERMISSION_REPORTS_FINANCIAL_VIEW,
@@ -69,6 +70,8 @@ def test_default_permissions_seeded_for_owner_manager_reception_housekeeping(db)
     assert rows[("owner", PERMISSION_REPORTS_FINANCIAL_VIEW)] is True
     assert rows[("co_owner", PERMISSION_REPORTS_FINANCIAL_VIEW)] is True
     assert rows[("housekeeping", PERMISSION_ROOM_CLEANING_STATUS)] is True
+    # Product default: cleaning staff do not receive guest/reservation data.
+    assert rows[("housekeeping", PERMISSION_OCCUPANCY_VIEW)] is False
     # Defaults remain conservative, but they are editable starting values
     # rather than a permanent ceiling for an explicit owner override.
     assert rows[("manager", PERMISSION_STOCK_ADJUST)] is False

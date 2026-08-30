@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-29T23:58:53.218Z",
+  "generatedAt": "2026-08-30T05:21:22.624Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -16455,6 +16455,28 @@
       "warnings": []
     },
     {
+      "id": "flow:versions_20260830_hk_occupancy_default_downgrade",
+      "name": "downgrade",
+      "entryPoint": "versions_20260830_hk_occupancy_default_downgrade",
+      "entryPointId": "versions_20260830_hk_occupancy_default_downgrade",
+      "path": [
+        "versions_20260830_hk_occupancy_default_downgrade",
+        "versions_20260830_hk_occupancy_default_set_role_default"
+      ],
+      "qualifiedPath": [
+        "versions_20260830_hk_occupancy_default_downgrade",
+        "versions_20260830_hk_occupancy_default_set_role_default"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20260830_hk_occupancy_default.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:versions_3bc5882f756d_add_role_visibility_windows_downgrade",
       "name": "downgrade",
       "entryPoint": "versions_3bc5882f756d_add_role_visibility_windows_downgrade",
@@ -20490,6 +20512,28 @@
       "fileCount": 1,
       "files": [
         "alembic/versions/20260828_retire_category_pricing.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:versions_20260830_hk_occupancy_default_upgrade",
+      "name": "upgrade",
+      "entryPoint": "versions_20260830_hk_occupancy_default_upgrade",
+      "entryPointId": "versions_20260830_hk_occupancy_default_upgrade",
+      "path": [
+        "versions_20260830_hk_occupancy_default_upgrade",
+        "versions_20260830_hk_occupancy_default_set_role_default"
+      ],
+      "qualifiedPath": [
+        "versions_20260830_hk_occupancy_default_upgrade",
+        "versions_20260830_hk_occupancy_default_set_role_default"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20260830_hk_occupancy_default.py"
       ],
       "criticality": 0.16,
       "warnings": []

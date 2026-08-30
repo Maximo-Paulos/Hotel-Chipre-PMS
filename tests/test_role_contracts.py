@@ -25,6 +25,7 @@ from app.services.permission_service import (
     PERMISSION_GUEST_EDIT,
     PERMISSION_GUEST_TAGS,
     PERMISSION_GUEST_VIEW,
+    PERMISSION_OCCUPANCY_VIEW,
     PERMISSION_REPORTS_FINANCIAL_VIEW,
     PERMISSION_REPORTS_OPERATIONAL_VIEW,
     PERMISSION_ROOM_CLEANING_STATUS,
@@ -123,6 +124,13 @@ def test_housekeeping_cannot_access_guest_or_reservation_pii(role_client):
     assert client.get(f"/api/guests/{guest.id}").status_code == 403
     assert client.get("/api/reservations/").status_code == 403
     assert client.get("/api/reservations/actions/pending").status_code == 403
+    assert (
+        client.get(
+            "/api/reservations/occupancy-grid",
+            params={"date_from": date.today().isoformat(), "date_to": (date.today() + timedelta(days=1)).isoformat()},
+        ).status_code
+        == 403
+    )
     assert client.get("/api/bookings/").status_code == 403
 
 
@@ -233,10 +241,10 @@ SECTION_VIEW_PERMISSION_ROLE_CONTRACTS = (
     ("analytics:advanced:view", {"owner", "co_owner"}),
     ("analytics:ai:view", {"owner", "co_owner"}),
     ("dashboard:view", {"owner", "co_owner", "manager", "receptionist"}),
-    # These two defaults follow the existing API guards, which are broader
-    # than the frontend route derivation: housekeeping already has room:read
-    # for occupancy-grid, and manager already has company:manage for companies.
-    ("occupancy:view", {"owner", "co_owner", "manager", "receptionist", "housekeeping"}),
+    # Product decision: cleaning staff get no guest or reservation data by
+    # default. This is intentionally not derived from frontend routes; an
+    # owner may explicitly grant occupancy:view for a particular hotel.
+    (PERMISSION_OCCUPANCY_VIEW, {"owner", "co_owner", "manager", "receptionist"}),
     ("waitlist:view", {"owner", "co_owner", "manager", "receptionist"}),
     ("waitlist:manage", {"owner", "co_owner", "manager", "receptionist"}),
     ("cash:view", {"owner", "co_owner", "receptionist"}),

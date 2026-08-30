@@ -132,6 +132,80 @@ def test_permission_catalog_migration_is_additive_and_reversible(tmp_path):
         engine.dispose()
 
 
+def test_housekeeping_occupancy_default_migration_tightens_without_touching_grant(tmp_path):
+    cwd = os.path.dirname(os.path.dirname(__file__))
+    db_path = str(tmp_path / "housekeeping-occupancy-default.db")
+    previous_head = "20260829_permission_enforcement"
+    new_head = "20260830_hk_occupancy_default"
+
+    _alembic(cwd, db_path, "upgrade", PRE_REVISION)
+    engine = create_engine(f"sqlite:///{db_path}")
+    try:
+        insert_historical_hotel_config(engine, 1)
+    finally:
+        engine.dispose()
+
+    _alembic(cwd, db_path, "upgrade", previous_head)
+    engine = create_engine(f"sqlite:///{db_path}")
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO hotel_permission_overrides "
+                    "(hotel_id, role, permission_code, allowed) "
+                    "VALUES (1, 'housekeeping', 'occupancy:view', 1)"
+                )
+            )
+    finally:
+        engine.dispose()
+
+    _alembic(cwd, db_path, "upgrade", new_head)
+    engine = create_engine(f"sqlite:///{db_path}")
+    try:
+        with engine.connect() as connection:
+            assert connection.execute(
+                text(
+                    "SELECT allowed FROM role_permission_defaults "
+                    "WHERE role = 'housekeeping' AND permission_code = 'occupancy:view'"
+                )
+            ).scalar() == 0
+            assert connection.execute(
+                text(
+                    "SELECT allowed FROM hotel_permission_overrides "
+                    "WHERE hotel_id = 1 AND role = 'housekeeping' "
+                    "AND permission_code = 'occupancy:view'"
+                )
+            ).scalar() == 1
+            assert connection.execute(
+                text(
+                    "SELECT COUNT(*) FROM role_permission_defaults "
+                    "WHERE role = 'housekeeping' AND permission_code = 'occupancy:view'"
+                )
+            ).scalar() == 1
+    finally:
+        engine.dispose()
+
+    _alembic(cwd, db_path, "downgrade", previous_head)
+    engine = create_engine(f"sqlite:///{db_path}")
+    try:
+        with engine.connect() as connection:
+            assert connection.execute(
+                text(
+                    "SELECT allowed FROM role_permission_defaults "
+                    "WHERE role = 'housekeeping' AND permission_code = 'occupancy:view'"
+                )
+            ).scalar() == 1
+            assert connection.execute(
+                text(
+                    "SELECT allowed FROM hotel_permission_overrides "
+                    "WHERE hotel_id = 1 AND role = 'housekeeping' "
+                    "AND permission_code = 'occupancy:view'"
+                )
+            ).scalar() == 1
+    finally:
+        engine.dispose()
+
+
 def test_permission_enforcement_migration_backfills_defaults_and_removes_sessions(tmp_path):
     cwd = os.path.dirname(os.path.dirname(__file__))
     db_path = str(tmp_path / "permission-enforcement.db")
@@ -144,6 +218,7 @@ def test_permission_enforcement_migration_backfills_defaults_and_removes_session
         insert_historical_hotel_config(engine, 1)
     finally:
         engine.dispose()
+
 
     _alembic(cwd, db_path, "upgrade", previous_head)
     engine = create_engine(f"sqlite:///{db_path}")

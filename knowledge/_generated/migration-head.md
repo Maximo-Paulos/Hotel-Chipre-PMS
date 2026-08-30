@@ -1,9 +1,9 @@
 # Alembic head
 
-Generado: 2026-08-29T23:59:06.305284+00:00
-Commit: `666c024`
+Generado: 2026-08-30T05:19:16.227850+00:00
+Commit: `e6abcab`
 
 ```text
-20260829_permission_enforcement (head)
+20260830_hk_occupancy_default (head)
 ```
 Fuente: `alembic.ini` y `alembic/versions/`.

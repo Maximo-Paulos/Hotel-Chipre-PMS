@@ -988,8 +988,8 @@
     "hash": "8957ff474c6b4ab62f6ac219a5df9f87"
   },
   "app/services/permission_service.py": {
-    "mtime": 1788047200744.2524,
-    "hash": "89eb21e8045b0e17b6853156d41d9771"
+    "mtime": 1788066553377.2146,
+    "hash": "2e36aa00e7424ec7d217124c4377a555"
   },
   "app/services/pricing_policy_service.py": {
     "mtime": 1787360063279.0254,
@@ -1396,8 +1396,8 @@
     "hash": "6acea01e9771ad459993dc7d8f386ced"
   },
   "frontend/src/ui/AppShell.tsx": {
-    "mtime": 1788046994545.7063,
-    "hash": "b21f609ebcfd2b4dc529b5860bac5c17"
+    "mtime": 1788063814527.2256,
+    "hash": "5599ea27960b9dc0c46c09c1dec64f2b"
   },
   "frontend/src/ui/HotelSelector.tsx": {
     "mtime": 1787360058515.8127,
@@ -1912,12 +1912,12 @@
     "hash": "97854fe2b1d7c9794858adf271cc05ca"
   },
   "tests/test_permission_service.py": {
-    "mtime": 1788026569648.2012,
-    "hash": "77d54d1df2a5692814de9500a48d48f1"
+    "mtime": 1788066553540.4648,
+    "hash": "c2479de4b05cfbaef29a392b1af59bc1"
   },
   "tests/test_permissions_api.py": {
-    "mtime": 1788047611615.5288,
-    "hash": "5d0589267c19d985cfc9d5101b32e769"
+    "mtime": 1788066553500.2937,
+    "hash": "175b4d8861c99effcaeddd957efd2d40"
   },
   "tests/test_postgres_validation.py": {
     "mtime": 1787360063389.443,
@@ -2784,28 +2784,28 @@
     "hash": "84364af62f8c6b7d15983dd02b1a18bf"
   },
   "knowledge/_generated/README.md": {
-    "mtime": 1788026569640.2996,
-    "hash": "09d13a8033bbf700cd9c7b724a5f773a"
+    "mtime": 1788067156758.022,
+    "hash": "f9ffeae3b41b8306947714d46addd502"
   },
   "knowledge/_generated/api-surface.md": {
-    "mtime": 1788026569640.3997,
-    "hash": "7b7a861dbc82c322944760906ef05982"
+    "mtime": 1788067156090.7244,
+    "hash": "0b932feb1b17295610538cfa3c4458e2"
   },
   "knowledge/_generated/cloud-surfaces.md": {
-    "mtime": 1788026569640.695,
-    "hash": "1c225d8b37085790a4747e5b560e5e47"
+    "mtime": 1788067156746.678,
+    "hash": "2e1ab658ae3b5ef4d698611cc5013da8"
   },
   "knowledge/_generated/frontend-routes.md": {
-    "mtime": 1788026569640.7915,
-    "hash": "7cd6eb74c83ac37375f5bec9aa1299fc"
+    "mtime": 1788067156102.0786,
+    "hash": "ef844ea1100a06ea86716cc14390e181"
   },
   "knowledge/_generated/graphify-summary.md": {
-    "mtime": 1788026569640.8914,
-    "hash": "cbe76b06f2993884123a6739373397a4"
+    "mtime": 1788067156735.337,
+    "hash": "3191d41586e3847a567d841d83243489"
   },
   "knowledge/_generated/migration-head.md": {
-    "mtime": 1788026569640.9846,
-    "hash": "d42d7d6deea8514cfc6e6190e82e7bea"
+    "mtime": 1788067156240.2544,
+    "hash": "3628fbca133f1d0a3c1042d5a285086a"
   },
   "qa/evidence/README.md": {
     "mtime": 1787360058523.809,
@@ -3976,8 +3976,8 @@
     "hash": "b984dbaafdf0ee332fc1506e7f4b2ae6"
   },
   "tests/test_role_contracts.py": {
-    "mtime": 1788046994300.957,
-    "hash": "3551cf088199318635ab50b0f0c0b5f6"
+    "mtime": 1788067191400.6746,
+    "hash": "abe13f5a2fe63d111536d0636fc9828e"
   },
   "tests/test_settings_security_api.py": {
     "mtime": 1787360063391.4036,
@@ -4828,12 +4828,12 @@
     "hash": "89579529cc0bb5165242bfdfe9273fee"
   },
   "alembic/versions/20260828_permission_catalog.py": {
-    "mtime": 1788046994352.6692,
-    "hash": "04d6e5427bc2839e1055d515a1554772"
+    "mtime": 1788048157034.4434,
+    "hash": "aff1401870e2da75d2345c6d9e73dbeb"
   },
   "tests/test_permission_catalog_migration.py": {
-    "mtime": 1788047504898.1003,
-    "hash": "1960625652eac6ebf9243a581e6aa30c"
+    "mtime": 1788067040954.952,
+    "hash": "6053f3b527bf402a5aac56bc3f4b57d6"
   },
   "alembic/versions/3bc5882f756d_add_role_visibility_windows.py": {
     "mtime": 1788026569618.464,
@@ -4922,5 +4922,9 @@
   "tests/test_section_view_enforcement.py": {
     "mtime": 1788047561508.9963,
     "hash": "a8e6b9185304e8812c2e456a5ac20f39"
+  },
+  "alembic/versions/20260830_hk_occupancy_default.py": {
+    "mtime": 1788067040919.0354,
+    "hash": "ebbb2aa3b2d32673780b1e73639f2f25"
   }
 }

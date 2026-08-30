@@ -18,6 +18,7 @@ from app.services.permission_service import (
     PERMISSION_GUEST_EDIT,
     PERMISSION_HOTEL_PROPERTY_MANAGE,
     PERMISSION_HOTEL_SECURITY_MANAGE,
+    PERMISSION_OCCUPANCY_VIEW,
     PERMISSION_RESERVATION_CREATE,
     PERMISSION_PERMISSION_MANAGE,
     PERMISSION_ROOM_STATUS_UPDATE,
@@ -314,6 +315,38 @@ def test_permission_override_can_grant_permission_missing_from_role_default():
 
         assert response.status_code == 200, response.text
         assert response.json()["allowed"] is True
+    finally:
+        fastapi_app.dependency_overrides.clear()
+        db.close()
+        engine.dispose()
+
+
+def test_owner_can_grant_housekeeping_occupancy_planner():
+    client, db, engine = _client_with_db()
+    fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner", user_id=99)
+    try:
+        grant = client.put(
+            "/api/permissions/override",
+            json={
+                "role": "housekeeping",
+                "permission_code": PERMISSION_OCCUPANCY_VIEW,
+                "allowed": True,
+            },
+        )
+
+        assert grant.status_code == 200, grant.text
+        assert grant.json()["allowed"] is True
+
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "housekeeping")
+        effective = client.get("/api/permissions/effective")
+        assert effective.status_code == 200, effective.text
+        assert PERMISSION_OCCUPANCY_VIEW in effective.json()["permissions"]
+
+        occupancy = client.get(
+            "/api/reservations/occupancy-grid",
+            params={"date_from": "2027-01-01", "date_to": "2027-01-02"},
+        )
+        assert occupancy.status_code == 200, occupancy.text
     finally:
         fastapi_app.dependency_overrides.clear()
         db.close()

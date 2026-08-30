@@ -97,8 +97,8 @@ const groupedNav: NavSection[] = [
       { label: "Pruebas", to: "/settings/tests", requiresAnyPermission: ["settings:tests:view"], hideForPreviewRoles: ["housekeeping"] },
       { label: "Hotel", to: "/settings/hotel", requiresAnyPermission: ["hotel_settings:read"], hideForPreviewRoles: ["housekeeping"] },
       { label: "Seguridad", to: "/settings/security", requiresAnyPermission: ["settings:security:view"], hideForPreviewRoles: ["housekeeping"] },
-      // Housekeeping's menu is deliberately minimal even if an administrator
-      // grants it another read permission: it stays inside rooms and laundry.
+      // Keep this presentation-only exception for the role preview. A real
+      // housekeeping user with the permission must still see the link.
       { label: "Notificaciones", to: "/settings/notifications", requiresAnyPermission: ["settings:notifications:view"], hideForPreviewRoles: ["housekeeping"] },
     ],
   },
@@ -129,6 +129,7 @@ export function AppShell() {
   // instead -- see UserBadge/session.tsx and those pages' own comments.
   const role = session.role;
   const realRole = session.baseRole ?? session.role;
+  const previewRole = role && role !== realRole ? role : null;
   const isHousekeeping = realRole === "housekeeping";
   const homePath = defaultPathForRole(realRole);
   const { hasAnyPermission, hasAllPermissions } = useEffectivePermissions();
@@ -185,12 +186,12 @@ export function AppShell() {
   const filterItems = useMemo(() => {
     return (items: NavItem[]) =>
       items
-        .filter((item) => !item.hideForPreviewRoles || (role ? !item.hideForPreviewRoles.includes(role) : false))
+        .filter((item) => !previewRole || !item.hideForPreviewRoles?.includes(previewRole))
         .filter((item) => !item.requiresAnyPermission || hasAnyPermission(item.requiresAnyPermission))
         .filter((item) => !item.requiresAllPermissions || hasAllPermissions(item.requiresAllPermissions))
         .filter((item) => !item.minPlan || (subscription?.plan ? (planRank[subscription.plan as keyof typeof planRank] ?? 0) >= (planRank[item.minPlan] ?? 0) : false))
         .filter((item) => !(item.to === "/onboarding" && onboarding?.completed));
-  }, [role, onboarding?.completed, subscription?.plan, hasAnyPermission, hasAllPermissions]);
+  }, [previewRole, onboarding?.completed, subscription?.plan, hasAnyPermission, hasAllPermissions]);
 
   const visibleDailyNav = useMemo(() => filterItems(dailyNav), [filterItems]);
 
