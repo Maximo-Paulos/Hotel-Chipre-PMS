@@ -91,6 +91,7 @@ from app.services.permission_service import (
     PERMISSION_RESERVATION_READ,
     PERMISSION_RESERVATION_UPDATE,
     PERMISSION_ROOM_READ,
+    PERMISSION_OCCUPANCY_VIEW,
     audit_permission_denied,
     resolve,
 )
@@ -360,7 +361,7 @@ def occupancy_grid(
     date_from: date = Query(...),
     date_to: date = Query(...),
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_ROOM_READ)),
+    context: AuthContext = Depends(require_all_permissions(PERMISSION_ROOM_READ, PERMISSION_OCCUPANCY_VIEW)),
 ):
     """B2: planilla de ocupación — rooms x days grid data for one hotel."""
     if date_to <= date_from:

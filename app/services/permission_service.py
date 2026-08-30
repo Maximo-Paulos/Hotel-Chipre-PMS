@@ -109,7 +109,6 @@ PERMISSION_SETTINGS_INTEGRATIONS_VIEW = "settings:integrations:view"
 PERMISSION_SETTINGS_INTEGRATIONS_MANAGE = "settings:integrations:manage"
 PERMISSION_SETTINGS_SUBSCRIPTION_VIEW = "settings:subscription:view"
 PERMISSION_SETTINGS_SECURITY_VIEW = "settings:security:view"
-PERMISSION_SETTINGS_SESSIONS_VIEW = "settings:sessions:view"
 PERMISSION_SETTINGS_NOTIFICATIONS_VIEW = "settings:notifications:view"
 PERMISSION_SETTINGS_ASSISTANT_VIEW = "settings:assistant:view"
 PERMISSION_SETTINGS_TESTS_VIEW = "settings:tests:view"
@@ -388,10 +387,6 @@ _CANONICAL_DEFINITIONS: dict[str, tuple[str, str, str]] = {
         "settings", "Read security settings",
         "Permite abrir la configuración de seguridad y consultar su estado. No permite modificar secretos, sesiones ni políticas.",
     ),
-    PERMISSION_SETTINGS_SESSIONS_VIEW: (
-        "settings", "Read active sessions",
-        "Permite consultar las sesiones activas del hotel. No permite revocarlas ni cambiar credenciales.",
-    ),
     PERMISSION_SETTINGS_NOTIFICATIONS_VIEW: (
         "settings", "Read notifications",
         "Permite abrir y consultar las notificaciones del hotel. No permite cambiar preferencias ni enviar mensajes.",
@@ -470,7 +465,7 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
         PERMISSION_LAUNDRY_PRICE_MANAGE, PERMISSION_RATES_READ,
         PERMISSION_RATES_UPDATE, PERMISSION_PROMOTIONS_READ,
         PERMISSION_PROMOTIONS_MANAGE, PERMISSION_REPORTS_OPERATIONAL_VIEW,
-        PERMISSION_COMPANY_MANAGE,
+        PERMISSION_COMPANY_MANAGE, PERMISSION_COMPANY_VIEW,
         PERMISSION_DASHBOARD_VIEW, PERMISSION_OCCUPANCY_VIEW,
         PERMISSION_WAITLIST_VIEW, PERMISSION_WAITLIST_MANAGE,
         PERMISSION_SETTINGS_NOTIFICATIONS_VIEW, PERMISSION_SETTINGS_ASSISTANT_VIEW,
@@ -490,6 +485,7 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
     ROLE_HOUSEKEEPING: _role_permissions(
         PERMISSION_ROOM_READ, PERMISSION_ROOM_STATUS_UPDATE, PERMISSION_LAUNDRY_READ,
         PERMISSION_LAUNDRY_MOVE, PERMISSION_LAUNDRY_REMITO_MANAGE,
+        PERMISSION_OCCUPANCY_VIEW,
     ),
 }
 

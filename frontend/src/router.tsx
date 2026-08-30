@@ -242,7 +242,7 @@ const appRoutes = APP_HOST
           { path: "settings/tests", element: <PermissionGate anyPermission={["settings:tests:view"]}><SettingsTestsPage /></PermissionGate> },
           { path: "settings/hotel", element: <PermissionGate anyPermission={["hotel_settings:read"]}><SettingsHotelPage /></PermissionGate> },
           { path: "settings/security", element: <PermissionGate anyPermission={["settings:security:view"]}><SettingsSecurityPage /></PermissionGate> },
-          { path: "settings/sessions", element: <PermissionGate anyPermission={["settings:sessions:view"]}><SettingsSessionsPage /></PermissionGate> },
+          { path: "settings/sessions", element: <SettingsSessionsPage /> },
           { path: "settings/notifications", element: <PermissionGate anyPermission={["settings:notifications:view"]}><SettingsNotificationsPage /></PermissionGate> }
         ]
       },

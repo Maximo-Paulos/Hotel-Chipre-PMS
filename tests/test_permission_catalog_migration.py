@@ -130,3 +130,126 @@ def test_permission_catalog_migration_is_additive_and_reversible(tmp_path):
             ).scalar() == 1
     finally:
         engine.dispose()
+
+
+def test_permission_enforcement_migration_backfills_defaults_and_removes_sessions(tmp_path):
+    cwd = os.path.dirname(os.path.dirname(__file__))
+    db_path = str(tmp_path / "permission-enforcement.db")
+    previous_head = "20260828_query_shape_indexes"
+    new_head = "20260829_permission_enforcement"
+
+    _alembic(cwd, db_path, "upgrade", PRE_REVISION)
+    engine = create_engine(f"sqlite:///{db_path}")
+    try:
+        insert_historical_hotel_config(engine, 1)
+    finally:
+        engine.dispose()
+
+    _alembic(cwd, db_path, "upgrade", previous_head)
+    engine = create_engine(f"sqlite:///{db_path}")
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "UPDATE role_permission_defaults SET allowed = 0 "
+                    "WHERE (role = 'housekeeping' AND permission_code = 'occupancy:view') "
+                    "OR (role = 'manager' AND permission_code = 'company:view')"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO hotel_permission_overrides "
+                    "(hotel_id, role, permission_code, allowed) VALUES "
+                    "(1, 'housekeeping', 'occupancy:view', 0), "
+                    "(1, 'manager', 'company:view', 0)"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO users "
+                    "(id, email, password_hash, is_active, is_verified, role, created_at, updated_at) "
+                    "VALUES (10, 'migration@example.test', 'not-a-password', 1, 1, 'owner', "
+                    "CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO hotel_memberships (hotel_id, user_id, role, status) "
+                    "VALUES (1, 10, 'owner', 'active')"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO hotel_permission_overrides "
+                    "(hotel_id, role, permission_code, allowed) "
+                    "VALUES (1, 'manager', 'settings:sessions:view', 0)"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO user_permission_overrides "
+                    "(hotel_id, user_id, permission_code, allowed) "
+                    "VALUES (1, 10, 'settings:sessions:view', 1)"
+                )
+            )
+    finally:
+        engine.dispose()
+
+    _alembic(cwd, db_path, "upgrade", new_head)
+    engine = create_engine(f"sqlite:///{db_path}")
+    try:
+        with engine.connect() as connection:
+            assert connection.execute(
+                text(
+                    "SELECT allowed FROM role_permission_defaults "
+                    "WHERE role = 'housekeeping' AND permission_code = 'occupancy:view'"
+                )
+            ).scalar() == 1
+            assert connection.execute(
+                text(
+                    "SELECT allowed FROM role_permission_defaults "
+                    "WHERE role = 'manager' AND permission_code = 'company:view'"
+                )
+            ).scalar() == 1
+            assert connection.execute(
+                text(
+                    "SELECT allowed FROM hotel_permission_overrides "
+                    "WHERE hotel_id = 1 AND role = 'housekeeping' AND permission_code = 'occupancy:view'"
+                )
+            ).scalar() == 0
+            assert connection.execute(
+                text(
+                    "SELECT allowed FROM hotel_permission_overrides "
+                    "WHERE hotel_id = 1 AND role = 'manager' AND permission_code = 'company:view'"
+                )
+            ).scalar() == 0
+            assert connection.execute(
+                text("SELECT COUNT(*) FROM permissions WHERE code = 'settings:sessions:view'")
+            ).scalar() == 0
+            for table in (
+                "role_permission_defaults",
+                "hotel_permission_overrides",
+                "user_permission_overrides",
+            ):
+                assert connection.execute(
+                    text(f"SELECT COUNT(*) FROM {table} WHERE permission_code = 'settings:sessions:view'")
+                ).scalar() == 0
+    finally:
+        engine.dispose()
+
+    _alembic(cwd, db_path, "downgrade", previous_head)
+    _alembic(cwd, db_path, "upgrade", new_head)
+    engine = create_engine(f"sqlite:///{db_path}")
+    try:
+        with engine.connect() as connection:
+            assert connection.execute(
+                text("SELECT COUNT(*) FROM permissions WHERE code = 'settings:sessions:view'")
+            ).scalar() == 0
+            assert connection.execute(
+                text(
+                    "SELECT allowed FROM role_permission_defaults "
+                    "WHERE role = 'housekeeping' AND permission_code = 'occupancy:view'"
+                )
+            ).scalar() == 1
+    finally:
+        engine.dispose()

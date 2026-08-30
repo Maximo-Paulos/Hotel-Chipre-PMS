@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies.auth import AuthContext, require_permission
+from app.dependencies.auth import AuthContext, require_all_permissions, require_permission
 from app.models.waitlist import WaitlistStatusEnum
 from app.schemas.waitlist import (
     WaitlistEntryCreate,
@@ -12,7 +12,7 @@ from app.schemas.waitlist import (
     WaitlistPromoteRequest,
     WaitlistPromoteResponse,
 )
-from app.services.permission_service import PERMISSION_RESERVATION_CREATE
+from app.services.permission_service import PERMISSION_RESERVATION_CREATE, PERMISSION_WAITLIST_VIEW
 from app.services.waitlist_service import (
     WaitlistError,
     add_to_waitlist,
@@ -51,7 +51,7 @@ def create_waitlist_entry(
 def list_waitlist(
     status_filter: WaitlistStatusEnum | None = None,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_CREATE)),
+    context: AuthContext = Depends(require_all_permissions(PERMISSION_RESERVATION_CREATE, PERMISSION_WAITLIST_VIEW)),
 ):
     return list_waitlist_entries(db, context.hotel_id, status_filter=status_filter)
 
@@ -60,7 +60,7 @@ def list_waitlist(
 def read_waitlist_entry(
     entry_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_CREATE)),
+    context: AuthContext = Depends(require_all_permissions(PERMISSION_RESERVATION_CREATE, PERMISSION_WAITLIST_VIEW)),
 ):
     try:
         return get_waitlist_entry(db, context.hotel_id, entry_id)

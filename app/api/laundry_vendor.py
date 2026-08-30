@@ -18,7 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies.auth import AuthContext, require_any_permission, require_permission
+from app.dependencies.auth import AuthContext, require_all_permissions, require_any_permission, require_permission
 from app.services.laundry_vendor_service import (
     LaundryVendorError,
     create_remito,
@@ -48,6 +48,7 @@ from app.services.linen_service import (
 from app.services.permission_service import (
     PERMISSION_LAUNDRY_MANAGE_VENDORS,
     PERMISSION_LAUNDRY_OPERATE_REMITOS,
+    PERMISSION_LAUNDRY_PRICE_MANAGE,
     PERMISSION_REPORTS_FINANCIAL_VIEW,
 )
 
@@ -426,7 +427,9 @@ def upsert_laundry_vendor_price(
     vendor_id: int,
     data: VendorPriceUpsert,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_LAUNDRY_MANAGE_VENDORS)),
+    context: AuthContext = Depends(
+        require_all_permissions(PERMISSION_LAUNDRY_MANAGE_VENDORS, PERMISSION_LAUNDRY_PRICE_MANAGE)
+    ),
 ):
     try:
         price = set_vendor_price(db, hotel_id=context.hotel_id, vendor_id=vendor_id, **data.model_dump())

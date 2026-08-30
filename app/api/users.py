@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies.auth import AuthContext, get_auth_context, require_permission, require_roles
+from app.dependencies.auth import AuthContext, get_auth_context, require_permission, require_roles, require_roles_and_permission
 from app.models.audit_log import AuditActionEnum
 from app.models.user import User
 from app.models.hotel_membership import HotelMembership
@@ -16,7 +16,7 @@ from app.models.invitation import StaffInvitation
 from app.schemas.auth import UserInfo
 from app.services.security import hash_password, create_signed_token, verify_password
 from app.services import mfa_service
-from app.services.permission_service import PERMISSION_HOTEL_PROPERTY_MANAGE
+from app.services.permission_service import PERMISSION_HOTEL_PROPERTY_MANAGE, PERMISSION_SETTINGS_USERS_VIEW
 from app.services.invitation_service import (
     invitation_snapshot,
     issue_invitation,
@@ -85,7 +85,7 @@ def _membership_user_info(user: User, role: str) -> UserInfo:
 @router.get("/", response_model=list[UserInfo])
 def list_users(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner")),
+    context: AuthContext = Depends(require_roles_and_permission(PERMISSION_SETTINGS_USERS_VIEW, "owner", "co_owner")),
 ):
     memberships = (
         db.query(HotelMembership)

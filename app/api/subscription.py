@@ -9,7 +9,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies.auth import AuthContext, require_platform_admin, require_roles
+from app.dependencies.auth import AuthContext, require_platform_admin, require_roles, require_roles_and_permission
 from app.master_admin.security import audit_master_action
 from app.models.hotel_config import HotelConfiguration
 from app.models.room import Room
@@ -33,6 +33,7 @@ from app.services.subscription_service import (
     get_staff_usage,
     set_entitlement_override,
 )
+from app.services.permission_service import PERMISSION_SETTINGS_SUBSCRIPTION_VIEW
 
 router = APIRouter(prefix="/api/subscription", tags=["Subscription"])
 admin_router = APIRouter(prefix="/api/admin/subscription", tags=["Subscription Admin"])
@@ -77,7 +78,9 @@ def _serialize_status_payload(db: Session, hotel_id: int) -> dict:
 @router.get("/status")
 def subscription_status(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner")),
+    context: AuthContext = Depends(
+        require_roles_and_permission(PERMISSION_SETTINGS_SUBSCRIPTION_VIEW, "owner", "co_owner")
+    ),
 ):
     try:
         return _serialize_status_payload(db, context.hotel_id)
@@ -102,7 +105,9 @@ def subscription_status(
 @router.get("/plans")
 def list_plans(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner")),
+    context: AuthContext = Depends(
+        require_roles_and_permission(PERMISSION_SETTINGS_SUBSCRIPTION_VIEW, "owner", "co_owner")
+    ),
 ):
     ensure_subscription(db, context.hotel_id)
     return plan_catalog()
@@ -143,7 +148,9 @@ def start_subscription_trial(
 @router.get("/entitlements", response_model=EntitlementsResponse)
 def get_entitlements(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner")),
+    context: AuthContext = Depends(
+        require_roles_and_permission(PERMISSION_SETTINGS_SUBSCRIPTION_VIEW, "owner", "co_owner")
+    ),
 ):
     return entitlements_payload(db, context.hotel_id)
 

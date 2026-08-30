@@ -97,7 +97,6 @@ const groupedNav: NavSection[] = [
       { label: "Pruebas", to: "/settings/tests", requiresAnyPermission: ["settings:tests:view"], hideForPreviewRoles: ["housekeeping"] },
       { label: "Hotel", to: "/settings/hotel", requiresAnyPermission: ["hotel_settings:read"], hideForPreviewRoles: ["housekeeping"] },
       { label: "Seguridad", to: "/settings/security", requiresAnyPermission: ["settings:security:view"], hideForPreviewRoles: ["housekeeping"] },
-      { label: "Dispositivos", to: "/settings/sessions", requiresAnyPermission: ["settings:sessions:view"], hideForPreviewRoles: ["housekeeping"] },
       // Housekeeping's menu is deliberately minimal even if an administrator
       // grants it another read permission: it stays inside rooms and laundry.
       { label: "Notificaciones", to: "/settings/notifications", requiresAnyPermission: ["settings:notifications:view"], hideForPreviewRoles: ["housekeeping"] },

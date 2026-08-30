@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import get_db
-from app.dependencies.auth import AuthContext, require_roles
+from app.dependencies.auth import AuthContext, require_roles, require_roles_and_permission
 from app.schemas.payment_link_test import PaymentLinkTestCreate, PaymentLinkTestRead
 from app.services.payment_link_test_service import (
     PaymentLinkTestError,
@@ -14,6 +14,7 @@ from app.services.payment_link_test_service import (
     refresh_mercadopago_payment_link_test_by_reference,
     validate_mercadopago_webhook_signature,
 )
+from app.services.permission_service import PERMISSION_SETTINGS_TESTS_VIEW
 from app.services.external_effects_policy import (
     InboundProviderEventsDisabled,
     require_inbound_provider_events,
@@ -27,7 +28,7 @@ router = APIRouter(prefix="/api/payment-link-tests", tags=["Payment Link Tests"]
 @router.get("/", response_model=list[PaymentLinkTestRead])
 def list_tests(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner")),
+    context: AuthContext = Depends(require_roles_and_permission(PERMISSION_SETTINGS_TESTS_VIEW, "owner", "co_owner")),
 ):
     tests = list_payment_link_tests(db, context.hotel_id)
     db.commit()

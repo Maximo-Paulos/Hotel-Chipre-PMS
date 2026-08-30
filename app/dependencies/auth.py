@@ -320,6 +320,25 @@ def require_roles(*roles: str):
     return dependency
 
 
+def require_roles_and_permission(permission: str, *roles: str):
+    """Keep a hard role boundary while also requiring a delegated capability."""
+
+    allowed = set(roles)
+    permission_dependency = require_permission(permission)
+
+    def dependency(
+        db: Session = Depends(get_db),
+        context: AuthContext = Depends(get_auth_context),
+    ) -> AuthContext:
+        if not context.is_verified:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Verifica tu email para usar el sistema")
+        if context.user_role not in allowed:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tenes permisos para esta accion")
+        return permission_dependency(db=db, context=context)
+
+    return dependency
+
+
 def require_platform_admin():
     def dependency(
         db: Session = Depends(get_db),

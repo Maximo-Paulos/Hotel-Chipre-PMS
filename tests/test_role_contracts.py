@@ -233,18 +233,20 @@ SECTION_VIEW_PERMISSION_ROLE_CONTRACTS = (
     ("analytics:advanced:view", {"owner", "co_owner"}),
     ("analytics:ai:view", {"owner", "co_owner"}),
     ("dashboard:view", {"owner", "co_owner", "manager", "receptionist"}),
-    ("occupancy:view", {"owner", "co_owner", "manager", "receptionist"}),
+    # These two defaults follow the existing API guards, which are broader
+    # than the frontend route derivation: housekeeping already has room:read
+    # for occupancy-grid, and manager already has company:manage for companies.
+    ("occupancy:view", {"owner", "co_owner", "manager", "receptionist", "housekeeping"}),
     ("waitlist:view", {"owner", "co_owner", "manager", "receptionist"}),
     ("waitlist:manage", {"owner", "co_owner", "manager", "receptionist"}),
     ("cash:view", {"owner", "co_owner", "receptionist"}),
-    ("company:view", {"owner", "co_owner"}),
+    ("company:view", {"owner", "co_owner", "manager"}),
     ("settings:users:view", {"owner", "co_owner"}),
     ("settings:users:manage", {"owner", "co_owner"}),
     ("settings:integrations:view", {"owner", "co_owner"}),
     ("settings:integrations:manage", {"owner", "co_owner"}),
     ("settings:subscription:view", {"owner", "co_owner"}),
     ("settings:security:view", {"owner", "co_owner"}),
-    ("settings:sessions:view", {"owner", "co_owner"}),
     ("settings:notifications:view", {"owner", "co_owner", "manager", "receptionist"}),
     ("settings:assistant:view", {"owner", "co_owner", "manager"}),
     ("settings:tests:view", {"owner", "co_owner"}),

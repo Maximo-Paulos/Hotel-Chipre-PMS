@@ -16,7 +16,9 @@ from app.database import Base, get_db
 from app.dependencies.auth import AuthContext, get_auth_context
 from app.main import app as fastapi_app
 from app.models.hotel_config import HotelConfiguration
+from app.models.permission import HotelPermissionOverride
 from app.services.linen_service import create_linen_item, create_location, register_movement
+from app.services.permission_service import PERMISSION_LAUNDRY_PRICE_MANAGE
 
 
 def _override_auth(hotel_id: int, role: str, user_id: int = 10):
@@ -87,6 +89,32 @@ def test_owner_can_manage_vendors_and_receptionist_cannot():
             json={"linen_item_id": item.id, "unit_price": "100.00"},
         )
         assert forbidden_price.status_code == 403
+    finally:
+        _teardown(db, engine)
+
+
+def test_vendor_price_write_requires_laundry_price_permission():
+    client, db, engine = _client_with_db()
+    try:
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner")
+        vendor = client.post("/api/laundry/vendors", json={"name": "Lavadero precios"})
+        assert vendor.status_code == 201, vendor.text
+        item = create_linen_item(db, hotel_id=1, name="Toallas", unit="unit", min_quantity=None, active=True)
+        db.add(
+            HotelPermissionOverride(
+                hotel_id=1,
+                role="owner",
+                permission_code=PERMISSION_LAUNDRY_PRICE_MANAGE,
+                allowed=False,
+            )
+        )
+        db.commit()
+
+        response = client.post(
+            f"/api/laundry/vendors/{vendor.json()['id']}/prices",
+            json={"linen_item_id": item.id, "unit_price": "100.00"},
+        )
+        assert response.status_code == 403, response.text
     finally:
         _teardown(db, engine)
 

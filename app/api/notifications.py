@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies.auth import AuthContext, get_auth_context, require_roles
+from app.dependencies.auth import AuthContext, get_auth_context, require_roles, require_roles_and_permission
 from app.schemas.notification import (
     DailyReportScheduleRead,
     DailyReportScheduleUpdate,
@@ -23,7 +23,7 @@ from app.schemas.notification import (
     PushSubscriptionUnregisterRequest,
 )
 from app.services import notification_service
-from app.services.permission_service import ROLE_CO_OWNER, ROLE_OWNER
+from app.services.permission_service import PERMISSION_SETTINGS_NOTIFICATIONS_VIEW, ROLE_CO_OWNER, ROLE_OWNER
 
 router = APIRouter(prefix="/api/notifications", tags=["Notifications"])
 
@@ -154,7 +154,9 @@ def _schedule_to_read(hotel_id: int, row) -> DailyReportScheduleRead:
 @router.get("/daily-report-schedule", response_model=DailyReportScheduleRead)
 def get_daily_report_schedule(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles(ROLE_OWNER, ROLE_CO_OWNER)),
+    context: AuthContext = Depends(
+        require_roles_and_permission(PERMISSION_SETTINGS_NOTIFICATIONS_VIEW, ROLE_OWNER, ROLE_CO_OWNER)
+    ),
 ):
     row = notification_service.get_daily_report_schedule(db, hotel_id=context.hotel_id)
     return _schedule_to_read(context.hotel_id, row)

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-28T23:48:50.739Z",
+  "generatedAt": "2026-08-29T23:58:53.218Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -2223,6 +2223,30 @@
       "warnings": []
     },
     {
+      "id": "flow:versions_20260829_permission_enforcement_downgrade",
+      "name": "downgrade",
+      "entryPoint": "versions_20260829_permission_enforcement_downgrade",
+      "entryPointId": "versions_20260829_permission_enforcement_downgrade",
+      "path": [
+        "versions_20260829_permission_enforcement_downgrade",
+        "versions_20260829_permission_enforcement_restore_session_permission",
+        "versions_20260829_permission_enforcement_set_role_default"
+      ],
+      "qualifiedPath": [
+        "versions_20260829_permission_enforcement_downgrade",
+        "versions_20260829_permission_enforcement_restore_session_permission",
+        "versions_20260829_permission_enforcement_set_role_default"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20260829_permission_enforcement.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
       "id": "flow:versions_62fddec52b79_repair_sqlite_reservation_status_enum_downgrade",
       "name": "downgrade",
       "entryPoint": "versions_62fddec52b79_repair_sqlite_reservation_status_enum_downgrade",
@@ -2604,6 +2628,28 @@
       "fileCount": 1,
       "files": [
         "app/api/permissions.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
+      "id": "flow:dependencies_auth_require_roles_and_permission",
+      "name": "require_roles_and_permission",
+      "entryPoint": "dependencies_auth_require_roles_and_permission",
+      "entryPointId": "dependencies_auth_require_roles_and_permission",
+      "path": [
+        "dependencies_auth_require_roles_and_permission",
+        "dependencies_auth_require_permission"
+      ],
+      "qualifiedPath": [
+        "dependencies_auth_require_roles_and_permission",
+        "dependencies_auth_require_permission"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/dependencies/auth.py"
       ],
       "criticality": 0.41,
       "warnings": []
@@ -3076,6 +3122,28 @@
       "fileCount": 1,
       "files": [
         "alembic/versions/20260828_permission_catalog.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
+      "id": "flow:versions_20260829_permission_enforcement_upgrade",
+      "name": "upgrade",
+      "entryPoint": "versions_20260829_permission_enforcement_upgrade",
+      "entryPointId": "versions_20260829_permission_enforcement_upgrade",
+      "path": [
+        "versions_20260829_permission_enforcement_upgrade",
+        "versions_20260829_permission_enforcement_set_role_default"
+      ],
+      "qualifiedPath": [
+        "versions_20260829_permission_enforcement_upgrade",
+        "versions_20260829_permission_enforcement_set_role_default"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20260829_permission_enforcement.py"
       ],
       "criticality": 0.41,
       "warnings": []

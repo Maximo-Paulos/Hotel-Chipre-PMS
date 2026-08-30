@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies.auth import AuthContext, require_permission, require_roles
+from app.dependencies.auth import AuthContext, require_all_permissions, require_roles_and_permission
 from app.schemas.gemma_chat import (
     GemmaActionApplyDraftRequest,
     GemmaActionApplyDraftResponse,
@@ -31,7 +31,7 @@ from app.services.gemma_action_run_service import (
     review_action_run_draft,
 )
 from app.services.gemma_orchestrator import GemmaChatError, GemmaOrchestrator
-from app.services.permission_service import PERMISSION_REPORTS_FINANCIAL_VIEW
+from app.services.permission_service import PERMISSION_REPORTS_FINANCIAL_VIEW, PERMISSION_SETTINGS_ASSISTANT_VIEW
 
 
 router = APIRouter(prefix="/api/gemma/chat", tags=["Gemma Chat"])
@@ -45,7 +45,9 @@ def _get_orchestrator() -> GemmaOrchestrator:
 def get_chat_history(
     limit: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
+    context: AuthContext = Depends(
+        require_all_permissions(PERMISSION_REPORTS_FINANCIAL_VIEW, PERMISSION_SETTINGS_ASSISTANT_VIEW)
+    ),
     orchestrator: GemmaOrchestrator = Depends(_get_orchestrator),
 ):
     sessions = orchestrator.list_sessions(
@@ -61,7 +63,9 @@ def get_chat_history(
 def get_chat_insights(
     limit: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
+    context: AuthContext = Depends(
+        require_all_permissions(PERMISSION_REPORTS_FINANCIAL_VIEW, PERMISSION_SETTINGS_ASSISTANT_VIEW)
+    ),
     orchestrator: GemmaOrchestrator = Depends(_get_orchestrator),
 ):
     insights = orchestrator.list_insights(
@@ -77,7 +81,9 @@ def get_chat_insights(
 def archive_chat_session(
     session_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
+    context: AuthContext = Depends(
+        require_all_permissions(PERMISSION_REPORTS_FINANCIAL_VIEW, PERMISSION_SETTINGS_ASSISTANT_VIEW)
+    ),
     orchestrator: GemmaOrchestrator = Depends(_get_orchestrator),
 ):
     try:
@@ -96,7 +102,9 @@ def archive_chat_session(
 
 @router.get("/runtime-status", response_model=GemmaRuntimeStatusRead)
 def get_runtime_status(
-    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
+    context: AuthContext = Depends(
+        require_all_permissions(PERMISSION_REPORTS_FINANCIAL_VIEW, PERMISSION_SETTINGS_ASSISTANT_VIEW)
+    ),
     orchestrator: GemmaOrchestrator = Depends(_get_orchestrator),
 ):
     _ = context
@@ -107,7 +115,9 @@ def get_runtime_status(
 def get_chat_session(
     session_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
+    context: AuthContext = Depends(
+        require_all_permissions(PERMISSION_REPORTS_FINANCIAL_VIEW, PERMISSION_SETTINGS_ASSISTANT_VIEW)
+    ),
     orchestrator: GemmaOrchestrator = Depends(_get_orchestrator),
 ):
     try:
@@ -126,7 +136,9 @@ def get_chat_session(
 def send_chat_message(
     payload: GemmaChatMessageRequest,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
+    context: AuthContext = Depends(
+        require_all_permissions(PERMISSION_REPORTS_FINANCIAL_VIEW, PERMISSION_SETTINGS_ASSISTANT_VIEW)
+    ),
     orchestrator: GemmaOrchestrator = Depends(_get_orchestrator),
 ):
     try:
@@ -167,7 +179,9 @@ def approve_chat_action(
     action_run_id: int,
     payload: GemmaActionApproveRequest,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner")),
+    context: AuthContext = Depends(
+        require_roles_and_permission(PERMISSION_SETTINGS_ASSISTANT_VIEW, "owner", "co_owner")
+    ),
 ):
     try:
         result = approve_action_run(
@@ -192,7 +206,9 @@ def reject_chat_action(
     action_run_id: int,
     payload: GemmaActionRejectRequest,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner")),
+    context: AuthContext = Depends(
+        require_roles_and_permission(PERMISSION_SETTINGS_ASSISTANT_VIEW, "owner", "co_owner")
+    ),
 ):
     try:
         result = reject_action_run(
@@ -216,7 +232,9 @@ def review_chat_action_draft(
     action_run_id: int,
     payload: GemmaActionReviewDraftRequest,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner")),
+    context: AuthContext = Depends(
+        require_roles_and_permission(PERMISSION_SETTINGS_ASSISTANT_VIEW, "owner", "co_owner")
+    ),
 ):
     try:
         result = review_action_run_draft(
@@ -241,7 +259,9 @@ def apply_chat_action_draft(
     action_run_id: int,
     payload: GemmaActionApplyDraftRequest,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner")),
+    context: AuthContext = Depends(
+        require_roles_and_permission(PERMISSION_SETTINGS_ASSISTANT_VIEW, "owner", "co_owner")
+    ),
 ):
     try:
         result = apply_action_run_draft(

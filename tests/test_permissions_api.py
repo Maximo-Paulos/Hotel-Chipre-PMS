@@ -1,3 +1,4 @@
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -8,6 +9,7 @@ from app.dependencies.auth import AuthContext, get_auth_context
 from app.main import app as fastapi_app
 from app.models.security_audit_log import SecurityAuditLog
 from app.models.hotel_config import HotelConfiguration
+from app.models.permission import HotelPermissionOverride
 from app.services.permission_service import (
     _CANONICAL_DEFINITIONS,
     LEGACY_PERMISSION_ALIASES,
@@ -97,7 +99,7 @@ def test_permissions_matrix_exposes_only_canonical_rows_with_ui_metadata():
         canonical_codes = set(_CANONICAL_DEFINITIONS)
         legacy_codes = set(LEGACY_PERMISSION_ALIASES)
 
-        assert len(canonical_codes) == 65
+        assert len(canonical_codes) == 64
         for cells in matrix.values():
             assert len(cells) == len(canonical_codes)
             assert set(cells) == canonical_codes
@@ -105,6 +107,49 @@ def test_permissions_matrix_exposes_only_canonical_rows_with_ui_metadata():
             for code, cell in cells.items():
                 assert cell["module"] == _CANONICAL_DEFINITIONS[code][0]
                 assert cell["help_es"] == _CANONICAL_DEFINITIONS[code][2]
+    finally:
+        fastapi_app.dependency_overrides.clear()
+        db.close()
+        engine.dispose()
+
+
+@pytest.mark.parametrize(
+    ("permission_code", "path", "params"),
+    [
+        ("analytics:view", "/api/analytics/starter-summary", None),
+        ("analytics:advanced:view", "/api/analytics/rooms", None),
+        ("analytics:ai:view", "/api/analytics/ai-config", None),
+        ("occupancy:view", "/api/reservations/occupancy-grid", {"date_from": "2027-01-01", "date_to": "2027-01-02"}),
+        ("waitlist:view", "/api/waitlist/", None),
+        ("cash:view", "/api/cash-register/sessions", None),
+        ("company:view", "/api/companies", None),
+        ("company:view", "/api/company-documents/company/1", None),
+        ("settings:users:view", "/api/users/", None),
+        ("settings:integrations:view", "/api/integrations", None),
+        ("settings:subscription:view", "/api/subscription/status", None),
+        ("settings:security:view", "/api/settings/security/overview", None),
+        ("settings:notifications:view", "/api/notifications/daily-report-schedule", None),
+        ("settings:assistant:view", "/api/gemma/chat/history", None),
+        ("settings:tests:view", "/api/payment-link-tests", None),
+    ],
+)
+def test_revoking_each_section_view_permission_blocks_its_read_endpoint(
+    permission_code, path, params
+):
+    client, db, engine = _client_with_db()
+    fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner")
+    try:
+        db.add(
+            HotelPermissionOverride(
+                hotel_id=1,
+                role="owner",
+                permission_code=permission_code,
+                allowed=False,
+            )
+        )
+        db.commit()
+        response = client.get(path, params=params)
+        assert response.status_code == 403, response.text
     finally:
         fastapi_app.dependency_overrides.clear()
         db.close()

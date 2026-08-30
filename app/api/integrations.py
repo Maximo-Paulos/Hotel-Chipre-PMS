@@ -8,11 +8,12 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import get_db
-from app.dependencies.auth import AuthContext, require_permission
+from app.dependencies.auth import AuthContext, require_all_permissions, require_permission
 from app.models.hotel_membership import HotelMembership
 from app.services.permission_service import (
     PERMISSION_HOTEL_SECURITY_MANAGE,
     PERMISSION_HOTEL_SETTINGS_READ,
+    PERMISSION_SETTINGS_INTEGRATIONS_VIEW,
     audit_permission_denied,
     resolve,
 )
@@ -269,7 +270,9 @@ def _authorize_oauth_state_actor(db: Session, *, hotel_id: int, user_id: int) ->
 @router.get("", response_model=IntegrationStatusResponse)
 def get_status(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_HOTEL_SETTINGS_READ)),
+    context: AuthContext = Depends(
+        require_all_permissions(PERMISSION_HOTEL_SETTINGS_READ, PERMISSION_SETTINGS_INTEGRATIONS_VIEW)
+    ),
 ):
     _ensure_enabled()
     catalog, connections = list_catalog_with_status(db, context.hotel_id)

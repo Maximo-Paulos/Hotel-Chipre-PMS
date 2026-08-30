@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies.auth import AuthContext, require_permission
+from app.dependencies.auth import AuthContext, require_all_permissions, require_permission
 from app.schemas.cash_register import (
     CashCloseReportRead,
     CashMovementCreate,
@@ -24,7 +24,11 @@ from app.services.cash_register_service import (
     list_sessions,
     open_session,
 )
-from app.services.permission_service import PERMISSION_CASH_APPROVE_DIFFERENCE, PERMISSION_CASH_OPERATE
+from app.services.permission_service import (
+    PERMISSION_CASH_APPROVE_DIFFERENCE,
+    PERMISSION_CASH_OPERATE,
+    PERMISSION_CASH_VIEW,
+)
 from app.services.distributed_lock import DistributedLockBusy, DistributedLockUnavailable
 
 
@@ -59,7 +63,7 @@ def open_cash_session(
 @router.get("/cash-register/sessions", response_model=list[CashSessionRead])
 def list_cash_sessions(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_CASH_OPERATE)),
+    context: AuthContext = Depends(require_all_permissions(PERMISSION_CASH_OPERATE, PERMISSION_CASH_VIEW)),
 ):
     return list_sessions(db, hotel_id=context.hotel_id)
 
@@ -68,7 +72,7 @@ def list_cash_sessions(
 @router.get("/cash-register/close-reports/latest", response_model=CashCloseReportRead | None)
 def latest_cash_close_report(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_CASH_OPERATE)),
+    context: AuthContext = Depends(require_all_permissions(PERMISSION_CASH_OPERATE, PERMISSION_CASH_VIEW)),
 ):
     return get_latest_close_report(db, hotel_id=context.hotel_id)
 
@@ -114,7 +118,7 @@ def add_cash_movement(
 def cash_session_summary(
     session_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_CASH_OPERATE)),
+    context: AuthContext = Depends(require_all_permissions(PERMISSION_CASH_OPERATE, PERMISSION_CASH_VIEW)),
 ):
     try:
         return get_session_summary(db, hotel_id=context.hotel_id, session_id=session_id)
@@ -127,7 +131,7 @@ def cash_session_summary(
 def list_cash_movements(
     session_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_CASH_OPERATE)),
+    context: AuthContext = Depends(require_all_permissions(PERMISSION_CASH_OPERATE, PERMISSION_CASH_VIEW)),
 ):
     return list_movements(db, hotel_id=context.hotel_id, session_id=session_id)
 

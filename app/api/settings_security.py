@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import get_db
-from app.dependencies.auth import AuthContext, require_roles
+from app.dependencies.auth import AuthContext, require_roles, require_roles_and_permission
 from app.models.hotel_membership import HotelMembership
 from app.models.security_audit_log import SecurityAuditLog
 from app.models.user import User
@@ -25,6 +25,7 @@ from app.schemas.settings_security import (
 )
 from app.services.user_session_service import revoke_all_sessions
 from app.services.audit_timeline_service import list_audit_timeline
+from app.services.permission_service import PERMISSION_SETTINGS_SECURITY_VIEW
 
 
 router = APIRouter(prefix="/api/settings/security", tags=["Settings Security"])
@@ -89,7 +90,7 @@ def _build_audit_timeline_csv(items: list[dict]) -> str:
 @router.get("/overview", response_model=SecurityOverviewRead)
 def security_overview(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles(*_SECURITY_ROLES)),
+    context: AuthContext = Depends(require_roles_and_permission(PERMISSION_SETTINGS_SECURITY_VIEW, *_SECURITY_ROLES)),
 ):
     user = _current_user(db, context)
     since = datetime.now(timezone.utc) - timedelta(hours=24)
@@ -124,7 +125,7 @@ def security_overview(
 def recent_security_events(
     limit: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles(*_SECURITY_ROLES)),
+    context: AuthContext = Depends(require_roles_and_permission(PERMISSION_SETTINGS_SECURITY_VIEW, *_SECURITY_ROLES)),
 ):
     rows = (
         db.query(SecurityAuditLog)
@@ -156,7 +157,7 @@ def audit_timeline(
     from_date: date | None = Query(default=None, alias="from"),
     to_date: date | None = Query(default=None, alias="to"),
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles(*_SECURITY_ROLES)),
+    context: AuthContext = Depends(require_roles_and_permission(PERMISSION_SETTINGS_SECURITY_VIEW, *_SECURITY_ROLES)),
 ):
     _validate_audit_timeline_range(from_date, to_date)
 
@@ -187,7 +188,7 @@ def export_audit_timeline(
     from_date: date | None = Query(default=None, alias="from"),
     to_date: date | None = Query(default=None, alias="to"),
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles(*_SECURITY_ROLES)),
+    context: AuthContext = Depends(require_roles_and_permission(PERMISSION_SETTINGS_SECURITY_VIEW, *_SECURITY_ROLES)),
 ):
     """Export the redacted unified timeline, capped at 5,000 rows per request."""
 

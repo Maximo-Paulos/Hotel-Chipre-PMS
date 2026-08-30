@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies.auth import AuthContext, require_permission
+from app.dependencies.auth import AuthContext, require_all_permissions, require_permission
 from app.schemas.analytics_api import CompanyCreate, CompanyRead, CompanyUpdate
 from app.services.analytics_service import (
     create_company,
@@ -15,7 +15,7 @@ from app.services.analytics_service import (
     reactivate_company,
     update_company,
 )
-from app.services.permission_service import PERMISSION_COMPANY_MANAGE
+from app.services.permission_service import PERMISSION_COMPANY_MANAGE, PERMISSION_COMPANY_VIEW
 
 
 router = APIRouter(prefix="/api/companies", tags=["Companies"])
@@ -24,7 +24,7 @@ router = APIRouter(prefix="/api/companies", tags=["Companies"])
 @router.get("", response_model=list[CompanyRead])
 def get_companies(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_COMPANY_MANAGE)),
+    context: AuthContext = Depends(require_all_permissions(PERMISSION_COMPANY_MANAGE, PERMISSION_COMPANY_VIEW)),
 ):
     require_analytics_plan(db, context.hotel_id, "pro")
     return list_companies(db, context.hotel_id)
@@ -47,7 +47,7 @@ def create_new_company(
 def get_company(
     company_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_COMPANY_MANAGE)),
+    context: AuthContext = Depends(require_all_permissions(PERMISSION_COMPANY_MANAGE, PERMISSION_COMPANY_VIEW)),
 ):
     require_analytics_plan(db, context.hotel_id, "pro")
     return get_company_or_404(db, context.hotel_id, company_id)
