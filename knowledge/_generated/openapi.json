@@ -3315,6 +3315,177 @@
         }
       }
     },
+    "/api/guests/{guest_id}/room-avoidances": {
+      "get": {
+        "tags": [
+          "Guest Room Avoidances"
+        ],
+        "summary": "List Active Room Avoidances",
+        "operationId": "list_active_room_avoidances_api_guests__guest_id__room_avoidances_get",
+        "parameters": [
+          {
+            "name": "guest_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Guest Id"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/GuestRoomAvoidanceRead"
+                  },
+                  "title": "Response List Active Room Avoidances Api Guests  Guest Id  Room Avoidances Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/guests/{guest_id}/room-avoidances/{avoidance_id}/resolve": {
+      "post": {
+        "tags": [
+          "Guest Room Avoidances"
+        ],
+        "summary": "Resolve Room Avoidance",
+        "operationId": "resolve_room_avoidance_api_guests__guest_id__room_avoidances__avoidance_id__resolve_post",
+        "parameters": [
+          {
+            "name": "guest_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Guest Id"
+            }
+          },
+          {
+            "name": "avoidance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Avoidance Id"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GuestRoomAvoidanceResolveRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuestRoomAvoidanceRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/reservations/": {
       "post": {
         "tags": [
@@ -38152,6 +38323,134 @@
           "resolved"
         ],
         "title": "GuestRestrictionStatusEnum"
+      },
+      "GuestRoomAvoidanceRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "hotel_id": {
+            "type": "integer",
+            "title": "Hotel Id"
+          },
+          "guest_id": {
+            "type": "integer",
+            "title": "Guest Id"
+          },
+          "room_id": {
+            "type": "integer",
+            "title": "Room Id"
+          },
+          "status": {
+            "$ref": "#/components/schemas/GuestRoomAvoidanceStatusEnum"
+          },
+          "source_move_event_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Move Event Id"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "created_by_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By User Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "resolved_by_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved By User Id"
+          },
+          "resolved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved At"
+          },
+          "resolution_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolution Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "hotel_id",
+          "guest_id",
+          "room_id",
+          "status",
+          "created_at"
+        ],
+        "title": "GuestRoomAvoidanceRead"
+      },
+      "GuestRoomAvoidanceResolveRequest": {
+        "properties": {
+          "resolution_note": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Resolution Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "resolution_note"
+        ],
+        "title": "GuestRoomAvoidanceResolveRequest"
+      },
+      "GuestRoomAvoidanceStatusEnum": {
+        "type": "string",
+        "enum": [
+          "active",
+          "resolved"
+        ],
+        "title": "GuestRoomAvoidanceStatusEnum"
       },
       "GuestSummary": {
         "properties": {

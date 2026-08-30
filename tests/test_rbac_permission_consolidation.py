@@ -37,7 +37,7 @@ ROUTE_CONTRACTS = (
     ("app/api/allocation_policy.py", "apply_suggestion", "PERMISSION_CONFIG_MANAGE", "hotel_settings:update", {"owner", "co_owner"}),
     ("app/api/allocation_policy.py", "create_questionnaire_draft", "PERMISSION_CONFIG_MANAGE", "hotel_settings:update", {"owner", "co_owner"}),
     ("app/api/allocation_policy.py", "create_feedback_draft", "PERMISSION_CONFIG_MANAGE", "hotel_settings:update", {"owner", "co_owner"}),
-    ("app/api/movement_groups.py", "revert_movement_group", "PERMISSION_RESERVATION_MOVE", "reservation:move", {"owner", "co_owner", "manager"}),
+    ("app/api/movement_groups.py", "revert_movement_group", "PERMISSION_RESERVATION_MOVE", "reservation:move", {"owner", "co_owner", "manager", "receptionist"}),
     ("app/api/users.py", "transfer_primary_owner_endpoint", "PERMISSION_HOTEL_PROPERTY_MANAGE", "hotel_settings:property_manage", {"owner"}),
 )
 

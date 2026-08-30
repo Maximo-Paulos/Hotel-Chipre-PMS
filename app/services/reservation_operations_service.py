@@ -35,12 +35,21 @@ from app.models.room import Room, RoomCategory
 from app.models.transaction import Transaction
 from app.services import audit_log_service
 from app.services.allocation_policy_service import record_manual_override_feedback
+from app.services.guest_room_avoidance_service import record_guest_room_avoidance
 from app.services.analytics_facts import touch_reservation_fact_window
 from app.schemas.payment_link import PaymentLinkCreate
 from app.schemas.reservation import ReservationCreate, ReservationUpdate
 from app.schemas.transaction import PaymentRequest
 from app.services.payment_link_service import PaymentLinkError, create_link
 from app.services.payment_service import PaymentError, process_payment
+from app.services.permission_service import (
+    PERMISSION_RESERVATION_MOVE,
+    PERMISSION_RESERVATION_MOVE_CAPACITY,
+    PERMISSION_RESERVATION_MOVE_CATEGORY,
+    RESERVATION_MOVE_TIER_PERMISSIONS,
+    audit_permission_denied,
+    resolve,
+)
 from app.services.pricing_policy_service import PricingPolicyError, quote_rate_plan_stay
 from app.services.read_model_cache import invalidate_hotel_operational_caches
 from app.services.reservation_service import (
@@ -60,6 +69,118 @@ from app.services.room_movement_group_service import create_grouped_room_move
 
 class ReservationOperationsError(ReservationError):
     """Operational exception with business-friendly semantics."""
+
+
+class RoomMovePermissionError(ReservationOperationsError):
+    """A caller lacks the permission tier required by a room move's shape."""
+
+
+_ROOM_MOVE_PERMISSION_DETAILS = {
+    PERMISSION_RESERVATION_MOVE: "Para mover dentro de la misma categoría necesitás el permiso 'Mover dentro de categoría'.",
+    PERMISSION_RESERVATION_MOVE_CATEGORY: "Para mover a otra categoría necesitás el permiso 'Cambiar de categoría'.",
+    PERMISSION_RESERVATION_MOVE_CAPACITY: "Para mover a una categoría con distinta capacidad necesitás el permiso 'Cambiar de capacidad'.",
+}
+
+
+def required_room_move_permission(
+    current_category: RoomCategory,
+    destination_category: RoomCategory,
+) -> str:
+    """Return the minimum permission tier for this category-to-category move."""
+    if current_category.id == destination_category.id:
+        return PERMISSION_RESERVATION_MOVE
+    if current_category.max_occupancy == destination_category.max_occupancy:
+        return PERMISSION_RESERVATION_MOVE_CATEGORY
+    return PERMISSION_RESERVATION_MOVE_CAPACITY
+
+
+def _room_move_permission_candidates(required_permission: str) -> tuple[str, ...]:
+    try:
+        required_index = RESERVATION_MOVE_TIER_PERMISSIONS.index(required_permission)
+    except ValueError as exc:  # defensive boundary for future tiers
+        raise ValueError(f"Unknown room move permission tier: {required_permission}") from exc
+    return RESERVATION_MOVE_TIER_PERMISSIONS[required_index:]
+
+
+def _room_move_categories(
+    db: Session,
+    *,
+    reservation: Reservation,
+    destination_room: Room,
+    hotel_id: int,
+) -> tuple[RoomCategory, RoomCategory]:
+    """Load source and destination categories through tenant-scoped rows."""
+    if reservation.hotel_id != hotel_id:
+        raise ReservationOperationsError("La reserva no pertenece al hotel activo")
+    if destination_room.hotel_id != hotel_id:
+        raise ReservationOperationsError("La habitacion destino no existe para este hotel")
+
+    current_category_id = reservation.category_id
+    if reservation.room_id is not None:
+        current_room = (
+            db.query(Room)
+            .filter(Room.id == reservation.room_id, Room.hotel_id == hotel_id)
+            .first()
+        )
+        if current_room is None:
+            raise ReservationOperationsError("La habitacion actual no existe para este hotel")
+        current_category_id = current_room.category_id
+
+    current_category = (
+        db.query(RoomCategory)
+        .filter(RoomCategory.id == current_category_id, RoomCategory.hotel_id == hotel_id)
+        .first()
+    )
+    destination_category = (
+        db.query(RoomCategory)
+        .filter(RoomCategory.id == destination_room.category_id, RoomCategory.hotel_id == hotel_id)
+        .first()
+    )
+    if current_category is None:
+        raise ReservationOperationsError("La categoria de la habitacion actual no existe para este hotel")
+    if destination_category is None:
+        raise ReservationOperationsError("La categoria de la habitacion destino no existe para este hotel")
+    return current_category, destination_category
+
+
+def enforce_room_move_permission(
+    db: Session,
+    *,
+    reservation: Reservation,
+    destination_room: Room,
+    hotel_id: int,
+    actor_role: str | None,
+    actor_user_id: int | None,
+) -> tuple[RoomCategory, RoomCategory, str]:
+    """Classify a move and enforce its tier for a user-initiated operation.
+
+    Internal allocation paths have no actor role and remain governed by their
+    own orchestration policies. Every HTTP move supplies an actor role here.
+    """
+    current_category, destination_category = _room_move_categories(
+        db,
+        reservation=reservation,
+        destination_room=destination_room,
+        hotel_id=hotel_id,
+    )
+    required_permission = required_room_move_permission(current_category, destination_category)
+    if actor_role is None:
+        return current_category, destination_category, required_permission
+
+    if any(
+        resolve(db, hotel_id, actor_role, permission, user_id=actor_user_id)
+        for permission in _room_move_permission_candidates(required_permission)
+    ):
+        return current_category, destination_category, required_permission
+
+    audit_permission_denied(
+        db,
+        hotel_id=hotel_id,
+        user_id=actor_user_id,
+        role=actor_role,
+        permission_code=required_permission,
+    )
+    raise RoomMovePermissionError(_ROOM_MOVE_PERMISSION_DETAILS[required_permission])
 
 
 def _invalidate_availability_cache(hotel_id: int) -> None:
@@ -743,6 +864,7 @@ def move_reservation_room(
     to_room_id: int,
     hotel_id: int,
     moved_by_user_id: Optional[int] = None,
+    actor_role: Optional[str] = None,
     reason_code: Optional[str] = None,
     notes: Optional[str] = None,
     move_type: RoomMoveTypeEnum = RoomMoveTypeEnum.MANUAL_MOVE,
@@ -764,6 +886,15 @@ def move_reservation_room(
     if not room:
         raise ReservationOperationsError("La habitacion destino no existe para este hotel")
 
+    current_category, destination_category, _required_permission = enforce_room_move_permission(
+        db,
+        reservation=reservation,
+        destination_room=room,
+        hotel_id=hotel_id,
+        actor_role=actor_role,
+        actor_user_id=moved_by_user_id,
+    )
+
     if not check_room_availability(
         db,
         room.id,
@@ -774,10 +905,10 @@ def move_reservation_room(
     ):
         raise ReservationOperationsError("La habitacion destino no esta disponible para esas fechas")
 
-    category_changed = room.category_id != reservation.category_id
+    category_changed = destination_category.id != current_category.id
     if category_changed:
         try:
-            _validate_reservation_occupancy(room.category, reservation.num_adults, reservation.num_children)
+            _validate_reservation_occupancy(destination_category, reservation.num_adults, reservation.num_children)
         except ReservationError as exc:
             raise ReservationOperationsError(str(exc)) from exc
 
@@ -826,6 +957,16 @@ def move_reservation_room(
     )
     db.add(event)
     db.flush()
+    if move_type == RoomMoveTypeEnum.MANUAL_MOVE and reason_code == "guest_complaint" and previous_room_id is not None:
+        record_guest_room_avoidance(
+            db,
+            hotel_id=hotel_id,
+            guest_id=reservation.guest_id,
+            room_id=previous_room_id,
+            source_move_event_id=event.id,
+            reason=notes,
+            created_by_user_id=moved_by_user_id,
+        )
     _invalidate_availability_cache(hotel_id)
     _touch_facts(db, hotel_id, reservation.check_in_date, reservation.check_out_date)
     record_manual_override_feedback(

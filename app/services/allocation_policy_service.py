@@ -39,6 +39,8 @@ DEFAULT_ALLOCATION_WEIGHTS: dict[str, float] = {
     "room_usage_penalty": 50.0,
     "unassigned_penalty": 10000.0,
     "fallback_priority_penalty": 25.0,
+    "prior_stay_room_bonus": 100.0,
+    "guest_room_avoidance_penalty": 1000.0,
 }
 
 

@@ -39,6 +39,7 @@ from app.schemas.reservation_operations import (
     ReservationManualReviewResponse,
     ReservationOperationsSummaryRead,
     ReservationPendingActionRead,
+    ManualRoomMoveReasonCodeEnum,
     RoomMoveRequest,
     RoomMoveResponse,
 )
@@ -58,6 +59,7 @@ from app.services.read_model_cache import get_cached_occupancy_grid_payload
 from app.services.guest_restriction_service import GuestProhibitedError, RestrictionOverridePermissionError
 from app.services.reservation_operations_service import (
     ReservationOperationsError,
+    RoomMovePermissionError,
     change_reservation_dates,
     extend_reservation_stay,
     add_reservation_charge,
@@ -79,7 +81,7 @@ from app.services.ota_manual_service import (
 )
 from app.services.payment_service import PaymentError
 from app.services.allocation_runtime_service import run_persisted_allocation
-from app.dependencies.auth import AuthContext, require_all_permissions, require_permission
+from app.dependencies.auth import AuthContext, require_all_permissions, require_any_permission, require_permission
 from app.services.permission_service import (
     PERMISSION_COMPANY_MANAGE,
     PERMISSION_GUEST_CREATE,
@@ -88,10 +90,13 @@ from app.services.permission_service import (
     PERMISSION_RESERVATION_CREATE,
     PERMISSION_RESERVATION_MANUAL_RATE,
     PERMISSION_RESERVATION_MOVE,
+    PERMISSION_RESERVATION_MOVE_CAPACITY,
+    PERMISSION_RESERVATION_MOVE_CATEGORY,
     PERMISSION_RESERVATION_READ,
     PERMISSION_RESERVATION_UPDATE,
     PERMISSION_ROOM_READ,
     PERMISSION_OCCUPANCY_VIEW,
+    RESERVATION_MOVE_TIER_PERMISSIONS,
     audit_permission_denied,
     resolve,
 )
@@ -152,15 +157,19 @@ def _ensure_action_permission(
     context: AuthContext,
     permission_code: str,
     *,
+    acceptable_permissions: tuple[str, ...] = (),
     detail: str = "No tenes permisos para esta accion",
 ) -> None:
     """Enforce payload-dependent actions before loading or mutating data."""
-    if resolve(
-        db,
-        context.hotel_id,
-        context.user_role,
-        permission_code,
-        user_id=context.user_id,
+    if any(
+        resolve(
+            db,
+            context.hotel_id,
+            context.user_role,
+            candidate_permission,
+            user_id=context.user_id,
+        )
+        for candidate_permission in (permission_code, *acceptable_permissions)
     ):
         return
     audit_permission_denied(
@@ -804,7 +813,15 @@ def change_dates(
     context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_UPDATE)),
 ):
     if payload.room_id is not None:
-        _ensure_action_permission(db, context, PERMISSION_RESERVATION_MOVE)
+        # change_reservation_dates/create_reservation rejects a room from a
+        # different category, so this implicit move is necessarily tier 1.
+        # A wider tier still implies tier 1 for an explicitly customized role.
+        _ensure_action_permission(
+            db,
+            context,
+            PERMISSION_RESERVATION_MOVE,
+            acceptable_permissions=RESERVATION_MOVE_TIER_PERMISSIONS[1:],
+        )
     r = get_reservation_by_id(db, reservation_id, context.hotel_id)
     if not r:
         raise HTTPException(status_code=404, detail="Reservation not found")
@@ -863,7 +880,14 @@ def modify_reservation(
 ):
     """Modify a reservation (dates, notes, room). Only allowed for pre-check-in states."""
     if "room_id" in data.model_fields_set:
-        _ensure_action_permission(db, context, PERMISSION_RESERVATION_MOVE)
+        # update_reservation_fields rejects cross-category rooms, so this
+        # legacy edit path can only make a same-category (tier 1) move.
+        _ensure_action_permission(
+            db,
+            context,
+            PERMISSION_RESERVATION_MOVE,
+            acceptable_permissions=RESERVATION_MOVE_TIER_PERMISSIONS[1:],
+        )
     config = db.get(HotelConfiguration, context.hotel_id)
     if config and not config.subscription_active:
         raise HTTPException(
@@ -988,8 +1012,22 @@ def room_move(
     payload: RoomMoveRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_MOVE)),
+    context: AuthContext = Depends(
+        require_any_permission(
+            PERMISSION_RESERVATION_MOVE,
+            PERMISSION_RESERVATION_MOVE_CATEGORY,
+            PERMISSION_RESERVATION_MOVE_CAPACITY,
+        )
+    ),
 ):
+    try:
+        manual_reason_code = ManualRoomMoveReasonCodeEnum(payload.reason_code)
+    except ValueError as exc:
+        allowed = ", ".join(reason.value for reason in ManualRoomMoveReasonCodeEnum)
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"reason_code debe ser uno de: {allowed}",
+        ) from exc
     reservation = get_reservation_by_id(db, reservation_id, context.hotel_id)
     if not reservation:
         raise HTTPException(status_code=404, detail="Reservation not found")
@@ -1001,7 +1039,8 @@ def room_move(
             to_room_id=payload.to_room_id,
             hotel_id=context.hotel_id,
             moved_by_user_id=context.user_id,
-            reason_code=payload.reason_code,
+            actor_role=context.user_role,
+            reason_code=manual_reason_code.value,
             notes=payload.notes,
             price_action=payload.price_action,
         )
@@ -1040,6 +1079,9 @@ def room_move(
             amount_delta=result.amount_delta,
             currency_code=result.currency_code,
         )
+    except RoomMovePermissionError as e:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
     except ReservationOperationsError as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))

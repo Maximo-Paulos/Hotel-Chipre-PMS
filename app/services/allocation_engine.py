@@ -37,10 +37,13 @@ class ReservationSlot:
     check_out: date
     current_room_id: Optional[int]
     is_locked: bool  # True if checked_in (cannot be moved)
+    guest_id: Optional[int] = None
     num_guests: int = 1
     mobility_restriction: bool = False
     allowed_category_ids: list[int] = field(default_factory=list)
     category_priority_by_id: dict[int, int] = field(default_factory=dict)
+    prior_stay_room_id: Optional[int] = None
+    avoided_room_ids: list[int] = field(default_factory=list)
 
     @property
     def effective_allowed_category_ids(self) -> list[int]:
@@ -125,6 +128,27 @@ def _adjacency_bonus_for_room(
     return bonus
 
 
+def _guest_room_signal_score(
+    reservation: ReservationSlot,
+    room: RoomSlot,
+    *,
+    prior_stay_room_bonus: int,
+    avoided_room_penalty: int,
+) -> int:
+    """Return the soft, derived guest-room signal for one candidate room.
+
+    ``avoid`` intentionally remains a score, not an eligibility constraint:
+    assigning a disliked room is preferable to leaving a guest unassigned when
+    it is the only compatible room.
+    """
+    score = 0
+    if room.room_id == reservation.prior_stay_room_id:
+        score += prior_stay_room_bonus
+    if room.room_id in reservation.avoided_room_ids:
+        score -= avoided_room_penalty
+    return score
+
+
 def run_allocation(
     reservations: list[ReservationSlot],
     rooms: list[RoomSlot],
@@ -176,6 +200,20 @@ def run_allocation(
     fallback_priority_penalty = int(policy_weights.get("fallback_priority_penalty", 25))
     one_night_gap_penalty = int(policy_weights.get("minimize_one_night_gaps", room_usage_penalty * 2))
     room_score_tiebreaker = int(policy_weights.get("room_score_tiebreaker", 1))
+    # Signals are intentionally smaller than the category objective and never
+    # apply when an already-assigned reservation can remain in its room. They
+    # steer fresh allocation without introducing preference-driven churn.
+    prior_stay_room_bonus = max(
+        0,
+        min(int(policy_weights.get("prior_stay_room_bonus", 100)), max(exact_match_weight - 1, 0)),
+    )
+    guest_room_avoidance_penalty = max(
+        0,
+        min(
+            int(policy_weights.get("guest_room_avoidance_penalty", 1000)),
+            max(unassigned_penalty - 1, 0),
+        ),
+    )
 
     model = cp_model.CpModel()
 
@@ -296,8 +334,18 @@ def run_allocation(
     category_match_bonus = []
     fallback_penalties = []
     room_score_bonus = []
+    prior_stay_room_bonus_terms = []
+    guest_room_avoidance_penalty_terms = []
+    rooms_by_id = {room.room_id: room for room in rooms}
 
     for r_idx, res in enumerate(reservations):
+        current_room = rooms_by_id.get(res.current_room_id)
+        current_room_is_compatible = bool(
+            current_room
+            and current_room.category_id in res.effective_allowed_category_ids
+            and current_room.max_occupancy >= res.num_guests
+            and (not res.mobility_restriction or current_room.is_accessible)
+        )
         for h_idx, room in enumerate(rooms):
             # Occupancy contribution: each night assigned to a room adds to score
             occupancy_score.append((x[r_idx, h_idx], res.nights))
@@ -305,6 +353,15 @@ def run_allocation(
             # Stability: prefer keeping reservation in current room (if one exists)
             if res.current_room_id == room.room_id and not res.is_locked:
                 stability_bonus.append((x[r_idx, h_idx], stability_weight))
+
+            if not current_room_is_compatible and room.room_id == res.prior_stay_room_id:
+                prior_stay_room_bonus_terms.append(
+                    (x[r_idx, h_idx], prior_stay_room_bonus)
+                )
+            if not current_room_is_compatible and room.room_id in res.avoided_room_ids:
+                guest_room_avoidance_penalty_terms.append(
+                    (x[r_idx, h_idx], guest_room_avoidance_penalty)
+                )
 
             # Category match bonus: heavily penalize upgrading if original category is available
             if room.category_id == res.category_id:
@@ -334,10 +391,12 @@ def run_allocation(
     model.Maximize(
         sum(var * coeff for var, coeff in occupancy_score)
         + sum(var * coeff for var, coeff in stability_bonus)
+        + sum(var * coeff for var, coeff in prior_stay_room_bonus_terms)
         + sum(var * coeff for var, coeff in category_match_bonus)
         + sum(var * coeff for var, coeff in room_score_bonus)
         - sum(room_usage[h_idx] * room_usage_penalty for h_idx in range(len(rooms)))
         - sum(var * coeff for var, coeff in fallback_penalties)
+        - sum(var * coeff for var, coeff in guest_room_avoidance_penalty_terms)
         - sum(gap * one_night_gap_penalty for gap in gap_penalties)
         - sum((1 - is_assigned[r_idx]) * unassigned_penalty for r_idx in range(len(reservations)))
     )
@@ -396,6 +455,16 @@ def _run_allocation_greedy(
     """
     assignments: dict[int, int] = {}
     moved: list[int] = []
+    policy_weights = policy_weights or {}
+    unassigned_penalty = int(policy_weights.get("unassigned_penalty", 10000))
+    prior_stay_room_bonus = max(0, int(policy_weights.get("prior_stay_room_bonus", 100)))
+    guest_room_avoidance_penalty = max(
+        0,
+        min(
+            int(policy_weights.get("guest_room_avoidance_penalty", 1000)),
+            max(unassigned_penalty - 1, 0),
+        ),
+    )
 
     # Group rooms by category
     rooms_by_category: dict[int, list[RoomSlot]] = {}
@@ -432,11 +501,21 @@ def _run_allocation_greedy(
         if res.mobility_restriction:
             candidate_rooms = [room for room in candidate_rooms if room.is_accessible]
 
-        # Prefer current room for stability, then exact category match, then rooms partially occupied
+        # Preserve an already compatible current assignment before applying
+        # either soft signal. Avoided rooms still remain candidates, so the
+        # only feasible room is always assigned.
+        has_guest_room_signal = res.prior_stay_room_id is not None or bool(res.avoided_room_ids)
         if res.current_room_id is not None:
             current_first = sorted(
                 candidate_rooms,
                 key=lambda r: (
+                    0 if has_guest_room_signal and r.room_id == res.current_room_id else 1,
+                    -_guest_room_signal_score(
+                        res,
+                        r,
+                        prior_stay_room_bonus=prior_stay_room_bonus,
+                        avoided_room_penalty=guest_room_avoidance_penalty,
+                    ),
                     0 if r.category_id == res.category_id else 1,
                     _one_night_gap_penalty_for_room(res, room_occupancy.get(r.room_id, [])),
                     -_adjacency_bonus_for_room(res, room_occupancy.get(r.room_id, [])),
@@ -452,6 +531,12 @@ def _run_allocation_greedy(
             current_first = sorted(
                 candidate_rooms,
                 key=lambda r: (
+                    -_guest_room_signal_score(
+                        res,
+                        r,
+                        prior_stay_room_bonus=prior_stay_room_bonus,
+                        avoided_room_penalty=guest_room_avoidance_penalty,
+                    ),
                     0 if r.category_id == res.category_id else 1,
                     _one_night_gap_penalty_for_room(res, room_occupancy.get(r.room_id, [])),
                     -_adjacency_bonus_for_room(res, room_occupancy.get(r.room_id, [])),
@@ -587,6 +672,7 @@ def build_slots_from_db(
     policy_constraints = policy_constraints or {}
     from app.models.allocation import ReservationAllocationLock
     from app.models.company import Company
+    from app.models.guest_room_avoidance import GuestRoomAvoidance, GuestRoomAvoidanceStatusEnum
     from app.services.room_block_service import blocked_room_ids_for_range
     has_hotel_context = hotel_id is not None
 
@@ -664,6 +750,58 @@ def build_slots_from_db(
             product_query = product_query.filter(SellableProduct.hotel_id == hotel_id)
         product_map = {product.id: product for product in product_query.all()}
 
+    # A single UNION ALL query batches both guest-room data sources for every
+    # guest represented in the horizon. The slot loop below only reads these
+    # in-memory maps, so allocation cannot turn returning guests into an N+1
+    # query path.
+    guest_ids = {reservation.guest_id for reservation in reservation_rows if reservation.guest_id is not None}
+    avoided_room_ids_by_guest: dict[int, set[int]] = {}
+    completed_stays_by_guest: dict[int, list[tuple[date, int, int, int]]] = {}
+    if guest_ids:
+        from sqlalchemy import Date, Integer, and_, literal
+
+        avoidance_signal_query = db.query(
+            GuestRoomAvoidance.guest_id,
+            GuestRoomAvoidance.room_id,
+            literal(None, type_=Date()).label("check_out_date"),
+            literal(None, type_=Integer()).label("completed_reservation_id"),
+            literal(None, type_=Integer()).label("room_category_id"),
+            literal("avoidance").label("source"),
+        ).filter(
+            GuestRoomAvoidance.guest_id.in_(guest_ids),
+            GuestRoomAvoidance.status == GuestRoomAvoidanceStatusEnum.ACTIVE,
+        )
+        if has_hotel_context:
+            avoidance_signal_query = avoidance_signal_query.filter(GuestRoomAvoidance.hotel_id == hotel_id)
+
+        historical_stay_signal_query = db.query(
+            Reservation.guest_id,
+            Reservation.room_id,
+            Reservation.check_out_date,
+            Reservation.id.label("completed_reservation_id"),
+            Room.category_id.label("room_category_id"),
+            literal("historical_stay").label("source"),
+        ).join(
+            Room,
+            and_(Room.id == Reservation.room_id, Room.hotel_id == Reservation.hotel_id),
+        ).filter(
+            Reservation.guest_id.in_(guest_ids),
+            Reservation.room_id.isnot(None),
+            Reservation.status == ReservationStatusEnum.CHECKED_OUT,
+        )
+        if has_hotel_context:
+            historical_stay_signal_query = historical_stay_signal_query.filter(Reservation.hotel_id == hotel_id)
+
+        for guest_id, room_id, check_out_date, completed_reservation_id, room_category_id, source in (
+            avoidance_signal_query.union_all(historical_stay_signal_query).all()
+        ):
+            if source == "avoidance":
+                avoided_room_ids_by_guest.setdefault(guest_id, set()).add(room_id)
+            elif check_out_date is not None:
+                completed_stays_by_guest.setdefault(guest_id, []).append(
+                    (check_out_date, completed_reservation_id, room_id, room_category_id)
+                )
+
     reservation_slots = []
     for res in reservation_rows:
         req_cat = cat_map.get(res.category_id)
@@ -689,6 +827,21 @@ def build_slots_from_db(
             allowed.append(product.primary_room_category_id)
             priority_by_category[product.primary_room_category_id] = 0
 
+        avoided_room_ids = avoided_room_ids_by_guest.get(res.guest_id, set())
+        prior_stays = [
+            stay
+            for stay in completed_stays_by_guest.get(res.guest_id, [])
+            if stay[0] <= res.check_in_date
+        ]
+        last_stay = max(prior_stays, default=None, key=lambda stay: (stay[0], stay[1]))
+        prior_stay_room_id = (
+            last_stay[2]
+            if last_stay is not None
+            and last_stay[3] == res.category_id
+            and last_stay[2] not in avoided_room_ids
+            else None
+        )
+
         slot = ReservationSlot(
             reservation_id=res.id,
             category_id=res.category_id,
@@ -700,10 +853,13 @@ def build_slots_from_db(
                 active_lock_ids=active_lock_ids,
                 protected_company_ids=protected_company_ids,
             ),
+            guest_id=res.guest_id,
             num_guests=max(1, int((res.num_adults or 0) + (res.num_children or 0))),
             mobility_restriction=bool(getattr(res, "mobility_restriction", False)),
             allowed_category_ids=allowed,
             category_priority_by_id=priority_by_category,
+            prior_stay_room_id=prior_stay_room_id,
+            avoided_room_ids=sorted(avoided_room_ids),
         )
         reservation_slots.append(slot)
 

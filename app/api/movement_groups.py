@@ -15,7 +15,7 @@ from app.services.room_movement_group_service import (
     list_groups,
     revert_group,
 )
-from app.services.permission_service import PERMISSION_RESERVATION_MOVE, PERMISSION_RESERVATION_ROOM_MOVE
+from app.services.permission_service import PERMISSION_RESERVATION_MOVE
 
 
 router = APIRouter(prefix="/api/movement-groups", tags=["Movement Groups"])
@@ -107,7 +107,7 @@ def list_movement_groups(
     reservation_id: int | None = None,
     created_by_user_id: int | None = None,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_ROOM_MOVE)),
+    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_MOVE)),
 ):
     if (
         trigger_reason is None
@@ -144,7 +144,7 @@ def list_movement_groups(
 def read_movement_group(
     group_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_ROOM_MOVE)),
+    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_MOVE)),
 ):
     group = get_group(db, hotel_id=context.hotel_id, group_id=group_id)
     if group is None:

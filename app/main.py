@@ -33,6 +33,7 @@ from app.api import (
     rooms,
     guests,
     guest_restrictions,
+    guest_room_avoidances,
     reservations,
     waitlist,
     payments,
@@ -229,6 +230,7 @@ app.include_router(reference.router)
 app.include_router(rooms.router)
 app.include_router(guests.router)
 app.include_router(guest_restrictions.router)
+app.include_router(guest_room_avoidances.router)
 app.include_router(reservations.router)
 app.include_router(waitlist.router)
 app.include_router(bookings.router)

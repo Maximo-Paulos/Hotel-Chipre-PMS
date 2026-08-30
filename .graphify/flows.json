@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-30T05:21:22.624Z",
+  "generatedAt": "2026-08-30T19:35:41.333Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -3911,6 +3911,44 @@
       "warnings": []
     },
     {
+      "id": "flow:services_reservation_operations_service_move_reservation_room",
+      "name": "move_reservation_room",
+      "entryPoint": "services_reservation_operations_service_move_reservation_room",
+      "entryPointId": "services_reservation_operations_service_move_reservation_room",
+      "path": [
+        "services_reservation_operations_service_move_reservation_room",
+        "services_reservation_operations_service_enforce_room_move_permission",
+        "services_reservation_operations_service_invalidate_availability_cache",
+        "services_reservation_operations_service_reservationoperationserror",
+        "services_reservation_operations_service_roommoveresult",
+        "services_reservation_operations_service_touch_facts",
+        "services_reservation_operations_service_required_room_move_permission",
+        "services_reservation_operations_service_room_move_categories",
+        "services_reservation_operations_service_room_move_permission_candidates",
+        "services_reservation_operations_service_roommovepermissionerror"
+      ],
+      "qualifiedPath": [
+        "services_reservation_operations_service_move_reservation_room",
+        "services_reservation_operations_service_enforce_room_move_permission",
+        "services_reservation_operations_service_invalidate_availability_cache",
+        "services_reservation_operations_service_reservationoperationserror",
+        "services_reservation_operations_service_roommoveresult",
+        "services_reservation_operations_service_touch_facts",
+        "services_reservation_operations_service_required_room_move_permission",
+        "services_reservation_operations_service_room_move_categories",
+        "services_reservation_operations_service_room_move_permission_candidates",
+        "services_reservation_operations_service_roommovepermissionerror"
+      ],
+      "depth": 2,
+      "nodeCount": 10,
+      "fileCount": 1,
+      "files": [
+        "app/services/reservation_operations_service.py"
+      ],
+      "criticality": 0.295,
+      "warnings": []
+    },
+    {
       "id": "flow:adapters_paypal_adapter_paypaladapter_execute_payment",
       "name": ".execute_payment",
       "entryPoint": "adapters_paypal_adapter_paypaladapter_execute_payment",
@@ -5815,6 +5853,30 @@
       "warnings": []
     },
     {
+      "id": "flow:versions_20260830_room_move_tiers_upgrade",
+      "name": "upgrade",
+      "entryPoint": "versions_20260830_room_move_tiers_upgrade",
+      "entryPointId": "versions_20260830_room_move_tiers_upgrade",
+      "path": [
+        "versions_20260830_room_move_tiers_upgrade",
+        "versions_20260830_room_move_tiers_insert_default_rows",
+        "versions_20260830_room_move_tiers_insert_permission_rows"
+      ],
+      "qualifiedPath": [
+        "versions_20260830_room_move_tiers_upgrade",
+        "versions_20260830_room_move_tiers_insert_default_rows",
+        "versions_20260830_room_move_tiers_insert_permission_rows"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20260830_room_move_tiers.py"
+      ],
+      "criticality": 0.2433,
+      "warnings": []
+    },
+    {
       "id": "flow:services_membership_service_validate_membership_change",
       "name": "validate_membership_change",
       "entryPoint": "services_membership_service_validate_membership_change",
@@ -6919,6 +6981,32 @@
       "warnings": []
     },
     {
+      "id": "flow:versions_20260830_guest_room_avoidance_upgrade",
+      "name": "upgrade",
+      "entryPoint": "versions_20260830_guest_room_avoidance_upgrade",
+      "entryPointId": "versions_20260830_guest_room_avoidance_upgrade",
+      "path": [
+        "versions_20260830_guest_room_avoidance_upgrade",
+        "versions_20260830_guest_room_avoidance_insert_default_rows",
+        "versions_20260830_guest_room_avoidance_insert_permission_rows",
+        "versions_20260830_guest_room_avoidance_install_rls"
+      ],
+      "qualifiedPath": [
+        "versions_20260830_guest_room_avoidance_upgrade",
+        "versions_20260830_guest_room_avoidance_insert_default_rows",
+        "versions_20260830_guest_room_avoidance_insert_permission_rows",
+        "versions_20260830_guest_room_avoidance_install_rls"
+      ],
+      "depth": 1,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20260830_guest_room_avoidance.py"
+      ],
+      "criticality": 0.2225,
+      "warnings": []
+    },
+    {
       "id": "flow:tests_postgres_test_safety_validate_postgres_test_target",
       "name": "validate_postgres_test_target",
       "entryPoint": "tests_postgres_test_safety_validate_postgres_test_target",
@@ -7907,34 +7995,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_reservation_operations_service_move_reservation_room",
-      "name": "move_reservation_room",
-      "entryPoint": "services_reservation_operations_service_move_reservation_room",
-      "entryPointId": "services_reservation_operations_service_move_reservation_room",
-      "path": [
-        "services_reservation_operations_service_move_reservation_room",
-        "services_reservation_operations_service_invalidate_availability_cache",
-        "services_reservation_operations_service_reservationoperationserror",
-        "services_reservation_operations_service_roommoveresult",
-        "services_reservation_operations_service_touch_facts"
-      ],
-      "qualifiedPath": [
-        "services_reservation_operations_service_move_reservation_room",
-        "services_reservation_operations_service_invalidate_availability_cache",
-        "services_reservation_operations_service_reservationoperationserror",
-        "services_reservation_operations_service_roommoveresult",
-        "services_reservation_operations_service_touch_facts"
-      ],
-      "depth": 1,
-      "nodeCount": 5,
-      "fileCount": 1,
-      "files": [
-        "app/services/reservation_operations_service.py"
-      ],
-      "criticality": 0.21,
-      "warnings": []
-    },
-    {
       "id": "flow:services_analytics_service_update_company",
       "name": "update_company",
       "entryPoint": "services_analytics_service_update_company",
@@ -8848,6 +8908,46 @@
       "fileCount": 1,
       "files": [
         "app/services/payment_link_test_service.py"
+      ],
+      "criticality": 0.1927,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_allocation_engine_run_allocation",
+      "name": "run_allocation",
+      "entryPoint": "services_allocation_engine_run_allocation",
+      "entryPointId": "services_allocation_engine_run_allocation",
+      "path": [
+        "services_allocation_engine_run_allocation",
+        "services_allocation_engine_allocationresult",
+        "services_allocation_engine_check_overlap",
+        "services_allocation_engine_lowest_available_compatible_floor",
+        "services_allocation_engine_reservationslot_category_priority",
+        "services_allocation_engine_run_allocation_greedy",
+        "services_allocation_engine_lowest_compatible_floor",
+        "services_allocation_engine_adjacency_bonus_for_room",
+        "services_allocation_engine_guest_room_preference_score",
+        "services_allocation_engine_guest_room_signal_score",
+        "services_allocation_engine_one_night_gap_penalty_for_room"
+      ],
+      "qualifiedPath": [
+        "services_allocation_engine_run_allocation",
+        "services_allocation_engine_allocationresult",
+        "services_allocation_engine_check_overlap",
+        "services_allocation_engine_lowest_available_compatible_floor",
+        "services_allocation_engine_reservationslot_category_priority",
+        "services_allocation_engine_run_allocation_greedy",
+        "services_allocation_engine_lowest_compatible_floor",
+        "services_allocation_engine_adjacency_bonus_for_room",
+        "services_allocation_engine_guest_room_preference_score",
+        "services_allocation_engine_guest_room_signal_score",
+        "services_allocation_engine_one_night_gap_penalty_for_room"
+      ],
+      "depth": 2,
+      "nodeCount": 11,
+      "fileCount": 1,
+      "files": [
+        "app/services/allocation_engine.py"
       ],
       "criticality": 0.1927,
       "warnings": []
@@ -11041,6 +11141,30 @@
       "warnings": []
     },
     {
+      "id": "flow:services_guest_room_avoidance_service_get_active_guest_room_avoidances",
+      "name": "get_active_guest_room_avoidances",
+      "entryPoint": "services_guest_room_avoidance_service_get_active_guest_room_avoidances",
+      "entryPointId": "services_guest_room_avoidance_service_get_active_guest_room_avoidances",
+      "path": [
+        "services_guest_room_avoidance_service_get_active_guest_room_avoidances",
+        "services_guest_room_avoidance_service_get_tenant_guest",
+        "services_guest_room_avoidance_service_guestroomavoidancenotfounderror"
+      ],
+      "qualifiedPath": [
+        "services_guest_room_avoidance_service_get_active_guest_room_avoidances",
+        "services_guest_room_avoidance_service_get_tenant_guest",
+        "services_guest_room_avoidance_service_guestroomavoidancenotfounderror"
+      ],
+      "depth": 2,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/services/guest_room_avoidance_service.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
       "id": "flow:api_allocation_policy_get_active_policy",
       "name": "get_active_policy",
       "entryPoint": "api_allocation_policy_get_active_policy",
@@ -11971,6 +12095,32 @@
       "warnings": []
     },
     {
+      "id": "flow:services_guest_room_avoidance_service_record_guest_room_avoidance",
+      "name": "record_guest_room_avoidance",
+      "entryPoint": "services_guest_room_avoidance_service_record_guest_room_avoidance",
+      "entryPointId": "services_guest_room_avoidance_service_record_guest_room_avoidance",
+      "path": [
+        "services_guest_room_avoidance_service_record_guest_room_avoidance",
+        "services_guest_room_avoidance_service_get_tenant_guest",
+        "services_guest_room_avoidance_service_get_tenant_room",
+        "services_guest_room_avoidance_service_guestroomavoidancenotfounderror"
+      ],
+      "qualifiedPath": [
+        "services_guest_room_avoidance_service_record_guest_room_avoidance",
+        "services_guest_room_avoidance_service_get_tenant_guest",
+        "services_guest_room_avoidance_service_get_tenant_room",
+        "services_guest_room_avoidance_service_guestroomavoidancenotfounderror"
+      ],
+      "depth": 2,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/services/guest_room_avoidance_service.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
       "id": "flow:services_linen_service_register_movement",
       "name": "register_movement",
       "entryPoint": "services_linen_service_register_movement",
@@ -12174,42 +12324,6 @@
       "fileCount": 1,
       "files": [
         "app/api/allocation_policy.py"
-      ],
-      "criticality": 0.17,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_allocation_engine_run_allocation",
-      "name": "run_allocation",
-      "entryPoint": "services_allocation_engine_run_allocation",
-      "entryPointId": "services_allocation_engine_run_allocation",
-      "path": [
-        "services_allocation_engine_run_allocation",
-        "services_allocation_engine_allocationresult",
-        "services_allocation_engine_check_overlap",
-        "services_allocation_engine_lowest_available_compatible_floor",
-        "services_allocation_engine_reservationslot_category_priority",
-        "services_allocation_engine_run_allocation_greedy",
-        "services_allocation_engine_lowest_compatible_floor",
-        "services_allocation_engine_adjacency_bonus_for_room",
-        "services_allocation_engine_one_night_gap_penalty_for_room"
-      ],
-      "qualifiedPath": [
-        "services_allocation_engine_run_allocation",
-        "services_allocation_engine_allocationresult",
-        "services_allocation_engine_check_overlap",
-        "services_allocation_engine_lowest_available_compatible_floor",
-        "services_allocation_engine_reservationslot_category_priority",
-        "services_allocation_engine_run_allocation_greedy",
-        "services_allocation_engine_lowest_compatible_floor",
-        "services_allocation_engine_adjacency_bonus_for_room",
-        "services_allocation_engine_one_night_gap_penalty_for_room"
-      ],
-      "depth": 2,
-      "nodeCount": 9,
-      "fileCount": 1,
-      "files": [
-        "app/services/allocation_engine.py"
       ],
       "criticality": 0.17,
       "warnings": []
@@ -16455,6 +16569,28 @@
       "warnings": []
     },
     {
+      "id": "flow:versions_20260830_guest_room_avoidance_downgrade",
+      "name": "downgrade",
+      "entryPoint": "versions_20260830_guest_room_avoidance_downgrade",
+      "entryPointId": "versions_20260830_guest_room_avoidance_downgrade",
+      "path": [
+        "versions_20260830_guest_room_avoidance_downgrade",
+        "versions_20260830_guest_room_avoidance_remove_rls"
+      ],
+      "qualifiedPath": [
+        "versions_20260830_guest_room_avoidance_downgrade",
+        "versions_20260830_guest_room_avoidance_remove_rls"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20260830_guest_room_avoidance.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:versions_20260830_hk_occupancy_default_downgrade",
       "name": "downgrade",
       "entryPoint": "versions_20260830_hk_occupancy_default_downgrade",
@@ -19122,6 +19258,34 @@
       "fileCount": 1,
       "files": [
         "app/services/guest_restriction_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_guest_room_avoidance_service_resolve_guest_room_avoidance",
+      "name": "resolve_guest_room_avoidance",
+      "entryPoint": "services_guest_room_avoidance_service_resolve_guest_room_avoidance",
+      "entryPointId": "services_guest_room_avoidance_service_resolve_guest_room_avoidance",
+      "path": [
+        "services_guest_room_avoidance_service_resolve_guest_room_avoidance",
+        "services_guest_room_avoidance_service_get_tenant_guest",
+        "services_guest_room_avoidance_service_guestroomavoidanceconflicterror",
+        "services_guest_room_avoidance_service_guestroomavoidancenotfounderror",
+        "services_guest_room_avoidance_service_now"
+      ],
+      "qualifiedPath": [
+        "services_guest_room_avoidance_service_resolve_guest_room_avoidance",
+        "services_guest_room_avoidance_service_get_tenant_guest",
+        "services_guest_room_avoidance_service_guestroomavoidanceconflicterror",
+        "services_guest_room_avoidance_service_guestroomavoidancenotfounderror",
+        "services_guest_room_avoidance_service_now"
+      ],
+      "depth": 1,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "app/services/guest_room_avoidance_service.py"
       ],
       "criticality": 0.16,
       "warnings": []

@@ -70,6 +70,10 @@ ADDITIVE_RLS_TABLE_CONTRACT = (
         "3bc5882f756d_add_role_visibility_windows.py",
         ("hotel_role_visibility_window",),
     ),
+    (
+        "20260830_guest_room_avoidance.py",
+        ("guest_room_avoidance",),
+    ),
 )
 
 
@@ -121,6 +125,17 @@ def _remaining_scoped_scalar_fks():
                 continue
             local = tuple(element.parent.name for element in constraint.elements)
             remote = tuple(element.column.name for element in constraint.elements)
+            # This lifecycle row intentionally keeps the source movement FK
+            # scalar: SQLite and PostgreSQL can then honour ON DELETE SET NULL
+            # without attempting to null the non-null tenant key. The value is
+            # never supplied by an API caller; it is written from the just
+            # created, same-hotel RoomMoveEvent inside the move transaction.
+            if (
+                table.name == "guest_room_avoidance"
+                and local == ("source_move_event_id",)
+                and parent.name == "room_move_events"
+            ):
+                continue
             if len(local) == 1 and local[0] != "hotel_id":
                 rows.add((table.name, ("hotel_id", local[0]), parent.name, ("hotel_id", remote[0])))
     core = set(CORE_COMPOSITE_FK_REQUIREMENTS)
@@ -213,6 +228,7 @@ def test_rls_migration_covers_every_hotel_scoped_model_table():
         "payment_proofs",
         "user_permission_overrides",
         "guest_restrictions",
+        "guest_room_avoidance",
         "promotions",
         "notifications",
         "push_subscriptions",

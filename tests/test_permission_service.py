@@ -14,6 +14,7 @@ from app.services.permission_service import (
     PERMISSION_GUEST_CREATE,
     PERMISSION_GUEST_EDIT,
     PERMISSION_GUEST_READ,
+    PERMISSION_GUEST_ROOM_AVOIDANCE_RESOLVE,
     PERMISSION_GUEST_TAGS,
     PERMISSION_GUEST_UPDATE,
     PERMISSION_GUEST_VIEW,
@@ -21,6 +22,9 @@ from app.services.permission_service import (
     PERMISSION_OCCUPANCY_VIEW,
     PERMISSION_RESERVATION_CREATE,
     PERMISSION_RESERVATION_MANUAL_RATE,
+    PERMISSION_RESERVATION_MOVE,
+    PERMISSION_RESERVATION_MOVE_CAPACITY,
+    PERMISSION_RESERVATION_MOVE_CATEGORY,
     PERMISSION_REPORTS_FINANCIAL_VIEW,
     PERMISSION_REPORTS_OPERATIONAL_VIEW,
     PERMISSION_ROOM_CLEANING_STATUS,
@@ -72,6 +76,26 @@ def test_default_permissions_seeded_for_owner_manager_reception_housekeeping(db)
     assert rows[("housekeeping", PERMISSION_ROOM_CLEANING_STATUS)] is True
     # Product default: cleaning staff do not receive guest/reservation data.
     assert rows[("housekeeping", PERMISSION_OCCUPANCY_VIEW)] is False
+    assert rows[("owner", PERMISSION_RESERVATION_MOVE)] is True
+    assert rows[("owner", PERMISSION_RESERVATION_MOVE_CATEGORY)] is True
+    assert rows[("owner", PERMISSION_RESERVATION_MOVE_CAPACITY)] is True
+    assert rows[("co_owner", PERMISSION_RESERVATION_MOVE)] is True
+    assert rows[("co_owner", PERMISSION_RESERVATION_MOVE_CATEGORY)] is True
+    assert rows[("co_owner", PERMISSION_RESERVATION_MOVE_CAPACITY)] is True
+    assert rows[("manager", PERMISSION_RESERVATION_MOVE)] is True
+    assert rows[("manager", PERMISSION_RESERVATION_MOVE_CATEGORY)] is True
+    assert rows[("manager", PERMISSION_RESERVATION_MOVE_CAPACITY)] is True
+    assert rows[("receptionist", PERMISSION_RESERVATION_MOVE)] is True
+    assert rows[("receptionist", PERMISSION_RESERVATION_MOVE_CATEGORY)] is False
+    assert rows[("receptionist", PERMISSION_RESERVATION_MOVE_CAPACITY)] is False
+    assert rows[("housekeeping", PERMISSION_RESERVATION_MOVE)] is False
+    assert rows[("housekeeping", PERMISSION_RESERVATION_MOVE_CATEGORY)] is False
+    assert rows[("housekeeping", PERMISSION_RESERVATION_MOVE_CAPACITY)] is False
+    assert rows[("owner", PERMISSION_GUEST_ROOM_AVOIDANCE_RESOLVE)] is True
+    assert rows[("co_owner", PERMISSION_GUEST_ROOM_AVOIDANCE_RESOLVE)] is True
+    assert rows[("manager", PERMISSION_GUEST_ROOM_AVOIDANCE_RESOLVE)] is True
+    assert rows[("receptionist", PERMISSION_GUEST_ROOM_AVOIDANCE_RESOLVE)] is False
+    assert rows[("housekeeping", PERMISSION_GUEST_ROOM_AVOIDANCE_RESOLVE)] is False
     # Defaults remain conservative, but they are editable starting values
     # rather than a permanent ceiling for an explicit owner override.
     assert rows[("manager", PERMISSION_STOCK_ADJUST)] is False

@@ -206,6 +206,106 @@ def test_housekeeping_occupancy_default_migration_tightens_without_touching_gran
         engine.dispose()
 
 
+def test_room_move_tier_migration_is_additive_idempotent_and_preserves_overrides(tmp_path):
+    cwd = os.path.dirname(os.path.dirname(__file__))
+    db_path = str(tmp_path / "room-move-tiers.db")
+    previous_head = "20260830_hk_occupancy_default"
+    new_head = "20260830_room_move_tiers"
+    category_permission = "reservation:move_category"
+    capacity_permission = "reservation:move_capacity"
+
+    _alembic(cwd, db_path, "upgrade", previous_head)
+    engine = create_engine(f"sqlite:///{db_path}")
+    try:
+        insert_historical_hotel_config(engine, 1)
+        with engine.begin() as connection:
+            # Simulate a partially pre-seeded catalog plus an explicit
+            # operator choice. The migration must only fill missing rows.
+            connection.execute(
+                text(
+                    "INSERT INTO permissions (code, description) "
+                    "VALUES (:code, 'operator description')"
+                ),
+                {"code": category_permission},
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO role_permission_defaults (role, permission_code, allowed) "
+                    "VALUES ('manager', :code, 0)"
+                ),
+                {"code": category_permission},
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO hotel_permission_overrides "
+                    "(hotel_id, role, permission_code, allowed) "
+                    "VALUES (1, 'manager', :code, 0)"
+                ),
+                {"code": category_permission},
+            )
+    finally:
+        engine.dispose()
+
+    _alembic(cwd, db_path, "upgrade", new_head)
+    _alembic(cwd, db_path, "upgrade", new_head)
+    engine = create_engine(f"sqlite:///{db_path}")
+    try:
+        with engine.connect() as connection:
+            assert connection.execute(
+                text("SELECT description FROM permissions WHERE code = :code"),
+                {"code": category_permission},
+            ).scalar() == "operator description"
+            assert connection.execute(
+                text(
+                    "SELECT allowed FROM role_permission_defaults "
+                    "WHERE role = 'manager' AND permission_code = :code"
+                ),
+                {"code": category_permission},
+            ).scalar() == 0
+            assert connection.execute(
+                text(
+                    "SELECT allowed FROM hotel_permission_overrides "
+                    "WHERE hotel_id = 1 AND role = 'manager' AND permission_code = :code"
+                ),
+                {"code": category_permission},
+            ).scalar() == 0
+            assert connection.execute(
+                text("SELECT COUNT(*) FROM role_permission_defaults WHERE permission_code = :code"),
+                {"code": category_permission},
+            ).scalar() == 5
+            assert connection.execute(
+                text("SELECT COUNT(*) FROM role_permission_defaults WHERE permission_code = :code"),
+                {"code": capacity_permission},
+            ).scalar() == 5
+            assert connection.execute(
+                text(
+                    "SELECT allowed FROM role_permission_defaults "
+                    "WHERE role = 'manager' AND permission_code = :code"
+                ),
+                {"code": capacity_permission},
+            ).scalar() == 1
+    finally:
+        engine.dispose()
+
+    _alembic(cwd, db_path, "downgrade", previous_head)
+    engine = create_engine(f"sqlite:///{db_path}")
+    try:
+        with engine.connect() as connection:
+            assert connection.execute(
+                text("SELECT COUNT(*) FROM role_permission_defaults WHERE permission_code IN (:category, :capacity)"),
+                {"category": category_permission, "capacity": capacity_permission},
+            ).scalar() == 0
+            assert connection.execute(
+                text("SELECT COUNT(*) FROM permissions WHERE code = :code"),
+                {"code": category_permission},
+            ).scalar() == 1
+            assert connection.execute(
+                text("SELECT COUNT(*) FROM permissions WHERE code = :code"),
+                {"code": capacity_permission},
+            ).scalar() == 0
+    finally:
+        engine.dispose()
+
 def test_permission_enforcement_migration_backfills_defaults_and_removes_sessions(tmp_path):
     cwd = os.path.dirname(os.path.dirname(__file__))
     db_path = str(tmp_path / "permission-enforcement.db")

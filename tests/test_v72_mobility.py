@@ -301,8 +301,8 @@ def test_room_move_requires_reason_code_and_accepts_valid_reason(reservation_api
     assert reservation.room_id == room_b.id
 
 
-def test_room_move_rejects_receptionist_without_room_move_permission(reservation_api_client_as_receptionist, monkeypatch):
-    """B5: reservation:room_move is gated -- receptionist is denied by default."""
+def test_room_move_allows_receptionist_within_the_same_category(reservation_api_client_as_receptionist, monkeypatch):
+    """Receptionists gain only the narrow, same-category move tier by default."""
     client, db = reservation_api_client_as_receptionist
     monkeypatch.setattr("app.api.reservations._trigger_reoptimization_bg", lambda **_kwargs: None)
     guest, category, room_a, room_b = _seed_reservation_prerequisites(db)
@@ -332,9 +332,9 @@ def test_room_move_rejects_receptionist_without_room_move_permission(reservation
         f"/api/reservations/{reservation.id}/room-move",
         json={"to_room_id": room_b.id, "reason_code": "guest_request"},
     )
-    assert response.status_code == 403, response.text
+    assert response.status_code == 200, response.text
     db.refresh(reservation)
-    assert reservation.room_id == room_a.id
+    assert reservation.room_id == room_b.id
 
 
 def test_room_move_endpoint_rejects_capacity_overflow_and_returns_delta_on_reprice(

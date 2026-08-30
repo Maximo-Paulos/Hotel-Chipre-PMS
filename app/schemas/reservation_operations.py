@@ -3,6 +3,7 @@ Schemas for operational reservation actions.
 """
 from __future__ import annotations
 
+import enum
 from datetime import date
 from decimal import Decimal
 from typing import Literal, Optional
@@ -10,6 +11,14 @@ from typing import Literal, Optional
 from pydantic import BaseModel, Field, field_validator
 
 from app.schemas.reservation import ReservationRead
+
+
+class ManualRoomMoveReasonCodeEnum(str, enum.Enum):
+    GUEST_COMPLAINT = "guest_complaint"
+    GUEST_REQUEST = "guest_request"
+    MAINTENANCE = "maintenance"
+    OPERATIONAL = "operational"
+    UPGRADE = "upgrade"
 
 
 class RoomMoveRequest(BaseModel):

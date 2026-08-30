@@ -300,6 +300,14 @@ def _create_assignment_explanation(
         summary_parts.append("Compatible fallback assignment")
     if was_moved:
         summary_parts.append("reservation moved")
+    prior_stay_room_id = reservation_slot.prior_stay_room_id if reservation_slot else None
+    avoided_room_ids = set(reservation_slot.avoided_room_ids) if reservation_slot else set()
+    if room_id == prior_stay_room_id:
+        summary_parts.append("returning guest, previous completed room honored")
+    elif room_id in avoided_room_ids:
+        summary_parts.append("rejected room assigned as a soft signal")
+    elif avoided_room_ids:
+        summary_parts.append("active room rejection respected")
     summary = ". ".join(summary_parts)
     details = {
         "reservation_id": reservation.id,
@@ -310,6 +318,8 @@ def _create_assignment_explanation(
         "was_moved": was_moved,
         "category_priority": priority,
         "allowed_category_ids": reservation_slot.effective_allowed_category_ids if reservation_slot else [requested_category_id],
+        "prior_stay_room_id": prior_stay_room_id,
+        "avoided_room_ids": sorted(avoided_room_ids),
     }
     db.add(
         AllocationExplanation(

@@ -49,6 +49,7 @@ PERMISSION_GUEST_UPDATE = "guest:update"
 PERMISSION_GUEST_TAGS_MANAGE = "guest:tags_manage"
 PERMISSION_GUEST_PROHIBITION_READ = "guest:prohibition_read"
 PERMISSION_GUEST_PROHIBITION_MANAGE = "guest:prohibition_manage"
+PERMISSION_GUEST_ROOM_AVOIDANCE_RESOLVE = "guest:room_avoidance_resolve"
 PERMISSION_GUEST_EXPORT = "guest:export"
 PERMISSION_RESERVATION_READ = "reservation:read"
 PERMISSION_RESERVATION_CREATE = "reservation:create"
@@ -56,6 +57,8 @@ PERMISSION_RESERVATION_UPDATE = "reservation:update"
 PERMISSION_RESERVATION_CANCEL = "reservation:cancel"
 PERMISSION_RESERVATION_CHARGE = "reservation:charge"
 PERMISSION_RESERVATION_MOVE = "reservation:move"
+PERMISSION_RESERVATION_MOVE_CATEGORY = "reservation:move_category"
+PERMISSION_RESERVATION_MOVE_CAPACITY = "reservation:move_capacity"
 PERMISSION_RESERVATION_MANUAL_RATE = "reservation:manual_rate"
 PERMISSION_RESERVATION_PROHIBITION_OVERRIDE = "reservation:prohibition_override"
 PERMISSION_ROOM_READ = "room:read"
@@ -142,6 +145,15 @@ LEGACY_PERMISSION_ALIASES: dict[str, str] = {
     PERMISSION_LAUNDRY_OPERATE_REMITOS: PERMISSION_LAUNDRY_REMITO_MANAGE,
 }
 
+# Ordered from narrowest to widest. A room-move operation checks the minimum
+# tier implied by its source and destination categories, then accepts that
+# permission or any later one in this tuple.
+RESERVATION_MOVE_TIER_PERMISSIONS = (
+    PERMISSION_RESERVATION_MOVE,
+    PERMISSION_RESERVATION_MOVE_CATEGORY,
+    PERMISSION_RESERVATION_MOVE_CAPACITY,
+)
+
 _CANONICAL_DEFINITIONS: dict[str, tuple[str, str, str]] = {
     PERMISSION_PERMISSION_MANAGE: (
         "security", "Administer role and employee permissions",
@@ -171,6 +183,10 @@ _CANONICAL_DEFINITIONS: dict[str, tuple[str, str, str]] = {
         "guests", "Create and resolve lodging prohibitions",
         "Permite crear y resolver prohibiciones de alojamiento. No permite saltear una prohibición vigente sin el permiso específico.",
     ),
+    PERMISSION_GUEST_ROOM_AVOIDANCE_RESOLVE: (
+        "guests", "Resolve guest room rejections",
+        "Permite resolver un rechazo activo de habitación dejando una nota de resolución. No permite crear rechazos manualmente ni cambiar el evento de movimiento que los originó.",
+    ),
     PERMISSION_GUEST_EXPORT: (
         "guests", "Export guest ledger data",
         "Permite exportar el libro de huéspedes dentro del alcance del hotel. No permite editar perfiles ni modificar el historial exportado.",
@@ -197,7 +213,15 @@ _CANONICAL_DEFINITIONS: dict[str, tuple[str, str, str]] = {
     ),
     PERMISSION_RESERVATION_MOVE: (
         "reservations", "Move reservations between rooms",
-        "Permite mover una reserva de habitación. No permite editar otros datos ni cambiar su tarifa.",
+        "Permite mover una reserva entre habitaciones de la misma categoría. No permite cambiar de categoría ni de capacidad; los permisos de categoría o capacidad incluyen este alcance.",
+    ),
+    PERMISSION_RESERVATION_MOVE_CATEGORY: (
+        "reservations", "Move reservations to another category with equal capacity",
+        "Permite mover una reserva a otra categoría con la misma capacidad máxima. También incluye mover dentro de la misma categoría. No permite cambiar a una categoría con capacidad máxima diferente.",
+    ),
+    PERMISSION_RESERVATION_MOVE_CAPACITY: (
+        "reservations", "Move reservations to another category with different capacity",
+        "Permite mover una reserva a otra categoría con capacidad máxima diferente. También incluye los movimientos dentro de la misma categoría y entre categorías de igual capacidad. No permite editar otros datos de la reserva ni saltear la validación de ocupación.",
     ),
     PERMISSION_RESERVATION_MANUAL_RATE: (
         "rates", "Override the quoted reservation rate",
@@ -452,10 +476,12 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
     ROLE_MANAGER: _role_permissions(
         PERMISSION_GUEST_READ, PERMISSION_GUEST_CREATE, PERMISSION_GUEST_UPDATE,
         PERMISSION_GUEST_TAGS_MANAGE, PERMISSION_GUEST_PROHIBITION_READ,
-        PERMISSION_GUEST_PROHIBITION_MANAGE, PERMISSION_GUEST_EXPORT,
+        PERMISSION_GUEST_PROHIBITION_MANAGE, PERMISSION_GUEST_ROOM_AVOIDANCE_RESOLVE,
+        PERMISSION_GUEST_EXPORT,
         PERMISSION_RESERVATION_READ, PERMISSION_RESERVATION_CREATE,
         PERMISSION_RESERVATION_UPDATE, PERMISSION_RESERVATION_CANCEL,
-        PERMISSION_RESERVATION_MOVE, PERMISSION_RESERVATION_PROHIBITION_OVERRIDE,
+        PERMISSION_RESERVATION_MOVE, PERMISSION_RESERVATION_MOVE_CATEGORY,
+        PERMISSION_RESERVATION_MOVE_CAPACITY, PERMISSION_RESERVATION_PROHIBITION_OVERRIDE,
         PERMISSION_ROOM_READ, PERMISSION_ROOM_STATUS_UPDATE,
         PERMISSION_ROOM_BLOCK_CREATE, PERMISSION_ROOM_BLOCK_RELEASE,
         PERMISSION_CHECKIN_PERFORM, PERMISSION_CHECKOUT_PERFORM,
@@ -475,7 +501,7 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
         PERMISSION_GUEST_TAGS_MANAGE, PERMISSION_GUEST_PROHIBITION_READ,
         PERMISSION_RESERVATION_READ, PERMISSION_RESERVATION_CREATE,
         PERMISSION_RESERVATION_UPDATE, PERMISSION_RESERVATION_CANCEL,
-        PERMISSION_RESERVATION_CHARGE, PERMISSION_ROOM_READ,
+        PERMISSION_RESERVATION_CHARGE, PERMISSION_RESERVATION_MOVE, PERMISSION_ROOM_READ,
         PERMISSION_ROOM_BLOCK_CREATE, PERMISSION_CHECKIN_PERFORM,
         PERMISSION_CHECKOUT_PERFORM, PERMISSION_CASH_OPERATE,
         PERMISSION_DASHBOARD_VIEW, PERMISSION_OCCUPANCY_VIEW,

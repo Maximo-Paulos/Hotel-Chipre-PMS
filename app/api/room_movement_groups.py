@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.dependencies.auth import AuthContext, require_permission
 from app.schemas.room_movement_group import RoomMovementGroupRead
-from app.services.permission_service import PERMISSION_RESERVATION_ROOM_MOVE
+from app.services.permission_service import PERMISSION_RESERVATION_MOVE
 from app.services.room_movement_group_service import (
     RoomMovementGroupError,
     get_group,
@@ -23,7 +23,7 @@ router = APIRouter(prefix="/api/room-movement-groups", tags=["Room Movement Grou
 def list_room_movement_groups(
     limit: int = 50,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_ROOM_MOVE)),
+    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_MOVE)),
 ):
     return list_groups(db, hotel_id=context.hotel_id, limit=limit)
 
@@ -32,7 +32,7 @@ def list_room_movement_groups(
 def read_room_movement_group(
     group_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_ROOM_MOVE)),
+    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_MOVE)),
 ):
     group = get_group(db, hotel_id=context.hotel_id, group_id=group_id)
     if group is None:
@@ -44,7 +44,7 @@ def read_room_movement_group(
 def revert_room_movement_group(
     group_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_ROOM_MOVE)),
+    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_MOVE)),
 ):
     try:
         result = revert_group(

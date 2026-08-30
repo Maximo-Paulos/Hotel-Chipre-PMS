@@ -292,8 +292,8 @@
     "hash": "136dc428e369ffb2f64e33aa8ff565ca"
   },
   "app/api/movement_groups.py": {
-    "mtime": 1787360063269.9583,
-    "hash": "c5ccc6e90850dd22ef3e67008329f3fc"
+    "mtime": 1788112350417.084,
+    "hash": "ff671665dc0c7b87111394a24d97bcc2"
   },
   "app/api/onboarding.py": {
     "mtime": 1788026569623.7764,
@@ -340,16 +340,16 @@
     "hash": "563c722f64619c187e64a09ea6e680a1"
   },
   "app/api/reservations.py": {
-    "mtime": 1788047039751.3057,
-    "hash": "58560b5bd20bdf1519210874615cc8c4"
+    "mtime": 1788117593088.0625,
+    "hash": "bd802dc8fc8a5de35752a61c4f68567c"
   },
   "app/api/room_blocks.py": {
     "mtime": 1787360058493.4429,
     "hash": "3cca2786ce9d999f0006c57bb175f43f"
   },
   "app/api/room_movement_groups.py": {
-    "mtime": 1783103274877.3145,
-    "hash": "223b682d5ffd02005e6089dc91cd707e"
+    "mtime": 1788112350380.0571,
+    "hash": "cdb968c9f01271d886b094e29fc660a7"
   },
   "app/api/room_state_events.py": {
     "mtime": 1787360058493.529,
@@ -424,8 +424,8 @@
     "hash": "9950d74c9d8eff387774d1423188c07b"
   },
   "app/main.py": {
-    "mtime": 1787360063273.1282,
-    "hash": "3b3183843fa9e420e6a444650833e4e7"
+    "mtime": 1788117592976.3684,
+    "hash": "b52c7400b744522ab3e908ee0e22ddee"
   },
   "app/master_admin/__init__.py": {
     "mtime": 1783103274878.9458,
@@ -468,8 +468,8 @@
     "hash": "62ef3eaf849f09518abe70f4b804b84a"
   },
   "app/models/__init__.py": {
-    "mtime": 1788026569626.2036,
-    "hash": "828b172c92059f742e91a3544bc4e1b5"
+    "mtime": 1788117592939.5042,
+    "hash": "fe2cd8bd8556ede13b4966133e63fd7f"
   },
   "app/models/ai_assistant.py": {
     "mtime": 1783103274879.7097,
@@ -732,8 +732,8 @@
     "hash": "271c5846b66a722de24836d0967b9ec0"
   },
   "app/schemas/reservation_operations.py": {
-    "mtime": 1787360058497.6,
-    "hash": "bf1a6d7d464764f58709723103d08536"
+    "mtime": 1788117593050.588,
+    "hash": "af8d9803a8fcbe24f4e8678bf3c76d65"
   },
   "app/schemas/room.py": {
     "mtime": 1788026569628.141,
@@ -780,20 +780,20 @@
     "hash": "9c5d000f789b0650f5663b362f6ae61b"
   },
   "app/services/allocation_engine.py": {
-    "mtime": 1788026569628.5688,
-    "hash": "ca12743eda195bbc34476831825b8392"
+    "mtime": 1788118288076.9446,
+    "hash": "2020f2bc985cc2c0cc62e80ed722226e"
   },
   "app/services/allocation_learning_service.py": {
     "mtime": 1783103274885.521,
     "hash": "b41a5fe5a3e72536d850f005a2901e23"
   },
   "app/services/allocation_policy_service.py": {
-    "mtime": 1783103274885.6272,
-    "hash": "ef87826b9045cbd0920aae109dcfed9e"
+    "mtime": 1788117706917.6572,
+    "hash": "a9272c205861ddbd1f650968d8bddaa8"
   },
   "app/services/allocation_runtime_service.py": {
-    "mtime": 1787360058498.815,
-    "hash": "283b7154163548df3d2ff8b32edd697b"
+    "mtime": 1788117666912.7988,
+    "hash": "24fae41ad91669324c7981b10c17c883"
   },
   "app/services/analytics_ai_providers.py": {
     "mtime": 1783103274885.8555,
@@ -988,8 +988,8 @@
     "hash": "8957ff474c6b4ab62f6ac219a5df9f87"
   },
   "app/services/permission_service.py": {
-    "mtime": 1788066553377.2146,
-    "hash": "2e36aa00e7424ec7d217124c4377a555"
+    "mtime": 1788117593013.564,
+    "hash": "0a1da2adc076d5e4e5e99c74e311b6a6"
   },
   "app/services/pricing_policy_service.py": {
     "mtime": 1787360063279.0254,
@@ -1012,8 +1012,8 @@
     "hash": "d7a4a790192fd0f301a9c24c047cafc0"
   },
   "app/services/reservation_operations_service.py": {
-    "mtime": 1787360063279.5625,
-    "hash": "0a58a6ee2df24747c8a2a104783d9e76"
+    "mtime": 1788117593125.0383,
+    "hash": "e9a6855814fd991be7c594fc6720005e"
   },
   "app/services/reservation_service.py": {
     "mtime": 1788026569631.3325,
@@ -1912,12 +1912,12 @@
     "hash": "97854fe2b1d7c9794858adf271cc05ca"
   },
   "tests/test_permission_service.py": {
-    "mtime": 1788066553540.4648,
-    "hash": "c2479de4b05cfbaef29a392b1af59bc1"
+    "mtime": 1788117852955.8086,
+    "hash": "86ae6bd05d8be11e169ed4c6e92f3d30"
   },
   "tests/test_permissions_api.py": {
-    "mtime": 1788066553500.2937,
-    "hash": "175b4d8861c99effcaeddd957efd2d40"
+    "mtime": 1788117706993.3267,
+    "hash": "3cced4c20a1aa84053df8d91052c5723"
   },
   "tests/test_postgres_validation.py": {
     "mtime": 1787360063389.443,
@@ -2060,8 +2060,8 @@
     "hash": "780252d4cf657feaefd065623c80cc76"
   },
   "tests/test_v72_mobility.py": {
-    "mtime": 1787360058542.0562,
-    "hash": "2fc8b028af29e8af296016d7cc76d133"
+    "mtime": 1788112432969.831,
+    "hash": "31dd74b4124821e7e4f382b76e109861"
   },
   "tests/test_v72_movement_groups.py": {
     "mtime": 1783103275011.084,
@@ -2784,28 +2784,28 @@
     "hash": "84364af62f8c6b7d15983dd02b1a18bf"
   },
   "knowledge/_generated/README.md": {
-    "mtime": 1788067156758.022,
-    "hash": "f9ffeae3b41b8306947714d46addd502"
+    "mtime": 1788118133380.1929,
+    "hash": "ef79d074890dcb4e99910f716d1f1e91"
   },
   "knowledge/_generated/api-surface.md": {
-    "mtime": 1788067156090.7244,
-    "hash": "0b932feb1b17295610538cfa3c4458e2"
+    "mtime": 1788118132554.1604,
+    "hash": "134a74dbd179d0e32893da2d662ea33b"
   },
   "knowledge/_generated/cloud-surfaces.md": {
-    "mtime": 1788067156746.678,
-    "hash": "2e1ab658ae3b5ef4d698611cc5013da8"
+    "mtime": 1788118133366.6277,
+    "hash": "6491f892f7a05cf2b658859644cc0672"
   },
   "knowledge/_generated/frontend-routes.md": {
-    "mtime": 1788067156102.0786,
-    "hash": "ef844ea1100a06ea86716cc14390e181"
+    "mtime": 1788118132569.449,
+    "hash": "38579a6094ae89fd856c1079ed41f5d8"
   },
   "knowledge/_generated/graphify-summary.md": {
-    "mtime": 1788067156735.337,
-    "hash": "3191d41586e3847a567d841d83243489"
+    "mtime": 1788118133352.469,
+    "hash": "38fadefffc6c9e4e576dc260316eea0e"
   },
   "knowledge/_generated/migration-head.md": {
-    "mtime": 1788067156240.2544,
-    "hash": "3628fbca133f1d0a3c1042d5a285086a"
+    "mtime": 1788118132749.0957,
+    "hash": "73b9088151367d3eef4bf4a7c1cd7c8a"
   },
   "qa/evidence/README.md": {
     "mtime": 1787360058523.809,
@@ -3084,159 +3084,159 @@
     "hash": "ef35735d034a51a2252fec9bb768a97b"
   },
   ".claude/skills/agent-setup-maintenance/SKILL.md": {
-    "mtime": 1784398283650.376,
+    "mtime": 1784398283642.3325,
     "hash": "7f2bc46168bc8fdeb6fc3d4b9111ac17"
   },
   ".claude/skills/agent-setup-maintenance/agents/openai.yaml": {
-    "mtime": 1784398283650.5127,
+    "mtime": 1784398283642.5366,
     "hash": "967cc804617e0c6daf9d6c7a10b429dd"
   },
   ".claude/skills/cloud-user-qa/SKILL.md": {
-    "mtime": 1787360058441.4465,
+    "mtime": 1787360058440.8018,
     "hash": "5215227cddfc212586f18365dd97c2af"
   },
   ".claude/skills/cloud-user-qa/agents/openai.yaml": {
-    "mtime": 1784398283650.7932,
+    "mtime": 1784398283642.8386,
     "hash": "16edeff38c514d364477c4f7aeb21532"
   },
   ".claude/skills/data-visualization-review/SKILL.md": {
-    "mtime": 1784398283650.9294,
+    "mtime": 1784398283643.003,
     "hash": "62e2a84a1bc6e8b8a9057dbe3d27d17d"
   },
   ".claude/skills/data-visualization-review/agents/openai.yaml": {
-    "mtime": 1784398283651.0544,
+    "mtime": 1784398283643.1606,
     "hash": "6bb9a290c5f1ca22cd45dc74a233fbc6"
   },
   ".claude/skills/deploy-preview-check/SKILL.md": {
-    "mtime": 1784398283651.1792,
+    "mtime": 1784398283643.3237,
     "hash": "26741e1bdc585eb15ce227d6350412c3"
   },
   ".claude/skills/deploy-preview-check/agents/openai.yaml": {
-    "mtime": 1784398283651.3083,
+    "mtime": 1784398283643.487,
     "hash": "9c09b9e7d1e31d25383e03d43df00004"
   },
   ".claude/skills/dev-up/SKILL.md": {
-    "mtime": 1784817331516.435,
+    "mtime": 1784817331515.6523,
     "hash": "b42c183d9beb40574eb293b1170d1678"
   },
   ".claude/skills/geo-local-seo/SKILL.md": {
-    "mtime": 1784398283651.4424,
+    "mtime": 1784398283643.793,
     "hash": "f4086f1839ebd3d8ff6aa761b451266b"
   },
   ".claude/skills/geo-local-seo/agents/openai.yaml": {
-    "mtime": 1784398283651.575,
+    "mtime": 1784398283643.9397,
     "hash": "a7a4ee77dd6da8981773eb2ae686b5af"
   },
   ".claude/skills/geo-market-expansion/SKILL.md": {
-    "mtime": 1784398283651.701,
+    "mtime": 1784398283644.086,
     "hash": "1ba813def89bdd26e0e501da3ae4f4be"
   },
   ".claude/skills/geo-market-expansion/agents/openai.yaml": {
-    "mtime": 1784398283651.8342,
+    "mtime": 1784398283644.2273,
     "hash": "4a3802b6ad3354acdb57f69706e6772b"
   },
   ".claude/skills/graphify-load-context/SKILL.md": {
-    "mtime": 1784398283651.9697,
+    "mtime": 1784398283644.3684,
     "hash": "837f1d137040339a77ce4afc9cb44d91"
   },
   ".claude/skills/graphify-load-context/agents/openai.yaml": {
-    "mtime": 1784398283652.1062,
+    "mtime": 1784398283644.508,
     "hash": "6e92cc5d9e88e22c370a3a40e20c62e6"
   },
   ".claude/skills/graphify-read/SKILL.md": {
-    "mtime": 1784398283652.2393,
+    "mtime": 1784398283644.6558,
     "hash": "93eaff240ba760e7a58369ec602a21df"
   },
   ".claude/skills/graphify-read/agents/openai.yaml": {
-    "mtime": 1784398283652.4824,
+    "mtime": 1784398283644.795,
     "hash": "eb155a1a8e1aa45a671a4507c736f6b7"
   },
   ".claude/skills/graphify-write/SKILL.md": {
-    "mtime": 1784398283652.6133,
+    "mtime": 1784398283644.9365,
     "hash": "720d5e5ead4eed1979606befbf315dc7"
   },
   ".claude/skills/graphify-write/agents/openai.yaml": {
-    "mtime": 1784398283652.7449,
+    "mtime": 1784398283645.0718,
     "hash": "fd786dd876b32162a80ffef4897bbe6d"
   },
   ".claude/skills/incident-triage/SKILL.md": {
-    "mtime": 1784398283652.8745,
+    "mtime": 1784398283645.2085,
     "hash": "e8232fcae72793a1c70659cc6d25f034"
   },
   ".claude/skills/incident-triage/agents/openai.yaml": {
-    "mtime": 1784398283653.0103,
+    "mtime": 1784398283645.342,
     "hash": "2401b878bced3e59222d60a75ab15379"
   },
   ".claude/skills/new-migration/SKILL.md": {
-    "mtime": 1784817331516.8323,
+    "mtime": 1784817331516.179,
     "hash": "1bcdd99c2cb3569a63526ae2c493d3f7"
   },
   ".claude/skills/obsidian-load-context/SKILL.md": {
-    "mtime": 1784398283653.1458,
+    "mtime": 1784398283645.6125,
     "hash": "c50670fe8d18a5aa9e195eada79372ba"
   },
   ".claude/skills/obsidian-load-context/agents/openai.yaml": {
-    "mtime": 1784398283653.286,
+    "mtime": 1784398283645.748,
     "hash": "5a44b291a63b65f4316dbb59d42dc6ae"
   },
   ".claude/skills/obsidian-read/SKILL.md": {
-    "mtime": 1784398283653.4165,
+    "mtime": 1784398283645.881,
     "hash": "9470db7fda22e6d964a607fc5ee70090"
   },
   ".claude/skills/obsidian-read/agents/openai.yaml": {
-    "mtime": 1784398283653.5483,
+    "mtime": 1784398283646.012,
     "hash": "49210ca9dc1a3e2dc7659d0e9c805e31"
   },
   ".claude/skills/obsidian-write/SKILL.md": {
-    "mtime": 1784398283653.679,
+    "mtime": 1784398283646.15,
     "hash": "503e5069808b768535a56804ad700c4f"
   },
   ".claude/skills/obsidian-write/agents/openai.yaml": {
-    "mtime": 1784398283653.8147,
+    "mtime": 1784398283646.2812,
     "hash": "32c48a2dd7379797c8ba4d096459915e"
   },
   ".claude/skills/product-ceo-review/SKILL.md": {
-    "mtime": 1784398283653.9443,
+    "mtime": 1784398283646.4133,
     "hash": "88fae2a6d3e1d9d4c598611685acf8c2"
   },
   ".claude/skills/product-ceo-review/agents/openai.yaml": {
-    "mtime": 1784398283654.074,
+    "mtime": 1784398283646.5547,
     "hash": "638c5975d1325000228d3391a597df79"
   },
   ".claude/skills/qa-persona-bootstrap/SKILL.md": {
-    "mtime": 1784398283654.2031,
+    "mtime": 1784398283646.71,
     "hash": "8ffb83de9489ffdfbc786ec142cea2cd"
   },
   ".claude/skills/qa-persona-bootstrap/agents/openai.yaml": {
-    "mtime": 1784398283654.3281,
+    "mtime": 1784398283646.8628,
     "hash": "bdd2b69a7803613ec60e869562cdf3dd"
   },
   ".claude/skills/release-gate/SKILL.md": {
-    "mtime": 1784398283654.465,
+    "mtime": 1784398283647.028,
     "hash": "3c19144a1a25364f0cafef71eba4e5fe"
   },
   ".claude/skills/release-gate/agents/openai.yaml": {
-    "mtime": 1784398283654.596,
+    "mtime": 1784398283647.2017,
     "hash": "c61c9bc51a06623481ad199db2ceed4a"
   },
   ".claude/skills/secure-integration-review/SKILL.md": {
-    "mtime": 1784398283654.7249,
+    "mtime": 1784398283647.3608,
     "hash": "850e46270104bd6bd1492c55c901e350"
   },
   ".claude/skills/secure-integration-review/agents/openai.yaml": {
-    "mtime": 1784398283654.8506,
+    "mtime": 1784398283647.5073,
     "hash": "1462dbf4e00ea39db479341556a170db"
   },
   ".claude/skills/ux-ui-audit/SKILL.md": {
-    "mtime": 1784398283654.978,
+    "mtime": 1784398283647.6824,
     "hash": "0f2359a751e2ab26ef41d243e5887ede"
   },
   ".claude/skills/ux-ui-audit/agents/openai.yaml": {
-    "mtime": 1784398283655.1094,
+    "mtime": 1784398283647.8218,
     "hash": "f88f2e0fc4b94cb53ef8d5ac709de4d6"
   },
   ".claude/skills/validate-all/SKILL.md": {
-    "mtime": 1787360058441.708,
+    "mtime": 1787360058441.1992,
     "hash": "c8507d2cd81357c23d6bd2f3014c5c99"
   },
   ".github/workflows/preview-qa.yml": {
@@ -3248,8 +3248,8 @@
     "hash": "8e2277e0fc399686b86f61f02ef68f93"
   },
   ".graphify/GRAPH_REPORT.md": {
-    "mtime": 1788026569578.712,
-    "hash": "b88b73750ff822f1692c25f8321ff086"
+    "mtime": 1788067279908.27,
+    "hash": "86cf4755d98bd40b442b810af22db938"
   },
   "scripts/agent_ops/manage_qa_baseline_lease.py": {
     "mtime": 1784517879747.6167,
@@ -3312,8 +3312,8 @@
     "hash": "590ebb6a3ff3265f1f8123461619d2f3"
   },
   "tests/test_tenant_rls_contract.py": {
-    "mtime": 1788026569650.2214,
-    "hash": "f57e5ea26911db45cbd865ade9ae8a8e"
+    "mtime": 1788117917969.5146,
+    "hash": "e32cd0d5e3f945725e8fd59dc5aeae0e"
   },
   "alembic/versions/20260724_payment_proofs.py": {
     "mtime": 1787360058488.9614,
@@ -3392,11 +3392,11 @@
     "hash": "c7a5b78381b8855ce88b853b56376705"
   },
   ".claude/skills/scale-data-architecture/SKILL.md": {
-    "mtime": 1787360058441.5317,
+    "mtime": 1787360058440.9148,
     "hash": "89b2edce0efaa2ea6c280c5d3e92da37"
   },
   ".claude/skills/scale-data-architecture/agents/openai.yaml": {
-    "mtime": 1787360058441.6191,
+    "mtime": 1787360058440.9995,
     "hash": "3f19a2e230b5e82f46a7c990a069dad2"
   },
   ".github/workflows/trusted-release-gate.yml": {
@@ -4804,8 +4804,8 @@
     "hash": "aab054c885074be92f6e2e21ee476fdf"
   },
   "tests/test_rbac_permission_consolidation.py": {
-    "mtime": 1787360063390.5728,
-    "hash": "127eaa87130d5a69712275ec12316a6d"
+    "mtime": 1788112618674.1956,
+    "hash": "9696f9b987ebdbd53805c1d171b9db0b"
   },
   "tests/test_soft_deleted_reservations_excluded.py": {
     "mtime": 1788026569650.0244,
@@ -4832,8 +4832,8 @@
     "hash": "aff1401870e2da75d2345c6d9e73dbeb"
   },
   "tests/test_permission_catalog_migration.py": {
-    "mtime": 1788067040954.952,
-    "hash": "6053f3b527bf402a5aac56bc3f4b57d6"
+    "mtime": 1788112618636.8699,
+    "hash": "b98fa89e30929e278fc1d2e141b65cb1"
   },
   "alembic/versions/3bc5882f756d_add_role_visibility_windows.py": {
     "mtime": 1788026569618.464,
@@ -4926,5 +4926,53 @@
   "alembic/versions/20260830_hk_occupancy_default.py": {
     "mtime": 1788067040919.0354,
     "hash": "ebbb2aa3b2d32673780b1e73639f2f25"
+  },
+  ".agents/skills/new-permission/SKILL.md": {
+    "mtime": 1788109406405.121,
+    "hash": "8f7289123368dadf9b94df48a80d243b"
+  },
+  ".claude/skills/new-permission/SKILL.md": {
+    "mtime": 1788109406405.121,
+    "hash": "8f7289123368dadf9b94df48a80d243b"
+  },
+  "alembic/versions/20260830_room_move_tiers.py": {
+    "mtime": 1788112378054.7393,
+    "hash": "a2b00eebb48e07548510d04cd7a83fce"
+  },
+  "tests/test_room_move_permission_tiers.py": {
+    "mtime": 1788112540659.162,
+    "hash": "61e06b6afcf0c4008b71a1b684bc7897"
+  },
+  "alembic/versions/20260830_guest_room_avoidance.py": {
+    "mtime": 1788117569902.5312,
+    "hash": "209cc0c0383e9e38bfea8c9ec9c18124"
+  },
+  "app/api/guest_room_avoidances.py": {
+    "mtime": 1788117529415.554,
+    "hash": "df5fbe7bf3ae9aca8c490019740ab203"
+  },
+  "app/models/guest_room_avoidance.py": {
+    "mtime": 1788117529305.4614,
+    "hash": "4724bab1911a730aecc157f3d4045bc2"
+  },
+  "app/schemas/guest_room_avoidance.py": {
+    "mtime": 1788117529342.0798,
+    "hash": "fa49832bcf0fc2355398ab2e21649757"
+  },
+  "app/services/guest_room_avoidance_service.py": {
+    "mtime": 1788117529378.8354,
+    "hash": "90a7375185697fbd0cd57dc10af5230d"
+  },
+  "tests/test_allocation_guest_room_avoidance.py": {
+    "mtime": 1788117977888.8801,
+    "hash": "c677d7628c9b1b8fc59ced254f11b711"
+  },
+  "tests/test_guest_room_avoidance_api.py": {
+    "mtime": 1788117800522.3232,
+    "hash": "6ae4bf81e5d6940be6a296d4942a8f2a"
+  },
+  "tests/test_guest_room_avoidance_migration.py": {
+    "mtime": 1788117924879.9167,
+    "hash": "218a4afbca5f082127a55558b2ddf5a2"
   }
 }

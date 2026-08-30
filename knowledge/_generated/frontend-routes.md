@@ -1,7 +1,7 @@
 # Rutas frontend
 
-Generado: 2026-08-30T05:19:16.091046+00:00
-Commit: `e6abcab`
+Generado: 2026-08-30T19:35:43.870560+00:00
+Commit: `af0c518`
 
 Extraídas de `frontend/src/router.tsx` (73 rutas declaradas). El host determina si una ruta es app o marketing.
 

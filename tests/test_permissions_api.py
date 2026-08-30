@@ -100,7 +100,7 @@ def test_permissions_matrix_exposes_only_canonical_rows_with_ui_metadata():
         canonical_codes = set(_CANONICAL_DEFINITIONS)
         legacy_codes = set(LEGACY_PERMISSION_ALIASES)
 
-        assert len(canonical_codes) == 64
+        assert len(canonical_codes) == 67
         for cells in matrix.values():
             assert len(cells) == len(canonical_codes)
             assert set(cells) == canonical_codes
