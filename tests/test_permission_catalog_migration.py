@@ -428,3 +428,41 @@ def test_permission_enforcement_migration_backfills_defaults_and_removes_session
             ).scalar() == 1
     finally:
         engine.dispose()
+
+
+def test_migrated_defaults_match_the_code_default_matrix(tmp_path):
+    """role_permission_defaults must agree with DEFAULT_MATRIX after migrating.
+
+    Runtime authorization reads the table, not the dict. When a permission's
+    default changes in code, the change is invisible on every pre-existing
+    database unless a migration updates the row too -- and the rest of the
+    suite cannot see the gap, because it builds permissions from the dict.
+
+    reservation:move is why this test exists: it was flipped on for
+    receptionists in code while the migrated row stayed False.
+    """
+    from app.services.permission_service import DEFAULT_MATRIX
+
+    cwd = os.path.dirname(os.path.dirname(__file__))
+    db_path = str(tmp_path / "defaults-parity.db")
+    _alembic(cwd, db_path, "upgrade", "head")
+
+    engine = create_engine(f"sqlite:///{db_path}")
+    try:
+        with engine.begin() as connection:
+            migrated = {
+                (row[0], row[1]): bool(row[2])
+                for row in connection.execute(
+                    text("SELECT role, permission_code, allowed FROM role_permission_defaults")
+                ).all()
+            }
+    finally:
+        engine.dispose()
+
+    mismatches = sorted(
+        f"{role}/{code}: code={expected} migrated={migrated[(role, code)]}"
+        for role, permissions in DEFAULT_MATRIX.items()
+        for code, expected in permissions.items()
+        if (role, code) in migrated and migrated[(role, code)] is not bool(expected)
+    )
+    assert not mismatches, "DEFAULT_MATRIX and role_permission_defaults disagree: " + "; ".join(mismatches)
