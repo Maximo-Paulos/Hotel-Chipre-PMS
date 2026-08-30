@@ -11,11 +11,23 @@ import { reservationStatusConfig } from "../utils/reservationStatus";
 
 const DATE_LABEL = new Intl.DateTimeFormat("es-AR", { weekday: "short", day: "2-digit", month: "2-digit" });
 
+export type RoomDropTarget = { reservationId: number; toRoomId: number };
+
 type OccupancyGridProps = {
   data: OccupancyGridResponse;
   days: string[];
   todayIso: string;
   onSelectReservation: (id: number) => void;
+  /** Drop handler. Absent = drag disabled (no permission, or read-only view). */
+  onDropReservation?: (target: RoomDropTarget) => void;
+  /**
+   * Fires when a drag begins (null when it ends). The parent needs the source
+   * reservation to decide which rooms may receive it -- that cannot wait for
+   * the drop, or every room would look droppable mid-drag.
+   */
+  onDragReservationChange?: (reservationId: number | null) => void;
+  /** Why this room cannot receive the dragged reservation, or null if it can. */
+  roomDropBlockedReason?: (roomId: number) => string | null;
 };
 
 type CategoryGroup = {
@@ -96,22 +108,58 @@ function StickyLabelCell({ children, className }: { children: React.ReactNode; c
 function Cell({
   reservationItems,
   blockItems,
-  onSelectReservation
+  onSelectReservation,
+  roomId,
+  onDropReservation,
+  onDragReservationChange,
+  dropBlockedReason
 }: {
   reservationItems: OccupancyGridReservation[];
   blockItems: OccupancyGridBlock[];
   onSelectReservation: (id: number) => void;
+  roomId?: number;
+  onDropReservation?: (target: RoomDropTarget) => void;
+  onDragReservationChange?: (reservationId: number | null) => void;
+  dropBlockedReason?: string | null;
 }) {
+  // ponytail: native HTML5 drag, no dependency. Drag is a shortcut only --
+  // it does not work on touch or with a keyboard, so the picker in the
+  // reservation drawer stays the primary path.
+  const canDrop = Boolean(onDropReservation) && roomId !== undefined && !dropBlockedReason;
+  const dropProps = canDrop
+    ? {
+        onDragOver: (event: React.DragEvent) => {
+          event.preventDefault();
+          event.dataTransfer.dropEffect = "move" as const;
+        },
+        onDrop: (event: React.DragEvent) => {
+          event.preventDefault();
+          const raw = event.dataTransfer.getData("text/reservation-id");
+          const reservationId = Number(raw);
+          if (raw && Number.isFinite(reservationId) && roomId !== undefined) {
+            onDropReservation?.({ reservationId, toRoomId: roomId });
+          }
+        }
+      }
+    : {};
+  const blockedTitle = dropBlockedReason ?? undefined;
   if (reservationItems.length > 0) {
     const item = reservationItems[0];
     const status = reservationStatusConfig[item.status];
     const extra = reservationItems.length - 1;
     return (
-      <td className="min-w-[110px] border-b border-r border-slate-200 p-1 align-top">
+      <td className="min-w-[110px] border-b border-r border-slate-200 p-1 align-top" title={blockedTitle} {...dropProps}>
         <button
           type="button"
           data-testid={`occupancy-reservation-${item.id}`}
           onClick={() => onSelectReservation(item.id)}
+          draggable={Boolean(onDropReservation)}
+          onDragStart={(event) => {
+            event.dataTransfer.setData("text/reservation-id", String(item.id));
+            event.dataTransfer.effectAllowed = "move";
+            onDragReservationChange?.(item.id);
+          }}
+          onDragEnd={() => onDragReservationChange?.(null)}
           title={`${item.guest_name} · ${item.confirmation_code}`}
           className={cx(
             "w-full truncate rounded-lg px-2 py-1.5 text-left text-xs font-semibold shadow-sm hover:opacity-80",
@@ -135,10 +183,19 @@ function Cell({
     );
   }
 
-  return <td className="min-w-[110px] border-b border-r border-slate-200 p-1 align-top" />;
+  return (
+    <td
+      className={cx(
+        "min-w-[110px] border-b border-r border-slate-200 p-1 align-top",
+        dropBlockedReason && "bg-slate-50"
+      )}
+      title={blockedTitle}
+      {...dropProps}
+    />
+  );
 }
 
-export function OccupancyGrid({ data, days, todayIso, onSelectReservation }: OccupancyGridProps) {
+export function OccupancyGrid({ data, days, todayIso, onSelectReservation, onDropReservation, onDragReservationChange, roomDropBlockedReason }: OccupancyGridProps) {
   const groups = useMemo(() => groupByCategory(data.rooms), [data.rooms]);
   const reservationsByCell = useMemo(
     () => buildReservationsByRoomAndDay(data.reservations, data.unassigned, days),
@@ -207,6 +264,10 @@ export function OccupancyGrid({ data, days, todayIso, onSelectReservation }: Occ
                       reservationItems={reservationsByCell.get(`${room.id}_${day}`) ?? []}
                       blockItems={blocksByCell.get(`${room.id}_${day}`) ?? []}
                       onSelectReservation={onSelectReservation}
+                      roomId={room.id}
+                      onDropReservation={onDropReservation}
+                      onDragReservationChange={onDragReservationChange}
+                      dropBlockedReason={roomDropBlockedReason?.(room.id) ?? null}
                     />
                   ))}
                 </tr>

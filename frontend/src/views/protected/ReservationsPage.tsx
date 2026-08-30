@@ -69,16 +69,10 @@ import {
   reservationStatusConfig
 } from "../../utils/reservationStatus";
 import ReservationStatCard from "../../components/StatCard";
+import { ROOM_MOVE_REASONS, moveBlockedReason } from "../../utils/roomMove";
+import { useEffectivePermissions } from "../../hooks/usePermissions";
 
-// Los cinco motivos que acepta POST /reservations/{id}/room-move. Texto libre
-// devuelve 422: el backend usa el codigo para decidir si registra un rechazo.
-const ROOM_MOVE_REASONS = [
-  { value: "guest_request", label: "A pedido del huésped" },
-  { value: "guest_complaint", label: "Por queja del huésped" },
-  { value: "maintenance", label: "Mantenimiento" },
-  { value: "operational", label: "Operativo" },
-  { value: "upgrade", label: "Upgrade" }
-] as const;
+
 
 type FormState = {
   guest_id: string;
@@ -186,6 +180,7 @@ const readFileAsDataUrl = (file: File) =>
 
 export function ReservationsPage() {
   const { session } = useSession();
+  const { hasPermission } = useEffectivePermissions();
   const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState<ReservationStatus | "all" | "">("");
   const [fromDate, setFromDate] = useState("");
@@ -393,6 +388,24 @@ export function ReservationsPage() {
         room.status !== "blocked"
     );
   }, [detailsReservation, roomsQuery.data]);
+
+  const categoryById = useMemo(() => {
+    const map = new Map<number, { id: number; max_occupancy: number }>();
+    categoriesData.forEach((cat) => map.set(cat.id, { id: cat.id, max_occupancy: cat.max_occupancy }));
+    return map;
+  }, [categoriesData]);
+
+  // A destination the operator cannot use stays listed and says why: hiding it
+  // would leave them guessing where the suite went.
+  const moveBlockByRoomId = useMemo(() => {
+    const map = new Map<number, string | null>();
+    if (!detailsReservation) return map;
+    const from = categoryById.get(detailsReservation.category_id);
+    moveRoomOptions.forEach((room) => {
+      map.set(room.id, moveBlockedReason(from, categoryById.get(room.category_id), hasPermission));
+    });
+    return map;
+  }, [categoryById, detailsReservation, moveRoomOptions, hasPermission]);
 
   const categoryNameById = useMemo(() => {
     const map = new Map<number, string>();
@@ -3121,14 +3134,18 @@ export function ReservationsPage() {
                       className="w-full rounded-lg border border-slate-300 px-3 py-2"
                     >
                       <option value="">Seleccionar habitación</option>
-                      {moveRoomOptions.map((room) => (
-                        <option key={room.id} value={room.id}>
-                          Hab {room.room_number} · Piso {room.floor}
-                          {room.category_id !== detailsReservation.category_id
-                            ? ` · ${categoryNameById.get(room.category_id) ?? "otra categoría"}`
-                            : ""}
-                        </option>
-                      ))}
+                      {moveRoomOptions.map((room) => {
+                        const blocked = moveBlockByRoomId.get(room.id) ?? null;
+                        return (
+                          <option key={room.id} value={room.id} disabled={blocked !== null}>
+                            Hab {room.room_number} · Piso {room.floor}
+                            {room.category_id !== detailsReservation.category_id
+                              ? ` · ${categoryNameById.get(room.category_id) ?? "otra categoría"}`
+                              : ""}
+                            {blocked ? ` — ${blocked}` : ""}
+                          </option>
+                        );
+                      })}
                     </select>
                   </label>
                   {moveCrossesCategory ? (
