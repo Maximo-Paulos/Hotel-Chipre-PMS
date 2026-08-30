@@ -70,6 +70,16 @@ import {
 } from "../../utils/reservationStatus";
 import ReservationStatCard from "../../components/StatCard";
 
+// Los cinco motivos que acepta POST /reservations/{id}/room-move. Texto libre
+// devuelve 422: el backend usa el codigo para decidir si registra un rechazo.
+const ROOM_MOVE_REASONS = [
+  { value: "guest_request", label: "A pedido del huésped" },
+  { value: "guest_complaint", label: "Por queja del huésped" },
+  { value: "maintenance", label: "Mantenimiento" },
+  { value: "operational", label: "Operativo" },
+  { value: "upgrade", label: "Upgrade" }
+] as const;
+
 type FormState = {
   guest_id: string;
   category_id: string;
@@ -3145,14 +3155,26 @@ export function ReservationsPage() {
                   ) : null}
                   <label className="space-y-1 text-sm">
                     <span className="text-slate-600">Motivo del cambio</span>
-                    <input
+                    <select
                       value={roomMoveForm.reason_code}
                       onChange={(event) => setRoomMoveForm((current) => ({ ...current, reason_code: event.target.value }))}
                       disabled={!canMoveRoom(detailsReservation.status) || roomMoveMutation.isPending}
-                      placeholder="Mantenimiento, upgrade, pedido del huésped"
                       required
                       className="w-full rounded-lg border border-slate-300 px-3 py-2"
-                    />
+                    >
+                      <option value="">Elegí un motivo</option>
+                      {ROOM_MOVE_REASONS.map((reason) => (
+                        <option key={reason.value} value={reason.value}>
+                          {reason.label}
+                        </option>
+                      ))}
+                    </select>
+                    {roomMoveForm.reason_code === "guest_complaint" ? (
+                      <span className="block text-xs text-amber-700">
+                        Se va a registrar un rechazo: la asignación automática va a evitar esta habitación
+                        para este huésped en estadías futuras, hasta que alguien lo resuelva.
+                      </span>
+                    ) : null}
                   </label>
                   <label className="space-y-1 text-sm">
                     <span className="text-slate-600">Notas del cambio</span>
