@@ -11,12 +11,27 @@ import {
   type RevenueReport
 } from "../api/reports";
 import { hasValidSession } from "../api/client";
+import { queryKeys } from "../api/queryKeys";
 import { useSession } from "../state/session";
 
-const dailyReportKey = (hotelId: number | null, reportDate: string) => ["reports", "operational-daily", hotelId, reportDate];
-const alertsKey = (hotelId: number | null, reportDate: string) => ["reports", "operational-alerts", hotelId, reportDate];
-const occupancyKey = (hotelId: number | null, startDate: string, endDate: string) => ["reports", "occupancy", hotelId, startDate, endDate];
-const revenueKey = (hotelId: number | null, startDate: string, endDate: string) => ["reports", "revenue", hotelId, startDate, endDate];
+const dailyReportKey = (hotelId: number | null, reportDate: string) => [
+  ...queryKeys.reports(hotelId, "operational-daily"),
+  reportDate
+];
+const alertsKey = (hotelId: number | null, reportDate: string) => [
+  ...queryKeys.reports(hotelId, "operational-alerts"),
+  reportDate
+];
+const occupancyKey = (hotelId: number | null, startDate: string, endDate: string) => [
+  ...queryKeys.reports(hotelId, "occupancy"),
+  startDate,
+  endDate
+];
+const revenueKey = (hotelId: number | null, startDate: string, endDate: string) => [
+  ...queryKeys.reports(hotelId, "revenue"),
+  startDate,
+  endDate
+];
 
 export function useDailyOperationalReport(reportDate: string) {
   const { session } = useSession();

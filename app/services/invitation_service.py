@@ -10,6 +10,7 @@ from sqlalchemy import update
 from sqlalchemy.orm import Session
 
 from app.models.invitation import StaffInvitation
+from app.services.domain_events import queue_domain_change
 
 
 INVITATION_TTL = timedelta(days=7)
@@ -119,6 +120,22 @@ def consume_invitation(db: Session, invitation: StaffInvitation) -> bool:
     )
     if consumed.rowcount != 1:
         return False
+    # This lifecycle transition uses a Core UPDATE, so explicitly queue the
+    # tenant-scoped invalidation without ever including the invitation token.
+    queue_domain_change(
+        db,
+        hotel_id=invitation.hotel_id,
+        domain="users",
+        event_type="staff_invitation.consumed",
+        payload={"action_id": invitation.id},
+    )
+    queue_domain_change(
+        db,
+        hotel_id=invitation.hotel_id,
+        domain="security",
+        event_type="staff_invitation.consumed",
+        payload={"action_id": invitation.id},
+    )
     db.flush()
     db.refresh(invitation)
     return True

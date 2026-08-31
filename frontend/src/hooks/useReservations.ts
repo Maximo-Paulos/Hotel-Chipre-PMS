@@ -1,4 +1,4 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   addReservationGuests,
@@ -37,6 +37,7 @@ import {
 import { validateGuestForCheckin, type GuestCheckinValidation } from "../api/guests";
 import type { SessionState } from "../state/session";
 import { ApiError, hasValidSession } from "../api/client";
+import { refreshReservationState } from "../api/queryInvalidation";
 import { useSession } from "../state/session";
 
 import { useGuardedMutation } from "./useGuardedMutation";
@@ -149,23 +150,16 @@ export function usePendingReservationActions(limit = 100) {
 }
 
 export function useReservationMutations(filters?: ReservationFilters) {
+  void filters;
   const queryClient = useQueryClient();
   const { session } = useSession();
 
-  const invalidate = () =>
-    queryClient.invalidateQueries({
-      queryKey: filters ? reservationsKey(session.hotelId, filters) : ["reservations", session.hotelId]
-    });
+  const invalidate = () => refreshReservationState(queryClient, session.hotelId);
 
   // Check-in/check-out/companion changes are read by the drawer's own
   // single-reservation query, not just the list -- refresh both so the
   // status/guest data the receptionist just saved shows up immediately.
-  const invalidateReservationDetail = (reservationId: number) => {
-    invalidate();
-    queryClient.invalidateQueries({ queryKey: reservationKey(session.hotelId, reservationId) });
-    queryClient.invalidateQueries({ queryKey: reservationOperationsKey(session.hotelId, reservationId) });
-    queryClient.invalidateQueries({ queryKey: ["guest-checkin-validation", session.hotelId] });
-  };
+  const invalidateReservationDetail = (reservationId: number) => refreshReservationState(queryClient, session.hotelId, reservationId);
 
   // Double-click / double-tap on "confirm" fires two submits in the same JS
   // turn, before React re-renders the button as disabled. Without a real
@@ -176,25 +170,25 @@ export function useReservationMutations(filters?: ReservationFilters) {
   // them twice would double-apply their side effects.
   const createMutation = useGuardedMutation({
     mutationFn: (payload: ReservationPayload) => createReservation(payload, session),
-    onSuccess: invalidate
+    onSuccess: async () => invalidate()
   });
 
   // B4: "Cargar reserva de OTA" -- upsert by (channel, external_id), see
   // createManualOtaReservation.
   const createManualOtaMutation = useGuardedMutation({
     mutationFn: (payload: ManualOtaReservationPayload) => createManualOtaReservation(payload, session),
-    onSuccess: invalidate
+    onSuccess: async () => invalidate()
   });
 
-  const updateMutation = useMutation({
+  const updateMutation = useGuardedMutation({
     mutationFn: ({ id, payload }: { id: number; payload: ReservationUpdatePayload }) =>
       updateReservation(id, payload, session),
-    onSuccess: invalidate
+    onSuccess: async () => invalidate()
   });
 
-  const cancelMutation = useMutation({
+  const cancelMutation = useGuardedMutation({
     mutationFn: (id: number) => cancelReservation(id, session),
-    onSuccess: invalidate
+    onSuccess: async () => invalidate()
   });
 
   type CheckInParams = number | ({ id: number } & CheckInPayload);
@@ -208,7 +202,7 @@ export function useReservationMutations(filters?: ReservationFilters) {
       const { id, guest, override_prohibido, restriction_override } = normalizeCheckInParams(params);
       return checkInReservation(id, { guest, override_prohibido, restriction_override }, session);
     },
-    onSuccess: (_, params) => invalidateReservationDetail(normalizeCheckInParams(params).id)
+    onSuccess: async (_, params) => invalidateReservationDetail(normalizeCheckInParams(params).id)
   });
 
   // B3.1: partial check-in (PRE_CHECK_IN) -- same guest-capture payload shape
@@ -220,20 +214,20 @@ export function useReservationMutations(filters?: ReservationFilters) {
       const { id, guest, override_prohibido } = normalizeCheckInParams(params);
       return partialCheckInReservation(id, { guest, override_prohibido }, session);
     },
-    onSuccess: (_, params) => invalidateReservationDetail(normalizeCheckInParams(params).id)
+    onSuccess: async (_, params) => invalidateReservationDetail(normalizeCheckInParams(params).id)
   });
 
   const checkOutMutation = useGuardedMutation({
     mutationFn: (id: number) => checkOutReservation(id, session),
-    onSuccess: (_, id) => invalidateReservationDetail(id)
+    onSuccess: async (_, id) => invalidateReservationDetail(id)
   });
 
   // B3.5: acompañantes -- zero new backend, the endpoint already dedups by
   // document and validates capacity.
-  const addGuestsMutation = useMutation({
+  const addGuestsMutation = useGuardedMutation({
     mutationFn: ({ id, guests }: { id: number; guests: ReservationGuestCreatePayload[] }) =>
       addReservationGuests(id, guests, session),
-    onSuccess: (_, { id }) => invalidateReservationDetail(id)
+    onSuccess: async (_, { id }) => invalidateReservationDetail(id)
   });
 
   return {
@@ -249,39 +243,28 @@ export function useReservationMutations(filters?: ReservationFilters) {
 }
 
 export function useReservationActionMutations(filters?: ReservationFilters) {
+  void filters;
   const queryClient = useQueryClient();
   const { session } = useSession();
 
-  const invalidateAll = (reservationId?: number) => {
-    queryClient.invalidateQueries({
-      queryKey: filters ? reservationsKey(session.hotelId, filters) : ["reservations", session.hotelId]
-    });
-    queryClient.invalidateQueries({ queryKey: ["reservations", session.hotelId] });
-    queryClient.invalidateQueries({ queryKey: ["payment-summary", session.hotelId] });
-    queryClient.invalidateQueries({ queryKey: ["reservation-pending-actions", session.hotelId] });
-    if (reservationId) {
-      queryClient.invalidateQueries({ queryKey: reservationOperationsKey(session.hotelId, reservationId) });
-      queryClient.invalidateQueries({ queryKey: reservationKey(session.hotelId, reservationId) });
-      queryClient.invalidateQueries({ queryKey: ["payment-summary", session.hotelId, reservationId] });
-    }
-  };
+  const invalidateAll = (reservationId?: number) => refreshReservationState(queryClient, session.hotelId, reservationId);
 
-  const resolveExternalMutation = useMutation<
+  const resolveExternalMutation = useGuardedMutation<
     ReservationExternalResolutionResponse,
     unknown,
     { reservationId: number; payload: ReservationActionResolvePayload }
   >({
     mutationFn: ({ reservationId, payload }) => resolveReservationExternal(reservationId, payload, session),
-    onSuccess: (_, variables) => invalidateAll(variables.reservationId)
+    onSuccess: async (_, variables) => invalidateAll(variables.reservationId)
   });
 
-  const clearManualReviewMutation = useMutation<
+  const clearManualReviewMutation = useGuardedMutation<
     ReservationManualReviewResponse,
     unknown,
     { reservationId: number; payload: ReservationActionResolvePayload }
   >({
     mutationFn: ({ reservationId, payload }) => clearReservationManualReview(reservationId, payload, session),
-    onSuccess: (_, variables) => invalidateAll(variables.reservationId)
+    onSuccess: async (_, variables) => invalidateAll(variables.reservationId)
   });
 
   return {

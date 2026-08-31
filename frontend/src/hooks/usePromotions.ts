@@ -15,6 +15,9 @@ import {
   type PromotionUpdatePayload
 } from "../api/promotions";
 import { useSession } from "../state/session";
+import { refreshSettingsState } from "../api/queryInvalidation";
+
+import { useGuardedMutation } from "./useGuardedMutation";
 
 const promotionsKey = (hotelId: number | null, includeInactive: boolean) => ["promotions", hotelId, includeInactive];
 
@@ -33,27 +36,27 @@ export function usePromotionMutations() {
   const { session } = useSession();
   // Both include_inactive=true/false query variants are cached separately;
   // invalidate the whole "promotions" family so neither goes stale.
-  const invalidate = () => qc.invalidateQueries({ queryKey: ["promotions", session.hotelId] });
+  const invalidate = () => refreshSettingsState(qc, session.hotelId);
 
-  const createMutation = useMutation({
+  const createMutation = useGuardedMutation({
     mutationFn: (payload: PromotionCreatePayload) => createPromotion(payload, session),
-    onSuccess: invalidate
+    onSuccess: async () => invalidate()
   });
 
-  const updateMutation = useMutation({
+  const updateMutation = useGuardedMutation({
     mutationFn: ({ id, payload }: { id: number; payload: PromotionUpdatePayload }) =>
       updatePromotion(id, payload, session),
-    onSuccess: invalidate
+    onSuccess: async () => invalidate()
   });
 
-  const deactivateMutation = useMutation({
+  const deactivateMutation = useGuardedMutation({
     mutationFn: (id: number) => deactivatePromotion(id, session),
-    onSuccess: invalidate
+    onSuccess: async () => invalidate()
   });
 
-  const reactivateMutation = useMutation({
+  const reactivateMutation = useGuardedMutation({
     mutationFn: (id: number) => reactivatePromotion(id, session),
-    onSuccess: invalidate
+    onSuccess: async () => invalidate()
   });
 
   return { createMutation, updateMutation, deactivateMutation, reactivateMutation };

@@ -41,7 +41,7 @@ from app.models.notification import (
     PushSubscription,
 )
 from app.models.user import User
-from app.services.domain_events import SAFE_PAYLOAD_KEYS
+from app.services.domain_events import SAFE_PAYLOAD_KEYS, queue_domain_change
 from app.services.permission_service import (
     PERMISSION_GUEST_PROHIBITION_READ,
     PERMISSION_RESERVATION_READ,
@@ -381,6 +381,16 @@ def enqueue_notifications_for_event(
         ["hotel_id", "dedupe_key", "channel", "recipient_user_id"],
     )
     db.flush()
+    # The outbox insert uses a dialect-specific Core statement, so the ORM
+    # change collector cannot see it. Queue only a generic inbox signal; the
+    # notification body and recipient data never enter Redis.
+    queue_domain_change(
+        db,
+        hotel_id=hotel_id,
+        domain="notifications",
+        event_type="notifications.outbox.changed",
+        payload={"family": "outbox"},
+    )
 
     return (
         db.query(NotificationOutbox)

@@ -16,7 +16,7 @@ import { useReservationDrawer } from "../hooks/useReservationDrawer";
 import { useSubscriptionStatus } from "../hooks/useSubscription";
 import { defaultPathForRole, useSession } from "../state/session";
 import { ApiError, hasValidSession } from "../api/client";
-import { useCrossTabSync } from "../sync/crossTabSync";
+import { useCrossTabSync, useRealtimeStatus } from "../sync/crossTabSync";
 
 import { BottomNav, type BottomNavTab } from "./BottomNav";
 import { HotelSelector } from "./HotelSelector";
@@ -144,6 +144,7 @@ export function AppShell() {
   const installPrompt = useInstallPrompt();
   const isOnline = useOnlineStatus();
   const unreadNotifications = useUnreadNotificationCount();
+  const realtimeStatus = useRealtimeStatus();
 
   useCrossTabSync();
 
@@ -263,6 +264,28 @@ export function AppShell() {
         >
           <strong>Sin conexión.</strong> Los datos visibles pueden estar desactualizados. Las acciones de reservas, check-in/out y
           cobros requieren conexión y no se guardan para reintentar automáticamente.
+        </div>
+      )}
+
+      {realtimeStatus !== "disabled" && (
+        <div
+          className={cx(
+            "border-b px-4 py-1.5 text-xs sm:px-6",
+            realtimeStatus === "connected"
+              ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+              : realtimeStatus === "degraded"
+                ? "border-amber-300 bg-amber-100 text-amber-950"
+                : "border-sky-200 bg-sky-50 text-sky-900"
+          )}
+          data-testid="realtime-status"
+          role="status"
+          aria-live="polite"
+        >
+          {realtimeStatus === "connected" && "Conectado: cambios en tiempo real activos."}
+          {realtimeStatus === "connecting" && "Conectando sincronización en tiempo real…"}
+          {realtimeStatus === "reconnecting" && "Reconectando sincronización en tiempo real…"}
+          {realtimeStatus === "degraded" &&
+            "Sincronización en tiempo real degradada. Las operaciones siguen guardándose; actualizaremos al reconectar."}
         </div>
       )}
 

@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   addGuestCompanions,
@@ -12,7 +12,10 @@ import {
   type GuestUpdatePayload
 } from "../api/guests";
 import { hasValidSession } from "../api/client";
+import { refreshGuestState } from "../api/queryInvalidation";
 import { useSession } from "../state/session";
+
+import { useGuardedMutation } from "./useGuardedMutation";
 
 // A5: page size mirrors the backend default (app/api/guests.py:117) so a
 // full page reliably means "there may be a next one" for the UI's has-more
@@ -24,11 +27,9 @@ const guestsKey = (hotelId: number | null, search: string, page: number) => ["gu
 export function useGuestCreate() {
   const queryClient = useQueryClient();
   const { session } = useSession();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (payload: GuestPayload) => createGuest(payload, session),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["guests", session.hotelId] });
-    }
+    onSuccess: async () => refreshGuestState(queryClient, session.hotelId)
   });
 }
 
@@ -55,18 +56,15 @@ export function useGuest(guestId?: number) {
 export function useGuestUpdate() {
   const queryClient = useQueryClient();
   const { session } = useSession();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: ({ guestId, payload }: { guestId: number; payload: GuestUpdatePayload }) =>
       updateGuest(guestId, payload, session),
     onSuccess: async (_, variables) => {
       // Keep the mutation pending until the refreshed guest data is rendered.
       // GuestsPage resets its form feedback when the selected record changes;
-      // awaiting these invalidations prevents a successful save message from
-      // being immediately cleared by the background list refresh.
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["guests", session.hotelId] }),
-        queryClient.invalidateQueries({ queryKey: ["guest", session.hotelId, variables.guestId] })
-      ]);
+      // awaiting the central domain refresh prevents a success message from
+      // being shown while the list/detail still contain the previous guest.
+      await refreshGuestState(queryClient, session.hotelId, variables.guestId);
     }
   });
 }
@@ -74,12 +72,9 @@ export function useGuestUpdate() {
 export function useGuestCompanionAdd() {
   const queryClient = useQueryClient();
   const { session } = useSession();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: ({ guestId, companions }: { guestId: number; companions: GuestCompanionPayload[] }) =>
       addGuestCompanions(guestId, companions, session),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["guests", session.hotelId] });
-      queryClient.invalidateQueries({ queryKey: ["guest", session.hotelId, variables.guestId] });
-    }
+    onSuccess: async (_, variables) => refreshGuestState(queryClient, session.hotelId, variables.guestId)
   });
 }

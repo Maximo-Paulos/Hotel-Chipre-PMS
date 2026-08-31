@@ -141,6 +141,10 @@ test("owner opens the reservation drawer from the dashboard, global search, and 
   // The payment summary refetches after the mutation invalidates it, so
   // poll instead of reading innerText() once (which can race the refetch).
   await expect(drawer.getByTestId("drawer-balance-due")).not.toHaveText(balanceBeforePayment);
+  // The reservation itself must also be refreshed before the drawer is
+  // considered current; the payment changes its status from Pendiente to
+  // Seña without a full page reload.
+  await expect(drawer.getByText("Seña", { exact: true })).toBeVisible();
 
   const deepLinkUrl = page.url();
   await page.getByRole("button", { name: "Cerrar detalle de reserva" }).click();
@@ -151,4 +155,88 @@ test("owner opens the reservation drawer from the dashboard, global search, and 
   await expect(drawer).toBeVisible();
   await expect(drawer).toContainText(confirmationCode);
   await expect(drawer.getByText("Seña", { exact: true })).toBeVisible();
+});
+
+test("an authenticated second context sees a committed payment through realtime events", async ({ page, browser }) => {
+  test.skip(process.env.REALTIME_E2E !== "true", "Requires REALTIME_E2E=true and Redis/Valkey");
+
+  const suffix = Date.now().toString();
+  const guestLastName = `RealtimeQA-${suffix}`;
+  const salt = Number(suffix.slice(-4));
+  const pastIsoDate = (daysAgo: number) => {
+    const value = new Date();
+    value.setDate(value.getDate() - daysAgo);
+    const pad = (part: number) => String(part).padStart(2, "0");
+    return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
+  };
+
+  await login(page);
+  const sessionsResponse = page.waitForResponse(
+    (response) => response.url().includes("/api/cash-register/sessions") && response.request().method() === "GET"
+  );
+  await page.goto("/caja");
+  await sessionsResponse;
+  const openingForm = page.locator("form").filter({ hasText: "Saldo inicial" }).filter({ hasText: "Abrir caja" });
+  const openButton = openingForm.getByRole("button", { name: "Abrir caja", exact: true });
+  if (await openButton.isVisible().catch(() => false)) {
+    const openResponse = page.waitForResponse(
+      (response) => response.url().includes("/api/cash-register/sessions") && response.request().method() === "POST"
+    );
+    await openButton.click();
+    await openResponse;
+  }
+
+  await page.goto("/reservas");
+  await page.getByRole("button", { name: "Crear reserva", exact: true }).click();
+  const form = page.locator("form").filter({ hasText: "Datos de la reserva" });
+  await form.getByRole("button", { name: "¿No lo encontrás? Crear huésped nuevo", exact: true }).click();
+  await form.getByPlaceholder("Nombre").fill("Huésped");
+  await form.getByPlaceholder("Apellido").fill(guestLastName);
+  await form.getByPlaceholder("Email").fill(`${guestLastName.toLowerCase()}@example.test`);
+  await form.getByPlaceholder("Teléfono").fill("1112345678");
+  await form.getByLabel("Tipo de documento").selectOption("DNI");
+  await form.getByPlaceholder("Documento").fill(`REALTIME-${suffix}`);
+  await form.getByRole("button", { name: "Crear Huésped y asignar ID", exact: true }).click();
+  await expect(page.getByText("Huésped creado y asignado", { exact: true })).toBeVisible();
+
+  const categorySelect = form.locator("label").filter({ hasText: "Categoría" }).locator("select");
+  const categoryOption = categorySelect.locator("option").filter({ hasText: "Standard E2E" });
+  await categorySelect.selectOption((await categoryOption.getAttribute("value"))!);
+  const roomSelect = form.locator("label").filter({ hasText: "Habitación (opcional)" }).locator("select");
+  const roomOption = roomSelect.locator("option").filter({ hasText: "101" });
+  await roomSelect.selectOption((await roomOption.getAttribute("value"))!);
+  await form.locator("label").filter({ hasText: "Check-in" }).locator('input[type="date"]').fill(pastIsoDate(5000 + salt));
+  await form.locator("label").filter({ hasText: "Check-out" }).locator('input[type="date"]').fill(pastIsoDate(4998 + salt));
+  const [createResponse] = await Promise.all([
+    page.waitForResponse((response) => response.url().includes("/api/reservations/") && response.request().method() === "POST"),
+    form.getByRole("button", { name: "Crear", exact: true }).click()
+  ]);
+  await expect(page.getByText("Reserva creada", { exact: true })).toBeVisible();
+  const created = await createResponse.json();
+  const reservationId: number = created.id;
+  const confirmationCode: string = created.confirmation_code;
+
+  await page.goto(`/dashboard?reserva=${reservationId}`);
+  const firstDrawer = page.getByRole("dialog", { name: confirmationCode });
+  await expect(firstDrawer).toBeVisible();
+  const balanceBeforePayment = await firstDrawer.getByTestId("drawer-balance-due").innerText();
+
+  const secondContext = await browser.newContext();
+  const secondPage = await secondContext.newPage();
+  try {
+    await login(secondPage);
+    await secondPage.goto(`/dashboard?reserva=${reservationId}`);
+    const secondDrawer = secondPage.getByRole("dialog", { name: confirmationCode });
+    await expect(secondDrawer).toBeVisible();
+    await secondDrawer.getByLabel("Importe a cobrar").fill("100");
+    await secondDrawer.getByRole("button", { name: "Registrar cobro", exact: true }).click();
+    await expect(secondDrawer.getByText("Pago registrado.", { exact: true })).toBeVisible();
+
+    // Different browser contexts do not share BroadcastChannel/localStorage;
+    // this assertion therefore verifies the server event stream path.
+    await expect(firstDrawer.getByTestId("drawer-balance-due")).not.toHaveText(balanceBeforePayment);
+    await expect(firstDrawer.getByText("Seña", { exact: true })).toBeVisible();
+  } finally {
+    await secondContext.close();
+  }
 });

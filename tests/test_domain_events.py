@@ -2,12 +2,16 @@ from __future__ import annotations
 
 import asyncio
 import json
+from types import SimpleNamespace
 
 import pytest
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import Session
 
 from app.api import events
 from app.config import Settings
 from app.dependencies.auth import AuthContext
+from app.models.hotel_config import HotelConfiguration
 from app.services import domain_events
 
 
@@ -157,6 +161,192 @@ def test_required_backend_raises_when_unavailable(monkeypatch: pytest.MonkeyPatc
         )
 
 
+def test_queued_domain_change_publishes_once_after_commit(monkeypatch: pytest.MonkeyPatch):
+    published: list[dict] = []
+    monkeypatch.setattr(domain_events, "publish_domain_event", lambda **kwargs: published.append(kwargs))
+    session = Session(create_engine("sqlite://"))
+    try:
+        session.execute(text("SELECT 1"))
+        domain_events.queue_domain_change(
+            session,
+            hotel_id=42,
+            domain="payments",
+            event_type="payment.changed",
+            payload={"reservation_id": 17, "payment_id": 91},
+        )
+        # The collector is transaction-scoped and repeated model/service calls
+        # must not publish the same signal twice.
+        domain_events.queue_domain_change(
+            session,
+            hotel_id=42,
+            domain="payments",
+            event_type="payment.changed",
+            payload={"reservation_id": 17, "payment_id": 91},
+        )
+        session.commit()
+    finally:
+        session.close()
+
+    assert published == [
+        {
+            "hotel_id": 42,
+            "domain": "payments",
+            "event_type": "payment.changed",
+            "payload": {"reservation_id": 17, "payment_id": 91},
+        }
+    ]
+
+
+def test_queued_domain_change_is_discarded_on_rollback(monkeypatch: pytest.MonkeyPatch):
+    published: list[dict] = []
+    monkeypatch.setattr(domain_events, "publish_domain_event", lambda **kwargs: published.append(kwargs))
+    session = Session(create_engine("sqlite://"))
+    try:
+        session.execute(text("SELECT 1"))
+        domain_events.queue_domain_change(
+            session,
+            hotel_id=42,
+            domain="reservations",
+            event_type="reservation.changed",
+            payload={"reservation_id": 17},
+        )
+        session.rollback()
+        # A later successful transaction on the same Session must not flush a
+        # signal for the rolled-back write.
+        session.execute(text("SELECT 1"))
+        session.commit()
+    finally:
+        session.close()
+
+    assert published == []
+
+
+def test_model_change_collector_fans_out_payment_dependencies_without_sensitive_fields(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    published: list[dict] = []
+    monkeypatch.setattr(domain_events, "publish_domain_event", lambda **kwargs: published.append(kwargs))
+    transaction = SimpleNamespace(
+        __tablename__="transactions",
+        hotel_id=42,
+        id=91,
+        reservation_id=17,
+        status="completed",
+        amount=1250,
+        description="guest phone number",
+    )
+    session = SimpleNamespace(info={}, new=[transaction], dirty=[], deleted=[])
+
+    domain_events.queue_model_changes(session)
+    domain_events.publish_queued_domain_changes(session)
+
+    assert {event["domain"] for event in published} == {"payments", "cash", "analytics"}
+    for event in published:
+        assert event["payload"] == {
+            "transaction_id": 91,
+            "reservation_id": 17,
+            "status": "completed",
+        }
+        assert "amount" not in event["payload"]
+        assert "description" not in event["payload"]
+
+
+def test_derived_analytics_changes_are_coalesced_by_family(monkeypatch: pytest.MonkeyPatch):
+    published: list[dict] = []
+    monkeypatch.setattr(domain_events, "publish_domain_event", lambda **kwargs: published.append(kwargs))
+    session = SimpleNamespace(
+        info={},
+        new=[
+            SimpleNamespace(__tablename__="fact_reservation_daily", hotel_id=42, id=1),
+            SimpleNamespace(__tablename__="fact_reservation_daily", hotel_id=42, id=2),
+        ],
+        dirty=[],
+        deleted=[],
+    )
+
+    domain_events.queue_model_changes(session)
+    domain_events.publish_queued_domain_changes(session)
+
+    assert published == [
+        {
+            "hotel_id": 42,
+            "domain": "analytics",
+            "event_type": "analytics.read_model.changed",
+            "payload": {"family": "reservation_daily"},
+        }
+    ]
+
+
+def test_session_hooks_publish_model_changes_only_after_commit(monkeypatch: pytest.MonkeyPatch):
+    published: list[dict] = []
+    monkeypatch.setattr(domain_events, "publish_domain_event", lambda **kwargs: published.append(kwargs))
+    engine = create_engine("sqlite://")
+    HotelConfiguration.__table__.create(engine)
+    session = Session(engine)
+    try:
+        config = HotelConfiguration(id=501, hotel_name="Commit hotel")
+        session.add(config)
+        session.flush()
+        assert published == []
+        session.commit()
+        assert {event["domain"] for event in published} == {"settings", "analytics"}
+
+        published.clear()
+        session.add(HotelConfiguration(id=502, hotel_name="Rollback hotel"))
+        session.flush()
+        session.rollback()
+        assert published == []
+    finally:
+        session.close()
+        engine.dispose()
+
+
+def test_nested_rollback_prunes_only_nested_realtime_signals(monkeypatch: pytest.MonkeyPatch):
+    published: list[dict] = []
+    monkeypatch.setattr(domain_events, "publish_domain_event", lambda **kwargs: published.append(kwargs))
+    engine = create_engine("sqlite://")
+    HotelConfiguration.__table__.create(engine)
+    session = Session(engine)
+    try:
+        session.add(HotelConfiguration(id=503, hotel_name="Outer hotel"))
+        session.flush()
+        try:
+            with session.begin_nested():
+                session.add(HotelConfiguration(id=504, hotel_name="Nested hotel"))
+                session.flush()
+                raise RuntimeError("rollback nested work")
+        except RuntimeError:
+            pass
+        session.commit()
+    finally:
+        session.close()
+        engine.dispose()
+
+    assert published
+    assert all(event["hotel_id"] == 503 for event in published)
+
+
+def test_nested_commit_publishes_only_after_root_commit(monkeypatch: pytest.MonkeyPatch):
+    published: list[dict] = []
+    monkeypatch.setattr(domain_events, "publish_domain_event", lambda **kwargs: published.append(kwargs))
+    engine = create_engine("sqlite://")
+    HotelConfiguration.__table__.create(engine)
+    session = Session(engine)
+    try:
+        session.add(HotelConfiguration(id=505, hotel_name="Outer hotel"))
+        session.flush()
+        with session.begin_nested():
+            session.add(HotelConfiguration(id=506, hotel_name="Nested hotel"))
+            session.flush()
+        assert published == []
+        session.commit()
+    finally:
+        session.close()
+        engine.dispose()
+
+    assert {event["hotel_id"] for event in published} == {505, 506}
+
+
 def test_stream_endpoint_sets_no_cache_headers_and_tenant_stream(monkeypatch: pytest.MonkeyPatch):
     fake = FakeRedis()
 
@@ -174,9 +364,20 @@ def test_stream_endpoint_sets_no_cache_headers_and_tenant_stream(monkeypatch: py
     monkeypatch.setattr(events, "get_realtime_client", lambda: fake)
     monkeypatch.setattr(events, "get_settings", lambda: _settings(REALTIME_EVENTS_HEARTBEAT_SECONDS=10))
 
-    response = events.stream_domain_events(AuthContext(hotel_id=42, user_id=9, user_role="owner", is_verified=True))
+    class ClosableDb:
+        closed = False
+
+        def close(self):
+            self.closed = True
+
+    db = ClosableDb()
+    response = events.stream_domain_events(
+        AuthContext(hotel_id=42, user_id=9, user_role="owner", is_verified=True),
+        db,
+    )
     assert response.media_type == "text/event-stream"
     assert response.headers["cache-control"] == "no-cache, no-store"
+    assert db.closed is True
     async def read_first_frame():
         return await response.body_iterator.__anext__()
 

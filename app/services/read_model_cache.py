@@ -11,9 +11,6 @@ import redis
 from fastapi.encoders import jsonable_encoder
 
 from app.config import get_settings
-from app.services.domain_events import RealtimeEventsUnavailable, publish_domain_event
-
-
 logger = logging.getLogger(__name__)
 T = TypeVar("T")
 
@@ -23,23 +20,6 @@ _redis_unavailable_until = 0.0
 _redis_was_unavailable = False
 _redis_availability_known = False
 _redis_state_lock = RLock()
-
-
-def _publish_cache_event(*, hotel_id: int, event_type: str, family: str) -> None:
-    """Best-effort invalidation signal; never turn a committed OLTP write into a false 500."""
-
-    try:
-        publish_domain_event(
-            hotel_id=hotel_id,
-            domain="analytics",
-            event_type=event_type,
-            payload={"family": family},
-        )
-    except RealtimeEventsUnavailable:
-        logger.error(
-            "read_model_cache.realtime_event_unavailable",
-            extra={"hotel_id": hotel_id, "family": family},
-        )
 
 
 def _settings():
@@ -308,20 +288,10 @@ def invalidate_hotel_operational_caches(hotel_id: int) -> None:
             "occupancy_grid",
         ),
     )
-    _publish_cache_event(
-        hotel_id=hotel_id,
-        event_type="operational.read_model_invalidated",
-        family="availability",
-    )
 
 
 def invalidate_hotel_analytics_cache(hotel_id: int) -> None:
     _invalidate_hotel_cache_prefixes(hotel_id, ("analytics",))
-    _publish_cache_event(
-        hotel_id=hotel_id,
-        event_type="analytics.invalidated",
-        family="analytics",
-    )
 
 
 def _invalidate_hotel_cache_prefixes(hotel_id: int, families: tuple[str, ...]) -> None:

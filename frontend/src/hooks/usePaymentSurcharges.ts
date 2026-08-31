@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   createPaymentSurcharge,
@@ -8,7 +8,10 @@ import {
   type PaymentSurchargeCreatePayload
 } from "../api/paymentSurcharges";
 import { hasValidSession } from "../api/client";
+import { refreshAfterMutation } from "../api/queryInvalidation";
 import { useSession } from "../state/session";
+
+import { useGuardedMutation } from "./useGuardedMutation";
 
 const surchargesKey = (hotelId: number | null) => ["payment-surcharges", hotelId];
 
@@ -25,15 +28,15 @@ export function usePaymentSurcharges() {
 export function usePaymentSurchargeMutations() {
   const qc = useQueryClient();
   const { session } = useSession();
-  const invalidate = () => qc.invalidateQueries({ queryKey: surchargesKey(session.hotelId) });
+  const invalidate = () => refreshAfterMutation(qc, session.hotelId, ["settings", "payments"]);
 
-  const createMutation = useMutation({
+  const createMutation = useGuardedMutation({
     mutationFn: (payload: PaymentSurchargeCreatePayload) => createPaymentSurcharge(payload, session),
-    onSuccess: invalidate
+    onSuccess: async () => invalidate()
   });
-  const deactivateMutation = useMutation({
+  const deactivateMutation = useGuardedMutation({
     mutationFn: (id: number) => deactivatePaymentSurcharge(id, session),
-    onSuccess: invalidate
+    onSuccess: async () => invalidate()
   });
 
   return { createMutation, deactivateMutation };

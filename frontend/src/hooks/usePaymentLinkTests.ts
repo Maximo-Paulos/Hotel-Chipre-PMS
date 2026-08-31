@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   createMercadoPagoPaymentLinkTest,
@@ -7,7 +7,10 @@ import {
   type PaymentLinkTestCreatePayload,
 } from "../api/paymentLinkTests";
 import { hasValidSession } from "../api/client";
+import { refreshAfterMutation } from "../api/queryInvalidation";
 import { useSession } from "../state/session";
+
+import { useGuardedMutation } from "./useGuardedMutation";
 
 const paymentLinkTestsKey = (hotelId: number | null) => ["payment-link-tests", hotelId, "mercadopago"];
 
@@ -25,16 +28,16 @@ export function useMercadoPagoTestMutations() {
   const { session } = useSession();
   const queryClient = useQueryClient();
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: paymentLinkTestsKey(session.hotelId) });
+  const invalidate = () => refreshAfterMutation(queryClient, session.hotelId, ["payments", "settings"]);
 
-  const createMutation = useMutation({
+  const createMutation = useGuardedMutation({
     mutationFn: (payload: PaymentLinkTestCreatePayload) => createMercadoPagoPaymentLinkTest(payload, session),
-    onSuccess: invalidate,
+    onSuccess: async () => invalidate(),
   });
 
-  const refreshMutation = useMutation({
+  const refreshMutation = useGuardedMutation({
     mutationFn: (testId: number) => refreshPaymentLinkTest(testId, session),
-    onSuccess: invalidate,
+    onSuccess: async () => invalidate(),
   });
 
   return { createMutation, refreshMutation };

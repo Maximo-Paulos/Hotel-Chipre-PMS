@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   createGuestRestriction,
@@ -9,9 +9,11 @@ import {
   type GuestRestrictionResolvePayload
 } from "../api/guestRestrictions";
 import { hasValidSession } from "../api/client";
+import { refreshGuestState } from "../api/queryInvalidation";
 import { useSession } from "../state/session";
 
 import { useEffectivePermissions } from "./usePermissions";
+import { useGuardedMutation } from "./useGuardedMutation";
 
 const guestRestrictionsKey = (hotelId: number | null, guestId: number, activeOnly: boolean) => [
   "guest-restrictions",
@@ -44,20 +46,17 @@ export function useGuestRestrictionMutations(guestId?: number) {
   const queryClient = useQueryClient();
   const { session } = useSession();
 
-  const invalidate = () => {
-    if (!guestId) return;
-    queryClient.invalidateQueries({ queryKey: ["guest-restrictions", session.hotelId, guestId] });
-  };
+  const invalidate = () => refreshGuestState(queryClient, session.hotelId, guestId);
 
-  const createMutation = useMutation({
+  const createMutation = useGuardedMutation({
     mutationFn: (payload: GuestRestrictionCreatePayload) => createGuestRestriction(guestId!, payload, session),
-    onSuccess: invalidate
+    onSuccess: async () => invalidate()
   });
 
-  const resolveMutation = useMutation({
+  const resolveMutation = useGuardedMutation({
     mutationFn: ({ restrictionId, payload }: { restrictionId: number; payload: GuestRestrictionResolvePayload }) =>
       resolveGuestRestriction(guestId!, restrictionId, payload, session),
-    onSuccess: invalidate
+    onSuccess: async () => invalidate()
   });
 
   return { createMutation, resolveMutation };

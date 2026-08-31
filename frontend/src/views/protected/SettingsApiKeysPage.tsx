@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
 import {
@@ -12,6 +12,8 @@ import {
 import { hasValidSession } from "../../api/client";
 import { useSession } from "../../state/session";
 import { queryKeys } from "../../api/queryKeys";
+import { refreshSettingsState } from "../../api/queryInvalidation";
+import { useGuardedMutation } from "../../hooks/useGuardedMutation";
 
 const purposeLabels: Record<ApiKeyPurpose, string> = {
   whatsapp_bot: "WhatsApp bot",
@@ -45,18 +47,34 @@ export function SettingsApiKeysPage() {
     enabled: hasValidSession(session) && canManage,
     queryFn: () => listApiKeys(session)
   });
-  const issueMutation = useMutation({
+  const issueMutation = useGuardedMutation({
     mutationFn: (payload: IssueHotelApiKeyPayload) => issueApiKey(payload, session),
-    onSuccess: (res) => {
+    onSuccess: async (res) => {
+      await refreshSettingsState(qc, session.hotelId);
       setIssuedKey(res);
       setForm(emptyForm);
-      qc.invalidateQueries({ queryKey: queryKeys.apiKeys(session.hotelId) });
     }
   });
-  const revokeMutation = useMutation({
+  const revokeMutation = useGuardedMutation({
     mutationFn: (keyId: number) => revokeApiKey(keyId, session),
-    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.apiKeys(session.hotelId) })
+    onSuccess: async () => refreshSettingsState(qc, session.hotelId)
   });
+
+  const handleIssue = async () => {
+    try {
+      await issueMutation.mutateAsync(form);
+    } catch {
+      // The mutation state renders the safe backend error below.
+    }
+  };
+
+  const handleRevoke = async (keyId: number) => {
+    try {
+      await revokeMutation.mutateAsync(keyId);
+    } catch {
+      // The mutation state renders the safe backend error below.
+    }
+  };
 
   if (!hasValidSession(session)) {
     return <p className="text-sm text-slate-600">Inicia sesion con un hotel activo para administrar API Keys.</p>;
@@ -137,7 +155,7 @@ export function SettingsApiKeysPage() {
           />
           <button
             type="button"
-            onClick={() => issueMutation.mutate(form)}
+            onClick={() => void handleIssue()}
             disabled={issueMutation.isPending || !form.name.trim()}
             className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-60"
           >
@@ -192,7 +210,7 @@ export function SettingsApiKeysPage() {
                     {key.is_active && (
                       <button
                         type="button"
-                        onClick={() => revokeMutation.mutate(key.id)}
+                        onClick={() => void handleRevoke(key.id)}
                         disabled={revokeMutation.isPending}
                         className="text-sm font-semibold text-rose-600 hover:underline disabled:opacity-60"
                       >

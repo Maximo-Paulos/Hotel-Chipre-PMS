@@ -136,9 +136,13 @@ export function RateCalendarPage() {
   });
 
   const [cellError, setCellError] = useState<string | null>(null);
-  const handleSaveCell = (payload: SingleRateInput) => {
+  const handleSaveCell = async (payload: SingleRateInput) => {
     setCellError(null);
-    cellSave.mutate(payload, { onError: (err) => setCellError(err.message) });
+    try {
+      await cellSave.mutateAsync(payload);
+    } catch (err: unknown) {
+      setCellError(err instanceof Error ? err.message : "No se pudo guardar la tarifa.");
+    }
   };
 
   const [fromDate, setFromDate] = useState(dateFrom);
@@ -169,10 +173,14 @@ export function RateCalendarPage() {
     setPeriodForm((current) => ({ ...current, category_id: categoryId ?? 0, start_date: dateFrom, end_date: dateTo }));
   }, [dateFrom, dateTo, categoryId]);
 
-  const handleCreatePeriod = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleCreatePeriod = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!categoryId || !periodForm.name.trim() || periodForm.end_date < periodForm.start_date) return;
-    periodMutations.create.mutate({ ...periodForm, category_id: categoryId, name: periodForm.name.trim() });
+    try {
+      await periodMutations.create.mutateAsync({ ...periodForm, category_id: categoryId, name: periodForm.name.trim() });
+    } catch {
+      // The mutation state renders the error below the form.
+    }
   };
 
   const rangeRows = useMemo(
@@ -228,7 +236,7 @@ export function RateCalendarPage() {
     );
   };
 
-  const handleSaveRates = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSaveRates = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!canEditRates) return;
     setSaveError(null);
@@ -255,17 +263,18 @@ export function RateCalendarPage() {
         setSaveError("Ingresá un valor válido para la edición rápida.");
         return;
       }
-      bulkFieldSave.mutate(
-        {
+      try {
+        await bulkFieldSave.mutateAsync({
           from_date: fromDate,
           to_date: toDate,
           field: bulkField,
           mode: bulkAction,
           value,
           exclude_dates: excludedDates
-        },
-        { onError: (err) => setSaveError(err.message) }
-      );
+        });
+      } catch (err: unknown) {
+        setSaveError(err instanceof Error ? err.message : "No se pudieron guardar las tarifas.");
+      }
       return;
     }
 
@@ -274,20 +283,20 @@ export function RateCalendarPage() {
       return;
     }
 
-    bulkSave.mutate(
-      {
+    try {
+      await bulkSave.mutateAsync({
         from_date: fromDate,
         to_date: toDate,
         price,
         price_cash: toNumberOrNull(priceCash),
         price_transfer: toNumberOrNull(priceTransfer),
         price_mercadopago: toNumberOrNull(priceMercadopago),
-        price_paypal: toNumberOrNull(pricePaypal),
         price_credit_card: toNumberOrNull(priceCreditCard),
         exclude_dates: excludedDates
-      },
-      { onError: (err) => setSaveError(err.message) }
-    );
+      });
+    } catch (err: unknown) {
+      setSaveError(err instanceof Error ? err.message : "No se pudieron guardar las tarifas.");
+    }
   };
 
   const inputClass =
@@ -707,7 +716,7 @@ export function RateCalendarPage() {
                     <p className="font-semibold text-slate-900">{period.name} · {period.price_per_night} {currencyCode}</p>
                     <p className="text-xs text-slate-500">{period.start_date} → {period.end_date} · prioridad {period.priority} · {period.is_active ? "Activa" : "Inactiva"}</p>
                   </div>
-                  {canEditRates ? <button type="button" className="rounded-lg border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-700" onClick={() => periodMutations.remove.mutate(period.id)} disabled={periodMutations.remove.isPending}>Eliminar</button> : null}
+                  {canEditRates ? <button type="button" className="rounded-lg border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-700" onClick={() => void periodMutations.remove.mutateAsync(period.id).catch(() => undefined)} disabled={periodMutations.remove.isPending}>Eliminar</button> : null}
                 </div>
               ))}
             </div>

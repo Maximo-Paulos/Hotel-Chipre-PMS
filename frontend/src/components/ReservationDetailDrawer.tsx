@@ -127,15 +127,15 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
     terms_accepted: captureForm.terms_accepted
   });
 
-  const handleAddCompanion = () => {
+  const handleAddCompanion = async () => {
     if (!reservationId) return;
     if (!companionForm.first_name.trim() || !companionForm.last_name.trim()) {
       setCompanionError("Completá nombre y apellido del acompañante.");
       return;
     }
     setCompanionError(null);
-    addGuestsMutation.mutate(
-      {
+    try {
+      await addGuestsMutation.mutateAsync({
         id: reservationId,
         guests: [
           {
@@ -144,13 +144,11 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
             document_number: companionForm.document_number.trim() || undefined
           }
         ]
-      },
-      {
-        onSuccess: () => setCompanionForm({ first_name: "", last_name: "", document_number: "" }),
-        onError: (err) =>
-          setCompanionError(err instanceof ApiError ? err.message : "No se pudo agregar el acompañante.")
-      }
-    );
+      });
+      setCompanionForm({ first_name: "", last_name: "", document_number: "" });
+    } catch (err) {
+      setCompanionError(err instanceof ApiError ? err.message : "No se pudo agregar el acompañante.");
+    }
   };
   // Bug documented in frontend/src/api/payments.ts: total_amount/balance_due
   // ignore consumption charges. Always prefer the operational figures for
@@ -158,17 +156,18 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
   const currencyCode = normalizeCurrencyCode(summary?.currency_code ?? reservation?.currency_code);
   const operationalBalanceDue = summary?.operational_balance_due ?? summary?.balance_due;
 
-  const runAction = (label: string, action: () => void) => {
+  const runAction = async (label: string, action: () => Promise<unknown>, onSuccess: () => void) => {
     setActionError(null);
     setActionMessage(null);
     try {
-      action();
+      await action();
+      onSuccess();
     } catch (err) {
       setActionError(err instanceof ApiError ? err.message : `No se pudo completar: ${label}.`);
     }
   };
 
-  const handlePay = () => {
+  const handlePay = async () => {
     if (!reservationId) return;
     const amount = Number(paymentAmount);
     if (!Number.isFinite(amount) || amount <= 0) {
@@ -177,31 +176,65 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
     }
     setActionError(null);
     setActionMessage(null);
-    paymentMutation.mutate(
-      {
+    try {
+      // usePaymentMutation keeps this promise pending until the server-backed
+      // reservation, operations, payment, cash and analytics queries have
+      // refetched. The drawer must not report success or become closable before
+      // that confirmation arrives.
+      await paymentMutation.mutateAsync({
         reservation_id: reservationId,
         amount,
         payment_method: paymentMethod,
         transaction_type: reservation?.status === "pending" ? "deposit" : "balance_payment",
         currency: currencyCode
-      },
-      {
-        onSuccess: () => {
-          setPaymentAmount("");
-          setActionMessage("Pago registrado.");
-        },
-        onError: (err) => setActionError(err instanceof ApiError ? err.message : "No se pudo registrar el pago.")
-      }
-    );
+      });
+      setPaymentAmount("");
+      setActionMessage("Pago registrado.");
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : "No se pudo registrar el pago.");
+    }
   };
 
-  const containerRef = useDialogA11y(open, onClose);
+  const handleClose = () => {
+    if (
+      paymentMutation.isPending ||
+      addGuestsMutation.isPending ||
+      partialCheckInMutation.isPending ||
+      checkInMutation.isPending ||
+      checkOutMutation.isPending ||
+      cancelMutation.isPending
+    ) {
+      return;
+    }
+    onClose();
+  };
+
+  const submitCheckIn = async (restrictionOverride?: RestrictionOverride): Promise<void> => {
+    if (!reservationId || !reservation) return;
+    setActionError(null);
+    setActionMessage(null);
+    try {
+      await checkInMutation.mutateAsync({
+        id: reservation.id,
+        guest: needsCheckinCapture ? buildGuestPatch() : undefined,
+        restriction_override: restrictionOverride
+      });
+      setActionMessage("Check-in registrado.");
+    } catch (err) {
+      // The guest has an active GuestRestriction -- prompt for an override
+      // reason and retry through the same atomic endpoint.
+      if (restrictionOverridePrompt.handleError(err, (override) => void submitCheckIn(override))) return;
+      setActionError(err instanceof ApiError ? err.message : "No se pudo hacer check-in.");
+    }
+  };
+
+  const containerRef = useDialogA11y(open, handleClose);
 
   if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex" role="dialog" aria-modal="true" aria-labelledby="reservation-drawer-title">
-      <div className="flex-1 animate-fade-in bg-black/30" onClick={onClose} />
+      <div className="flex-1 animate-fade-in bg-black/30" onClick={handleClose} />
       <div
         ref={containerRef}
         tabIndex={-1}
@@ -223,9 +256,10 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
+            disabled={paymentMutation.isPending}
             aria-label="Cerrar detalle de reserva"
-            className="text-lg leading-none text-slate-500 hover:text-slate-800"
+            className="text-lg leading-none text-slate-500 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
           >
             ×
           </button>
@@ -550,15 +584,10 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                     type="button"
                     disabled={partialCheckInMutation.isPending}
                     onClick={() =>
-                      runAction("check-in parcial", () =>
-                        partialCheckInMutation.mutate(
-                          { id: reservation.id, guest: needsCheckinCapture ? buildGuestPatch() : undefined },
-                          {
-                            onSuccess: () => setActionMessage("Check-in parcial registrado."),
-                            onError: (err) =>
-                              setActionError(err instanceof ApiError ? err.message : "No se pudo hacer el check-in parcial.")
-                          }
-                        )
+                      void runAction(
+                        "check-in parcial",
+                        () => partialCheckInMutation.mutateAsync({ id: reservation.id, guest: needsCheckinCapture ? buildGuestPatch() : undefined }),
+                        () => setActionMessage("Check-in parcial registrado.")
                       )
                     }
                     className="rounded-lg border border-teal-200 bg-teal-50 px-3 py-2 text-xs font-semibold text-teal-700 hover:border-teal-300 disabled:cursor-not-allowed disabled:opacity-60"
@@ -569,29 +598,7 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                 <button
                   type="button"
                   disabled={!canCheckInReservation(reservation.status) || checkInMutation.isPending}
-                  onClick={() => {
-                    const submitCheckIn = (restrictionOverride?: RestrictionOverride) =>
-                      runAction("check-in", () =>
-                        checkInMutation.mutate(
-                          {
-                            id: reservation.id,
-                            guest: needsCheckinCapture ? buildGuestPatch() : undefined,
-                            restriction_override: restrictionOverride
-                          },
-                          {
-                            onSuccess: () => setActionMessage("Check-in registrado."),
-                            onError: (err) => {
-                              // The guest has an active GuestRestriction --
-                              // prompt for an override reason and retry
-                              // instead of surfacing a raw 409/403.
-                              if (restrictionOverridePrompt.handleError(err, submitCheckIn)) return;
-                              setActionError(err instanceof ApiError ? err.message : "No se pudo hacer check-in.");
-                            }
-                          }
-                        )
-                      );
-                    submitCheckIn();
-                  }}
+                  onClick={() => void submitCheckIn()}
                   className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-xs font-semibold text-brand-700 hover:border-brand-300 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Confirmar check-in
@@ -600,11 +607,10 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                   type="button"
                   disabled={!canCheckOutReservation(reservation.status) || checkOutMutation.isPending}
                   onClick={() =>
-                    runAction("check-out", () =>
-                      checkOutMutation.mutate(reservation.id, {
-                        onSuccess: () => setActionMessage("Check-out registrado."),
-                        onError: (err) => setActionError(err instanceof ApiError ? err.message : "No se pudo hacer check-out.")
-                      })
+                    void runAction(
+                      "check-out",
+                      () => checkOutMutation.mutateAsync(reservation.id),
+                      () => setActionMessage("Check-out registrado.")
                     )
                   }
                   className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-semibold text-sky-700 hover:border-sky-300 disabled:cursor-not-allowed disabled:opacity-60"
@@ -615,11 +621,10 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                   type="button"
                   disabled={!canCancelReservation(reservation.status) || cancelMutation.isPending}
                   onClick={() =>
-                    runAction("cancelación", () =>
-                      cancelMutation.mutate(reservation.id, {
-                        onSuccess: () => setActionMessage("Reserva cancelada."),
-                        onError: (err) => setActionError(err instanceof ApiError ? err.message : "No se pudo cancelar.")
-                      })
+                    void runAction(
+                      "cancelación",
+                      () => cancelMutation.mutateAsync(reservation.id),
+                      () => setActionMessage("Reserva cancelada.")
                     )
                   }
                   className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 hover:border-rose-300 disabled:cursor-not-allowed disabled:opacity-60"

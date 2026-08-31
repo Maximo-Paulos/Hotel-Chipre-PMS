@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   fetchIntegrations,
@@ -11,6 +11,9 @@ import {
 import { hasValidSession } from "../api/client";
 import { useSession } from "../state/session";
 import { queryKeys } from "../api/queryKeys";
+import { refreshSettingsState } from "../api/queryInvalidation";
+
+import { useGuardedMutation } from "./useGuardedMutation";
 
 export const useIntegrations = () => {
   const { session } = useSession();
@@ -24,36 +27,36 @@ export const useIntegrations = () => {
 export const useConnectIntegration = () => {
   const client = useQueryClient();
   const { session } = useSession();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: ({ id, payload }: { id: number; payload?: Record<string, unknown> }) =>
       connectIntegration(id, payload, session),
-    onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.integrations(session.hotelId) })
+    onSuccess: async () => refreshSettingsState(client, session.hotelId)
   });
 };
 
 export const useRevokeIntegration = () => {
   const client = useQueryClient();
   const { session } = useSession();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (id: number) => revokeIntegration(id, session),
-    onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.integrations(session.hotelId) })
+    onSuccess: async () => refreshSettingsState(client, session.hotelId)
   });
 };
 
 export const useRefreshIntegration = () => {
   const client = useQueryClient();
   const { session } = useSession();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (id: number) => refreshIntegration(id, session),
-    onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.integrations(session.hotelId) })
+    onSuccess: async () => refreshSettingsState(client, session.hotelId)
   });
 };
 
 export const useFinalizeIntegrationOAuth = () => {
   const client = useQueryClient();
   const { session } = useSession();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: ({ id, code }: { id: number; code: string }) => finalizeIntegrationOAuth(id, code, session),
-    onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.integrations(session.hotelId) })
+    onSuccess: async () => refreshSettingsState(client, session.hotelId)
   });
 };

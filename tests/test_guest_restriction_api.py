@@ -134,7 +134,7 @@ def test_restriction_api_permissions_tenant_isolation_and_event(monkeypatch):
         published.append(kwargs)
         return None
 
-    monkeypatch.setattr("app.services.guest_restriction_service.publish_domain_event", capture_event)
+    monkeypatch.setattr("app.services.domain_events.publish_domain_event", capture_event)
     try:
         fastapi_app.dependency_overrides[get_auth_context] = _auth(7201, "owner", 201)
         created = client.post(
@@ -145,9 +145,13 @@ def test_restriction_api_permissions_tenant_isolation_and_event(monkeypatch):
         restriction_id = created.json()["id"]
         assert reservation.status is ReservationStatusEnum.FULLY_PAID
         assert reservation.requires_manual_review is True
-        assert published[-1]["event_type"] == "guest.restriction.created"
-        assert "reason" not in published[-1]["payload"]
-        assert "detail" not in published[-1]["payload"]
+        restriction_events = [
+            event for event in published if event["event_type"] == "guest.restriction.created"
+        ]
+        assert restriction_events
+        restriction_event = restriction_events[-1]
+        assert "reason" not in restriction_event["payload"]
+        assert "detail" not in restriction_event["payload"]
 
         fastapi_app.dependency_overrides[get_auth_context] = _auth(7201, "receptionist", 202)
         readable = client.get(f"/api/guests/{guest_a.id}/restrictions", params={"active_only": True})
@@ -312,4 +316,3 @@ def test_restriction_override_reason_rejects_whitespace():
         fastapi_app.dependency_overrides.clear()
         db.close()
         engine.dispose()
-

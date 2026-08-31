@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
+import { useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 
 import {
   fetchPermissionCatalog,
@@ -31,6 +31,8 @@ import { InfoTip } from "../../components/InfoTip";
 import { listUsers } from "../../api/users";
 import type { AuthUser } from "../../api/auth";
 import { useSession } from "../../state/session";
+import { refreshAfterMutation } from "../../api/queryInvalidation";
+import { useGuardedMutation } from "../../hooks/useGuardedMutation";
 
 const roleOrder: PermissionRole[] = ["owner", "co_owner", "manager", "receptionist", "housekeeping"];
 
@@ -481,80 +483,75 @@ export function SettingsPermissionsPage() {
     [selectedUserId, usersQuery.data]
   );
 
-  const invalidatePermissionQueries = () => {
-    void qc.invalidateQueries({ queryKey: ["permissions-matrix", session.hotelId] });
-    void qc.invalidateQueries({ queryKey: ["permissions-role-profiles", session.hotelId] });
-    void qc.invalidateQueries({ queryKey: ["permissions-user-overrides", session.hotelId] });
-    void qc.invalidateQueries({ queryKey: ["permissions", "effective"] });
-  };
+  const invalidatePermissionQueries = () => refreshAfterMutation(qc, session.hotelId, ["security", "users", "settings"]);
 
-  const roleOverrideMutation = useMutation<PermissionOverrideResponse, Error, { role: PermissionRole; code: string; allowed: boolean; expectedVersion: number }>({
+  const roleOverrideMutation = useGuardedMutation<PermissionOverrideResponse, Error, { role: PermissionRole; code: string; allowed: boolean; expectedVersion: number }>({
     mutationFn: ({ role, code, allowed, expectedVersion }) => updatePermissionOverride({ role, permission_code: code, allowed, expected_version: expectedVersion }, session),
-    onSuccess: (response, variables) => {
+    onSuccess: async (response, variables) => {
       setRoleVersions((current) => ({ ...current, [permissionKey(variables.role, variables.code)]: response.version }));
       setMessage(null);
-      invalidatePermissionQueries();
+      await invalidatePermissionQueries();
     },
     onError: (error) => setMessage(conflictMessage(error))
   });
 
-  const restoreRolePermissionMutation = useMutation<RestoreRolePermissionResponse, Error, { role: PermissionRole; code: string; expectedVersion: number }>({
+  const restoreRolePermissionMutation = useGuardedMutation<RestoreRolePermissionResponse, Error, { role: PermissionRole; code: string; expectedVersion: number }>({
     mutationFn: ({ role, code, expectedVersion }) => restoreRolePermissionOverride(role, code, expectedVersion, session),
-    onSuccess: () => {
+    onSuccess: async () => {
       setMessage(null);
-      invalidatePermissionQueries();
+      await invalidatePermissionQueries();
     },
     onError: (error) => setMessage(conflictMessage(error))
   });
 
-  const restoreRoleMutation = useMutation<RestoreRoleDefaultsResponse, Error, PermissionRole>({
+  const restoreRoleMutation = useGuardedMutation<RestoreRoleDefaultsResponse, Error, PermissionRole>({
     mutationFn: (role) => restoreRoleDefaults(role, session),
-    onSuccess: () => {
+    onSuccess: async () => {
       setMessage(null);
-      invalidatePermissionQueries();
+      await invalidatePermissionQueries();
     },
     onError: (error) => setMessage(conflictMessage(error))
   });
 
-  const visibilityMutation = useMutation<VisibilityWindow, Error, { role: PermissionRole; value: VisibilityOptionValue }>({
+  const visibilityMutation = useGuardedMutation<VisibilityWindow, Error, { role: PermissionRole; value: VisibilityOptionValue }>({
     mutationFn: ({ role, value }) => {
       const hours = value === "always" ? null : Number(value) as VisibilityWindowHours;
       return updateVisibilityWindow({ role, past_hours: hours, future_hours: hours }, session);
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       setMessage(null);
-      void qc.invalidateQueries({ queryKey: ["permissions-visibility-windows", session.hotelId] });
+      await invalidatePermissionQueries();
     },
     onError: (error) => setMessage(conflictMessage(error))
   });
 
-  const userOverrideMutation = useMutation<UserPermissionMutationResponse, Error, { userId: number; code: string; allowed: boolean; expectedVersion: number }>({
+  const userOverrideMutation = useGuardedMutation<UserPermissionMutationResponse, Error, { userId: number; code: string; allowed: boolean; expectedVersion: number }>({
     mutationFn: ({ userId, code, allowed, expectedVersion }) => updateUserPermissionOverride(userId, { permission_code: code, allowed, expected_version: expectedVersion }, session),
-    onSuccess: (response, variables) => {
+    onSuccess: async (response, variables) => {
       if (typeof response.version === "number") {
         const userRole = userOverridesQuery.data?.role ?? roleFromUser(selectedUser);
         if (userRole) setUserVersions((current) => ({ ...current, [permissionKey(userRole, variables.code)]: response.version as number }));
       }
       setMessage(null);
-      invalidatePermissionQueries();
+      await invalidatePermissionQueries();
     },
     onError: (error) => setMessage(conflictMessage(error))
   });
 
-  const restoreUserPermissionMutation = useMutation<UserPermissionMutationResponse, Error, { userId: number; code: string; expectedVersion: number }>({
+  const restoreUserPermissionMutation = useGuardedMutation<UserPermissionMutationResponse, Error, { userId: number; code: string; expectedVersion: number }>({
     mutationFn: ({ userId, code, expectedVersion }) => restoreUserPermissionOverride(userId, code, expectedVersion, session),
-    onSuccess: () => {
+    onSuccess: async () => {
       setMessage(null);
-      invalidatePermissionQueries();
+      await invalidatePermissionQueries();
     },
     onError: (error) => setMessage(conflictMessage(error))
   });
 
-  const restoreUserMutation = useMutation<{ hotel_id: number; user_id: number; restored: number }, Error, number>({
+  const restoreUserMutation = useGuardedMutation<{ hotel_id: number; user_id: number; restored: number }, Error, number>({
     mutationFn: (userId) => restoreUserDefaults(userId, session),
-    onSuccess: () => {
+    onSuccess: async () => {
       setMessage(null);
-      invalidatePermissionQueries();
+      await invalidatePermissionQueries();
     },
     onError: (error) => setMessage(conflictMessage(error))
   });
@@ -611,10 +608,18 @@ export function SettingsPermissionsPage() {
             visibilityWindows={visibilityQuery.data.windows}
             roleVersions={roleVersions}
             isBusy={isBusy}
-            onToggle={(role, code, allowed, expectedVersion) => roleOverrideMutation.mutate({ role, code, allowed, expectedVersion })}
-            onRestorePermission={(role, code, expectedVersion) => restoreRolePermissionMutation.mutate({ role, code, expectedVersion })}
-            onRestoreRole={(role) => restoreRoleMutation.mutate(role)}
-            onVisibilityChange={(role, value) => visibilityMutation.mutate({ role, value })}
+            onToggle={(role, code, allowed, expectedVersion) => {
+              void roleOverrideMutation.mutateAsync({ role, code, allowed, expectedVersion }).catch(() => undefined);
+            }}
+            onRestorePermission={(role, code, expectedVersion) => {
+              void restoreRolePermissionMutation.mutateAsync({ role, code, expectedVersion }).catch(() => undefined);
+            }}
+            onRestoreRole={(role) => {
+              void restoreRoleMutation.mutateAsync(role).catch(() => undefined);
+            }}
+            onVisibilityChange={(role, value) => {
+              void visibilityMutation.mutateAsync({ role, value }).catch(() => undefined);
+            }}
           />
         </section>
       ) : null}
@@ -631,9 +636,15 @@ export function SettingsPermissionsPage() {
           userVersions={userVersions}
           isBusy={isBusy}
           onSelectUser={setSelectedUserId}
-          onToggle={(userId, code, allowed, expectedVersion) => userOverrideMutation.mutate({ userId, code, allowed, expectedVersion })}
-          onRestorePermission={(userId, code, expectedVersion) => restoreUserPermissionMutation.mutate({ userId, code, expectedVersion })}
-          onRestoreAll={(userId) => restoreUserMutation.mutate(userId)}
+          onToggle={(userId, code, allowed, expectedVersion) => {
+            void userOverrideMutation.mutateAsync({ userId, code, allowed, expectedVersion }).catch(() => undefined);
+          }}
+          onRestorePermission={(userId, code, expectedVersion) => {
+            void restoreUserPermissionMutation.mutateAsync({ userId, code, expectedVersion }).catch(() => undefined);
+          }}
+          onRestoreAll={(userId) => {
+            void restoreUserMutation.mutateAsync(userId).catch(() => undefined);
+          }}
         />
       ) : null}
     </div>

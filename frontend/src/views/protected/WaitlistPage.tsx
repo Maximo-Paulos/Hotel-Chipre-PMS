@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { listGuests } from "../../api/guests";
 import {
@@ -13,6 +13,8 @@ import {
 import { hasValidSession } from "../../api/client";
 import { useSession } from "../../state/session";
 import { useRooms } from "../../hooks/useRooms";
+import { refreshReservationState } from "../../api/queryInvalidation";
+import { useGuardedMutation } from "../../hooks/useGuardedMutation";
 
 const waitlistStatusLabel: Record<WaitlistStatus, string> = {
   waiting: "En espera",
@@ -68,25 +70,22 @@ export function WaitlistPage() {
     staleTime: 60 * 1000
   });
 
-  const invalidateWaitlist = () => {
-    queryClient.invalidateQueries({ queryKey: ["waitlist", session.hotelId] });
-    queryClient.invalidateQueries({ queryKey: ["reservations", session.hotelId] });
-  };
+  const invalidateWaitlist = () => refreshReservationState(queryClient, session.hotelId);
 
-  const createMutation = useMutation({
+  const createMutation = useGuardedMutation({
     mutationFn: (payload: WaitlistEntryCreate) => createWaitlistEntry(payload, session),
-    onSuccess: () => {
-      invalidateWaitlist();
+    onSuccess: async () => {
+      await invalidateWaitlist();
       setFormValues(emptyForm);
       setMessage("Entrada agregada a la lista de espera.");
     }
   });
 
-  const promoteMutation = useMutation({
+  const promoteMutation = useGuardedMutation({
     mutationFn: ({ entryId, roomId, notes }: { entryId: number; roomId?: number | null; notes?: string | null }) =>
       promoteWaitlistEntry(entryId, { room_id: roomId, notes }, session),
-    onSuccess: () => {
-      invalidateWaitlist();
+    onSuccess: async () => {
+      await invalidateWaitlist();
       setSelectedEntryId(null);
       setPromoteRoomId("");
       setPromoteNotes("");
@@ -94,10 +93,10 @@ export function WaitlistPage() {
     }
   });
 
-  const cancelMutation = useMutation({
+  const cancelMutation = useGuardedMutation({
     mutationFn: (entryId: number) => cancelWaitlistEntry(entryId, session),
-    onSuccess: () => {
-      invalidateWaitlist();
+    onSuccess: async () => {
+      await invalidateWaitlist();
       setMessage("Entrada cancelada.");
     }
   });
@@ -146,6 +145,15 @@ export function WaitlistPage() {
       });
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "No se pudo promover la entrada.");
+    }
+  };
+
+  const handleCancel = async (entryId: number) => {
+    setMessage(null);
+    try {
+      await cancelMutation.mutateAsync(entryId);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "No se pudo cancelar la entrada.");
     }
   };
 
@@ -221,7 +229,7 @@ export function WaitlistPage() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => cancelMutation.mutate(entry.id)}
+                          onClick={() => void handleCancel(entry.id)}
                           disabled={cancelMutation.isPending}
                           className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
                         >

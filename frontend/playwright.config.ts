@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 const baseURL = process.env.E2E_BASE_URL || "http://127.0.0.1:5173";
 const backendURL = process.env.E2E_BACKEND_URL || "http://127.0.0.1:8040";
 const reuseExistingServer = process.env.E2E_REUSE_SERVER === "true";
+const realtimeE2EEnabled = process.env.REALTIME_E2E === "true";
 const frontendDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(frontendDir, "..");
 const pythonRelativePath = process.platform === "win32" ? "Scripts/python.exe" : "bin/python";
@@ -171,7 +172,7 @@ export default defineConfig({
         EXTERNAL_EFFECTS_ENABLED: "false",
         CONNECTIONS_ENABLED: "false",
         INBOUND_PROVIDER_EVENTS_ENABLED: "false",
-        REALTIME_EVENTS_ENABLED: "false",
+        REALTIME_EVENTS_ENABLED: realtimeE2EEnabled ? "true" : "false",
         CLICKHOUSE_ENABLED: "false",
         JWT_SECRET: jwtSecret,
         DEV_EMAIL_OUTBOX_PATH: emailOutboxPath,
@@ -198,7 +199,8 @@ export default defineConfig({
         VITE_ALLOW_PREVIEW_APP_HOST: "true",
         VITE_PREVIEW_APP_HOST_SUFFIXES: ".localhost",
         VITE_API_URL: `${backendURL}/api`,
-        VITE_BACKEND_URL: backendURL
+        VITE_BACKEND_URL: backendURL,
+        VITE_REALTIME_EVENTS_ENABLED: realtimeE2EEnabled ? "true" : "false"
       }
     }
   ]

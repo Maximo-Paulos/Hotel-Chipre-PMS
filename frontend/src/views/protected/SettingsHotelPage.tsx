@@ -1,4 +1,4 @@
-﻿import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+﻿import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -19,10 +19,12 @@ import { useSession } from "../../state/session";
 import { ApiError, hasValidSession } from "../../api/client";
 import { useTimezones } from "../../hooks/useTimezones";
 import { useRooms } from "../../hooks/useRooms";
-import { queryKeys } from "../../api/queryKeys";
+import { refreshAfterMutation, refreshRoomState } from "../../api/queryInvalidation";
 import { usePaymentSurcharges, usePaymentSurchargeMutations } from "../../hooks/usePaymentSurcharges";
 import { type PaymentSurchargeType } from "../../api/paymentSurcharges";
 import { useEffectivePermissions } from "../../hooks/usePermissions";
+import { useGuardedMutation } from "../../hooks/useGuardedMutation";
+import { useCollaborativeResource } from "../../hooks/useCollaborativeResource";
 import { moveBlockedReason, requiredMovePermission } from "../../utils/roomMove";
 
 const roomStatuses: RoomStatus[] = ["available", "occupied", "maintenance", "blocked", "cleaning"];
@@ -114,13 +116,26 @@ export function SettingsHotelPage() {
   const [roomDeleteState, setRoomDeleteState] = useState<RoomDeleteState | null>(null);
   const [roomMoveDestinations, setRoomMoveDestinations] = useState<Record<number, string>>({});
   const [movingReservationId, setMovingReservationId] = useState<number | null>(null);
+  const editingRoom = useMemo(
+    () => (roomsQuery.data ?? []).find((room) => room.id === editingRoomId) ?? null,
+    [editingRoomId, roomsQuery.data]
+  );
+  const collaborativeRoom = useCollaborativeResource({
+    resourceType: "room",
+    resourceId: editingRoom?.id,
+    initialValues: editingRoom
+      ? {
+          room_number: editingRoom.room_number,
+          floor: editingRoom.floor,
+          category_id: editingRoom.category_id,
+          notes: editingRoom.notes ?? null
+        }
+      : null,
+    enabled: Boolean(editingRoom && hasPermission("room:status_update"))
+  });
 
-  const invalidateRoomAndReservationQueries = () => {
-    qc.invalidateQueries({ queryKey: queryKeys.rooms(session.hotelId) });
-    qc.invalidateQueries({ queryKey: ["reservations", session.hotelId] });
-    qc.invalidateQueries({ queryKey: ["reservation", session.hotelId] });
-    qc.invalidateQueries({ queryKey: ["occupancy-grid", session.hotelId] });
-  };
+  const invalidateRoomAndReservationQueries = () =>
+    refreshAfterMutation(qc, session.hotelId, ["rooms", "reservations", "analytics"]);
 
   const configQuery = useQuery({
     queryKey: ["hotel-config", session.hotelId],
@@ -132,29 +147,30 @@ export function SettingsHotelPage() {
     if (configQuery.data) setForm(configQuery.data);
   }, [configQuery.data]);
 
-  const updateConfigMutation = useMutation({
+  const updateConfigMutation = useGuardedMutation({
     mutationFn: (payload: Partial<HotelConfig>) => updateHotelConfig(payload, session),
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       setForm(data);
       setError(null);
+      await refreshAfterMutation(qc, session.hotelId, ["settings", "reservations", "rooms", "analytics"]);
     },
     onError: (err: unknown) => setError(err instanceof Error ? err.message : "No se pudo guardar la configuración")
   });
 
-  const createCategoryMutation = useMutation({
+  const createCategoryMutation = useGuardedMutation({
     mutationFn: (payload: Omit<RoomCategory, "id">) => createRoomCategory(payload, session),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.roomCategories(session.hotelId) });
+    onSuccess: async () => {
+      await refreshRoomState(qc, session.hotelId);
       setCategoryForm({ name: "", code: "", description: "", base_price_per_night: 0, max_occupancy: 1, amenities: "" });
       setError(null);
     },
     onError: (err: unknown) => setError(err instanceof Error ? err.message : "No se pudo crear la categoría")
   });
 
-  const updateCategoryMutation = useMutation({
+  const updateCategoryMutation = useGuardedMutation({
     mutationFn: ({ id, payload }: { id: number; payload: Partial<Omit<RoomCategory, "id">> }) => updateRoomCategory(id, payload, session),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.roomCategories(session.hotelId) });
+    onSuccess: async () => {
+      await refreshRoomState(qc, session.hotelId);
       setEditingCategoryId(null);
       setCategoryEdit({});
       setError(null);
@@ -162,22 +178,22 @@ export function SettingsHotelPage() {
     onError: (err: unknown) => setError(err instanceof Error ? err.message : "No se pudo actualizar la categoría")
   });
 
-  const createRoomMutation = useMutation({
+  const createRoomMutation = useGuardedMutation({
     mutationFn: (payload: { room_number: string; floor: number; category_id: number; notes?: string }) =>
       createRoom({ ...payload, status: "available", is_active: true }, session),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.rooms(session.hotelId) });
+    onSuccess: async () => {
+      await refreshRoomState(qc, session.hotelId);
       setRoomForm({ room_number: "", floor: 1, category_id: 0, notes: "" });
       setError(null);
     },
     onError: (err: unknown) => setError(err instanceof Error ? err.message : "No se pudo crear la habitación")
   });
 
-  const updateRoomMutation = useMutation({
+  const updateRoomMutation = useGuardedMutation({
     mutationFn: ({ id, payload }: { id: number; payload: Partial<{ room_number: string; floor: number; category_id: number; status: RoomStatus; is_active: boolean; notes?: string }> }) =>
       updateRoom(id, payload, session),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.rooms(session.hotelId) });
+    onSuccess: async () => {
+      await refreshRoomState(qc, session.hotelId);
       setEditingRoomId(null);
       setRoomEdit({});
       setError(null);
@@ -185,10 +201,10 @@ export function SettingsHotelPage() {
     onError: (err: unknown) => setError(err instanceof Error ? err.message : "No se pudo actualizar la habitación")
   });
 
-  const deleteRoomMutation = useMutation<void, unknown, number>({
+  const deleteRoomMutation = useGuardedMutation<void, unknown, number>({
     mutationFn: (roomId) => deleteRoom(roomId, session),
-    onSuccess: () => {
-      invalidateRoomAndReservationQueries();
+    onSuccess: async () => {
+      await invalidateRoomAndReservationQueries();
       setRoomDeleteState(null);
       setRoomMoveDestinations({});
       setError(null);
@@ -213,7 +229,7 @@ export function SettingsHotelPage() {
     }
   });
 
-  const moveBlockingReservationMutation = useMutation<
+  const moveBlockingReservationMutation = useGuardedMutation<
     unknown,
     unknown,
     { reservationId: number; toRoomId: number }
@@ -224,8 +240,8 @@ export function SettingsHotelPage() {
       setMovingReservationId(reservationId);
       setError(null);
     },
-    onSuccess: (_result, { reservationId }) => {
-      invalidateRoomAndReservationQueries();
+    onSuccess: async (_result, { reservationId }) => {
+      await invalidateRoomAndReservationQueries();
       setRoomDeleteState((current) =>
         current
           ? {
@@ -288,9 +304,69 @@ export function SettingsHotelPage() {
   }, [hasPermission, roomCategoryById, roomDeleteMoveDestinations, roomDeleteState]);
 
   const handleChange = (key: keyof HotelConfig, value: unknown) => setForm((prev) => ({ ...prev, [key]: value }));
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleRoomEditField = (field: "room_number" | "floor" | "category_id" | "notes", value: unknown) => {
+    setRoomEdit((current) => ({ ...current, [field]: value }));
+    collaborativeRoom.setField(field, value);
+  };
+  const handleSaveRoom = async (roomId: number) => {
+    if (editingRoomId !== roomId) return;
+    if (Object.keys(collaborativeRoom.conflicts).length > 0) {
+      setError("Hay conflictos en la habitación. Elegí qué valor conservar antes de guardar.");
+      return;
+    }
+    try {
+      const collaborationActive = collaborativeRoom.status !== "idle";
+      if (collaborationActive && collaborativeRoom.isDirty) {
+        await collaborativeRoom.save();
+        const operationalChanges: typeof roomEdit = {};
+        if (roomEdit.status !== undefined && roomEdit.status !== editingRoom?.status) {
+          operationalChanges.status = roomEdit.status;
+        }
+        if (roomEdit.is_active !== undefined && roomEdit.is_active !== editingRoom?.is_active) {
+          operationalChanges.is_active = roomEdit.is_active;
+        }
+        if (Object.keys(operationalChanges).length > 0) {
+          await updateRoomMutation.mutateAsync({ id: roomId, payload: operationalChanges });
+        } else {
+          setEditingRoomId(null);
+          setRoomEdit({});
+          setError(null);
+        }
+        return;
+      }
+      if (collaborationActive) {
+        // Editable metadata is owned by the collaboration resource. If this
+        // editor is clean, sending the stale local fallback would overwrite a
+        // remote change that arrived after the form was opened. Only persist
+        // the intentionally non-mergeable operational fields here.
+        const operationalChanges: typeof roomEdit = {};
+        if (roomEdit.status !== undefined && roomEdit.status !== editingRoom?.status) {
+          operationalChanges.status = roomEdit.status;
+        }
+        if (roomEdit.is_active !== undefined && roomEdit.is_active !== editingRoom?.is_active) {
+          operationalChanges.is_active = roomEdit.is_active;
+        }
+        if (Object.keys(operationalChanges).length > 0) {
+          await updateRoomMutation.mutateAsync({ id: roomId, payload: operationalChanges });
+        } else {
+          setEditingRoomId(null);
+          setRoomEdit({});
+          setError(null);
+        }
+        return;
+      }
+      await updateRoomMutation.mutateAsync({ id: roomId, payload: roomEdit });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "No se pudo actualizar la habitación");
+    }
+  };
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    updateConfigMutation.mutate(form);
+    try {
+      await updateConfigMutation.mutateAsync(form);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "No se pudo guardar la configuración");
+    }
   };
 
   const ownerOnly = session.baseRole === "owner";
@@ -405,7 +481,7 @@ export function SettingsHotelPage() {
               <input type="number" min={1} className="rounded-lg border border-slate-200 px-3 py-2 text-sm" placeholder="Ocupación máx" value={categoryForm.max_occupancy} onChange={(e) => setCategoryForm((p) => ({ ...p, max_occupancy: parseInt(e.target.value || "1", 10) }))} />
               <input className="rounded-lg border border-slate-200 px-3 py-2 text-sm md:col-span-2" placeholder="Amenidades" value={categoryForm.amenities ?? ""} onChange={(e) => setCategoryForm((p) => ({ ...p, amenities: e.target.value }))} />
               <input className="rounded-lg border border-slate-200 px-3 py-2 text-sm md:col-span-3" placeholder="Descripción" value={categoryForm.description ?? ""} onChange={(e) => setCategoryForm((p) => ({ ...p, description: e.target.value }))} />
-              <button type="button" className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60" disabled={createCategoryMutation.isPending || !categoryForm.name || !categoryForm.code || categoryForm.base_price_per_night <= 0 || categoryForm.max_occupancy <= 0} onClick={() => createCategoryMutation.mutate(categoryForm)}>
+              <button type="button" className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60" disabled={createCategoryMutation.isPending || !categoryForm.name || !categoryForm.code || categoryForm.base_price_per_night <= 0 || categoryForm.max_occupancy <= 0} onClick={() => void createCategoryMutation.mutateAsync(categoryForm).catch(() => undefined)}>
                 {createCategoryMutation.isPending ? "Guardando..." : "Agregar categoría"}
               </button>
             </div>
@@ -423,7 +499,7 @@ export function SettingsHotelPage() {
                       <input className="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm" placeholder="Amenidades" value={categoryEdit.amenities ?? c.amenities ?? ""} onChange={(e) => setCategoryEdit((p) => ({ ...p, amenities: e.target.value }))} />
                       <input className="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm" placeholder="Descripción" value={categoryEdit.description ?? c.description ?? ""} onChange={(e) => setCategoryEdit((p) => ({ ...p, description: e.target.value }))} />
                       <div className="flex gap-2">
-                        <button type="button" className="rounded-lg bg-brand-600 px-3 py-1 text-xs font-semibold text-white" onClick={() => updateCategoryMutation.mutate({ id: c.id, payload: categoryEdit })}>Guardar</button>
+                        <button type="button" className="rounded-lg bg-brand-600 px-3 py-1 text-xs font-semibold text-white" onClick={() => void updateCategoryMutation.mutateAsync({ id: c.id, payload: categoryEdit }).catch(() => undefined)}>Guardar</button>
                         <button type="button" className="rounded-lg border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700" onClick={() => { setEditingCategoryId(null); setCategoryEdit({}); }}>Cancelar</button>
                       </div>
                     </div>
@@ -457,7 +533,7 @@ export function SettingsHotelPage() {
                 ))}
               </select>
               <input className="rounded-lg border border-slate-200 px-3 py-2 text-sm md:col-span-2" placeholder="Notas" value={roomForm.notes ?? ""} onChange={(e) => setRoomForm((p) => ({ ...p, notes: e.target.value }))} />
-              <button type="button" className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60 md:col-span-2" disabled={createRoomMutation.isPending || !roomForm.room_number || !roomForm.category_id} onClick={() => createRoomMutation.mutate(roomForm)}>
+              <button type="button" className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60 md:col-span-2" disabled={createRoomMutation.isPending || !roomForm.room_number || !roomForm.category_id} onClick={() => void createRoomMutation.mutateAsync(roomForm).catch(() => undefined)}>
                 {createRoomMutation.isPending ? "Guardando..." : "Agregar habitación"}
               </button>
             </div>
@@ -466,10 +542,10 @@ export function SettingsHotelPage() {
                 <div key={r.id} className="rounded-lg border border-slate-200 px-3 py-2 text-sm">
                   {editingRoomId === r.id ? (
                     <div className="space-y-2">
-                      <input className="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm" value={roomEdit.room_number ?? r.room_number} onChange={(e) => setRoomEdit((p) => ({ ...p, room_number: e.target.value }))} />
+                      <input className="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm" value={String(collaborativeRoom.draftValues.room_number ?? roomEdit.room_number ?? r.room_number)} onChange={(e) => handleRoomEditField("room_number", e.target.value)} onFocus={() => collaborativeRoom.focusField("room_number")} onBlur={() => collaborativeRoom.blurField("room_number")} />
                       <div className="grid grid-cols-2 gap-2">
-                        <input type="number" className="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm" value={roomEdit.floor ?? r.floor} onChange={(e) => setRoomEdit((p) => ({ ...p, floor: parseInt(e.target.value || "1", 10) }))} />
-                        <select className="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm" value={roomEdit.category_id ?? r.category_id} onChange={(e) => setRoomEdit((p) => ({ ...p, category_id: parseInt(e.target.value, 10) }))}>
+                        <input type="number" className="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm" value={Number(collaborativeRoom.draftValues.floor ?? roomEdit.floor ?? r.floor)} onChange={(e) => handleRoomEditField("floor", parseInt(e.target.value || "1", 10))} onFocus={() => collaborativeRoom.focusField("floor")} onBlur={() => collaborativeRoom.blurField("floor")} />
+                        <select className="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm" value={Number(collaborativeRoom.draftValues.category_id ?? roomEdit.category_id ?? r.category_id)} onChange={(e) => handleRoomEditField("category_id", parseInt(e.target.value, 10))} onFocus={() => collaborativeRoom.focusField("category_id")} onBlur={() => collaborativeRoom.blurField("category_id")}>
                           {(categoriesQuery.data ?? []).map((c) => (
                             <option key={c.id} value={c.id}>{c.name}</option>
                           ))}
@@ -486,9 +562,38 @@ export function SettingsHotelPage() {
                           Activa
                         </label>
                       </div>
-                      <input className="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm" placeholder="Notas" value={roomEdit.notes ?? r.notes ?? ""} onChange={(e) => setRoomEdit((p) => ({ ...p, notes: e.target.value }))} />
+                      <input className="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm" placeholder="Notas" value={String(collaborativeRoom.draftValues.notes ?? roomEdit.notes ?? r.notes ?? "")} onChange={(e) => handleRoomEditField("notes", e.target.value || null)} onFocus={() => collaborativeRoom.focusField("notes")} onBlur={() => collaborativeRoom.blurField("notes")} />
+                      {collaborativeRoom.status !== "idle" && (
+                        <div className="rounded-lg border border-sky-200 bg-sky-50 p-2 text-xs text-sky-900" role="status">
+                          <p>
+                            {collaborativeRoom.status === "connected"
+                              ? `Coedición conectada${collaborativeRoom.peers.length ? ` · ${collaborativeRoom.peers.length} usuario(s) más` : ""}`
+                              : collaborativeRoom.status === "saving"
+                                ? "Guardando cambios..."
+                                : collaborativeRoom.status === "conflict"
+                                  ? "Conflicto pendiente"
+                                  : collaborativeRoom.status === "degraded"
+                                    ? "Coedición degradada"
+                                    : "Conectando..."}
+                          </p>
+                          {collaborativeRoom.peers.filter((peer) => peer.fields.length > 0).map((peer) => (
+                            <p key={peer.connectionId} className="mt-1">Otro usuario está editando: {peer.fields.join(", ")}</p>
+                          ))}
+                        </div>
+                      )}
+                      {Object.values(collaborativeRoom.conflicts).map((conflict) => (
+                        <div key={conflict.field} className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-950" data-testid={`room-conflict-${conflict.field}`}>
+                          <p className="font-semibold">Conflicto en {conflict.field}</p>
+                          <p>Propio: {String(conflict.localValue ?? "(vacío)")}</p>
+                          <p>Remoto: {String(conflict.remoteValue ?? "(vacío)")}</p>
+                          <div className="mt-1 flex gap-2">
+                            <button type="button" className="rounded border border-amber-300 bg-white px-2 py-1 font-semibold" onClick={() => collaborativeRoom.keepMine(conflict.field)}>Conservar el mío</button>
+                            <button type="button" className="rounded border border-amber-300 bg-white px-2 py-1 font-semibold" onClick={() => collaborativeRoom.useRemote(conflict.field)}>Usar remoto</button>
+                          </div>
+                        </div>
+                      ))}
                       <div className="flex gap-2">
-                        <button type="button" className="rounded-lg bg-brand-600 px-3 py-1 text-xs font-semibold text-white" onClick={() => updateRoomMutation.mutate({ id: r.id, payload: roomEdit })}>Guardar</button>
+                        <button type="button" className="rounded-lg bg-brand-600 px-3 py-1 text-xs font-semibold text-white" disabled={updateRoomMutation.isPending || collaborativeRoom.isSaving} onClick={() => void handleSaveRoom(r.id)}>Guardar</button>
                         <button type="button" className="rounded-lg border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700" onClick={() => { setEditingRoomId(null); setRoomEdit({}); }}>Cancelar</button>
                       </div>
                     </div>
@@ -532,7 +637,7 @@ export function SettingsHotelPage() {
                                 type="button"
                                 className="rounded-lg bg-rose-600 px-3 py-1 text-xs font-semibold text-white hover:bg-rose-700 disabled:opacity-60"
                                 disabled={deleteRoomMutation.isPending}
-                                onClick={() => deleteRoomMutation.mutate(r.id)}
+                                onClick={() => void deleteRoomMutation.mutateAsync(r.id).catch(() => undefined)}
                               >
                                 {deleteRoomMutation.isPending ? "Eliminando..." : "Sí, eliminar"}
                               </button>
@@ -619,10 +724,10 @@ export function SettingsHotelPage() {
                                               setError(selectedDestinationBlockedReason);
                                               return;
                                             }
-                                            moveBlockingReservationMutation.mutate({
+                                            void moveBlockingReservationMutation.mutateAsync({
                                               reservationId: reservation.id,
                                               toRoomId: selectedDestination.id
-                                            });
+                                            }).catch(() => undefined);
                                           }}
                                         >
                                           {movingReservationId === reservation.id ? "Reubicando..." : "Reubicar"}
@@ -651,7 +756,7 @@ export function SettingsHotelPage() {
                                   type="button"
                                   className="rounded-lg bg-rose-600 px-3 py-1 text-xs font-semibold text-white hover:bg-rose-700 disabled:opacity-60"
                                   disabled={deleteRoomMutation.isPending}
-                                  onClick={() => deleteRoomMutation.mutate(r.id)}
+                                  onClick={() => void deleteRoomMutation.mutateAsync(r.id).catch(() => undefined)}
                                 >
                                   {deleteRoomMutation.isPending ? "Eliminando..." : "Eliminar habitación definitivamente"}
                                 </button>
@@ -740,20 +845,27 @@ function PaymentSurchargesCard() {
 
   const active = (surchargesQuery.data ?? []).filter((s) => s.is_active);
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     setFormError(null);
     const value = Number(amount);
     if (!Number.isFinite(value) || value < 0) {
       setFormError("Ingresá un valor válido.");
       return;
     }
-    createMutation.mutate(
-      { payment_method: method, surcharge_type: type, amount: value },
-      {
-        onSuccess: () => setAmount(""),
-        onError: (err: unknown) => setFormError(err instanceof Error ? err.message : "No se pudo guardar el recargo.")
-      }
-    );
+    try {
+      await createMutation.mutateAsync({ payment_method: method, surcharge_type: type, amount: value });
+      setAmount("");
+    } catch (err: unknown) {
+      setFormError(err instanceof Error ? err.message : "No se pudo guardar el recargo.");
+    }
+  };
+
+  const handleDeactivate = async (id: number) => {
+    try {
+      await deactivateMutation.mutateAsync(id);
+    } catch {
+      // The shared mutation hook reports the API error to the surrounding UI.
+    }
   };
 
   return (
@@ -804,7 +916,7 @@ function PaymentSurchargesCard() {
                 <strong>{surchargeMethodLabel(s.payment_method)}</strong>:{" "}
                 {s.surcharge_type === "percentage" ? `${s.amount}%` : `$${s.amount}`}
               </span>
-              <button type="button" onClick={() => deactivateMutation.mutate(s.id)} disabled={deactivateMutation.isPending} className="rounded-lg border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-60">
+              <button type="button" onClick={() => void handleDeactivate(s.id)} disabled={deactivateMutation.isPending} className="rounded-lg border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-60">
                 Quitar
               </button>
             </div>

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
+import { useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 
 import {
   createStockItem,
@@ -30,6 +30,8 @@ import { useIsDesktopViewport } from "../../hooks/useIsDesktopViewport";
 import { useOnlineStatus } from "../../hooks/useOnlineStatus";
 import { useSession } from "../../state/session";
 import { startOfCurrentMonthIso, startOfCurrentWeekIso, todayIso } from "../../utils/date";
+import { refreshStockState } from "../../api/queryInvalidation";
+import { useCollaborativeResource } from "../../hooks/useCollaborativeResource";
 
 // Mobile task-based tabs (see the useIsDesktopViewport docstring for why this
 // is JS state, not a CSS breakpoint split): "movement" and "adjustment" both
@@ -272,16 +274,9 @@ export function StockPage() {
     }
   };
 
-  const invalidateStock = () => {
-    queryClient.invalidateQueries({ queryKey: ["stock-items", session.hotelId] });
-    queryClient.invalidateQueries({ queryKey: ["stock-locations", session.hotelId] });
-    queryClient.invalidateQueries({ queryKey: ["stock-low", session.hotelId] });
-    queryClient.invalidateQueries({ queryKey: ["stock-summary", session.hotelId] });
-    queryClient.invalidateQueries({ queryKey: ["stock-movements", session.hotelId] });
-    queryClient.invalidateQueries({ queryKey: ["stock-consumption-report", session.hotelId] });
-  };
+  const invalidateStock = () => refreshStockState(queryClient, session.hotelId);
 
-  const createItemMutation = useMutation({
+  const createItemMutation = useGuardedMutation({
     mutationFn: () =>
       createStockItem(
         {
@@ -294,8 +289,8 @@ export function StockPage() {
         },
         session
       ),
-    onSuccess: () => {
-      invalidateStock();
+    onSuccess: async () => {
+      await invalidateStock();
       setItemForm(emptyItemForm);
       setMessage("Item de stock creado.");
     }
@@ -304,29 +299,29 @@ export function StockPage() {
   // Owner: "quiero que se pueda poner en las cosas de stock... el costo por
   // unidad" -- inline edit on each card instead of a separate full item-edit
   // form, since unit_cost is the only field that needs changing after creation.
-  const updateItemCostMutation = useMutation({
+  const updateItemCostMutation = useGuardedMutation({
     mutationFn: ({ itemId, unitCost }: { itemId: number; unitCost: string }) =>
       updateStockItem(itemId, { unit_cost: unitCost || null }, session),
-    onSuccess: () => {
-      invalidateStock();
+    onSuccess: async () => {
+      await invalidateStock();
       setMessage("Costo por unidad actualizado.");
     }
   });
 
-  const updateItemMutation = useMutation({
+  const updateItemMutation = useGuardedMutation({
     mutationFn: ({ itemId, changes }: { itemId: number; changes: StockItemUpdate }) =>
       updateStockItem(itemId, changes, session),
-    onSuccess: () => {
-      invalidateStock();
+    onSuccess: async () => {
+      await invalidateStock();
       setItemBeingEdited(null);
       setMessage("Item actualizado.");
     }
   });
 
-  const deleteItemMutation = useMutation({
+  const deleteItemMutation = useGuardedMutation({
     mutationFn: (itemId: number) => deleteStockItem(itemId, session),
-    onSuccess: () => {
-      invalidateStock();
+    onSuccess: async () => {
+      await invalidateStock();
       setMessage("Item eliminado.");
     }
   });
@@ -343,10 +338,10 @@ export function StockPage() {
     }
   };
 
-  const createLocationMutation = useMutation({
+  const createLocationMutation = useGuardedMutation({
     mutationFn: () => createStockLocation({ name: locationForm.name }, session),
-    onSuccess: () => {
-      invalidateStock();
+    onSuccess: async () => {
+      await invalidateStock();
       setLocationForm(emptyLocationForm);
       setMessage("Ubicacion creada.");
     }
@@ -360,8 +355,8 @@ export function StockPage() {
   const createMovementMutation = useGuardedMutation({
     mutationFn: ({ payload, idempotencyKey }: { payload: StockMovementCreate; idempotencyKey: string }) =>
       createStockMovement(payload, { idempotencyKey }, session),
-    onSuccess: () => {
-      invalidateStock();
+    onSuccess: async () => {
+      await invalidateStock();
       setMovementForm((current) => ({
         ...emptyMovementForm,
         item_id: current.item_id,
@@ -512,7 +507,7 @@ export function StockPage() {
                     </div>
                     <UnitCostField
                       unitCost={item.unit_cost ?? null}
-                      onSave={(unitCost) => updateItemCostMutation.mutate({ itemId: item.id, unitCost })}
+                      onSave={(unitCost) => void updateItemCostMutation.mutateAsync({ itemId: item.id, unitCost }).catch((error: unknown) => setMessage(error instanceof Error ? error.message : "No se pudo actualizar el costo."))}
                       saving={updateItemCostMutation.isPending}
                     />
                   </div>
@@ -883,7 +878,14 @@ export function StockPage() {
       <EditStockItemModal
         item={itemBeingEdited}
         saving={updateItemMutation.isPending}
-        onSave={(changes) => itemBeingEdited && updateItemMutation.mutate({ itemId: itemBeingEdited.id, changes })}
+        collaborationEnabled={canAdjustStock}
+        onSave={async (changes) => {
+          if (itemBeingEdited) await updateItemMutation.mutateAsync({ itemId: itemBeingEdited.id, changes });
+        }}
+        onCollaborativeSaved={() => {
+          setItemBeingEdited(null);
+          setMessage("Item actualizado.");
+        }}
         onCancel={() => setItemBeingEdited(null)}
       />
     </div>
@@ -897,15 +899,20 @@ export function StockPage() {
 function EditStockItemModal({
   item,
   saving,
+  collaborationEnabled,
   onSave,
+  onCollaborativeSaved,
   onCancel
 }: {
   item: StockItem | null;
   saving: boolean;
-  onSave: (changes: StockItemUpdate) => void;
+  collaborationEnabled: boolean;
+  onSave: (changes: StockItemUpdate) => void | Promise<void>;
+  onCollaborativeSaved: () => void;
   onCancel: () => void;
 }) {
   const [form, setForm] = useState({ name: "", sku: "", unit: "", min_quantity: "" });
+  const [formError, setFormError] = useState<string | null>(null);
 
   // Re-seed the draft from the item that was just opened -- item identity
   // (id) changes each time "Editar" is clicked on a different card.
@@ -922,12 +929,50 @@ function EditStockItemModal({
     setOpenItemId(null);
   }
 
+  const collaborativeItem = useCollaborativeResource({
+    resourceType: "stock_item",
+    resourceId: item?.id,
+    initialValues: item
+      ? {
+          name: item.name,
+          sku: item.sku ?? null,
+          unit: item.unit,
+          min_quantity: item.min_quantity ?? null,
+          unit_cost: item.unit_cost ?? null,
+          active: item.active
+        }
+      : null,
+    enabled: Boolean(item && collaborationEnabled)
+  });
+
+  const collaborativeForm = {
+    ...form,
+    name: String(collaborativeItem.draftValues.name ?? form.name),
+    sku: String(collaborativeItem.draftValues.sku ?? ""),
+    unit: String(collaborativeItem.draftValues.unit ?? form.unit),
+    min_quantity:
+      collaborativeItem.draftValues.min_quantity === null || collaborativeItem.draftValues.min_quantity === undefined
+        ? ""
+        : String(collaborativeItem.draftValues.min_quantity)
+  };
+
+  const setItemField = (field: "name" | "sku" | "unit" | "min_quantity", value: string) => {
+    setForm((current) => ({ ...current, [field]: value }));
+    const normalized = field === "sku" || field === "min_quantity" ? value || null : value;
+    collaborativeItem.setField(field, normalized);
+  };
+
+  const handleCancel = () => {
+    if (collaborativeItem.isSaving || saving) return;
+    onCancel();
+  };
+
   if (!item) return null;
 
   return (
     <div
       className="fixed inset-0 z-40 flex animate-fade-in items-center justify-center bg-slate-900/40 px-4 py-6"
-      onClick={onCancel}
+      onClick={handleCancel}
     >
       <form
         role="dialog"
@@ -935,34 +980,85 @@ function EditStockItemModal({
         aria-labelledby="edit-stock-item-title"
         className="w-full max-w-sm animate-scale-in rounded-xl border border-slate-200 bg-white p-5 shadow-xl"
         onClick={(event) => event.stopPropagation()}
-        onSubmit={(event) => {
+        onSubmit={async (event) => {
           event.preventDefault();
-          onSave({
-            name: form.name,
-            sku: form.sku || null,
-            unit: form.unit,
-            min_quantity: form.min_quantity || null
-          });
+          setFormError(null);
+          try {
+            if (collaborativeItem.status !== "idle") {
+              if (Object.keys(collaborativeItem.conflicts).length > 0) {
+                setFormError("Hay conflictos en el item. Elegí qué valor conservar antes de guardar.");
+                return;
+              }
+              if (collaborativeItem.isDirty) {
+                await collaborativeItem.save();
+                onCollaborativeSaved();
+              }
+              return;
+            }
+            await onSave({
+              name: collaborativeForm.name,
+              sku: collaborativeForm.sku || null,
+              unit: collaborativeForm.unit,
+              min_quantity: collaborativeForm.min_quantity || null
+            });
+          } catch (error) {
+            setFormError(error instanceof Error ? error.message : "No se pudo guardar el item.");
+          }
         }}
       >
         <h2 id="edit-stock-item-title" className="text-base font-semibold text-slate-900">
           Editar item de stock
         </h2>
+        {collaborationEnabled && collaborativeItem.status !== "idle" ? (
+          <div className="mt-2 space-y-2 rounded-md border border-sky-200 bg-sky-50 px-2 py-1.5 text-xs text-sky-900" data-testid="stock-collaboration" role="status">
+            <p>
+              {collaborativeItem.status === "connected"
+                ? `Coedición conectada${collaborativeItem.peers.length ? ` · ${collaborativeItem.peers.length} usuario(s) más` : ""}.`
+                : collaborativeItem.status === "saving"
+                  ? "Guardando y confirmando con el servidor..."
+                  : collaborativeItem.status === "conflict"
+                    ? "Hay un conflicto de edición."
+                    : collaborativeItem.status === "degraded"
+                      ? "Coedición degradada; podés usar el guardado normal."
+                      : "Conectando coedición..."}
+            </p>
+            {Object.values(collaborativeItem.conflicts).map((conflict) => (
+              <div key={conflict.field} className="rounded border border-amber-200 bg-amber-50 p-2 text-amber-950" data-testid={`stock-conflict-${conflict.field}`}>
+                <p className="font-semibold">Conflicto en {conflict.field}</p>
+                <p>Propio: {String(conflict.localValue ?? "(vacío)")}</p>
+                <p>Remoto: {String(conflict.remoteValue ?? "(vacío)")}</p>
+                <div className="mt-1 flex gap-2">
+                  <button type="button" className="rounded border border-amber-300 bg-white px-2 py-1 font-semibold" onClick={() => collaborativeItem.keepMine(conflict.field)}>
+                    Conservar el mío
+                  </button>
+                  <button type="button" className="rounded border border-amber-300 bg-white px-2 py-1 font-semibold" onClick={() => collaborativeItem.useRemote(conflict.field)}>
+                    Usar remoto
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+        {formError ? <p className="mt-2 rounded-md bg-rose-50 px-2 py-1 text-xs text-rose-800" role="alert">{formError}</p> : null}
         <div className="mt-4 space-y-3">
           <label className="block text-sm">
             <span className="block text-xs uppercase tracking-wide text-slate-500">Nombre</span>
             <input
               required
-              value={form.name}
-              onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
+              value={collaborativeForm.name}
+              onChange={(event) => setItemField("name", event.target.value)}
+              onFocus={() => collaborativeItem.focusField("name")}
+              onBlur={() => collaborativeItem.blurField("name")}
               className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
             />
           </label>
           <label className="block text-sm">
             <span className="block text-xs uppercase tracking-wide text-slate-500">SKU</span>
             <input
-              value={form.sku}
-              onChange={(event) => setForm((current) => ({ ...current, sku: event.target.value }))}
+              value={collaborativeForm.sku}
+              onChange={(event) => setItemField("sku", event.target.value)}
+              onFocus={() => collaborativeItem.focusField("sku")}
+              onBlur={() => collaborativeItem.blurField("sku")}
               className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
             />
           </label>
@@ -970,8 +1066,10 @@ function EditStockItemModal({
             <span className="block text-xs uppercase tracking-wide text-slate-500">Unidad</span>
             <input
               required
-              value={form.unit}
-              onChange={(event) => setForm((current) => ({ ...current, unit: event.target.value }))}
+              value={collaborativeForm.unit}
+              onChange={(event) => setItemField("unit", event.target.value)}
+              onFocus={() => collaborativeItem.focusField("unit")}
+              onBlur={() => collaborativeItem.blurField("unit")}
               className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
             />
           </label>
@@ -981,8 +1079,10 @@ function EditStockItemModal({
               type="number"
               min="0"
               step="0.01"
-              value={form.min_quantity}
-              onChange={(event) => setForm((current) => ({ ...current, min_quantity: event.target.value }))}
+              value={collaborativeForm.min_quantity}
+              onChange={(event) => setItemField("min_quantity", event.target.value)}
+              onFocus={() => collaborativeItem.focusField("min_quantity")}
+              onBlur={() => collaborativeItem.blurField("min_quantity")}
               className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
             />
           </label>
@@ -990,14 +1090,14 @@ function EditStockItemModal({
         <div className="mt-5 flex gap-2">
           <button
             type="button"
-            onClick={onCancel}
+            onClick={handleCancel}
             className="min-h-11 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
           >
             Cancelar
           </button>
           <button
             type="submit"
-            disabled={saving}
+            disabled={saving || collaborativeItem.isSaving}
             className="min-h-11 flex-1 rounded-lg border border-brand-600 bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
           >
             Guardar

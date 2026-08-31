@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 
 import { hasValidSession } from "../api/client";
 import {
@@ -22,6 +22,9 @@ import {
   type PricePeriodInput
 } from "../api/rate-calendar";
 import { useSession } from "../state/session";
+import { refreshAfterMutation } from "../api/queryInvalidation";
+
+import { useGuardedMutation } from "./useGuardedMutation";
 
 export type { PricePeriodInput } from "../api/rate-calendar";
 
@@ -55,7 +58,7 @@ export function useUpsertDailyRate(categoryId: number | null) {
   const { session } = useSession();
   const queryClient = useQueryClient();
 
-  return useMutation<DailyRateOut, Error, SingleRateInput>({
+  return useGuardedMutation<DailyRateOut, Error, SingleRateInput>({
     mutationFn: (payload) => {
       if (typeof categoryId !== "number" || categoryId <= 0) {
         throw new Error("Seleccioná una categoría válida antes de guardar tarifas.");
@@ -63,10 +66,7 @@ export function useUpsertDailyRate(categoryId: number | null) {
       return upsertDailyRate(categoryId, payload, session);
     },
     // Prefix-match invalidation so every loaded date window refetches.
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["category-daily-rates", session.hotelId ?? null, categoryId] });
-      queryClient.invalidateQueries({ queryKey: ["rate-calendar", session.hotelId ?? null, categoryId] });
-    }
+    onSuccess: async () => refreshAfterMutation(queryClient, session.hotelId, ["rooms", "settings", "reservations", "analytics"])
   });
 }
 
@@ -89,17 +89,14 @@ export function useBulkUpsertRates(categoryId: number | null) {
   const { session } = useSession();
   const queryClient = useQueryClient();
 
-  return useMutation<BulkRateResult, Error, BulkRateInput>({
+  return useGuardedMutation<BulkRateResult, Error, BulkRateInput>({
     mutationFn: (payload) => {
       if (typeof categoryId !== "number" || categoryId <= 0) {
         throw new Error("Seleccioná una categoría válida antes de guardar tarifas.");
       }
       return bulkUpsertDailyRates(categoryId, payload, session);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["rate-calendar", session.hotelId ?? null, categoryId] });
-      queryClient.invalidateQueries({ queryKey: ["category-daily-rates", session.hotelId ?? null, categoryId] });
-    }
+    onSuccess: async () => refreshAfterMutation(queryClient, session.hotelId, ["rooms", "settings", "reservations", "analytics"])
   });
 }
 
@@ -107,17 +104,14 @@ export function useBulkUpdateRateField(categoryId: number | null) {
   const { session } = useSession();
   const queryClient = useQueryClient();
 
-  return useMutation<BulkRateResult, Error, BulkRateFieldInput>({
+  return useGuardedMutation<BulkRateResult, Error, BulkRateFieldInput>({
     mutationFn: (payload) => {
       if (typeof categoryId !== "number" || categoryId <= 0) {
         throw new Error("Seleccioná una categoría válida antes de guardar tarifas.");
       }
       return bulkUpdateDailyRateField(categoryId, payload, session);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["rate-calendar", session.hotelId ?? null, categoryId] });
-      queryClient.invalidateQueries({ queryKey: ["category-daily-rates", session.hotelId ?? null, categoryId] });
-    }
+    onSuccess: async () => refreshAfterMutation(queryClient, session.hotelId, ["rooms", "settings", "reservations", "analytics"])
   });
 }
 
@@ -134,13 +128,19 @@ export function usePricePeriods(categoryId: number | null) {
 export function usePricePeriodMutations(categoryId: number | null) {
   const { session } = useSession();
   const queryClient = useQueryClient();
-  const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ["price-periods", session.hotelId ?? null, categoryId] });
-    queryClient.invalidateQueries({ queryKey: ["rate-calendar", session.hotelId ?? null, categoryId] });
-    queryClient.invalidateQueries({ queryKey: ["category-daily-rates", session.hotelId ?? null, categoryId] });
-  };
-  const create = useMutation({ mutationFn: (payload: PricePeriodInput) => createPricePeriod(payload, session), onSuccess: invalidate });
-  const update = useMutation({ mutationFn: ({ id, payload }: { id: number; payload: Partial<PricePeriodInput> }) => updatePricePeriod(id, payload, session), onSuccess: invalidate });
-  const remove = useMutation({ mutationFn: (id: number) => deletePricePeriod(id, session), onSuccess: invalidate });
+  void categoryId;
+  const invalidate = () => refreshAfterMutation(queryClient, session.hotelId, ["rooms", "settings", "reservations", "analytics"]);
+  const create = useGuardedMutation({
+    mutationFn: (payload: PricePeriodInput) => createPricePeriod(payload, session),
+    onSuccess: async () => invalidate()
+  });
+  const update = useGuardedMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: Partial<PricePeriodInput> }) => updatePricePeriod(id, payload, session),
+    onSuccess: async () => invalidate()
+  });
+  const remove = useGuardedMutation({
+    mutationFn: (id: number) => deletePricePeriod(id, session),
+    onSuccess: async () => invalidate()
+  });
   return { create, update, remove };
 }

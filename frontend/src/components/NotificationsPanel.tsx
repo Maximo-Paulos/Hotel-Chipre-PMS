@@ -67,8 +67,14 @@ export function NotificationsPanel({ open, onClose }: Props) {
   // api/notifications.ts) -- there is no guest_id on a guest_restriction
   // notification, so that one is deliberately not clickable rather than
   // guessing a route.
-  const handleItemClick = (item: NotificationItem) => {
-    if (!item.is_read) markReadMutation.mutate(item.id);
+  const handleItemClick = async (item: NotificationItem) => {
+    if (!item.is_read) {
+      try {
+        await markReadMutation.mutateAsync(item.id);
+      } catch {
+        // Navigating to the linked entity remains useful even if marking read fails.
+      }
+    }
     if (item.entity_type === "reservation" && item.entity_id && canOpenReservations) {
       openReservation(item.entity_id);
       onClose();
@@ -77,6 +83,14 @@ export function NotificationsPanel({ open, onClose }: Props) {
     if (item.entity_type === "stock_item" && item.entity_id) {
       navigate("/operacion/stock");
       onClose();
+    }
+  };
+
+  const handleMarkAllRead = async () => {
+    try {
+      await markAllReadMutation.mutateAsync();
+    } catch {
+      // The inbox remains visible so the operator can retry.
     }
   };
 
@@ -131,7 +145,7 @@ export function NotificationsPanel({ open, onClose }: Props) {
           {unreadCount > 0 && (
             <button
               type="button"
-              onClick={() => markAllReadMutation.mutate()}
+              onClick={() => void handleMarkAllRead()}
               disabled={markAllReadMutation.isPending || !isOnline}
               className="min-h-11 rounded-lg px-2 text-xs font-semibold text-brand-700 hover:bg-brand-50 disabled:opacity-60"
             >

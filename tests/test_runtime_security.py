@@ -1,3 +1,5 @@
+import pytest
+
 from app.config import Settings, get_settings, validate_runtime_security
 
 
@@ -182,6 +184,23 @@ def test_validate_runtime_security_accepts_strong_production_settings():
 
     validate_runtime_security(settings)
     get_settings.cache_clear()
+
+
+def test_validate_runtime_security_requires_realtime_events_in_production():
+    settings = Settings(
+        APP_ENV="production",
+        REALTIME_EVENTS_ENABLED=False,
+        JWT_SECRET="super-secret-value-for-production-1234567890",
+        MASTER_ADMIN_PIN="654321",
+        APP_BASE_URL="https://hotel-chipre.example.com",
+        DISTRIBUTED_LOCK_ENABLED=True,
+        DISTRIBUTED_LOCK_REQUIRED=True,
+        INTEGRATIONS_ENCRYPTION_KEY="fRb9jE74bWw5gAKpNwZrl_uCWhsx2Nl7fNL1jK5vLG8=",
+        EMAIL_PROVIDER="null",
+    )
+
+    with pytest.raises(RuntimeError, match="REALTIME_EVENTS_ENABLED"):
+        validate_runtime_security(settings)
 
 
 def test_validate_runtime_security_rejects_unsafe_production_sandbox_profile():

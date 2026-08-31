@@ -90,6 +90,63 @@ def _reapply_tenant_context(session: Session, transaction, connection) -> None:
     reapply_tenant_context_on_connection(session, connection)
 
 
+@event.listens_for(Session, "after_commit")
+def _publish_realtime_events_after_commit(session: Session) -> None:
+    """Publish only after the database accepted the transaction.
+
+    Redis is an invalidation transport, never the source of truth. The
+    publisher catches its own failures so an unavailable realtime backend
+    cannot make an already-committed hotel operation look unsuccessful.
+    """
+
+    # SQLAlchemy emits ``after_commit`` for a SAVEPOINT as well as for the
+    # root transaction.  A SAVEPOINT commit is still reversible by the outer
+    # rollback, so defer publication until the root commit callback.
+    if session.get_nested_transaction() is not None:
+        return
+    from app.services.domain_events import publish_queued_domain_changes
+
+    publish_queued_domain_changes(session)
+
+
+@event.listens_for(Session, "after_flush")
+def _collect_realtime_events_after_flush(session: Session, flush_context) -> None:
+    """Collect model changes while the transaction can still be rolled back."""
+
+    from app.services.domain_events import queue_model_changes
+
+    queue_model_changes(session)
+
+
+@event.listens_for(Session, "after_rollback")
+def _discard_realtime_events_after_rollback(session: Session) -> None:
+    """Ensure rolled-back writes never leak to another browser/device."""
+
+    # SQLAlchemy also emits ``after_rollback`` for a failed SAVEPOINT.  The
+    # outer transaction may still commit (payment idempotency and other
+    # services use nested transactions), so retain its pending signals until
+    # the root transaction ends.
+    if session.get_nested_transaction() is not None:
+        return
+    from app.services.domain_events import discard_queued_domain_changes
+
+    discard_queued_domain_changes(session)
+
+
+@event.listens_for(Session, "after_soft_rollback")
+def _discard_realtime_events_after_root_soft_rollback(session: Session, previous_transaction) -> None:
+    """Prune a failed SAVEPOINT or clear a completed root rollback."""
+
+    from app.services.domain_events import discard_queued_domain_changes
+
+    if getattr(previous_transaction, "nested", False):
+        discard_queued_domain_changes(session, id(previous_transaction))
+        return
+    if session.in_transaction():
+        return
+    discard_queued_domain_changes(session)
+
+
 def get_engine(database_url: str | None = None):
     """Create a SQLAlchemy engine for SQLite (dev) or PostgreSQL (prod)."""
     url = database_url or get_settings().DATABASE_URL

@@ -78,6 +78,7 @@ export default function ManualOtaReservationModal({ open, onClose }: ManualOtaRe
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<Reservation | null>(null);
   const containerRef = useDialogA11y(open, () => {
+    if (createManualOtaMutation.isPending || guestMutation.isPending) return;
     reset();
     onClose();
   });
@@ -97,6 +98,7 @@ export default function ManualOtaReservationModal({ open, onClose }: ManualOtaRe
   };
 
   const handleClose = () => {
+    if (createManualOtaMutation.isPending || guestMutation.isPending) return;
     reset();
     onClose();
   };
@@ -166,8 +168,8 @@ export default function ManualOtaReservationModal({ open, onClose }: ManualOtaRe
     const totalAmount = amountArs !== null ? amountArs : amountUsd;
     const targetCurrency = amountArs !== null ? "ARS" : amountUsd !== null ? "USD" : null;
 
-    createManualOtaMutation.mutate(
-      {
+    try {
+      const reservation = await createManualOtaMutation.mutateAsync({
         guest_id: guestIdNum,
         category_id: categoryIdNum,
         room_id: form.room_id ? Number(form.room_id) : null,
@@ -182,13 +184,11 @@ export default function ManualOtaReservationModal({ open, onClose }: ManualOtaRe
         quoted_amount_ars: amountArs,
         quoted_amount_usd: amountUsd,
         amount_paid: amountPaid
-      },
-      {
-        onSuccess: (reservation) => setCreated(reservation),
-        onError: (err: unknown) =>
-          setError(err instanceof Error ? err.message : "No se pudo guardar la reserva de OTA")
-      }
-    );
+      });
+      setCreated(reservation);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "No se pudo guardar la reserva de OTA");
+    }
   };
 
   return (

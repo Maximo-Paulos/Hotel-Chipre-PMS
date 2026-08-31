@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   createCompany,
@@ -17,7 +17,10 @@ import {
   type CompanyPayload
 } from "../api/companies";
 import { hasValidSession } from "../api/client";
+import { refreshSettingsState } from "../api/queryInvalidation";
 import { useSession } from "../state/session";
+
+import { useGuardedMutation } from "./useGuardedMutation";
 
 const companiesKey = (hotelId: number | null) => ["companies", hotelId];
 const companyDocumentsKey = (hotelId: number | null, companyId: number) => ["company-documents", hotelId, companyId];
@@ -45,27 +48,27 @@ export function useCompanyDocuments(companyId?: number) {
 export function useCompanyMutations() {
   const queryClient = useQueryClient();
   const { session } = useSession();
-  const invalidateCompanies = () => queryClient.invalidateQueries({ queryKey: companiesKey(session.hotelId) });
+  const invalidateCompanies = () => refreshSettingsState(queryClient, session.hotelId);
 
-  const createMutation = useMutation({
+  const createMutation = useGuardedMutation({
     mutationFn: (payload: CompanyPayload) => createCompany(payload, session),
-    onSuccess: invalidateCompanies
+    onSuccess: async () => invalidateCompanies()
   });
 
-  const updateMutation = useMutation({
+  const updateMutation = useGuardedMutation({
     mutationFn: ({ companyId, payload }: { companyId: number; payload: Partial<CompanyPayload> }) =>
       updateCompany(companyId, payload, session),
-    onSuccess: invalidateCompanies
+    onSuccess: async () => invalidateCompanies()
   });
 
-  const deactivateMutation = useMutation({
+  const deactivateMutation = useGuardedMutation({
     mutationFn: (companyId: number) => deactivateCompany(companyId, session),
-    onSuccess: invalidateCompanies
+    onSuccess: async () => invalidateCompanies()
   });
 
-  const reactivateMutation = useMutation({
+  const reactivateMutation = useGuardedMutation({
     mutationFn: (companyId: number) => reactivateCompany(companyId, session),
-    onSuccess: invalidateCompanies
+    onSuccess: async () => invalidateCompanies()
   });
 
   return { createMutation, updateMutation, deactivateMutation, reactivateMutation };
@@ -74,27 +77,24 @@ export function useCompanyMutations() {
 export function useCompanyDocumentMutations(companyId?: number) {
   const queryClient = useQueryClient();
   const { session } = useSession();
+  void companyId;
 
-  const invalidateDocuments = () => {
-    if (companyId) {
-      queryClient.invalidateQueries({ queryKey: companyDocumentsKey(session.hotelId, companyId) });
-    }
-  };
+  const invalidateDocuments = () => refreshSettingsState(queryClient, session.hotelId);
 
-  const createDocumentMutation = useMutation({
+  const createDocumentMutation = useGuardedMutation({
     mutationFn: (payload: CompanyDocumentPayload) => createCompanyDocument(payload, session),
-    onSuccess: invalidateDocuments
+    onSuccess: async () => invalidateDocuments()
   });
 
-  const updateStatusMutation = useMutation({
+  const updateStatusMutation = useGuardedMutation({
     mutationFn: ({ documentId, status }: { documentId: number; status: CompanyDocumentStatus }) =>
       updateCompanyDocumentStatus(documentId, status, session),
-    onSuccess: invalidateDocuments
+    onSuccess: async () => invalidateDocuments()
   });
 
-  const deleteDocumentMutation = useMutation({
+  const deleteDocumentMutation = useGuardedMutation({
     mutationFn: (documentId: number) => deleteCompanyDocument(documentId, session),
-    onSuccess: invalidateDocuments
+    onSuccess: async () => invalidateDocuments()
   });
 
   return { createDocumentMutation, updateStatusMutation, deleteDocumentMutation };
