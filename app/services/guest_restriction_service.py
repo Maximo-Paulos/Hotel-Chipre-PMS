@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy import or_
@@ -32,6 +32,7 @@ from app.services.permission_service import (
     resolve as resolve_permission,
 )
 from app.services.reservation_service import active_reservations
+from app.services.timezones import hotel_today
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +90,7 @@ def get_active_guest_restrictions(db: Session, *, hotel_id: int, guest_id: int) 
 def _flag_future_active_reservations(db: Session, *, hotel_id: int, guest_id: int) -> None:
     """Mark every future, non-cancelled/non-no-show reservation for this
     guest for manual review. Past reservations are left untouched."""
-    today = date.today()
+    today = hotel_today(db, hotel_id)
     reservations = (
         active_reservations(db, hotel_id)
         .filter(

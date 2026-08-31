@@ -39,6 +39,7 @@ from sqlalchemy.orm import Session
 from app.models.hotel_config import HotelConfiguration
 from app.services.pricing_service import resolve_rate_calendar
 from app.services.promotion_service import PromotionMatchContext, apply_promotions_to_night, find_applicable_promotions
+from app.services.timezones import hotel_today
 
 MONEY_QUANTUM = Decimal("0.01")
 
@@ -125,7 +126,7 @@ def compute_canonical_stay_pricing(
 
     nights = (check_out - check_in).days
     base_currency = _hotel_default_currency(db, hotel_id=hotel_id)
-    booking_date = booking_date or date.today()
+    booking_date = booking_date or hotel_today(db, hotel_id)
 
     if manual_override_total is not None:
         total = _quantize(Decimal(manual_override_total))

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
-from datetime import date, timedelta
+from datetime import timedelta
 from typing import Any
 
 from sqlalchemy import func
@@ -13,6 +13,7 @@ from app.models.operations import RoomMoveEvent
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.room import Room
 from app.services.allocation_policy_service import get_active_policy_settings
+from app.services.timezones import local_today
 from app.services.reservation_action_service import list_pending_reservation_actions
 from app.services.reservation_service import active_reservations
 
@@ -37,7 +38,7 @@ def build_gemma_hotel_context(
     if hotel is None:
         raise ValueError(f"Hotel {hotel_id} not found")
 
-    today = date.today()
+    today = local_today(hotel.hotel_timezone)
     lookback_start = today - timedelta(days=lookback_days)
     horizon_end = today + timedelta(days=horizon_days)
 

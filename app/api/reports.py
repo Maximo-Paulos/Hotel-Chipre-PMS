@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from app.database import get_db
+from app.services.timezones import hotel_today
 from app.dependencies.auth import AuthContext, require_permission
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.transaction import Transaction, TransactionStatusEnum, PaymentMethodEnum
@@ -46,7 +47,7 @@ def operational_daily_report(
     context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_OPERATIONAL_VIEW)),
 ):
     if report_date is None:
-        report_date = date.today()
+        report_date = hotel_today(db, context.hotel_id)
     report = DailyOperationalReportRead.model_validate(
         get_cached_daily_report_payload(
             hotel_id=context.hotel_id,
@@ -66,7 +67,7 @@ def operational_alerts(
     context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_OPERATIONAL_VIEW)),
 ):
     if report_date is None:
-        report_date = date.today()
+        report_date = hotel_today(db, context.hotel_id)
     summary = build_nightly_summary(db, context.hotel_id, report_date)
     if resolve(db, context.hotel_id, context.user_role, PERMISSION_REPORTS_FINANCIAL_VIEW, user_id=context.user_id):
         return summary
@@ -80,7 +81,7 @@ def trigger_nightly_summary_delivery(
     context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_OPERATIONAL_VIEW)),
 ):
     if report_date is None:
-        report_date = date.today()
+        report_date = hotel_today(db, context.hotel_id)
     recipients = operational_report_recipients(db, context.hotel_id)
     if not recipients:
         raise HTTPException(status_code=400, detail="No operational report recipients configured for this hotel")
@@ -127,7 +128,7 @@ def daily_report(
     Shows arrivals, departures, occupancy, revenue collected, and pending payments for a given date.
     """
     if report_date is None:
-        report_date = date.today()
+        report_date = hotel_today(db, context.hotel_id)
 
     next_day = report_date + timedelta(days=1)
 
@@ -186,7 +187,7 @@ def daily_report(
         ReservationStatusEnum.PENDING,
         ReservationStatusEnum.DEPOSIT_PAID,
         ReservationStatusEnum.FULLY_PAID,
-    ) and r.check_in_date < date.today()]
+    ) and r.check_in_date < hotel_today(db, context.hotel_id)]
 
     return {
         "report_date": str(report_date),
@@ -258,9 +259,9 @@ def occupancy_report(
 ):
     """Occupancy report for a date range (default: last 30 days)."""
     if start_date is None:
-        start_date = date.today() - timedelta(days=30)
+        start_date = hotel_today(db, context.hotel_id) - timedelta(days=30)
     if end_date is None:
-        end_date = date.today()
+        end_date = hotel_today(db, context.hotel_id)
     # The sweep-line below materializes one row per overlapping reservation,
     # not per day, so an unbounded range on a hotel with a long history could
     # still pull an unbounded result set into memory. Cap the window instead
@@ -332,9 +333,9 @@ def revenue_report(
 ):
     """Revenue report for a date range."""
     if start_date is None:
-        start_date = date.today() - timedelta(days=30)
+        start_date = hotel_today(db, context.hotel_id) - timedelta(days=30)
     if end_date is None:
-        end_date = date.today()
+        end_date = hotel_today(db, context.hotel_id)
 
     reservation_scope = active_reservations(db, context.hotel_id)
 

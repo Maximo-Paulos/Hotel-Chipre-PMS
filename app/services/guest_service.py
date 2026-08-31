@@ -14,6 +14,7 @@ from app.models.guest import Guest, GuestRatingEnum, GuestTag, GuestTagTypeEnum
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.security_audit_log import SecurityAuditLog
 from app.services.reservation_service import active_reservations
+from app.services.timezones import hotel_today
 
 
 class GuestServiceError(Exception):
@@ -248,8 +249,6 @@ def quick_profile(
     ``stays_by_status`` breakdown (previas / futuras / canceladas / no_show)
     plus ``total_stays`` for the "Mostrar más" pagination.
     """
-    from datetime import date as _date
-
     guest = _get_guest(db, hotel_id, guest_id)
 
     base_query = (
@@ -264,7 +263,7 @@ def quick_profile(
     page_limit = max(int(limit if limit is not None else 5), 0)
     page = base_query.offset(page_offset).limit(page_limit).all()
 
-    today = _date.today()
+    today = hotel_today(db, hotel_id)
     previas: list[dict[str, Any]] = []
     futuras: list[dict[str, Any]] = []
     canceladas: list[dict[str, Any]] = []

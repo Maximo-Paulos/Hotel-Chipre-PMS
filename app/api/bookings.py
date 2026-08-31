@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.services.timezones import hotel_today
 from app.dependencies.auth import AuthContext, require_permission, require_roles
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.audit_log import AuditActionEnum
@@ -389,7 +390,7 @@ def seed_demo_bookings(
 ):
     """Quickly seed demo bookings (requires DEMO_MODE=true)."""
     _require_demo_mode()
-    today = date.today()
+    today = hotel_today(db, context.hotel_id)
 
     category = db.query(RoomCategory).filter(RoomCategory.hotel_id == context.hotel_id).first()
     if not category:

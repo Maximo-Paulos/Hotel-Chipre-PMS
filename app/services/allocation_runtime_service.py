@@ -23,6 +23,7 @@ from app.models.allocation import (
 )
 from app.models.reservation import Reservation
 from app.services.allocation_policy_service import get_active_policy_settings
+from app.services.timezones import hotel_today
 from app.services.allocation_engine import (
     AllocationError,
     AllocationResult,
@@ -62,7 +63,7 @@ def run_persisted_allocation(
     horizon_end: Optional[date] = None,
 ) -> PersistedAllocationResult:
     if horizon_start is None:
-        horizon_start = date.today()
+        horizon_start = hotel_today(db, hotel_id)
     if horizon_end is None:
         horizon_end = horizon_start + timedelta(days=90)
 

@@ -100,3 +100,15 @@ def test_calendar_marks_the_hotel_local_day_as_today(session):
 
     flagged = [day["date"] for day in calendar["days"] if day["is_today"]]
     assert flagged == [date(2026, 8, 30)]
+
+
+def test_hotel_today_reads_the_configured_timezone(session):
+    db, _category_id = session
+
+    assert timezones.hotel_today(db, HOTEL_ID) == date(2026, 8, 30)
+
+
+def test_hotel_today_falls_back_to_utc_for_an_unknown_hotel(session):
+    db, _category_id = session
+
+    assert timezones.hotel_today(db, 999) == date(2026, 8, 31)
