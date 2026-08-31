@@ -1,10 +1,12 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { inviteUser, listUsers, revokeUser, updateUserRole, type InvitePayload } from "../../api/users";
 import { type AuthUser } from "../../api/auth";
 import { hasValidSession } from "../../api/client";
 import { useSession } from "../../state/session";
+import { refreshUserState } from "../../api/queryInvalidation";
+import { useGuardedMutation } from "../../hooks/useGuardedMutation";
 
 type InviteResponse = {
   user: AuthUser;
@@ -28,18 +30,18 @@ export function SettingsUsersPage() {
     enabled: hasValidSession(session),
     queryFn: () => listUsers(session)
   });
-  const inviteMutation = useMutation({
+  const inviteMutation = useGuardedMutation({
     mutationFn: (payload: InvitePayload) => inviteUser(payload, session),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["users", session.hotelId] })
+    onSuccess: async () => refreshUserState(qc, session.hotelId)
   });
-  const revokeMutation = useMutation({
+  const revokeMutation = useGuardedMutation({
     mutationFn: (userId: number) => revokeUser(userId, session),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["users", session.hotelId] })
+    onSuccess: async () => refreshUserState(qc, session.hotelId)
   });
-  const updateRoleMutation = useMutation({
+  const updateRoleMutation = useGuardedMutation({
     mutationFn: (payload: { userId: number; role: InvitePayload["role"] }) =>
       updateUserRole(payload.userId, payload.role, session),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["users", session.hotelId] })
+    onSuccess: async () => refreshUserState(qc, session.hotelId)
   });
 
   const [inviteForm, setInviteForm] = useState<InvitePayload>({ email: "", role: "manager" });
@@ -49,6 +51,32 @@ export function SettingsUsersPage() {
   // their roles, i.e. who can access this hotel account at all. Must
   // reflect the real user, not the "Cambiar vista" preview role.
   const canManage = ["owner", "co_owner"].includes(session.baseRole ?? "");
+
+  const handleInvite = async () => {
+    try {
+      const response = await inviteMutation.mutateAsync(inviteForm) as InviteResponse;
+      setInviteLink(response.accept_url || response.invite_token || null);
+      setInviteForm({ email: "", role: "manager" });
+    } catch {
+      // The mutation state renders the safe backend error below.
+    }
+  };
+
+  const handleRoleChange = async (userId: number, role: InvitePayload["role"]) => {
+    try {
+      await updateRoleMutation.mutateAsync({ userId, role });
+    } catch {
+      // The mutation state renders the safe backend error below.
+    }
+  };
+
+  const handleRevoke = async (userId: number) => {
+    try {
+      await revokeMutation.mutateAsync(userId);
+    } catch {
+      // The mutation state renders the safe backend error below.
+    }
+  };
 
   if (!hasValidSession(session)) {
     return <p className="text-sm text-slate-600">Iniciá sesión con un hotel activo para administrar usuarios.</p>;
@@ -86,14 +114,7 @@ export function SettingsUsersPage() {
             </select>
             <button
               type="button"
-              onClick={() =>
-                inviteMutation.mutate(inviteForm, {
-                  onSuccess: (res: InviteResponse) => {
-                    setInviteLink(res.accept_url || res.invite_token || null);
-                    setInviteForm({ email: "", role: "manager" });
-                  }
-                })
-              }
+              onClick={() => void handleInvite()}
               disabled={inviteMutation.isPending || !inviteForm.email}
               className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-60"
             >
@@ -148,9 +169,7 @@ export function SettingsUsersPage() {
                         className="rounded-lg border border-slate-200 px-2 py-1 text-sm"
                         aria-label={`Rol de ${u.email}`}
                         value={u.role}
-                        onChange={(e) =>
-                          updateRoleMutation.mutate({ userId: u.id, role: e.target.value as InvitePayload["role"] })
-                        }
+                        onChange={(e) => void handleRoleChange(u.id, e.target.value as InvitePayload["role"])}
                       >
                         <option value="co_owner">Co-owner</option>
                         <option value="manager">Manager</option>
@@ -172,7 +191,7 @@ export function SettingsUsersPage() {
                     {canManage && session.userId !== u.email && (
                       <button
                         type="button"
-                        onClick={() => revokeMutation.mutate(u.id)}
+                        onClick={() => void handleRevoke(u.id)}
                         className="text-sm font-semibold text-rose-600 hover:underline"
                       >
                         Revocar

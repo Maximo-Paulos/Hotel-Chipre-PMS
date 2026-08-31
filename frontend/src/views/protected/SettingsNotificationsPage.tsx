@@ -126,6 +126,7 @@ function PreferencesCard() {
   const preferencesQuery = useNotificationPreferences();
   const mutation = useNotificationPreferenceMutation();
   const [pendingKey, setPendingKey] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const rows = useMemo<NotificationPreference[]>(() => {
     const saved = new Map((preferencesQuery.data ?? []).map((row) => [row.event_type, row]));
@@ -143,13 +144,21 @@ function PreferencesCard() {
     );
   }, [preferencesQuery.data]);
 
-  const save = (eventType: string, patch: Omit<NotificationPreferenceUpdate, "event_type">) => {
+  const save = async (eventType: string, patch: Omit<NotificationPreferenceUpdate, "event_type">) => {
     setPendingKey(eventType);
-    mutation.mutate({ event_type: eventType, ...patch }, { onSettled: () => setPendingKey(null) });
+    setSaveError(null);
+    try {
+      await mutation.mutateAsync({ event_type: eventType, ...patch });
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "No se pudo guardar la preferencia.");
+    } finally {
+      setPendingKey(null);
+    }
   };
 
   return (
     <Card title="Preferencias por tipo de alerta">
+      {saveError ? <p className="mb-3 text-sm text-rose-700" role="alert">{saveError}</p> : null}
       <p className="mb-3 text-sm text-slate-600">
         "Predeterminado" aplica a toda alerta sin una preferencia propia debajo. Un tipo específico siempre gana sobre
         el predeterminado.
@@ -175,7 +184,7 @@ function PreferencesCard() {
                           checked={row[key]}
                           disabled={disabled}
                           onChange={(event) =>
-                            save(row.event_type, { [key]: event.target.checked } as Partial<NotificationPreferenceUpdate>)
+                            void save(row.event_type, { [key]: event.target.checked } as Partial<NotificationPreferenceUpdate>)
                           }
                         />
                         {channel.label}
@@ -189,7 +198,7 @@ function PreferencesCard() {
                     value={row.quiet_hours_start ?? ""}
                     disabled={disabled}
                     onChange={(event) =>
-                      save(row.event_type, {
+                      void save(row.event_type, {
                         quiet_hours_start: event.target.value === "" ? null : Number(event.target.value)
                       })
                     }
@@ -207,7 +216,7 @@ function PreferencesCard() {
                     value={row.quiet_hours_end ?? ""}
                     disabled={disabled}
                     onChange={(event) =>
-                      save(row.event_type, {
+                      void save(row.event_type, {
                         quiet_hours_end: event.target.value === "" ? null : Number(event.target.value)
                       })
                     }
@@ -224,7 +233,7 @@ function PreferencesCard() {
                     <button
                       type="button"
                       disabled={disabled}
-                      onClick={() => save(row.event_type, { clear_quiet_hours: true })}
+                      onClick={() => void save(row.event_type, { clear_quiet_hours: true })}
                       className="min-h-11 rounded-lg border border-slate-200 px-2 text-slate-700 hover:bg-slate-50"
                     >
                       Quitar
@@ -272,12 +281,13 @@ function DailyReportScheduleCard() {
   const toggle = (list: string[], value: string) =>
     list.includes(value) ? list.filter((item) => item !== value) : [...list, value];
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setError(null);
-    mutation.mutate(
-      { hour, recipient_user_ids: recipientUserIds, recipient_roles: recipientRoles, channels, sections, enabled },
-      { onError: (err: unknown) => setError(err instanceof Error ? err.message : "No se pudo guardar el reporte diario.") }
-    );
+    try {
+      await mutation.mutateAsync({ hour, recipient_user_ids: recipientUserIds, recipient_roles: recipientRoles, channels, sections, enabled });
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "No se pudo guardar el reporte diario.");
+    }
   };
 
   return (

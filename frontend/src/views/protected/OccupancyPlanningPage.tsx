@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { OccupancyGrid, type RoomDropTarget } from "../../components/OccupancyGrid";
 import { moveReservationRoom } from "../../api/reservations";
@@ -10,6 +10,8 @@ import { ROOM_MOVE_REASONS, moveBlockedReason } from "../../utils/roomMove";
 import { useReservationDrawer } from "../../hooks/useReservationDrawer";
 import { addDaysIso, todayIso } from "../../hooks/useRateCalendar";
 import { useOccupancyGrid, usePrefetchOccupancyGrid } from "../../hooks/useReservations";
+import { refreshReservationState } from "../../api/queryInvalidation";
+import { useGuardedMutation } from "../../hooks/useGuardedMutation";
 
 const WINDOW_DAYS = 30;
 
@@ -62,16 +64,15 @@ export function OccupancyPlanningPage() {
     || hasPermission("reservation:move_category")
     || hasPermission("reservation:move_capacity");
 
-  const moveMutation = useMutation({
+  const moveMutation = useGuardedMutation({
     mutationFn: ({ reservationId, toRoomId }: { reservationId: number; toRoomId: number }) =>
       moveReservationRoom(
         reservationId,
         { to_room_id: toRoomId, reason_code: moveReason, notes: moveNotes || null, price_action: "keep" },
         session
       ),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["occupancy-grid"] });
-      queryClient.invalidateQueries({ queryKey: ["reservations", session.hotelId] });
+    onSuccess: async () => {
+      await refreshReservationState(queryClient, session.hotelId);
       setPendingMove(null);
       setMoveReason("");
       setMoveNotes("");
@@ -84,6 +85,15 @@ export function OccupancyPlanningPage() {
       setMoveError(detail ?? "No se pudo mover la reserva.");
     }
   });
+
+  const handleConfirmMove = async () => {
+    if (!pendingMove || !moveReason || moveMutation.isPending) return;
+    try {
+      await moveMutation.mutateAsync(pendingMove);
+    } catch {
+      // The mutation's onError callback renders the safe backend message.
+    }
+  };
 
 
   // Prefetch the previous/next windows so ±30 navigation feels instant --
@@ -236,7 +246,7 @@ export function OccupancyPlanningPage() {
               <button
                 type="button"
                 disabled={!moveReason || moveMutation.isPending}
-                onClick={() => moveMutation.mutate(pendingMove)}
+                onClick={() => void handleConfirmMove()}
                 className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
               >
                 {moveMutation.isPending ? "Moviendo..." : "Confirmar"}

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   addReservationCharge,
@@ -71,6 +71,9 @@ import {
 import ReservationStatCard from "../../components/StatCard";
 import { ROOM_MOVE_REASONS, moveBlockedReason } from "../../utils/roomMove";
 import { useEffectivePermissions } from "../../hooks/usePermissions";
+import { useCollaborativeResource } from "../../hooks/useCollaborativeResource";
+import { refreshReservationState } from "../../api/queryInvalidation";
+import { useGuardedMutation } from "../../hooks/useGuardedMutation";
 
 
 
@@ -279,7 +282,7 @@ export function ReservationsPage() {
   const detailsSummaryQuery = usePaymentSummary(detailsReservationId || undefined);
   const detailsOperationsQuery = useReservationOperationsSummary(detailsReservationId || undefined);
   const paymentMutation = usePaymentMutation(editing?.id || undefined);
-  const availabilityMutation = useMutation<RoomAvailabilityResponse, unknown, { category_id: number; check_in_date: string; check_out_date: string }>({
+  const availabilityMutation = useGuardedMutation<RoomAvailabilityResponse, unknown, { category_id: number; check_in_date: string; check_out_date: string }>({
     mutationFn: (payload) => checkRoomAvailability(payload, session)
   });
   const { createMutation, updateMutation, cancelMutation, checkInMutation, checkOutMutation } = useReservationMutations(filters);
@@ -291,24 +294,33 @@ export function ReservationsPage() {
     enabled: hasValidSession(session),
     staleTime: 1000 * 15
   });
+  const collaborativeReservation = useCollaborativeResource({
+    resourceType: "reservation",
+    resourceId: editing?.id,
+    initialValues: editing
+      ? {
+          room_id: editing.room_id,
+          check_in_date: editing.check_in_date,
+          check_out_date: editing.check_out_date,
+          num_adults: editing.num_adults,
+          num_children: editing.num_children,
+          notes: editing.notes ?? null,
+          mobility_restriction: false
+        }
+      : null,
+    enabled: Boolean(formOpen && editing)
+  });
 
-  const invalidateAllocationState = () => {
-    queryClient.invalidateQueries({ queryKey: ["reservations", session.hotelId] });
-    queryClient.invalidateQueries({ queryKey: ["reservation", session.hotelId] });
-    queryClient.invalidateQueries({ queryKey: ["reservation-operations", session.hotelId] });
-    queryClient.invalidateQueries({ queryKey: ["reservation-pending-actions", session.hotelId] });
-    queryClient.invalidateQueries({ queryKey: ["room-movement-groups", session.hotelId] });
-    queryClient.invalidateQueries({ queryKey: ["payment-summary", session.hotelId] });
-  };
+  const invalidateAllocationState = () => refreshReservationState(queryClient, session.hotelId);
 
-  const roomMoveMutation = useMutation<
+  const roomMoveMutation = useGuardedMutation<
     ReservationRoomMoveResponse,
     unknown,
     { reservationId: number; payload: ReservationRoomMovePayload }
   >({
     mutationFn: ({ reservationId, payload }) => moveReservationRoom(reservationId, payload, session),
-    onSuccess: (result) => {
-      invalidateAllocationState();
+    onSuccess: async (result) => {
+      await invalidateAllocationState();
       setRoomMoveForm({ to_room_id: "", reason_code: "", notes: "", price_action: "keep" });
       const currency = normalizeCurrencyCode(result.currency_code);
       if (!result.category_changed || result.amount_delta === 0) {
@@ -326,19 +338,19 @@ export function ReservationsPage() {
     }
   });
 
-  const noShowMutation = useMutation<Reservation, unknown, { reservationId: number; payload: ReservationNoShowPayload }>({
+  const noShowMutation = useGuardedMutation<Reservation, unknown, { reservationId: number; payload: ReservationNoShowPayload }>({
     mutationFn: ({ reservationId, payload }) => markReservationNoShow(reservationId, payload, session),
-    onSuccess: () => {
-      invalidateAllocationState();
+    onSuccess: async () => {
+      await invalidateAllocationState();
       setNoShowNotes("");
       showToast("success", "No-show registrado.");
     }
   });
 
-  const chargeMutation = useMutation<unknown, unknown, { reservationId: number; payload: ReservationChargePayload }>({
+  const chargeMutation = useGuardedMutation<unknown, unknown, { reservationId: number; payload: ReservationChargePayload }>({
     mutationFn: ({ reservationId, payload }) => addReservationCharge(reservationId, payload, session),
-    onSuccess: () => {
-      invalidateAllocationState();
+    onSuccess: async () => {
+      await invalidateAllocationState();
       setChargeForm({ description: "", amount: "" });
       showToast("success", "Consumo cargado a la reserva.");
     },
@@ -347,7 +359,7 @@ export function ReservationsPage() {
     }
   });
 
-  const allocationRunMutation = useMutation<AllocationRunResponse, unknown, typeof allocationForm>({
+  const allocationRunMutation = useGuardedMutation<AllocationRunResponse, unknown, typeof allocationForm>({
     mutationFn: (payload) =>
       triggerAllocationRecalculation(
         {
@@ -357,12 +369,12 @@ export function ReservationsPage() {
         },
         session
       ),
-    onSuccess: invalidateAllocationState
+    onSuccess: async () => invalidateAllocationState()
   });
 
-  const revertMovementGroupMutation = useMutation<RoomMovementGroup, unknown, number>({
+  const revertMovementGroupMutation = useGuardedMutation<RoomMovementGroup, unknown, number>({
     mutationFn: (groupId) => revertRoomMovementGroup(groupId, session),
-    onSuccess: invalidateAllocationState
+    onSuccess: async () => invalidateAllocationState()
   });
 
   const showToast = (type: "success" | "error" | "info", message: string) => {
@@ -617,6 +629,17 @@ export function ReservationsPage() {
   };
 
   const closeForm = () => {
+    if (
+      collaborativeReservation.isSaving ||
+      paymentMutation.isPending ||
+      paymentProofMutations.submitMutation.isPending ||
+      paymentProofMutations.approveMutation.isPending ||
+      paymentProofMutations.rejectMutation.isPending ||
+      paymentLinkCreate.isPending ||
+      paymentLinkCancel.isPending
+    ) {
+      return;
+    }
     setFormOpen(false);
     setEditing(null);
     setFormError(null);
@@ -627,6 +650,38 @@ export function ReservationsPage() {
     setPaymentProofFile(null);
   };
 
+  const collaborativeFormValues: FormState = editing
+    ? {
+        ...formValues,
+        room_id:
+          collaborativeReservation.draftValues.room_id === null || collaborativeReservation.draftValues.room_id === undefined
+            ? ""
+            : String(collaborativeReservation.draftValues.room_id),
+        check_in_date: String(collaborativeReservation.draftValues.check_in_date ?? formValues.check_in_date),
+        check_out_date: String(collaborativeReservation.draftValues.check_out_date ?? formValues.check_out_date),
+        num_adults: String(collaborativeReservation.draftValues.num_adults ?? formValues.num_adults),
+        num_children: String(collaborativeReservation.draftValues.num_children ?? formValues.num_children),
+        notes: String(collaborativeReservation.draftValues.notes ?? "")
+      }
+    : formValues;
+
+  const setReservationField = (
+    field: "room_id" | "check_in_date" | "check_out_date" | "num_adults" | "num_children" | "notes",
+    value: string
+  ) => {
+    setFormValues((previous) => ({ ...previous, [field]: value }));
+    if (!editing) return;
+    const normalizedValue =
+      field === "room_id"
+        ? value
+          ? Number(value)
+          : null
+        : field === "num_adults" || field === "num_children"
+          ? Number(value)
+          : value;
+    collaborativeReservation.setField(field, normalizedValue);
+  };
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setFormError(null);
@@ -635,8 +690,9 @@ export function ReservationsPage() {
       return;
     }
 
-    const categoryIdNum = Number(formValues.category_id);
-    let guestIdNum = Number(formValues.guest_id);
+    const currentFormValues = collaborativeFormValues;
+    const categoryIdNum = Number(currentFormValues.category_id);
+    let guestIdNum = Number(currentFormValues.guest_id);
     if (!editing && (!guestIdNum || Number.isNaN(guestIdNum))) {
       if (!hasQuickGuestFormData(guestForm)) {
         setFormError("Ingresá el ID del huésped o completá los datos para crearlo automáticamente.");
@@ -667,12 +723,12 @@ export function ReservationsPage() {
       setFormError("Seleccioná una Categoría (ID numérico).");
       return;
     }
-    if (!formValues.check_in_date || !formValues.check_out_date) {
+    if (!currentFormValues.check_in_date || !currentFormValues.check_out_date) {
       setFormError("Elegí fechas de ingreso y salida.");
       return;
     }
 
-    const baseDatesValid = new Date(formValues.check_out_date) > new Date(formValues.check_in_date);
+    const baseDatesValid = new Date(currentFormValues.check_out_date) > new Date(currentFormValues.check_in_date);
     if (!baseDatesValid) {
       setFormError("La fecha de salida debe ser posterior al ingreso.");
       return;
@@ -697,12 +753,12 @@ export function ReservationsPage() {
 
     const commonPayload = {
       category_id: categoryIdNum,
-      room_id: formValues.room_id ? Number(formValues.room_id) : null,
-      check_in_date: formValues.check_in_date,
-      check_out_date: formValues.check_out_date,
-      num_adults: Number(formValues.num_adults) || 1,
-      num_children: Number(formValues.num_children) || 0,
-      notes: formValues.notes || undefined
+      room_id: currentFormValues.room_id ? Number(currentFormValues.room_id) : null,
+      check_in_date: currentFormValues.check_in_date,
+      check_out_date: currentFormValues.check_out_date,
+      num_adults: Number(currentFormValues.num_adults) || 1,
+      num_children: Number(currentFormValues.num_children) || 0,
+      notes: currentFormValues.notes || undefined
     };
 
     if (editing) {
@@ -713,33 +769,42 @@ export function ReservationsPage() {
       // cambian con Check-in/Check-out/Cancelar/Marcar no-show.
       const { category_id, ...updatePayload } = commonPayload;
       void category_id;
-      const submitUpdate = (payload: ReservationUpdatePayload) => {
-        updateMutation.mutate(
-          { id: editing.id, payload },
-          {
-            onSuccess: () => {
-              showToast("success", "Reserva actualizada");
-              closeForm();
-            },
-            onError: (err: unknown) => {
-              // GuestRestriction blocked the update -- prompt for an
-              // override reason and retry the same request with it attached
-              // instead of surfacing a raw 409/403.
-              if (
-                restrictionOverridePrompt.handleError(err, (override) =>
-                  submitUpdate({ ...payload, restriction_override: override })
-                )
-              ) {
-                return;
-              }
-              const msg = err instanceof Error ? err.message : "No se pudo guardar la reserva";
-              setFormError(msg);
-              showToast("error", msg);
+      const submitUpdate = async (payload: ReservationUpdatePayload, forceRegularMutation = false): Promise<void> => {
+        try {
+          // When the authenticated collaboration channel is available, PATCH
+          // performs the field-level merge under the server's current version.
+          // A degraded Redis/WebSocket path never blocks ordinary PMS writes;
+          // the regular endpoint remains the safe fallback.
+          if (!forceRegularMutation && collaborativeReservation.status !== "idle") {
+            if (Object.keys(collaborativeReservation.conflicts).length > 0) {
+              setFormError("Hay conflictos en el formulario. Elegí qué valor conservar antes de guardar.");
+              return;
             }
+            if (collaborativeReservation.isDirty) await collaborativeReservation.save();
+          } else {
+            await updateMutation.mutateAsync({
+              id: editing.id,
+              payload: { ...payload, client_version: editing.version }
+            });
           }
-        );
+          showToast("success", "Reserva actualizada");
+          closeForm();
+        } catch (err: unknown) {
+          // GuestRestriction blocked the update -- prompt for an override
+          // reason and retry the same request through the atomic endpoint.
+          if (
+            restrictionOverridePrompt.handleError(err, (override) =>
+              void submitUpdate({ ...payload, restriction_override: override }, true)
+            )
+          ) {
+            return;
+          }
+          const msg = err instanceof Error ? err.message : "No se pudo guardar la reserva";
+          setFormError(msg);
+          showToast("error", msg);
+        }
       };
-      submitUpdate(updatePayload);
+      await submitUpdate(updatePayload);
     } else {
       // B4: con tarifa manual, la cotización automática (y su quote_token) no
       // aplica -- el backend usaría el total manual igual, pero no tiene
@@ -759,35 +824,33 @@ export function ReservationsPage() {
           ? { total_amount: manualTotalAmount, target_currency: manualTargetCurrency }
           : { quote_token: reservationQuote?.quoteToken })
       };
-      const submitCreate = (payload: ReservationPayload) => {
-        createMutation.mutate(payload, {
-          onSuccess: (created) => {
-            showToast("success", "Reserva creada");
-            if (manualTotalAmount !== null) {
-              // Keep the form open just long enough to show the operator what
-              // currency/cotización the manual total was saved with -- closing
-              // immediately would hide fx_rate_snapshot right after they asked
-              // for a currency conversion.
-              setLastCreatedReservation(created);
-            } else {
-              closeForm();
-            }
-          },
-          onError: (err: unknown) => {
-            if (
-              restrictionOverridePrompt.handleError(err, (override) =>
-                submitCreate({ ...payload, restriction_override: override })
-              )
-            ) {
-              return;
-            }
-            const msg = err instanceof Error ? err.message : "No se pudo crear la reserva";
-            setFormError(msg);
-            showToast("error", msg);
+      const submitCreate = async (payload: ReservationPayload): Promise<void> => {
+        try {
+          const created = await createMutation.mutateAsync(payload);
+          showToast("success", "Reserva creada");
+          if (manualTotalAmount !== null) {
+            // Keep the form open just long enough to show the operator what
+            // currency/cotización the manual total was saved with -- closing
+            // immediately would hide fx_rate_snapshot right after they asked
+            // for a currency conversion.
+            setLastCreatedReservation(created);
+          } else {
+            closeForm();
           }
-        });
+        } catch (err: unknown) {
+          if (
+            restrictionOverridePrompt.handleError(err, (override) =>
+              void submitCreate({ ...payload, restriction_override: override })
+            )
+          ) {
+            return;
+          }
+          const msg = err instanceof Error ? err.message : "No se pudo crear la reserva";
+          setFormError(msg);
+          showToast("error", msg);
+        }
       };
-      submitCreate(createPayload);
+      await submitCreate(createPayload);
     }
   };
 
@@ -799,11 +862,14 @@ export function ReservationsPage() {
   const canMoveRoom = (status: ReservationStatus) => !["cancelled", "checked_out", "no_show"].includes(status);
   const canAddCharge = (status: ReservationStatus) => !["cancelled", "checked_out", "no_show"].includes(status);
 
-  const handleCancel = (id: number) =>
-    cancelMutation.mutate(id, {
-      onSuccess: () => showToast("success", "Reserva cancelada"),
-      onError: (err: unknown) => showToast("error", err instanceof Error ? err.message : "No se pudo cancelar")
-    });
+  const handleCancel = async (id: number) => {
+    try {
+      await cancelMutation.mutateAsync(id);
+      showToast("success", "Reserva cancelada");
+    } catch (err: unknown) {
+      showToast("error", err instanceof Error ? err.message : "No se pudo cancelar");
+    }
+  };
 
   const handleCheckIn = (reservation: Reservation) => {
     if (!isCheckInReady(reservation.status)) {
@@ -817,32 +883,31 @@ export function ReservationsPage() {
       );
       return;
     }
-    const submitCheckIn = (restrictionOverride?: RestrictionOverride) => {
-      checkInMutation.mutate(
-        restrictionOverride ? { id: reservation.id, restriction_override: restrictionOverride } : reservation.id,
-        {
-          onSuccess: () => showToast("success", "Check-in registrado"),
-          onError: (err: unknown) => {
-            if (restrictionOverridePrompt.handleError(err, submitCheckIn)) return;
-            const msg = err instanceof Error ? err.message : "No se pudo hacer check-in";
-            // B3.3/B3.4: this quick action has no room to show the guest-data
-            // capture form inline -- send the receptionist to the reservation
-            // panel, which shows that form up front, instead of leaving them
-            // stuck on a bare 400 with no way to fix it from here.
-            if (msg.includes("missing required guest data")) {
-              openReservation(reservation.id);
-              showToast("info", "Faltan datos del huésped para el check-in: completalos en el panel de la reserva.");
-              return;
-            }
-            showToast("error", msg);
-          }
+    const submitCheckIn = async (restrictionOverride?: RestrictionOverride): Promise<void> => {
+      try {
+        await checkInMutation.mutateAsync(
+          restrictionOverride ? { id: reservation.id, restriction_override: restrictionOverride } : reservation.id
+        );
+        showToast("success", "Check-in registrado");
+      } catch (err: unknown) {
+        if (restrictionOverridePrompt.handleError(err, (override) => void submitCheckIn(override))) return;
+        const msg = err instanceof Error ? err.message : "No se pudo hacer check-in";
+        // B3.3/B3.4: this quick action has no room to show the guest-data
+        // capture form inline -- send the receptionist to the reservation
+        // panel, which shows that form up front, instead of leaving them
+        // stuck on a bare 400 with no way to fix it from here.
+        if (msg.includes("missing required guest data")) {
+          openReservation(reservation.id);
+          showToast("info", "Faltan datos del huésped para el check-in: completalos en el panel de la reserva.");
+          return;
         }
-      );
+        showToast("error", msg);
+      }
     };
-    submitCheckIn();
+    void submitCheckIn();
   };
 
-  const handleCheckOut = (reservation: Reservation) => {
+  const handleCheckOut = async (reservation: Reservation) => {
     // Cierra el loop cobro→estadía→egreso: si queda saldo, llevamos al operador a
     // cobrarlo (Pago total, que cae en la caja) en vez de fallar el check-out.
     // reservation.balance_due sólo cubre total_amount - amount_paid: no ve los
@@ -857,21 +922,21 @@ export function ReservationsPage() {
       );
       return;
     }
-    checkOutMutation.mutate(reservation.id, {
-      onSuccess: () => showToast("success", "Check-out registrado"),
-      onError: (err: unknown) => {
-        const message = err instanceof Error ? err.message : "No se pudo hacer check-out";
-        if (/saldo pendiente/i.test(message)) {
-          openEdit(reservation);
-          showToast("info", `${message} Cobralo con "Pago total" (queda en la caja) y luego hacé el check-out.`);
-          return;
-        }
-        showToast("error", message);
+    try {
+      await checkOutMutation.mutateAsync(reservation.id);
+      showToast("success", "Check-out registrado");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "No se pudo hacer check-out";
+      if (/saldo pendiente/i.test(message)) {
+        openEdit(reservation);
+        showToast("info", `${message} Cobralo con "Pago total" (queda en la caja) y luego hacé el check-out.`);
+        return;
       }
-    });
+      showToast("error", message);
+    }
   };
 
-  const handleCheckAvailability = () => {
+  const handleCheckAvailability = async () => {
     if (!availabilityForm.category_id || !availabilityForm.check_in_date || !availabilityForm.check_out_date) {
       showToast("error", "Completá Categoría y fechas para consultar disponibilidad.");
       return;
@@ -881,19 +946,19 @@ export function ReservationsPage() {
       check_in_date: availabilityForm.check_in_date,
       check_out_date: availabilityForm.check_out_date
     };
-    availabilityMutation.mutate(payload, {
-      onSuccess: (data) => {
-        if (data.status === "ok") {
-          showToast("success", `Disponibles: ${data.count} habitaciones`);
-        } else {
-          showToast("info", data.message);
-        }
-      },
-      onError: (err: unknown) => showToast("error", err instanceof Error ? err.message : "No se pudo consultar disponibilidad")
-    });
+    try {
+      const data = await availabilityMutation.mutateAsync(payload);
+      if (data.status === "ok") {
+        showToast("success", `Disponibles: ${data.count} habitaciones`);
+      } else {
+        showToast("info", data.message);
+      }
+    } catch (err: unknown) {
+      showToast("error", err instanceof Error ? err.message : "No se pudo consultar disponibilidad");
+    }
   };
 
-  const handleAllocationRun = () => {
+  const handleAllocationRun = async () => {
     if (subscriptionBlocked) {
       showToast("error", subscriptionBlockReason || "Accion bloqueada por suscripcion.");
       return;
@@ -907,30 +972,27 @@ export function ReservationsPage() {
       return;
     }
 
-    allocationRunMutation.mutate(allocationForm, {
-      onSuccess: (run) => {
-        showToast(
-          "success",
-          `Asignacion recalculada: ${run.assignments_created} asignadas, ${run.moved_count} movimientos.`
-        );
-      },
-      onError: (err: unknown) =>
-        showToast("error", err instanceof Error ? err.message : "No se pudo recalcular la asignacion")
-    });
+    try {
+      const run = await allocationRunMutation.mutateAsync(allocationForm);
+      showToast("success", `Asignacion recalculada: ${run.assignments_created} asignadas, ${run.moved_count} movimientos.`);
+    } catch (err: unknown) {
+      showToast("error", err instanceof Error ? err.message : "No se pudo recalcular la asignacion");
+    }
   };
 
-  const handleRevertMovementGroup = (group: RoomMovementGroup) => {
+  const handleRevertMovementGroup = async (group: RoomMovementGroup) => {
     const moves = group.move_events.length;
     const confirmed = window.confirm(
       `Revertir el grupo #${group.id}? Se intentaran deshacer ${moves} movimiento${moves === 1 ? "" : "s"} de habitacion.`
     );
     if (!confirmed) return;
 
-    revertMovementGroupMutation.mutate(group.id, {
-      onSuccess: () => showToast("success", `Grupo #${group.id} revertido`),
-      onError: (err: unknown) =>
-        showToast("error", err instanceof Error ? err.message : "No se pudo revertir el grupo")
-    });
+    try {
+      await revertMovementGroupMutation.mutateAsync(group.id);
+      showToast("success", `Grupo #${group.id} revertido`);
+    } catch (err: unknown) {
+      showToast("error", err instanceof Error ? err.message : "No se pudo revertir el grupo");
+    }
   };
 
   const paymentSummary = paymentSummaryQuery.data;
@@ -980,7 +1042,7 @@ export function ReservationsPage() {
       detailsReservation?.currency_code
   );
 
-  const handlePayDeposit = () => {
+  const handlePayDeposit = async () => {
     if (!editing || !paymentSummary) return;
     if (paymentMethod !== "cash") {
       showToast(
@@ -996,22 +1058,21 @@ export function ReservationsPage() {
       showToast("info", "La Seña ya está cubierta.");
       return;
     }
-    paymentMutation.mutate(
-      {
+    try {
+      await paymentMutation.mutateAsync({
         reservation_id: editing.id,
         amount: Number(due.toFixed(2)),
         payment_method: paymentMethod,
         transaction_type: "deposit",
         currency: editingCurrencyCode
-      },
-      {
-        onSuccess: () => showToast("success", "Se registró la Seña"),
-        onError: (err: unknown) => showToast("error", err instanceof Error ? err.message : "No se pudo registrar el pago")
-      }
-    );
+      });
+      showToast("success", "Se registró la Seña");
+    } catch (err: unknown) {
+      showToast("error", err instanceof Error ? err.message : "No se pudo registrar el pago");
+    }
   };
 
-  const handlePayFull = () => {
+  const handlePayFull = async () => {
     if (!editing || !paymentSummary) return;
     if (paymentMethod !== "cash") {
       showToast(
@@ -1027,22 +1088,21 @@ export function ReservationsPage() {
       showToast("info", "No hay saldo pendiente.");
       return;
     }
-    paymentMutation.mutate(
-      {
+    try {
+      await paymentMutation.mutateAsync({
         reservation_id: editing.id,
         amount: Number(due.toFixed(2)),
         payment_method: paymentMethod,
         transaction_type: "full_payment",
         currency: editingCurrencyCode
-      },
-      {
-        onSuccess: () => showToast("success", "Pago completo registrado"),
-        onError: (err: unknown) => showToast("error", err instanceof Error ? err.message : "No se pudo registrar el pago")
-      }
-    );
+      });
+      showToast("success", "Pago completo registrado");
+    } catch (err: unknown) {
+      showToast("error", err instanceof Error ? err.message : "No se pudo registrar el pago");
+    }
   };
 
-  const handlePayPartial = () => {
+  const handlePayPartial = async () => {
     if (!editing || !paymentSummary) return;
     if (paymentMethod !== "cash") {
       showToast(
@@ -1059,25 +1119,22 @@ export function ReservationsPage() {
       showToast("error", "Ingresá un importe positivo que no supere el saldo pendiente.");
       return;
     }
-    paymentMutation.mutate(
-      {
+    try {
+      await paymentMutation.mutateAsync({
         reservation_id: editing.id,
         amount: Number(amount.toFixed(2)),
         payment_method: paymentMethod,
         transaction_type: "partial_payment",
         currency: editingCurrencyCode
-      },
-      {
-        onSuccess: () => {
-          setPaymentAmountInput("");
-          showToast("success", "Cobro parcial registrado");
-        },
-        onError: (err: unknown) => showToast("error", err instanceof Error ? err.message : "No se pudo registrar el pago")
-      }
-    );
+      });
+      setPaymentAmountInput("");
+      showToast("success", "Cobro parcial registrado");
+    } catch (err: unknown) {
+      showToast("error", err instanceof Error ? err.message : "No se pudo registrar el pago");
+    }
   };
 
-  const handleRefund = () => {
+  const handleRefund = async () => {
     if (!editing || !paymentSummary) return;
     if (paymentMethod !== "cash") {
       showToast("info", "La devolución manual se registra en efectivo desde la caja abierta.");
@@ -1090,23 +1147,20 @@ export function ReservationsPage() {
       return;
     }
     if (!window.confirm(`¿Confirmar devolución en efectivo de ${formatMoney(amount, editingCurrencyCode)}?`)) return;
-    paymentMutation.mutate(
-      {
+    try {
+      await paymentMutation.mutateAsync({
         reservation_id: editing.id,
         amount: Number(amount.toFixed(2)),
         payment_method: paymentMethod,
         transaction_type: "refund",
         currency: editingCurrencyCode,
         description: "Devolución manual en efectivo"
-      },
-      {
-        onSuccess: () => {
-          setPaymentAmountInput("");
-          showToast("success", "Devolución registrada");
-        },
-        onError: (err: unknown) => showToast("error", err instanceof Error ? err.message : "No se pudo registrar la devolución")
-      }
-    );
+      });
+      setPaymentAmountInput("");
+      showToast("success", "Devolución registrada");
+    } catch (err: unknown) {
+      showToast("error", err instanceof Error ? err.message : "No se pudo registrar la devolución");
+    }
   };
 
   const handleSubmitTransferProof = async () => {
@@ -1154,26 +1208,32 @@ export function ReservationsPage() {
     setPaymentProofPreview(null);
   };
 
-  const handleRejectPaymentProof = (proofId: number) => {
+  const handleApprovePaymentProof = async (proofId: number) => {
+    try {
+      await paymentProofMutations.approveMutation.mutateAsync(proofId);
+      showToast("success", "Comprobante aprobado");
+    } catch (err: unknown) {
+      showToast("error", err instanceof Error ? err.message : "No se pudo aprobar el comprobante");
+    }
+  };
+
+  const handleRejectPaymentProof = async (proofId: number) => {
     const reason = paymentProofRejectReason.trim();
     if (!reason) {
       showToast("error", "Escribí el motivo del rechazo.");
       return;
     }
-    paymentProofMutations.rejectMutation.mutate(
-      { proofId, reason },
-      {
-        onSuccess: () => {
-          setRejectingPaymentProofId(null);
-          setPaymentProofRejectReason("");
-          showToast("success", "Comprobante rechazado");
-        },
-        onError: (err: unknown) => showToast("error", err instanceof Error ? err.message : "No se pudo rechazar el comprobante")
-      }
-    );
+    try {
+      await paymentProofMutations.rejectMutation.mutateAsync({ proofId, reason });
+      setRejectingPaymentProofId(null);
+      setPaymentProofRejectReason("");
+      showToast("success", "Comprobante rechazado");
+    } catch (err: unknown) {
+      showToast("error", err instanceof Error ? err.message : "No se pudo rechazar el comprobante");
+    }
   };
 
-  const handleGenerateDepositLink = () => {
+  const handleGenerateDepositLink = async () => {
     if (!editing || !paymentSummary) return;
     const due =
       Math.max(paymentSummary.deposit_required - paymentSummary.amount_paid, 0) ||
@@ -1187,8 +1247,8 @@ export function ReservationsPage() {
       showToast("error", "El huésped no tiene email; agregá un email para enviar el link de seña.");
       return;
     }
-    paymentLinkCreate.mutate(
-      {
+    try {
+      const created = await paymentLinkCreate.mutateAsync({
         reservation_id: editing.id,
         requested_amount: Number(due.toFixed(2)),
         recipient_email: email,
@@ -1196,18 +1256,25 @@ export function ReservationsPage() {
         recipient_phone: editingGuest?.phone || undefined,
         currency: editingCurrencyCode,
         title: `Seña reserva ${editing.confirmation_code}`
-      },
-      {
-        onSuccess: (created) =>
-          showToast(
-            "success",
-            created.execution_mode === "local_only" || !created.payable
-              ? "Solicitud local creada. No es un link cobrable y no se envió al huésped."
-              : "Link de seña generado"
-          ),
-        onError: (err: unknown) => showToast("error", err instanceof Error ? err.message : "No se pudo generar el link")
-      }
-    );
+      });
+      showToast(
+        "success",
+        created.execution_mode === "local_only" || !created.payable
+          ? "Solicitud local creada. No es un link cobrable y no se envió al huésped."
+          : "Link de seña generado"
+      );
+    } catch (err: unknown) {
+      showToast("error", err instanceof Error ? err.message : "No se pudo generar el link");
+    }
+  };
+
+  const handleCancelPaymentLink = async (linkId: number) => {
+    try {
+      await paymentLinkCancel.mutateAsync(linkId);
+      showToast("success", "Solicitud de seña anulada");
+    } catch (err: unknown) {
+      showToast("error", err instanceof Error ? err.message : "No se pudo anular la solicitud");
+    }
   };
 
   const openDetails = (reservation: Reservation) => {
@@ -1231,34 +1298,38 @@ export function ReservationsPage() {
   const openGuest = (guestId: number) => setGuestIdOpen(guestId);
   const closeGuest = () => setGuestIdOpen(null);
 
-  const handleResolveExternal = (reservationId: number) =>
-    resolveExternalMutation.mutate(
-      { reservationId, payload: { notes: "Cierre manual desde la bandeja operativa." } },
-      {
-        onSuccess: () => showToast("success", "Follow-up externo marcado como resuelto"),
-        onError: (err: unknown) =>
-          showToast("error", err instanceof Error ? err.message : "No se pudo cerrar la acción externa")
-      }
-    );
+  const handleResolveExternal = async (reservationId: number) => {
+    try {
+      await resolveExternalMutation.mutateAsync({
+        reservationId,
+        payload: { notes: "Cierre manual desde la bandeja operativa." }
+      });
+      showToast("success", "Follow-up externo marcado como resuelto");
+    } catch (err: unknown) {
+      showToast("error", err instanceof Error ? err.message : "No se pudo cerrar la acción externa");
+    }
+  };
 
-  const handleClearManualReview = (reservationId: number) =>
-    clearManualReviewMutation.mutate(
-      { reservationId, payload: { notes: "Revisión manual cerrada desde la bandeja operativa." } },
-      {
-        onSuccess: () => showToast("success", "Revisión manual cerrada"),
-        onError: (err: unknown) =>
-          showToast("error", err instanceof Error ? err.message : "No se pudo cerrar la revisión manual")
-      }
-    );
+  const handleClearManualReview = async (reservationId: number) => {
+    try {
+      await clearManualReviewMutation.mutateAsync({
+        reservationId,
+        payload: { notes: "Revisión manual cerrada desde la bandeja operativa." }
+      });
+      showToast("success", "Revisión manual cerrada");
+    } catch (err: unknown) {
+      showToast("error", err instanceof Error ? err.message : "No se pudo cerrar la revisión manual");
+    }
+  };
 
-  const handleRoomMove = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleRoomMove = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!detailsReservation || !roomMoveForm.to_room_id || !roomMoveForm.reason_code.trim()) {
       showToast("error", "Elegí una habitación destino e indicá el motivo del cambio.");
       return;
     }
-    roomMoveMutation.mutate(
-      {
+    try {
+      await roomMoveMutation.mutateAsync({
         reservationId: detailsReservation.id,
         payload: {
           to_room_id: Number(roomMoveForm.to_room_id),
@@ -1266,26 +1337,23 @@ export function ReservationsPage() {
           notes: roomMoveForm.notes.trim() || null,
           price_action: roomMoveForm.price_action
         }
-      },
-      {
-        onError: (err: unknown) =>
-          showToast("error", err instanceof Error ? err.message : "No se pudo cambiar la habitación")
-      }
-    );
+      });
+    } catch (err: unknown) {
+      showToast("error", err instanceof Error ? err.message : "No se pudo cambiar la habitación");
+    }
   };
 
-  const handleNoShow = () => {
+  const handleNoShow = async () => {
     if (!detailsReservation || !canNoShow(detailsReservation.status)) return;
     if (!window.confirm("¿Marcar esta reserva como no-show? No genera un cargo automático.")) return;
-    noShowMutation.mutate(
-      {
+    try {
+      await noShowMutation.mutateAsync({
         reservationId: detailsReservation.id,
         payload: { client_version: detailsReservation.version ?? 0, notes: noShowNotes.trim() || null }
-      },
-      {
-        onError: (err: unknown) => showToast("error", err instanceof Error ? err.message : "No se pudo registrar el no-show")
-      }
-    );
+      });
+    } catch (err: unknown) {
+      showToast("error", err instanceof Error ? err.message : "No se pudo registrar el no-show");
+    }
   };
 
   const exportVoucher = () => {
@@ -2127,6 +2195,67 @@ export function ReservationsPage() {
               <div className="rounded-lg bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700">
                 Datos de la reserva
               </div>
+              {editing && collaborativeReservation.status !== "idle" && (
+                <div
+                  className="space-y-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-900"
+                  data-testid="reservation-collaboration"
+                  role="status"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-semibold">
+                      {collaborativeReservation.status === "connected"
+                        ? "Coedición conectada"
+                        : collaborativeReservation.status === "connecting"
+                          ? "Conectando coedición…"
+                          : collaborativeReservation.status === "reconnecting"
+                            ? "Reconectando coedición…"
+                            : collaborativeReservation.status === "saving"
+                              ? "Confirmando cambios…"
+                              : collaborativeReservation.status === "conflict"
+                                ? "Hay conflictos para resolver"
+                                : "Coedición degradada; el guardado normal sigue disponible."}
+                    </span>
+                    {collaborativeReservation.peers.length > 0 && (
+                      <span className="text-xs">
+                        {collaborativeReservation.peers.length} otra(s) persona(s) editando
+                      </span>
+                    )}
+                  </div>
+                  {collaborativeReservation.peers.some((peer) => peer.fields.length > 0) && (
+                    <p className="text-xs text-sky-800">
+                      Campos en edición remota: {Array.from(new Set(collaborativeReservation.peers.flatMap((peer) => peer.fields))).join(", ")}.
+                    </p>
+                  )}
+                  {Object.values(collaborativeReservation.conflicts).map((conflict) => (
+                    <div
+                      key={conflict.field}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded border border-amber-200 bg-amber-50 px-2 py-2 text-xs text-amber-950"
+                      data-testid={`reservation-conflict-${conflict.field}`}
+                    >
+                      <span>
+                        <strong>{conflict.field}</strong>: tu valor “{String(conflict.localValue ?? "vacío")}” · remoto “
+                        {String(conflict.remoteValue ?? "vacío")}”
+                      </span>
+                      <span className="flex gap-2">
+                        <button
+                          type="button"
+                          className="font-semibold underline"
+                          onClick={() => collaborativeReservation.keepMine(conflict.field)}
+                        >
+                          Conservar el mío
+                        </button>
+                        <button
+                          type="button"
+                          className="font-semibold underline"
+                          onClick={() => collaborativeReservation.useRemote(conflict.field)}
+                        >
+                          Usar remoto
+                        </button>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="grid gap-3 sm:grid-cols-2">
                 <GuestQuickCreatePanel
                   guestId={formValues.guest_id}
@@ -2160,8 +2289,10 @@ export function ReservationsPage() {
                 <label className="text-xs font-semibold text-slate-600">
                   Habitación (opcional)
                   <select
-                    value={formValues.room_id}
-                    onChange={(e) => setFormValues((prev) => ({ ...prev, room_id: e.target.value }))}
+                    value={collaborativeFormValues.room_id}
+                    onChange={(e) => setReservationField("room_id", e.target.value)}
+                    onFocus={() => editing && collaborativeReservation.focusField("room_id")}
+                    onBlur={() => editing && collaborativeReservation.blurField("room_id")}
                     className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
                   >
                     <option value="">Sin asignar</option>
@@ -2193,8 +2324,10 @@ export function ReservationsPage() {
                   Check-in
                   <input
                     type="date"
-                    value={formValues.check_in_date}
-                    onChange={(e) => setFormValues((prev) => ({ ...prev, check_in_date: e.target.value }))}
+                    value={collaborativeFormValues.check_in_date}
+                    onChange={(e) => setReservationField("check_in_date", e.target.value)}
+                    onFocus={() => editing && collaborativeReservation.focusField("check_in_date")}
+                    onBlur={() => editing && collaborativeReservation.blurField("check_in_date")}
                     className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
                   />
                 </label>
@@ -2202,8 +2335,10 @@ export function ReservationsPage() {
                   Check-out
                   <input
                     type="date"
-                    value={formValues.check_out_date}
-                    onChange={(e) => setFormValues((prev) => ({ ...prev, check_out_date: e.target.value }))}
+                    value={collaborativeFormValues.check_out_date}
+                    onChange={(e) => setReservationField("check_out_date", e.target.value)}
+                    onFocus={() => editing && collaborativeReservation.focusField("check_out_date")}
+                    onBlur={() => editing && collaborativeReservation.blurField("check_out_date")}
                     className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
                   />
                 </label>
@@ -2470,8 +2605,10 @@ export function ReservationsPage() {
                   <input
                     type="number"
                     min={1}
-                    value={formValues.num_adults}
-                    onChange={(e) => setFormValues((prev) => ({ ...prev, num_adults: e.target.value }))}
+                    value={collaborativeFormValues.num_adults}
+                    onChange={(e) => setReservationField("num_adults", e.target.value)}
+                    onFocus={() => editing && collaborativeReservation.focusField("num_adults")}
+                    onBlur={() => editing && collaborativeReservation.blurField("num_adults")}
                     className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
                   />
                 </label>
@@ -2480,8 +2617,10 @@ export function ReservationsPage() {
                   <input
                     type="number"
                     min={0}
-                    value={formValues.num_children}
-                    onChange={(e) => setFormValues((prev) => ({ ...prev, num_children: e.target.value }))}
+                    value={collaborativeFormValues.num_children}
+                    onChange={(e) => setReservationField("num_children", e.target.value)}
+                    onFocus={() => editing && collaborativeReservation.focusField("num_children")}
+                    onBlur={() => editing && collaborativeReservation.blurField("num_children")}
                     className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
                   />
                 </label>
@@ -2512,9 +2651,11 @@ export function ReservationsPage() {
               <label className="text-xs font-semibold text-slate-600">
                 Notas
                 <textarea
-                  value={formValues.notes}
+                  value={collaborativeFormValues.notes}
                   placeholder="Notas internas (opcional)"
-                  onChange={(e) => setFormValues((prev) => ({ ...prev, notes: e.target.value }))}
+                  onChange={(e) => setReservationField("notes", e.target.value)}
+                  onFocus={() => editing && collaborativeReservation.focusField("notes")}
+                  onBlur={() => editing && collaborativeReservation.blurField("notes")}
                   className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
                   rows={3}
                 />
@@ -2682,7 +2823,7 @@ export function ReservationsPage() {
                                   <>
                                     <button
                                       type="button"
-                                      onClick={() => paymentProofMutations.approveMutation.mutate(proof.id)}
+                                      onClick={() => void handleApprovePaymentProof(proof.id)}
                                       disabled={paymentProofMutations.approveMutation.isPending}
                                       className="rounded-lg border border-emerald-200 px-2 py-1 font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-60"
                                     >
@@ -2810,7 +2951,7 @@ export function ReservationsPage() {
                                 {lnk.status === "pending" && lnk.execution_mode === "local_only" && (
                                   <button
                                     type="button"
-                                    onClick={() => paymentLinkCancel.mutate(lnk.id)}
+                                    onClick={() => void handleCancelPaymentLink(lnk.id)}
                                     disabled={paymentLinkCancel.isPending}
                                     className="rounded-lg border border-slate-200 px-2 py-1 font-semibold text-slate-600 hover:bg-white disabled:opacity-60"
                                   >
@@ -2866,6 +3007,7 @@ export function ReservationsPage() {
                   disabled={
                     createMutation.isPending ||
                     updateMutation.isPending ||
+                    collaborativeReservation.isSaving ||
                     subscriptionBlocked ||
                     Boolean(lastCreatedReservation) ||
                     (!editing &&
@@ -3284,17 +3426,21 @@ export function ReservationsPage() {
 
               <form
                 className="mt-3 grid gap-3 rounded-lg border border-slate-200 bg-white p-3 md:grid-cols-[minmax(0,1fr)_10rem_auto] md:items-end"
-                onSubmit={(event) => {
+                onSubmit={async (event) => {
                   event.preventDefault();
                   const amount = Number(chargeForm.amount);
                   if (!chargeForm.description.trim() || !Number.isFinite(amount) || amount <= 0) {
                     showToast("error", "Ingresá un detalle y un importe positivo para el consumo.");
                     return;
                   }
-                  chargeMutation.mutate({
-                    reservationId: detailsReservation.id,
-                    payload: { description: chargeForm.description, amount, currency_code: detailsReservation.currency_code || "ARS" }
-                  });
+                  try {
+                    await chargeMutation.mutateAsync({
+                      reservationId: detailsReservation.id,
+                      payload: { description: chargeForm.description, amount, currency_code: detailsReservation.currency_code || "ARS" }
+                    });
+                  } catch (err: unknown) {
+                    showToast("error", err instanceof Error ? err.message : "No se pudo cargar el consumo.");
+                  }
                 }}
               >
                 <label className="space-y-1 text-sm">

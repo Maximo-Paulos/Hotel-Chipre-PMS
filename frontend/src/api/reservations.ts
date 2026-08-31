@@ -310,6 +310,7 @@ export type ReservationQuoteParams = {
 
 export type ReservationUpdatePayload = Partial<ReservationPayload> & {
   status?: ReservationStatus;
+  client_version?: number;
 };
 
 export type ReservationNoShowPayload = {

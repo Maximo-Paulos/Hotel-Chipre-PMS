@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   createPaymentLink,
@@ -8,7 +8,10 @@ import {
   type PaymentLinkCreatePayload
 } from "../api/paymentLinks";
 import { hasValidSession } from "../api/client";
+import { refreshPaymentState } from "../api/queryInvalidation";
 import { useSession } from "../state/session";
+
+import { useGuardedMutation } from "./useGuardedMutation";
 
 const linksKey = (hotelId: number | null, reservationId?: number) => ["payment-links", hotelId, reservationId];
 
@@ -25,9 +28,9 @@ export function usePaymentLinks(reservationId?: number) {
 export function usePaymentLinkCreate(reservationId?: number) {
   const qc = useQueryClient();
   const { session } = useSession();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (payload: PaymentLinkCreatePayload) => createPaymentLink(payload, session),
-    onSuccess: (created: PaymentLink) => {
+    onSuccess: async (created: PaymentLink) => {
       const key = linksKey(session.hotelId, reservationId);
       // The POST response is already the persisted source of truth. Publish it
       // immediately so a successful local-only request is visible even when
@@ -37,7 +40,7 @@ export function usePaymentLinkCreate(reservationId?: number) {
         created,
         ...(current ?? []).filter((link) => link.id !== created.id)
       ]);
-      void qc.invalidateQueries({ queryKey: key });
+      await refreshPaymentState(qc, session.hotelId, reservationId);
     }
   });
 }
@@ -45,8 +48,8 @@ export function usePaymentLinkCreate(reservationId?: number) {
 export function usePaymentLinkCancel(reservationId?: number) {
   const qc = useQueryClient();
   const { session } = useSession();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (linkId: number) => cancelPaymentLink(linkId, "operator_request", session),
-    onSuccess: () => qc.invalidateQueries({ queryKey: linksKey(session.hotelId, reservationId) })
+    onSuccess: async () => refreshPaymentState(qc, session.hotelId, reservationId)
   });
 }

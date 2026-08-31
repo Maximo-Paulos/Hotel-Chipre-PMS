@@ -78,6 +78,7 @@ from app.api import (
     room_movement_groups,
     health,
     events,
+    collaboration,
     settings_security,
     notifications,
 )
@@ -284,6 +285,7 @@ app.include_router(room_movement_groups.router)
 app.include_router(master_admin_router)
 app.include_router(health.router)
 app.include_router(events.router)
+app.include_router(collaboration.router)
 app.include_router(settings_security.router)
 app.include_router(notifications.router)
 

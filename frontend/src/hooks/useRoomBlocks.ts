@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   createRoomBlock,
@@ -9,8 +9,10 @@ import {
   type RoomBlockReasonCode
 } from "../api/roomBlocks";
 import { hasValidSession } from "../api/client";
-import { queryKeys } from "../api/queryKeys";
+import { refreshRoomState } from "../api/queryInvalidation";
 import { useSession } from "../state/session";
+
+import { useGuardedMutation } from "./useGuardedMutation";
 
 const roomBlocksKey = (hotelId: number | null) => ["room-blocks", hotelId];
 
@@ -36,19 +38,16 @@ export function useRoomBlocks(options?: { enabled?: boolean }) {
     staleTime: 1000 * 15
   });
 
-  const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: roomBlocksKey(session.hotelId) });
-    queryClient.invalidateQueries({ queryKey: queryKeys.rooms(session.hotelId) });
-  };
+  const invalidate = () => refreshRoomState(queryClient, session.hotelId);
 
-  const createBlockMutation = useMutation({
+  const createBlockMutation = useGuardedMutation({
     mutationFn: (payload: RoomBlockCreatePayload) => createRoomBlock(payload, session),
-    onSuccess: invalidate
+    onSuccess: async () => invalidate()
   });
 
-  const resolveBlockMutation = useMutation({
+  const resolveBlockMutation = useGuardedMutation({
     mutationFn: (blockId: number) => resolveRoomBlock(blockId, session),
-    onSuccess: invalidate
+    onSuccess: async () => invalidate()
   });
 
   return { blocksQuery, createBlockMutation, resolveBlockMutation };

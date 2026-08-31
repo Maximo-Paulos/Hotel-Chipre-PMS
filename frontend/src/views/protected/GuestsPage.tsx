@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import { hasValidSession } from "../../api/client";
@@ -23,6 +23,9 @@ import { useEffectivePermissions } from "../../hooks/usePermissions";
 import { useReservationDrawer } from "../../hooks/useReservationDrawer";
 import { useRestrictionOverridePrompt } from "../../hooks/useRestrictionOverridePrompt";
 import { useSession } from "../../state/session";
+import { useCollaborativeResource } from "../../hooks/useCollaborativeResource";
+import { refreshAfterMutation, refreshGuestState } from "../../api/queryInvalidation";
+import { useGuardedMutation } from "../../hooks/useGuardedMutation";
 
 const DOCUMENT_TYPES = ["DNI", "PASSPORT", "CEDULA"] as const;
 
@@ -129,6 +132,28 @@ export function GuestsPage() {
     [guests, selectedGuestId]
   );
 
+  const collaborativeGuest = useCollaborativeResource({
+    resourceType: "guest",
+    resourceId: selectedGuest?.id,
+    initialValues: selectedGuest
+      ? {
+          first_name: selectedGuest.first_name,
+          last_name: selectedGuest.last_name,
+          document_type: selectedGuest.document_type ?? null,
+          document_number: selectedGuest.document_number ?? null,
+          nationality: selectedGuest.nationality ?? null,
+          date_of_birth: selectedGuest.date_of_birth ?? null,
+          email: selectedGuest.email ?? null,
+          phone: selectedGuest.phone ?? null,
+          address_line1: selectedGuest.address_line1 ?? null,
+          city: selectedGuest.city ?? null,
+          country: selectedGuest.country ?? null,
+          observations: selectedGuest.observations ?? null
+        }
+      : null,
+    enabled: Boolean(selectedGuest && canEditGuest)
+  });
+
   const tagsQuery = useQuery({
     queryKey: ["guest-tags", session.hotelId, selectedGuest?.id],
     queryFn: () => listGuestTags(selectedGuest!.id, session),
@@ -143,29 +168,22 @@ export function GuestsPage() {
     staleTime: 30 * 1000
   });
 
-  const invalidateGuestOperationalData = async (guestId: number) => {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["guests", session.hotelId] }),
-      queryClient.invalidateQueries({ queryKey: ["guest", session.hotelId, guestId] }),
-      queryClient.invalidateQueries({ queryKey: ["guest-tags", session.hotelId, guestId] }),
-      queryClient.invalidateQueries({ queryKey: ["guest-quick-profile", session.hotelId, guestId] })
-    ]);
-  };
+  const invalidateGuestOperationalData = (guestId: number) => refreshGuestState(queryClient, session.hotelId, guestId);
 
-  const addTagMutation = useMutation({
+  const addTagMutation = useGuardedMutation({
     mutationFn: ({ guestId, payload }: { guestId: number; payload: GuestTagPayload }) =>
       addGuestTag(guestId, payload, session),
     onSuccess: async (_, variables) => invalidateGuestOperationalData(variables.guestId)
   });
 
-  const resolveTagMutation = useMutation({
+  const resolveTagMutation = useGuardedMutation({
     mutationFn: ({ guestId, tagId }: { guestId: number; tagId: number }) => resolveGuestTag(guestId, tagId, session),
     onSuccess: async (_, variables) => invalidateGuestOperationalData(variables.guestId)
   });
 
   const restrictionOverridePrompt = useRestrictionOverridePrompt();
 
-  const checkInMutation = useMutation({
+  const checkInMutation = useGuardedMutation({
     mutationFn: ({
       reservationId,
       override,
@@ -181,11 +199,8 @@ export function GuestsPage() {
         session
       ),
     onSuccess: async (_, variables) => {
-      if (selectedGuest?.id) {
-        await invalidateGuestOperationalData(selectedGuest.id);
-      }
-      await queryClient.invalidateQueries({ queryKey: ["reservations", session.hotelId] });
-      await queryClient.invalidateQueries({ queryKey: ["reservation", session.hotelId, variables.reservationId] });
+      await refreshAfterMutation(queryClient, session.hotelId, ["guests", "reservations", "rooms", "payments", "cash", "analytics"]);
+      void variables;
     }
   });
 
@@ -234,8 +249,20 @@ export function GuestsPage() {
   const companions = selectedGuest?.companions ?? [];
   const lastStays = quickProfileQuery.data?.last_stays ?? [];
 
+  const collaborativeGuestValues: GuestUpdatePayload = selectedGuest
+    ? Object.keys(formValues).reduce<GuestUpdatePayload>((values, field) => {
+        const draftValue = collaborativeGuest.draftValues[field];
+        values[field as keyof GuestUpdatePayload] = (draftValue === undefined ? formValues[field as keyof GuestUpdatePayload] : draftValue) as never;
+        return values;
+      }, { ...formValues })
+    : formValues;
+
   const handleChange = (field: keyof GuestUpdatePayload, value: string) => {
     setFormValues((current) => ({ ...current, [field]: value }));
+    if (selectedGuest) {
+      const normalizedValue = field === "document_type" || field === "date_of_birth" ? value || null : value;
+      collaborativeGuest.setField(field, normalizedValue);
+    }
   };
 
   const handleCompanionChange = (field: keyof GuestCompanionPayload, value: string) => {
@@ -248,11 +275,19 @@ export function GuestsPage() {
     setFormMessage(null);
     try {
       const payload: GuestUpdatePayload = {
-        ...formValues,
-        document_type: formValues.document_type || undefined,
-        date_of_birth: formValues.date_of_birth || undefined
+        ...collaborativeGuestValues,
+        document_type: collaborativeGuestValues.document_type || undefined,
+        date_of_birth: collaborativeGuestValues.date_of_birth || undefined
       };
-      await updateGuestMutation.mutateAsync({ guestId: selectedGuestId, payload });
+      if (collaborativeGuest.status !== "idle") {
+        if (Object.keys(collaborativeGuest.conflicts).length > 0) {
+          setFormMessage("Hay conflictos en la ficha. Elegí qué valor conservar antes de guardar.");
+          return;
+        }
+        if (collaborativeGuest.isDirty) await collaborativeGuest.save();
+      } else {
+        await updateGuestMutation.mutateAsync({ guestId: selectedGuestId, payload });
+      }
       setFormMessage("Huésped guardado.");
     } catch (error) {
       setFormMessage(error instanceof Error ? error.message : "No se pudo guardar el huésped.");
@@ -444,20 +479,66 @@ export function GuestsPage() {
                   </span>
                 </div>
 
+                {canEditGuest && collaborativeGuest.status !== "idle" ? (
+                  <div
+                    className="space-y-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-900"
+                    data-testid="guest-collaboration"
+                    role="status"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span>
+                        {collaborativeGuest.status === "connected"
+                          ? `Coedición conectada${collaborativeGuest.peers.length ? ` · ${collaborativeGuest.peers.length} usuario(s) más` : ""}.`
+                          : collaborativeGuest.status === "saving"
+                            ? "Guardando y confirmando con el servidor..."
+                            : collaborativeGuest.status === "conflict"
+                              ? "Hay cambios simultáneos que requieren una decisión."
+                              : collaborativeGuest.status === "degraded"
+                                ? "Coedición degradada; el guardado normal sigue disponible."
+                                : "Conectando coedición..."}
+                      </span>
+                      {collaborativeGuest.peers.length > 0 ? (
+                        <span className="text-xs text-sky-700">
+                          {collaborativeGuest.peers.map((peer) => peer.fields.length ? peer.fields.join(", ") : "sin campo activo").join(" · ")}
+                        </span>
+                      ) : null}
+                    </div>
+                    {Object.values(collaborativeGuest.conflicts).map((conflict) => (
+                      <div key={conflict.field} className="rounded-md border border-amber-200 bg-amber-50 p-2 text-amber-950" data-testid={`guest-conflict-${conflict.field}`}>
+                        <p className="font-semibold">Conflicto en {conflict.field}</p>
+                        <p className="text-xs">Propio: {String(conflict.localValue ?? "(vacío)")}</p>
+                        <p className="text-xs">Remoto: {String(conflict.remoteValue ?? "(vacío)")}</p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <button type="button" className="rounded border border-amber-300 bg-white px-2 py-1 text-xs font-semibold" onClick={() => collaborativeGuest.keepMine(conflict.field)}>
+                            Conservar el mío
+                          </button>
+                          <button type="button" className="rounded border border-amber-300 bg-white px-2 py-1 text-xs font-semibold" onClick={() => collaborativeGuest.useRemote(conflict.field)}>
+                            Usar remoto
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
                 <fieldset disabled={!canEditGuest} className="grid gap-4 md:grid-cols-2 disabled:opacity-70">
                   <label className="space-y-1 text-sm">
                     <span className="text-slate-600">Nombre</span>
                     <input
-                      value={formValues.first_name ?? ""}
+                      value={collaborativeGuestValues.first_name ?? ""}
                       onChange={(e) => handleChange("first_name", e.target.value)}
+                      onFocus={() => collaborativeGuest.focusField("first_name")}
+                      onBlur={() => collaborativeGuest.blurField("first_name")}
                       className="w-full rounded-lg border border-slate-300 px-3 py-2"
                     />
                   </label>
                   <label className="space-y-1 text-sm">
                     <span className="text-slate-600">Apellido</span>
                     <input
-                      value={formValues.last_name ?? ""}
+                      value={collaborativeGuestValues.last_name ?? ""}
                       onChange={(e) => handleChange("last_name", e.target.value)}
+                      onFocus={() => collaborativeGuest.focusField("last_name")}
+                      onBlur={() => collaborativeGuest.blurField("last_name")}
                       className="w-full rounded-lg border border-slate-300 px-3 py-2"
                     />
                   </label>
@@ -465,32 +546,40 @@ export function GuestsPage() {
                     <span className="text-slate-600">Fecha de nacimiento</span>
                     <input
                       type="date"
-                      value={formValues.date_of_birth ?? ""}
+                      value={collaborativeGuestValues.date_of_birth ?? ""}
                       onChange={(e) => handleChange("date_of_birth", e.target.value)}
+                      onFocus={() => collaborativeGuest.focusField("date_of_birth")}
+                      onBlur={() => collaborativeGuest.blurField("date_of_birth")}
                       className="w-full rounded-lg border border-slate-300 px-3 py-2"
                     />
                   </label>
                   <label className="space-y-1 text-sm">
                     <span className="text-slate-600">Email</span>
                     <input
-                      value={formValues.email ?? ""}
+                      value={collaborativeGuestValues.email ?? ""}
                       onChange={(e) => handleChange("email", e.target.value)}
+                      onFocus={() => collaborativeGuest.focusField("email")}
+                      onBlur={() => collaborativeGuest.blurField("email")}
                       className="w-full rounded-lg border border-slate-300 px-3 py-2"
                     />
                   </label>
                   <label className="space-y-1 text-sm">
                     <span className="text-slate-600">Teléfono</span>
                     <input
-                      value={formValues.phone ?? ""}
+                      value={collaborativeGuestValues.phone ?? ""}
                       onChange={(e) => handleChange("phone", e.target.value)}
+                      onFocus={() => collaborativeGuest.focusField("phone")}
+                      onBlur={() => collaborativeGuest.blurField("phone")}
                       className="w-full rounded-lg border border-slate-300 px-3 py-2"
                     />
                   </label>
                   <label className="space-y-1 text-sm">
                     <span className="text-slate-600">Tipo de documento</span>
                     <select
-                      value={formValues.document_type ?? ""}
+                      value={collaborativeGuestValues.document_type ?? ""}
                       onChange={(e) => handleChange("document_type", e.target.value)}
+                      onFocus={() => collaborativeGuest.focusField("document_type")}
+                      onBlur={() => collaborativeGuest.blurField("document_type")}
                       className="w-full rounded-lg border border-slate-300 px-3 py-2"
                     >
                       <option value="">Seleccionar</option>
@@ -504,40 +593,50 @@ export function GuestsPage() {
                   <label className="space-y-1 text-sm">
                     <span className="text-slate-600">Número de documento</span>
                     <input
-                      value={formValues.document_number ?? ""}
+                      value={collaborativeGuestValues.document_number ?? ""}
                       onChange={(e) => handleChange("document_number", e.target.value)}
+                      onFocus={() => collaborativeGuest.focusField("document_number")}
+                      onBlur={() => collaborativeGuest.blurField("document_number")}
                       className="w-full rounded-lg border border-slate-300 px-3 py-2"
                     />
                   </label>
                   <label className="space-y-1 text-sm">
                     <span className="text-slate-600">Nacionalidad</span>
                     <input
-                      value={formValues.nationality ?? ""}
+                      value={collaborativeGuestValues.nationality ?? ""}
                       onChange={(e) => handleChange("nationality", e.target.value)}
+                      onFocus={() => collaborativeGuest.focusField("nationality")}
+                      onBlur={() => collaborativeGuest.blurField("nationality")}
                       className="w-full rounded-lg border border-slate-300 px-3 py-2"
                     />
                   </label>
                   <label className="space-y-1 text-sm">
                     <span className="text-slate-600">Ciudad</span>
                     <input
-                      value={formValues.city ?? ""}
+                      value={collaborativeGuestValues.city ?? ""}
                       onChange={(e) => handleChange("city", e.target.value)}
+                      onFocus={() => collaborativeGuest.focusField("city")}
+                      onBlur={() => collaborativeGuest.blurField("city")}
                       className="w-full rounded-lg border border-slate-300 px-3 py-2"
                     />
                   </label>
                   <label className="space-y-1 text-sm md:col-span-2">
                     <span className="text-slate-600">Dirección</span>
                     <input
-                      value={formValues.address_line1 ?? ""}
+                      value={collaborativeGuestValues.address_line1 ?? ""}
                       onChange={(e) => handleChange("address_line1", e.target.value)}
+                      onFocus={() => collaborativeGuest.focusField("address_line1")}
+                      onBlur={() => collaborativeGuest.blurField("address_line1")}
                       className="w-full rounded-lg border border-slate-300 px-3 py-2"
                     />
                   </label>
                   <label className="space-y-1 text-sm md:col-span-2">
                     <span className="text-slate-600">Observaciones</span>
                     <textarea
-                      value={formValues.observations ?? ""}
+                      value={collaborativeGuestValues.observations ?? ""}
                       onChange={(e) => handleChange("observations", e.target.value)}
+                      onFocus={() => collaborativeGuest.focusField("observations")}
+                      onBlur={() => collaborativeGuest.blurField("observations")}
                       rows={4}
                       className="w-full rounded-lg border border-slate-300 px-3 py-2"
                     />
@@ -553,7 +652,7 @@ export function GuestsPage() {
                 {canEditGuest ? <div className="flex justify-end">
                   <button
                     type="submit"
-                    disabled={updateGuestMutation.isPending}
+                    disabled={updateGuestMutation.isPending || collaborativeGuest.isSaving}
                     className="rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
                   >
                     Guardar huésped

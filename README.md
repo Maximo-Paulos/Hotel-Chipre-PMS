@@ -61,6 +61,10 @@ Toma `DATABASE_URL` del compose. Para SQLite local: `DATABASE_URL=sqlite:///./de
 - Add `X-User-Id` for auditing; values are free-form.
 
 ## Key Stage 1 Endpoints
+
+La arquitectura y operación de la sincronización SSE/Redis y la coedición por
+campo están documentadas en [`docs/realtime-collaboration.md`](docs/realtime-collaboration.md).
+
 | Method & Path | Purpose |
 | --- | --- |
 | GET `/health` | Liveness probe. |

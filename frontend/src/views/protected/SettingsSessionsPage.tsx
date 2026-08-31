@@ -1,9 +1,11 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 
 import { hasValidSession } from "../../api/client";
 import { listUserSessions, revokeUserSession } from "../../api/security";
 import { useSession } from "../../state/session";
+import { refreshSettingsState } from "../../api/queryInvalidation";
+import { useGuardedMutation } from "../../hooks/useGuardedMutation";
 
 const formatDate = (value: string) => {
   const date = new Date(value);
@@ -23,24 +25,30 @@ export function SettingsSessionsPage() {
   });
   const sessions = sessionsQuery.data ?? [];
 
-  const revokeMutation = useMutation({
+  const revokeMutation = useGuardedMutation({
     mutationFn: (sessionId: number) => revokeUserSession(sessionId, session),
-    onSuccess: (_response, sessionId) => {
+    onSuccess: async (_response, sessionId) => {
       const revokedSession = sessions.find((item) => item.id === sessionId);
       if (revokedSession?.current) {
         logout();
         navigate("/login?sessions=revoked", { replace: true });
         return;
       }
-      void queryClient.invalidateQueries({ queryKey: ["settings-sessions", session.hotelId] });
+      await refreshSettingsState(queryClient, session.hotelId);
     }
   });
 
-  const handleRevoke = (sessionId: number, current: boolean, deviceLabel: string) => {
+  const handleRevoke = async (sessionId: number, current: boolean, deviceLabel: string) => {
     const question = current
       ? "¿Cerrar la sesión de este dispositivo? Tendrás que volver a iniciar sesión."
       : `¿Revocar la sesión de ${deviceLabel}?`;
-    if (window.confirm(question)) revokeMutation.mutate(sessionId);
+    if (!window.confirm(question)) return;
+    try {
+      await revokeMutation.mutateAsync(sessionId);
+    } catch {
+      // The mutation exposes the error state in the page; keeping the handler
+      // awaited prevents a rejected promise from escaping the click event.
+    }
   };
 
   return (

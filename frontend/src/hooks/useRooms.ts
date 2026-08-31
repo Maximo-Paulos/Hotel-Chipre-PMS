@@ -1,9 +1,12 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { listRoomCategories, listRooms, updateRoomCleaningStatus, updateRoomStatus, type Room, type RoomCategory, type RoomStatus } from "../api/rooms";
 import { hasValidSession } from "../api/client";
 import { useSession } from "../state/session";
 import { queryKeys } from "../api/queryKeys";
+import { refreshRoomState } from "../api/queryInvalidation";
+
+import { useGuardedMutation } from "./useGuardedMutation";
 
 export function useRooms(options?: { includeCategories?: boolean }) {
   const { session } = useSession();
@@ -24,20 +27,16 @@ export function useRooms(options?: { includeCategories?: boolean }) {
 
   const queryClient = useQueryClient();
 
-  const updateStatusMutation = useMutation({
+  const updateStatusMutation = useGuardedMutation({
     mutationFn: ({ roomId, status, notes }: { roomId: number; status: RoomStatus; notes?: string }) =>
       updateRoomStatus(roomId, status, notes, session),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.rooms(session.hotelId) });
-    }
+    onSuccess: async (_, variables) => refreshRoomState(queryClient, session.hotelId, variables.roomId)
   });
 
-  const updateCleaningStatusMutation = useMutation({
+  const updateCleaningStatusMutation = useGuardedMutation({
     mutationFn: ({ roomId, status, notes }: { roomId: number; status: "cleaning" | "available"; notes?: string }) =>
       updateRoomCleaningStatus(roomId, status, notes, session),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.rooms(session.hotelId) });
-    }
+    onSuccess: async (_, variables) => refreshRoomState(queryClient, session.hotelId, variables.roomId)
   });
 
   return { roomsQuery, categoriesQuery, updateStatusMutation, updateCleaningStatusMutation };

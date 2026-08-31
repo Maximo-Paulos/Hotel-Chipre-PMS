@@ -10,7 +10,7 @@ import json
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Iterable, Mapping
+from typing import Any, Iterable, Mapping, TYPE_CHECKING
 
 import redis
 
@@ -19,14 +19,19 @@ from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
+
 EVENT_CHANNEL_TEMPLATE = "hotel:{hotel_id}:events"
 REVISION_KEY_TEMPLATE = "hotel:{hotel_id}:revision:{domain}"
 EVENT_NAME = "domain_change"
+PENDING_EVENTS_KEY = "_hotel_pms_pending_domain_events"
 SUPPORTED_DOMAINS = frozenset(
     {
         "analytics",
         "cash",
         "guests",
+        "notifications",
         "onboarding",
         "payments",
         "reservations",
@@ -43,19 +48,45 @@ SUPPORTED_DOMAINS = frozenset(
 # Redis pub/sub messages.
 SAFE_PAYLOAD_KEYS = frozenset(
     {
+        "action_id",
+        "adjustment_id",
+        "allocation_id",
+        "assignment_id",
+        "audit_id",
+        "block_id",
         "category_id",
+        "close_report_id",
+        "company_id",
+        "connection_id",
+        "document_id",
+        "event_id",
+        "export_id",
         "family",
         "group_id",
         "guest_id",
+        "handoff_id",
         "item_id",
+        "linen_item_id",
+        "link_id",
         "location_id",
+        "mapping_id",
+        "movement_id",
         "payment_id",
+        "payment_link_id",
+        "proof_id",
+        "redemption_id",
         "reservation_id",
         "restriction_id",
         "room_id",
+        "run_id",
+        "session_id",
         "source",
         "status",
+        "status_history_id",
+        "transaction_id",
         "user_id",
+        "vendor_id",
+        "voucher_id",
     }
 )
 
@@ -87,6 +118,438 @@ class DomainEvent:
             "occurred_at": self.occurred_at,
             "payload": dict(self.payload),
         }
+
+
+@dataclass(frozen=True)
+class QueuedDomainChange:
+    """A safe invalidation signal waiting for the surrounding DB commit."""
+
+    hotel_id: int
+    domain: str
+    event_type: str
+    payload: dict[str, Any]
+    transaction_id: int | None = None
+
+
+# A single ORM transaction can update several read models. Mapping the
+# persisted model once here avoids depending on every API route remembering to
+# publish all of its downstream domains. Tables not in this allowlist are
+# intentionally ignored, especially credentials, sessions, blobs and global
+# catalog tables.
+MODEL_DOMAIN_DEPENDENCIES: dict[str, tuple[str, ...]] = {
+    "reservations": ("reservations", "analytics"),
+    "reservation_adjustments": ("reservations", "analytics"),
+    "reservation_status_history": ("reservations", "analytics"),
+    "billing_adjustments": ("reservations", "payments", "analytics"),
+    "room_move_events": ("reservations", "rooms", "analytics"),
+    "room_movement_groups": ("reservations", "rooms", "analytics"),
+    "pending_operational_actions": ("reservations", "analytics"),
+    "waitlist_entries": ("reservations", "analytics"),
+    "guest_room_avoidance": ("reservations", "rooms", "analytics"),
+    "ota_reservation_mappings": ("reservations", "analytics"),
+    "ota_reservation_links": ("reservations", "analytics"),
+    "ota_sync_events": ("reservations", "analytics"),
+    "allocation_assignments": ("reservations", "rooms", "analytics"),
+    "reservation_allocation_locks": ("reservations", "rooms", "analytics"),
+    "transactions": ("payments", "cash", "analytics"),
+    "payments": ("payments", "analytics"),
+    "payment_links": ("payments", "reservations", "analytics"),
+    "payment_proofs": ("payments", "reservations", "analytics"),
+    "payment_webhook_events": ("payments", "analytics"),
+    "refund_requests": ("payments", "cash", "analytics"),
+    "hotel_vouchers": ("payments", "analytics"),
+    "voucher_redemptions": ("payments", "analytics"),
+    "payment_link_tests": ("payments", "analytics"),
+    "payment_surcharges": ("payments", "settings", "analytics"),
+    "cash_sessions": ("cash", "analytics"),
+    "cash_movements": ("cash", "payments", "analytics"),
+    "cash_close_reports": ("cash", "analytics"),
+    "cash_custody_handoffs": ("cash", "analytics"),
+    "guests": ("guests", "reservations", "analytics"),
+    "guest_companions": ("guests", "reservations", "analytics"),
+    "guest_tags": ("guests", "analytics"),
+    # Guest restrictions use a service-level event with a stable event type;
+    # the service queues it explicitly so the generic ORM collector does not
+    # publish a duplicate signal for the same restriction transition.
+    "rooms": ("rooms", "reservations", "analytics"),
+    "room_categories": ("rooms", "reservations", "analytics"),
+    "room_blocks": ("rooms", "reservations", "analytics"),
+    "room_state_events": ("rooms", "analytics"),
+    "daily_rates": ("rooms", "analytics"),
+    "price_periods": ("rooms", "analytics"),
+    "category_pricing_legacy": ("rooms", "analytics"),
+    "stock_items": ("stock", "analytics"),
+    "stock_locations": ("stock", "analytics"),
+    "stock_movements": ("stock", "analytics"),
+    "linen_items": ("stock", "analytics"),
+    "linen_locations": ("stock", "analytics"),
+    "linen_movements": ("stock", "analytics"),
+    "laundry_batches": ("stock", "analytics"),
+    "laundry_items": ("stock", "analytics"),
+    "laundry_vendors": ("stock", "analytics"),
+    "laundry_vendor_prices": ("stock", "analytics"),
+    "laundry_remitos": ("stock", "analytics"),
+    "laundry_remito_lines": ("stock", "analytics"),
+    "laundry_vendor_settlements": ("stock", "cash", "analytics"),
+    "hotel_configuration": ("settings", "analytics"),
+    "companies": ("settings", "analytics"),
+    "company_documents": ("settings", "analytics"),
+    "promotions": ("settings", "analytics"),
+    "integration_connections": ("settings",),
+    "integration_events": ("settings", "analytics"),
+    "subscriptions": ("settings",),
+    "hotel_subscriptions": ("settings",),
+    "subscription_entitlements": ("settings",),
+    "hotel_entitlement_overrides": ("settings",),
+    "hotel_api_keys": ("settings",),
+    "onboarding_state": ("onboarding", "settings"),
+    "users": ("users", "security"),
+    "hotel_memberships": ("users", "security"),
+    "staff_invitations": ("users", "security"),
+    "user_permission_overrides": ("security", "users"),
+    "hotel_permission_overrides": ("security", "settings"),
+    "hotel_role_visibility_window": ("security", "settings"),
+    "temporary_action_grants": ("security", "users"),
+    "notification_preferences": ("notifications", "settings"),
+    "notifications": ("notifications",),
+    "notification_outbox": ("notifications",),
+    "daily_report_schedules": ("notifications", "settings", "analytics"),
+    # Allocation and AI read models. Their prompts, explanations and numeric
+    # scores are deliberately not copied into the event payload; the event is
+    # only a tenant-scoped cache invalidation signal.
+    "ai_assistant_action_runs": ("analytics",),
+    "ai_assistant_insights": ("analytics",),
+    "ai_assistant_messages": ("analytics",),
+    "ai_assistant_sessions": ("analytics",),
+    "allocation_explanations": ("reservations", "rooms", "analytics"),
+    "allocation_policy_profiles": ("settings", "rooms", "reservations", "analytics"),
+    "allocation_policy_versions": ("settings", "rooms", "reservations", "analytics"),
+    "allocation_runs": ("reservations", "rooms", "analytics"),
+    "analytics_ai_usage_monthly": ("analytics",),
+    "analytics_alert_settings": ("settings", "analytics"),
+    "analytics_alert_snoozes": ("analytics",),
+    "analytics_export_jobs": ("analytics",),
+    "audit_logs": ("security", "analytics"),
+    "fact_reservation_daily": ("analytics",),
+    "fact_room_occupancy_daily": ("analytics",),
+    "fx_policies": ("settings", "rooms", "reservations", "analytics"),
+    "fx_rate_snapshots": ("settings", "analytics"),
+    "hotel_audit_events": ("security", "analytics"),
+    "llm_feedback_events": ("analytics",),
+    "llm_policy_suggestions": ("settings", "analytics"),
+    "manual_override_reasons": ("reservations", "analytics"),
+    # OTA configuration is safe to invalidate by identifier/status. Secret
+    # credential tables remain intentionally absent from this registry.
+    "ota_cancellation_rules": ("settings", "reservations", "analytics"),
+    "ota_commission_rules": ("settings", "reservations", "analytics"),
+    "ota_connections": ("settings",),
+    "ota_currency_rates": ("settings", "analytics"),
+    "ota_inventory_rules": ("settings", "rooms", "reservations", "analytics"),
+    "ota_price_rules": ("settings", "rooms", "reservations", "analytics"),
+    "ota_property_mappings": ("settings", "rooms", "reservations", "analytics"),
+    "ota_rate_plan_mappings": ("settings", "rooms", "reservations", "analytics"),
+    "ota_room_mappings": ("settings", "rooms", "reservations", "analytics"),
+    "ota_sync_jobs": ("settings", "reservations", "analytics"),
+    "product_room_compatibility": ("settings", "rooms", "reservations", "analytics"),
+    "rate_plan_prices": ("settings", "rooms", "reservations", "analytics"),
+    "rate_plans": ("settings", "rooms", "reservations", "analytics"),
+    "security_audit_logs": ("security",),
+    "sellable_products": ("settings", "rooms", "reservations", "analytics"),
+    "solver_metrics": ("reservations", "rooms", "analytics"),
+    "subscription_adjustments": ("settings",),
+    "subscription_events": ("settings",),
+    "tax_policies": ("settings", "rooms", "reservations", "analytics"),
+    "tax_rules": ("settings", "rooms", "reservations", "analytics"),
+}
+
+# Fact tables can receive one row per stay/room day during a single write.
+# They still need to wake analytics, but publishing one signal per row would
+# create a needless Redis storm. Use a stable family event for those models.
+DERIVED_ANALYTICS_MODEL_FAMILIES = {
+    "fact_reservation_daily": "reservation_daily",
+    "fact_room_occupancy_daily": "room_occupancy_daily",
+    "analytics_ai_usage_monthly": "ai_usage_monthly",
+}
+
+_MODEL_ID_PAYLOAD_KEYS: dict[str, str] = {
+    "reservations": "reservation_id",
+    "reservation_adjustments": "adjustment_id",
+    "reservation_status_history": "status_history_id",
+    "billing_adjustments": "adjustment_id",
+    "room_move_events": "movement_id",
+    "room_movement_groups": "group_id",
+    "pending_operational_actions": "action_id",
+    "waitlist_entries": "action_id",
+    "guest_room_avoidance": "action_id",
+    "transactions": "transaction_id",
+    "payments": "payment_id",
+    "payment_links": "payment_link_id",
+    "payment_proofs": "proof_id",
+    "refund_requests": "action_id",
+    "hotel_vouchers": "voucher_id",
+    "voucher_redemptions": "redemption_id",
+    "payment_link_tests": "action_id",
+    "payment_surcharges": "action_id",
+    "cash_sessions": "session_id",
+    "cash_movements": "movement_id",
+    "cash_close_reports": "close_report_id",
+    "cash_custody_handoffs": "handoff_id",
+    "rooms": "room_id",
+    "room_categories": "category_id",
+    "room_blocks": "block_id",
+    "room_state_events": "action_id",
+    "stock_items": "item_id",
+    "stock_locations": "location_id",
+    "stock_movements": "movement_id",
+    "linen_items": "item_id",
+    "linen_locations": "location_id",
+    "linen_movements": "movement_id",
+    "laundry_vendors": "vendor_id",
+    "laundry_vendor_prices": "action_id",
+    "laundry_remitos": "action_id",
+    "laundry_remito_lines": "action_id",
+    "laundry_vendor_settlements": "action_id",
+    "promotions": "action_id",
+    "companies": "company_id",
+    "company_documents": "document_id",
+    "integration_connections": "connection_id",
+    "integration_events": "action_id",
+    "onboarding_state": "action_id",
+    "users": "user_id",
+    "hotel_memberships": "action_id",
+    "staff_invitations": "action_id",
+    "user_permission_overrides": "action_id",
+    "hotel_permission_overrides": "action_id",
+    "hotel_role_visibility_window": "action_id",
+    "temporary_action_grants": "action_id",
+    "notification_preferences": "action_id",
+    "notifications": "action_id",
+    "notification_outbox": "action_id",
+    "daily_report_schedules": "action_id",
+    "ai_assistant_action_runs": "action_id",
+    "ai_assistant_insights": "action_id",
+    "ai_assistant_messages": "action_id",
+    "ai_assistant_sessions": "session_id",
+    "allocation_explanations": "action_id",
+    "allocation_policy_profiles": "action_id",
+    "allocation_policy_versions": "action_id",
+    "allocation_runs": "run_id",
+    "analytics_ai_usage_monthly": "action_id",
+    "analytics_alert_settings": "action_id",
+    "analytics_alert_snoozes": "action_id",
+    "analytics_export_jobs": "export_id",
+    "audit_logs": "audit_id",
+    "fact_reservation_daily": "action_id",
+    "fact_room_occupancy_daily": "action_id",
+    "fx_policies": "action_id",
+    "fx_rate_snapshots": "action_id",
+    "hotel_audit_events": "event_id",
+    "llm_feedback_events": "event_id",
+    "llm_policy_suggestions": "action_id",
+    "manual_override_reasons": "action_id",
+    "ota_cancellation_rules": "action_id",
+    "ota_commission_rules": "action_id",
+    "ota_connections": "connection_id",
+    "ota_currency_rates": "action_id",
+    "ota_inventory_rules": "action_id",
+    "ota_price_rules": "action_id",
+    "ota_property_mappings": "mapping_id",
+    "ota_rate_plan_mappings": "mapping_id",
+    "ota_room_mappings": "mapping_id",
+    "ota_sync_jobs": "action_id",
+    "product_room_compatibility": "action_id",
+    "rate_plan_prices": "action_id",
+    "rate_plans": "action_id",
+    "security_audit_logs": "event_id",
+    "sellable_products": "action_id",
+    "solver_metrics": "action_id",
+    "subscription_adjustments": "adjustment_id",
+    "subscription_events": "event_id",
+    "tax_policies": "action_id",
+    "tax_rules": "action_id",
+}
+
+
+def _scalar_event_value(value: Any) -> str | int | float | bool | None:
+    if hasattr(value, "value"):
+        value = value.value
+    return value if value is None or isinstance(value, (str, int, float, bool)) else None
+
+
+def _model_hotel_id(model: Any, table_name: str) -> int | None:
+    value = getattr(model, "hotel_id", None)
+    # HotelConfiguration is keyed by hotel id rather than carrying a separate
+    # hotel_id column. It is still safe to scope its event to that id.
+    if value is None and table_name == "hotel_configuration":
+        value = getattr(model, "id", None)
+    if isinstance(value, int) and value > 0:
+        return value
+    return None
+
+
+def _model_event_payload(model: Any, table_name: str) -> dict[str, Any]:
+    payload: dict[str, Any] = {}
+    id_key = _MODEL_ID_PAYLOAD_KEYS.get(table_name)
+    if id_key:
+        value = _scalar_event_value(getattr(model, "id", None))
+        if isinstance(value, int) and value > 0:
+            payload[id_key] = value
+
+    for attribute, payload_key in (
+        ("reservation_id", "reservation_id"),
+        ("guest_id", "guest_id"),
+        ("room_id", "room_id"),
+        ("category_id", "category_id"),
+        ("item_id", "item_id"),
+        ("location_id", "location_id"),
+        ("group_id", "group_id"),
+        ("session_id", "session_id"),
+        ("transaction_id", "transaction_id"),
+        ("vendor_id", "vendor_id"),
+        ("linen_item_id", "linen_item_id"),
+        ("company_id", "company_id"),
+        ("movement_group_id", "group_id"),
+    ):
+        value = _scalar_event_value(getattr(model, attribute, None))
+        if isinstance(value, int) and value > 0:
+            payload[payload_key] = value
+
+    status = _scalar_event_value(getattr(model, "status", None))
+    if isinstance(status, (str, int, float, bool)):
+        payload["status"] = status
+    return validate_event_input(
+        hotel_id=_model_hotel_id(model, table_name) or 1,
+        domain="analytics",
+        event_type="model.changed",
+        payload=payload,
+    )
+
+
+def queue_model_changes(session: Any) -> None:
+    """Collect safe domain signals from ORM writes before a transaction ends."""
+
+    collections = (
+        ("created", getattr(session, "new", ())),
+        ("updated", getattr(session, "dirty", ())),
+        ("deleted", getattr(session, "deleted", ())),
+    )
+    seen: set[tuple[int, str]] = set()
+    for action, models in collections:
+        for model in models:
+            table_name = str(getattr(model, "__tablename__", "") or "")
+            domains = MODEL_DOMAIN_DEPENDENCIES.get(table_name)
+            hotel_id = _model_hotel_id(model, table_name)
+            if not domains or not hotel_id or (id(model), action) in seen:
+                continue
+            seen.add((id(model), action))
+            derived_family = DERIVED_ANALYTICS_MODEL_FAMILIES.get(table_name)
+            if derived_family:
+                event_type = "analytics.read_model.changed"
+                payload = {"family": derived_family}
+            else:
+                event_type = f"{table_name}.{action}"
+                payload = _model_event_payload(model, table_name)
+            for domain in domains:
+                queue_domain_change(
+                    session,
+                    hotel_id=hotel_id,
+                    domain=domain,
+                    event_type=event_type,
+                    payload=payload,
+                )
+
+
+def queue_domain_change(
+    session: "Session",
+    *,
+    hotel_id: int,
+    domain: str,
+    event_type: str,
+    payload: Mapping[str, Any] | None = None,
+) -> None:
+    """Queue one tenant-scoped change for publication after commit.
+
+    Services can call this as soon as they know a transaction changed. The
+    event is held in ``Session.info`` so a rollback removes it and duplicate
+    service/model notifications collapse before publication. This function
+    never sends a payload containing amounts, PII, credentials or file bytes.
+    """
+
+    normalized_payload = validate_event_input(
+        hotel_id=hotel_id,
+        domain=domain,
+        event_type=event_type,
+        payload=payload,
+    )
+    pending = session.info.setdefault(PENDING_EVENTS_KEY, {})
+    dedupe_key = (
+        hotel_id,
+        domain.strip().lower(),
+        event_type.strip(),
+        json.dumps(normalized_payload, sort_keys=True, ensure_ascii=True, allow_nan=False),
+    )
+    pending[dedupe_key] = QueuedDomainChange(
+        hotel_id=hotel_id,
+        domain=domain.strip().lower(),
+        event_type=event_type.strip(),
+        payload=normalized_payload,
+        transaction_id=_session_transaction_id(session),
+    )
+
+
+def publish_queued_domain_changes(session: "Session") -> None:
+    """Publish committed signals without allowing Redis to break the request."""
+
+    pending = session.info.pop(PENDING_EVENTS_KEY, {})
+    for change in pending.values():
+        try:
+            publish_domain_event(
+                hotel_id=change.hotel_id,
+                domain=change.domain,
+                event_type=change.event_type,
+                payload=change.payload,
+            )
+        except Exception as exc:  # post-commit work must not turn 200 into 500
+            logger.warning(
+                "realtime_events.post_commit_publish_failed",
+                extra={
+                    "hotel_id": change.hotel_id,
+                    "domain": change.domain,
+                    "event_type": change.event_type,
+                    "error_type": type(exc).__name__,
+                },
+            )
+
+
+def discard_queued_domain_changes(session: "Session", transaction_id: int | None = None) -> None:
+    """Drop signals from a rolled-back root or nested transaction."""
+
+    if transaction_id is None:
+        session.info.pop(PENDING_EVENTS_KEY, None)
+        return
+    pending = session.info.get(PENDING_EVENTS_KEY)
+    if not isinstance(pending, dict):
+        return
+    remaining = {
+        key: change
+        for key, change in pending.items()
+        if getattr(change, "transaction_id", None) != transaction_id
+    }
+    if remaining:
+        session.info[PENDING_EVENTS_KEY] = remaining
+    else:
+        session.info.pop(PENDING_EVENTS_KEY, None)
+
+
+def _session_transaction_id(session: "Session") -> int | None:
+    """Identify the innermost SQLAlchemy transaction for rollback pruning."""
+
+    get_nested_transaction = getattr(session, "get_nested_transaction", None)
+    get_transaction = getattr(session, "get_transaction", None)
+    nested_transaction = get_nested_transaction() if callable(get_nested_transaction) else None
+    root_transaction = get_transaction() if callable(get_transaction) else None
+    transaction = nested_transaction or root_transaction
+    return id(transaction) if transaction is not None else None
 
 
 def _settings():

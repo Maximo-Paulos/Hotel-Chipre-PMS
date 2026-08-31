@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, Route, Routes, useNavigate } from "react-router-dom";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { ApiError } from "../../api/client";
 import {
@@ -27,10 +27,13 @@ import {
   type StaffPayload,
   type SubscriptionChoicePayload
 } from "../../api/onboarding";
+import { refreshAfterMutation } from "../../api/queryInvalidation";
+import type { QueryDomain } from "../../api/queryKeys";
 import { onboardingStatusKey, useOnboardingStatus } from "../../hooks/useOnboardingStatus";
 import { useSubscriptionPlans } from "../../hooks/useSubscription";
 import { useTimezones } from "../../hooks/useTimezones";
 import { useSession } from "../../state/session";
+import { useGuardedMutation } from "../../hooks/useGuardedMutation";
 
 const steps = [
   { path: "", label: "Owner" },
@@ -202,12 +205,17 @@ export function OnboardingWizard() {
   const refreshCache = (data: OnboardingStatus) =>
     queryClient.setQueryData(onboardingStatusKey(session.hotelId, session.userId), data);
 
-  const runWithFeedback = async (action: () => Promise<OnboardingStatus>, successMessage: string) => {
+  const runWithFeedback = async (
+    action: () => Promise<OnboardingStatus>,
+    successMessage: string,
+    domains: readonly QueryDomain[]
+  ) => {
     setError(null);
     setToast(null);
     try {
       const data = await action();
       refreshCache(data);
+      await refreshAfterMutation(queryClient, session.hotelId, domains);
       setToast(successMessage);
       return data;
     } catch (err) {
@@ -216,49 +224,88 @@ export function OnboardingWizard() {
     }
   };
 
-  const ownerMutation = useMutation({
-    mutationFn: () => runWithFeedback(() => persistOwner(ownerForm, session), "Owner guardado.")
+  const ownerMutation = useGuardedMutation({
+    mutationFn: () => runWithFeedback(() => persistOwner(ownerForm, session), "Owner guardado.", ["onboarding", "settings", "users"])
   });
 
-  const identityMutation = useMutation({
-    mutationFn: () => runWithFeedback(() => setHotelIdentity(identityForm, session), "Identidad del hotel guardada.")
-  });
-
-  const categoriesMutation = useMutation({
-    mutationFn: () => runWithFeedback(() => setCategories(categories, session), "Categorías guardadas.")
-  });
-
-  const roomsMutation = useMutation({
-    mutationFn: () => runWithFeedback(() => setRooms(rooms, session), "Habitaciones guardadas.")
-  });
-
-  const policyMutation = useMutation({
-    mutationFn: () => runWithFeedback(() => setDepositPolicy(policyForm, session), "Política guardada.")
-  });
-
-  const paymentsMutation = useMutation({
-    mutationFn: () => runWithFeedback(() => setPaymentMethods(paymentsForm, session), "Pagos guardados.")
-  });
-
-  const otaMutation = useMutation({
-    mutationFn: () => runWithFeedback(() => setOtaChannels(otaForm, session), "Canales OTA guardados.")
-  });
-
-  const subscriptionMutation = useMutation({
+  const identityMutation = useGuardedMutation({
     mutationFn: () =>
-      runWithFeedback(() => setSubscriptionChoice(subscriptionForm, session), "Suscripción configurada.")
+      runWithFeedback(() => setHotelIdentity(identityForm, session), "Identidad del hotel guardada.", [
+        "onboarding",
+        "settings",
+        "rooms",
+        "reservations"
+      ])
   });
 
-  const staffMutation = useMutation({
-    mutationFn: () => runWithFeedback(() => setStaff(staff, session), "Staff guardado.")
+  const categoriesMutation = useGuardedMutation({
+    mutationFn: () =>
+      runWithFeedback(() => setCategories(categories, session), "Categorías guardadas.", [
+        "onboarding",
+        "rooms",
+        "reservations",
+        "analytics"
+      ])
   });
 
-  const finishMutation = useMutation({
+  const roomsMutation = useGuardedMutation({
+    mutationFn: () =>
+      runWithFeedback(() => setRooms(rooms, session), "Habitaciones guardadas.", [
+        "onboarding",
+        "rooms",
+        "reservations",
+        "analytics"
+      ])
+  });
+
+  const policyMutation = useGuardedMutation({
+    mutationFn: () =>
+      runWithFeedback(() => setDepositPolicy(policyForm, session), "Política guardada.", [
+        "onboarding",
+        "settings",
+        "payments",
+        "reservations"
+      ])
+  });
+
+  const paymentsMutation = useGuardedMutation({
+    mutationFn: () =>
+      runWithFeedback(() => setPaymentMethods(paymentsForm, session), "Pagos guardados.", [
+        "onboarding",
+        "settings",
+        "payments"
+      ])
+  });
+
+  const otaMutation = useGuardedMutation({
+    mutationFn: () =>
+      runWithFeedback(() => setOtaChannels(otaForm, session), "Canales OTA guardados.", [
+        "onboarding",
+        "settings",
+        "reservations",
+        "rooms"
+      ])
+  });
+
+  const subscriptionMutation = useGuardedMutation({
+    mutationFn: () =>
+      runWithFeedback(() => setSubscriptionChoice(subscriptionForm, session), "Suscripción configurada.", [
+        "onboarding",
+        "settings"
+      ])
+  });
+
+  const staffMutation = useGuardedMutation({
+    mutationFn: () =>
+      runWithFeedback(() => setStaff(staff, session), "Staff guardado.", ["onboarding", "users", "settings"])
+  });
+
+  const finishMutation = useGuardedMutation({
     mutationFn: async () => {
       setError(null);
       setToast(null);
       await refreshStatus(refetch);
-      return runWithFeedback(() => finishOnboarding(session), "Onboarding finalizado.");
+      return runWithFeedback(() => finishOnboarding(session), "Onboarding finalizado.", ["onboarding", "settings"]);
     },
     onSuccess: () => {
       navigate("/dashboard", { replace: true });

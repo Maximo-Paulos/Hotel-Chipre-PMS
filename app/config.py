@@ -48,6 +48,13 @@ class Settings(BaseSettings):
     DISTRIBUTED_LOCK_DEFAULT_TTL_SECONDS: int = 60
     REALTIME_EVENTS_ENABLED: bool = True
     REALTIME_EVENTS_HEARTBEAT_SECONDS: int = 15
+    # Collaboration tickets are intentionally short-lived and one-use. Redis
+    # / Valkey is required for issuing them so a multi-worker deployment cannot
+    # accidentally accept a ticket twice.
+    COLLABORATION_TICKET_TTL_SECONDS: int = 30
+    COLLABORATION_MAX_WS_MESSAGE_BYTES: int = 16 * 1024
+    COLLABORATION_MAX_PATCH_FIELDS: int = 20
+    COLLABORATION_RATE_LIMIT_PER_MINUTE: int = 120
     CLICKHOUSE_ENABLED: bool = False
     CLICKHOUSE_REQUIRED: bool = False
     CLICKHOUSE_URL: str = ""
@@ -448,6 +455,8 @@ def validate_runtime_security(settings: Settings | None = None) -> None:
 
     if not runtime_settings.DISTRIBUTED_LOCK_ENABLED or not runtime_settings.DISTRIBUTED_LOCK_REQUIRED:
         errors.append("DISTRIBUTED_LOCK_ENABLED and DISTRIBUTED_LOCK_REQUIRED must be true in production")
+    if not runtime_settings.REALTIME_EVENTS_ENABLED:
+        errors.append("REALTIME_EVENTS_ENABLED must be true in production")
     if runtime_settings.MASTER_ADMIN_COOKIE_SECURE is False:
         errors.append("MASTER_ADMIN_COOKIE_SECURE must not be false in production")
     if _cors_contains_wildcard(runtime_settings):

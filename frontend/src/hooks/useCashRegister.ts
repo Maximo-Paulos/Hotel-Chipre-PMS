@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 
 import {
   addCashMovement,
@@ -19,7 +19,10 @@ import {
   type CashSessionSummary
 } from "../api/cashRegister";
 import { hasValidSession } from "../api/client";
+import { refreshCashState } from "../api/queryInvalidation";
 import { useSession } from "../state/session";
+
+import { useGuardedMutation } from "./useGuardedMutation";
 
 const cashSessionsKey = (hotelId: number | null) => ["cash-sessions", hotelId];
 const cashMovementsKey = (hotelId: number | null, sessionId: number) => ["cash-movements", hotelId, sessionId];
@@ -32,10 +35,7 @@ const latestCloseReportKey = (hotelId: number | null) => ["cash-latest-close-rep
  * the source of that movement.
  */
 export function invalidateCashRegisterQueries(queryClient: QueryClient, hotelId: number | null) {
-  queryClient.invalidateQueries({ queryKey: cashSessionsKey(hotelId) });
-  queryClient.invalidateQueries({ queryKey: ["cash-movements", hotelId] });
-  queryClient.invalidateQueries({ queryKey: ["cash-summary", hotelId] });
-  queryClient.invalidateQueries({ queryKey: latestCloseReportKey(hotelId) });
+  return refreshCashState(queryClient, hotelId);
 }
 
 export function useCashSessions() {
@@ -82,52 +82,41 @@ export function useCashRegisterMutations(sessionId?: number) {
   const queryClient = useQueryClient();
   const { session } = useSession();
 
-  const invalidateSessions = () => {
-    queryClient.invalidateQueries({ queryKey: cashSessionsKey(session.hotelId) });
-    queryClient.invalidateQueries({ queryKey: latestCloseReportKey(session.hotelId) });
-  };
-  const invalidateMovements = () => {
-    if (sessionId) {
-      queryClient.invalidateQueries({ queryKey: cashMovementsKey(session.hotelId, sessionId) });
-      queryClient.invalidateQueries({ queryKey: ["cash-summary", session.hotelId, sessionId] });
-    }
-  };
+  const invalidateSessions = () => refreshCashState(queryClient, session.hotelId);
+  const invalidateMovements = () => refreshCashState(queryClient, session.hotelId);
 
-  const openSessionMutation = useMutation({
+  const openSessionMutation = useGuardedMutation({
     mutationFn: (payload: CashSessionOpenPayload) => openCashSession(payload, session),
-    onSuccess: invalidateSessions,
+    onSuccess: async () => invalidateSessions(),
     // A rejected "open" (e.g. someone else already opened the register on
     // another device) means our cached session list is stale, not just the
     // request. Without this, the UI keeps offering an "Abrir caja" button
     // that will fail again instead of switching to the real "already open"
     // state.
-    onError: invalidateSessions
+    onError: async () => invalidateSessions()
   });
 
-  const addMovementMutation = useMutation({
+  const addMovementMutation = useGuardedMutation({
     mutationFn: (payload: CashMovementPayload) => addCashMovement(sessionId!, payload, session),
-    onSuccess: () => {
-      invalidateSessions();
-      invalidateMovements();
-    }
+    onSuccess: async () => invalidateMovements()
   });
 
-  const closeSessionMutation = useMutation<CashCloseReport, unknown, CashSessionClosePayload>({
+  const closeSessionMutation = useGuardedMutation<CashCloseReport, unknown, CashSessionClosePayload>({
     mutationFn: (payload) => closeCashSession(sessionId!, payload, session),
-    onSuccess: invalidateSessions,
-    onError: invalidateSessions
+    onSuccess: async () => invalidateSessions(),
+    onError: async () => invalidateSessions()
   });
 
-  const approveDifferenceMutation = useMutation({
+  const approveDifferenceMutation = useGuardedMutation({
     mutationFn: (reportId: number) => approveCashCloseDifference(reportId, session),
-    onSuccess: invalidateSessions,
-    onError: invalidateSessions
+    onSuccess: async () => invalidateSessions(),
+    onError: async () => invalidateSessions()
   });
 
-  const confirmCustodyMutation = useMutation({
+  const confirmCustodyMutation = useGuardedMutation({
     mutationFn: (reportId: number) => confirmCashCustody(reportId, session),
-    onSuccess: invalidateSessions,
-    onError: invalidateSessions
+    onSuccess: async () => invalidateSessions(),
+    onError: async () => invalidateSessions()
   });
 
   return { openSessionMutation, addMovementMutation, closeSessionMutation, approveDifferenceMutation, confirmCustodyMutation };

@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   approvePaymentProof,
@@ -9,9 +9,10 @@ import {
   type PaymentProofCreatePayload
 } from "../api/paymentProofs";
 import { hasValidSession } from "../api/client";
+import { refreshPaymentState } from "../api/queryInvalidation";
 import { useSession } from "../state/session";
 
-import { invalidateCashRegisterQueries } from "./useCashRegister";
+import { useGuardedMutation } from "./useGuardedMutation";
 
 const proofsKey = (hotelId: number | null, reservationId?: number) => ["payment-proofs", hotelId, reservationId];
 
@@ -28,26 +29,19 @@ export function usePaymentProofs(reservationId?: number) {
 export function usePaymentProofMutations(reservationId?: number) {
   const { session } = useSession();
   const queryClient = useQueryClient();
-  const invalidate = () => {
-    if (reservationId) queryClient.invalidateQueries({ queryKey: proofsKey(session.hotelId, reservationId) });
-    queryClient.invalidateQueries({ queryKey: ["payment-summary", session.hotelId, reservationId] });
-    queryClient.invalidateQueries({ queryKey: ["reservations", session.hotelId] });
-  };
+  const invalidate = () => refreshPaymentState(queryClient, session.hotelId, reservationId);
 
-  const submitMutation = useMutation({
+  const submitMutation = useGuardedMutation({
     mutationFn: (payload: PaymentProofCreatePayload) => submitPaymentProof(payload, session),
-    onSuccess: invalidate
+    onSuccess: async () => invalidate()
   });
-  const approveMutation = useMutation({
+  const approveMutation = useGuardedMutation({
     mutationFn: (proofId: number) => approvePaymentProof(proofId, session),
-    onSuccess: () => {
-      invalidate();
-      invalidateCashRegisterQueries(queryClient, session.hotelId);
-    }
+    onSuccess: async () => invalidate()
   });
-  const rejectMutation = useMutation({
+  const rejectMutation = useGuardedMutation({
     mutationFn: ({ proofId, reason }: { proofId: number; reason: string }) => rejectPaymentProof(proofId, reason, session),
-    onSuccess: invalidate
+    onSuccess: async () => invalidate()
   });
 
   return { submitMutation, approveMutation, rejectMutation };

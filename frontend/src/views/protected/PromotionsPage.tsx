@@ -227,7 +227,10 @@ export function PromotionsPage() {
     }));
   };
 
-  const handleSubmit = (event: React.FormEvent) => {
+  const showMutationError = (err: unknown) =>
+    setFormError(err instanceof ApiError ? err.message : "No se pudo guardar la promoción.");
+
+  const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setFormError(null);
 
@@ -250,12 +253,9 @@ export function PromotionsPage() {
     }
 
     const conditions = buildConditions(form);
-    const onError = (err: unknown) =>
-      setFormError(err instanceof ApiError ? err.message : "No se pudo guardar la promoción.");
-
     if (editingId) {
-      updateMutation.mutate(
-        {
+      try {
+        await updateMutation.mutateAsync({
           id: editingId,
           payload: {
             name: form.name.trim(),
@@ -268,15 +268,12 @@ export function PromotionsPage() {
             stackable: form.stackable,
             conditions
           }
-        },
-        {
-          onSuccess: () => {
-            setShowForm(false);
-            setEditingId(null);
-          },
-          onError
-        }
-      );
+        });
+        setShowForm(false);
+        setEditingId(null);
+      } catch (err: unknown) {
+        showMutationError(err);
+      }
       return;
     }
 
@@ -292,13 +289,13 @@ export function PromotionsPage() {
       stackable: form.stackable,
       conditions
     };
-    createMutation.mutate(payload, {
-      onSuccess: () => {
-        setShowForm(false);
-        setForm(emptyForm);
-      },
-      onError
-    });
+    try {
+      await createMutation.mutateAsync(payload);
+      setShowForm(false);
+      setForm(emptyForm);
+    } catch (err: unknown) {
+      showMutationError(err);
+    }
   };
 
   if (!hasValidSession(session)) {
@@ -385,7 +382,7 @@ export function PromotionsPage() {
                       type="button"
                       className="min-h-11 rounded-lg border border-rose-200 px-4 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-60"
                       disabled={deactivateMutation.isPending}
-                      onClick={() => deactivateMutation.mutate(promo.id)}
+                      onClick={() => void deactivateMutation.mutateAsync(promo.id).catch((err: unknown) => showMutationError(err))}
                     >
                       Desactivar
                     </button>
@@ -394,7 +391,7 @@ export function PromotionsPage() {
                       type="button"
                       className="min-h-11 rounded-lg border border-emerald-200 px-4 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-60"
                       disabled={reactivateMutation.isPending}
-                      onClick={() => reactivateMutation.mutate(promo.id)}
+                      onClick={() => void reactivateMutation.mutateAsync(promo.id).catch((err: unknown) => showMutationError(err))}
                     >
                       Reactivar
                     </button>
@@ -668,15 +665,15 @@ function PromotionSimulator() {
 
   const canSimulate = Boolean(categoryId && checkIn && checkOut);
 
-  const handleSimulate = (event: React.FormEvent) => {
+  const handleSimulate = async (event: React.FormEvent) => {
     event.preventDefault();
     setError(null);
     if (!canSimulate) {
       setError("Elegí categoría y fechas de entrada/salida.");
       return;
     }
-    simulateMutation.mutate(
-      {
+    try {
+      const simulation = await simulateMutation.mutateAsync({
         category_id: Number(categoryId),
         check_in_date: checkIn,
         check_out_date: checkOut,
@@ -685,12 +682,11 @@ function PromotionSimulator() {
         sales_channel_code: salesChannel.trim() || null,
         guest_id: toIntOrNull(guestId),
         company_id: toIntOrNull(companyId)
-      },
-      {
-        onSuccess: setResult,
-        onError: (err) => setError(err instanceof ApiError ? err.message : "No se pudo simular la cotización.")
-      }
-    );
+      });
+      setResult(simulation);
+    } catch (err: unknown) {
+      setError(err instanceof ApiError ? err.message : "No se pudo simular la cotización.");
+    }
   };
 
   const currency = result?.output_currency ?? "ARS";

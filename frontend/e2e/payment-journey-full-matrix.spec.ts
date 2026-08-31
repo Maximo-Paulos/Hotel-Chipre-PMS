@@ -225,7 +225,7 @@ test("a rapid double-click on a cash partial payment must not double the charge"
   // Fire two native clicks back-to-back in the SAME JS turn (no await between
   // them), before React has a chance to re-render the button as disabled from
   // the first click's mutation. This is the realistic double-click race: the
-  // frontend mints a brand-new Idempotency-Key on every call to makePayment(),
+  // the payment hook reuses an Idempotency-Key when retrying the same intent,
   // so the backend's idempotency-key dedup cannot catch two distinct clicks --
   // only a same-amount-exceeds-balance guard could, and $50 + $50 is still
   // within the $300 balance, so nothing else stops a silent double charge.

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useMutation, useQueries, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
+import { useQueries, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 
 import {
   createLaundryRemito,
@@ -38,6 +38,7 @@ import { useOnlineStatus } from "../../hooks/useOnlineStatus";
 import { useSession } from "../../state/session";
 import { formatMoney } from "../../utils/currency";
 import { startOfCurrentMonthIso, startOfCurrentWeekIso, todayIso } from "../../utils/date";
+import { refreshStockState } from "../../api/queryInvalidation";
 
 // Mobile task-based tabs -- desktop keeps showing every section at once
 // regardless of mobileTab. "vendors" (lavaderos/precios/catálogo) is only
@@ -309,23 +310,17 @@ export function LaundryPage() {
     return map;
   }, [houseStockSummaryQuery.data]);
 
-  const invalidateVendors = () => queryClient.invalidateQueries({ queryKey: ["laundry-vendors", session.hotelId] });
-  const invalidatePrices = (vendorId: number) =>
-    queryClient.invalidateQueries({ queryKey: ["laundry-vendor-prices", session.hotelId, vendorId] });
-  const invalidateLinenItems = () => queryClient.invalidateQueries({ queryKey: ["linen-items", session.hotelId] });
-  const invalidateLinenLocations = () =>
-    queryClient.invalidateQueries({ queryKey: ["linen-locations", session.hotelId] });
-  const invalidateAfterRemito = () => {
-    queryClient.invalidateQueries({ queryKey: ["laundry-remitos", session.hotelId] });
-    queryClient.invalidateQueries({ queryKey: ["laundry-vendor-balance", session.hotelId] });
-    queryClient.invalidateQueries({ queryKey: ["laundry-vendor-spend", session.hotelId] });
-    queryClient.invalidateQueries({ queryKey: ["linen-summary", session.hotelId] });
+  const invalidateVendors = () => refreshStockState(queryClient, session.hotelId);
+  const invalidatePrices = (vendorId: number) => {
+    void vendorId;
+    return refreshStockState(queryClient, session.hotelId);
   };
-  const invalidateAfterMovement = () => {
-    queryClient.invalidateQueries({ queryKey: ["linen-summary", session.hotelId] });
-  };
+  const invalidateLinenItems = () => refreshStockState(queryClient, session.hotelId);
+  const invalidateLinenLocations = () => refreshStockState(queryClient, session.hotelId);
+  const invalidateAfterRemito = () => refreshStockState(queryClient, session.hotelId);
+  const invalidateAfterMovement = () => refreshStockState(queryClient, session.hotelId);
 
-  const createVendorMutation = useMutation({
+  const createVendorMutation = useGuardedMutation({
     mutationFn: () =>
       createLaundryVendor(
         {
@@ -335,19 +330,19 @@ export function LaundryPage() {
         },
         session
       ),
-    onSuccess: (vendor) => {
-      invalidateVendors();
+    onSuccess: async (vendor) => {
+      await invalidateVendors();
       setVendorForm(emptyVendorForm);
       setSelectedVendorId(vendor.id);
       setMessage(`Lavadero "${vendor.name}" creado.`);
     }
   });
 
-  const updateVendorMutation = useMutation({
+  const updateVendorMutation = useGuardedMutation({
     mutationFn: ({ vendorId, active }: { vendorId: number; active: boolean }) =>
       updateLaundryVendor(vendorId, { active }, session),
-    onSuccess: (vendor) => {
-      invalidateVendors();
+    onSuccess: async (vendor) => {
+      await invalidateVendors();
       setMessage(`Lavadero "${vendor.name}" actualizado.`);
     }
   });
@@ -355,19 +350,19 @@ export function LaundryPage() {
   // D (stock/lavanderia separation, real split): linen_items is its own
   // table now (see api/linen.ts) -- this form is the only way to add a new
   // linen type, there is no StockPage equivalent to fall back on.
-  const createLinenItemMutation = useMutation({
+  const createLinenItemMutation = useGuardedMutation({
     mutationFn: () => createLinenItem({ name: linenItemForm.name, unit: linenItemForm.unit }, session),
-    onSuccess: () => {
-      invalidateLinenItems();
+    onSuccess: async () => {
+      await invalidateLinenItems();
       setLinenItemForm(emptyLinenItemForm);
       setMessage("Tipo de ropa blanca creado.");
     }
   });
 
-  const createLinenLocationMutation = useMutation({
+  const createLinenLocationMutation = useGuardedMutation({
     mutationFn: () => createLinenLocation({ name: linenLocationForm.name }, session),
-    onSuccess: () => {
-      invalidateLinenLocations();
+    onSuccess: async () => {
+      await invalidateLinenLocations();
       setLinenLocationForm(emptyLinenLocationForm);
       setMessage("Ubicacion de lavanderia creada.");
     }
@@ -376,7 +371,7 @@ export function LaundryPage() {
   // Replaces the old workaround of loading an opening balance for a new
   // linen type through StockPage's generic movement form -- linen_items is
   // its own table now, so StockPage's form can no longer target it at all.
-  const createLinenMovementMutation = useMutation({
+  const createLinenMovementMutation = useGuardedMutation({
     mutationFn: () =>
       createLinenMovement(
         {
@@ -388,34 +383,32 @@ export function LaundryPage() {
         },
         session
       ),
-    onSuccess: () => {
-      invalidateAfterMovement();
+    onSuccess: async () => {
+      await invalidateAfterMovement();
       setMovementForm(emptyMovementForm);
       setMessage("Movimiento registrado.");
     }
   });
 
-  const setPriceMutation = useMutation({
+  const setPriceMutation = useGuardedMutation({
     mutationFn: () =>
       setLaundryVendorPrice(
         selectedVendorId as number,
         { linen_item_id: Number(priceForm.linen_item_id), unit_price: priceForm.unit_price },
         session
       ),
-    onSuccess: () => {
-      if (selectedVendorId) invalidatePrices(selectedVendorId);
+    onSuccess: async () => {
+      if (selectedVendorId) await invalidatePrices(selectedVendorId);
       setPriceForm(emptyPriceForm);
       setMessage("Precio guardado.");
     }
   });
 
-  const markSettlementMutation = useMutation({
+  const markSettlementMutation = useGuardedMutation({
     mutationFn: ({ periodStart, paid, notes }: { periodStart: string; paid: boolean; notes?: string | null }) =>
       markLaundryVendorSettlementPaid(selectedVendorId as number, periodStart, { paid, notes }, session),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["laundry-vendor-settlements", session.hotelId, selectedVendorId]
-      });
+    onSuccess: async () => {
+      await refreshStockState(queryClient, session.hotelId);
     }
   });
 
@@ -466,8 +459,8 @@ export function LaundryPage() {
 
       return { outbound, inbound, inboundError };
     },
-    onSuccess: (result) => {
-      invalidateAfterRemito();
+    onSuccess: async (result) => {
+      await invalidateAfterRemito();
       if (result.inboundError) {
         setMessage(
           `Salida registrada (remito ${result.outbound?.remito.remito_number}), pero el retorno falló: ${result.inboundError}`
@@ -668,7 +661,7 @@ export function LaundryPage() {
                   vendor={vendor}
                   selected={selectedVendorId === vendor.id}
                   onSelect={() => setSelectedVendorId(vendor.id)}
-                  onToggleActive={() => updateVendorMutation.mutate({ vendorId: vendor.id, active: !vendor.active })}
+                  onToggleActive={() => void updateVendorMutation.mutateAsync({ vendorId: vendor.id, active: !vendor.active }).catch((error: unknown) => setMessage(error instanceof Error ? error.message : "No se pudo actualizar el lavadero."))}
                   toggling={updateVendorMutation.isPending}
                 />
               ))}
@@ -1062,7 +1055,7 @@ export function LaundryPage() {
           onYearChange={setSettlementYear}
           quarters={settlementQuarters}
           query={settlementsQuery}
-          onMark={(periodStart, paid, notes) => markSettlementMutation.mutate({ periodStart, paid, notes })}
+          onMark={(periodStart, paid, notes) => void markSettlementMutation.mutateAsync({ periodStart, paid, notes }).catch((error: unknown) => setMessage(error instanceof Error ? error.message : "No se pudo actualizar el pago."))}
           marking={markSettlementMutation.isPending}
         />
       )}

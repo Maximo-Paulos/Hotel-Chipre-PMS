@@ -99,22 +99,20 @@ export function RoomsPage() {
     );
   }, [rooms]);
 
-  const handleStatusUpdate = (roomId: number, status: RoomStatus) => {
+  const handleStatusUpdate = async (roomId: number, status: RoomStatus) => {
     if (actionsBlocked || (!canManageRoomStatus && !canToggleCleaningStatus)) return;
     setRoomStatusError(null);
     setPendingRoom(roomId);
-    const mutationOptions = {
-      onError: (error: unknown) => {
-        const detail = error instanceof Error ? error.message : "No se pudo actualizar el estado de la habitación.";
-        setRoomStatusError({ roomId, message: detail });
-      },
-      onSettled: () => setPendingRoom(null)
-    };
-    if (canManageRoomStatus) {
-      updateStatusMutation.mutate({ roomId, status }, mutationOptions);
-    } else if (status === "available" || status === "cleaning") {
-      updateCleaningStatusMutation.mutate({ roomId, status }, mutationOptions);
-    } else {
+    try {
+      if (canManageRoomStatus) {
+        await updateStatusMutation.mutateAsync({ roomId, status });
+      } else if (status === "available" || status === "cleaning") {
+        await updateCleaningStatusMutation.mutateAsync({ roomId, status });
+      }
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "No se pudo actualizar el estado de la habitación.";
+      setRoomStatusError({ roomId, message: detail });
+    } finally {
       setPendingRoom(null);
     }
   };
@@ -244,7 +242,7 @@ export function RoomsPage() {
                       id={`room-status-${room.id}`}
                       aria-label={`Estado de habitación ${room.room_number}`}
                       value={room.status}
-                      onChange={(e) => handleStatusUpdate(room.id, e.target.value as RoomStatus)}
+                      onChange={(e) => void handleStatusUpdate(room.id, e.target.value as RoomStatus)}
                       className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-brand-400 focus:outline-none disabled:bg-slate-50"
                       disabled={actionsBlocked || (pendingRoom === room.id && (updateStatusMutation.isPending || updateCleaningStatusMutation.isPending))}
                     >

@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { ApiError, apiFetch } from "../../../api/client";
 import { useSubscriptionStatus } from "../../../hooks/useSubscription";
 import { formatMoney } from "../../../utils/currency";
 import { StatCard } from "../../../components/StatCard";
 import { useSession } from "../../../state/session";
+import { refreshAfterMutation, refreshRoomState } from "../../../api/queryInvalidation";
+import { useGuardedMutation } from "../../../hooks/useGuardedMutation";
 
 type AnalyticsEnvelope = {
   hotel_id: number;
@@ -700,12 +702,14 @@ export function AnalyticsOperationsPage() {
 }
 
 export function AnalyticsAIChatPage() {
+  const { session } = useSession();
+  const queryClient = useQueryClient();
   const [filters, setFilters] = usePersistedAnalyticsFilters("ai-chat");
   const [message, setMessage] = useState("");
   const [history, setHistory] = useState<ChatMessage[]>([]);
   const statusQuery = useAnalyticsQuery<AnalyticsAIStatus>("/api/analytics/insights/status");
 
-  const chatMutation = useMutation({
+  const chatMutation = useGuardedMutation({
     mutationFn: async (text: string) =>
       apiFetch<AnalyticsAIChatResponse>("/api/analytics/ai-chat", {
         method: "POST",
@@ -716,9 +720,10 @@ export function AnalyticsAIChatPage() {
           currency_display: filters.currency_display,
           compare_previous: filters.compare_previous,
           compare_yoy: filters.compare_yoy
-        }
+        },
+        session
       }),
-    onSuccess: (response, text) => {
+    onSuccess: async (response, text) => {
       setHistory((current) => [
         ...current,
         { role: "user", text },
@@ -730,6 +735,7 @@ export function AnalyticsAIChatPage() {
         }
       ]);
       setMessage("");
+      await refreshAfterMutation(queryClient, session.hotelId, ["analytics"]);
     }
   });
 
@@ -815,7 +821,7 @@ export function AnalyticsAIChatPage() {
               onSubmit={(event) => {
                 event.preventDefault();
                 const text = message.trim();
-                if (text) chatMutation.mutate(text);
+                if (text) void chatMutation.mutateAsync(text).catch(() => undefined);
               }}
             >
               <input
@@ -841,6 +847,7 @@ export function AnalyticsAIChatPage() {
 
 export function CompaniesSettingsPage() {
   const plan = usePlan();
+  const { session } = useSession();
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState<Company | null>(null);
   const [form, setForm] = useState({
@@ -852,12 +859,12 @@ export function CompaniesSettingsPage() {
   });
 
   const companiesQuery = useQuery({
-    queryKey: ["companies"],
-    queryFn: async () => apiFetch<Company[]>("/api/companies"),
+    queryKey: ["companies", session.hotelId],
+    queryFn: async () => apiFetch<Company[]>("/api/companies", { session }),
     staleTime: 30_000
   });
 
-  const createMutation = useMutation({
+  const createMutation = useGuardedMutation({
     mutationFn: async () =>
       apiFetch<Company>("/api/companies", {
         method: "POST",
@@ -867,15 +874,16 @@ export function CompaniesSettingsPage() {
           tax_id: form.tax_id || null,
           country_code: form.country_code || null,
           notes: form.notes || null
-        }
+        },
+        session
       }),
     onSuccess: async () => {
       setForm({ legal_name: "", display_name: "", tax_id: "", country_code: "AR", notes: "" });
-      await queryClient.invalidateQueries({ queryKey: ["companies"] });
+      await refreshAfterMutation(queryClient, session.hotelId, ["settings"]);
     }
   });
 
-  const patchMutation = useMutation({
+  const patchMutation = useGuardedMutation({
     mutationFn: async () =>
       editing &&
       apiFetch<Company>(`/api/companies/${editing.id}`, {
@@ -886,24 +894,47 @@ export function CompaniesSettingsPage() {
           tax_id: form.tax_id || undefined,
           country_code: form.country_code || undefined,
           notes: form.notes || undefined
-        }
+        },
+        session
       }),
     onSuccess: async () => {
       setEditing(null);
-      await queryClient.invalidateQueries({ queryKey: ["companies"] });
+      await refreshAfterMutation(queryClient, session.hotelId, ["settings"]);
     }
   });
 
-  const deactivateMutation = useMutation({
-    mutationFn: async (companyId: number) => apiFetch(`/api/companies/${companyId}/deactivate`, { method: "POST" }),
-    onSuccess: async () => queryClient.invalidateQueries({ queryKey: ["companies"] })
+  const deactivateMutation = useGuardedMutation({
+    mutationFn: async (companyId: number) => apiFetch(`/api/companies/${companyId}/deactivate`, { method: "POST", session }),
+    onSuccess: async () => refreshAfterMutation(queryClient, session.hotelId, ["settings"])
   });
-  const reactivateMutation = useMutation({
-    mutationFn: async (companyId: number) => apiFetch(`/api/companies/${companyId}/reactivate`, { method: "POST" }),
-    onSuccess: async () => queryClient.invalidateQueries({ queryKey: ["companies"] })
+  const reactivateMutation = useGuardedMutation({
+    mutationFn: async (companyId: number) => apiFetch(`/api/companies/${companyId}/reactivate`, { method: "POST", session }),
+    onSuccess: async () => refreshAfterMutation(queryClient, session.hotelId, ["settings"])
   });
 
   const companies = companiesQuery.data || [];
+  const handleCompanySave = async () => {
+    try {
+      if (editing) await patchMutation.mutateAsync();
+      else await createMutation.mutateAsync();
+    } catch {
+      // The mutation state remains available to the surrounding page.
+    }
+  };
+  const handleCompanyDeactivate = async (companyId: number) => {
+    try {
+      await deactivateMutation.mutateAsync(companyId);
+    } catch {
+      // The mutation state remains available to the surrounding page.
+    }
+  };
+  const handleCompanyReactivate = async (companyId: number) => {
+    try {
+      await reactivateMutation.mutateAsync(companyId);
+    } catch {
+      // The mutation state remains available to the surrounding page.
+    }
+  };
   if ((planRank[plan] ?? 0) < planRank.pro) {
     return <Navigate to="/analytics" replace />;
   }
@@ -939,7 +970,7 @@ export function CompaniesSettingsPage() {
           <div className="mt-4 flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => (editing ? patchMutation.mutate() : createMutation.mutate())}
+              onClick={() => void handleCompanySave()}
               className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
             >
               {editing ? "Guardar" : "Crear"}
@@ -988,7 +1019,7 @@ export function CompaniesSettingsPage() {
                   {company.is_active ? (
                     <button
                       type="button"
-                      onClick={() => deactivateMutation.mutate(company.id)}
+                      onClick={() => void handleCompanyDeactivate(company.id)}
                       className="rounded-lg border border-rose-300 px-3 py-2 text-xs font-semibold text-rose-700"
                     >
                       Desactivar
@@ -996,7 +1027,7 @@ export function CompaniesSettingsPage() {
                   ) : (
                     <button
                       type="button"
-                      onClick={() => reactivateMutation.mutate(company.id)}
+                      onClick={() => void handleCompanyReactivate(company.id)}
                       className="rounded-lg border border-emerald-300 px-3 py-2 text-xs font-semibold text-emerald-700"
                     >
                       Reactivar
@@ -1027,6 +1058,7 @@ export function CompaniesSettingsPage() {
 
 export function RoomStateEventsPage() {
   const plan = usePlan();
+  const { session } = useSession();
   const queryClient = useQueryClient();
   const [form, setForm] = useState<RoomStateEventCreate>({
     room_id: 0,
@@ -1037,12 +1069,12 @@ export function RoomStateEventsPage() {
   });
 
   const eventsQuery = useQuery({
-    queryKey: ["room-state-events"],
-    queryFn: async () => apiFetch<RoomStateEvent[]>("/api/room-state-events"),
+    queryKey: ["room-state-events", session.hotelId],
+    queryFn: async () => apiFetch<RoomStateEvent[]>("/api/room-state-events", { session }),
     staleTime: 10_000
   });
 
-  const createMutation = useMutation({
+  const createMutation = useGuardedMutation({
     mutationFn: async () =>
       apiFetch<RoomStateEvent>("/api/room-state-events", {
         method: "POST",
@@ -1050,17 +1082,32 @@ export function RoomStateEventsPage() {
           ...form,
           reason_note: form.reason_note || null,
           started_at: form.started_at || null
-        }
+        },
+        session
       }),
-    onSuccess: async () => queryClient.invalidateQueries({ queryKey: ["room-state-events"] })
+    onSuccess: async () => refreshRoomState(queryClient, session.hotelId)
   });
 
-  const closeMutation = useMutation({
-    mutationFn: async (eventId: number) => apiFetch(`/api/room-state-events/${eventId}/close`, { method: "POST" }),
-    onSuccess: async () => queryClient.invalidateQueries({ queryKey: ["room-state-events"] })
+  const closeMutation = useGuardedMutation({
+    mutationFn: async (eventId: number) => apiFetch(`/api/room-state-events/${eventId}/close`, { method: "POST", session }),
+    onSuccess: async () => refreshRoomState(queryClient, session.hotelId)
   });
 
   const events = eventsQuery.data || [];
+  const handleCreateRoomStateEvent = async () => {
+    try {
+      await createMutation.mutateAsync();
+    } catch {
+      // The mutation state remains available to the surrounding page.
+    }
+  };
+  const handleCloseRoomStateEvent = async (eventId: number) => {
+    try {
+      await closeMutation.mutateAsync(eventId);
+    } catch {
+      // The mutation state remains available to the surrounding page.
+    }
+  };
   if ((planRank[plan] ?? 0) < planRank.pro) {
     return <Navigate to="/analytics" replace />;
   }
@@ -1132,7 +1179,7 @@ export function RoomStateEventsPage() {
           </div>
           <button
             type="button"
-            onClick={() => createMutation.mutate()}
+            onClick={() => void handleCreateRoomStateEvent()}
             className="mt-4 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
           >
             Crear evento
@@ -1154,7 +1201,7 @@ export function RoomStateEventsPage() {
                   ) : (
                     <button
                       type="button"
-                      onClick={() => closeMutation.mutate(event.id)}
+                      onClick={() => void handleCloseRoomStateEvent(event.id)}
                       className="rounded-lg border border-emerald-300 px-3 py-2 text-xs font-semibold text-emerald-700"
                     >
                       Cerrar

@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   getDailyReportSchedule,
@@ -13,19 +13,19 @@ import {
   type NotificationPreferenceUpdate
 } from "../api/notifications";
 import { hasValidSession } from "../api/client";
+import { refreshAfterMutation } from "../api/queryInvalidation";
 import { useSession } from "../state/session";
 
 import { useOnlineStatus } from "./useOnlineStatus";
+import { useGuardedMutation } from "./useGuardedMutation";
 
 const inboxKey = (hotelId: number | null, unreadOnly: boolean) => ["notifications", "inbox", hotelId, unreadOnly];
 const preferencesKey = (hotelId: number | null) => ["notifications", "preferences", hotelId];
 const dailyReportScheduleKey = (hotelId: number | null) => ["notifications", "daily-report-schedule", hotelId];
 
-// Backend has no realtime "notification created" event on the SSE stream
-// (see crossTabSync.ts's SyncDomain list -- notifications isn't one), so the
-// unread badge/inbox polls instead, same 30s cadence as useGemmaChat's
-// polling query. Never fetches while offline (useOnlineStatus) or without a
-// valid session, matching every other query hook in this codebase.
+// Notifications still poll while open, but mutations use the same tenant-safe
+// invalidation path as the rest of the PMS so a read/unread change is visible
+// in the bell and the open inbox before the mutation reports success.
 export function useNotificationsInbox(unreadOnly = false, limit = 50, offset = 0) {
   const { session } = useSession();
   const isOnline = useOnlineStatus();
@@ -52,16 +52,16 @@ export function useNotificationMutations() {
   const queryClient = useQueryClient();
   const { session } = useSession();
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["notifications", "inbox", session.hotelId] });
+  const invalidate = () => refreshAfterMutation(queryClient, session.hotelId, ["notifications"]);
 
-  const markReadMutation = useMutation({
+  const markReadMutation = useGuardedMutation({
     mutationFn: (notificationId: number) => markNotificationRead(notificationId, true, session),
-    onSuccess: invalidate
+    onSuccess: async () => invalidate()
   });
 
-  const markAllReadMutation = useMutation({
+  const markAllReadMutation = useGuardedMutation({
     mutationFn: () => markAllNotificationsRead(session),
-    onSuccess: invalidate
+    onSuccess: async () => invalidate()
   });
 
   return { markReadMutation, markAllReadMutation };
@@ -80,9 +80,9 @@ export function useNotificationPreferences() {
 export function useNotificationPreferenceMutation() {
   const queryClient = useQueryClient();
   const { session } = useSession();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (payload: NotificationPreferenceUpdate) => updateNotificationPreference(payload, session),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: preferencesKey(session.hotelId) })
+    onSuccess: async () => refreshAfterMutation(queryClient, session.hotelId, ["notifications", "settings"])
   });
 }
 
@@ -104,8 +104,8 @@ export function useDailyReportSchedule(enabled: boolean) {
 export function useDailyReportScheduleMutation() {
   const queryClient = useQueryClient();
   const { session } = useSession();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (payload: DailyReportScheduleUpdate) => updateDailyReportSchedule(payload, session),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: dailyReportScheduleKey(session.hotelId) })
+    onSuccess: async () => refreshAfterMutation(queryClient, session.hotelId, ["notifications", "settings"])
   });
 }

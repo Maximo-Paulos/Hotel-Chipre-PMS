@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { hasValidSession } from "../api/client";
 import {
@@ -28,6 +28,9 @@ import {
   type GemmaRuntimeStatus,
 } from "../api/gemma";
 import { useSession } from "../state/session";
+import { refreshAfterMutation } from "../api/queryInvalidation";
+
+import { useGuardedMutation } from "./useGuardedMutation";
 
 const storageKey = (hotelId: number | null, userId: string | null) =>
   hotelId && userId ? `hotel-pms-gemma-session-${hotelId}-${userId}` : null;
@@ -106,7 +109,7 @@ export function useGemmaChat() {
     queryClient.invalidateQueries({ queryKey: gemmaHistoryKey(session.hotelId) });
   }, [queryClient, session.hotelId, storage]);
 
-  const sendMessageMutation = useMutation({
+  const sendMessageMutation = useGuardedMutation({
     mutationFn: (payload: GemmaChatMessagePayload) => sendGemmaChatMessage(payload, session),
     onSuccess: async (result, variables) => {
       if (result.session?.id) {
@@ -123,16 +126,17 @@ export function useGemmaChat() {
     },
   });
 
-  const approveActionMutation = useMutation({
+  const approveActionMutation = useGuardedMutation({
     mutationFn: ({ actionRunId, payload }: { actionRunId: number; payload: GemmaApproveActionPayload }) =>
       approveGemmaAction(actionRunId, payload, session),
     onSuccess: async (_result: GemmaApproveActionResponse, variables) => {
       await queryClient.invalidateQueries({ queryKey: gemmaChatKey(session.hotelId, variables.payload.session_id) });
       await queryClient.invalidateQueries({ queryKey: gemmaHistoryKey(session.hotelId) });
+      await refreshAfterMutation(queryClient, session.hotelId, ["reservations", "payments", "cash", "rooms", "guests", "stock", "settings", "analytics"]);
     },
   });
 
-  const rejectActionMutation = useMutation({
+  const rejectActionMutation = useGuardedMutation({
     mutationFn: ({ actionRunId, payload }: { actionRunId: number; payload: GemmaRejectActionPayload }) =>
       rejectGemmaAction(actionRunId, payload, session),
     onSuccess: async (_result: GemmaRejectActionResponse, variables) => {
@@ -141,7 +145,7 @@ export function useGemmaChat() {
     },
   });
 
-  const reviewDraftMutation = useMutation({
+  const reviewDraftMutation = useGuardedMutation({
     mutationFn: ({ actionRunId, payload }: { actionRunId: number; payload: GemmaReviewDraftPayload }) =>
       reviewGemmaDraft(actionRunId, payload, session),
     onSuccess: async (_result: GemmaReviewDraftResponse, variables) => {
@@ -150,16 +154,17 @@ export function useGemmaChat() {
     },
   });
 
-  const applyDraftMutation = useMutation({
+  const applyDraftMutation = useGuardedMutation({
     mutationFn: ({ actionRunId, payload }: { actionRunId: number; payload: GemmaApplyDraftPayload }) =>
       applyGemmaDraft(actionRunId, payload, session),
     onSuccess: async (_result: GemmaApplyDraftResponse, variables) => {
       await queryClient.invalidateQueries({ queryKey: gemmaChatKey(session.hotelId, variables.payload.session_id) });
       await queryClient.invalidateQueries({ queryKey: gemmaHistoryKey(session.hotelId) });
+      await refreshAfterMutation(queryClient, session.hotelId, ["reservations", "payments", "cash", "rooms", "guests", "stock", "settings", "analytics"]);
     },
   });
 
-  const archiveSessionMutation = useMutation({
+  const archiveSessionMutation = useGuardedMutation({
     mutationFn: (targetSessionId: number) => archiveGemmaChatSession(targetSessionId, session),
     onSuccess: async (result) => {
       await queryClient.invalidateQueries({ queryKey: gemmaHistoryKey(session.hotelId) });

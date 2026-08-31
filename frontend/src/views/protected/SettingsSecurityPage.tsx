@@ -1,9 +1,10 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 
 import { hasValidSession } from "../../api/client";
 import { getSecurityEvents, getSecurityOverview, revokeAllSessions } from "../../api/security";
 import { useSession } from "../../state/session";
+import { useGuardedMutation } from "../../hooks/useGuardedMutation";
 
 const formatEventAction = (action: string) => action.replace(/_/g, " ").replace(/:/g, " · ");
 
@@ -23,7 +24,7 @@ export function SettingsSecurityPage() {
     enabled,
     staleTime: 15 * 1000
   });
-  const revokeMutation = useMutation({
+  const revokeMutation = useGuardedMutation({
     mutationFn: () => revokeAllSessions(session),
     onSuccess: () => {
       logout();
@@ -31,11 +32,16 @@ export function SettingsSecurityPage() {
     }
   });
 
-  const handleRevokeAll = () => {
+  const handleRevokeAll = async () => {
     const confirmed = window.confirm(
       "¿Cerrar todas tus sesiones? Tendrás que volver a iniciar sesión en este y en los demás dispositivos."
     );
-    if (confirmed) revokeMutation.mutate();
+    if (!confirmed) return;
+    try {
+      await revokeMutation.mutateAsync();
+    } catch {
+      // The mutation state renders the safe backend error below.
+    }
   };
 
   const overview = overviewQuery.data;
@@ -93,7 +99,7 @@ export function SettingsSecurityPage() {
               </div>
               <button
                 type="button"
-                onClick={handleRevokeAll}
+                onClick={() => void handleRevokeAll()}
                 disabled={revokeMutation.isPending}
                 className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-800 hover:bg-rose-100 disabled:opacity-60"
                 data-testid="security-revoke-all"

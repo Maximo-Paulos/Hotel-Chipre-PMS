@@ -11,6 +11,8 @@ import {
   useCashSessionSummary
 } from "../../hooks/useCashRegister";
 import { useSession } from "../../state/session";
+import { useEffectivePermissions } from "../../hooks/usePermissions";
+import { useCollaborativeResource } from "../../hooks/useCollaborativeResource";
 
 const emptyMovementForm: CashMovementPayload = {
   movement_type: "income",
@@ -23,6 +25,7 @@ const money = (value?: number | string | null, currency = "ARS") =>
 
 export function CashRegisterPage() {
   const { session } = useSession();
+  const { hasPermission } = useEffectivePermissions();
   const [selectedSessionId, setSelectedSessionId] = useState<number | null>(null);
   const [openingBalance, setOpeningBalance] = useState<number | null>(null);
   const [openingNotes, setOpeningNotes] = useState("");
@@ -41,6 +44,12 @@ export function CashRegisterPage() {
     () => sessions.find((session) => session.id === selectedSessionId) ?? openSession ?? sessions[0] ?? null,
     [openSession, selectedSessionId, sessions]
   );
+  const collaborativeCashSession = useCollaborativeResource({
+    resourceType: "cash_session",
+    resourceId: selectedSession?.id,
+    initialValues: selectedSession ? { notes: selectedSession.notes ?? null } : null,
+    enabled: Boolean(selectedSession && hasPermission("cash:operate"))
+  });
   const movementsQuery = useCashMovements(selectedSession?.id);
   const summaryQuery = useCashSessionSummary(selectedSession?.id);
   const mutations = useCashRegisterMutations(selectedSession?.id);
@@ -154,6 +163,21 @@ export function CashRegisterPage() {
       setMessage("Recepción de custodia confirmada.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "No se pudo confirmar la custodia.");
+    }
+  };
+
+  const handleCashNotesSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!selectedSession || !collaborativeCashSession.isDirty) return;
+    if (Object.keys(collaborativeCashSession.conflicts).length > 0) {
+      setMessage("Hay un conflicto en las notas de caja. Elegí qué valor conservar.");
+      return;
+    }
+    try {
+      await collaborativeCashSession.save();
+      setMessage("Notas de caja actualizadas.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "No se pudieron guardar las notas de caja.");
     }
   };
 
@@ -292,6 +316,60 @@ export function CashRegisterPage() {
                 {movements.length} movimientos
               </span>
             </div>
+
+            {selectedSession && hasPermission("cash:operate") ? (
+              <form className="rounded-lg border border-sky-200 bg-sky-50 p-3" onSubmit={handleCashNotesSubmit}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <label className="text-sm font-semibold text-sky-950" htmlFor="cash-session-notes">
+                    Notas de la caja
+                  </label>
+                  {collaborativeCashSession.status !== "idle" ? (
+                    <span className="text-xs text-sky-700" role="status">
+                      {collaborativeCashSession.status === "connected"
+                        ? `Coedición conectada${collaborativeCashSession.peers.length ? ` · ${collaborativeCashSession.peers.length} usuario(s) más` : ""}`
+                        : collaborativeCashSession.status === "saving"
+                          ? "Guardando..."
+                          : collaborativeCashSession.status === "conflict"
+                            ? "Conflicto pendiente"
+                            : collaborativeCashSession.status === "degraded"
+                              ? "Coedición degradada"
+                              : "Conectando..."}
+                    </span>
+                  ) : null}
+                </div>
+                <textarea
+                  id="cash-session-notes"
+                  value={String(collaborativeCashSession.draftValues.notes ?? "")}
+                  onChange={(event) => collaborativeCashSession.setField("notes", event.target.value || null)}
+                  onFocus={() => collaborativeCashSession.focusField("notes")}
+                  onBlur={() => collaborativeCashSession.blurField("notes")}
+                  rows={2}
+                  className="mt-2 w-full rounded-lg border border-sky-200 bg-white px-3 py-2 text-sm"
+                />
+                {Object.values(collaborativeCashSession.conflicts).map((conflict) => (
+                  <div key={conflict.field} className="mt-2 rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-950" data-testid={`cash-conflict-${conflict.field}`}>
+                    <p className="font-semibold">Conflicto en {conflict.field}</p>
+                    <p>Propio: {String(conflict.localValue ?? "(vacío)")}</p>
+                    <p>Remoto: {String(conflict.remoteValue ?? "(vacío)")}</p>
+                    <div className="mt-1 flex gap-2">
+                      <button type="button" className="rounded border border-amber-300 bg-white px-2 py-1 font-semibold" onClick={() => collaborativeCashSession.keepMine(conflict.field)}>
+                        Conservar el mío
+                      </button>
+                      <button type="button" className="rounded border border-amber-300 bg-white px-2 py-1 font-semibold" onClick={() => collaborativeCashSession.useRemote(conflict.field)}>
+                        Usar remoto
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                <button
+                  type="submit"
+                  disabled={!collaborativeCashSession.isDirty || collaborativeCashSession.isSaving}
+                  className="mt-2 rounded-lg border border-sky-300 bg-white px-3 py-2 text-xs font-semibold text-sky-900 disabled:opacity-50"
+                >
+                  Guardar notas
+                </button>
+              </form>
+            ) : null}
 
             <form className="mt-4 grid gap-4 md:grid-cols-2" onSubmit={handleMovementSubmit}>
               <label className="space-y-1 text-sm">

@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
 import {
@@ -10,6 +10,8 @@ import {
 } from "../../api/paymentLinkTests";
 import { ApiError } from "../../api/client";
 import { useSession } from "../../state/session";
+import { refreshSettingsState } from "../../api/queryInvalidation";
+import { useGuardedMutation } from "../../hooks/useGuardedMutation";
 
 const statusTone: Record<string, string> = {
   approved: "bg-emerald-50 text-emerald-700",
@@ -51,7 +53,7 @@ export function SettingsTestsPage() {
   });
   const tests = testsQuery.data ?? [];
 
-  const createMutation = useMutation({
+  const createMutation = useGuardedMutation({
     mutationFn: () =>
       createMercadoPagoPaymentLinkTest(
         {
@@ -64,6 +66,7 @@ export function SettingsTestsPage() {
         session,
       ),
     onSuccess: async (created) => {
+      await refreshSettingsState(queryClient, session.hotelId);
       setError(null);
       setToast(
         created.email_sent_at
@@ -77,7 +80,6 @@ export function SettingsTestsPage() {
         currency: "ARS",
         expires_in_minutes: "60",
       });
-      await queryClient.invalidateQueries({ queryKey: ["payment-link-tests", session.hotelId] });
     },
     onError: (err) => {
       const message = err instanceof ApiError ? err.message : "No se pudo crear la prueba.";
@@ -86,16 +88,16 @@ export function SettingsTestsPage() {
     },
   });
 
-  const refreshMutation = useMutation({
+  const refreshMutation = useGuardedMutation({
     mutationFn: (testId: number) => refreshPaymentLinkTest(testId, session),
     onSuccess: async (test) => {
+      await refreshSettingsState(queryClient, session.hotelId);
       setError(null);
       setToast(
         test.status === "approved"
           ? "Pago confirmado por Mercado Pago."
           : "Estado actualizado. Si la persona ya pago, el sistema lo seguira verificando automaticamente.",
       );
-      await queryClient.invalidateQueries({ queryKey: ["payment-link-tests", session.hotelId] });
     },
     onError: (err) => {
       const message = err instanceof ApiError ? err.message : "No se pudo refrescar el estado.";
@@ -104,12 +106,12 @@ export function SettingsTestsPage() {
     },
   });
 
-  const cancelMutation = useMutation({
+  const cancelMutation = useGuardedMutation({
     mutationFn: (testId: number) => cancelPaymentLinkTest(testId, session),
     onSuccess: async () => {
+      await refreshSettingsState(queryClient, session.hotelId);
       setError(null);
       setToast("Link cancelado. Mercado Pago ya no deberia permitir nuevos pagos sobre esa preferencia.");
-      await queryClient.invalidateQueries({ queryKey: ["payment-link-tests", session.hotelId] });
     },
     onError: (err) => {
       const message = err instanceof ApiError ? err.message : "No se pudo cancelar el link.";
@@ -119,6 +121,30 @@ export function SettingsTestsPage() {
   });
 
   const canSubmit = Boolean(form.recipient_email && form.amount && Number(form.amount) > 0);
+
+  const handleCreate = async () => {
+    try {
+      await createMutation.mutateAsync();
+    } catch {
+      // The mutation state renders the safe backend error below.
+    }
+  };
+
+  const handleRefresh = async (testId: number) => {
+    try {
+      await refreshMutation.mutateAsync(testId);
+    } catch {
+      // The mutation state renders the safe backend error below.
+    }
+  };
+
+  const handleCancel = async (testId: number) => {
+    try {
+      await cancelMutation.mutateAsync(testId);
+    } catch {
+      // The mutation state renders the safe backend error below.
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -202,7 +228,7 @@ export function SettingsTestsPage() {
           <button
             type="button"
             className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-            onClick={() => createMutation.mutate()}
+            onClick={() => void handleCreate()}
             disabled={!canSubmit || createMutation.isPending}
           >
             {createMutation.isPending ? "Creando prueba..." : "Probar"}
@@ -286,7 +312,7 @@ export function SettingsTestsPage() {
                   <button
                     type="button"
                     className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm font-semibold text-slate-800 disabled:opacity-60"
-                    onClick={() => refreshMutation.mutate(test.id)}
+                    onClick={() => void handleRefresh(test.id)}
                     disabled={refreshMutation.isPending}
                   >
                     Refrescar
@@ -325,7 +351,7 @@ export function SettingsTestsPage() {
                       <button
                         type="button"
                         className="rounded-lg border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-700 disabled:opacity-60"
-                        onClick={() => cancelMutation.mutate(test.id)}
+                        onClick={() => void handleCancel(test.id)}
                         disabled={cancelMutation.isPending}
                       >
                         Cancelar link

@@ -176,10 +176,10 @@ export default function GuestQuickCreatePanel({
     setShowQuickCreate(false);
   };
 
-  const handleCreateGuest = () => {
+  const handleCreateGuest = async () => {
     if (!canCreateGuests) return;
-    guestMutation.mutate(
-      {
+    try {
+      const guest = await guestMutation.mutateAsync({
         first_name: form.first_name.trim(),
         last_name: form.last_name.trim(),
         email: form.email.trim() || undefined,
@@ -187,18 +187,15 @@ export default function GuestQuickCreatePanel({
         document_type: form.document_type,
         document_number: form.document_number.trim() || undefined,
         terms_accepted: true
-      },
-      {
-        onSuccess: (guest) => {
-          setSelectedGuest(guest);
-          onGuestIdChange(String(guest.id));
-          onFormChange(emptyQuickGuestForm);
-          setShowQuickCreate(false);
-          onGuestCreated(guest.id);
-        },
-        onError: (err: unknown) => onError(err instanceof Error ? err.message : "No se pudo crear el huésped")
-      }
-    );
+      });
+      setSelectedGuest(guest);
+      onGuestIdChange(String(guest.id));
+      onFormChange(emptyQuickGuestForm);
+      setShowQuickCreate(false);
+      onGuestCreated(guest.id);
+    } catch (err: unknown) {
+      onError(err instanceof Error ? err.message : "No se pudo crear el huésped");
+    }
   };
 
   const results = searchQuery.data ?? [];
