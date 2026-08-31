@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-30T19:35:41.333Z",
+  "generatedAt": "2026-08-31T00:32:58.801Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -4278,6 +4278,28 @@
       "fileCount": 1,
       "files": [
         "app/services/audit_log_service.py"
+      ],
+      "criticality": 0.285,
+      "warnings": []
+    },
+    {
+      "id": "flow:utils_roommove_moveblockedreason",
+      "name": "moveBlockedReason",
+      "entryPoint": "utils_roommove_moveblockedreason",
+      "entryPointId": "utils_roommove_moveblockedreason",
+      "path": [
+        "utils_roommove_moveblockedreason",
+        "utils_roommove_requiredmovepermission"
+      ],
+      "qualifiedPath": [
+        "utils_roommove_moveblockedreason",
+        "utils_roommove_requiredmovepermission"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/utils/roomMove.ts"
       ],
       "criticality": 0.285,
       "warnings": []
@@ -9709,6 +9731,32 @@
       "warnings": []
     },
     {
+      "id": "flow:services_timezones_local_today",
+      "name": "local_today",
+      "entryPoint": "services_timezones_local_today",
+      "entryPointId": "services_timezones_local_today",
+      "path": [
+        "services_timezones_local_today",
+        "services_timezones_normalize_timezone",
+        "services_timezones_is_valid_timezone",
+        "services_timezones_get_timezone_catalog"
+      ],
+      "qualifiedPath": [
+        "services_timezones_local_today",
+        "services_timezones_normalize_timezone",
+        "services_timezones_is_valid_timezone",
+        "services_timezones_get_timezone_catalog"
+      ],
+      "depth": 3,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/services/timezones.py"
+      ],
+      "criticality": 0.18,
+      "warnings": []
+    },
+    {
       "id": "flow:services_stock_service_low_stock_items",
       "name": "low_stock_items",
       "entryPoint": "services_stock_service_low_stock_items",
@@ -11812,30 +11860,6 @@
       "fileCount": 1,
       "files": [
         "app/scripts/repair_cash_handoff_schema.py"
-      ],
-      "criticality": 0.17,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_timezones_normalize_timezone",
-      "name": "normalize_timezone",
-      "entryPoint": "services_timezones_normalize_timezone",
-      "entryPointId": "services_timezones_normalize_timezone",
-      "path": [
-        "services_timezones_normalize_timezone",
-        "services_timezones_is_valid_timezone",
-        "services_timezones_get_timezone_catalog"
-      ],
-      "qualifiedPath": [
-        "services_timezones_normalize_timezone",
-        "services_timezones_is_valid_timezone",
-        "services_timezones_get_timezone_catalog"
-      ],
-      "depth": 2,
-      "nodeCount": 3,
-      "fileCount": 1,
-      "files": [
-        "app/services/timezones.py"
       ],
       "criticality": 0.17,
       "warnings": []
