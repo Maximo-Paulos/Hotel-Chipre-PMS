@@ -29,6 +29,7 @@ from app.services.financial_ledger import (
     completed_paid_amounts_by_reservation,
 )
 from app.services.reservation_service import active_reservations
+from app.services.timezones import hotel_today
 
 
 logger = logging.getLogger(__name__)
@@ -507,7 +508,7 @@ def route_manual_review(db: Session, reservation: Reservation, *, today: date | 
 
     try:
         if today is None:
-            today = date.today()
+            today = hotel_today(db, reservation.hotel_id)
         if not is_review_for_today(reservation, today):
             return False
         recipients = operational_report_recipients(db, reservation.hotel_id)

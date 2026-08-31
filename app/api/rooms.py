@@ -10,6 +10,7 @@ from typing import Optional
 
 from app.database import get_db
 from app.models.audit_log import AuditActionEnum
+from app.models.hotel_config import HotelConfiguration
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.schemas.room import (
@@ -25,6 +26,7 @@ from app.schemas.room import (
 )
 from app.services.reservation_service import ReservationError, find_available_rooms
 from app.services.pricing_service import resolve_rate_calendar
+from app.services.timezones import local_today
 from app.dependencies.auth import AuthContext, require_permission
 from app.services.allocation_runtime_service import run_persisted_allocation
 from app.services.read_model_cache import get_cached_availability_payload, invalidate_hotel_operational_caches
@@ -81,6 +83,12 @@ def _serialize_reallocation_result(result, *, include_message: bool = False) -> 
     return payload
 
 
+# room_categories is unique on (hotel_id, code) and on (hotel_id, name).
+_DUPLICATE_CATEGORY_DETAIL = "Ya existe una categoría con ese código o nombre en este hotel"
+# rooms is unique on (hotel_id, room_number).
+_DUPLICATE_ROOM_DETAIL = "Ya existe una habitación con ese número en este hotel"
+
+
 @router.post("/categories", response_model=RoomCategoryRead, status_code=status.HTTP_201_CREATED)
 def create_category(
     data: RoomCategoryCreate,
@@ -92,10 +100,7 @@ def create_category(
         db.flush()
     except IntegrityError:
         db.rollback()
-        raise HTTPException(
-            status_code=409,
-            detail="Ya existe una categoría con ese código en este hotel",
-        )
+        raise HTTPException(status_code=409, detail=_DUPLICATE_CATEGORY_DETAIL)
     db.commit()
     db.refresh(category)
     return category
@@ -126,7 +131,11 @@ def update_category(
             before={"room_category_id": category.id, "variable_cost_per_night": before_variable_cost},
             after={"room_category_id": category.id, "variable_cost_per_night": float(category.variable_cost_per_night or 0)},
         )
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=_DUPLICATE_CATEGORY_DETAIL)
     db.refresh(category)
     return category
 
@@ -135,7 +144,9 @@ def _attach_current_rate(db: Session, hotel_id: int, category: RoomCategory) -> 
     """Resolve today's effective rate from the single source of truth and attach it
     as a transient attribute so RoomCategoryRead serialises it. This keeps the rooms
     inventory view in sync with the Tarifas calendar and reservation pricing."""
-    resolution = resolve_rate_calendar(db, hotel_id, category.id, date.today(), date.today())[0]
+    hotel_config = db.get(HotelConfiguration, hotel_id)
+    today = local_today(hotel_config.hotel_timezone if hotel_config else None)
+    resolution = resolve_rate_calendar(db, hotel_id, category.id, today, today)[0]
     category.current_rate = resolution["price"]
     category.current_rate_source = resolution["source"]
     return category
@@ -192,10 +203,7 @@ def create_room(
         db.commit()
     except IntegrityError:
         db.rollback()
-        raise HTTPException(
-            status_code=409,
-            detail="Ya existe una habitación con ese número en este hotel",
-        )
+        raise HTTPException(status_code=409, detail=_DUPLICATE_ROOM_DETAIL)
     db.refresh(room)
     audit_log_service.safe_create_audit_log(
         db,
@@ -333,7 +341,11 @@ def update_room(
         )
         return room
 
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=_DUPLICATE_ROOM_DETAIL)
     db.refresh(room)
     audit_log_service.safe_create_audit_log(
         db,

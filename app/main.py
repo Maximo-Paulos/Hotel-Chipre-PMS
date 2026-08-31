@@ -189,7 +189,15 @@ _CSP = (
 
 @app.middleware("http")
 async def security_headers(request: Request, call_next):
-    response = await call_next(request)
+    # The try/except also turns an unhandled exception into a real 500 response
+    # from *inside* the CORS middleware. Starlette's own 500 is produced above
+    # CORS, so it carries no Access-Control-Allow-Origin and the browser reports
+    # the server error as an opaque "Failed to fetch" instead of its real status.
+    try:
+        response = await call_next(request)
+    except Exception:
+        LOGGER.exception("Unhandled error on %s %s", request.method, request.url.path)
+        response = JSONResponse(status_code=500, content={"detail": "Error interno del servidor"})
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"

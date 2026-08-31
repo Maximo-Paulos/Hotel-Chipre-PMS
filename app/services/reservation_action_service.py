@@ -14,6 +14,7 @@ from app.models.reservation import Reservation, ReservationSourceEnum, Reservati
 from app.models.transaction import Transaction, TransactionStatusEnum, TransactionTypeEnum
 from app.services.payment_service import get_reservation_financial_summary
 from app.services.reservation_service import active_reservations, active_reservations_select
+from app.services.timezones import hotel_today
 
 
 class ReservationActionError(Exception):
@@ -122,7 +123,7 @@ def _candidate_reservation_ids(db: Session, *, hotel_id: int) -> list[int]:
     real action is silently dropped -- see tests/test_reservation_action_service.py
     for the before/after correctness comparison.
     """
-    cutoff = date.today() - timedelta(days=_ACTIVE_WINDOW_DAYS)
+    cutoff = hotel_today(db, hotel_id) - timedelta(days=_ACTIVE_WINDOW_DAYS)
     rows = db.execute(
         active_reservations_select(hotel_id)
         .with_only_columns(

@@ -11,6 +11,7 @@ from typing import Optional
 import httpx
 
 from app.tasks.celery_app import celery_app
+from app.services.timezones import hotel_today
 from app.config import get_settings
 from app.services.tenant_context import set_tenant_hotel_context
 from app.services.external_effects_policy import (
@@ -227,15 +228,16 @@ def sync_all_availability(self, days_ahead: int = 90, database_url: Optional[str
         db = SessionLocal()
 
         try:
-            today = date.today()
-            end = today + timedelta(days=days_ahead)
-
             results = {}
             from app.models.hotel_config import HotelConfiguration
 
             hotel_ids = [row[0] for row in db.query(HotelConfiguration.id).all()]
             for hotel_id in hotel_ids:
                 set_tenant_hotel_context(db, hotel_id)
+                # Per hotel: the sync window must start on the hotel's own
+                # today, not the worker's UTC date.
+                today = hotel_today(db, hotel_id)
+                end = today + timedelta(days=days_ahead)
                 categories = db.query(RoomCategory).filter(RoomCategory.hotel_id == hotel_id).all()
                 for cat in categories:
                     task_result = push_availability_update.delay(

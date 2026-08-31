@@ -22,6 +22,7 @@ from app.database import get_engine
 from app.services.external_effects_policy import require_external_connections
 from app.services.tenant_context import set_tenant_hotel_context
 from app.tasks.celery_app import celery_app
+from app.services.timezones import hotel_today
 
 logger = logging.getLogger(__name__)
 
@@ -98,9 +99,6 @@ def _run_scheduled_reports(
     SessionLocal = sessionmaker(bind=engine)
     db = SessionLocal()
 
-    if report_date is None:
-        report_date = date.today()
-
     sent = 0
     failed = 0
     hotel_ids: list[int] = []
@@ -109,7 +107,11 @@ def _run_scheduled_reports(
         for hotel_id in hotel_ids:
             try:
                 set_tenant_hotel_context(db, hotel_id)
-                if _send_report_for_hotel(db, hotel_id, report_date, kind=kind):
+                # Resolved per hotel: one run can cover hotels in different
+                # timezones, so a single server-side date would report the
+                # wrong day for some of them.
+                hotel_report_date = report_date or hotel_today(db, hotel_id)
+                if _send_report_for_hotel(db, hotel_id, hotel_report_date, kind=kind):
                     sent += 1
                 else:
                     failed += 1
@@ -128,7 +130,7 @@ def _run_scheduled_reports(
 
     return {
         "kind": kind,
-        "report_date": report_date.isoformat(),
+        "report_date": report_date.isoformat() if report_date else "per-hotel",
         "hotels": len(hotel_ids),
         "sent": sent,
         "failed": failed,

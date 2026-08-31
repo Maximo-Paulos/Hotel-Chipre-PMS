@@ -65,6 +65,7 @@ from app.services.reservation_service import (
     _validate_reservation_occupancy,
 )
 from app.services.room_movement_group_service import create_grouped_room_move
+from app.services.timezones import hotel_today
 
 
 class ReservationOperationsError(ReservationError):
@@ -595,7 +596,7 @@ def change_reservation_dates(
     assert_reservation_version(reservation, client_version)
     if check_out_date <= check_in_date:
         raise ReservationOperationsError("Check-out must be after check-in")
-    if check_in_date < date.today():
+    if check_in_date < hotel_today(db, hotel_id):
         raise ReservationOperationsError("No se puede cambiar la fecha de check-in a una fecha en el pasado")
     original_check_in = reservation.check_in_date
     original_check_out = reservation.check_out_date

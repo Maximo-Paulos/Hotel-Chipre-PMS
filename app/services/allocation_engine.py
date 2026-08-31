@@ -280,8 +280,12 @@ def run_allocation(
             horizon_start = min(all_dates)
             horizon_end = max(all_dates) + timedelta(days=1)
         else:
+            # Pure solver: no db/hotel here, and this branch only runs when
+            # there are no reservations at all, so the horizon is unused. Real
+            # callers pass optimization_horizon (see
+            # allocation_runtime_service, which resolves it hotel-locally).
             horizon_start = date.today()
-            horizon_end = date.today() + timedelta(days=30)
+            horizon_end = horizon_start + timedelta(days=30)
 
     total_days = (horizon_end - horizon_start).days
     if total_days <= 0:

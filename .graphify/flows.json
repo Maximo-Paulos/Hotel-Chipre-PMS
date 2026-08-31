@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-30T19:35:41.333Z",
+  "generatedAt": "2026-08-31T00:42:28.811Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -4278,6 +4278,28 @@
       "fileCount": 1,
       "files": [
         "app/services/audit_log_service.py"
+      ],
+      "criticality": 0.285,
+      "warnings": []
+    },
+    {
+      "id": "flow:utils_roommove_moveblockedreason",
+      "name": "moveBlockedReason",
+      "entryPoint": "utils_roommove_moveblockedreason",
+      "entryPointId": "utils_roommove_moveblockedreason",
+      "path": [
+        "utils_roommove_moveblockedreason",
+        "utils_roommove_requiredmovepermission"
+      ],
+      "qualifiedPath": [
+        "utils_roommove_moveblockedreason",
+        "utils_roommove_requiredmovepermission"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/utils/roomMove.ts"
       ],
       "criticality": 0.285,
       "warnings": []
@@ -9075,6 +9097,34 @@
       "warnings": []
     },
     {
+      "id": "flow:services_timezones_hotel_today",
+      "name": "hotel_today",
+      "entryPoint": "services_timezones_hotel_today",
+      "entryPointId": "services_timezones_hotel_today",
+      "path": [
+        "services_timezones_hotel_today",
+        "services_timezones_local_today",
+        "services_timezones_normalize_timezone",
+        "services_timezones_is_valid_timezone",
+        "services_timezones_get_timezone_catalog"
+      ],
+      "qualifiedPath": [
+        "services_timezones_hotel_today",
+        "services_timezones_local_today",
+        "services_timezones_normalize_timezone",
+        "services_timezones_is_valid_timezone",
+        "services_timezones_get_timezone_catalog"
+      ],
+      "depth": 4,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "app/services/timezones.py"
+      ],
+      "criticality": 0.19,
+      "warnings": []
+    },
+    {
       "id": "flow:services_audit_timeline_service_list_audit_timeline",
       "name": "list_audit_timeline",
       "entryPoint": "services_audit_timeline_service_list_audit_timeline",
@@ -11812,30 +11862,6 @@
       "fileCount": 1,
       "files": [
         "app/scripts/repair_cash_handoff_schema.py"
-      ],
-      "criticality": 0.17,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_timezones_normalize_timezone",
-      "name": "normalize_timezone",
-      "entryPoint": "services_timezones_normalize_timezone",
-      "entryPointId": "services_timezones_normalize_timezone",
-      "path": [
-        "services_timezones_normalize_timezone",
-        "services_timezones_is_valid_timezone",
-        "services_timezones_get_timezone_catalog"
-      ],
-      "qualifiedPath": [
-        "services_timezones_normalize_timezone",
-        "services_timezones_is_valid_timezone",
-        "services_timezones_get_timezone_catalog"
-      ],
-      "depth": 2,
-      "nodeCount": 3,
-      "fileCount": 1,
-      "files": [
-        "app/services/timezones.py"
       ],
       "criticality": 0.17,
       "warnings": []
