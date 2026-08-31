@@ -14,6 +14,7 @@ from app.models.ota_core import OTAInventoryRule, OTAPriceRule, OTAProvider, OTA
 from app.models.reservation import Reservation, ReservationSourceEnum, ReservationStatusEnum
 from app.models.room import Room, RoomCategory
 from app.services.reservation_service import active_reservations
+from app.services.timezones import local_today
 
 
 # §13 calendar cell states (derived, no persistence).
@@ -275,7 +276,7 @@ def get_daily_calendar(
     for rule in inventory_rules:
         inventory_by_key[(rule.provider_id, rule.stay_date)].append(rule)
 
-    today = date.today()
+    today = local_today(hotel_config.hotel_timezone if hotel_config else None)
     days: list[dict] = []
     current_date = date_from
     while current_date <= date_to:
