@@ -41,6 +41,14 @@ if not os.environ.get("DATABASE_URL_TEST"):
     if _dsn:
         os.environ["DATABASE_URL_TEST"] = _dsn
 
+# The application intentionally loads .env in normal runtime.  Pytest owns its
+# configuration instead, so make every Settings instance created by this test
+# process use only explicit test values and process environment overrides.
+# This runs before importing modules that call get_settings().
+from app.config import Settings
+
+Settings.model_config["env_file"] = None
+
 import pytest
 from datetime import date, timedelta
 from sqlalchemy import create_engine, event

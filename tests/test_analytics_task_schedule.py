@@ -10,6 +10,13 @@ from app.services import analytics_warehouse
 from app.tasks.celery_app import build_beat_schedule, celery_app
 
 
+_ISOLATED_WORKER_IMPORT = (
+    "from app.config import Settings; "
+    "Settings.model_config['env_file'] = None; "
+    "import app.tasks.celery_app"
+)
+
+
 def test_derived_analytics_has_incremental_and_nightly_schedules():
     schedule = build_beat_schedule(
         Settings(EXTERNAL_EFFECTS_ENABLED=True, CONNECTIONS_ENABLED=True)
@@ -64,8 +71,8 @@ def test_celery_process_accepts_explicit_closed_production_profile():
         [
             sys.executable,
             "-c",
-            "from app.tasks.celery_app import celery_app; "
-            "assert celery_app.conf.beat_schedule == {}",
+            f"{_ISOLATED_WORKER_IMPORT}; "
+            "assert app.tasks.celery_app.celery_app.conf.beat_schedule == {}",
         ],
         env=_safe_worker_env(),
         capture_output=True,
@@ -79,7 +86,7 @@ def test_celery_process_rejects_missing_production_policy_before_startup():
     env = _safe_worker_env()
     env.pop("EXTERNAL_EFFECTS_ENABLED")
     result = subprocess.run(
-        [sys.executable, "-c", "import app.tasks.celery_app"],
+        [sys.executable, "-c", _ISOLATED_WORKER_IMPORT],
         env=env,
         capture_output=True,
         text=True,
