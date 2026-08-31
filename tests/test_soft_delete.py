@@ -15,7 +15,7 @@ from app.dependencies.auth import AuthContext, get_auth_context
 from app.models.audit_log import AuditActionEnum, AuditLog
 from app.models.guest import Guest
 from app.models.hotel_config import HotelConfiguration
-from app.models.reservation import Reservation
+from app.models.reservation import Reservation, ReservationSourceEnum, ReservationStatusEnum
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.daily_rate import PricePeriod
 from app.models.user import User
@@ -181,6 +181,100 @@ def test_room_delete_soft_deletes_hides_and_audits(soft_delete_client):
         assert room.deleted_by_user_id == 1
         audit = _delete_audit(db, table_name="rooms", record_id=room_id)
         assert audit.actor_user_id == 1
+
+
+def test_room_delete_lists_only_active_blocking_reservations_and_allows_delete_after_move(
+    soft_delete_client, monkeypatch: pytest.MonkeyPatch
+):
+    client, SessionLocal = soft_delete_client
+    monkeypatch.setattr("app.api.reservations._trigger_reoptimization_bg", lambda **_kwargs: None)
+
+    with SessionLocal() as db:
+        category = _seed_category(db, name="Delete Blocking Cat")
+        source_room = Room(
+            hotel_id=1,
+            room_number="611",
+            floor=6,
+            category_id=category.id,
+            status=RoomStatusEnum.AVAILABLE,
+        )
+        target_room = Room(
+            hotel_id=1,
+            room_number="612",
+            floor=6,
+            category_id=category.id,
+            status=RoomStatusEnum.AVAILABLE,
+        )
+        active_guest = Guest(first_name="Active", last_name="Guest", hotel_id=1)
+        cancelled_guest = Guest(first_name="Cancelled", last_name="Guest", hotel_id=1)
+        checked_out_guest = Guest(first_name="Checked", last_name="Out", hotel_id=1)
+        db.add_all([source_room, target_room, active_guest, cancelled_guest, checked_out_guest])
+        db.flush()
+
+        def reservation(code: str, guest_id: int, status: ReservationStatusEnum) -> Reservation:
+            return Reservation(
+                confirmation_code=code,
+                hotel_id=1,
+                guest_id=guest_id,
+                room_id=source_room.id,
+                category_id=category.id,
+                check_in_date=date(2027, 1, 10),
+                check_out_date=date(2027, 1, 12),
+                total_amount=200,
+                subtotal_amount=200,
+                net_amount=200,
+                amount_paid=0,
+                deposit_amount=0,
+                currency_code="ARS",
+                status=status,
+                source=ReservationSourceEnum.DIRECT,
+                num_adults=1,
+                num_children=0,
+            )
+
+        active_reservation = reservation("DELETE-ACTIVE-001", active_guest.id, ReservationStatusEnum.PENDING)
+        db.add_all(
+            [
+                active_reservation,
+                reservation("DELETE-CANCELLED-001", cancelled_guest.id, ReservationStatusEnum.CANCELLED),
+                reservation("DELETE-CHECKED-OUT-001", checked_out_guest.id, ReservationStatusEnum.CHECKED_OUT),
+            ]
+        )
+        db.commit()
+        # Capture ids before the session closes: the ORM instances detach with
+        # it, and touching an attribute afterwards raises DetachedInstanceError.
+        source_room_id = source_room.id
+        target_room_id = target_room.id
+        active_reservation_id = active_reservation.id
+
+    deactivation = client.patch(f"/api/rooms/{source_room_id}", json={"is_active": False})
+    assert deactivation.status_code == 400, deactivation.text
+    assert deactivation.json()["detail"] == "La habitación tiene reservas activas. Reubicalas antes de desactivarla."
+
+    blocked_delete = client.delete(f"/api/rooms/{source_room_id}")
+    assert blocked_delete.status_code == 400, blocked_delete.text
+    detail = blocked_delete.json()["detail"]
+    assert detail["message"] == "La habitación tiene reservas activas. Reubicalas antes de eliminarla."
+    assert detail["reservations"] == [
+        {
+            "id": active_reservation_id,
+            "confirmation_code": "DELETE-ACTIVE-001",
+            "guest_name": "Active Guest",
+            "check_in_date": "2027-01-10",
+            "check_out_date": "2027-01-12",
+            "status": ReservationStatusEnum.PENDING.value,
+            "category_id": category.id,
+        }
+    ]
+
+    moved = client.post(
+        f"/api/reservations/{active_reservation_id}/room-move",
+        json={"to_room_id": target_room_id, "reason_code": "operational"},
+    )
+    assert moved.status_code == 200, moved.text
+
+    deleted = client.delete(f"/api/rooms/{source_room_id}")
+    assert deleted.status_code == 204, deleted.text
 
 
 def test_price_period_delete_soft_deletes_hides_and_audits(soft_delete_client):

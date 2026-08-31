@@ -26,6 +26,22 @@ export type Room = {
   category?: RoomCategory | null;
 };
 
+export type RoomDeleteBlockingReservation = {
+  id: number;
+  confirmation_code: string;
+  guest_name: string;
+  check_in_date: string;
+  check_out_date: string;
+  status: string;
+  /** Source category used by the reservation room-move permission classifier. */
+  category_id: number;
+};
+
+export type RoomDeleteBlockedDetail = {
+  message: string;
+  reservations: RoomDeleteBlockingReservation[];
+};
+
 export const listRooms = (session?: SessionLike) => apiFetch<Room[]>("/api/rooms/", { session });
 
 export const listRoomCategories = (session?: SessionLike) =>
@@ -50,6 +66,9 @@ export const updateRoom = (
   room: Partial<{ room_number: string; floor: number; category_id: number; status: RoomStatus; is_active: boolean; notes: string }>,
   session?: SessionLike
 ) => apiFetch<Room>(`/api/rooms/${roomId}`, { method: "PATCH", data: room, session });
+
+export const deleteRoom = (roomId: number, session?: SessionLike) =>
+  apiFetch<void>(`/api/rooms/${roomId}`, { method: "DELETE", session });
 
 export const updateRoomStatus = (roomId: number, status: RoomStatus, notes?: string, session?: SessionLike) =>
   apiFetch(`/api/rooms/${roomId}/status`, {

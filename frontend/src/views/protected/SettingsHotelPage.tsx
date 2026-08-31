@@ -1,5 +1,5 @@
 ﻿import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { getHotelConfig, updateHotelConfig, type HotelConfig } from "../../api/config";
@@ -8,18 +8,63 @@ import {
   updateRoomCategory,
   createRoom,
   updateRoom,
+  deleteRoom,
+  type RoomDeleteBlockedDetail,
+  type RoomDeleteBlockingReservation,
   type RoomCategory,
   type RoomStatus
 } from "../../api/rooms";
+import { moveReservationRoom } from "../../api/reservations";
 import { useSession } from "../../state/session";
-import { hasValidSession } from "../../api/client";
+import { ApiError, hasValidSession } from "../../api/client";
 import { useTimezones } from "../../hooks/useTimezones";
 import { useRooms } from "../../hooks/useRooms";
 import { queryKeys } from "../../api/queryKeys";
 import { usePaymentSurcharges, usePaymentSurchargeMutations } from "../../hooks/usePaymentSurcharges";
 import { type PaymentSurchargeType } from "../../api/paymentSurcharges";
+import { useEffectivePermissions } from "../../hooks/usePermissions";
+import { moveBlockedReason, requiredMovePermission } from "../../utils/roomMove";
 
 const roomStatuses: RoomStatus[] = ["available", "occupied", "maintenance", "blocked", "cleaning"];
+
+type RoomDeleteState = {
+  roomId: number;
+  blockingReservations: RoomDeleteBlockingReservation[];
+  requiresFinalConfirmation: boolean;
+};
+
+type RoomMovePermissionBlocker = {
+  confirmationCode: string;
+  missingPermissions: Array<{ code: string; reason: string }>;
+};
+
+function isRoomDeleteBlockedDetail(value: unknown): value is RoomDeleteBlockedDetail {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Partial<RoomDeleteBlockedDetail>;
+  return (
+    typeof candidate.message === "string" &&
+    Array.isArray(candidate.reservations) &&
+    candidate.reservations.every(
+      (reservation) =>
+        reservation &&
+        typeof reservation.id === "number" &&
+        typeof reservation.confirmation_code === "string" &&
+        typeof reservation.guest_name === "string" &&
+        typeof reservation.check_in_date === "string" &&
+        typeof reservation.check_out_date === "string" &&
+        typeof reservation.status === "string" &&
+        typeof reservation.category_id === "number"
+    )
+  );
+}
+
+function getRoomDeleteBlockedDetail(error: unknown): RoomDeleteBlockedDetail | null {
+  if (!(error instanceof ApiError) || error.status !== 400 || !error.payload || typeof error.payload !== "object") {
+    return null;
+  }
+  const detail = (error.payload as { detail?: unknown }).detail;
+  return isRoomDeleteBlockedDetail(detail) ? detail : null;
+}
 
 const paymentMethodConfigOptions: Array<{ key: keyof HotelConfig; label: string; helper: string }> = [
   { key: "enable_cash", label: "Efectivo", helper: "Se registra en caja." },
@@ -43,6 +88,7 @@ const surchargeMethodLabel = (value: string) =>
 
 export function SettingsHotelPage() {
   const { session } = useSession();
+  const { hasPermission, permissionsKnown } = useEffectivePermissions();
   const qc = useQueryClient();
   const timezonesQuery = useTimezones();
   const { categoriesQuery, roomsQuery } = useRooms({ includeCategories: true });
@@ -65,6 +111,16 @@ export function SettingsHotelPage() {
   );
   const [editingRoomId, setEditingRoomId] = useState<number | null>(null);
   const [roomEdit, setRoomEdit] = useState<Partial<{ room_number: string; floor: number; category_id: number; status: RoomStatus; is_active: boolean; notes?: string }>>({});
+  const [roomDeleteState, setRoomDeleteState] = useState<RoomDeleteState | null>(null);
+  const [roomMoveDestinations, setRoomMoveDestinations] = useState<Record<number, string>>({});
+  const [movingReservationId, setMovingReservationId] = useState<number | null>(null);
+
+  const invalidateRoomAndReservationQueries = () => {
+    qc.invalidateQueries({ queryKey: queryKeys.rooms(session.hotelId) });
+    qc.invalidateQueries({ queryKey: ["reservations", session.hotelId] });
+    qc.invalidateQueries({ queryKey: ["reservation", session.hotelId] });
+    qc.invalidateQueries({ queryKey: ["occupancy-grid", session.hotelId] });
+  };
 
   const configQuery = useQuery({
     queryKey: ["hotel-config", session.hotelId],
@@ -129,6 +185,108 @@ export function SettingsHotelPage() {
     onError: (err: unknown) => setError(err instanceof Error ? err.message : "No se pudo actualizar la habitación")
   });
 
+  const deleteRoomMutation = useMutation<void, unknown, number>({
+    mutationFn: (roomId) => deleteRoom(roomId, session),
+    onSuccess: () => {
+      invalidateRoomAndReservationQueries();
+      setRoomDeleteState(null);
+      setRoomMoveDestinations({});
+      setError(null);
+    },
+    onError: (err: unknown) => {
+      const blocked = getRoomDeleteBlockedDetail(err);
+      if (blocked) {
+        setRoomDeleteState((current) =>
+          current
+            ? {
+                ...current,
+                blockingReservations: blocked.reservations,
+                requiresFinalConfirmation: true
+              }
+            : current
+        );
+        setRoomMoveDestinations({});
+        setError(null);
+        return;
+      }
+      setError(err instanceof Error ? err.message : "No se pudo eliminar la habitación");
+    }
+  });
+
+  const moveBlockingReservationMutation = useMutation<
+    unknown,
+    unknown,
+    { reservationId: number; toRoomId: number }
+  >({
+    mutationFn: ({ reservationId, toRoomId }) =>
+      moveReservationRoom(reservationId, { to_room_id: toRoomId, reason_code: "operational" }, session),
+    onMutate: ({ reservationId }) => {
+      setMovingReservationId(reservationId);
+      setError(null);
+    },
+    onSuccess: (_result, { reservationId }) => {
+      invalidateRoomAndReservationQueries();
+      setRoomDeleteState((current) =>
+        current
+          ? {
+              ...current,
+              blockingReservations: current.blockingReservations.filter(
+                (reservation) => reservation.id !== reservationId
+              )
+            }
+          : current
+      );
+      setRoomMoveDestinations((current) => {
+        const { [reservationId]: movedReservation, ...remaining } = current;
+        void movedReservation;
+        return remaining;
+      });
+    },
+    onError: (err: unknown) =>
+      setError(err instanceof Error ? err.message : "No se pudo reubicar la reserva"),
+    onSettled: () => setMovingReservationId(null)
+  });
+
+  const roomDeleteMoveDestinations = useMemo(() => {
+    if (!roomDeleteState) return [];
+    return (roomsQuery.data ?? []).filter(
+      (room) =>
+        room.id !== roomDeleteState.roomId &&
+        room.is_active &&
+        room.status !== "maintenance" &&
+        room.status !== "blocked"
+    );
+  }, [roomDeleteState, roomsQuery.data]);
+
+  const roomCategoryById = useMemo(() => {
+    const categories = new Map<number, { id: number; max_occupancy: number }>();
+    (categoriesQuery.data ?? []).forEach((category) => {
+      categories.set(category.id, { id: category.id, max_occupancy: category.max_occupancy });
+    });
+    return categories;
+  }, [categoriesQuery.data]);
+
+  const roomMovePermissionBlockers = useMemo<RoomMovePermissionBlocker[]>(() => {
+    if (!roomDeleteState?.requiresFinalConfirmation) return [];
+
+    return roomDeleteState.blockingReservations.flatMap((reservation) => {
+      const from = roomCategoryById.get(reservation.category_id);
+      const missingPermissions = roomDeleteMoveDestinations.flatMap((destination) => {
+        const to = roomCategoryById.get(destination.category_id);
+        const reason = moveBlockedReason(from, to, hasPermission);
+        if (!reason || !from || !to) return [];
+        return [{ code: requiredMovePermission(from, to), reason }];
+      });
+      const everyDestinationIsBlocked =
+        roomDeleteMoveDestinations.length > 0 && missingPermissions.length === roomDeleteMoveDestinations.length;
+      if (!everyDestinationIsBlocked) return [];
+      const uniquePermissions = Array.from(
+        new Map(missingPermissions.map((permission) => [permission.code, permission])).values()
+      );
+      return [{ confirmationCode: reservation.confirmation_code, missingPermissions: uniquePermissions }];
+    });
+  }, [hasPermission, roomCategoryById, roomDeleteMoveDestinations, roomDeleteState]);
+
   const handleChange = (key: keyof HotelConfig, value: unknown) => setForm((prev) => ({ ...prev, [key]: value }));
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -136,6 +294,7 @@ export function SettingsHotelPage() {
   };
 
   const ownerOnly = session.baseRole === "owner";
+  const canDeleteRooms = permissionsKnown && hasPermission("hotel_settings:update");
 
   if (!hasValidSession(session)) return <p className="text-sm text-slate-600">Iniciá sesión con un hotel activo para editar la configuración.</p>;
 
@@ -334,15 +493,186 @@ export function SettingsHotelPage() {
                       </div>
                     </div>
                   ) : (
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="font-semibold text-slate-900">Hab {r.room_number} · Piso {r.floor}</p>
-                        {r.category && <p className="text-xs text-slate-600">Categoría: {r.category.name}</p>}
-                        <p className="text-xs text-slate-500">Estado: {r.status}</p>
-                        {r.notes && <p className="text-xs text-slate-500">Notas: {r.notes}</p>}
+                    <>
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-semibold text-slate-900">Hab {r.room_number} · Piso {r.floor}</p>
+                          {r.category && <p className="text-xs text-slate-600">Categoría: {r.category.name}</p>}
+                          <p className="text-xs text-slate-500">Estado: {r.status}</p>
+                          {r.notes && <p className="text-xs text-slate-500">Notas: {r.notes}</p>}
+                        </div>
+                        <div className="flex shrink-0 gap-2">
+                          <button type="button" className="rounded-lg border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700" onClick={() => { setEditingRoomId(r.id); setRoomEdit({}); }}>Editar</button>
+                          {canDeleteRooms && (
+                            <button
+                              type="button"
+                              className="rounded-lg border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50"
+                              onClick={() => {
+                                setRoomDeleteState({ roomId: r.id, blockingReservations: [], requiresFinalConfirmation: false });
+                                setRoomMoveDestinations({});
+                                setError(null);
+                              }}
+                            >
+                              Eliminar
+                            </button>
+                          )}
+                        </div>
                       </div>
-                      <button type="button" className="rounded-lg border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700" onClick={() => { setEditingRoomId(r.id); setRoomEdit({}); }}>Editar</button>
-                    </div>
+
+                      {roomDeleteState?.roomId === r.id && (
+                        <div className="mt-3 space-y-3 rounded-lg border border-rose-200 bg-rose-50 p-3">
+                          <div>
+                            <p className="text-sm font-semibold text-rose-900">¿Eliminar la habitación {r.room_number}?</p>
+                            <p className="mt-1 text-xs text-rose-800">El historial de reservas se conserva.</p>
+                          </div>
+
+                          {!roomDeleteState.requiresFinalConfirmation ? (
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                className="rounded-lg bg-rose-600 px-3 py-1 text-xs font-semibold text-white hover:bg-rose-700 disabled:opacity-60"
+                                disabled={deleteRoomMutation.isPending}
+                                onClick={() => deleteRoomMutation.mutate(r.id)}
+                              >
+                                {deleteRoomMutation.isPending ? "Eliminando..." : "Sí, eliminar"}
+                              </button>
+                              <button
+                                type="button"
+                                className="rounded-lg border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700"
+                                onClick={() => {
+                                  setRoomDeleteState(null);
+                                  setRoomMoveDestinations({});
+                                  setError(null);
+                                }}
+                              >
+                                Cancelar
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="space-y-3">
+                              {roomDeleteState.blockingReservations.length > 0 ? (
+                                <p className="text-xs text-rose-800">No se puede eliminar hasta reubicar las reservas activas o futuras.</p>
+                              ) : (
+                                /* Every blocker was relocated in this panel: saying "no se puede"
+                                   next to an enabled delete button contradicts itself. */
+                                <p className="text-xs text-emerald-800">Ya no quedan reservas en esta habitación. Podés eliminarla.</p>
+                              )}
+
+                              <div className="space-y-2">
+                                {roomDeleteState.blockingReservations.map((reservation) => {
+                                  const fromCategory = roomCategoryById.get(reservation.category_id);
+                                  const selectedDestination = roomDeleteMoveDestinations.find(
+                                    (destination) => destination.id === Number(roomMoveDestinations[reservation.id])
+                                  );
+                                  const selectedDestinationBlockedReason = selectedDestination
+                                    ? moveBlockedReason(
+                                        fromCategory,
+                                        roomCategoryById.get(selectedDestination.category_id),
+                                        hasPermission
+                                      )
+                                    : null;
+
+                                  return (
+                                    <div key={reservation.id} className="space-y-2 rounded-lg border border-rose-200 bg-white p-3">
+                                      <div>
+                                        <p className="text-sm font-semibold text-slate-900">{reservation.confirmation_code} · {reservation.guest_name}</p>
+                                        <p className="text-xs text-slate-600">{reservation.check_in_date} al {reservation.check_out_date}</p>
+                                      </div>
+                                      <div className="flex flex-wrap gap-2">
+                                        <select
+                                          className="min-w-48 flex-1 rounded-lg border border-slate-200 px-3 py-1 text-xs"
+                                          value={roomMoveDestinations[reservation.id] ?? ""}
+                                          disabled={movingReservationId === reservation.id}
+                                          onChange={(event) => setRoomMoveDestinations((current) => ({
+                                            ...current,
+                                            [reservation.id]: event.target.value
+                                          }))}
+                                        >
+                                          <option value="">Elegí una habitación destino</option>
+                                          {roomDeleteMoveDestinations.map((destination) => {
+                                            const blockedReason = moveBlockedReason(
+                                              fromCategory,
+                                              roomCategoryById.get(destination.category_id),
+                                              hasPermission
+                                            );
+                                            return (
+                                              <option key={destination.id} value={destination.id} disabled={Boolean(blockedReason)}>
+                                                Hab {destination.room_number} · Piso {destination.floor}{blockedReason ? ` — ${blockedReason}` : ""}
+                                              </option>
+                                            );
+                                          })}
+                                        </select>
+                                        <button
+                                          type="button"
+                                          className="rounded-lg bg-brand-600 px-3 py-1 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
+                                          disabled={
+                                            movingReservationId === reservation.id ||
+                                            !selectedDestination ||
+                                            Boolean(selectedDestinationBlockedReason)
+                                          }
+                                          onClick={() => {
+                                            if (!selectedDestination) {
+                                              setError("Elegí una habitación destino para reubicar la reserva.");
+                                              return;
+                                            }
+                                            if (selectedDestinationBlockedReason) {
+                                              setError(selectedDestinationBlockedReason);
+                                              return;
+                                            }
+                                            moveBlockingReservationMutation.mutate({
+                                              reservationId: reservation.id,
+                                              toRoomId: selectedDestination.id
+                                            });
+                                          }}
+                                        >
+                                          {movingReservationId === reservation.id ? "Reubicando..." : "Reubicar"}
+                                        </button>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+
+                              {roomMovePermissionBlockers.length > 0 && (
+                                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                                  <p className="font-semibold">No tenés permisos para reubicar algunas reservas.</p>
+                                  <ul className="mt-1 list-disc space-y-1 pl-4">
+                                    {roomMovePermissionBlockers.map((blocker) => (
+                                      <li key={blocker.confirmationCode}>
+                                        Reserva {blocker.confirmationCode}: {blocker.missingPermissions.map((permission) => `${permission.reason} (${permission.code})`).join(", ")}. Necesitás que alguien con ese permiso la reubique.
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+
+                              {roomDeleteState.blockingReservations.length === 0 && (
+                                <button
+                                  type="button"
+                                  className="rounded-lg bg-rose-600 px-3 py-1 text-xs font-semibold text-white hover:bg-rose-700 disabled:opacity-60"
+                                  disabled={deleteRoomMutation.isPending}
+                                  onClick={() => deleteRoomMutation.mutate(r.id)}
+                                >
+                                  {deleteRoomMutation.isPending ? "Eliminando..." : "Eliminar habitación definitivamente"}
+                                </button>
+                              )}
+
+                              <button
+                                type="button"
+                                className="rounded-lg border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700"
+                                onClick={() => {
+                                  setRoomDeleteState(null);
+                                  setRoomMoveDestinations({});
+                                  setError(null);
+                                }}
+                              >
+                                Cancelar
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               ))}

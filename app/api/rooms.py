@@ -327,7 +327,10 @@ def update_room(
             Reservation.status.notin_([ReservationStatusEnum.CANCELLED, ReservationStatusEnum.CHECKED_OUT]),
         ).count()
         if active_res > 0:
-            raise HTTPException(status_code=400, detail="Room has active reservations and cannot be deactivated")
+            raise HTTPException(
+                status_code=400,
+                detail="La habitación tiene reservas activas. Reubicalas antes de desactivarla.",
+            )
 
     if status_changed:
         change_room_status(
@@ -614,14 +617,34 @@ def delete_room(
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
 
-    in_use = db.query(Reservation).filter(
+    blocking_reservations = db.query(Reservation).filter(
         Reservation.room_id == room_id,
         Reservation.hotel_id == context.hotel_id,
         Reservation.deleted_at.is_(None),
         Reservation.status.notin_([ReservationStatusEnum.CANCELLED, ReservationStatusEnum.CHECKED_OUT]),
-    ).count()
-    if in_use > 0:
-        raise HTTPException(status_code=400, detail="Room has active reservations and cannot be deleted")
+    ).order_by(Reservation.check_in_date.asc(), Reservation.id.asc()).all()
+    if blocking_reservations:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "message": "La habitación tiene reservas activas. Reubicalas antes de eliminarla.",
+                "reservations": [
+                    {
+                        "id": reservation.id,
+                        "confirmation_code": reservation.confirmation_code,
+                        "guest_name": f"{reservation.guest.first_name} {reservation.guest.last_name}".strip(),
+                        "check_in_date": reservation.check_in_date.isoformat(),
+                        "check_out_date": reservation.check_out_date.isoformat(),
+                        "status": reservation.status.value,
+                        # The client needs the reservation category (not just
+                        # the current room category) to apply the exact room
+                        # move permission tier before requesting a move.
+                        "category_id": reservation.category_id,
+                    }
+                    for reservation in blocking_reservations
+                ],
+            },
+        )
 
     before = audit_log_service.model_snapshot(room)
     room.deleted_at = datetime.now(timezone.utc)
