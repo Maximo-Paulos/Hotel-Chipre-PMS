@@ -27,6 +27,7 @@ from app.services.analytics_service import (
 )
 from app.services.gemma_context_service import build_gemma_hotel_context
 from app.services.guest_service import quick_profile
+from app.services.timezones import hotel_today
 from app.services.operational_report_service import daily_report as operational_daily_report
 from app.services.rate_calendar_service import get_daily_calendar
 from app.services.reservation_action_service import list_pending_reservation_actions
@@ -275,7 +276,10 @@ def test_soft_deleted_reservation_is_excluded_from_aggregation_and_availability(
     sample_rooms,
     surface: Surface,
 ):
-    target = date.today()
+    # Hotel-local, not the runner's date: the analytics pickup surfaces bucket
+    # `created_at` in the hotel's timezone, so a UTC runner between 21:00 and
+    # midnight in Buenos Aires would look for the reservation one day late.
+    target = hotel_today(db, 1)
     reservation = _make_reservation(
         db,
         sample_guest,
