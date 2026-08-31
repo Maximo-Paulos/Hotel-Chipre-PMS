@@ -16,6 +16,7 @@ from app.services.allocation_policy_service import get_active_policy_settings
 from app.services.timezones import local_today
 from app.services.reservation_action_service import list_pending_reservation_actions
 from app.services.reservation_service import active_reservations
+from app.services.room_service import active_rooms
 
 
 _ACTIVE_RESERVATION_STATUSES = (
@@ -44,10 +45,11 @@ def build_gemma_hotel_context(
 
     policy = get_active_policy_settings(db, hotel_id)
 
-    total_rooms = db.query(Room).filter(Room.hotel_id == hotel_id, Room.is_active == True).count()
+    total_rooms = active_rooms(db, hotel_id).filter(Room.is_active.is_(True)).count()
     room_status_rows = (
-        db.query(Room.status, func.count(Room.id))
-        .filter(Room.hotel_id == hotel_id, Room.is_active == True)
+        active_rooms(db, hotel_id)
+        .with_entities(Room.status, func.count(Room.id))
+        .filter(Room.is_active.is_(True))
         .group_by(Room.status)
         .all()
     )

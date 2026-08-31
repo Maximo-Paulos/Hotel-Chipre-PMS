@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from sqlalchemy.orm import Session
 
 from app.models.room import Room, RoomStatusEnum
+from app.services.room_service import active_rooms
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.services.reservation_service import _active_reservations_without_hotel, active_reservations
 
@@ -868,12 +869,10 @@ def build_slots_from_db(
         reservation_slots.append(slot)
 
     # Load all active rooms — EXCLUDE maintenance, blocked, but include CLEANING as it's a temporary state
-    rooms_query = db.query(Room).filter(
+    rooms_query = active_rooms(db, hotel_id).filter(
         Room.is_active == True,
         Room.status.in_([RoomStatusEnum.AVAILABLE, RoomStatusEnum.OCCUPIED, RoomStatusEnum.CLEANING]),
     )
-    if has_hotel_context:
-        rooms_query = rooms_query.filter(Room.hotel_id == hotel_id)
     rooms = rooms_query.all()
     blocked_room_ids = (
         blocked_room_ids_for_range(db, hotel_id=hotel_id, start_date=start_date, end_date=end_date)

@@ -41,6 +41,7 @@ from app.services.analytics_contracts import (
     resolve_guest_segment,
 )
 from app.services.reservation_service import active_reservations
+from app.services.room_service import active_rooms
 from app.services.timezones import normalize_timezone
 
 
@@ -312,11 +313,12 @@ def refresh_fact_room_occupancy_daily(
         .order_by(Reservation.check_in_date.asc(), Reservation.id.asc())
         .all()
     )
-    rooms = db.execute(
-        select(Room.id, Room.category_id, Room.is_active)
-        .where(Room.hotel_id == hotel_id)
+    rooms = (
+        active_rooms(db, hotel_id)
+        .with_entities(Room.id, Room.category_id, Room.is_active)
         .order_by(Room.id.asc())
-    ).all()
+        .all()
+    )
 
     reservation_map = _occupied_nightly_fact_map(
         db,
@@ -488,11 +490,7 @@ def calculate_physical_room_nights_for_window(
     date_from: date,
     date_to: date,
 ) -> int:
-    active_room_count = (
-        db.query(Room)
-        .filter(Room.hotel_id == hotel_id, Room.is_active.is_(True))
-        .count()
-    )
+    active_room_count = active_rooms(db, hotel_id).filter(Room.is_active.is_(True)).count()
     return calculate_physical_room_nights(
         active_room_count=active_room_count,
         date_from=date_from,

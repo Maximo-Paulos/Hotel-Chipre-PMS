@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.models.hotel_config import HotelConfiguration
 from app.models.onboarding import OnboardingState
 from app.models.room import Room, RoomCategory
+from app.services.room_service import active_rooms
 from app.schemas.onboarding import (
     DepositPolicyPayload,
     HotelIdentityPayload,
@@ -107,9 +108,9 @@ def _serialize_categories(db: Session, hotel_id: int) -> list[dict]:
 
 def _serialize_rooms(db: Session, hotel_id: int) -> list[dict]:
     rooms = (
-        db.query(Room.room_number, Room.floor, RoomCategory.code)
+        active_rooms(db, hotel_id)
+        .with_entities(Room.room_number, Room.floor, RoomCategory.code)
         .join(RoomCategory, Room.category_id == RoomCategory.id)
-        .filter(Room.hotel_id == hotel_id)
         .order_by(Room.id.asc())
         .all()
     )

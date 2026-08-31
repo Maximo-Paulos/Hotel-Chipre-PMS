@@ -23,6 +23,7 @@ from app.models.reservation import (
 )
 from app.models.room import Room
 from app.services.reservation_service import active_reservations
+from app.services.room_service import active_rooms
 from app.services.timezones import normalize_timezone
 
 MONEY_QUANTUM = Decimal("0.01")
@@ -412,11 +413,7 @@ def calculate_physical_room_nights_for_hotel(
     date_from: date,
     date_to: date,
 ) -> int:
-    active_room_count = (
-        db.query(Room)
-        .filter(Room.hotel_id == hotel_id, Room.is_active.is_(True))
-        .count()
-    )
+    active_room_count = active_rooms(db, hotel_id).filter(Room.is_active.is_(True)).count()
     return calculate_physical_room_nights(
         active_room_count=active_room_count,
         date_from=date_from,

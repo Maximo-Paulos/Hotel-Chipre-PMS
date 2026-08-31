@@ -18,6 +18,7 @@ from sqlalchemy import and_
 from app.models.commercial import ProductRoomCompatibility, RatePlan, SellableProduct
 from app.models.reservation import Reservation, ReservationStatusEnum, ReservationSourceEnum
 from app.models.room import Room, RoomCategory, RoomStatusEnum
+from app.services.room_service import active_rooms
 from app.models.guest import Guest
 from app.models.ota import OTAReservationMapping, OTAWebhookCredential, OTASyncStatusEnum
 from app.models.ota_core import (
@@ -1259,10 +1260,9 @@ class OTAIntegrationService:
         if not category:
             raise OTAError(f"Unknown room category id: {category_id}")
 
-        rooms = db.query(Room).filter(
+        rooms = active_rooms(db, category.hotel_id).filter(
             Room.category_id == category_id,
-            Room.hotel_id == category.hotel_id,
-            Room.is_active == True,
+            Room.is_active.is_(True),
             Room.status.in_([RoomStatusEnum.AVAILABLE, RoomStatusEnum.OCCUPIED]),
         ).all()
 

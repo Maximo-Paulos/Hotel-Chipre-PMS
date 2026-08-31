@@ -33,6 +33,7 @@ from app.services.subscription_service import (
     get_staff_usage,
     set_entitlement_override,
 )
+from app.services.room_service import active_rooms
 from app.services.permission_service import PERMISSION_SETTINGS_SUBSCRIPTION_VIEW
 
 router = APIRouter(prefix="/api/subscription", tags=["Subscription"])
@@ -50,7 +51,7 @@ def _remaining_trial_days(trial_end_at) -> int | None:
 
 def _serialize_status_payload(db: Session, hotel_id: int) -> dict:
     snapshot = get_subscription_snapshot(db, hotel_id)
-    rooms = db.query(Room).filter(Room.hotel_id == hotel_id, Room.is_active.is_(True)).count()
+    rooms = active_rooms(db, hotel_id).filter(Room.is_active.is_(True)).count()
     staff = get_staff_usage(db, hotel_id)
     payload = {
         "hotel_id": hotel_id,

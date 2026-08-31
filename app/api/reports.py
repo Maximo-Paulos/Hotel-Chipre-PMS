@@ -31,6 +31,7 @@ from app.services.operational_report_service import (
 )
 from app.services.read_model_cache import get_cached_daily_report_payload
 from app.services.reservation_service import active_reservations, visible_reservations
+from app.services.room_service import active_rooms
 from app.services.permission_service import (
     PERMISSION_REPORTS_FINANCIAL_VIEW,
     PERMISSION_REPORTS_OPERATIONAL_VIEW,
@@ -154,7 +155,7 @@ def daily_report(
         ]),
     ).all()
 
-    total_rooms = db.query(Room).filter(Room.is_active == True, Room.hotel_id == context.hotel_id).count()
+    total_rooms = active_rooms(db, context.hotel_id).filter(Room.is_active.is_(True)).count()
     occupied = len([r for r in in_house if r.status == ReservationStatusEnum.CHECKED_IN])
 
     # ── Revenue today (completed transactions) ──
@@ -272,7 +273,7 @@ def occupancy_report(
         raise HTTPException(status_code=422, detail="Date range must not exceed 366 days")
 
     reservation_scope = active_reservations(db, context.hotel_id)
-    total_rooms = db.query(Room).filter(Room.is_active == True, Room.hotel_id == context.hotel_id).count()
+    total_rooms = active_rooms(db, context.hotel_id).filter(Room.is_active.is_(True)).count()
 
     # Load the overlap candidates once. The previous implementation issued one
     # COUNT query per day in the requested range, making a 30-day dashboard

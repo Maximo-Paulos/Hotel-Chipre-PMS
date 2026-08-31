@@ -13,6 +13,7 @@ from app.models.hotel_config import HotelConfiguration
 from app.models.ota_core import OTAInventoryRule, OTAPriceRule, OTAProvider, OTARatePlanMapping, OTARoomMapping
 from app.models.reservation import Reservation, ReservationSourceEnum, ReservationStatusEnum
 from app.models.room import Room, RoomCategory
+from app.services.room_service import active_rooms
 from app.services.reservation_service import active_reservations
 from app.services.timezones import local_today
 
@@ -105,14 +106,16 @@ def get_daily_calendar(
         )
     rate_plan_ids = [plan.id for plan in rate_plans]
 
-    room_rows = db.execute(
-        select(Room.id).where(
-            Room.hotel_id == hotel_id,
+    room_rows = (
+        active_rooms(db, hotel_id)
+        .with_entities(Room.id)
+        .filter(
             Room.category_id == category_id,
-            Room.is_active == True,
+            Room.is_active.is_(True),
         )
         .order_by(Room.id.asc())
-    ).all()
+        .all()
+    )
     room_ids = [row.id for row in room_rows]
     total_rooms = len(room_rows)
 

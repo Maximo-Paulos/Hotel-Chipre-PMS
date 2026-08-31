@@ -46,6 +46,7 @@ from app.services.analytics_ai_providers import build_analytics_ai_config, get_a
 from app.services.analytics_contracts import build_analytics_window, calculate_physical_room_nights_for_hotel, calculate_pickup_30d_count
 from app.services.analytics_facts import refresh_fact_reservation_daily, refresh_fact_room_occupancy_daily
 from app.services.reservation_service import active_reservations
+from app.services.room_service import active_rooms
 from app.services.subscription_entitlements import get_subscription_snapshot
 from app.services.timezones import normalize_timezone
 
@@ -846,7 +847,7 @@ def _group_rows(rows: list[Any], key: str) -> dict[Any, list[Any]]:
 
 
 def _room_lookup_map(db: Session, hotel_id: int) -> dict[int, Room]:
-    rooms = db.query(Room).filter(Room.hotel_id == hotel_id).all()
+    rooms = active_rooms(db, hotel_id).all()
     return {room.id: room for room in rooms}
 
 
@@ -920,11 +921,13 @@ def _load_reservation_facts(db: Session, hotel_id: int, date_from: date, date_to
 
 def _load_room_facts(db: Session, hotel_id: int, date_from: date, date_to: date) -> list[FactRoomOccupancyDaily]:
     _ensure_facts_materialized(db, hotel_id, date_from, date_to)
+    active_room_ids = active_rooms(db, hotel_id).with_entities(Room.id).statement
     return (
         db.query(FactRoomOccupancyDaily)
         .filter(
             FactRoomOccupancyDaily.hotel_id == hotel_id,
             FactRoomOccupancyDaily.stay_date.between(date_from, date_to),
+            FactRoomOccupancyDaily.room_id.in_(active_room_ids),
         )
         .all()
     )
@@ -937,9 +940,14 @@ def _sum_money(rows: list[Any], attr: str) -> Decimal:
 def build_starter_summary_payload(db: Session, *, hotel_id: int, date_from: date | None, date_to: date | None) -> dict[str, Any]:
     window = _utc_date_range(db, hotel_id, date_from, date_to)
     facts = _load_reservation_facts(db, hotel_id, window.date_from, window.date_to)
+    active_room_ids = active_rooms(db, hotel_id).with_entities(Room.id).statement
     occupancy_rows = (
         db.query(FactRoomOccupancyDaily)
-        .filter(FactRoomOccupancyDaily.hotel_id == hotel_id, FactRoomOccupancyDaily.stay_date == window.date_to)
+        .filter(
+            FactRoomOccupancyDaily.hotel_id == hotel_id,
+            FactRoomOccupancyDaily.stay_date == window.date_to,
+            FactRoomOccupancyDaily.room_id.in_(active_room_ids),
+        )
         .all()
     )
     arrivals = (
@@ -950,9 +958,9 @@ def build_starter_summary_payload(db: Session, *, hotel_id: int, date_from: date
         )
         .count()
     )
-    total_rooms = db.query(Room).filter(Room.hotel_id == hotel_id, Room.is_active.is_(True)).count()
+    total_rooms = active_rooms(db, hotel_id).filter(Room.is_active.is_(True)).count()
     occupied_rooms = len([row for row in occupancy_rows if row.is_occupied])
-    occupancy_pct = (occupied_rooms / len(occupancy_rows) * 100.0) if occupancy_rows else 0.0
+    occupancy_pct = (occupied_rooms / total_rooms * 100.0) if total_rooms else 0.0
     revenue = _sum_money(facts, "revenue_gross_ars")
     cards = [
         metric_card("starter_revenue_month", "Revenue del mes", value_ars=revenue).model_dump(),
@@ -1159,8 +1167,8 @@ def build_category_detail_payload(
     if not category:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Category no encontrada")
     rooms = (
-        db.query(Room)
-        .filter(Room.hotel_id == hotel_id, Room.category_id == category_id)
+        active_rooms(db, hotel_id)
+        .filter(Room.category_id == category_id)
         .order_by(Room.room_number.asc())
         .all()
     )

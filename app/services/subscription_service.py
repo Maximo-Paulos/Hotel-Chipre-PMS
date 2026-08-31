@@ -26,6 +26,7 @@ from app.services.subscription_entitlements import (
     ensure_subscription_seed,
     set_room_limit_override,
 )
+from app.services.room_service import active_rooms
 
 # Default entitlements per plan code (beyond room limit which mirrors room_limit)
 DEFAULT_ENTITLEMENTS: dict[str, dict[str, Any]] = {
@@ -234,12 +235,7 @@ def ensure_room_within_limit(db: Session, hotel_id: int):
     limit = entry["value"] if entry else None
     if limit is None:
         return
-    current = (
-        db.query(func.count())
-        .select_from(Room)
-        .filter(Room.hotel_id == hotel_id, Room.is_active.is_(True))
-        .scalar()
-    )
+    current = active_rooms(db, hotel_id).filter(Room.is_active.is_(True)).count()
     if current >= int(limit):
         if is_enforcement_enabled():
             raise HTTPException(
@@ -323,12 +319,7 @@ def set_subscription_plan(db: Session, hotel_id: int, plan_code: str) -> dict:
     if plan_code not in PLAN_CATALOG:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plan no encontrado")
 
-    rooms_in_use = (
-        db.query(func.count())
-        .select_from(Room)
-        .filter(Room.hotel_id == hotel_id, Room.is_active.is_(True))
-        .scalar()
-    )
+    rooms_in_use = active_rooms(db, hotel_id).filter(Room.is_active.is_(True)).count()
     if PLAN_CATALOG[plan_code]["room_limit"] < rooms_in_use and is_enforcement_enabled():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
