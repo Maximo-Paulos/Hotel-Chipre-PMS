@@ -1128,9 +1128,9 @@
     "video": []
   },
   "total_files": 1118,
-  "total_words": 1730277,
+  "total_words": 1730525,
   "needs_graph": true,
-  "warning": "Large corpus: 1118 files · ~1,730,277 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
+  "warning": "Large corpus: 1118 files · ~1,730,525 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
   "skipped_sensitive": [
     "alembic/versions/20260408_security_tokens.py",
     "alembic/versions/20260725_user_token_version.py",
@@ -1148,7 +1148,7 @@
   "graphifyignore_patterns": 64,
   "git": {
     "source_owner": "git",
-    "source_hash": "c09a164d6f21262c753e63a09ba99848590c6fc8",
+    "source_hash": "6fd89adbd11930f42a212ae858b07b80609a2640",
     "branches": [
       "audit/tech-0000-baseline",
       "chore/revert-rls-bypass-diagnostic",
@@ -1227,7 +1227,7 @@
     "source": "cli",
     "root": ".",
     "git_root": ".",
-    "head": "c09a164d6f21262c753e63a09ba99848590c6fc8",
+    "head": "6fd89adbd11930f42a212ae858b07b80609a2640",
     "candidate_count": null,
     "included_count": 1118,
     "excluded_untracked_count": 0,
