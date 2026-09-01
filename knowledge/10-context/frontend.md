@@ -10,4 +10,4 @@ required_validation: npm run lint + npm run typecheck + npm run build + Playwrig
 
 `frontend/src/router.tsx` separa host de aplicación y marketing. `app.hotels-pms.com` sirve operaciones y master-admin; `hotels-pms.com` sirve marketing y redirecciones hacia la app. Consultar el inventario generado antes de cambiar rutas.
 
-Todo cambio visible debe cubrir carga, vacío, error, permisos, teclado/foco y responsive básico; la prueba de navegador debe usar el rol correcto sobre preview aislado.
+Todo cambio visible debe cubrir carga, vacío, error, permisos, teclado/foco y responsive básico; la prueba funcional de navegador debe usar el rol correcto sobre Render producción y el hotel de prueba autorizado después de verificar el SHA live.

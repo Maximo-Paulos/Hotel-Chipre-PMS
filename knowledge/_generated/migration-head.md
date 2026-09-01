@@ -1,9 +1,9 @@
 # Alembic head
 
-Generado: 2026-08-30T19:35:44.007754+00:00
-Commit: `af0c518`
+Generado: 2026-09-01T12:12:23.381491+00:00
+Commit: `9aee997`
 
 ```text
-20260830_guest_room_avoidance (head)
+20260830_fix_receptionist_move_default (head)
 ```
 Fuente: `alembic.ini` y `alembic/versions/`.

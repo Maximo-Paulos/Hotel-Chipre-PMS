@@ -1,3 +1,3 @@
 interface:
   display_name: "Deploy Preview Check"
-  short_description: "Comprueba que un preview sea aislado y apunte al backend correcto."
+  short_description: "Comprueba que Render producción esté desplegando el backend correcto."

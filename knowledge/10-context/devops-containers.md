@@ -1,13 +1,13 @@
 ---
-scope: Render, Vercel, Supabase, contenedores, CI y previews
+scope: Render producción, Vercel, Supabase, contenedores y CI
 owner: devops-containers
 last_verified_commit: bf14bf5
 canonical_sources: [render.yaml, vercel.json, frontend/vercel.json, .github/workflows/, knowledge/20-system/cloud-and-deployment.md]
 graphify_minimum: graphify affected-flows --files app/main.py
-required_validation: preview manifest + backend health + frontend VITE_API_URL exacta
+required_validation: production Render manifest + backend health + SHA + CORS/FRONTEND_URL + Redis
 ---
 # Context pack — DevOps y contenedores
 
-La producción actual declara backend Render en `render.yaml` y frontend Vercel. Los previews deben ser por PR: base Supabase Branch aislada, backend Render con URL/secretos QA propios y frontend Vercel construido contra la URL exacta del backend.
+La producción actual declara backend Render en `render.yaml` y frontend Vercel. La QA funcional cloud usa el deploy normal de `main` sobre Render producción y el hotel de prueba autorizado; el workflow sólo verifica el SHA, el perfil seguro, CORS, health y Redis.
 
-Si Supabase Branches no está disponible, no se degrada a una base compartida: se bloquea y se solicita segunda base QA aislada. Ningún documento contiene secretos de proveedor.
+No se requiere un servicio Render QA ni una base de preview separada para esta campaña. Ningún documento contiene secretos de proveedor; los cambios de infraestructura siguen requiriendo revisión y rollback.

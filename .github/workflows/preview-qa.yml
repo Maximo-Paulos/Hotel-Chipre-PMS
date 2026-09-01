@@ -6,8 +6,8 @@ on:
 
 # This workflow intentionally has no Actions read permission, environment,
 # provider secret, or artifact download. It executes branch-controlled code
-# only for static diagnostics. The complete provider/bootstrap/browser cycle
-# runs from the trusted default-branch workflow instead.
+# only for static diagnostics. Functional cloud QA runs after merge from the
+# trusted default-branch workflow against the production Render test hotel.
 permissions:
   contents: read
 
@@ -27,13 +27,10 @@ jobs:
           --only-binary=:all: -r requirements-qa-trusted.txt
       - name: Validate only the static branch contract
         run: |
-          python -m json.tool qa/preview-manifest.example.json >/dev/null
           python -m json.tool qa/regression-catalog.json >/dev/null
-          python scripts/agent_ops/validate_preview_manifest.py \
-            qa/preview-manifest.example.json --skip-freshness
           python scripts/agent_ops/render_agents.py --check
           python scripts/agent_ops/sync_skills.py --check
       - name: Explain the trusted cloud gate
         run: |
           echo "This untrusted PR workflow never reads provider artifacts or secrets."
-          echo "Dispatch verify-preview-providers.yml from the default branch for isolated cloud QA."
+          echo "After merge, verify-preview-providers.yml checks the live production Render deployment."

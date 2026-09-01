@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-31T00:42:28.811Z",
+  "generatedAt": "2026-09-01T12:29:05.593Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -152,6 +152,72 @@
       "fileCount": 1,
       "files": [
         "app/api/auth.py"
+      ],
+      "criticality": 0.45,
+      "warnings": []
+    },
+    {
+      "id": "flow:agent_ops_verify_production_render_main",
+      "name": "main",
+      "entryPoint": "agent_ops_verify_production_render_main",
+      "entryPointId": "agent_ops_verify_production_render_main",
+      "path": [
+        "agent_ops_verify_production_render_main",
+        "agent_ops_verify_production_render_readonlyrenderapi",
+        "agent_ops_verify_production_render_required_env",
+        "agent_ops_verify_production_render_verificationconfig",
+        "agent_ops_verify_production_render_verify",
+        "agent_ops_verify_production_render_verificationerror",
+        "agent_ops_verify_production_render_build_manifest",
+        "agent_ops_verify_production_render_https_origin",
+        "agent_ops_verify_production_render_live_deployment",
+        "agent_ops_verify_production_render_non_empty",
+        "agent_ops_verify_production_render_object",
+        "agent_ops_verify_production_render_render_env",
+        "agent_ops_verify_production_render_render_repository",
+        "agent_ops_verify_production_render_repository",
+        "agent_ops_verify_production_render_service_id",
+        "agent_ops_verify_production_render_timestamp",
+        "agent_ops_verify_production_render_validate_config",
+        "agent_ops_verify_production_render_verify_runtime_profile",
+        "agent_ops_verify_production_render_canonical_host",
+        "agent_ops_verify_production_render_deploymentnotready",
+        "agent_ops_verify_production_render_render_page",
+        "agent_ops_verify_production_render_require_recent",
+        "agent_ops_verify_production_render_validate_site_origin",
+        "agent_ops_verify_production_render_list"
+      ],
+      "qualifiedPath": [
+        "agent_ops_verify_production_render_main",
+        "agent_ops_verify_production_render_readonlyrenderapi",
+        "agent_ops_verify_production_render_required_env",
+        "agent_ops_verify_production_render_verificationconfig",
+        "agent_ops_verify_production_render_verify",
+        "agent_ops_verify_production_render_verificationerror",
+        "agent_ops_verify_production_render_build_manifest",
+        "agent_ops_verify_production_render_https_origin",
+        "agent_ops_verify_production_render_live_deployment",
+        "agent_ops_verify_production_render_non_empty",
+        "agent_ops_verify_production_render_object",
+        "agent_ops_verify_production_render_render_env",
+        "agent_ops_verify_production_render_render_repository",
+        "agent_ops_verify_production_render_repository",
+        "agent_ops_verify_production_render_service_id",
+        "agent_ops_verify_production_render_timestamp",
+        "agent_ops_verify_production_render_validate_config",
+        "agent_ops_verify_production_render_verify_runtime_profile",
+        "agent_ops_verify_production_render_canonical_host",
+        "agent_ops_verify_production_render_deploymentnotready",
+        "agent_ops_verify_production_render_render_page",
+        "agent_ops_verify_production_render_require_recent",
+        "agent_ops_verify_production_render_validate_site_origin",
+        "agent_ops_verify_production_render_list"
+      ],
+      "depth": 5,
+      "nodeCount": 24,
+      "fileCount": 1,
+      "files": [
+        "scripts/agent_ops/verify_production_render.py"
       ],
       "criticality": 0.45,
       "warnings": []
@@ -1083,6 +1149,30 @@
       "warnings": []
     },
     {
+      "id": "flow:api_queryinvalidation_refreshpaymentstate",
+      "name": "refreshPaymentState",
+      "entryPoint": "api_queryinvalidation_refreshpaymentstate",
+      "entryPointId": "api_queryinvalidation_refreshpaymentstate",
+      "path": [
+        "api_queryinvalidation_refreshpaymentstate",
+        "api_queryinvalidation_refreshreservationstate",
+        "api_queryinvalidation_refreshaftermutation"
+      ],
+      "qualifiedPath": [
+        "api_queryinvalidation_refreshpaymentstate",
+        "api_queryinvalidation_refreshreservationstate",
+        "api_queryinvalidation_refreshaftermutation"
+      ],
+      "depth": 2,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/api/queryInvalidation.ts"
+      ],
+      "criticality": 0.42,
+      "warnings": []
+    },
+    {
       "id": "flow:api_auth_refresh_session",
       "name": "refresh_session",
       "entryPoint": "api_auth_refresh_session",
@@ -1711,6 +1801,28 @@
       "warnings": []
     },
     {
+      "id": "flow:agent_ops_verify_production_render_readonlyrenderapi_init",
+      "name": ".__init",
+      "entryPoint": "agent_ops_verify_production_render_readonlyrenderapi_init",
+      "entryPointId": "agent_ops_verify_production_render_readonlyrenderapi_init",
+      "path": [
+        "agent_ops_verify_production_render_readonlyrenderapi_init",
+        "agent_ops_verify_production_render_verificationerror"
+      ],
+      "qualifiedPath": [
+        "agent_ops_verify_production_render_readonlyrenderapi_init",
+        "agent_ops_verify_production_render_verificationerror"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "scripts/agent_ops/verify_production_render.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
       "id": "flow:agent_ops_verify_preview_providers_readonlyjsonapi_get",
       "name": ".get",
       "entryPoint": "agent_ops_verify_preview_providers_readonlyjsonapi_get",
@@ -1728,6 +1840,28 @@
       "fileCount": 1,
       "files": [
         "scripts/agent_ops/verify_preview_providers.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
+      "id": "flow:agent_ops_verify_production_render_readonlyrenderapi_get",
+      "name": ".get",
+      "entryPoint": "agent_ops_verify_production_render_readonlyrenderapi_get",
+      "entryPointId": "agent_ops_verify_production_render_readonlyrenderapi_get",
+      "path": [
+        "agent_ops_verify_production_render_readonlyrenderapi_get",
+        "agent_ops_verify_production_render_verificationerror"
+      ],
+      "qualifiedPath": [
+        "agent_ops_verify_production_render_readonlyrenderapi_get",
+        "agent_ops_verify_production_render_verificationerror"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "scripts/agent_ops/verify_production_render.py"
       ],
       "criticality": 0.41,
       "warnings": []
@@ -2628,6 +2762,160 @@
       "fileCount": 1,
       "files": [
         "app/api/permissions.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_queryinvalidation_refreshcashstate",
+      "name": "refreshCashState",
+      "entryPoint": "api_queryinvalidation_refreshcashstate",
+      "entryPointId": "api_queryinvalidation_refreshcashstate",
+      "path": [
+        "api_queryinvalidation_refreshcashstate",
+        "api_queryinvalidation_refreshaftermutation"
+      ],
+      "qualifiedPath": [
+        "api_queryinvalidation_refreshcashstate",
+        "api_queryinvalidation_refreshaftermutation"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/api/queryInvalidation.ts"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_queryinvalidation_refreshdomains",
+      "name": "refreshDomains",
+      "entryPoint": "api_queryinvalidation_refreshdomains",
+      "entryPointId": "api_queryinvalidation_refreshdomains",
+      "path": [
+        "api_queryinvalidation_refreshdomains",
+        "api_queryinvalidation_refreshaftermutation"
+      ],
+      "qualifiedPath": [
+        "api_queryinvalidation_refreshdomains",
+        "api_queryinvalidation_refreshaftermutation"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/api/queryInvalidation.ts"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_queryinvalidation_refreshgueststate",
+      "name": "refreshGuestState",
+      "entryPoint": "api_queryinvalidation_refreshgueststate",
+      "entryPointId": "api_queryinvalidation_refreshgueststate",
+      "path": [
+        "api_queryinvalidation_refreshgueststate",
+        "api_queryinvalidation_refreshaftermutation"
+      ],
+      "qualifiedPath": [
+        "api_queryinvalidation_refreshgueststate",
+        "api_queryinvalidation_refreshaftermutation"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/api/queryInvalidation.ts"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_queryinvalidation_refreshroomstate",
+      "name": "refreshRoomState",
+      "entryPoint": "api_queryinvalidation_refreshroomstate",
+      "entryPointId": "api_queryinvalidation_refreshroomstate",
+      "path": [
+        "api_queryinvalidation_refreshroomstate",
+        "api_queryinvalidation_refreshaftermutation"
+      ],
+      "qualifiedPath": [
+        "api_queryinvalidation_refreshroomstate",
+        "api_queryinvalidation_refreshaftermutation"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/api/queryInvalidation.ts"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_queryinvalidation_refreshsettingsstate",
+      "name": "refreshSettingsState",
+      "entryPoint": "api_queryinvalidation_refreshsettingsstate",
+      "entryPointId": "api_queryinvalidation_refreshsettingsstate",
+      "path": [
+        "api_queryinvalidation_refreshsettingsstate",
+        "api_queryinvalidation_refreshaftermutation"
+      ],
+      "qualifiedPath": [
+        "api_queryinvalidation_refreshsettingsstate",
+        "api_queryinvalidation_refreshaftermutation"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/api/queryInvalidation.ts"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_queryinvalidation_refreshstockstate",
+      "name": "refreshStockState",
+      "entryPoint": "api_queryinvalidation_refreshstockstate",
+      "entryPointId": "api_queryinvalidation_refreshstockstate",
+      "path": [
+        "api_queryinvalidation_refreshstockstate",
+        "api_queryinvalidation_refreshaftermutation"
+      ],
+      "qualifiedPath": [
+        "api_queryinvalidation_refreshstockstate",
+        "api_queryinvalidation_refreshaftermutation"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/api/queryInvalidation.ts"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_queryinvalidation_refreshuserstate",
+      "name": "refreshUserState",
+      "entryPoint": "api_queryinvalidation_refreshuserstate",
+      "entryPointId": "api_queryinvalidation_refreshuserstate",
+      "path": [
+        "api_queryinvalidation_refreshuserstate",
+        "api_queryinvalidation_refreshaftermutation"
+      ],
+      "qualifiedPath": [
+        "api_queryinvalidation_refreshuserstate",
+        "api_queryinvalidation_refreshaftermutation"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/api/queryInvalidation.ts"
       ],
       "criticality": 0.41,
       "warnings": []
@@ -5211,6 +5499,42 @@
       "warnings": []
     },
     {
+      "id": "flow:services_domain_events_queue_model_changes",
+      "name": "queue_model_changes",
+      "entryPoint": "services_domain_events_queue_model_changes",
+      "entryPointId": "services_domain_events_queue_model_changes",
+      "path": [
+        "services_domain_events_queue_model_changes",
+        "services_domain_events_model_event_payload",
+        "services_domain_events_model_hotel_id",
+        "services_domain_events_queue_domain_change",
+        "services_domain_events_scalar_event_value",
+        "services_domain_events_validate_event_input",
+        "services_domain_events_queueddomainchange",
+        "services_domain_events_session_transaction_id",
+        "services_domain_events_validate_hotel_id"
+      ],
+      "qualifiedPath": [
+        "services_domain_events_queue_model_changes",
+        "services_domain_events_model_event_payload",
+        "services_domain_events_model_hotel_id",
+        "services_domain_events_queue_domain_change",
+        "services_domain_events_scalar_event_value",
+        "services_domain_events_validate_event_input",
+        "services_domain_events_queueddomainchange",
+        "services_domain_events_session_transaction_id",
+        "services_domain_events_validate_hotel_id"
+      ],
+      "depth": 3,
+      "nodeCount": 9,
+      "fileCount": 1,
+      "files": [
+        "app/services/domain_events.py"
+      ],
+      "criticality": 0.2633,
+      "warnings": []
+    },
+    {
       "id": "flow:services_room_block_service_create_block",
       "name": "create_block",
       "entryPoint": "services_room_block_service_create_block",
@@ -6977,6 +7301,32 @@
       "warnings": []
     },
     {
+      "id": "flow:api_collaboration_patch_collaborative_resource",
+      "name": "patch_collaborative_resource",
+      "entryPoint": "api_collaboration_patch_collaborative_resource",
+      "entryPointId": "api_collaboration_patch_collaborative_resource",
+      "path": [
+        "api_collaboration_patch_collaborative_resource",
+        "api_collaboration_patch_conflict_response",
+        "api_collaboration_require_permission",
+        "api_collaboration_require_resource_lane"
+      ],
+      "qualifiedPath": [
+        "api_collaboration_patch_collaborative_resource",
+        "api_collaboration_patch_conflict_response",
+        "api_collaboration_require_permission",
+        "api_collaboration_require_resource_lane"
+      ],
+      "depth": 1,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/api/collaboration.py"
+      ],
+      "criticality": 0.2225,
+      "warnings": []
+    },
+    {
       "id": "flow:api_users_update_role",
       "name": "update_role",
       "entryPoint": "api_users_update_role",
@@ -7100,6 +7450,48 @@
       "fileCount": 1,
       "files": [
         "app/services/reservation_operations_service.py"
+      ],
+      "criticality": 0.2217,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_domain_events_publish_queued_domain_changes",
+      "name": "publish_queued_domain_changes",
+      "entryPoint": "services_domain_events_publish_queued_domain_changes",
+      "entryPointId": "services_domain_events_publish_queued_domain_changes",
+      "path": [
+        "services_domain_events_publish_queued_domain_changes",
+        "services_domain_events_publish_domain_event",
+        "services_domain_events_domainevent",
+        "services_domain_events_domainevent_as_payload",
+        "services_domain_events_get_redis_client",
+        "services_domain_events_revision_key_for_hotel",
+        "services_domain_events_settings",
+        "services_domain_events_unavailable",
+        "services_domain_events_validate_event_input",
+        "services_domain_events_validate_hotel_id",
+        "services_domain_events_realtimeeventsunavailable",
+        "services_domain_events_required"
+      ],
+      "qualifiedPath": [
+        "services_domain_events_publish_queued_domain_changes",
+        "services_domain_events_publish_domain_event",
+        "services_domain_events_domainevent",
+        "services_domain_events_domainevent_as_payload",
+        "services_domain_events_get_redis_client",
+        "services_domain_events_revision_key_for_hotel",
+        "services_domain_events_settings",
+        "services_domain_events_unavailable",
+        "services_domain_events_validate_event_input",
+        "services_domain_events_validate_hotel_id",
+        "services_domain_events_realtimeeventsunavailable",
+        "services_domain_events_required"
+      ],
+      "depth": 3,
+      "nodeCount": 12,
+      "fileCount": 1,
+      "files": [
+        "app/services/domain_events.py"
       ],
       "criticality": 0.2217,
       "warnings": []
@@ -7415,6 +7807,38 @@
       "warnings": []
     },
     {
+      "id": "flow:services_collaboration_apply_resource_changes",
+      "name": "apply_resource_changes",
+      "entryPoint": "services_collaboration_apply_resource_changes",
+      "entryPointId": "services_collaboration_apply_resource_changes",
+      "path": [
+        "services_collaboration_apply_resource_changes",
+        "services_collaboration_get_resource_spec",
+        "services_collaboration_model_dump_for_database",
+        "services_collaboration_validate_draft_changes",
+        "services_collaboration_normalize_resource_type",
+        "services_collaboration_model_dump_for_wire",
+        "services_collaboration_json_safe"
+      ],
+      "qualifiedPath": [
+        "services_collaboration_apply_resource_changes",
+        "services_collaboration_get_resource_spec",
+        "services_collaboration_model_dump_for_database",
+        "services_collaboration_validate_draft_changes",
+        "services_collaboration_normalize_resource_type",
+        "services_collaboration_model_dump_for_wire",
+        "services_collaboration_json_safe"
+      ],
+      "depth": 3,
+      "nodeCount": 7,
+      "fileCount": 1,
+      "files": [
+        "app/services/collaboration.py"
+      ],
+      "criticality": 0.2157,
+      "warnings": []
+    },
+    {
       "id": "flow:api_movement_groups_revert_movement_group",
       "name": "revert_movement_group",
       "entryPoint": "api_movement_groups_revert_movement_group",
@@ -7444,46 +7868,6 @@
         "app/api/movement_groups.py"
       ],
       "criticality": 0.2157,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_domain_events_publish_domain_event",
-      "name": "publish_domain_event",
-      "entryPoint": "services_domain_events_publish_domain_event",
-      "entryPointId": "services_domain_events_publish_domain_event",
-      "path": [
-        "services_domain_events_publish_domain_event",
-        "services_domain_events_domainevent",
-        "services_domain_events_domainevent_as_payload",
-        "services_domain_events_get_redis_client",
-        "services_domain_events_revision_key_for_hotel",
-        "services_domain_events_settings",
-        "services_domain_events_unavailable",
-        "services_domain_events_validate_event_input",
-        "services_domain_events_validate_hotel_id",
-        "services_domain_events_realtimeeventsunavailable",
-        "services_domain_events_required"
-      ],
-      "qualifiedPath": [
-        "services_domain_events_publish_domain_event",
-        "services_domain_events_domainevent",
-        "services_domain_events_domainevent_as_payload",
-        "services_domain_events_get_redis_client",
-        "services_domain_events_revision_key_for_hotel",
-        "services_domain_events_settings",
-        "services_domain_events_unavailable",
-        "services_domain_events_validate_event_input",
-        "services_domain_events_validate_hotel_id",
-        "services_domain_events_realtimeeventsunavailable",
-        "services_domain_events_required"
-      ],
-      "depth": 2,
-      "nodeCount": 11,
-      "fileCount": 1,
-      "files": [
-        "app/services/domain_events.py"
-      ],
-      "criticality": 0.2155,
       "warnings": []
     },
     {
@@ -7697,6 +8081,56 @@
       "warnings": []
     },
     {
+      "id": "flow:api_collaboration_collaboration_websocket",
+      "name": "collaboration_websocket",
+      "entryPoint": "api_collaboration_collaboration_websocket",
+      "entryPointId": "api_collaboration_collaboration_websocket",
+      "path": [
+        "api_collaboration_collaboration_websocket",
+        "api_collaboration_collaborationmanager_join",
+        "api_collaboration_collaborationmanager_leave",
+        "api_collaboration_collaborationmanager_publish",
+        "api_collaboration_consume_ticket",
+        "api_collaboration_live_ticket_is_authorized",
+        "api_collaboration_message_allowed",
+        "api_collaboration_peer",
+        "api_collaboration_room_name",
+        "api_collaboration_send_peer",
+        "api_collaboration_collaborationmanager_retry_transport",
+        "api_collaboration_collaborationmanager_start_transport",
+        "api_collaboration_collaborationmanager_broadcast_local",
+        "api_collaboration_ticket_key",
+        "api_collaboration_collaborationmanager_listen",
+        "api_collaboration_roomtransport"
+      ],
+      "qualifiedPath": [
+        "api_collaboration_collaboration_websocket",
+        "api_collaboration_collaborationmanager_join",
+        "api_collaboration_collaborationmanager_leave",
+        "api_collaboration_collaborationmanager_publish",
+        "api_collaboration_consume_ticket",
+        "api_collaboration_live_ticket_is_authorized",
+        "api_collaboration_message_allowed",
+        "api_collaboration_peer",
+        "api_collaboration_room_name",
+        "api_collaboration_send_peer",
+        "api_collaboration_collaborationmanager_retry_transport",
+        "api_collaboration_collaborationmanager_start_transport",
+        "api_collaboration_collaborationmanager_broadcast_local",
+        "api_collaboration_ticket_key",
+        "api_collaboration_collaborationmanager_listen",
+        "api_collaboration_roomtransport"
+      ],
+      "depth": 3,
+      "nodeCount": 16,
+      "fileCount": 1,
+      "files": [
+        "app/api/collaboration.py"
+      ],
+      "criticality": 0.2113,
+      "warnings": []
+    },
+    {
       "id": "flow:agent_ops_operational_qa_main",
       "name": "main",
       "entryPoint": "agent_ops_operational_qa_main",
@@ -7838,6 +8272,34 @@
         "app/services/payment_link_test_service.py"
       ],
       "criticality": 0.2108,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_collaboration_create_collaboration_ticket",
+      "name": "create_collaboration_ticket",
+      "entryPoint": "api_collaboration_create_collaboration_ticket",
+      "entryPointId": "api_collaboration_create_collaboration_ticket",
+      "path": [
+        "api_collaboration_create_collaboration_ticket",
+        "api_collaboration_realtime_client_or_503",
+        "api_collaboration_require_permission",
+        "api_collaboration_require_resource_lane",
+        "api_collaboration_ticket_key"
+      ],
+      "qualifiedPath": [
+        "api_collaboration_create_collaboration_ticket",
+        "api_collaboration_realtime_client_or_503",
+        "api_collaboration_require_permission",
+        "api_collaboration_require_resource_lane",
+        "api_collaboration_ticket_key"
+      ],
+      "depth": 1,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "app/api/collaboration.py"
+      ],
+      "criticality": 0.21,
       "warnings": []
     },
     {
@@ -10107,6 +10569,34 @@
       "warnings": []
     },
     {
+      "id": "flow:services_collaboration_serialize_resource",
+      "name": "serialize_resource",
+      "entryPoint": "services_collaboration_serialize_resource",
+      "entryPointId": "services_collaboration_serialize_resource",
+      "path": [
+        "services_collaboration_serialize_resource",
+        "services_collaboration_editable_resource_values",
+        "services_collaboration_get_resource_spec",
+        "services_collaboration_json_safe",
+        "services_collaboration_normalize_resource_type"
+      ],
+      "qualifiedPath": [
+        "services_collaboration_serialize_resource",
+        "services_collaboration_editable_resource_values",
+        "services_collaboration_get_resource_spec",
+        "services_collaboration_json_safe",
+        "services_collaboration_normalize_resource_type"
+      ],
+      "depth": 3,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "app/services/collaboration.py"
+      ],
+      "criticality": 0.18,
+      "warnings": []
+    },
+    {
       "id": "flow:services_tenant_context_set_tenant_context",
       "name": "set_tenant_context",
       "entryPoint": "services_tenant_context_set_tenant_context",
@@ -11608,6 +12098,30 @@
       "fileCount": 1,
       "files": [
         "app/services/domain_events.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_collaboration_get_resource",
+      "name": "get_resource",
+      "entryPoint": "services_collaboration_get_resource",
+      "entryPointId": "services_collaboration_get_resource",
+      "path": [
+        "services_collaboration_get_resource",
+        "services_collaboration_get_resource_spec",
+        "services_collaboration_normalize_resource_type"
+      ],
+      "qualifiedPath": [
+        "services_collaboration_get_resource",
+        "services_collaboration_get_resource_spec",
+        "services_collaboration_normalize_resource_type"
+      ],
+      "depth": 2,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/services/collaboration.py"
       ],
       "criticality": 0.17,
       "warnings": []
@@ -14902,17 +15416,19 @@
       "path": [
         "sync_crosstabsync_broadcastdomainchange",
         "sync_crosstabsync_domainforpath",
+        "sync_crosstabsync_domainsforpath",
         "sync_crosstabsync_getsenderid",
         "sync_crosstabsync_normalizehotelid"
       ],
       "qualifiedPath": [
         "sync_crosstabsync_broadcastdomainchange",
         "sync_crosstabsync_domainforpath",
+        "sync_crosstabsync_domainsforpath",
         "sync_crosstabsync_getsenderid",
         "sync_crosstabsync_normalizehotelid"
       ],
       "depth": 1,
-      "nodeCount": 4,
+      "nodeCount": 5,
       "fileCount": 1,
       "files": [
         "frontend/src/sync/crossTabSync.ts"
@@ -17093,6 +17609,28 @@
       "warnings": []
     },
     {
+      "id": "flow:protected_settingshotelpage_getroomdeleteblockeddetail",
+      "name": "getRoomDeleteBlockedDetail",
+      "entryPoint": "protected_settingshotelpage_getroomdeleteblockeddetail",
+      "entryPointId": "protected_settingshotelpage_getroomdeleteblockeddetail",
+      "path": [
+        "protected_settingshotelpage_getroomdeleteblockeddetail",
+        "protected_settingshotelpage_isroomdeleteblockeddetail"
+      ],
+      "qualifiedPath": [
+        "protected_settingshotelpage_getroomdeleteblockeddetail",
+        "protected_settingshotelpage_isroomdeleteblockeddetail"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/views/protected/SettingsHotelPage.tsx"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:api_fx_rates_get_all_rates",
       "name": "get_all_rates",
       "entryPoint": "api_fx_rates_get_all_rates",
@@ -18439,6 +18977,28 @@
       "warnings": []
     },
     {
+      "id": "flow:services_collaboration_merge_field_changes",
+      "name": "merge_field_changes",
+      "entryPoint": "services_collaboration_merge_field_changes",
+      "entryPointId": "services_collaboration_merge_field_changes",
+      "path": [
+        "services_collaboration_merge_field_changes",
+        "services_collaboration_mergeresult"
+      ],
+      "qualifiedPath": [
+        "services_collaboration_merge_field_changes",
+        "services_collaboration_mergeresult"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/services/collaboration.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:db_mongo_mongo_healthcheck",
       "name": "mongo_healthcheck",
       "entryPoint": "db_mongo_mongo_healthcheck",
@@ -18526,6 +19086,28 @@
       "fileCount": 1,
       "files": [
         "frontend/src/config/publicUrls.ts"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:hooks_usecollaborativeresource_parsewsmessage",
+      "name": "parseWsMessage",
+      "entryPoint": "hooks_usecollaborativeresource_parsewsmessage",
+      "entryPointId": "hooks_usecollaborativeresource_parsewsmessage",
+      "path": [
+        "hooks_usecollaborativeresource_parsewsmessage",
+        "hooks_usecollaborativeresource_isrecord"
+      ],
+      "qualifiedPath": [
+        "hooks_usecollaborativeresource_parsewsmessage",
+        "hooks_usecollaborativeresource_isrecord"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/hooks/useCollaborativeResource.ts"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -19640,15 +20222,17 @@
       "path": [
         "sync_crosstabsync_runeventstream",
         "sync_crosstabsync_normalizehotelid",
-        "sync_crosstabsync_parsesseframes"
+        "sync_crosstabsync_parsesseframes",
+        "sync_crosstabsync_updaterealtimestatus"
       ],
       "qualifiedPath": [
         "sync_crosstabsync_runeventstream",
         "sync_crosstabsync_normalizehotelid",
-        "sync_crosstabsync_parsesseframes"
+        "sync_crosstabsync_parsesseframes",
+        "sync_crosstabsync_updaterealtimestatus"
       ],
       "depth": 1,
-      "nodeCount": 3,
+      "nodeCount": 4,
       "fileCount": 1,
       "files": [
         "frontend/src/sync/crossTabSync.ts"

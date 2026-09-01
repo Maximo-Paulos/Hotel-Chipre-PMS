@@ -1,47 +1,43 @@
-name: Trusted preview QA cycle
+name: Production Render QA cycle
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
-      target_branch:
-        description: Same-repository non-default branch to verify
-        required: true
-        type: string
       target_sha:
-        description: Full commit SHA that target_branch must resolve to
+        description: Full commit SHA already deployed by Render on main
         required: true
         type: string
 
-# The free dedicated Supabase QA project is a single serialized baseline, not branch-per-PR isolation.
-# Permanent parallel previews require Supabase Branches. This
-# one concurrency group covers lease, provider verification, bootstrap,
-# re-verification, bundle checks and cleanup without a cross-run TOCTOU gap.
+# Render production is the single functional cloud test surface. The workflow
+# is serialized because the same test hotel is used by the human QA campaign.
+# It never changes Render service configuration, deploys a branch, or writes
+# credentials; it waits for the normal main auto-deploy and verifies it.
 concurrency:
-  group: preview-qa-dedicated-baseline
+  group: production-render-test-hotel
   cancel-in-progress: false
 
 permissions:
   contents: read
 
 jobs:
-  trusted-cycle:
+  production-render:
     if: github.ref_name == github.event.repository.default_branch
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 35
+    # This existing protected environment is used only as a credential vault
+    # for the read-only Render API token. No QA service is required.
     environment: preview-qa
     env:
-      TARGET_BRANCH: ${{ inputs.target_branch }}
-      TARGET_SHA: ${{ inputs.target_sha }}
+      TARGET_SHA: ${{ inputs.target_sha || github.sha }}
+      TARGET_BRANCH: ${{ github.event.repository.default_branch }}
       TRUSTED_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-      QA_PROVIDER_EVIDENCE_TTL_SECONDS: '900'
       RENDER_PRODUCTION_SERVICE_ID: ${{ vars.RENDER_PRODUCTION_SERVICE_ID }}
-      RENDER_QA_SERVICE_ID: ${{ vars.RENDER_QA_SERVICE_ID }}
-      SUPABASE_PRODUCTION_PROJECT_REF: ${{ vars.SUPABASE_PRODUCTION_PROJECT_REF }}
-      SUPABASE_QA_PROJECT_REF: ${{ vars.SUPABASE_QA_PROJECT_REF }}
-      VERCEL_CANONICAL_TEAM_ID: ${{ vars.VERCEL_CANONICAL_TEAM_ID }}
-      VERCEL_CANONICAL_PROJECT_ID: ${{ vars.VERCEL_CANONICAL_PROJECT_ID }}
+      PRODUCTION_APP_URL: https://app.hotels-pms.com
+      QA_GITHUB_ENVIRONMENT: preview-qa
     steps:
-      - name: Checkout immutable trusted default-branch workflow source
+      - name: Checkout immutable main commit
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           ref: ${{ github.sha }}
@@ -50,188 +46,84 @@ jobs:
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
-      - name: Install hash-locked trusted runtime
+      - name: Install hash-locked verification runtime
         run: >-
           python -m pip install --disable-pip-version-check --require-hashes
           --only-binary=:all: -r requirements-qa-trusted.txt
-      - name: Require trusted workflow and environment configuration
+      - name: Require the deployed main commit and production service identity
         run: |
           test "$GITHUB_REF_NAME" = "$TRUSTED_DEFAULT_BRANCH"
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test -n "$TARGET_BRANCH"
-          test -n "$TARGET_SHA"
+          test "$TARGET_BRANCH" = "$TRUSTED_DEFAULT_BRANCH"
+          test "$TARGET_SHA" = "$GITHUB_SHA"
           test -n "$RENDER_PRODUCTION_SERVICE_ID"
-          test -n "$RENDER_QA_SERVICE_ID"
-          test -n "$SUPABASE_PRODUCTION_PROJECT_REF"
-          test -n "$SUPABASE_QA_PROJECT_REF"
-          test -n "$VERCEL_CANONICAL_TEAM_ID"
-          test -n "$VERCEL_CANONICAL_PROJECT_ID"
-          test "$RENDER_QA_SERVICE_ID" != "$RENDER_PRODUCTION_SERVICE_ID"
-          test "$SUPABASE_QA_PROJECT_REF" != "$SUPABASE_PRODUCTION_PROJECT_REF"
-      - name: Acquire exclusive QA baseline lease
-        id: lease
+      - name: Wait for and verify the live Render production deployment
         env:
+          GITHUB_ACTOR_ID: ${{ github.actor_id }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
           RENDER_API_TOKEN: ${{ secrets.RENDER_API_TOKEN }}
         run: |
-          python scripts/agent_ops/manage_qa_baseline_lease.py acquire \
-            --target-sha "$TARGET_SHA" \
-            --target-branch "$TARGET_BRANCH" \
-            --qa-service-id "$RENDER_QA_SERVICE_ID" \
-            --production-service-id "$RENDER_PRODUCTION_SERVICE_ID" \
-            --repository "$GITHUB_REPOSITORY" \
-            --github-output "$GITHUB_OUTPUT"
-      - name: Verify providers before bootstrap
-        env:
-          BASELINE_LEASE_ID: ${{ steps.lease.outputs.lease_id }}
-          GITHUB_TOKEN: ${{ github.token }}
-          RENDER_API_TOKEN: ${{ secrets.RENDER_API_TOKEN }}
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          VERCEL_ACCESS_TOKEN: ${{ secrets.VERCEL_ACCESS_TOKEN }}
-        run: |
-          python scripts/agent_ops/verify_preview_providers.py \
-            --output "$RUNNER_TEMP/pre-bootstrap-manifest.json"
-          python scripts/agent_ops/validate_preview_manifest.py \
-            "$RUNNER_TEMP/pre-bootstrap-manifest.json" \
-            --expected-sha "$TARGET_SHA" \
-            --expected-task-id "preview-${TARGET_SHA:0:12}" \
-            --expected-workflow-run-id "$GITHUB_RUN_ID" \
-            --expected-repository "$GITHUB_REPOSITORY" \
-            --expected-branch "$TARGET_BRANCH" \
-            --expected-baseline-lease-id "$BASELINE_LEASE_ID" \
-            --expected-workflow-sha "$GITHUB_SHA" \
-            --expected-default-branch "$TRUSTED_DEFAULT_BRANCH"
-      - name: Issue runner-local bootstrap capability
-        env:
-          QA_PROVIDER_EVIDENCE_PRIVATE_KEY: ${{ secrets.QA_PROVIDER_EVIDENCE_PRIVATE_KEY }}
-        run: |
-          python scripts/issue_qa_provider_evidence.py \
-            "$RUNNER_TEMP/pre-bootstrap-manifest.json" \
-            --output "$RUNNER_TEMP/qa-provider-evidence.token"
-      - name: Install capability on the verified QA service and bootstrap
-        env:
-          RENDER_API_TOKEN: ${{ secrets.RENDER_API_TOKEN }}
-        run: |
-          python scripts/agent_ops/provision_qa_bootstrap.py \
-            "$RUNNER_TEMP/pre-bootstrap-manifest.json" \
-            "$RUNNER_TEMP/qa-provider-evidence.token" \
-            --target-sha "$TARGET_SHA" \
-            --production-service-id "$RENDER_PRODUCTION_SERVICE_ID"
-      - name: Re-verify provider state after bootstrap
-        env:
-          BASELINE_LEASE_ID: ${{ steps.lease.outputs.lease_id }}
-          GITHUB_TOKEN: ${{ github.token }}
-          RENDER_API_TOKEN: ${{ secrets.RENDER_API_TOKEN }}
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          VERCEL_ACCESS_TOKEN: ${{ secrets.VERCEL_ACCESS_TOKEN }}
-        run: |
-          python scripts/agent_ops/verify_preview_providers.py \
-            --output "$RUNNER_TEMP/post-bootstrap-manifest.json"
-          python scripts/agent_ops/validate_preview_manifest.py \
-            "$RUNNER_TEMP/post-bootstrap-manifest.json" \
-            --expected-sha "$TARGET_SHA" \
-            --expected-task-id "preview-${TARGET_SHA:0:12}" \
-            --expected-workflow-run-id "$GITHUB_RUN_ID" \
-            --expected-repository "$GITHUB_REPOSITORY" \
-            --expected-branch "$TARGET_BRANCH" \
-            --expected-baseline-lease-id "$BASELINE_LEASE_ID" \
-            --expected-workflow-sha "$GITHUB_SHA" \
-            --expected-default-branch "$TRUSTED_DEFAULT_BRANCH"
-      - name: Resolve sanitized final surface
+          python scripts/agent_ops/verify_production_render.py \
+            --output production-render-manifest.json \
+            --wait-seconds 1800 \
+            --poll-seconds 20
+      - name: Resolve the verified production surface
         id: surface
         run: |
           python - <<'PY'
           import json, os
-          manifest = json.load(open(os.path.join(os.environ["RUNNER_TEMP"], "post-bootstrap-manifest.json"), encoding="utf-8"))
-          values = {
-              "app_url": manifest["app_url"],
-              "api_origin": manifest["api_origin"],
-              "api_base_url": manifest["api_base_url"],
-              "health_url": manifest["health_url"],
-          }
+          manifest = json.load(open("production-render-manifest.json", encoding="utf-8"))
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
-              for key, value in values.items():
-                  if not isinstance(value, str) or "\n" in value or "\r" in value:
-                      raise SystemExit(f"invalid manifest surface {key}")
+              for key in ("app_url", "api_base_url", "health_url"):
+                  value = manifest[key]
+                  if not isinstance(value, str) or any(ord(char) < 32 for char in value):
+                      raise SystemExit(f"invalid production surface {key}")
                   output.write(f"{key}={value}\n")
           PY
-      - name: Verify health, exact CORS and frontend API bundle
+      - name: Verify production health, CORS and frontend reachability
         env:
           APP_URL: ${{ steps.surface.outputs.app_url }}
-          API_ORIGIN: ${{ steps.surface.outputs.api_origin }}
           API_BASE_URL: ${{ steps.surface.outputs.api_base_url }}
           HEALTH_URL: ${{ steps.surface.outputs.health_url }}
         run: |
           curl --fail --silent --show-error --proto '=https' --max-filesize 2097152 \
-            "$HEALTH_URL" -o "$RUNNER_TEMP/health.json"
+            -D "$RUNNER_TEMP/health.headers" "$HEALTH_URL" -o "$RUNNER_TEMP/health.json"
           python - <<'PY'
           import json, os
           value = json.load(open(os.path.join(os.environ["RUNNER_TEMP"], "health.json"), encoding="utf-8"))
           if not isinstance(value, dict) or value.get("status") not in {"healthy", "ok"}:
-              raise SystemExit("preview health response is not healthy")
-          PY
-          curl --fail --silent --show-error --proto '=https' --max-filesize 2097152 \
-            -D "$RUNNER_TEMP/cors.headers" -o /dev/null -H "Origin: $APP_URL" "$HEALTH_URL"
-          python - <<'PY'
-          import os
-          headers = open(os.path.join(os.environ["RUNNER_TEMP"], "cors.headers"), encoding="iso-8859-1").read().splitlines()
+              raise SystemExit("production Render health response is not healthy")
+          headers = open(os.path.join(os.environ["RUNNER_TEMP"], "health.headers"), encoding="iso-8859-1").read().splitlines()
           origins = [line.split(":", 1)[1].strip() for line in headers if line.lower().startswith("access-control-allow-origin:")]
           if origins != [os.environ["APP_URL"]]:
-              raise SystemExit("preview CORS does not allow exactly the verified frontend")
+              raise SystemExit("production CORS does not allow exactly the canonical app")
+          PY
+          DATASTORES_URL="${HEALTH_URL%/health}/health/datastores"
+          curl --fail --silent --show-error --proto '=https' --max-filesize 2097152 \
+            "$DATASTORES_URL" -o "$RUNNER_TEMP/datastores.json"
+          python - <<'PY'
+          import json, os
+          value = json.load(open(os.path.join(os.environ["RUNNER_TEMP"], "datastores.json"), encoding="utf-8"))
+          postgres = value.get("postgres")
+          redis = value.get("redis")
+          if not isinstance(postgres, dict) or postgres.get("status") != "ok" or not postgres.get("connected"):
+              raise SystemExit("production PostgreSQL health is not ready")
+          if not isinstance(redis, dict) or redis.get("status") != "ok" or not redis.get("connected"):
+              raise SystemExit("production Redis/Valkey health is not ready")
+          if redis.get("realtime_events_enabled") is not True:
+              raise SystemExit("production realtime events are not enabled")
+          if redis.get("distributed_locks_enabled") is not True or redis.get("distributed_locks_required") is not True:
+              raise SystemExit("production distributed locks are not enforced")
           PY
           curl --fail --silent --show-error --proto '=https' --max-filesize 2097152 \
-            "$APP_URL/" -o "$RUNNER_TEMP/index.html"
-          python scripts/agent_ops/verify_preview_bundle.py discover \
-            --html "$RUNNER_TEMP/index.html" --app-url "$APP_URL" \
-            --output "$RUNNER_TEMP/assets.json"
-          python scripts/agent_ops/verify_preview_bundle.py fetch \
-            --index "$RUNNER_TEMP/assets.json" --asset-dir "$RUNNER_TEMP/assets" \
-            --app-url "$APP_URL"
-          python scripts/agent_ops/verify_preview_bundle.py verify \
-            --index "$RUNNER_TEMP/assets.json" --asset-dir "$RUNNER_TEMP/assets" \
-            --app-url "$APP_URL" --api-base-url "$API_BASE_URL"
-      - name: Re-verify providers immediately before evidence upload
-        env:
-          BASELINE_LEASE_ID: ${{ steps.lease.outputs.lease_id }}
-          GITHUB_TOKEN: ${{ github.token }}
-          RENDER_API_TOKEN: ${{ secrets.RENDER_API_TOKEN }}
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          VERCEL_ACCESS_TOKEN: ${{ secrets.VERCEL_ACCESS_TOKEN }}
-        run: |
-          python scripts/agent_ops/verify_preview_providers.py \
-            --output preview-manifest.json
-          python scripts/agent_ops/validate_preview_manifest.py \
-            preview-manifest.json \
-            --expected-sha "$TARGET_SHA" \
-            --expected-task-id "preview-${TARGET_SHA:0:12}" \
-            --expected-workflow-run-id "$GITHUB_RUN_ID" \
-            --expected-repository "$GITHUB_REPOSITORY" \
-            --expected-branch "$TARGET_BRANCH" \
-            --expected-baseline-lease-id "$BASELINE_LEASE_ID" \
-            --expected-workflow-sha "$GITHUB_SHA" \
-            --expected-default-branch "$TRUSTED_DEFAULT_BRANCH"
-          python scripts/agent_ops/compare_preview_manifests.py \
-            "$RUNNER_TEMP/post-bootstrap-manifest.json" \
-            preview-manifest.json
-      - name: Upload only final sanitized provider evidence
+            "$APP_URL/" -o "$RUNNER_TEMP/production-app.html"
+          test -s "$RUNNER_TEMP/production-app.html"
+          echo "Verified $API_BASE_URL and $APP_URL against the live Render production deployment."
+      - name: Upload sanitized production Render evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: preview-provider-evidence-${{ inputs.target_sha }}
-          path: preview-manifest.json
+          name: production-render-evidence-${{ env.TARGET_SHA }}
+          path: production-render-manifest.json
           if-no-files-found: error
           retention-days: 7
-      - name: Remove runner-local bootstrap capability
-        if: always()
-        run: rm -f "$RUNNER_TEMP/qa-provider-evidence.token"
-      - name: Release exclusive QA baseline lease
-        if: always() && steps.lease.outputs.lease_id != ''
-        env:
-          QA_BASELINE_LEASE_ID: ${{ steps.lease.outputs.lease_id }}
-          RENDER_API_TOKEN: ${{ secrets.RENDER_API_TOKEN }}
-        run: |
-          python scripts/agent_ops/manage_qa_baseline_lease.py release \
-            --lease-id "$QA_BASELINE_LEASE_ID" \
-            --target-sha "$TARGET_SHA" \
-            --target-branch "$TARGET_BRANCH" \
-            --qa-service-id "$RENDER_QA_SERVICE_ID" \
-            --production-service-id "$RENDER_PRODUCTION_SERVICE_ID" \
-            --repository "$GITHUB_REPOSITORY"

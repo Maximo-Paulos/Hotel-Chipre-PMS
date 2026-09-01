@@ -722,75 +722,6 @@ def test_http_failures_do_not_disclose_token_or_response_body() -> None:
     assert body_secret.decode() not in message
 
 
-def test_workflow_has_no_human_evidence_inputs_and_publishes_sha_bound_artifact() -> None:
-    workflow = open(".github/workflows/verify-preview-providers.yml", encoding="utf-8").read()
-
-    assert "target_branch:" in workflow
-    assert "target_sha:" in workflow
-    assert "baseline_lease_id:" not in workflow
-    assert "manage_qa_baseline_lease.py acquire" in workflow
-    assert "BASELINE_LEASE_ID: ${{ steps.lease.outputs.lease_id }}" in workflow
-    assert "--expected-baseline-lease-id \"$BASELINE_LEASE_ID\"" in workflow
-    assert "app_url:" not in workflow
-    assert "api_url:" not in workflow
-    assert "preview-provider-evidence-${{ inputs.target_sha }}" in workflow
-    assert "environment: preview-qa" in workflow
-    assert "if: github.ref_name == github.event.repository.default_branch" in workflow
-    assert "ref: ${{ github.sha }}" in workflow
-    assert "ref: ${{ inputs.target_branch }}" not in workflow
-    assert "scripts/agent_ops/verify_preview_providers.py" in workflow
-    assert "TARGET_SHA" in workflow and "TARGET_BRANCH" in workflow
-    assert "secrets.RENDER_API_TOKEN" in workflow
-    assert "secrets.SUPABASE_ACCESS_TOKEN" in workflow
-    assert "secrets.VERCEL_ACCESS_TOKEN" in workflow
-    assert "secrets.QA_PROVIDER_EVIDENCE_PRIVATE_KEY" in workflow
-    assert "QA_PROVIDER_EVIDENCE_HMAC_KEY" not in workflow
-    assert "qa-bootstrap-token-${{ inputs.target_sha }}" not in workflow
-    assert "download-artifact" not in workflow
-    assert "verify_preview_bundle.py verify" in workflow
-    assert "Re-verify provider state after bootstrap" in workflow
-    assert "Re-verify providers immediately before evidence upload" in workflow
-    assert workflow.count("scripts/agent_ops/verify_preview_providers.py") == 3
-    assert "compare_preview_manifests.py" in workflow
-    assert "manage_qa_baseline_lease.py release" in workflow
-    assert "if: always() && steps.lease.outputs.lease_id != ''" in workflow
-
-
-def test_dedicated_baseline_workflow_serializes_targets_without_cancellation() -> None:
-    workflow = open(".github/workflows/verify-preview-providers.yml", encoding="utf-8").read()
-
-    assert "group: preview-qa-dedicated-baseline" in workflow
-    assert "cancel-in-progress: false" in workflow
-    assert "group: preview-qa-dedicated-baseline-${{" not in workflow
-    assert "test -n \"$SUPABASE_QA_PROJECT_REF\"" in workflow
-    assert "not branch-per-PR isolation" in workflow
-    assert "Permanent parallel previews require Supabase" in workflow
-
-
-def test_pr_controlled_code_cannot_receive_provider_credentials_or_execute_in_verifier() -> None:
-    producer = open(".github/workflows/verify-preview-providers.yml", encoding="utf-8").read()
-    consumer = open(".github/workflows/preview-qa.yml", encoding="utf-8").read()
-
-    assert "ref: ${{ github.sha }}" in producer
-    assert "ref: ${{ inputs.target_branch }}" not in producer
-    assert "ref: ${{ inputs.target_sha }}" not in producer
-    assert "github.ref_name == github.event.repository.default_branch" in producer
-    assert "persist-credentials: false" in producer
-    for secret in (
-        "RENDER_API_TOKEN",
-        "SUPABASE_ACCESS_TOKEN",
-        "VERCEL_ACCESS_TOKEN",
-        "QA_PROVIDER_EVIDENCE_PRIVATE_KEY",
-    ):
-        assert f"secrets.{secret}" in producer
-        assert f"secrets.{secret}" not in consumer
-    assert "environment: preview-qa" not in consumer
-    assert "actions: read" not in consumer
-    assert "workflow_dispatch" not in consumer
-    assert "download-artifact" not in consumer
-    assert "npm ci" not in consumer
-
-
 def test_untrusted_contract_installs_the_exact_hash_locked_linux_runtime() -> None:
     workflow = open(".github/workflows/preview-qa.yml", encoding="utf-8").read()
 
@@ -799,19 +730,11 @@ def test_untrusted_contract_installs_the_exact_hash_locked_linux_runtime() -> No
     assert "-r requirements-qa-trusted.txt" in workflow
 
 
-def test_bootstrap_capability_never_crosses_a_workflow_or_artifact_boundary() -> None:
-    workflow_path = Path(".github/workflows/verify-preview-providers.yml")
-    workflow = workflow_path.read_text(encoding="utf-8")
+def test_legacy_preview_bootstrap_remains_outside_the_active_workflow() -> None:
+    workflow = Path(".github/workflows/verify-preview-providers.yml").read_text(encoding="utf-8")
 
-    assert not Path(".github/workflows/provision-qa-bootstrap.yml").exists()
-    assert "github.ref_name == github.event.repository.default_branch" in workflow
-    assert "ref: ${{ github.sha }}" in workflow
-    assert "ref: ${{ inputs.target_branch }}" not in workflow
-    assert "secrets.RENDER_API_TOKEN" in workflow
-    assert "secrets.QA_PROVIDER_EVIDENCE_PRIVATE_KEY" in workflow
-    assert "provision_qa_bootstrap.py" in workflow
-    assert "qa-provider-evidence.token" in workflow
-    assert "Upload short-lived" not in workflow
-    assert "download-artifact" not in workflow
-    assert "rm -f \"$RUNNER_TEMP/qa-provider-evidence.token\"" in workflow
-    assert "QA_PROVIDER_EVIDENCE_HMAC_KEY" not in workflow
+    assert "Production Render QA cycle" in workflow
+    assert "verify_production_render.py" in workflow
+    assert "RENDER_QA_SERVICE_ID" not in workflow
+    assert "provision_qa_bootstrap.py" not in workflow
+    assert "manage_qa_baseline_lease.py" not in workflow

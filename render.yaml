@@ -31,6 +31,8 @@ services:
         value: "false"
       - key: CONNECTIONS_ENABLED
         value: "false"
+      - key: REALTIME_EVENTS_ENABLED
+        value: "true"
       - key: GOOGLE_LOGIN_ENABLED
         value: "false"
       - key: APPLE_LOGIN_ENABLED
@@ -106,8 +108,8 @@ services:
           type: keyvalue
           name: hotel-chipre-pms-redis
           property: connectionString
-      # The current live web service is on Render Free and has no Redis.
-      # Flip this to true when the paid Redis service is actually available.
+      # Redis is required by the production test surface for realtime events
+      # and distributed locks. Keep the read-model cache opt-in independently.
       - key: READ_MODEL_CACHE_ENABLED
         value: "false"
       # The Blueprint includes beat; the current free service was created
@@ -156,6 +158,8 @@ services:
         value: "false"
       - key: CONNECTIONS_ENABLED
         value: "false"
+      - key: REALTIME_EVENTS_ENABLED
+        value: "true"
       - key: GOOGLE_LOGIN_ENABLED
         value: "false"
       - key: APPLE_LOGIN_ENABLED
@@ -225,6 +229,8 @@ services:
         value: "false"
       - key: CONNECTIONS_ENABLED
         value: "false"
+      - key: REALTIME_EVENTS_ENABLED
+        value: "true"
       - key: GOOGLE_LOGIN_ENABLED
         value: "false"
       - key: APPLE_LOGIN_ENABLED

@@ -1,5 +1,19 @@
 # Estado exhaustivo del sistema — Hotel Chipre PMS
 
+## Decisión vigente de QA — 2026-09-01
+
+La regla histórica de exigir un preview aislado para la QA funcional fue
+reemplazada por decisión del owner: las pruebas de usuario se ejecutan sobre el
+deploy de `main` en Render producción, dentro del hotel de prueba autorizado y
+con datos sintéticos/reversibles. El workflow `Production Render QA cycle`
+verifica SHA, health, CORS, Redis y el perfil sin efectos externos antes de la
+matriz humana. Las menciones a previews aislados en las secciones históricas
+inferiores conservan contexto anterior y no son la política vigente.
+
+La decisión no autoriza pagos reales, emails, webhooks, OTAs, pruebas de carga
+destructivas ni datos de otros hoteles. Tests unitarios, migraciones descartables,
+lint, typecheck y build siguen en CI/local.
+
 ## -1. Infraestructura cloud (no código) — 2026-08-23
 
 `confirmed` por verificación directa (DNS-over-HTTPS, consolas de Google/Render, bundle desplegado). Detalle completo: `docs/audits/infra-2026-08-23.md`.
@@ -49,7 +63,9 @@ El producto es un sistema de gestión hotelera multi-hotel: gestiona huéspedes,
 
 Las personas de operación son owner, manager, recepción y housekeeping. Owner configura y gobierna el hotel; manager supervisa operación; recepción trabaja con huéspedes/reservas/caja según permisos; housekeeping opera el estado de habitaciones/tareas permitidas. Master-admin es una identidad de plataforma distinta, con superficie `/adminpmsmaster`; no debe confundirse con owner de un hotel.
 
-La cobertura real por persona aún depende de ejecutar el catálogo QA sobre previews aislados. Ninguna de estas personas debe validarse sólo por respuesta API o por inspección de código.
+La cobertura real por persona aún depende de ejecutar el catálogo QA sobre Render
+producción y el hotel de prueba autorizado. Ninguna de estas personas debe
+validarse sólo por respuesta API o por inspección de código.
 
 ## 2. Arquitectura backend FastAPI
 

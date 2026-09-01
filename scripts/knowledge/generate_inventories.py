@@ -95,10 +95,10 @@ def main() -> int:
             "https://hotels-pms.com",
             "https://api.hotels-pms.com",
         ],
-        "preview_contract": [
-            "Vercel frontend por PR (URL publicada en manifiesto de preview)",
-            "Render backend QA target-bound con /health y lease exclusivo",
-            "Segundo proyecto Supabase QA sin datos productivos como baseline serializada; Supabase Branch por PR al habilitar el plan",
+        "production_render_qa": [
+            "Render producción en el deploy normal de main, verificado por SHA y /health",
+            "Frontend canónico https://app.hotels-pms.com contra la API canónica",
+            "Hotel de prueba autorizado con datos sintéticos/reversibles y efectos externos deshabilitados",
         ],
         "historical_or_needs_verification": [
             "Cualquier host hoteles-pms.com o onrender.com citado por documentación histórica",

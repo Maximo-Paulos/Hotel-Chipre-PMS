@@ -1,7 +1,7 @@
 # Superficies cloud
 
-Generado: 2026-08-30T19:35:44.510908+00:00
-Commit: `af0c518`
+Generado: 2026-09-01T12:12:23.860163+00:00
+Commit: `9aee997`
 
 ## canonical
 
@@ -9,11 +9,11 @@ Commit: `af0c518`
 - https://hotels-pms.com
 - https://api.hotels-pms.com
 
-## preview_contract
+## production_render_qa
 
-- Vercel frontend por PR (URL publicada en manifiesto de preview)
-- Render backend QA target-bound con /health y lease exclusivo
-- Segundo proyecto Supabase QA sin datos productivos como baseline serializada; Supabase Branch por PR al habilitar el plan
+- Render producción en el deploy normal de main, verificado por SHA y /health
+- Frontend canónico https://app.hotels-pms.com contra la API canónica
+- Hotel de prueba autorizado con datos sintéticos/reversibles y efectos externos deshabilitados
 
 ## historical_or_needs_verification
 

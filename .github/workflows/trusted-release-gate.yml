@@ -5,9 +5,7 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
 
 permissions:
-  actions: read
   contents: read
-  pull-requests: read
 
 jobs:
   trusted-base-evidence:
@@ -27,37 +25,8 @@ jobs:
         run: >-
           python -m pip install --disable-pip-version-check --require-hashes
           --only-binary=:all: -r requirements-qa-trusted.txt
-      - name: Validate head JSON as data using trusted base code
-        id: prepare
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPOSITORY: ${{ github.repository }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
+      - name: Confirm production Render is the post-merge cloud test surface
         run: |
-          test "$(git rev-parse HEAD)" = "$BASE_SHA"
-          python scripts/agent_ops/trusted_release_gate.py prepare \
-            --repository "$REPOSITORY" \
-            --pr-number "$PR_NUMBER" \
-            --base-sha "$BASE_SHA" \
-            --head-sha "$HEAD_SHA" \
-            --base-branch "$BASE_BRANCH" \
-            --output-dir "$RUNNER_TEMP/trusted-head-evidence" \
-            --github-output "$GITHUB_OUTPUT"
-      - name: Download only the verified provider-manifest artifact
-        if: steps.prepare.outputs.evidence_required == 'true'
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          artifact-ids: ${{ steps.prepare.outputs.artifact_id }}
-          path: ${{ runner.temp }}/trusted-provider-artifact
-          github-token: ${{ github.token }}
-          repository: ${{ github.repository }}
-          run-id: ${{ steps.prepare.outputs.workflow_run_id }}
-      - name: Require byte-identical provider and PR manifests
-        if: steps.prepare.outputs.evidence_required == 'true'
-        run: |
-          python scripts/agent_ops/trusted_release_gate.py finalize \
-            --input-dir "$RUNNER_TEMP/trusted-head-evidence" \
-            --artifact-dir "$RUNNER_TEMP/trusted-provider-artifact"
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.base.sha }}"
+          echo "No isolated Render QA service or pre-merge provider artifact is required."
+          echo "The production Render QA cycle runs automatically after main receives the merge via .github/workflows/verify-preview-providers.yml."

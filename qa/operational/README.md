@@ -1,7 +1,8 @@
-# QA operativa sobre dominios compartidos — NO ES EVIDENCIA DE RELEASE
+# QA operativa sobre Render producción — NO ES EVIDENCIA DE RELEASE
 
-Este árbol contiene campañas funcionales sobre el sandbox compartido que conserva
-`APP_ENV=production`. No certifica un preview aislado y ningún archivo bajo
+Este árbol contiene campañas funcionales sobre el servicio Render de producción,
+usando exclusivamente el hotel de prueba autorizado y datos sintéticos. No se
+crea ni se necesita un servicio Render QA separado. Ningún archivo bajo
 `qa/operational/` es elegible para el release gate formal.
 
 La fuente normativa de esta campaña es `shared-sandbox-catalog.json`. Cada ejecución
@@ -24,4 +25,6 @@ Inicializar y validar una campaña:
 Cada observación debe registrar el caso operativo, persona, dispositivo, URL,
 precondiciones, acciones humanas, resultado esperado y observado, estado, severidad,
 artefactos, SHA, referencias sintéticas creadas y estado de limpieza. Los secretos,
-cookies, tokens, emails completos y PII no forman parte de la evidencia.
+cookies, tokens, emails completos y PII no forman parte de la evidencia. Las
+operaciones de pago se verifican sólo con métodos de prueba/locales; nunca se
+completa un cobro real.

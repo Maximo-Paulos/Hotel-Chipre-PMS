@@ -24,17 +24,11 @@ jobs:
           --only-binary=:all: -r requirements-qa-trusted.txt
       - name: Validate agents, skills, vault and manifests
         run: python scripts/agent_ops/validate_setup.py
-      - name: Require provider-bound cloud evidence for release-relevant changes
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          EXPECTED_REPOSITORY: ${{ github.repository }}
-          EXPECTED_BRANCH: ${{ github.event.pull_request.head.ref }}
-          EXPECTED_DEFAULT_BRANCH: ${{ github.event.pull_request.base.ref }}
+      - name: Validate the production Render QA policy
         run: |
-          python scripts/agent_ops/check_release_evidence.py \
-            --base "$BASE_SHA" \
-            --head "$HEAD_SHA" \
-            --repository "$EXPECTED_REPOSITORY" \
-            --branch "$EXPECTED_BRANCH" \
-            --default-branch "$EXPECTED_DEFAULT_BRANCH"
+          test -f .github/workflows/verify-preview-providers.yml
+          grep -q "name: Production Render QA cycle" .github/workflows/verify-preview-providers.yml
+          grep -q "RENDER_PRODUCTION_SERVICE_ID" .github/workflows/verify-preview-providers.yml
+          ! grep -q "manage_qa_baseline_lease.py" .github/workflows/verify-preview-providers.yml
+          ! grep -q "provision_qa_bootstrap.py" .github/workflows/verify-preview-providers.yml
+          echo "Pre-merge cloud QA is replaced by the post-merge production Render QA cycle."

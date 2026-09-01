@@ -348,9 +348,12 @@ def test_malformed_nested_types_are_rejected_without_traceback(tmp_path: Path) -
 
 def test_pr_workflow_is_static_only_and_cannot_read_provider_artifacts() -> None:
     workflow = (ROOT / ".github" / "workflows" / "preview-qa.yml").read_text(encoding="utf-8")
+    production_workflow = (ROOT / ".github" / "workflows" / "verify-preview-providers.yml").read_text(
+        encoding="utf-8"
+    )
 
     assert "pull_request:" in workflow
-    assert "validate_preview_manifest.py" in workflow
+    assert "validate_preview_manifest.py" not in workflow
     assert "contents: read" in workflow
     assert "actions: read" not in workflow
     assert "workflow_dispatch" not in workflow
@@ -358,3 +361,4 @@ def test_pr_workflow_is_static_only_and_cannot_read_provider_artifacts() -> None
     assert "environment: preview-qa" not in workflow
     assert "${{ secrets." not in workflow
     assert "npm ci" not in workflow
+    assert "name: Production Render QA cycle" in production_workflow

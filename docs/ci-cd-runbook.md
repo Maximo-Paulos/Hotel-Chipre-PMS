@@ -1,26 +1,27 @@
 # CI/CD y ambientes seguros
 
-Estado de TECH-0112 al 2026-08-21: `BLOCKED` para el cierre completo. El
-contrato versionado tiene controles verificables, pero staging, las
-protecciones de rama y la configuración de ambientes/secrets de los
-proveedores todavía requieren una acción humana autorizada.
+Estado de TECH-0112 al 2026-09-01: el código de CI y la QA funcional sobre
+Render producción están definidos; las protecciones de rama y la configuración
+de secrets del environment todavía requieren una acción humana autorizada.
 
-## Pipeline objetivo
+## Pipeline vigente
 
 ```text
 feature branch
   -> PR
   -> tests + lint/build + migraciones en DB descartable
-  -> preview aislado y QA trusted con evidencia ligada a SHA
-  -> staging aislado + verificación humana/proveedor
   -> aprobación protegida
   -> main
   -> build de artefactos inmutables con tag SHA
-  -> producción sólo con el mismo SHA y aprobación humana
+  -> Render producción auto-deploy del mismo SHA
+  -> QA funcional visible sobre el hotel de prueba
 ```
 
-Un agente puede preparar código, tests y evidencia. No puede hacer un cutover
-a usuarios reales ni operar secretos de proveedor.
+Las pruebas unitarias, migraciones descartables, lint y build siguen siendo
+automáticas en CI. La prueba funcional cloud se ejecuta después del merge sobre
+Render producción, con el hotel de prueba autorizado y sin efectos externos.
+El workflow sólo lee la API de Render y espera el SHA publicado; no cambia
+configuración ni despliega ramas sobre producción.
 
 ## Qué queda cerrado en esta PR
 
@@ -29,13 +30,14 @@ a usuarios reales ni operar secretos de proveedor.
   toca ninguna base compartida.
 - `.github/workflows/preview-qa.yml` sigue siendo un contrato no confiable: no
   tiene secrets, artifacts de proveedor ni permisos `actions: read`.
-- `.github/workflows/verify-preview-providers.yml` ya limita el ciclo trusted a
-  la rama default, exige IDs QA distintos de producción, usa un lease serial y
-  valida el mismo `target_sha` antes/después del bootstrap y antes de subir
-  evidencia.
+- `.github/workflows/verify-preview-providers.yml` es ahora el ciclo de QA de
+  Render producción: se ejecuta en `push` a `main` o manualmente, espera el
+  deploy exacto de `GITHUB_SHA`, valida el perfil sin efectos externos y publica
+  sólo un manifiesto redactado.
 - `.github/workflows/release-gate.yml` y
-  `.github/workflows/trusted-release-gate.yml` mantienen la evidencia ligada al
-  PR head/base y al workflow trusted de la rama default.
+  `.github/workflows/trusted-release-gate.yml` ya no bloquean un PR por la
+  inexistencia de un servicio QA separado. El cierre cloud ocurre después del
+  merge mediante el ciclo de Render producción.
 - `.github/workflows/build-and-push.yml` sólo ejecuta desde la rama default,
   publica imágenes con tag completo `GITHUB_SHA`, verifica el label
   `org.opencontainers.image.revision` y no publica `latest`. Produce un
@@ -52,14 +54,14 @@ a usuarios reales ni operar secretos de proveedor.
 | Requisito | Estado | Evidencia / pendiente |
 | --- | --- | --- |
 | Feature branch -> PR -> tests | Cerrado en código | `pr-validation.yml`, `release-gate.yml`, `trusted-release-gate.yml` |
-| Preview aislado | Parcialmente cerrado | El contrato y el ciclo trusted existen; la evidencia cloud depende de la configuración humana del entorno `preview-qa`. |
-| Staging formal | Pendiente humano | No existe un servicio, DB, environment ni workflow de staging confirmado en este checkout. No se inventa uno en esta PR. |
-| DB separadas | Parcialmente cerrado | El preview trusted compara recursos QA/prod; staging y producción deben ser confirmados por proveedor. |
+| QA funcional en Render producción | Workflow cerrado; matriz pendiente | El ciclo verifica el SHA live, el healthcheck, Redis y el perfil de prueba del servicio productivo; la matriz humana se registra en `qa/operational/`. |
+| Staging formal | Fuera del flujo elegido | El producto usa Render producción como superficie funcional autorizada para este hotel de prueba. |
+| DB separadas | No aplica al flujo productivo autorizado | La selección de hotel y los permisos siguen aislando los datos operativos; no se ejecutan seeds ni migraciones destructivas desde QA. |
 | Secrets separados | Parcialmente cerrado | Los nombres/configuración son versionables y los valores quedan fuera de Git; falta configurar y auditar scopes por environment. |
 | Migraciones controladas | Cerrado en código, operación pendiente | PR usa DB descartable y Render declara pre-deploy Alembic; falta ejecutar y registrar un drill real por ambiente. |
 | Rollback | Documentado, no automatizado | Ver procedimiento debajo; no hay proveedor/servicio autorizado para implementar un rollback automático. |
-| Release atada a SHA | Cerrado para artifacts CI; pendiente de runtime cloud | Imágenes y manifest son SHA-only; staging/producción deben demostrar que el runtime desplegado es ese SHA. |
-| No experimentos directos a usuarios reales | Bloqueado por configuración externa | `render.yaml` aún declara `autoDeploy: true`; una persona debe imponer aprobación/entorno protegido en el proveedor antes de certificar este punto. |
+| Release atada a SHA | Cerrado para artifacts CI; pendiente de runtime cloud | Imágenes y manifest son SHA-only; Render producción debe demostrar que el runtime desplegado es ese SHA. |
+| No efectos externos durante QA | Cerrado en código/configuración | El verificador exige `EXTERNAL_EFFECTS_ENABLED=false`, inbound events desactivados, email nulo, PayPal sandbox y conexiones externas desactivadas. |
 
 ## Procedimiento de rollback / forward-fix
 
@@ -77,7 +79,7 @@ Una persona con autorización operativa debe:
      /ruta/al/release-manifest.json \
      --expected-sha <SHA_CONOCIDO_BUENO> \
      --expected-repository <owner/repository> \
-     --expected-environment staging
+     --expected-environment production
    ```
 
 3. En el proveedor, fijar el servicio al artifact exacto de ese SHA. No
@@ -94,37 +96,29 @@ Una persona con autorización operativa debe:
    Registrar la revisión Alembic antes y después (`alembic current` y
    `alembic heads`) en el incidente.
 
-## Acciones humanas necesarias para desbloquear el cierre
+## Acciones humanas necesarias para ejecutar QA en producción
 
-1. Crear y nombrar formalmente los environments GitHub `staging` y
-   `production`, con reviewers requeridos para producción y sin permitir que
-   un PR no confiable lea sus secrets.
+1. Mantener configurados `RENDER_PRODUCTION_SERVICE_ID` y `RENDER_API_TOKEN`
+   en el environment protegido usado por el workflow. No se necesita
+   `RENDER_QA_SERVICE_ID` ni `SUPABASE_QA_PROJECT_REF`.
 2. Configurar branch protection de `main`: PR obligatorio, checks de
    `pr-validation`, `release-gate` y `trusted-release-gate`, y bloqueo de push
-   directo. Esta configuración está fuera del repositorio y no se modifica en
-   esta PR.
-3. Crear o confirmar un backend, frontend y PostgreSQL/Supabase de staging
-   independientes de producción. Confirmar por IDs/hosts que DB, Redis,
-   JWT/keys, URLs, CORS y secrets no se comparten. Guardar sólo nombres,
-   fingerprints no sensibles y referencias en la evidencia.
-4. Definir el mecanismo autorizado de deploy a staging y producción para que
-   consuma el artifact/manifest del SHA aprobado, no `latest` ni el estado
-   mutable de una rama. Debe publicar la revisión observada para que
-   `verify_release_sha.py` pueda validarla.
-5. Desactivar o someter a aprobación humana el auto-deploy productivo del
-   proveedor. El `autoDeploy: true` de `render.yaml` es una declaración
-   versionada existente, no evidencia de que la cuenta real ya esté protegida.
-6. Ejecutar un drill real y aislado de migración, rollback de aplicación y
-   forward-fix en staging. Registrar resultado, SHA, revisión Alembic, health
-   y evidencia manual. Repetir la verificación sobre producción sólo con
-   autorización explícita y sin datos reales durante el ensayo.
+   directo. Esta configuración está fuera del repositorio.
+3. Ejecutar la matriz humana en Chrome sobre el hotel de prueba autorizado,
+   registrar el SHA live y guardar observaciones redactadas en
+   `qa/operational/runs/<run-id>/`.
+4. No completar pagos reales, enviar emails, disparar webhooks/OTAs ni tocar
+   datos de otros hoteles. Si el perfil seguro no coincide, el workflow debe
+   fallar y la prueba queda bloqueada.
 
 ## Validación local de esta PR
 
 ```bash
-python -m pytest -q tests/test_release_sha_validator.py \
+python -m pytest -q tests/test_production_render_verifier.py \
+  tests/test_release_sha_validator.py \
   tests/test_release_evidence_contract.py \
-  tests/test_preview_manifest_contract.py
+  tests/test_preview_manifest_contract.py \
+  tests/test_compare_preview_manifests.py
 ```
 
 La sintaxis YAML se valida con `actionlint` si está disponible; de lo
