@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 
 import { OccupancyGrid, type RoomDropTarget } from "../../components/OccupancyGrid";
 import { moveReservationRoom } from "../../api/reservations";
@@ -22,6 +23,7 @@ function buildDayRange(from: string, count: number): string[] {
 const RANGE_LABEL = new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "short", year: "numeric" });
 
 export function OccupancyPlanningPage() {
+  const { t } = useTranslation("reservations");
   const [windowStart, setWindowStart] = useState(todayIso());
   const windowEnd = useMemo(() => addDaysIso(windowStart, WINDOW_DAYS), [windowStart]);
   const days = useMemo(() => buildDayRange(windowStart, WINDOW_DAYS), [windowStart]);
@@ -82,7 +84,7 @@ export function OccupancyPlanningPage() {
       // The backend names the missing permission; show that, not a generic.
       const detail = (error as { detail?: string; message?: string })?.detail
         ?? (error as { message?: string })?.message;
-      setMoveError(detail ?? "No se pudo mover la reserva.");
+      setMoveError(detail ?? t("occupancy.errors.moveFailed"));
     }
   });
 
@@ -109,11 +111,11 @@ export function OccupancyPlanningPage() {
     <div className="space-y-4" data-testid="occupancy-planning-page">
       <header className="flex flex-col gap-3 rounded-3xl bg-white p-4 shadow-sm ring-1 ring-slate-200 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-xs uppercase tracking-wide text-slate-500">Operación</p>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Planilla de ocupación</h1>
+          <p className="text-xs uppercase tracking-wide text-slate-500">{t("occupancy.operationLabel")}</p>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">{t("occupancy.title")}</h1>
           <p className="mt-1 text-sm text-slate-600">
             {RANGE_LABEL.format(new Date(`${windowStart}T00:00:00`))} — {RANGE_LABEL.format(new Date(`${addDaysIso(windowStart, WINDOW_DAYS - 1)}T00:00:00`))}
-            {gridQuery.isFetching ? " · Actualizando..." : ""}
+            {gridQuery.isFetching ? t("occupancy.updatingSuffix") : ""}
           </p>
         </div>
         <div className="flex gap-2">
@@ -123,14 +125,14 @@ export function OccupancyPlanningPage() {
             onClick={() => setWindowStart((current) => addDaysIso(current, -WINDOW_DAYS))}
             className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
           >
-            ← 30 días
+            {t("occupancy.prevWindow")}
           </button>
           <button
             type="button"
             onClick={() => setWindowStart(today)}
             className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
           >
-            Hoy
+            {t("occupancy.today")}
           </button>
           <button
             type="button"
@@ -138,24 +140,24 @@ export function OccupancyPlanningPage() {
             onClick={() => setWindowStart((current) => addDaysIso(current, WINDOW_DAYS))}
             className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
           >
-            30 días →
+            {t("occupancy.nextWindow")}
           </button>
         </div>
       </header>
 
       {gridQuery.isLoading ? (
-        <div className="rounded-3xl border border-slate-200 bg-white p-6 text-sm text-slate-600 shadow-sm">Cargando planilla...</div>
+        <div className="rounded-3xl border border-slate-200 bg-white p-6 text-sm text-slate-600 shadow-sm">{t("occupancy.loading")}</div>
       ) : null}
 
       {gridQuery.isError ? (
         <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
-          No se pudo cargar la planilla: {(gridQuery.error as Error).message}
+          {t("occupancy.loadError", { message: (gridQuery.error as Error).message })}
         </div>
       ) : null}
 
       {gridQuery.data && gridQuery.data.rooms.length === 0 ? (
         <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-600 shadow-sm">
-          No hay habitaciones cargadas para mostrar la planilla.
+          {t("occupancy.noRooms")}
         </div>
       ) : null}
 
@@ -191,22 +193,24 @@ export function OccupancyPlanningPage() {
             className="w-full max-w-md space-y-3 rounded-2xl bg-white p-5 shadow-xl"
           >
             <h2 id="mover-reserva-titulo" className="text-lg font-bold text-slate-900">
-              Mover reserva
+              {t("occupancy.moveDialog.title")}
             </h2>
             <p className="text-sm text-slate-600">
-              {draggedReservation?.guest_name ?? "Reserva"} a la habitación{" "}
-              <strong>{roomById.get(pendingMove.toRoomId)?.room_number ?? pendingMove.toRoomId}</strong>.
+              {t("occupancy.moveDialog.description", {
+                guest: draggedReservation?.guest_name ?? t("occupancy.moveDialog.reservationFallback"),
+                room: roomById.get(pendingMove.toRoomId)?.room_number ?? pendingMove.toRoomId
+              })}
             </p>
 
             <label className="block space-y-1 text-sm">
-              <span className="text-slate-600">Motivo del cambio</span>
+              <span className="text-slate-600">{t("occupancy.moveDialog.reasonLabel")}</span>
               <select
                 value={moveReason}
                 onChange={(event) => setMoveReason(event.target.value)}
                 required
                 className="w-full rounded-lg border border-slate-300 px-3 py-2"
               >
-                <option value="">Elegí un motivo</option>
+                <option value="">{t("occupancy.moveDialog.reasonPlaceholder")}</option>
                 {ROOM_MOVE_REASONS.map((reason) => (
                   <option key={reason.value} value={reason.value}>
                     {reason.label}
@@ -216,13 +220,12 @@ export function OccupancyPlanningPage() {
             </label>
             {moveReason === "guest_complaint" ? (
               <p className="text-xs text-amber-700">
-                Se va a registrar un rechazo: la asignación automática va a evitar esta habitación para este
-                huésped en estadías futuras, hasta que alguien lo resuelva.
+                {t("occupancy.moveDialog.guestComplaintHint")}
               </p>
             ) : null}
 
             <label className="block space-y-1 text-sm">
-              <span className="text-slate-600">Notas del cambio</span>
+              <span className="text-slate-600">{t("occupancy.moveDialog.notesLabel")}</span>
               <textarea
                 value={moveNotes}
                 onChange={(event) => setMoveNotes(event.target.value)}
@@ -241,7 +244,7 @@ export function OccupancyPlanningPage() {
                 }}
                 className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
               >
-                Cancelar
+                {t("occupancy.moveDialog.cancel")}
               </button>
               <button
                 type="button"
@@ -249,7 +252,7 @@ export function OccupancyPlanningPage() {
                 onClick={() => void handleConfirmMove()}
                 className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
               >
-                {moveMutation.isPending ? "Moviendo..." : "Confirmar"}
+                {moveMutation.isPending ? t("occupancy.moveDialog.confirming") : t("occupancy.moveDialog.confirm")}
               </button>
             </div>
           </div>

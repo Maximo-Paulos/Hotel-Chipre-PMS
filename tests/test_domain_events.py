@@ -11,8 +11,17 @@ from sqlalchemy.orm import Session
 from app.api import events
 from app.config import Settings
 from app.dependencies.auth import AuthContext
+from app.models.domain_event_outbox import DomainEventOutbox
 from app.models.hotel_config import HotelConfiguration
 from app.services import domain_events
+
+
+def _event_engine():
+    """A minimal SQLite engine with just the tables the after_commit hook writes to."""
+
+    engine = create_engine("sqlite://")
+    DomainEventOutbox.__table__.create(engine)
+    return engine
 
 
 class FakeRedis:
@@ -164,7 +173,7 @@ def test_required_backend_raises_when_unavailable(monkeypatch: pytest.MonkeyPatc
 def test_queued_domain_change_publishes_once_after_commit(monkeypatch: pytest.MonkeyPatch):
     published: list[dict] = []
     monkeypatch.setattr(domain_events, "publish_domain_event", lambda **kwargs: published.append(kwargs))
-    session = Session(create_engine("sqlite://"))
+    session = Session(_event_engine())
     try:
         session.execute(text("SELECT 1"))
         domain_events.queue_domain_change(
@@ -200,7 +209,7 @@ def test_queued_domain_change_publishes_once_after_commit(monkeypatch: pytest.Mo
 def test_queued_domain_change_is_discarded_on_rollback(monkeypatch: pytest.MonkeyPatch):
     published: list[dict] = []
     monkeypatch.setattr(domain_events, "publish_domain_event", lambda **kwargs: published.append(kwargs))
-    session = Session(create_engine("sqlite://"))
+    session = Session(_event_engine())
     try:
         session.execute(text("SELECT 1"))
         domain_events.queue_domain_change(
@@ -235,7 +244,9 @@ def test_model_change_collector_fans_out_payment_dependencies_without_sensitive_
         amount=1250,
         description="guest phone number",
     )
-    session = SimpleNamespace(info={}, new=[transaction], dirty=[], deleted=[])
+    session = SimpleNamespace(
+        info={}, new=[transaction], dirty=[], deleted=[], add=lambda _row: None, get_bind=lambda: None
+    )
 
     domain_events.queue_model_changes(session)
     domain_events.publish_queued_domain_changes(session)
@@ -262,6 +273,8 @@ def test_derived_analytics_changes_are_coalesced_by_family(monkeypatch: pytest.M
         ],
         dirty=[],
         deleted=[],
+        add=lambda _row: None,
+        get_bind=lambda: None,
     )
 
     domain_events.queue_model_changes(session)
@@ -280,7 +293,7 @@ def test_derived_analytics_changes_are_coalesced_by_family(monkeypatch: pytest.M
 def test_session_hooks_publish_model_changes_only_after_commit(monkeypatch: pytest.MonkeyPatch):
     published: list[dict] = []
     monkeypatch.setattr(domain_events, "publish_domain_event", lambda **kwargs: published.append(kwargs))
-    engine = create_engine("sqlite://")
+    engine = _event_engine()
     HotelConfiguration.__table__.create(engine)
     session = Session(engine)
     try:
@@ -304,7 +317,7 @@ def test_session_hooks_publish_model_changes_only_after_commit(monkeypatch: pyte
 def test_nested_rollback_prunes_only_nested_realtime_signals(monkeypatch: pytest.MonkeyPatch):
     published: list[dict] = []
     monkeypatch.setattr(domain_events, "publish_domain_event", lambda **kwargs: published.append(kwargs))
-    engine = create_engine("sqlite://")
+    engine = _event_engine()
     HotelConfiguration.__table__.create(engine)
     session = Session(engine)
     try:
@@ -329,7 +342,7 @@ def test_nested_rollback_prunes_only_nested_realtime_signals(monkeypatch: pytest
 def test_nested_commit_publishes_only_after_root_commit(monkeypatch: pytest.MonkeyPatch):
     published: list[dict] = []
     monkeypatch.setattr(domain_events, "publish_domain_event", lambda **kwargs: published.append(kwargs))
-    engine = create_engine("sqlite://")
+    engine = _event_engine()
     HotelConfiguration.__table__.create(engine)
     session = Session(engine)
     try:

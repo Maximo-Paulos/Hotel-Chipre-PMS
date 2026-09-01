@@ -92,15 +92,24 @@ class PaymentProofBlob(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     hotel_id = Column(Integer, ForeignKey("hotel_configuration.id", ondelete="CASCADE"), nullable=False, index=True)
     proof_id = Column(Integer, nullable=False, unique=True, index=True)
-    content = Column(LargeBinary, nullable=False)
+    # Nullable (legacy): new rows upload bytes to object storage and only keep
+    # object_key/byte_size here; content stays populated only for rows written
+    # before the object-storage migration (see alembic
+    # 20260901_payment_proof_object_storage).
+    content = Column(LargeBinary, nullable=True)
     content_type = Column(String(80), nullable=False)
     sha256_hex = Column(String(64), nullable=False)
+    object_key = Column(String(255), nullable=True, unique=True)
+    byte_size = Column(Integer, nullable=True)
     created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
 
     proof = relationship("PaymentProof", back_populates="blob", uselist=False)
 
     __table_args__ = (
-        CheckConstraint("length(content) > 0", name="ck_payment_proof_blobs_content_nonempty"),
+        CheckConstraint(
+            "(content IS NOT NULL AND length(content) > 0) OR (object_key IS NOT NULL)",
+            name="ck_payment_proof_blobs_content_or_object_key",
+        ),
         CheckConstraint("length(sha256_hex) = 64", name="ck_payment_proof_blobs_sha256_length"),
         UniqueConstraint("hotel_id", "id", name="uq_payment_proof_blobs_hotel_id_id"),
         ForeignKeyConstraint(

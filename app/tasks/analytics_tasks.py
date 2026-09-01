@@ -3,7 +3,6 @@ Celery tasks for Analytics R1.0 facts and no-show detection.
 """
 from __future__ import annotations
 
-from pathlib import Path
 import logging
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
@@ -17,8 +16,10 @@ from app.models.hotel_config import HotelConfiguration
 from app.models.room import Room, RoomCategory
 from app.models.stock import StockMovement
 from app.models.transaction import Transaction, TransactionStatusEnum
+from app.services.analytics_exports import delete_export_file
 from app.services.financial_ledger import signed_transaction_amount
 from app.services.external_effects_policy import require_external_connections
+from app.services.object_storage import ObjectStorageError
 from app.services.analytics_warehouse import (
     DIM_DATE_TABLE,
     DIM_HOTEL_TABLE,
@@ -708,12 +709,12 @@ def cleanup_expired_exports(self, database_url: Optional[str] = None):
                     job.status = AnalyticsExportStatusEnum.EXPIRED
                     expired_ids.append(job.id)
                     if job.file_path:
-                        path = Path(job.file_path)
-                        if path.exists():
-                            try:
-                                path.unlink()
-                            except OSError:
-                                logger.warning("analytics.cleanup_expired_exports could not delete %s", path)
+                        try:
+                            delete_export_file(job)
+                        except ObjectStorageError:
+                            logger.warning(
+                                "analytics.cleanup_expired_exports could not delete %s", job.file_path
+                            )
                 db.commit()
             return {"expired": len(expired_ids), "expired_ids": expired_ids}
         finally:

@@ -18,6 +18,7 @@ import { moveReservationRoom } from "../../api/reservations";
 import { useSession } from "../../state/session";
 import { ApiError, hasValidSession } from "../../api/client";
 import { useTimezones } from "../../hooks/useTimezones";
+import { useCountries } from "../../hooks/useCountries";
 import { useRooms } from "../../hooks/useRooms";
 import { refreshAfterMutation, refreshRoomState } from "../../api/queryInvalidation";
 import { usePaymentSurcharges, usePaymentSurchargeMutations } from "../../hooks/usePaymentSurcharges";
@@ -93,6 +94,7 @@ export function SettingsHotelPage() {
   const { hasPermission, permissionsKnown } = useEffectivePermissions();
   const qc = useQueryClient();
   const timezonesQuery = useTimezones();
+  const countriesQuery = useCountries();
   const { categoriesQuery, roomsQuery } = useRooms({ includeCategories: true });
   const [form, setForm] = useState<Partial<HotelConfig>>({});
   const [error, setError] = useState<string | null>(null);
@@ -393,7 +395,23 @@ export function SettingsHotelPage() {
               <input className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" value={form.hotel_name ?? ""} onChange={(e) => handleChange("hotel_name", e.target.value)} />
             </label>
             <label className="text-sm font-semibold text-slate-700">
-              Zona horaria
+              País (define la zona horaria)
+              <select
+                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                value={(countriesQuery.data ?? []).find((c) => c.timezone === form.hotel_timezone)?.code ?? ""}
+                onChange={(e) => {
+                  const country = (countriesQuery.data ?? []).find((c) => c.code === e.target.value);
+                  if (country) handleChange("hotel_timezone", country.timezone);
+                }}
+              >
+                <option value="">Elegí un país</option>
+                {(countriesQuery.data ?? []).map((country) => (
+                  <option key={country.code} value={country.code}>{country.name}</option>
+                ))}
+              </select>
+            </label>
+            <label className="text-sm font-semibold text-slate-700">
+              Zona horaria (avanzado)
               <input
                 className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
                 value={form.hotel_timezone ?? ""}
@@ -410,7 +428,18 @@ export function SettingsHotelPage() {
           <div className="grid gap-3 md:grid-cols-3">
             <label className="text-sm font-semibold text-slate-700">
               Moneda
-              <input className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" value={form.default_currency ?? ""} onChange={(e) => handleChange("default_currency", e.target.value)} />
+              <select className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" value={form.default_currency ?? "ARS"} onChange={(e) => handleChange("default_currency", e.target.value)}>
+                {["ARS", "USD", "EUR", "BRL", "CLP", "UYU"].map((code) => (
+                  <option key={code} value={code}>{code}</option>
+                ))}
+              </select>
+            </label>
+            <label className="text-sm font-semibold text-slate-700">
+              Idioma de la interfaz
+              <select className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" value={form.interface_language ?? "es"} onChange={(e) => handleChange("interface_language", e.target.value)}>
+                <option value="es">Español</option>
+                <option value="en">English</option>
+              </select>
             </label>
             <label className="text-sm font-semibold text-slate-700">
               Depósito (%)

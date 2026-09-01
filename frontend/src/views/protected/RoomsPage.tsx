@@ -1,5 +1,7 @@
 import { type FormEvent, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 
 import { type RoomBlockCreatePayload, type RoomBlockReasonCode } from "../../api/roomBlocks";
 import { type RoomStatus } from "../../api/rooms";
@@ -40,6 +42,7 @@ const emptyBlockForm = (): BlockFormValues => ({
 });
 
 export function RoomsPage() {
+  const { t } = useTranslation("rooms");
   const { session } = useSession();
   const { hasPermission } = useEffectivePermissions();
   const isHousekeeping = session.baseRole === "housekeeping";
@@ -66,8 +69,8 @@ export function RoomsPage() {
   const actionsBlocked = Boolean(subscription) && (writeBlocked || inactiveSubscription);
   const blockReason = actionsBlocked
     ? writeBlocked
-      ? "Suscripción en modo solo lectura: reactivá tu plan para habilitar cambios."
-      : "Suscripción inactiva. Reactivá el plan para operar."
+      ? t("subscription.readOnly")
+      : t("subscription.inactive")
     : null;
 
   const categoryById = useMemo(() => {
@@ -110,7 +113,7 @@ export function RoomsPage() {
         await updateCleaningStatusMutation.mutateAsync({ roomId, status });
       }
     } catch (error) {
-      const detail = error instanceof Error ? error.message : "No se pudo actualizar el estado de la habitación.";
+      const detail = error instanceof Error ? error.message : t("inventory.statusUpdateDefaultError");
       setRoomStatusError({ roomId, message: detail });
     } finally {
       setPendingRoom(null);
@@ -128,11 +131,11 @@ export function RoomsPage() {
 
     const roomId = Number(blockForm.room_id);
     if (!Number.isInteger(roomId) || roomId <= 0) {
-      setBlockMessage("Seleccioná una habitación para bloquear.");
+      setBlockMessage(t("blocks.selectRoomError"));
       return;
     }
     if (!blockForm.is_indefinite && !blockForm.ends_at) {
-      setBlockMessage("Indicá una fecha de fin o marcá el bloqueo como indefinido.");
+      setBlockMessage(t("blocks.endDateRequired"));
       return;
     }
 
@@ -148,9 +151,9 @@ export function RoomsPage() {
     try {
       await createBlockMutation.mutateAsync(payload);
       setBlockForm(emptyBlockForm());
-      setBlockMessage("Bloqueo creado.");
+      setBlockMessage(t("blocks.createSuccess"));
     } catch (error) {
-      setBlockMessage(error instanceof Error ? error.message : "No se pudo crear el bloqueo.");
+      setBlockMessage(error instanceof Error ? error.message : t("blocks.createError"));
     }
   };
 
@@ -160,9 +163,9 @@ export function RoomsPage() {
     setBlockMessage(null);
     try {
       await resolveBlockMutation.mutateAsync(blockId);
-      setBlockMessage("Bloqueo resuelto.");
+      setBlockMessage(t("blocks.resolveSuccess"));
     } catch (error) {
-      setBlockMessage(error instanceof Error ? error.message : "No se pudo resolver el bloqueo.");
+      setBlockMessage(error instanceof Error ? error.message : t("blocks.resolveError"));
     } finally {
       setPendingBlockId(null);
     }
@@ -172,35 +175,35 @@ export function RoomsPage() {
     <div className="space-y-6">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-xs uppercase tracking-wide text-slate-500">Operación</p>
-          <h1 className="text-2xl font-semibold text-slate-900">Habitaciones</h1>
-          <p className="text-sm text-slate-600">Inventario en vivo con actualización de estado (libre, ocupada, limpieza).</p>
+          <p className="text-xs uppercase tracking-wide text-slate-500">{t("header.eyebrow")}</p>
+          <h1 className="text-2xl font-semibold text-slate-900">{t("header.title")}</h1>
+          <p className="text-sm text-slate-600">{t("header.description")}</p>
         </div>
-        {roomsQuery.isFetching && <p className="text-xs text-slate-500">Actualizando estado...</p>}
+        {roomsQuery.isFetching && <p className="text-xs text-slate-500">{t("header.updating")}</p>}
       </header>
 
       {actionsBlocked && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
           {blockReason}{" "}
           <Link to="/settings/subscription" className="font-semibold underline">
-            Ir a Suscripción
+            {t("subscription.goToSubscription")}
           </Link>
           .
         </div>
       )}
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <StatusBadge label="Libres" value={stats.available ?? 0} className={statusColors.available} />
-        <StatusBadge label="Ocupadas" value={stats.occupied ?? 0} className={statusColors.occupied} />
-        <StatusBadge label="En limpieza" value={stats.cleaning ?? 0} className={statusColors.cleaning} />
+        <StatusBadge label={t("stats.available")} value={stats.available ?? 0} className={statusColors.available} />
+        <StatusBadge label={t("stats.occupied")} value={stats.occupied ?? 0} className={statusColors.occupied} />
+        <StatusBadge label={t("stats.cleaning")} value={stats.cleaning ?? 0} className={statusColors.cleaning} />
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-xs uppercase tracking-wide text-slate-500">Inventario</p>
-            <h2 className="text-lg font-semibold text-slate-900">Habitaciones ({rooms.length})</h2>
-            {roomsQuery.error && <p className="text-xs text-rose-700">No se pudo cargar: {(roomsQuery.error as Error).message}</p>}
+            <p className="text-xs uppercase tracking-wide text-slate-500">{t("inventory.eyebrow")}</p>
+            <h2 className="text-lg font-semibold text-slate-900">{t("inventory.title", { count: rooms.length })}</h2>
+            {roomsQuery.error && <p className="text-xs text-rose-700">{t("inventory.loadError", { message: (roomsQuery.error as Error).message })}</p>}
           </div>
         </div>
 
@@ -215,32 +218,32 @@ export function RoomsPage() {
               <div key={room.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="flex items-start justify-between">
                   <div>
-                    <p className="text-xs uppercase tracking-wide text-slate-500">Hab. {room.room_number}</p>
-                    <h2 className="text-lg font-semibold text-slate-900">{category?.name || room.category?.name || `Categoría ${room.category_id}`}</h2>
+                    <p className="text-xs uppercase tracking-wide text-slate-500">{t("inventory.roomLabel", { number: room.room_number })}</p>
+                    <h2 className="text-lg font-semibold text-slate-900">{category?.name || room.category?.name || t("inventory.categoryFallback", { id: room.category_id })}</h2>
                     <p className="text-xs text-slate-500">
-                      Piso {room.floor} · {category?.code || room.category?.code || "sin código"}
+                      {t("inventory.floorAndCode", { floor: room.floor, code: category?.code || room.category?.code || t("inventory.noCode") })}
                     </p>
                     {!isHousekeeping && <p className="text-xs text-slate-600">
-                      Tarifa hoy:{" "}
+                      {t("inventory.rateToday")}{" "}
                       <span className="font-semibold text-slate-800">
                         ${formatRate(category?.current_rate ?? category?.base_price_per_night ?? room.category?.base_price_per_night)}
                       </span>
-                      /noche
+                      {t("inventory.perNight")}
                     </p>}
                   </div>
                   <span className={`rounded-full px-2 py-1 text-xs font-semibold ${statusColors[room.status]}`}>
                     {roomStatusLabel[room.status]}
                   </span>
                 </div>
-                <p className="mt-3 text-sm text-slate-700">{room.notes || "Sin notas"}</p>
+                <p className="mt-3 text-sm text-slate-700">{room.notes || t("inventory.noNotes")}</p>
                 {canChangeThisStatus ? (
                   <div className="mt-4 text-xs text-slate-600">
                     <label htmlFor={`room-status-${room.id}`} className="mb-1 block font-semibold text-slate-600">
-                      Estado operativo
+                      {t("inventory.statusLabel")}
                     </label>
                     <select
                       id={`room-status-${room.id}`}
-                      aria-label={`Estado de habitación ${room.room_number}`}
+                      aria-label={t("inventory.statusAriaLabel", { number: room.room_number })}
                       value={room.status}
                       onChange={(e) => void handleStatusUpdate(room.id, e.target.value as RoomStatus)}
                       className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-brand-400 focus:outline-none disabled:bg-slate-50"
@@ -253,26 +256,26 @@ export function RoomsPage() {
                       ))}
                     </select>
                     {!canManageRoomStatus && canToggleCleaningStatus && (
-                      <p className="mt-1 text-[11px] text-slate-500">Housekeeping sólo puede alternar Limpieza y Libre.</p>
+                      <p className="mt-1 text-[11px] text-slate-500">{t("inventory.housekeepingHint")}</p>
                     )}
                     {pendingRoom === room.id && (updateStatusMutation.isPending || updateCleaningStatusMutation.isPending) && (
-                      <p className="mt-2 text-xs text-slate-500">Guardando...</p>
+                      <p className="mt-2 text-xs text-slate-500">{t("inventory.saving")}</p>
                     )}
                     {roomStatusError?.roomId === room.id && (
                       <p role="alert" className="mt-2 text-xs text-rose-700">
-                        No se pudo actualizar el estado: {roomStatusError.message}
+                        {t("inventory.statusUpdateError", { message: roomStatusError.message })}
                       </p>
                     )}
                   </div>
                 ) : (
-                  <p className="mt-4 text-xs text-slate-400">Solo lectura para tu rol.</p>
+                  <p className="mt-4 text-xs text-slate-400">{t("inventory.readOnlyRole")}</p>
                 )}
               </div>
             );
           })}
           {!roomsQuery.isLoading && rooms.length === 0 && (
             <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-600">
-              No hay habitaciones cargadas en el sistema.
+              {t("inventory.empty")}
             </div>
           )}
         </div>
@@ -281,18 +284,18 @@ export function RoomsPage() {
       {!isHousekeeping && <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <p className="text-xs uppercase tracking-wide text-slate-500">Bloqueos</p>
-            <h2 className="text-lg font-semibold text-slate-900">Bloqueos activos ({activeBlocks.length})</h2>
-            <p className="text-sm text-slate-600">Reservá habitaciones fuera de venta por mantenimiento, limpieza o uso interno.</p>
-            {blocksQuery.error && <p className="mt-1 text-xs text-rose-700">No se pudo cargar: {(blocksQuery.error as Error).message}</p>}
+            <p className="text-xs uppercase tracking-wide text-slate-500">{t("blocks.eyebrow")}</p>
+            <h2 className="text-lg font-semibold text-slate-900">{t("blocks.title", { count: activeBlocks.length })}</h2>
+            <p className="text-sm text-slate-600">{t("blocks.description")}</p>
+            {blocksQuery.error && <p className="mt-1 text-xs text-rose-700">{t("blocks.loadError", { message: (blocksQuery.error as Error).message })}</p>}
           </div>
-          {blocksQuery.isFetching && <p className="text-xs text-slate-500">Actualizando bloqueos...</p>}
+          {blocksQuery.isFetching && <p className="text-xs text-slate-500">{t("blocks.updating")}</p>}
         </div>
 
         {canCreateBlocks && (
         <form className="mt-4 grid gap-4 rounded-lg border border-slate-200 bg-slate-50 p-4 lg:grid-cols-6" onSubmit={handleCreateBlock}>
           <label className="space-y-1 text-sm lg:col-span-1">
-            <span className="text-slate-600">Habitación</span>
+            <span className="text-slate-600">{t("blocks.roomFieldLabel")}</span>
             <select
               required
               value={blockForm.room_id}
@@ -300,17 +303,17 @@ export function RoomsPage() {
               className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
               disabled={actionsBlocked || createBlockMutation.isPending}
             >
-              <option value="">Seleccionar</option>
+              <option value="">{t("blocks.select")}</option>
               {rooms.map((room) => (
                 <option key={room.id} value={room.id}>
-                  Hab. {room.room_number}
+                  {t("blocks.roomOption", { number: room.room_number })}
                 </option>
               ))}
             </select>
           </label>
 
           <label className="space-y-1 text-sm lg:col-span-1">
-            <span className="text-slate-600">Desde</span>
+            <span className="text-slate-600">{t("blocks.fromLabel")}</span>
             <input
               required
               type="date"
@@ -322,7 +325,7 @@ export function RoomsPage() {
           </label>
 
           <label className="space-y-1 text-sm lg:col-span-1">
-            <span className="text-slate-600">Hasta</span>
+            <span className="text-slate-600">{t("blocks.toLabel")}</span>
             <input
               type="date"
               value={blockForm.ends_at}
@@ -335,7 +338,7 @@ export function RoomsPage() {
           </label>
 
           <label className="space-y-1 text-sm lg:col-span-1">
-            <span className="text-slate-600">Motivo</span>
+            <span className="text-slate-600">{t("blocks.reasonLabel")}</span>
             <select
               value={blockForm.reason_code}
               onChange={(event) => handleBlockFormChange("reason_code", event.target.value as RoomBlockReasonCode)}
@@ -351,12 +354,12 @@ export function RoomsPage() {
           </label>
 
           <label className="space-y-1 text-sm lg:col-span-2">
-            <span className="text-slate-600">Detalle</span>
+            <span className="text-slate-600">{t("blocks.detailLabel")}</span>
             <input
               value={blockForm.reason_note}
               onChange={(event) => handleBlockFormChange("reason_note", event.target.value)}
               maxLength={500}
-              placeholder="Ej. reparación de aire acondicionado"
+              placeholder={t("blocks.detailPlaceholder")}
               className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
               disabled={actionsBlocked || createBlockMutation.isPending}
             />
@@ -374,14 +377,14 @@ export function RoomsPage() {
                 className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
                 disabled={actionsBlocked || createBlockMutation.isPending}
               />
-              Bloqueo indefinido
+              {t("blocks.indefinite")}
             </label>
             <button
               type="submit"
               disabled={actionsBlocked || createBlockMutation.isPending}
               className="rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
             >
-              {createBlockMutation.isPending ? "Creando..." : "Crear bloqueo"}
+              {createBlockMutation.isPending ? t("blocks.creating") : t("blocks.create")}
             </button>
           </div>
         </form>
@@ -399,10 +402,10 @@ export function RoomsPage() {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-xs uppercase tracking-wide text-slate-500">
-                      {room ? `Hab. ${room.room_number} · Piso ${room.floor}` : `Habitación ${block.room_id}`}
+                      {room ? t("blocks.roomFloor", { number: room.room_number, floor: room.floor }) : t("blocks.roomFallback", { id: block.room_id })}
                     </p>
                     <h3 className="text-base font-semibold text-slate-900">{roomBlockReasonLabel[block.reason_code]}</h3>
-                    <p className="text-xs text-slate-500">{formatBlockDates(block.starts_at, block.ends_at, block.is_indefinite)}</p>
+                    <p className="text-xs text-slate-500">{formatBlockDates(block.starts_at, block.ends_at, block.is_indefinite, t)}</p>
                   </div>
                   {canReleaseBlocks && (
                     <button
@@ -411,17 +414,17 @@ export function RoomsPage() {
                       disabled={actionsBlocked || (pendingBlockId === block.id && resolveBlockMutation.isPending)}
                       className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
                     >
-                      {pendingBlockId === block.id && resolveBlockMutation.isPending ? "Resolviendo..." : "Resolver"}
+                      {pendingBlockId === block.id && resolveBlockMutation.isPending ? t("blocks.resolving") : t("blocks.resolve")}
                     </button>
                   )}
                 </div>
-                <p className="mt-3 text-sm text-slate-700">{block.reason_note || "Sin detalle adicional."}</p>
+                <p className="mt-3 text-sm text-slate-700">{block.reason_note || t("blocks.noDetail")}</p>
               </div>
             );
           })}
           {!blocksQuery.isLoading && activeBlocks.length === 0 && (
             <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-600">
-              No hay bloqueos activos.
+              {t("blocks.empty")}
             </div>
           )}
         </div>
@@ -430,10 +433,10 @@ export function RoomsPage() {
   );
 }
 
-function formatBlockDates(startsAt: string, endsAt?: string | null, isIndefinite?: boolean) {
+function formatBlockDates(startsAt: string, endsAt: string | null | undefined, isIndefinite: boolean | undefined, t: TFunction) {
   const start = formatDate(startsAt);
-  if (isIndefinite) return `Desde ${start} · indefinido`;
-  return `Desde ${start} hasta ${endsAt ? formatDate(endsAt) : "sin fecha de fin"}`;
+  if (isIndefinite) return t("blocks.datesIndefinite", { start });
+  return t("blocks.datesRange", { start, end: endsAt ? formatDate(endsAt) : t("blocks.noEndDate") });
 }
 
 function formatDate(value: string) {

@@ -1,5 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 
 import { hasValidSession } from "../../api/client";
 import {
@@ -29,22 +31,21 @@ import { useGuardedMutation } from "../../hooks/useGuardedMutation";
 
 const DOCUMENT_TYPES = ["DNI", "PASSPORT", "CEDULA"] as const;
 
-const TAG_OPTIONS: Array<{ value: GuestTagType; label: string }> = [
-  { value: "prohibido_alojar", label: "Prohibido alojar" },
-  { value: "requiere_deposito", label: "Requiere depósito" },
-  { value: "no_pago", label: "No pagó" },
-  { value: "conflictivo", label: "Conflictivo" },
-  { value: "robo", label: "Robo" },
-  { value: "robo_cosas", label: "Rompió cosas" },
-  { value: "vip", label: "VIP" },
-  { value: "alergias", label: "Alergias" },
-  { value: "otro", label: "Otro" }
+const TAG_OPTIONS: Array<{ value: GuestTagType }> = [
+  { value: "prohibido_alojar" },
+  { value: "requiere_deposito" },
+  { value: "no_pago" },
+  { value: "conflictivo" },
+  { value: "robo" },
+  { value: "robo_cosas" },
+  { value: "vip" },
+  { value: "alergias" },
+  { value: "otro" }
 ];
 
-const tagLabels = TAG_OPTIONS.reduce<Record<GuestTagType, string>>((acc, option) => {
-  acc[option.value] = option.label;
-  return acc;
-}, {} as Record<GuestTagType, string>);
+// ponytail: tag labels resolved via t(`tags.types.${value}`) at render time
+// instead of a precomputed map -- one lookup path, and unknown tag types
+// still render (via i18next's defaultValue) instead of needing a fallback.
 
 const emptyForm: GuestUpdatePayload = {
   first_name: "",
@@ -84,14 +85,15 @@ const formatStatus = (status: string) =>
     .replace(/_/g, " ")
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 
-const formatDate = (value?: string | null) => {
-  if (!value) return "Sin fecha";
+const formatDate = (value: string | null | undefined, t: TFunction) => {
+  if (!value) return t("checkIn.noDate");
   return new Date(value).toLocaleDateString("es-AR");
 };
 
 const isProhibidoTag = (tag: GuestTag) => tag.tag_type === "prohibido_alojar";
 
 export function GuestsPage() {
+  const { t } = useTranslation("guests");
   const { session } = useSession();
   const { hasPermission } = useEffectivePermissions();
   const canEditGuest = hasPermission("guest:update");
@@ -281,16 +283,16 @@ export function GuestsPage() {
       };
       if (collaborativeGuest.status !== "idle") {
         if (Object.keys(collaborativeGuest.conflicts).length > 0) {
-          setFormMessage("Hay conflictos en la ficha. Elegí qué valor conservar antes de guardar.");
+          setFormMessage(t("profile.saveConflict"));
           return;
         }
         if (collaborativeGuest.isDirty) await collaborativeGuest.save();
       } else {
         await updateGuestMutation.mutateAsync({ guestId: selectedGuestId, payload });
       }
-      setFormMessage("Huésped guardado.");
+      setFormMessage(t("profile.saveSuccess"));
     } catch (error) {
-      setFormMessage(error instanceof Error ? error.message : "No se pudo guardar el huésped.");
+      setFormMessage(error instanceof Error ? error.message : t("profile.saveError"));
     }
   };
 
@@ -304,11 +306,11 @@ export function GuestsPage() {
         date_of_birth: companionValues.date_of_birth || undefined
       };
       await addCompanionMutation.mutateAsync({ guestId: selectedGuestId, companions: [payload] });
-      setCompanionMessage("Acompañante guardado.");
+      setCompanionMessage(t("companions.addSuccess"));
       setCompanionValues(emptyCompanion);
       await guestsQuery.refetch();
     } catch (error) {
-      setCompanionMessage(error instanceof Error ? error.message : "No se pudo guardar el acompañante.");
+      setCompanionMessage(error instanceof Error ? error.message : t("companions.addError"));
     }
   };
 
@@ -326,9 +328,9 @@ export function GuestsPage() {
         }
       });
       setTagValues(emptyTagForm);
-      setTagMessage("Etiqueta agregada.");
+      setTagMessage(t("tags.addSuccess"));
     } catch (error) {
-      setTagMessage(error instanceof Error ? error.message : "No se pudo agregar la etiqueta.");
+      setTagMessage(error instanceof Error ? error.message : t("tags.addError"));
     }
   };
 
@@ -337,9 +339,9 @@ export function GuestsPage() {
     setTagMessage(null);
     try {
       await resolveTagMutation.mutateAsync({ guestId: selectedGuestId, tagId });
-      setTagMessage("Etiqueta resuelta.");
+      setTagMessage(t("tags.resolveSuccess"));
     } catch (error) {
-      setTagMessage(error instanceof Error ? error.message : "No se pudo resolver la etiqueta.");
+      setTagMessage(error instanceof Error ? error.message : t("tags.resolveError"));
     }
   };
 
@@ -352,7 +354,7 @@ export function GuestsPage() {
     setCheckInMessage(null);
     try {
       await checkInMutation.mutateAsync({ reservationId, override, restrictionOverride });
-      setCheckInMessage(override ? "Check-in realizado con override autorizado." : "Check-in realizado.");
+      setCheckInMessage(override ? t("checkIn.successOverride") : t("checkIn.success"));
     } catch (error) {
       // The guest has an active GuestRestriction (separate from the legacy
       // "prohibido_alojar" tag above) -- prompt for an override reason and
@@ -364,7 +366,7 @@ export function GuestsPage() {
       ) {
         return;
       }
-      setCheckInMessage(error instanceof Error ? error.message : "No se pudo realizar el check-in.");
+      setCheckInMessage(error instanceof Error ? error.message : t("checkIn.error"));
     }
   };
 
@@ -372,18 +374,16 @@ export function GuestsPage() {
     <div className="space-y-6">
       <header className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-xs uppercase tracking-wide text-slate-500">Huéspedes</p>
-          <h1 className="text-2xl font-semibold text-slate-900">Ficha de huéspedes</h1>
-          <p className="text-sm text-slate-600">
-            Buscá por nombre, documento o email y mantené actualizado el registro operativo.
-          </p>
+          <p className="text-xs uppercase tracking-wide text-slate-500">{t("list.eyebrow")}</p>
+          <h1 className="text-2xl font-semibold text-slate-900">{t("list.title")}</h1>
+          <p className="text-sm text-slate-600">{t("list.description")}</p>
         </div>
         <div className="w-full max-w-sm">
           <input
             type="search"
             value={search}
             onChange={(event) => handleSearchChange(event.target.value)}
-            placeholder="Buscar por nombre, documento o email"
+            placeholder={t("list.searchPlaceholder")}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
           />
         </div>
@@ -392,14 +392,14 @@ export function GuestsPage() {
       <div className="grid gap-4 lg:grid-cols-[360px_minmax(0,1fr)]">
         <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-200 px-4 py-3">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Listado</p>
-            <h2 className="text-lg font-semibold text-slate-900">Huéspedes del hotel</h2>
+            <p className="text-xs uppercase tracking-wide text-slate-500">{t("list.panelEyebrow")}</p>
+            <h2 className="text-lg font-semibold text-slate-900">{t("list.panelTitle")}</h2>
           </div>
           <div className="max-h-[65vh] overflow-y-auto">
             {guestsQuery.isLoading ? (
-              <p className="px-4 py-3 text-sm text-slate-500">Cargando huéspedes...</p>
+              <p className="px-4 py-3 text-sm text-slate-500">{t("list.loading")}</p>
             ) : guests.length === 0 ? (
-              <p className="px-4 py-3 text-sm text-slate-500">No hay huéspedes para el filtro actual.</p>
+              <p className="px-4 py-3 text-sm text-slate-500">{t("list.empty")}</p>
             ) : (
               <div className="divide-y divide-slate-200">
                 {guests.map((guest) => {
@@ -414,9 +414,9 @@ export function GuestsPage() {
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="font-semibold text-slate-900">{fullName || `Huésped #${guest.id}`}</p>
+                          <p className="font-semibold text-slate-900">{fullName || t("list.fallbackName", { id: guest.id })}</p>
                           <p className="text-xs text-slate-500">
-                            {guest.document_number || guest.email || guest.phone || "Sin documento ni contacto"}
+                            {guest.document_number || guest.email || guest.phone || t("list.noContact")}
                           </p>
                           <GuestRestrictionBadge guestId={guest.id} className="mt-1" />
                         </div>
@@ -432,8 +432,8 @@ export function GuestsPage() {
           </div>
           <div className="flex items-center justify-between gap-2 border-t border-slate-200 px-4 py-3">
             <span className="text-xs text-slate-500" data-testid="guests-page-indicator">
-              Página {page + 1}
-              {guestsQuery.isFetching ? " · Actualizando..." : ""}
+              {t("list.pageIndicator", { page: page + 1 })}
+              {guestsQuery.isFetching ? t("list.updating") : ""}
             </span>
             <div className="flex gap-2">
               <button
@@ -443,7 +443,7 @@ export function GuestsPage() {
                 disabled={page === 0 || guestsQuery.isFetching}
                 className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                ← Anterior
+                {t("list.prevPage")}
               </button>
               <button
                 type="button"
@@ -452,7 +452,7 @@ export function GuestsPage() {
                 disabled={!hasNextPage || guestsQuery.isFetching}
                 className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Siguiente →
+                {t("list.nextPage")}
               </button>
             </div>
           </div>
@@ -464,18 +464,19 @@ export function GuestsPage() {
               <form className="space-y-4" onSubmit={handleSubmit}>
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-xs uppercase tracking-wide text-slate-500">Ficha operativa</p>
+                    <p className="text-xs uppercase tracking-wide text-slate-500">{t("profile.eyebrow")}</p>
                     <h2 className="text-lg font-semibold text-slate-900">
                       {selectedGuest.first_name} {selectedGuest.last_name}
                     </h2>
                     <p className="text-xs text-slate-500">
-                      Actualizado{" "}
-                      {selectedGuest.updated_at ? new Date(selectedGuest.updated_at).toLocaleString("es-AR") : "sin fecha"}
+                      {t("profile.updatedAt", {
+                        date: selectedGuest.updated_at ? new Date(selectedGuest.updated_at).toLocaleString("es-AR") : t("profile.noDate")
+                      })}
                     </p>
                     <GuestRestrictionBadge guestId={selectedGuest.id} className="mt-2" />
                   </div>
                   <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">
-                    ID {selectedGuest.id}
+                    {t("profile.idLabel", { id: selectedGuest.id })}
                   </span>
                 </div>
 
@@ -488,32 +489,32 @@ export function GuestsPage() {
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <span>
                         {collaborativeGuest.status === "connected"
-                          ? `Coedición conectada${collaborativeGuest.peers.length ? ` · ${collaborativeGuest.peers.length} usuario(s) más` : ""}.`
+                          ? `${t("collaboration.connected")}${collaborativeGuest.peers.length ? t("collaboration.connectedPeers", { count: collaborativeGuest.peers.length }) : ""}.`
                           : collaborativeGuest.status === "saving"
-                            ? "Guardando y confirmando con el servidor..."
+                            ? t("collaboration.saving")
                             : collaborativeGuest.status === "conflict"
-                              ? "Hay cambios simultáneos que requieren una decisión."
+                              ? t("collaboration.conflict")
                               : collaborativeGuest.status === "degraded"
-                                ? "Coedición degradada; el guardado normal sigue disponible."
-                                : "Conectando coedición..."}
+                                ? t("collaboration.degraded")
+                                : t("collaboration.connecting")}
                       </span>
                       {collaborativeGuest.peers.length > 0 ? (
                         <span className="text-xs text-sky-700">
-                          {collaborativeGuest.peers.map((peer) => peer.fields.length ? peer.fields.join(", ") : "sin campo activo").join(" · ")}
+                          {collaborativeGuest.peers.map((peer) => peer.fields.length ? peer.fields.join(", ") : t("collaboration.noActiveField")).join(" · ")}
                         </span>
                       ) : null}
                     </div>
                     {Object.values(collaborativeGuest.conflicts).map((conflict) => (
                       <div key={conflict.field} className="rounded-md border border-amber-200 bg-amber-50 p-2 text-amber-950" data-testid={`guest-conflict-${conflict.field}`}>
-                        <p className="font-semibold">Conflicto en {conflict.field}</p>
-                        <p className="text-xs">Propio: {String(conflict.localValue ?? "(vacío)")}</p>
-                        <p className="text-xs">Remoto: {String(conflict.remoteValue ?? "(vacío)")}</p>
+                        <p className="font-semibold">{t("collaboration.conflictIn", { field: conflict.field })}</p>
+                        <p className="text-xs">{t("collaboration.ownValue", { value: String(conflict.localValue ?? t("collaboration.emptyValue")) })}</p>
+                        <p className="text-xs">{t("collaboration.remoteValue", { value: String(conflict.remoteValue ?? t("collaboration.emptyValue")) })}</p>
                         <div className="mt-2 flex flex-wrap gap-2">
                           <button type="button" className="rounded border border-amber-300 bg-white px-2 py-1 text-xs font-semibold" onClick={() => collaborativeGuest.keepMine(conflict.field)}>
-                            Conservar el mío
+                            {t("collaboration.keepMine")}
                           </button>
                           <button type="button" className="rounded border border-amber-300 bg-white px-2 py-1 text-xs font-semibold" onClick={() => collaborativeGuest.useRemote(conflict.field)}>
-                            Usar remoto
+                            {t("collaboration.useRemote")}
                           </button>
                         </div>
                       </div>
@@ -523,7 +524,7 @@ export function GuestsPage() {
 
                 <fieldset disabled={!canEditGuest} className="grid gap-4 md:grid-cols-2 disabled:opacity-70">
                   <label className="space-y-1 text-sm">
-                    <span className="text-slate-600">Nombre</span>
+                    <span className="text-slate-600">{t("profile.fields.firstName")}</span>
                     <input
                       value={collaborativeGuestValues.first_name ?? ""}
                       onChange={(e) => handleChange("first_name", e.target.value)}
@@ -533,7 +534,7 @@ export function GuestsPage() {
                     />
                   </label>
                   <label className="space-y-1 text-sm">
-                    <span className="text-slate-600">Apellido</span>
+                    <span className="text-slate-600">{t("profile.fields.lastName")}</span>
                     <input
                       value={collaborativeGuestValues.last_name ?? ""}
                       onChange={(e) => handleChange("last_name", e.target.value)}
@@ -543,7 +544,7 @@ export function GuestsPage() {
                     />
                   </label>
                   <label className="space-y-1 text-sm">
-                    <span className="text-slate-600">Fecha de nacimiento</span>
+                    <span className="text-slate-600">{t("profile.fields.dateOfBirth")}</span>
                     <input
                       type="date"
                       value={collaborativeGuestValues.date_of_birth ?? ""}
@@ -554,7 +555,7 @@ export function GuestsPage() {
                     />
                   </label>
                   <label className="space-y-1 text-sm">
-                    <span className="text-slate-600">Email</span>
+                    <span className="text-slate-600">{t("profile.fields.email")}</span>
                     <input
                       value={collaborativeGuestValues.email ?? ""}
                       onChange={(e) => handleChange("email", e.target.value)}
@@ -564,7 +565,7 @@ export function GuestsPage() {
                     />
                   </label>
                   <label className="space-y-1 text-sm">
-                    <span className="text-slate-600">Teléfono</span>
+                    <span className="text-slate-600">{t("profile.fields.phone")}</span>
                     <input
                       value={collaborativeGuestValues.phone ?? ""}
                       onChange={(e) => handleChange("phone", e.target.value)}
@@ -574,7 +575,7 @@ export function GuestsPage() {
                     />
                   </label>
                   <label className="space-y-1 text-sm">
-                    <span className="text-slate-600">Tipo de documento</span>
+                    <span className="text-slate-600">{t("profile.fields.documentType")}</span>
                     <select
                       value={collaborativeGuestValues.document_type ?? ""}
                       onChange={(e) => handleChange("document_type", e.target.value)}
@@ -582,7 +583,7 @@ export function GuestsPage() {
                       onBlur={() => collaborativeGuest.blurField("document_type")}
                       className="w-full rounded-lg border border-slate-300 px-3 py-2"
                     >
-                      <option value="">Seleccionar</option>
+                      <option value="">{t("profile.fields.select")}</option>
                       {DOCUMENT_TYPES.map((type) => (
                         <option key={type} value={type}>
                           {type}
@@ -591,7 +592,7 @@ export function GuestsPage() {
                     </select>
                   </label>
                   <label className="space-y-1 text-sm">
-                    <span className="text-slate-600">Número de documento</span>
+                    <span className="text-slate-600">{t("profile.fields.documentNumber")}</span>
                     <input
                       value={collaborativeGuestValues.document_number ?? ""}
                       onChange={(e) => handleChange("document_number", e.target.value)}
@@ -601,7 +602,7 @@ export function GuestsPage() {
                     />
                   </label>
                   <label className="space-y-1 text-sm">
-                    <span className="text-slate-600">Nacionalidad</span>
+                    <span className="text-slate-600">{t("profile.fields.nationality")}</span>
                     <input
                       value={collaborativeGuestValues.nationality ?? ""}
                       onChange={(e) => handleChange("nationality", e.target.value)}
@@ -611,7 +612,7 @@ export function GuestsPage() {
                     />
                   </label>
                   <label className="space-y-1 text-sm">
-                    <span className="text-slate-600">Ciudad</span>
+                    <span className="text-slate-600">{t("profile.fields.city")}</span>
                     <input
                       value={collaborativeGuestValues.city ?? ""}
                       onChange={(e) => handleChange("city", e.target.value)}
@@ -621,7 +622,7 @@ export function GuestsPage() {
                     />
                   </label>
                   <label className="space-y-1 text-sm md:col-span-2">
-                    <span className="text-slate-600">Dirección</span>
+                    <span className="text-slate-600">{t("profile.fields.address")}</span>
                     <input
                       value={collaborativeGuestValues.address_line1 ?? ""}
                       onChange={(e) => handleChange("address_line1", e.target.value)}
@@ -631,7 +632,7 @@ export function GuestsPage() {
                     />
                   </label>
                   <label className="space-y-1 text-sm md:col-span-2">
-                    <span className="text-slate-600">Observaciones</span>
+                    <span className="text-slate-600">{t("profile.fields.observations")}</span>
                     <textarea
                       value={collaborativeGuestValues.observations ?? ""}
                       onChange={(e) => handleChange("observations", e.target.value)}
@@ -655,27 +656,27 @@ export function GuestsPage() {
                     disabled={updateGuestMutation.isPending || collaborativeGuest.isSaving}
                     className="rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
                   >
-                    Guardar huésped
+                    {t("profile.save")}
                   </button>
                 </div> : (
-                  <p className="text-xs text-slate-500">Tu permiso permite consultar la ficha, pero no editarla.</p>
+                  <p className="text-xs text-slate-500">{t("profile.readOnlyHint")}</p>
                 )}
               </form>
 
               <section className="space-y-4 border-t border-slate-200 pt-4">
                 <div className="flex flex-col gap-1">
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Etiquetas</p>
-                  <h3 className="text-base font-semibold text-slate-900">Alertas y segmentación</h3>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">{t("tags.eyebrow")}</p>
+                  <h3 className="text-base font-semibold text-slate-900">{t("tags.title")}</h3>
                   {hasProhibido ? (
                     <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-800">
-                      Este huésped tiene una etiqueta activa de prohibido alojar. El check-in queda bloqueado salvo override autorizado.
+                      {t("tags.prohibidoWarning")}
                     </p>
                   ) : null}
                 </div>
 
                 <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
                   {tagsQuery.isLoading ? (
-                    <p className="text-sm text-slate-500">Cargando etiquetas...</p>
+                    <p className="text-sm text-slate-500">{t("tags.loading")}</p>
                   ) : activeTags.length > 0 ? (
                     <div className="flex flex-wrap gap-2">
                       {activeTags.map((tag) => (
@@ -687,7 +688,7 @@ export function GuestsPage() {
                               : "border-slate-200 bg-white text-slate-700"
                           }`}
                         >
-                          <span>{tagLabels[tag.tag_type] ?? tag.tag_type}</span>
+                          <span>{t(`tags.types.${tag.tag_type}`, { defaultValue: tag.tag_type })}</span>
                           {tag.note ? <span className="truncate font-normal text-slate-500">- {tag.note}</span> : null}
                           {canManageTags && (
                             <button
@@ -696,20 +697,20 @@ export function GuestsPage() {
                               disabled={resolveTagMutation.isPending}
                               className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] text-slate-600 hover:bg-slate-100 disabled:opacity-60"
                             >
-                              Resolver
+                              {t("tags.resolve")}
                             </button>
                           )}
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <p className="text-sm text-slate-500">Sin etiquetas activas.</p>
+                    <p className="text-sm text-slate-500">{t("tags.empty")}</p>
                   )}
                 </div>
 
                 {canManageTags ? <form className="grid gap-4 md:grid-cols-[220px_minmax(0,1fr)_180px_auto]" onSubmit={handleTagSubmit}>
                   <label className="space-y-1 text-sm">
-                    <span className="text-slate-600">Etiqueta</span>
+                    <span className="text-slate-600">{t("tags.typeLabel")}</span>
                     <select
                       value={tagValues.tag_type}
                       onChange={(e) => setTagValues((current) => ({ ...current, tag_type: e.target.value as GuestTagType }))}
@@ -717,22 +718,22 @@ export function GuestsPage() {
                     >
                       {TAG_OPTIONS.map((option) => (
                         <option key={option.value} value={option.value}>
-                          {option.label}
+                          {t(`tags.types.${option.value}`)}
                         </option>
                       ))}
                     </select>
                   </label>
                   <label className="space-y-1 text-sm">
-                    <span className="text-slate-600">Nota</span>
+                    <span className="text-slate-600">{t("tags.noteLabel")}</span>
                     <input
                       value={tagValues.note ?? ""}
                       onChange={(e) => setTagValues((current) => ({ ...current, note: e.target.value }))}
-                      placeholder="Detalle operativo"
+                      placeholder={t("tags.notePlaceholder")}
                       className="w-full rounded-lg border border-slate-300 px-3 py-2"
                     />
                   </label>
                   <label className="space-y-1 text-sm">
-                    <span className="text-slate-600">Vence</span>
+                    <span className="text-slate-600">{t("tags.expiresLabel")}</span>
                     <input
                       type="datetime-local"
                       value={tagValues.expires_at ?? ""}
@@ -746,7 +747,7 @@ export function GuestsPage() {
                       disabled={addTagMutation.isPending}
                       className="w-full rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
                     >
-                      Agregar
+                      {t("tags.add")}
                     </button>
                   </div>
                   {tagMessage ? (
@@ -761,13 +762,13 @@ export function GuestsPage() {
 
               <section className="space-y-4 border-t border-slate-200 pt-4">
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Check-in</p>
-                  <h3 className="text-base font-semibold text-slate-900">Últimas estadías</h3>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">{t("checkIn.eyebrow")}</p>
+                  <h3 className="text-base font-semibold text-slate-900">{t("checkIn.title")}</h3>
                 </div>
 
                 <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
                   {quickProfileQuery.isLoading ? (
-                    <p className="text-sm text-slate-500">Cargando estadías...</p>
+                    <p className="text-sm text-slate-500">{t("checkIn.loading")}</p>
                   ) : lastStays.length > 0 ? (
                     <div className="space-y-2">
                       {lastStays.map((stay) => {
@@ -777,7 +778,7 @@ export function GuestsPage() {
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                               <div>
                                 <p className="font-semibold text-slate-900">
-                                  Reserva{" "}
+                                  {t("checkIn.reservationPrefix")}{" "}
                                   <button
                                     type="button"
                                     onClick={() => openReservation(stay.reservation_id)}
@@ -788,8 +789,8 @@ export function GuestsPage() {
                                   · {formatStatus(String(stay.status))}
                                 </p>
                                 <p className="text-xs text-slate-500">
-                                  {formatDate(stay.check_in_date)} a {formatDate(stay.check_out_date)}
-                                  {stay.room_number ? ` · Hab. ${stay.room_number}` : ""}
+                                  {t("checkIn.dateRange", { start: formatDate(stay.check_in_date, t), end: formatDate(stay.check_out_date, t) })}
+                                  {stay.room_number ? t("checkIn.roomSuffix", { room: stay.room_number }) : ""}
                                 </p>
                               </div>
                               {canCheckIn && canCheckInStay ? (
@@ -800,7 +801,7 @@ export function GuestsPage() {
                                     disabled={checkInMutation.isPending || hasProhibido}
                                     className="rounded-lg border border-brand-200 bg-brand-600 px-3 py-2 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
                                   >
-                                    Check-in
+                                    {t("checkIn.action")}
                                   </button>
                                   {hasProhibido && canOverrideProhibido ? (
                                     <button
@@ -809,7 +810,7 @@ export function GuestsPage() {
                                       disabled={checkInMutation.isPending}
                                       className="rounded-lg border border-red-200 bg-red-600 px-3 py-2 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-60"
                                     >
-                                      Override prohibido
+                                      {t("checkIn.override")}
                                     </button>
                                   ) : null}
                                 </div>
@@ -817,7 +818,7 @@ export function GuestsPage() {
                             </div>
                             {hasProhibido && canCheckIn && canCheckInStay && !canOverrideProhibido ? (
                               <p className="mt-2 text-xs font-medium text-red-700">
-                                Solo manager, owner o co-owner pueden autorizar el override.
+                                {t("checkIn.onlyManagerOverride")}
                               </p>
                             ) : null}
                           </div>
@@ -825,7 +826,7 @@ export function GuestsPage() {
                       })}
                     </div>
                   ) : (
-                    <p className="text-sm text-slate-500">Sin estadías recientes para este huésped.</p>
+                    <p className="text-sm text-slate-500">{t("checkIn.empty")}</p>
                   )}
                 </div>
 
@@ -838,8 +839,8 @@ export function GuestsPage() {
 
               <section className="space-y-4 border-t border-slate-200 pt-4">
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Acompañantes</p>
-                  <h3 className="text-base font-semibold text-slate-900">Personas asociadas a la estadía</h3>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">{t("companions.eyebrow")}</p>
+                  <h3 className="text-base font-semibold text-slate-900">{t("companions.title")}</h3>
                 </div>
 
                 <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
@@ -855,24 +856,24 @@ export function GuestsPage() {
                               {companion.first_name} {companion.last_name}
                             </p>
                             <span className="text-xs text-slate-500">
-                              {companion.relationship_to_guest || "relación pendiente"}
+                              {companion.relationship_to_guest || t("companions.relationshipPending")}
                             </span>
                           </div>
                           <p className="text-xs text-slate-500">
-                            {companion.document_type || "Sin documento"}{" "}
+                            {companion.document_type || t("companions.noDocument")}{" "}
                             {companion.document_number ? `- ${companion.document_number}` : ""}
                           </p>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <p className="text-sm text-slate-500">Sin acompañantes registrados.</p>
+                    <p className="text-sm text-slate-500">{t("companions.empty")}</p>
                   )}
                 </div>
 
                 {canEditGuest ? <form className="grid gap-4 md:grid-cols-2" onSubmit={handleCompanionSubmit}>
                   <label className="space-y-1 text-sm">
-                    <span className="text-slate-600">Nombre</span>
+                    <span className="text-slate-600">{t("companions.fields.firstName")}</span>
                     <input
                       value={companionValues.first_name ?? ""}
                       onChange={(e) => handleCompanionChange("first_name", e.target.value)}
@@ -880,7 +881,7 @@ export function GuestsPage() {
                     />
                   </label>
                   <label className="space-y-1 text-sm">
-                    <span className="text-slate-600">Apellido</span>
+                    <span className="text-slate-600">{t("companions.fields.lastName")}</span>
                     <input
                       value={companionValues.last_name ?? ""}
                       onChange={(e) => handleCompanionChange("last_name", e.target.value)}
@@ -888,7 +889,7 @@ export function GuestsPage() {
                     />
                   </label>
                   <label className="space-y-1 text-sm">
-                    <span className="text-slate-600">Fecha de nacimiento</span>
+                    <span className="text-slate-600">{t("companions.fields.dateOfBirth")}</span>
                     <input
                       type="date"
                       value={companionValues.date_of_birth ?? ""}
@@ -897,16 +898,16 @@ export function GuestsPage() {
                     />
                   </label>
                   <label className="space-y-1 text-sm">
-                    <span className="text-slate-600">Relación</span>
+                    <span className="text-slate-600">{t("companions.fields.relationship")}</span>
                     <input
                       value={companionValues.relationship_to_guest ?? ""}
                       onChange={(e) => handleCompanionChange("relationship_to_guest", e.target.value)}
-                      placeholder="hijo, pareja, tutor..."
+                      placeholder={t("companions.fields.relationshipPlaceholder")}
                       className="w-full rounded-lg border border-slate-300 px-3 py-2"
                     />
                   </label>
                   <label className="space-y-1 text-sm">
-                    <span className="text-slate-600">Tipo de documento</span>
+                    <span className="text-slate-600">{t("companions.fields.documentType")}</span>
                     <select
                       value={companionValues.document_type ?? ""}
                       onChange={(e) => handleCompanionChange("document_type", e.target.value)}
@@ -920,7 +921,7 @@ export function GuestsPage() {
                     </select>
                   </label>
                   <label className="space-y-1 text-sm">
-                    <span className="text-slate-600">Número de documento</span>
+                    <span className="text-slate-600">{t("companions.fields.documentNumber")}</span>
                     <input
                       value={companionValues.document_number ?? ""}
                       onChange={(e) => handleCompanionChange("document_number", e.target.value)}
@@ -928,7 +929,7 @@ export function GuestsPage() {
                     />
                   </label>
                   <label className="space-y-1 text-sm md:col-span-2">
-                    <span className="text-slate-600">Nacionalidad</span>
+                    <span className="text-slate-600">{t("companions.fields.nationality")}</span>
                     <input
                       value={companionValues.nationality ?? ""}
                       onChange={(e) => handleCompanionChange("nationality", e.target.value)}
@@ -948,7 +949,7 @@ export function GuestsPage() {
                       disabled={addCompanionMutation.isPending}
                       className="rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
                     >
-                      Agregar acompañante
+                      {t("companions.add")}
                     </button>
                   </div>
                 </form> : null}
@@ -956,7 +957,7 @@ export function GuestsPage() {
             </>
           ) : (
             <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-sm text-slate-500">
-              Seleccioná un huésped para abrir la ficha.
+              {t("emptySelection")}
             </div>
           )}
         </section>

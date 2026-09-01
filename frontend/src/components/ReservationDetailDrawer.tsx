@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { type TFunction } from "i18next";
 
 import { ApiError } from "../api/client";
 import { type GuestUpdatePayload } from "../api/guests";
@@ -55,21 +57,26 @@ type Props = {
   onClose: () => void;
 };
 
-const paymentMethodOptions: Array<{ value: PaymentMethod; label: string }> = [
-  { value: "cash", label: "Efectivo" },
-  { value: "bank_transfer", label: "Transferencia" },
-  { value: "mercado_pago", label: "Mercado Pago" },
-  { value: "credit_card", label: "Tarjeta de crédito" },
-  { value: "debit_card", label: "Tarjeta de débito" },
-  { value: "paypal", label: "PayPal" }
+const paymentMethodValues: PaymentMethod[] = [
+  "cash",
+  "bank_transfer",
+  "mercado_pago",
+  "credit_card",
+  "debit_card",
+  "paypal"
 ];
 
-function guestFullName(guest?: { first_name: string; last_name: string } | null, fallbackId?: number) {
+function guestFullName(
+  t: TFunction,
+  guest?: { first_name: string; last_name: string } | null,
+  fallbackId?: number
+) {
   if (guest) return `${guest.first_name} ${guest.last_name}`.trim();
-  return fallbackId ? `Huésped #${fallbackId}` : "Sin huésped";
+  return fallbackId ? t("drawer.guests.guestFallbackWithId", { id: fallbackId }) : t("drawer.guests.guestFallbackNone");
 }
 
 export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
+  const { t } = useTranslation("reservations");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
   const [paymentAmount, setPaymentAmount] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
@@ -130,7 +137,7 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
   const handleAddCompanion = async () => {
     if (!reservationId) return;
     if (!companionForm.first_name.trim() || !companionForm.last_name.trim()) {
-      setCompanionError("Completá nombre y apellido del acompañante.");
+      setCompanionError(t("drawer.errors.companionRequired"));
       return;
     }
     setCompanionError(null);
@@ -147,7 +154,7 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
       });
       setCompanionForm({ first_name: "", last_name: "", document_number: "" });
     } catch (err) {
-      setCompanionError(err instanceof ApiError ? err.message : "No se pudo agregar el acompañante.");
+      setCompanionError(err instanceof ApiError ? err.message : t("drawer.errors.addCompanionFailed"));
     }
   };
   // Bug documented in frontend/src/api/payments.ts: total_amount/balance_due
@@ -163,7 +170,7 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
       await action();
       onSuccess();
     } catch (err) {
-      setActionError(err instanceof ApiError ? err.message : `No se pudo completar: ${label}.`);
+      setActionError(err instanceof ApiError ? err.message : t("drawer.errors.actionFailed", { label }));
     }
   };
 
@@ -171,7 +178,7 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
     if (!reservationId) return;
     const amount = Number(paymentAmount);
     if (!Number.isFinite(amount) || amount <= 0) {
-      setActionError("Ingresá un importe válido para cobrar.");
+      setActionError(t("drawer.errors.invalidAmount"));
       return;
     }
     setActionError(null);
@@ -189,9 +196,9 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
         currency: currencyCode
       });
       setPaymentAmount("");
-      setActionMessage("Pago registrado.");
+      setActionMessage(t("drawer.messages.paymentRegistered"));
     } catch (err) {
-      setActionError(err instanceof ApiError ? err.message : "No se pudo registrar el pago.");
+      setActionError(err instanceof ApiError ? err.message : t("drawer.errors.paymentFailed"));
     }
   };
 
@@ -219,12 +226,12 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
         guest: needsCheckinCapture ? buildGuestPatch() : undefined,
         restriction_override: restrictionOverride
       });
-      setActionMessage("Check-in registrado.");
+      setActionMessage(t("drawer.messages.checkInDone"));
     } catch (err) {
       // The guest has an active GuestRestriction -- prompt for an override
       // reason and retry through the same atomic endpoint.
       if (restrictionOverridePrompt.handleError(err, (override) => void submitCheckIn(override))) return;
-      setActionError(err instanceof ApiError ? err.message : "No se pudo hacer check-in.");
+      setActionError(err instanceof ApiError ? err.message : t("drawer.errors.checkInFailed"));
     }
   };
 
@@ -242,7 +249,7 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
       >
         <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-3">
           <div className="min-w-0">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Reserva</p>
+            <p className="text-xs uppercase tracking-wide text-slate-500">{t("drawer.reservationLabel")}</p>
             <h3 id="reservation-drawer-title" className="truncate text-lg font-semibold text-slate-900">
               {reservation ? reservation.confirmation_code : `#${reservationId}`}
             </h3>
@@ -258,7 +265,7 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
             type="button"
             onClick={handleClose}
             disabled={paymentMutation.isPending}
-            aria-label="Cerrar detalle de reserva"
+            aria-label={t("drawer.closeAria")}
             className="text-lg leading-none text-slate-500 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
           >
             ×
@@ -266,30 +273,33 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
         </div>
 
         <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4 text-sm text-slate-700">
-          {reservationQuery.isLoading && <p className="text-slate-500">Cargando reserva...</p>}
+          {reservationQuery.isLoading && <p className="text-slate-500">{t("drawer.loading")}</p>}
           {reservationQuery.isError && (
             <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-rose-700">
-              No se pudo cargar la reserva. Cerrá y volvé a intentar.
+              {t("drawer.loadError")}
             </p>
           )}
 
           {reservation && (
             <>
               <section className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Estadía</p>
+                <p className="text-xs uppercase tracking-wide text-slate-500">{t("drawer.stay.title")}</p>
                 <p className="mt-1 font-semibold text-slate-900">
                   {reservation.check_in_date} → {reservation.check_out_date}
                 </p>
                 <p className="text-xs text-slate-500">
-                  {reservation.room_id ? `Habitación #${reservation.room_id}` : "Sin habitación asignada"} · Categoría{" "}
+                  {reservation.room_id
+                    ? t("drawer.stay.roomNumber", { id: reservation.room_id })
+                    : t("drawer.stay.noRoomAssigned")}{" "}
+                  · {t("drawer.stay.category")}{" "}
                   {reservation.category_id}
                 </p>
               </section>
 
               <section className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Huéspedes</p>
-                <p data-testid="drawer-guest-name" className="mt-1 font-semibold text-slate-900">{guestFullName(reservation.guest, reservation.guest_id)}</p>
-                <p className="text-xs text-slate-500">Titular</p>
+                <p className="text-xs uppercase tracking-wide text-slate-500">{t("drawer.guests.title")}</p>
+                <p data-testid="drawer-guest-name" className="mt-1 font-semibold text-slate-900">{guestFullName(t, reservation.guest, reservation.guest_id)}</p>
+                <p className="text-xs text-slate-500">{t("drawer.guests.primary")}</p>
                 {reservation.guest_id ? (
                   <GuestRestrictionBadge guestId={reservation.guest_id} className="mt-1" />
                 ) : null}
@@ -297,44 +307,44 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                   <ul className="mt-2 space-y-1">
                     {reservation.additional_guests.map((guest) => (
                       <li key={guest.id} className="text-sm text-slate-800">
-                        {guestFullName(guest)}
-                        <span className="ml-2 text-xs text-slate-500">Acompañante</span>
+                        {guestFullName(t, guest)}
+                        <span className="ml-2 text-xs text-slate-500">{t("drawer.guests.companion")}</span>
                       </li>
                     ))}
                   </ul>
                 ) : (
-                  <p className="mt-2 text-xs text-slate-500">Sin acompañantes cargados.</p>
+                  <p className="mt-2 text-xs text-slate-500">{t("drawer.guests.noCompanions")}</p>
                 )}
 
                 {reservation.status !== "cancelled" && reservation.status !== "checked_out" && (
                   <div className="mt-3 border-t border-slate-200 pt-3">
-                    <p className="text-xs uppercase tracking-wide text-slate-500">Agregar acompañante</p>
+                    <p className="text-xs uppercase tracking-wide text-slate-500">{t("drawer.guests.addCompanion")}</p>
                     <div className="mt-2 flex flex-wrap items-end gap-2">
                       <input
                         type="text"
-                        placeholder="Nombre"
+                        placeholder={t("drawer.guests.firstNamePlaceholder")}
                         value={companionForm.first_name}
                         onChange={(event) => setCompanionForm((prev) => ({ ...prev, first_name: event.target.value }))}
                         className="w-28 rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
-                        aria-label="Nombre del acompañante"
+                        aria-label={t("drawer.guests.firstNameAria")}
                       />
                       <input
                         type="text"
-                        placeholder="Apellido"
+                        placeholder={t("drawer.guests.lastNamePlaceholder")}
                         value={companionForm.last_name}
                         onChange={(event) => setCompanionForm((prev) => ({ ...prev, last_name: event.target.value }))}
                         className="w-28 rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
-                        aria-label="Apellido del acompañante"
+                        aria-label={t("drawer.guests.lastNameAria")}
                       />
                       <input
                         type="text"
-                        placeholder="Documento (opcional)"
+                        placeholder={t("drawer.guests.documentPlaceholder")}
                         value={companionForm.document_number}
                         onChange={(event) =>
                           setCompanionForm((prev) => ({ ...prev, document_number: event.target.value }))
                         }
                         className="w-36 rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
-                        aria-label="Documento del acompañante"
+                        aria-label={t("drawer.guests.documentAria")}
                       />
                       <button
                         type="button"
@@ -342,7 +352,7 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                         disabled={addGuestsMutation.isPending}
                         className="rounded-lg border border-slate-300 bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        {addGuestsMutation.isPending ? "Agregando..." : "Agregar"}
+                        {addGuestsMutation.isPending ? t("drawer.guests.adding") : t("drawer.guests.add")}
                       </button>
                     </div>
                     {companionError && <p className="mt-2 text-xs text-rose-700">{companionError}</p>}
@@ -352,13 +362,13 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
 
               {needsCheckinCapture && (
                 <section className="rounded-lg border border-amber-200 bg-amber-50 p-3" data-testid="checkin-capture-form">
-                  <p className="text-xs uppercase tracking-wide text-amber-800">Completar datos para el check-in</p>
+                  <p className="text-xs uppercase tracking-wide text-amber-800">{t("drawer.checkinCapture.title")}</p>
                   {checkinValidation.data && checkinValidation.data.errors.length > 0 && (
                     <p className="mt-1 text-xs text-amber-800">{checkinValidation.data.errors.join("; ")}</p>
                   )}
                   <div className="mt-2 grid grid-cols-2 gap-2">
                     <label className="space-y-1 text-xs">
-                      <span className="text-slate-600">Tipo de documento</span>
+                      <span className="text-slate-600">{t("drawer.checkinCapture.documentType")}</span>
                       <select
                         value={captureForm.document_type}
                         onChange={(event) =>
@@ -369,14 +379,14 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                         }
                         className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
                       >
-                        <option value="">Sin especificar</option>
-                        <option value="DNI">DNI</option>
-                        <option value="PASSPORT">Pasaporte</option>
-                        <option value="CEDULA">Cédula</option>
+                        <option value="">{t("drawer.checkinCapture.documentTypeUnspecified")}</option>
+                        <option value="DNI">{t("drawer.checkinCapture.documentTypeDni")}</option>
+                        <option value="PASSPORT">{t("drawer.checkinCapture.documentTypePassport")}</option>
+                        <option value="CEDULA">{t("drawer.checkinCapture.documentTypeCedula")}</option>
                       </select>
                     </label>
                     <label className="space-y-1 text-xs">
-                      <span className="text-slate-600">Número de documento</span>
+                      <span className="text-slate-600">{t("drawer.checkinCapture.documentNumber")}</span>
                       <input
                         type="text"
                         value={captureForm.document_number}
@@ -385,7 +395,7 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                       />
                     </label>
                     <label className="space-y-1 text-xs">
-                      <span className="text-slate-600">Nacionalidad</span>
+                      <span className="text-slate-600">{t("drawer.checkinCapture.nationality")}</span>
                       <input
                         type="text"
                         value={captureForm.nationality}
@@ -394,7 +404,7 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                       />
                     </label>
                     <label className="space-y-1 text-xs">
-                      <span className="text-slate-600">País</span>
+                      <span className="text-slate-600">{t("drawer.checkinCapture.country")}</span>
                       <input
                         type="text"
                         value={captureForm.country}
@@ -403,43 +413,43 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                       />
                     </label>
                     <label className="space-y-1 text-xs">
-                      <span className="text-slate-600">Lugar de nacimiento</span>
+                      <span className="text-slate-600">{t("drawer.checkinCapture.birthPlace")}</span>
                       <input
                         type="text"
                         value={captureForm.birth_place}
                         onChange={(event) => setCaptureForm((prev) => ({ ...prev, birth_place: event.target.value }))}
                         className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
-                        aria-label="Lugar de nacimiento"
+                        aria-label={t("drawer.checkinCapture.birthPlace")}
                       />
                     </label>
                     <label className="space-y-1 text-xs">
-                      <span className="text-slate-600">País de nacimiento</span>
+                      <span className="text-slate-600">{t("drawer.checkinCapture.birthCountry")}</span>
                       <input
                         type="text"
                         value={captureForm.birth_country}
                         onChange={(event) => setCaptureForm((prev) => ({ ...prev, birth_country: event.target.value }))}
                         className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
-                        aria-label="País de nacimiento"
+                        aria-label={t("drawer.checkinCapture.birthCountry")}
                       />
                     </label>
                     <label className="space-y-1 text-xs">
-                      <span className="text-slate-600">Estado civil</span>
+                      <span className="text-slate-600">{t("drawer.checkinCapture.maritalStatus")}</span>
                       <input
                         type="text"
                         value={captureForm.marital_status}
                         onChange={(event) => setCaptureForm((prev) => ({ ...prev, marital_status: event.target.value }))}
                         className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
-                        aria-label="Estado civil"
+                        aria-label={t("drawer.checkinCapture.maritalStatus")}
                       />
                     </label>
                     <label className="space-y-1 text-xs">
-                      <span className="text-slate-600">Profesión</span>
+                      <span className="text-slate-600">{t("drawer.checkinCapture.occupation")}</span>
                       <input
                         type="text"
                         value={captureForm.occupation}
                         onChange={(event) => setCaptureForm((prev) => ({ ...prev, occupation: event.target.value }))}
                         className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
-                        aria-label="Profesión"
+                        aria-label={t("drawer.checkinCapture.occupation")}
                       />
                     </label>
                   </div>
@@ -449,59 +459,59 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                       checked={captureForm.terms_accepted}
                       onChange={(event) => setCaptureForm((prev) => ({ ...prev, terms_accepted: event.target.checked }))}
                     />
-                    Acepta términos y condiciones
+                    {t("drawer.checkinCapture.acceptTerms")}
                   </label>
                 </section>
               )}
 
               <section className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                 <div className="flex items-center justify-between">
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Cobros</p>
-                  {summaryQuery.isFetching && <span className="text-xs text-slate-500">Actualizando...</span>}
+                  <p className="text-xs uppercase tracking-wide text-slate-500">{t("drawer.billing.title")}</p>
+                  {summaryQuery.isFetching && <span className="text-xs text-slate-500">{t("drawer.billing.updating")}</span>}
                 </div>
                 {summaryQuery.isLoading ? (
-                  <p className="mt-2 text-slate-500">Cargando resumen financiero...</p>
+                  <p className="mt-2 text-slate-500">{t("drawer.billing.loadingSummary")}</p>
                 ) : summary ? (
                   <div className="mt-2 grid grid-cols-2 gap-2">
                     <div>
-                      <p className="text-xs text-slate-500">Total operativo</p>
+                      <p className="text-xs text-slate-500">{t("drawer.billing.operationalTotal")}</p>
                       <p className="font-semibold">
                         {formatMoney(operations?.financial_summary?.operational_total_amount ?? summary.total_amount, currencyCode)}
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs text-slate-500">Pagado</p>
+                      <p className="text-xs text-slate-500">{t("drawer.billing.paid")}</p>
                       <p className="font-semibold">{formatMoney(summary.amount_paid, currencyCode)}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-slate-500">Saldo operativo</p>
+                      <p className="text-xs text-slate-500">{t("drawer.billing.operationalBalance")}</p>
                       <p className="font-semibold text-slate-900" data-testid="drawer-balance-due">
                         {formatMoney(operationalBalanceDue ?? 0, currencyCode)}
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs text-slate-500">Depósito requerido</p>
+                      <p className="text-xs text-slate-500">{t("drawer.billing.depositRequired")}</p>
                       <p className="font-semibold">{formatMoney(summary.deposit_required, currencyCode)}</p>
                     </div>
                   </div>
                 ) : (
-                  <p className="mt-2 text-rose-700">No se pudo cargar el resumen financiero.</p>
+                  <p className="mt-2 text-rose-700">{t("drawer.billing.loadError")}</p>
                 )}
                 {(reservation.quoted_amount_ars != null || reservation.quoted_amount_usd != null) && (
                   <div className="mt-3 rounded-md border border-slate-200 bg-white p-2">
-                    <p className="text-xs font-semibold text-slate-700">Montos para informar al huésped</p>
+                    <p className="text-xs font-semibold text-slate-700">{t("drawer.billing.amountsTitle")}</p>
                     <p className="mt-1 text-xs text-slate-500">
-                      Cargados a mano por la OTA, no son una conversión entre sí.
+                      {t("drawer.billing.amountsHint")}
                     </p>
                     <div className="mt-1 grid grid-cols-2 gap-2">
                       <div>
-                        <p className="text-xs text-slate-500">En pesos</p>
+                        <p className="text-xs text-slate-500">{t("drawer.billing.inPesos")}</p>
                         <p className="font-semibold">
                           {reservation.quoted_amount_ars != null ? formatMoney(reservation.quoted_amount_ars, "ARS") : "—"}
                         </p>
                       </div>
                       <div>
-                        <p className="text-xs text-slate-500">En dólares</p>
+                        <p className="text-xs text-slate-500">{t("drawer.billing.inDollars")}</p>
                         <p className="font-semibold">
                           {reservation.quoted_amount_usd != null ? formatMoney(reservation.quoted_amount_usd, "USD") : "—"}
                         </p>
@@ -513,10 +523,10 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
 
               {reservation.status !== "cancelled" && reservation.status !== "checked_out" && (
                 <section className="rounded-lg border border-slate-200 bg-white p-3">
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Cobrar</p>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">{t("drawer.payment.title")}</p>
                   <div className="mt-2 flex flex-wrap items-end gap-2">
                     <label className="flex-1 space-y-1 text-xs">
-                      <span className="text-slate-600">Importe</span>
+                      <span className="text-slate-600">{t("drawer.payment.amountLabel")}</span>
                       <input
                         type="number"
                         min="0"
@@ -525,20 +535,20 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                         onChange={(event) => setPaymentAmount(event.target.value)}
                         placeholder={operationalBalanceDue ? String(operationalBalanceDue) : "0"}
                         className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                        aria-label="Importe a cobrar"
+                        aria-label={t("drawer.payment.amountAria")}
                       />
                     </label>
                     <label className="space-y-1 text-xs">
-                      <span className="text-slate-600">Método</span>
+                      <span className="text-slate-600">{t("drawer.payment.methodLabel")}</span>
                       <select
                         value={paymentMethod}
                         onChange={(event) => setPaymentMethod(event.target.value as PaymentMethod)}
                         className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                        aria-label="Método de pago"
+                        aria-label={t("drawer.payment.methodAria")}
                       >
-                        {paymentMethodOptions.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
+                        {paymentMethodValues.map((value) => (
+                          <option key={value} value={value}>
+                            {t(`drawer.payment.methods.${value}`)}
                           </option>
                         ))}
                       </select>
@@ -549,7 +559,7 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                       disabled={paymentMutation.isPending}
                       className="rounded-lg border border-emerald-200 bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      {paymentMutation.isPending ? "Cobrando..." : "Registrar cobro"}
+                      {paymentMutation.isPending ? t("drawer.payment.submitting") : t("drawer.payment.submit")}
                     </button>
                   </div>
                 </section>
@@ -557,7 +567,7 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
 
               {operations?.pending_actions && operations.pending_actions.length > 0 && (
                 <section className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-                  <p className="text-xs uppercase tracking-wide text-amber-800">Acciones pendientes</p>
+                  <p className="text-xs uppercase tracking-wide text-amber-800">{t("drawer.pendingActionsTitle")}</p>
                   <ul className="mt-2 space-y-1">
                     {operations.pending_actions.map((action) => (
                       <li key={action.action_key} className="text-sm text-amber-900">
@@ -585,14 +595,14 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                     disabled={partialCheckInMutation.isPending}
                     onClick={() =>
                       void runAction(
-                        "check-in parcial",
+                        t("drawer.actions.labels.partialCheckIn"),
                         () => partialCheckInMutation.mutateAsync({ id: reservation.id, guest: needsCheckinCapture ? buildGuestPatch() : undefined }),
-                        () => setActionMessage("Check-in parcial registrado.")
+                        () => setActionMessage(t("drawer.messages.partialCheckInDone"))
                       )
                     }
                     className="rounded-lg border border-teal-200 bg-teal-50 px-3 py-2 text-xs font-semibold text-teal-700 hover:border-teal-300 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    Check-in parcial
+                    {t("drawer.actions.partialCheckIn")}
                   </button>
                 )}
                 <button
@@ -601,35 +611,35 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                   onClick={() => void submitCheckIn()}
                   className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-xs font-semibold text-brand-700 hover:border-brand-300 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  Confirmar check-in
+                  {t("drawer.actions.confirmCheckIn")}
                 </button>
                 <button
                   type="button"
                   disabled={!canCheckOutReservation(reservation.status) || checkOutMutation.isPending}
                   onClick={() =>
                     void runAction(
-                      "check-out",
+                      t("drawer.actions.labels.checkOut"),
                       () => checkOutMutation.mutateAsync(reservation.id),
-                      () => setActionMessage("Check-out registrado.")
+                      () => setActionMessage(t("drawer.messages.checkOutDone"))
                     )
                   }
                   className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-semibold text-sky-700 hover:border-sky-300 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  Check-out
+                  {t("drawer.actions.checkOut")}
                 </button>
                 <button
                   type="button"
                   disabled={!canCancelReservation(reservation.status) || cancelMutation.isPending}
                   onClick={() =>
                     void runAction(
-                      "cancelación",
+                      t("drawer.actions.labels.cancel"),
                       () => cancelMutation.mutateAsync(reservation.id),
-                      () => setActionMessage("Reserva cancelada.")
+                      () => setActionMessage(t("drawer.messages.cancelled"))
                     )
                   }
                   className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 hover:border-rose-300 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  Cancelar
+                  {t("drawer.actions.cancel")}
                 </button>
               </section>
             </>

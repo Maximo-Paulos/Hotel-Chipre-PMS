@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 
 import { ApiError } from "../../api/client";
 import { Seo } from "../../components/Seo";
@@ -11,6 +12,7 @@ import { getOnboardingStatus } from "../../api/onboarding";
 import { defaultPathForRole, normalizeRole, useSession, type SessionState } from "../../state/session";
 
 export function LoginPage() {
+  const { t } = useTranslation("auth");
   const navigate = useNavigate();
   const { login, session, isInitializing, restoredSession } = useSession();
   const [email, setEmail] = useState("");
@@ -40,7 +42,7 @@ export function LoginPage() {
 
   const completeAuth = async (res: AuthResponse) => {
     if (!res.hotel_id) {
-      throw new ApiError(500, "La respuesta de autenticación no devolvió un hotel válido.");
+      throw new ApiError(500, t("login.errors.invalidHotel"));
     }
     const authenticatedRole = normalizeRole(res.user.role);
     const nextSession: Partial<SessionState> = {
@@ -83,7 +85,7 @@ export function LoginPage() {
       await completeAuth(res);
     } catch (err) {
       if (err instanceof ApiError) setError(err.message);
-      else setError("No se pudo iniciar sesion");
+      else setError(t("login.errors.signIn"));
     } finally {
       setLoading(false);
     }
@@ -97,7 +99,7 @@ export function LoginPage() {
       await completeAuth(res);
     } catch (err) {
       if (err instanceof ApiError) setError(err.message);
-      else setError("No se pudo iniciar sesion con Google");
+      else setError(t("login.errors.signInGoogle"));
     } finally {
       setLoading(false);
     }
@@ -115,7 +117,7 @@ export function LoginPage() {
       await completeAuth(res);
     } catch (err) {
       if (err instanceof ApiError) setError(err.message);
-      else setError("No se pudo iniciar sesion con Apple");
+      else setError(t("login.errors.signInApple"));
     } finally {
       setLoading(false);
     }
@@ -123,7 +125,7 @@ export function LoginPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
-      <Seo title="Ingresar | Hotel Chipre PMS" description="Accede al sistema de gestión hotelera Hotel Chipre PMS." noindex />
+      <Seo title={t("seo.loginTitle")} description={t("seo.loginDescription")} noindex />
       <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-lg ring-1 ring-slate-100">
         <div className="mb-6 flex flex-col items-start gap-4">
           <img
@@ -131,29 +133,27 @@ export function LoginPage() {
             alt="Hotel Chipre PMS"
             className="h-20 w-auto max-w-full object-contain"
           />
-          <h1 className="text-2xl font-semibold text-slate-900">Ingresa a tu cuenta</h1>
-          <p className="text-sm text-slate-600">
-            Ingresá con tus credenciales. El sistema sólo envía contexto de hotel cuando la sesión es válida.
-          </p>
+          <h1 className="text-2xl font-semibold text-slate-900">{t("login.title")}</h1>
+          <p className="text-sm text-slate-600">{t("login.description")}</p>
         </div>
         <form className="space-y-4" onSubmit={handleSubmit}>
           <div>
-            <label className="text-sm font-medium text-slate-700">Email</label>
+            <label className="text-sm font-medium text-slate-700">{t("login.emailLabel")}</label>
             <input
               required
               type="email"
               className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-900 shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-              placeholder="owner@hotel.com"
+              placeholder={t("login.emailPlaceholder")}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
           </div>
           <div>
-            <label className="text-sm font-medium text-slate-700">Contraseña</label>
+            <label className="text-sm font-medium text-slate-700">{t("login.passwordLabel")}</label>
             <PasswordInput
               value={password}
               onChange={setPassword}
-              placeholder="••••••••"
+              placeholder={t("login.passwordPlaceholder")}
               required
               autoComplete="current-password"
             />
@@ -161,7 +161,7 @@ export function LoginPage() {
           {error && <p className="rounded-md bg-rose-50 p-2 text-sm text-rose-700">{error}</p>}
           {loading && slowLogin && (
             <p className="rounded-md bg-amber-50 p-2 text-sm text-amber-800" data-testid="login-slow-hint" role="status">
-              La conexión está demorando más de lo habitual. Estamos intentando ingresar sin perder tus datos.
+              {t("login.slowHint")}
             </p>
           )}
           <button
@@ -170,13 +170,13 @@ export function LoginPage() {
             className="w-full rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-70"
             data-testid="login-submit"
           >
-            {loading ? "Conectando..." : "Entrar"}
+            {loading ? t("login.connecting") : t("login.submit")}
           </button>
         </form>
         <div className="mt-4">
           <div className="relative flex items-center py-2">
             <div className="flex-grow border-t border-slate-200" />
-            <span className="mx-3 text-xs uppercase text-slate-400">o</span>
+            <span className="mx-3 text-xs uppercase text-slate-400">{t("login.socialSeparator")}</span>
             <div className="flex-grow border-t border-slate-200" />
           </div>
           <GoogleSignInButton onCredential={handleGoogleCredential} />
@@ -186,10 +186,10 @@ export function LoginPage() {
         </div>
         <div className="mt-4 flex items-center justify-between text-sm">
           <Link to="/forgot-password" className="text-brand-700 hover:underline">
-            Olvidé mi contraseña
+            {t("login.forgotPassword")}
           </Link>
           <Link to="/register-owner" className="text-brand-700 hover:underline">
-            Crear cuenta de dueño
+            {t("login.createOwnerAccount")}
           </Link>
         </div>
       </div>

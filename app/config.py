@@ -165,6 +165,16 @@ class Settings(BaseSettings):
     # Relative to the process working dir (repo root); override with an absolute path in prod.
     ANALYTICS_EXPORTS_DIR: str = "./var/exports/analytics"
 
+    # Object storage (app.services.object_storage): where payment-proof
+    # images and analytics .xlsx exports live instead of Postgres/filesystem.
+    # "local" is the only backend actually wired up today; "s3" is a stub
+    # (see S3ObjectStorage docstring for what's needed to enable it).
+    OBJECT_STORAGE_BACKEND: str = "local"
+    OBJECT_STORAGE_LOCAL_DIR: str = "./var/object-storage"
+    OBJECT_STORAGE_S3_BUCKET: str = ""
+    OBJECT_STORAGE_S3_ENDPOINT_URL: str = ""
+    OBJECT_STORAGE_S3_REGION: str = ""
+
     # "Sign in with Google" (Google Identity Services ID-token flow). Only a
     # Client ID is needed -- no secret -- because the frontend gets a signed
     # JWT straight from Google and the backend just verifies its signature.

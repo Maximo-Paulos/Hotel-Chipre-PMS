@@ -1,0 +1,61 @@
+{
+  "eyebrow": "Dashboard",
+  "title": "Visión general",
+  "subtitle": "KPIs en vivo, llegadas/salidas y acciones operativas del hotel activo.",
+  "actions": {
+    "newReservation": "Nueva reserva",
+    "assignRoom": "Asignar habitación"
+  },
+  "cards": {
+    "occupancyToday": {
+      "label": "Ocupación hoy",
+      "helper": "{{count}} llegadas"
+    },
+    "adr": {
+      "label": "ADR",
+      "helperSingle": "Tarifa promedio mes",
+      "helperMulti": "Mes con reservas en distintas monedas"
+    },
+    "revenue": {
+      "label": "Revenue mes",
+      "helperSingle": "{{count}} salidas hoy",
+      "helperMulti": "Revisar detalle por reserva"
+    },
+    "pendingActions": {
+      "label": "Acciones pendientes",
+      "helperCritical": "{{count}} críticas",
+      "helperNone": "Sin críticas"
+    },
+    "multiCurrency": "Multimoneda"
+  },
+  "pipeline": {
+    "eyebrow": "Pipeline",
+    "title": "Próximas reservas",
+    "viewAll": "Ver todas",
+    "table": {
+      "code": "Código",
+      "guest": "Huésped",
+      "dates": "Fechas",
+      "status": "Estado",
+      "amount": "Monto"
+    },
+    "empty": "Sin próximas reservas."
+  },
+  "activity": {
+    "eyebrow": "Actividad",
+    "title": "Hoy",
+    "empty": "Sin actividad para hoy.",
+    "checkIn": "Check-in previsto {{code}}",
+    "checkOut": "Checkout previsto {{code}}",
+    "cancelled": "Reserva cancelada {{code}}"
+  },
+  "operations": {
+    "eyebrow": "Operación",
+    "title": "Bandeja operativa",
+    "goToReservations": "Ir a Reservas",
+    "loading": "Cargando acciones pendientes...",
+    "empty": "No hay acciones operativas pendientes.",
+    "viewReservation": "Ver reserva"
+  },
+  "guestFallback": "Huesped #{{id}}"
+}

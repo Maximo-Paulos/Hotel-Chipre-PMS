@@ -1,5 +1,7 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 
 import { usePendingReservationActions, useReservations } from "../../hooks/useReservations";
 import { useReservationDrawer } from "../../hooks/useReservationDrawer";
@@ -21,12 +23,16 @@ const monthRangeIso = (base: Date) => {
   const end = new Date(base.getFullYear(), base.getMonth() + 1, 0);
   return { fromDate: format(start), toDate: format(end) };
 };
-const reservationGuestLabel = (reservation: {
-  guest?: { first_name: string; last_name: string } | null;
-  guest_id: number;
-}) => (reservation.guest ? `${reservation.guest.first_name} ${reservation.guest.last_name}`.trim() : `Huesped #${reservation.guest_id}`);
+const reservationGuestLabel = (
+  reservation: {
+    guest?: { first_name: string; last_name: string } | null;
+    guest_id: number;
+  },
+  t: TFunction
+) => (reservation.guest ? `${reservation.guest.first_name} ${reservation.guest.last_name}`.trim() : t("guestFallback", { id: reservation.guest_id }));
 
 export function DashboardPage() {
+  const { t } = useTranslation("dashboard");
   const today = todayIso();
   // KPI cards (ADR/revenue/arrivals-departures today) and "today" activity
   // need every reservation touching the current month, not just the most
@@ -35,8 +41,8 @@ export function DashboardPage() {
   // falls inside this range, so today's check-ins/check-outs are covered.
   const { fromDate: monthFrom, toDate: monthTo } = useMemo(() => monthRangeIso(new Date()), []);
   const { data: reservations = [] } = useReservations({ fromDate: monthFrom, toDate: monthTo, order: "check_in", limit: 200 });
-  // "Próximas reservas": the 10 most recently booked reservations, newest
-  // first -- what the user asked this widget to show.
+  // Upcoming reservations widget: the 10 most recently booked reservations,
+  // newest first -- what the user asked this widget to show.
   const { data: recentReservations = [] } = useReservations({ limit: 10, order: "recent" });
   const pendingActionsQuery = usePendingReservationActions(8);
   const { openReservation } = useReservationDrawer();
@@ -65,24 +71,24 @@ export function DashboardPage() {
     const departuresToday = reservations.filter((r) => r.check_out_date === today).length;
 
     return [
-      { label: "Ocupación hoy", value: `${occupancy}%`, helper: `${arrivalsToday} llegadas` },
+      { label: t("cards.occupancyToday.label"), value: `${occupancy}%`, helper: t("cards.occupancyToday.helper", { count: arrivalsToday }) },
       {
-        label: "ADR",
-        value: monthCurrencyCode ? formatMoney(Math.round(adr || 0), monthCurrencyCode) : "Multimoneda",
-        helper: monthCurrencyCode ? "Tarifa promedio mes" : "Mes con reservas en distintas monedas"
+        label: t("cards.adr.label"),
+        value: monthCurrencyCode ? formatMoney(Math.round(adr || 0), monthCurrencyCode) : t("cards.multiCurrency"),
+        helper: monthCurrencyCode ? t("cards.adr.helperSingle") : t("cards.adr.helperMulti")
       },
       {
-        label: "Revenue mes",
-        value: monthCurrencyCode ? formatMoney(Math.round(revenue || 0), monthCurrencyCode) : "Multimoneda",
-        helper: monthCurrencyCode ? `${departuresToday} salidas hoy` : "Revisar detalle por reserva"
+        label: t("cards.revenue.label"),
+        value: monthCurrencyCode ? formatMoney(Math.round(revenue || 0), monthCurrencyCode) : t("cards.multiCurrency"),
+        helper: monthCurrencyCode ? t("cards.revenue.helperSingle", { count: departuresToday }) : t("cards.revenue.helperMulti")
       },
       {
-        label: "Acciones pendientes",
+        label: t("cards.pendingActions.label"),
         value: String(pendingActions.length),
-        helper: criticalPendingActions > 0 ? `${criticalPendingActions} críticas` : "Sin críticas"
+        helper: criticalPendingActions > 0 ? t("cards.pendingActions.helperCritical", { count: criticalPendingActions }) : t("cards.pendingActions.helperNone")
       }
     ];
-  }, [criticalPendingActions, pendingActions.length, reservations, rooms, today]);
+  }, [criticalPendingActions, pendingActions.length, reservations, rooms, today, t]);
 
   const arrivals = useMemo(
     () =>
@@ -100,21 +106,21 @@ export function DashboardPage() {
       key: r.id,
       description:
         r.check_in_date === today
-          ? `Check-in previsto ${r.confirmation_code}`
+          ? t("activity.checkIn", { code: r.confirmation_code })
           : r.check_out_date === today
-            ? `Checkout previsto ${r.confirmation_code}`
-            : `Reserva cancelada ${r.confirmation_code}`,
+            ? t("activity.checkOut", { code: r.confirmation_code })
+            : t("activity.cancelled", { code: r.confirmation_code }),
       tone: r.status === "cancelled" ? "warning" : "info"
     }));
-  }, [reservations, today]);
+  }, [reservations, today, t]);
 
   return (
     <div className="min-w-0 space-y-6">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-xs uppercase tracking-wide text-slate-500">Dashboard</p>
-          <h1 className="text-2xl font-semibold text-slate-900">Visión general</h1>
-          <p className="text-sm text-slate-600">KPIs en vivo, llegadas/salidas y acciones operativas del hotel activo.</p>
+          <p className="text-xs uppercase tracking-wide text-slate-500">{t("eyebrow")}</p>
+          <h1 className="text-2xl font-semibold text-slate-900">{t("title")}</h1>
+          <p className="text-sm text-slate-600">{t("subtitle")}</p>
           <span className="sr-only" data-testid="dashboard-today-date">{today}</span>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -122,13 +128,13 @@ export function DashboardPage() {
             to="/reservas?crear=1"
             className="rounded-lg border border-brand-200 bg-brand-50 px-4 py-2 text-sm font-semibold text-brand-700 hover:border-brand-300 hover:bg-brand-100"
           >
-            Nueva reserva
+            {t("actions.newReservation")}
           </Link>
           <Link
             to="/habitaciones"
             className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:border-slate-300"
           >
-            Asignar habitación
+            {t("actions.assignRoom")}
           </Link>
         </div>
       </header>
@@ -147,22 +153,22 @@ export function DashboardPage() {
         <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm lg:col-span-2">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs uppercase tracking-wide text-slate-500">Pipeline</p>
-              <h2 className="text-lg font-semibold text-slate-900">Próximas reservas</h2>
+              <p className="text-xs uppercase tracking-wide text-slate-500">{t("pipeline.eyebrow")}</p>
+              <h2 className="text-lg font-semibold text-slate-900">{t("pipeline.title")}</h2>
             </div>
             <Link to="/reservas" className="text-sm text-brand-700 hover:underline">
-              Ver todas
+              {t("pipeline.viewAll")}
             </Link>
           </div>
           <div className="mt-3 hidden overflow-x-auto rounded-lg border border-slate-200 sm:block">
             <table className="w-full min-w-[640px] divide-y divide-slate-200 text-sm">
               <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
                 <tr>
-                  <th className="px-4 py-2">Código</th>
-                  <th className="px-4 py-2">Huésped</th>
-                  <th className="px-4 py-2">Fechas</th>
-                  <th className="px-4 py-2">Estado</th>
-                  <th className="px-4 py-2 text-right">Monto</th>
+                  <th className="px-4 py-2">{t("pipeline.table.code")}</th>
+                  <th className="px-4 py-2">{t("pipeline.table.guest")}</th>
+                  <th className="px-4 py-2">{t("pipeline.table.dates")}</th>
+                  <th className="px-4 py-2">{t("pipeline.table.status")}</th>
+                  <th className="px-4 py-2 text-right">{t("pipeline.table.amount")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 bg-white">
@@ -177,7 +183,7 @@ export function DashboardPage() {
                         {reservation.confirmation_code}
                       </button>
                     </td>
-                    <td className="px-4 py-2 text-slate-600">{reservationGuestLabel(reservation)}</td>
+                    <td className="px-4 py-2 text-slate-600">{reservationGuestLabel(reservation, t)}</td>
                     <td className="px-4 py-2 text-slate-600">
                       {reservation.check_in_date} - {reservation.check_out_date}
                     </td>
@@ -196,7 +202,7 @@ export function DashboardPage() {
                 {arrivals.length === 0 && (
                   <tr>
                     <td className="px-4 py-3 text-sm text-slate-500" colSpan={5}>
-                      Sin próximas reservas.
+                      {t("pipeline.empty")}
                     </td>
                   </tr>
                 )}
@@ -215,7 +221,7 @@ export function DashboardPage() {
                     >
                       {reservation.confirmation_code}
                     </button>
-                    <p className="mt-1 break-words text-sm text-slate-600">{reservationGuestLabel(reservation)}</p>
+                    <p className="mt-1 break-words text-sm text-slate-600">{reservationGuestLabel(reservation, t)}</p>
                   </div>
                   <span
                     className={`shrink-0 rounded-full px-2 py-1 text-xs font-semibold ${reservationStatusConfig[reservation.status]?.className ?? "bg-slate-100 text-slate-800"}`}
@@ -225,13 +231,13 @@ export function DashboardPage() {
                 </div>
                 <dl className="mt-3 grid grid-cols-2 gap-3 text-xs">
                   <div>
-                    <dt className="text-slate-500">Fechas</dt>
+                    <dt className="text-slate-500">{t("pipeline.table.dates")}</dt>
                     <dd className="mt-1 break-words font-medium text-slate-700">
                       {reservation.check_in_date} - {reservation.check_out_date}
                     </dd>
                   </div>
                   <div className="text-right">
-                    <dt className="text-slate-500">Monto</dt>
+                    <dt className="text-slate-500">{t("pipeline.table.amount")}</dt>
                     <dd className="mt-1 font-semibold text-slate-900">
                       {formatMoney(reservation.total_amount ?? 0, reservation.currency_code)}
                     </dd>
@@ -239,13 +245,13 @@ export function DashboardPage() {
                 </dl>
               </article>
             ))}
-            {arrivals.length === 0 && <p className="text-sm text-slate-500">Sin próximas reservas.</p>}
+            {arrivals.length === 0 && <p className="text-sm text-slate-500">{t("pipeline.empty")}</p>}
           </div>
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="text-xs uppercase tracking-wide text-slate-500">Actividad</p>
-          <h2 className="text-lg font-semibold text-slate-900">Hoy</h2>
+          <p className="text-xs uppercase tracking-wide text-slate-500">{t("activity.eyebrow")}</p>
+          <h2 className="text-lg font-semibold text-slate-900">{t("activity.title")}</h2>
           <div className="mt-3 space-y-3">
             {activities.map((activity) => (
               <div
@@ -258,7 +264,7 @@ export function DashboardPage() {
                 <div>{activity.description}</div>
               </div>
             ))}
-            {activities.length === 0 && <p className="text-sm text-slate-500">Sin actividad para hoy.</p>}
+            {activities.length === 0 && <p className="text-sm text-slate-500">{t("activity.empty")}</p>}
           </div>
         </div>
       </div>
@@ -266,19 +272,19 @@ export function DashboardPage() {
       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="text-xs uppercase tracking-wide text-slate-500">Operación</p>
-            <h2 className="text-lg font-semibold text-slate-900">Bandeja operativa</h2>
+            <p className="text-xs uppercase tracking-wide text-slate-500">{t("operations.eyebrow")}</p>
+            <h2 className="text-lg font-semibold text-slate-900">{t("operations.title")}</h2>
           </div>
           <Link to="/reservas" className="text-sm font-semibold text-brand-700 hover:underline">
-            Ir a Reservas
+            {t("operations.goToReservations")}
           </Link>
         </div>
         <div className="mt-3 space-y-3">
           {pendingActionsQuery.isLoading ? (
-            <p className="text-sm text-slate-500">Cargando acciones pendientes...</p>
+            <p className="text-sm text-slate-500">{t("operations.loading")}</p>
           ) : pendingActions.length === 0 ? (
             <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-              No hay acciones operativas pendientes.
+              {t("operations.empty")}
             </div>
           ) : (
             pendingActions.map((action) => (
@@ -320,7 +326,7 @@ export function DashboardPage() {
                     onClick={() => openReservation(action.reservation_id)}
                     className="inline-flex min-h-11 items-center rounded-lg border border-brand-200 bg-white px-3 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-50"
                   >
-                    Ver reserva
+                    {t("operations.viewReservation")}
                   </button>
                 </div>
               </div>

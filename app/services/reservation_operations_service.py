@@ -64,7 +64,7 @@ from app.services.reservation_service import (
     _apply_pricing_result_to_reservation,
     _validate_reservation_occupancy,
 )
-from app.services.room_movement_group_service import create_grouped_room_move
+from app.services.room_movement_group_service import create_grouped_room_move, sync_room_statuses_after_move
 from app.services.timezones import hotel_today
 
 
@@ -942,6 +942,9 @@ def move_reservation_room(
     if move_type == RoomMoveTypeEnum.MANUAL_MOVE:
         reservation.allocation_locked = True
         reservation.requires_manual_review = False
+    sync_room_statuses_after_move(
+        db, hotel_id=hotel_id, reservation=reservation, from_room_id=previous_room_id, to_room=room,
+    )
     event = RoomMoveEvent(
         hotel_id=hotel_id,
         reservation_id=reservation.id,

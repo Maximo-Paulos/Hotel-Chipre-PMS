@@ -71,6 +71,15 @@ def build_beat_schedule(runtime_settings: Settings) -> dict:
             "task": "notifications.generate_daily_reports",
             "schedule": crontab(minute="*/15"),
         },
+        # Bounded recovery for the realtime after-commit fast path: replays
+        # any domain_event_outbox row still pending (process crash or a
+        # transient Redis outage between the business commit and its first
+        # publish attempt). No network egress by itself, but kept under the
+        # same closed-sandbox gate as everything else here.
+        "domain-events-publish-outbox": {
+            "task": "domain_events.publish_outbox",
+            "schedule": 30.0,
+        },
     }
 
 
@@ -83,3 +92,4 @@ import app.tasks.ota_tasks  # noqa: F401,E402
 import app.tasks.analytics_tasks  # noqa: F401,E402
 import app.tasks.report_tasks  # noqa: F401,E402
 import app.tasks.notification_tasks  # noqa: F401,E402
+import app.tasks.domain_event_tasks  # noqa: F401,E402

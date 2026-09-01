@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
-from pathlib import Path
+import io
 import zipfile
 
 import pytest
@@ -481,7 +481,7 @@ def test_alert_settings_ai_config_and_breakdowns(api_client):
     assert "analytics.ai.settings.updated" in action_codes
 
 
-def test_analytics_exports_png_csv_xlsx(api_client, monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+def test_analytics_exports_png_csv_xlsx(api_client):
     client, SessionLocal, headers, plan_state = api_client
     _seed_analytics_data(SessionLocal)
 
@@ -508,13 +508,6 @@ def test_analytics_exports_png_csv_xlsx(api_client, monkeypatch: pytest.MonkeyPa
         job_count_before = db.query(AnalyticsExportJob).filter(AnalyticsExportJob.hotel_id == 1).count()
 
     plan_state["plan"] = "ultra"
-    export_dir = tmp_path / "analytics-exports"
-    import app.services.analytics_exports as analytics_exports_module
-
-    class _Settings:
-        ANALYTICS_EXPORTS_DIR = str(export_dir)
-
-    monkeypatch.setattr(analytics_exports_module, "get_settings", lambda: _Settings())
 
     xlsx_resp = client.post(
         "/api/analytics/exports/xlsx",
@@ -533,9 +526,9 @@ def test_analytics_exports_png_csv_xlsx(api_client, monkeypatch: pytest.MonkeyPa
     assert download_resp.status_code == 200, download_resp.text
     assert download_resp.headers["content-type"].startswith("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     assert download_resp.content[:2] == b"PK"
-    assert export_dir.exists()
-    assert any(export_dir.rglob("*.xlsx"))
-    with zipfile.ZipFile(Path(next(export_dir.rglob("*.xlsx"))), "r") as archive:
+    # Downloaded bytes came back through object storage (app/services/object_storage.py),
+    # not a filesystem path -- read them straight off the response instead of the disk.
+    with zipfile.ZipFile(io.BytesIO(download_resp.content), "r") as archive:
         assert "xl/workbook.xml" in archive.namelist()
         assert "xl/worksheets/sheet1.xml" in archive.namelist()
 
@@ -680,21 +673,17 @@ def test_analytics_dashboard_and_ai_chat_without_provider(api_client):
     assert chat_resp.json()["detail"] == "La IA todavía no está conectada. Configurá el proveedor de IA para usar el asistente."
 
 
-def test_cleanup_expired_exports_task(api_client, monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+def test_cleanup_expired_exports_task(api_client, monkeypatch: pytest.MonkeyPatch):
     client, SessionLocal, headers, plan_state = api_client
     _seed_analytics_data(SessionLocal)
     plan_state["plan"] = "ultra"
 
     import app.services.analytics_service as analytics_service_module
     import app.services.analytics_insights as analytics_insights_module
-    import app.services.analytics_exports as analytics_exports_module
     import app.tasks.analytics_tasks as analytics_tasks_module
     from app.services.analytics_ai_providers import AnalyticsAIProviderStatus, AnalyticsAIResult
+    from app.services.object_storage import ObjectStorageError, get_object_storage
 
-    class _Settings:
-        ANALYTICS_EXPORTS_DIR = str(tmp_path / "analytics-exports")
-
-    monkeypatch.setattr(analytics_exports_module, "get_settings", lambda: _Settings())
     monkeypatch.setattr(analytics_tasks_module, "get_engine", lambda url: SessionLocal.kw["bind"])
     class _Provider:
         def status(self):
@@ -726,6 +715,10 @@ def test_cleanup_expired_exports_task(api_client, monkeypatch: pytest.MonkeyPatc
         assert job is not None
         job.expires_at = datetime.now(timezone.utc) - timedelta(hours=1)
         db.commit()
+        object_key = job.file_path
+    assert object_key
+    # Sanity check: the export bytes actually exist in object storage before cleanup runs.
+    get_object_storage().get_bytes(object_key)
 
     result = analytics_tasks_module.cleanup_expired_exports.run(database_url="sqlite:///:memory:")
     assert result["expired"] >= 1
@@ -734,6 +727,11 @@ def test_cleanup_expired_exports_task(api_client, monkeypatch: pytest.MonkeyPatc
         job = db.query(AnalyticsExportJob).filter(AnalyticsExportJob.id == job_id).first()
         assert job is not None
         assert job.status == AnalyticsExportStatusEnum.EXPIRED
+
+    # cleanup_expired_exports must also delete the object-storage file, not just
+    # flip the job status.
+    with pytest.raises(ObjectStorageError):
+        get_object_storage().get_bytes(object_key)
 
 
 def test_analytics_freshness_reflects_stale_derived_facts(api_client):

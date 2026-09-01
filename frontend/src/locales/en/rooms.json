@@ -1,0 +1,71 @@
+{
+  "subscription": {
+    "readOnly": "Subscription is in read-only mode: reactivate your plan to enable changes.",
+    "inactive": "Inactive subscription. Reactivate your plan to operate.",
+    "goToSubscription": "Go to Subscription"
+  },
+  "header": {
+    "eyebrow": "Operations",
+    "title": "Rooms",
+    "description": "Live inventory with status updates (available, occupied, cleaning).",
+    "updating": "Updating status..."
+  },
+  "stats": {
+    "available": "Available",
+    "occupied": "Occupied",
+    "cleaning": "Cleaning"
+  },
+  "inventory": {
+    "eyebrow": "Inventory",
+    "title": "Rooms ({{count}})",
+    "loadError": "Unable to load: {{message}}",
+    "roomLabel": "Room {{number}}",
+    "categoryFallback": "Category {{id}}",
+    "floorAndCode": "Floor {{floor}} · {{code}}",
+    "noCode": "no code",
+    "rateToday": "Rate today:",
+    "perNight": "/night",
+    "noNotes": "No notes",
+    "statusLabel": "Operational status",
+    "statusAriaLabel": "Status for room {{number}}",
+    "housekeepingHint": "Housekeeping can only toggle Cleaning and Available.",
+    "saving": "Saving...",
+    "statusUpdateError": "Unable to update the status: {{message}}",
+    "readOnlyRole": "Read-only for your role.",
+    "empty": "No rooms loaded in the system.",
+    "statusUpdateDefaultError": "Unable to update the room's status."
+  },
+  "blocks": {
+    "eyebrow": "Blocks",
+    "title": "Active blocks ({{count}})",
+    "description": "Take rooms off sale for maintenance, cleaning, or internal use.",
+    "loadError": "Unable to load: {{message}}",
+    "updating": "Updating blocks...",
+    "roomFieldLabel": "Room",
+    "select": "Select",
+    "roomOption": "Room {{number}}",
+    "fromLabel": "From",
+    "toLabel": "To",
+    "reasonLabel": "Reason",
+    "detailLabel": "Detail",
+    "detailPlaceholder": "e.g. air conditioning repair",
+    "indefinite": "Indefinite block",
+    "creating": "Creating...",
+    "create": "Create block",
+    "createSuccess": "Block created.",
+    "createError": "Unable to create the block.",
+    "roomFallback": "Room {{id}}",
+    "roomFloor": "Room {{number}} · Floor {{floor}}",
+    "resolving": "Resolving...",
+    "resolve": "Resolve",
+    "resolveSuccess": "Block resolved.",
+    "resolveError": "Unable to resolve the block.",
+    "noDetail": "No additional detail.",
+    "empty": "No active blocks.",
+    "selectRoomError": "Select a room to block.",
+    "endDateRequired": "Provide an end date or mark the block as indefinite.",
+    "datesIndefinite": "From {{start}} · indefinite",
+    "datesRange": "From {{start}} to {{end}}",
+    "noEndDate": "no end date"
+  }
+}

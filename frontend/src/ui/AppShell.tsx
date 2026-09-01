@@ -1,6 +1,7 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import cx from "clsx";
 import { Link, NavLink, Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 
 import { NotificationsPanel } from "../components/NotificationsPanel";
 import { ReservationDetailDrawer } from "../components/ReservationDetailDrawer";
@@ -44,12 +45,15 @@ type NavSection = {
 // reservation search (B1) is what makes this safe: any reservation is one
 // search away regardless of which menu group it would have lived in, so the
 // menu no longer has to list every route to keep it reachable.
+// NavItem.label holds an i18n key (namespace "appshell"), resolved with t()
+// at render time -- these arrays are module-level so they can't call the
+// useTranslation() hook themselves.
 const dailyNav: NavItem[] = [
-  { label: "Planilla", to: "/operacion/planilla", requiresAnyPermission: ["occupancy:view"], hideForPreviewRoles: ["housekeeping"] },
-  { label: "Reservas", to: "/reservas", requiresAnyPermission: ["reservation:read"], hideForPreviewRoles: ["housekeeping"] },
-  { label: "Huespedes", to: "/huespedes", requiresAnyPermission: ["guest:read"], hideForPreviewRoles: ["housekeeping"] },
-  { label: "Habitaciones", to: "/habitaciones", requiresAnyPermission: ["room:read"] },
-  { label: "Caja", to: "/caja", requiresAnyPermission: ["cash:view"], hideForPreviewRoles: ["housekeeping"] },
+  { label: "nav.daily.planning", to: "/operacion/planilla", requiresAnyPermission: ["occupancy:view"], hideForPreviewRoles: ["housekeeping"] },
+  { label: "nav.daily.reservations", to: "/reservas", requiresAnyPermission: ["reservation:read"], hideForPreviewRoles: ["housekeeping"] },
+  { label: "nav.daily.guests", to: "/huespedes", requiresAnyPermission: ["guest:read"], hideForPreviewRoles: ["housekeeping"] },
+  { label: "nav.daily.rooms", to: "/habitaciones", requiresAnyPermission: ["room:read"] },
+  { label: "nav.daily.cashRegister", to: "/caja", requiresAnyPermission: ["cash:view"], hideForPreviewRoles: ["housekeeping"] },
 ];
 
 // Grouping criterion: "Analitica" is every reporting/dashboard page a manager
@@ -60,46 +64,46 @@ const dailyNav: NavItem[] = [
 // screen. "Configuracion" is unchanged -- it was already its own group.
 const groupedNav: NavSection[] = [
   {
-    title: "Analitica",
+    title: "nav.sections.analytics.title",
     items: [
-      { label: "Resumen", to: "/analytics", requiresAnyPermission: ["analytics:view"], hideForPreviewRoles: ["housekeeping"] },
-      { label: "Habitaciones", to: "/analytics/rooms", requiresAnyPermission: ["analytics:advanced:view"], hideForPreviewRoles: ["housekeeping"], minPlan: "pro" },
-      { label: "Segmentos", to: "/analytics/segments", requiresAnyPermission: ["analytics:advanced:view"], hideForPreviewRoles: ["housekeeping"], minPlan: "pro" },
-      { label: "Canales", to: "/analytics/channels", requiresAnyPermission: ["analytics:advanced:view"], hideForPreviewRoles: ["housekeeping"], minPlan: "pro" },
-      { label: "Operación", to: "/analytics/operations", requiresAnyPermission: ["reports:operational:view"], hideForPreviewRoles: ["housekeeping"], minPlan: "pro" },
-      { label: "Chat IA", to: "/analytics/ai-chat", requiresAnyPermission: ["analytics:ai:view"], hideForPreviewRoles: ["housekeeping"], minPlan: "ultra" },
-      { label: "Room events", to: "/operacion/room-state-events", requiresAnyPermission: ["reports:operational:view"], hideForPreviewRoles: ["housekeeping"], minPlan: "pro" }
+      { label: "nav.sections.analytics.summary", to: "/analytics", requiresAnyPermission: ["analytics:view"], hideForPreviewRoles: ["housekeeping"] },
+      { label: "nav.sections.analytics.rooms", to: "/analytics/rooms", requiresAnyPermission: ["analytics:advanced:view"], hideForPreviewRoles: ["housekeeping"], minPlan: "pro" },
+      { label: "nav.sections.analytics.segments", to: "/analytics/segments", requiresAnyPermission: ["analytics:advanced:view"], hideForPreviewRoles: ["housekeeping"], minPlan: "pro" },
+      { label: "nav.sections.analytics.channels", to: "/analytics/channels", requiresAnyPermission: ["analytics:advanced:view"], hideForPreviewRoles: ["housekeeping"], minPlan: "pro" },
+      { label: "nav.sections.analytics.operations", to: "/analytics/operations", requiresAnyPermission: ["reports:operational:view"], hideForPreviewRoles: ["housekeeping"], minPlan: "pro" },
+      { label: "nav.sections.analytics.aiChat", to: "/analytics/ai-chat", requiresAnyPermission: ["analytics:ai:view"], hideForPreviewRoles: ["housekeeping"], minPlan: "ultra" },
+      { label: "nav.sections.analytics.roomEvents", to: "/operacion/room-state-events", requiresAnyPermission: ["reports:operational:view"], hideForPreviewRoles: ["housekeeping"], minPlan: "pro" }
     ]
   },
   {
-    title: "Mas operacion",
+    title: "nav.sections.moreOperations.title",
     items: [
-      { label: "Dashboard", to: "/dashboard", requiresAnyPermission: ["dashboard:view"], hideForPreviewRoles: ["housekeeping"] },
-      { label: "Reportes", to: "/reportes", requiresAnyPermission: ["reports:operational:view"], hideForPreviewRoles: ["housekeeping"] },
-      { label: "Lista de espera", to: "/operacion/lista-espera", requiresAnyPermission: ["waitlist:view"], hideForPreviewRoles: ["housekeeping"] },
-      { label: "Lavanderia", to: "/operacion/lavanderia", requiresAnyPermission: ["laundry:read"] },
-      { label: "Stock", to: "/operacion/stock", requiresAnyPermission: ["stock:read"], hideForPreviewRoles: ["housekeeping"] },
-      { label: "Tarifas", to: "/operacion/tarifas", requiresAnyPermission: ["rates:read"], hideForPreviewRoles: ["housekeeping"] },
-      { label: "Promociones", to: "/operacion/promociones", requiresAnyPermission: ["promotions:read"], hideForPreviewRoles: ["housekeeping"] },
-      { label: "Onboarding", to: "/onboarding", requiresAnyPermission: ["hotel_settings:update"], hideForPreviewRoles: ["housekeeping"] },
+      { label: "nav.sections.moreOperations.dashboard", to: "/dashboard", requiresAnyPermission: ["dashboard:view"], hideForPreviewRoles: ["housekeeping"] },
+      { label: "nav.sections.moreOperations.reports", to: "/reportes", requiresAnyPermission: ["reports:operational:view"], hideForPreviewRoles: ["housekeeping"] },
+      { label: "nav.sections.moreOperations.waitlist", to: "/operacion/lista-espera", requiresAnyPermission: ["waitlist:view"], hideForPreviewRoles: ["housekeeping"] },
+      { label: "nav.sections.moreOperations.laundry", to: "/operacion/lavanderia", requiresAnyPermission: ["laundry:read"] },
+      { label: "nav.sections.moreOperations.stock", to: "/operacion/stock", requiresAnyPermission: ["stock:read"], hideForPreviewRoles: ["housekeeping"] },
+      { label: "nav.sections.moreOperations.rates", to: "/operacion/tarifas", requiresAnyPermission: ["rates:read"], hideForPreviewRoles: ["housekeeping"] },
+      { label: "nav.sections.moreOperations.promotions", to: "/operacion/promociones", requiresAnyPermission: ["promotions:read"], hideForPreviewRoles: ["housekeeping"] },
+      { label: "nav.sections.moreOperations.onboarding", to: "/onboarding", requiresAnyPermission: ["hotel_settings:update"], hideForPreviewRoles: ["housekeeping"] },
     ],
   },
   {
-    title: "Configuracion",
+    title: "nav.sections.settings.title",
     items: [
-      { label: "Usuarios", to: "/settings/users", requiresAnyPermission: ["settings:users:view"], hideForPreviewRoles: ["housekeeping"] },
-      { label: "Asistente", to: "/settings/assistant", requiresAnyPermission: ["settings:assistant:view"], hideForPreviewRoles: ["housekeeping"] },
-      { label: "Suscripcion", to: "/settings/subscription", requiresAnyPermission: ["settings:subscription:view"], hideForPreviewRoles: ["housekeeping"] },
-      { label: "Empresas", to: "/settings/companies", requiresAnyPermission: ["company:view"], hideForPreviewRoles: ["housekeeping"], minPlan: "pro" },
-      { label: "API Keys", to: "/settings/api-keys", requiresAnyPermission: ["apikey:manage"], hideForPreviewRoles: ["housekeeping"] },
-      { label: "Permisos", to: "/settings/permissions", requiresAnyPermission: ["permissions:manage"], hideForPreviewRoles: ["housekeeping"] },
-      { label: "Conexiones", to: "/settings/connections", requiresAnyPermission: ["settings:integrations:view"], hideForPreviewRoles: ["housekeeping"] },
-      { label: "Pruebas", to: "/settings/tests", requiresAnyPermission: ["settings:tests:view"], hideForPreviewRoles: ["housekeeping"] },
-      { label: "Hotel", to: "/settings/hotel", requiresAnyPermission: ["hotel_settings:read"], hideForPreviewRoles: ["housekeeping"] },
-      { label: "Seguridad", to: "/settings/security", requiresAnyPermission: ["settings:security:view"], hideForPreviewRoles: ["housekeeping"] },
+      { label: "nav.sections.settings.users", to: "/settings/users", requiresAnyPermission: ["settings:users:view"], hideForPreviewRoles: ["housekeeping"] },
+      { label: "nav.sections.settings.assistant", to: "/settings/assistant", requiresAnyPermission: ["settings:assistant:view"], hideForPreviewRoles: ["housekeeping"] },
+      { label: "nav.sections.settings.subscription", to: "/settings/subscription", requiresAnyPermission: ["settings:subscription:view"], hideForPreviewRoles: ["housekeeping"] },
+      { label: "nav.sections.settings.companies", to: "/settings/companies", requiresAnyPermission: ["company:view"], hideForPreviewRoles: ["housekeeping"], minPlan: "pro" },
+      { label: "nav.sections.settings.apiKeys", to: "/settings/api-keys", requiresAnyPermission: ["apikey:manage"], hideForPreviewRoles: ["housekeeping"] },
+      { label: "nav.sections.settings.permissions", to: "/settings/permissions", requiresAnyPermission: ["permissions:manage"], hideForPreviewRoles: ["housekeeping"] },
+      { label: "nav.sections.settings.connections", to: "/settings/connections", requiresAnyPermission: ["settings:integrations:view"], hideForPreviewRoles: ["housekeeping"] },
+      { label: "nav.sections.settings.tests", to: "/settings/tests", requiresAnyPermission: ["settings:tests:view"], hideForPreviewRoles: ["housekeeping"] },
+      { label: "nav.sections.settings.hotel", to: "/settings/hotel", requiresAnyPermission: ["hotel_settings:read"], hideForPreviewRoles: ["housekeeping"] },
+      { label: "nav.sections.settings.security", to: "/settings/security", requiresAnyPermission: ["settings:security:view"], hideForPreviewRoles: ["housekeeping"] },
       // Keep this presentation-only exception for the role preview. A real
       // housekeeping user with the permission must still see the link.
-      { label: "Notificaciones", to: "/settings/notifications", requiresAnyPermission: ["settings:notifications:view"], hideForPreviewRoles: ["housekeeping"] },
+      { label: "nav.sections.settings.notifications", to: "/settings/notifications", requiresAnyPermission: ["settings:notifications:view"], hideForPreviewRoles: ["housekeeping"] },
     ],
   },
 ];
@@ -113,6 +117,7 @@ const planRank: Record<"starter" | "pro" | "ultra", number> = {
 const ACTIVE_SUBSCRIPTION_STATUSES = ["active", "trialing", "demo", "comped"];
 
 export function AppShell() {
+  const { t } = useTranslation("appshell");
   const location = useLocation();
   const navigate = useNavigate();
   const { session, setRole } = useSession();
@@ -178,7 +183,7 @@ export function AppShell() {
     subscription && subscription.room_limit > 0 && subscription.rooms_in_use >= subscription.room_limit;
   const capBanner =
     capReached &&
-    `Limite de habitaciones alcanzado (${subscription.rooms_in_use}/${subscription.room_limit}). Ajusta tu plan en Configuracion > Suscripcion.`;
+    t("subscription.capReached", { used: subscription.rooms_in_use, limit: subscription.room_limit });
   const writeBlocked = subscription?.can_write === false;
   const inactiveSubscription =
     subscription && !ACTIVE_SUBSCRIPTION_STATUSES.includes(subscription.status);
@@ -215,16 +220,16 @@ export function AppShell() {
   // same as "disappears automatically" on desktop.
   const bottomNavTabs = useMemo<BottomNavTab[]>(() => {
     const habitaciones = dailyNav.find((item) => item.to === "/habitaciones");
-    const lavanderia = groupedNav.flatMap((section) => section.items).find((item) => item.label === "Lavanderia");
+    const lavanderia = groupedNav.flatMap((section) => section.items).find((item) => item.to === "/operacion/lavanderia");
     const candidates: NavItem[] = isHousekeeping
       ? [habitaciones, lavanderia].filter((item): item is NavItem => Boolean(item))
       : dailyNav.filter((item) => item.to !== "/caja");
-    const links = filterItems(candidates).map((item): BottomNavTab => ({ kind: "link", label: item.label, to: item.to }));
+    const links = filterItems(candidates).map((item): BottomNavTab => ({ kind: "link", label: t(item.label), to: item.to }));
     const tabs: BottomNavTab[] = [...links];
     if (isHousekeeping) {
       tabs.push({
         kind: "button",
-        label: "Alertas",
+        label: t("bottomNav.alerts"),
         onClick: () => setAlertsOpen(true),
         testId: "bottom-nav-alerts-button",
         badge: unreadNotifications > 0
@@ -232,13 +237,13 @@ export function AppShell() {
     }
     tabs.push({
       kind: "button",
-      label: "Más",
+      label: t("bottomNav.more"),
       onClick: () => setMobileMenuOpen(true),
       testId: "bottom-nav-more-button",
       active: mobileMenuOpen
     });
     return tabs;
-  }, [isHousekeeping, filterItems, mobileMenuOpen, unreadNotifications]);
+  }, [isHousekeeping, filterItems, mobileMenuOpen, unreadNotifications, t]);
 
   const path = location.pathname;
   if (onboarding?.completed && path.startsWith("/onboarding")) return <Navigate to="/dashboard" replace />;
@@ -248,11 +253,13 @@ export function AppShell() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
-      <Seo title="Hotel Chipre PMS | App" description="Acceso al sistema operativo de Hotel Chipre PMS." noindex />
+      <Seo title={t("seo.title")} description={t("seo.description")} noindex />
       <div className="flex flex-wrap gap-x-3 gap-y-1 border-b bg-slate-900 px-4 py-2 text-xs text-white sm:px-6">
         <span className="font-semibold">Hotel Chipre PMS</span>
-        <span className="text-slate-200">Hotel ID {session.hotelId ?? "-"}</span>
-        <span className="min-w-0 break-all text-slate-200">Usuario {session.email || session.userId || "Sin sesion"}</span>
+        <span className="text-slate-200">{t("topbar.hotelId", { id: session.hotelId ?? "-" })}</span>
+        <span className="min-w-0 break-all text-slate-200">
+          {t("topbar.user", { user: session.email || session.userId || t("topbar.noSession") })}
+        </span>
       </div>
 
       {!isOnline && (
@@ -262,8 +269,7 @@ export function AppShell() {
           role="status"
           aria-live="assertive"
         >
-          <strong>Sin conexión.</strong> Los datos visibles pueden estar desactualizados. Las acciones de reservas, check-in/out y
-          cobros requieren conexión y no se guardan para reintentar automáticamente.
+          <strong>{t("offline.title")}</strong> {t("offline.description")}
         </div>
       )}
 
@@ -281,11 +287,10 @@ export function AppShell() {
           role="status"
           aria-live="polite"
         >
-          {realtimeStatus === "connected" && "Conectado: cambios en tiempo real activos."}
-          {realtimeStatus === "connecting" && "Conectando sincronización en tiempo real…"}
-          {realtimeStatus === "reconnecting" && "Reconectando sincronización en tiempo real…"}
-          {realtimeStatus === "degraded" &&
-            "Sincronización en tiempo real degradada. Las operaciones siguen guardándose; actualizaremos al reconectar."}
+          {realtimeStatus === "connected" && t("realtime.connected")}
+          {realtimeStatus === "connecting" && t("realtime.connecting")}
+          {realtimeStatus === "reconnecting" && t("realtime.reconnecting")}
+          {realtimeStatus === "degraded" && t("realtime.degraded")}
         </div>
       )}
 
@@ -294,25 +299,28 @@ export function AppShell() {
           className="border-b border-sky-200 bg-sky-50 px-6 py-2 text-sm text-sky-900"
           data-testid="viewing-as-banner"
         >
-          Vista previa como {roleLabels[session.role]} — no cambia permisos ni identidad; tus permisos efectivos siguen siendo
-          los de {roleLabels[session.baseRole]}.{" "}
+          {t("viewingAs.banner", { role: roleLabels[session.role], baseRole: roleLabels[session.baseRole] })}{" "}
           <button
             className="font-semibold underline"
             onClick={() => setRole(session.baseRole ?? null)}
             type="button"
             data-testid="reset-role-btn"
           >
-            Volver a mi rol
+            {t("viewingAs.reset")}
           </button>
         </div>
       )}
 
       {!isHousekeeping && (writeBlocked || inactiveSubscription) && (
         <div className="border-b border-amber-200 bg-amber-50 px-6 py-2 text-sm text-amber-900">
-          {writeBlocked ? "Suscripcion en modo solo lectura (can_write=false)." : "Suscripcion inactiva."}{" "}
-          Plan: {subscription?.plan || "sin plan"} · Habitaciones: {subscription?.rooms_in_use}/{subscription?.room_limit}.{" "}
+          {writeBlocked ? t("subscription.readOnly") : t("subscription.inactive")}{" "}
+          {t("subscription.planSummary", {
+            plan: subscription?.plan || t("subscription.noPlan"),
+            used: subscription?.rooms_in_use,
+            limit: subscription?.room_limit
+          })}{" "}
           <Link to={subscriptionCTA} className="font-semibold underline">
-            Reactivar o cambiar plan
+            {t("subscription.reactivate")}
           </Link>
         </div>
       )}
@@ -323,13 +331,13 @@ export function AppShell() {
 
       {!isFetching && onboarding && !onboarding.completed && !location.pathname.startsWith("/onboarding") && (
         <div className="border-b border-amber-200 bg-amber-50 px-6 py-2 text-sm text-amber-900">
-          Onboarding pendiente: {onboarding.missing_steps.join(", ") || "revisa los pasos"}.
+          {t("onboarding.pending", { steps: onboarding.missing_steps.join(", ") || t("onboarding.pendingFallback") })}
           <button
             className="ml-3 text-amber-800 underline"
             onClick={() => navigate("/onboarding", { replace: true })}
             type="button"
           >
-            Completar ahora
+            {t("onboarding.completeNow")}
           </button>
         </div>
       )}
@@ -337,30 +345,30 @@ export function AppShell() {
       {onboardingError && (
         <div className="border-b border-rose-200 bg-rose-50 px-6 py-2 text-sm text-rose-900">
           {onboardingError.status === 402
-              ? "Suscripcion inactiva. Reactiva el plan para seguir usando el sistema."
+              ? t("onboarding.error402")
               : onboardingError.status === 403
-                ? "Debes verificar tu email para continuar."
-                : "No se pudo conectar con el backend. Los datos visibles pueden estar desactualizados; las acciones de escritura requieren reconexión."}
+                ? t("onboarding.error403")
+                : t("onboarding.errorGeneric")}
         </div>
       )}
 
       {installPrompt.canInstall && (
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-emerald-200 bg-emerald-50 px-6 py-2 text-sm text-emerald-900">
-          <span>Instalá Hotel Chipre PMS en este dispositivo para acceso rápido.</span>
+          <span>{t("install.prompt")}</span>
           <div className="flex gap-2">
             <button
               type="button"
               onClick={installPrompt.promptInstall}
               className="min-h-11 rounded-lg border border-emerald-300 bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700"
             >
-              Instalar
+              {t("install.install")}
             </button>
             <button
               type="button"
               onClick={installPrompt.dismiss}
               className="min-h-11 rounded-lg border border-emerald-200 px-3 py-1.5 text-xs font-semibold text-emerald-800 hover:bg-emerald-100"
             >
-              Ahora no
+              {t("install.dismiss")}
             </button>
           </div>
         </div>
@@ -376,7 +384,7 @@ export function AppShell() {
                 className="h-16 w-auto object-contain"
               />
             </Link>
-            <p className="mt-2 text-xs text-slate-500">Layout de navegacion prototipo</p>
+            <p className="mt-2 text-xs text-slate-500">{t("sidebar.tagline")}</p>
           </div>
           <nav className="flex-1 space-y-4 px-3 pb-6">
             <div className="flex flex-col gap-1">
@@ -391,7 +399,7 @@ export function AppShell() {
                     )
                   }
                 >
-                  <span>{item.label}</span>
+                  <span>{t(item.label)}</span>
                 </NavLink>
               ))}
             </div>
@@ -403,7 +411,7 @@ export function AppShell() {
             {visibleNavSections.map((section) => (
               <details key={section.title} className="group">
                 <summary className="cursor-pointer select-none rounded-lg px-2 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500 hover:bg-slate-100">
-                  {section.title}
+                  {t(section.title)}
                 </summary>
                 <div className="mt-1 flex flex-col gap-1">
                   {section.items.map((item) => (
@@ -417,7 +425,7 @@ export function AppShell() {
                         )
                       }
                     >
-                      <span>{item.label}</span>
+                      <span>{t(item.label)}</span>
                     </NavLink>
                   ))}
                 </div>
@@ -444,7 +452,7 @@ export function AppShell() {
                 <button
                   type="button"
                   onClick={() => setAlertsOpen(true)}
-                  aria-label={unreadNotifications > 0 ? `Ver alertas (${unreadNotifications} sin leer)` : "Ver alertas"}
+                  aria-label={unreadNotifications > 0 ? t("alerts.viewUnread", { count: unreadNotifications }) : t("alerts.view")}
                   data-testid="mobile-alerts-button"
                   className="relative inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100"
                 >
@@ -463,7 +471,7 @@ export function AppShell() {
                 <button
                   type="button"
                   onClick={() => setMobileMenuOpen(true)}
-                  aria-label="Abrir menú"
+                  aria-label={t("mobileMenu.openMenu")}
                   aria-haspopup="true"
                   aria-expanded={mobileMenuOpen}
                   aria-controls="mobile-menu-panel"
@@ -484,7 +492,7 @@ export function AppShell() {
               <button
                 type="button"
                 onClick={() => setAlertsOpen(true)}
-                aria-label={unreadNotifications > 0 ? `Ver alertas (${unreadNotifications} sin leer)` : "Ver alertas"}
+                aria-label={unreadNotifications > 0 ? t("alerts.viewUnread", { count: unreadNotifications }) : t("alerts.view")}
                 className="relative inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100"
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5" aria-hidden="true">
@@ -505,7 +513,7 @@ export function AppShell() {
               className="fixed inset-0 z-50 flex md:hidden"
               role="dialog"
               aria-modal="true"
-              aria-label="Menú de navegación"
+              aria-label={t("mobileMenu.ariaLabel")}
             >
               <div className="flex-1 animate-fade-in bg-black/30" onClick={() => setMobileMenuOpen(false)} />
               <div
@@ -515,18 +523,18 @@ export function AppShell() {
                 className="flex h-full w-full max-w-xs animate-slide-in-right flex-col overflow-y-auto border-l border-slate-200 bg-white shadow-xl outline-none"
               >
                 <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
-                  <span className="text-sm font-semibold text-slate-900">Menú</span>
+                  <span className="text-sm font-semibold text-slate-900">{t("mobileMenu.title")}</span>
                   <button
                     type="button"
                     onClick={() => setMobileMenuOpen(false)}
-                    aria-label="Cerrar menú"
+                    aria-label={t("mobileMenu.closeMenu")}
                     className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-xl leading-none text-slate-500 hover:bg-slate-100 hover:text-slate-800"
                   >
                     ×
                   </button>
                 </div>
 
-                <nav aria-label="Navegación móvil" className="flex flex-col gap-1 px-3 py-3">
+                <nav aria-label={t("mobileMenu.navAriaLabel")} className="flex flex-col gap-1 px-3 py-3">
                   {visibleDailyNav.map((item) => (
                     <NavLink
                       key={item.to}
@@ -538,14 +546,14 @@ export function AppShell() {
                         )
                       }
                     >
-                      {item.label}
+                      {t(item.label)}
                     </NavLink>
                   ))}
                 </nav>
 
                 {visibleNavSections.map((section) => (
-                  <nav key={section.title} aria-label={section.title} className="flex flex-col gap-1 border-t border-slate-100 px-3 py-3">
-                    <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">{section.title}</p>
+                  <nav key={section.title} aria-label={t(section.title)} className="flex flex-col gap-1 border-t border-slate-100 px-3 py-3">
+                    <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">{t(section.title)}</p>
                     {section.items.map((item) => (
                       <NavLink
                         key={item.to}
@@ -557,7 +565,7 @@ export function AppShell() {
                           )
                         }
                       >
-                        {item.label}
+                        {t(item.label)}
                       </NavLink>
                     ))}
                   </nav>
@@ -577,7 +585,7 @@ export function AppShell() {
               original padding since the bottom nav is md:hidden there. */}
           <main className="min-w-0 flex-1 px-4 pb-[calc(56px+env(safe-area-inset-bottom)+1.5rem)] pt-8 sm:px-8 md:pb-8">
             <div className="mx-auto max-w-6xl min-w-0">
-              <Suspense fallback={<p className="text-sm text-slate-500">Cargando...</p>}>
+              <Suspense fallback={<p className="text-sm text-slate-500">{t("loading")}</p>}>
                 <Outlet />
               </Suspense>
             </div>

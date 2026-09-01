@@ -15,6 +15,7 @@ from typing import Any, Iterable, Mapping, TYPE_CHECKING
 import redis
 
 from app.config import get_settings
+from app.models.domain_event_outbox import DomainEventOutbox
 
 
 logger = logging.getLogger(__name__)
@@ -26,6 +27,10 @@ EVENT_CHANNEL_TEMPLATE = "hotel:{hotel_id}:events"
 REVISION_KEY_TEMPLATE = "hotel:{hotel_id}:revision:{domain}"
 EVENT_NAME = "domain_change"
 PENDING_EVENTS_KEY = "_hotel_pms_pending_domain_events"
+
+# Exponential backoff base for outbox replay (worker/Celery retries), in
+# seconds: attempt 1 waits this long, attempt 2 waits 2x, attempt 3 4x, etc.
+OUTBOX_RETRY_BASE_SECONDS = 30
 SUPPORTED_DOMAINS = frozenset(
     {
         "analytics",
@@ -129,6 +134,10 @@ class QueuedDomainChange:
     event_type: str
     payload: dict[str, Any]
     transaction_id: int | None = None
+    # The durable outbox row inserted in the same (still-open) transaction as
+    # the business change. Set by ``queue_domain_change``; the after-commit
+    # fast path reads its id to record its own publish attempt.
+    outbox: DomainEventOutbox | None = None
 
 
 # A single ORM transaction can update several read models. Mapping the
@@ -449,6 +458,13 @@ def queue_model_changes(session: Any) -> None:
             else:
                 event_type = f"{table_name}.{action}"
                 payload = _model_event_payload(model, table_name)
+            # A hard-deleted hotel_configuration row is the outbox's own FK
+            # target: an outbox insert queued from its delete would only
+            # reach the DB in a later flush pass, after that row (and its
+            # CASCADE-linked outbox rows) are already gone, violating the FK.
+            # There is also no tenant left to durably notify -- skip the
+            # durable row but keep the best-effort live publish.
+            durable = not (action == "deleted" and table_name == "hotel_configuration")
             for domain in domains:
                 queue_domain_change(
                     session,
@@ -456,6 +472,7 @@ def queue_model_changes(session: Any) -> None:
                     domain=domain,
                     event_type=event_type,
                     payload=payload,
+                    durable=durable,
                 )
 
 
@@ -466,6 +483,7 @@ def queue_domain_change(
     domain: str,
     event_type: str,
     payload: Mapping[str, Any] | None = None,
+    durable: bool = True,
 ) -> None:
     """Queue one tenant-scoped change for publication after commit.
 
@@ -473,6 +491,14 @@ def queue_domain_change(
     event is held in ``Session.info`` so a rollback removes it and duplicate
     service/model notifications collapse before publication. This function
     never sends a payload containing amounts, PII, credentials or file bytes.
+
+    A ``DomainEventOutbox`` row is added to ``session`` in the same breath, so
+    it is inserted in the very same (still-open) transaction as the business
+    change it describes -- if the process dies between this commit and the
+    Redis publish, the row survives for a worker to replay. Pass
+    ``durable=False`` to skip that row (best-effort live publish only) for the
+    rare case where there is no tenant left to durably notify -- see
+    ``queue_model_changes``'s hotel_configuration-delete handling.
     """
 
     normalized_payload = validate_event_input(
@@ -488,37 +514,108 @@ def queue_domain_change(
         event_type.strip(),
         json.dumps(normalized_payload, sort_keys=True, ensure_ascii=True, allow_nan=False),
     )
+    if dedupe_key in pending:
+        # Same logical event already queued (and its outbox row already
+        # added) earlier in this transaction -- collapse duplicates.
+        return
+
+    outbox_row = None
+    if durable:
+        outbox_row = DomainEventOutbox(
+            hotel_id=hotel_id,
+            domain=domain.strip().lower(),
+            event_type=event_type.strip(),
+            payload=normalized_payload,
+        )
+        session.add(outbox_row)
     pending[dedupe_key] = QueuedDomainChange(
         hotel_id=hotel_id,
         domain=domain.strip().lower(),
         event_type=event_type.strip(),
         payload=normalized_payload,
         transaction_id=_session_transaction_id(session),
+        outbox=outbox_row,
     )
 
 
 def publish_queued_domain_changes(session: "Session") -> None:
-    """Publish committed signals without allowing Redis to break the request."""
+    """Publish committed signals without allowing Redis to break the request.
+
+    This runs from ``Session`` ``after_commit`` (see ``app.database``), where
+    ``session`` itself cannot safely issue new SQL -- so each queued change's
+    durable outbox row (already committed as part of the transaction that
+    just ended) is instead recorded through a short-lived, separate
+    ``Session`` bound to the same engine. Already-loaded attributes on
+    ``session``'s own objects (like ``outbox.id``) are still safe to read
+    here: SQLAlchemy expires them only after ``after_commit`` listeners run.
+    """
 
     pending = session.info.pop(PENDING_EVENTS_KEY, {})
-    for change in pending.values():
-        try:
-            publish_domain_event(
-                hotel_id=change.hotel_id,
-                domain=change.domain,
-                event_type=change.event_type,
-                payload=change.payload,
-            )
-        except Exception as exc:  # post-commit work must not turn 200 into 500
-            logger.warning(
-                "realtime_events.post_commit_publish_failed",
-                extra={
-                    "hotel_id": change.hotel_id,
-                    "domain": change.domain,
-                    "event_type": change.event_type,
-                    "error_type": type(exc).__name__,
-                },
-            )
+    if not pending:
+        return
+
+    from sqlalchemy.orm import Session as _Session
+
+    bind = session.get_bind()
+    outbox_session = _Session(bind=bind) if bind is not None else None
+    try:
+        for change in pending.values():
+            outbox = change.outbox
+            outbox_id = outbox.id if outbox is not None else None
+            try:
+                event = publish_domain_event(
+                    hotel_id=change.hotel_id,
+                    domain=change.domain,
+                    event_type=change.event_type,
+                    payload=change.payload,
+                )
+                if event is None:
+                    raise RealtimeEventsUnavailable("publish_domain_event returned no event")
+                _record_outbox_attempt(
+                    outbox_session, outbox_id, revision=event.revision, published=True
+                )
+            except Exception as exc:  # post-commit work must not turn 200 into 500
+                logger.warning(
+                    "realtime_events.post_commit_publish_failed",
+                    extra={
+                        "hotel_id": change.hotel_id,
+                        "domain": change.domain,
+                        "event_type": change.event_type,
+                        "error_type": type(exc).__name__,
+                    },
+                )
+                _record_outbox_attempt(
+                    outbox_session, outbox_id, error=type(exc).__name__, published=False
+                )
+        if outbox_session is not None:
+            outbox_session.commit()
+    finally:
+        if outbox_session is not None:
+            outbox_session.close()
+
+
+def _record_outbox_attempt(
+    outbox_session: "Session | None",
+    outbox_id: int | None,
+    *,
+    published: bool,
+    revision: int | None = None,
+    error: str | None = None,
+) -> None:
+    """Record one publish attempt on a durable outbox row, if it still exists."""
+
+    if outbox_session is None or outbox_id is None:
+        return
+    row = outbox_session.get(DomainEventOutbox, outbox_id)
+    if row is None:
+        return
+    row.attempts += 1
+    if published:
+        row.revision = revision
+        row.published_at = datetime.now(timezone.utc)
+        row.last_error = None
+    else:
+        row.last_error = error
 
 
 def discard_queued_domain_changes(session: "Session", transaction_id: int | None = None) -> None:
@@ -629,7 +726,14 @@ def publish_domain_event(
     event_type: str,
     payload: Mapping[str, Any] | None = None,
     client: redis.Redis | None = None,
+    revision: int | None = None,
+    occurred_at: datetime | str | None = None,
 ) -> DomainEvent | None:
+    """Publish one event. ``revision``/``occurred_at`` let an outbox replay
+    reuse the values already stored on a durable row instead of minting a new
+    Redis revision or "now" timestamp on every retry; omit both for the
+    normal first-attempt path (revision is a fresh Redis INCR, occurred_at is
+    now)."""
     normalized_payload = validate_event_input(
         hotel_id=hotel_id,
         domain=domain,
@@ -644,13 +748,18 @@ def publish_domain_event(
         return None
 
     try:
-        revision = int(redis_client.incr(revision_key_for_hotel(hotel_id, domain)))
+        resolved_revision = (
+            int(revision) if revision else int(redis_client.incr(revision_key_for_hotel(hotel_id, domain)))
+        )
+        resolved_occurred_at = (
+            occurred_at.isoformat() if isinstance(occurred_at, datetime) else occurred_at
+        ) or datetime.now(timezone.utc).isoformat()
         event = DomainEvent(
             hotel_id=hotel_id,
             domain=domain.strip().lower(),
             event_type=event_type.strip(),
-            revision=revision,
-            occurred_at=datetime.now(timezone.utc).isoformat(),
+            revision=resolved_revision,
+            occurred_at=resolved_occurred_at,
             payload=normalized_payload,
         )
         redis_client.publish(event.channel, json.dumps(event.as_payload(), ensure_ascii=True, allow_nan=False))
@@ -658,6 +767,137 @@ def publish_domain_event(
     except Exception as exc:
         _unavailable("Redis/Valkey realtime publish failed", exc)
         return None
+
+
+def _outbox_backoff_seconds(attempts: int) -> int:
+    """Exponential backoff for outbox replay: base, 2x, 4x, ... per attempt."""
+    return OUTBOX_RETRY_BASE_SECONDS * (2 ** max(attempts - 1, 0))
+
+
+def publish_pending_domain_events(
+    db: "Session",
+    *,
+    hotel_id: int,
+    batch_size: int = 100,
+) -> dict[str, Any]:
+    """Drain durable outbox rows for one tenant onto Redis/Valkey.
+
+    Used both by the after-commit fast path's own worker retries and by the
+    periodic Celery task (``app.tasks.domain_event_tasks.publish_outbox``).
+    Scoped to a single hotel per call so one stuck tenant never blocks
+    another; on PostgreSQL the selecting query also takes
+    ``FOR UPDATE SKIP LOCKED`` so concurrent workers never double-publish the
+    same row. Does not commit -- the caller controls the transaction
+    boundary (matching this codebase's other outbox worker, ``app.services.
+    notification_service.process_pending_outbox``).
+    """
+
+    _validate_hotel_id(hotel_id)
+
+    query = (
+        db.query(DomainEventOutbox)
+        .filter(
+            DomainEventOutbox.hotel_id == hotel_id,
+            DomainEventOutbox.published_at.is_(None),
+        )
+        .order_by(DomainEventOutbox.id.asc())
+        .limit(max(batch_size, 1))
+    )
+    bind = db.get_bind()
+    if bind is not None and bind.dialect.name == "postgresql":
+        query = query.with_for_update(skip_locked=True)
+    rows = query.all()
+
+    published = 0
+    failed = 0
+    retry_after_seconds: int | None = None
+
+    for row in rows:
+        try:
+            # SQLite drops tzinfo on round-trip (unlike DateTime(timezone=True)
+            # under PostgreSQL); the stored instant is always UTC either way.
+            row_occurred_at = row.occurred_at
+            if row_occurred_at is not None and row_occurred_at.tzinfo is None:
+                row_occurred_at = row_occurred_at.replace(tzinfo=timezone.utc)
+            event = publish_domain_event(
+                hotel_id=row.hotel_id,
+                domain=row.domain,
+                event_type=row.event_type,
+                payload=row.payload,
+                revision=row.revision,
+                occurred_at=row_occurred_at,
+            )
+            if event is None:
+                raise RealtimeEventsUnavailable("publish_domain_event returned no event")
+            row.attempts += 1
+            row.revision = event.revision
+            row.published_at = datetime.now(timezone.utc)
+            row.last_error = None
+            published += 1
+        except Exception as exc:
+            row.attempts += 1
+            row.last_error = f"publish_failed:{type(exc).__name__}"
+            failed += 1
+            backoff = _outbox_backoff_seconds(row.attempts)
+            retry_after_seconds = backoff if retry_after_seconds is None else min(retry_after_seconds, backoff)
+
+    return {
+        "selected": len(rows),
+        "published": published,
+        "failed": failed,
+        "retry_after_seconds": retry_after_seconds,
+    }
+
+
+def get_domain_event_outbox_metrics(
+    db: "Session",
+    *,
+    hotel_id: int,
+    now: datetime | None = None,
+    stale_after_seconds: float = 300.0,
+) -> dict[str, Any]:
+    """Report pending-outbox depth/age for one tenant; warn when stale.
+
+    "Stale" means the oldest still-unpublished row is older than
+    ``stale_after_seconds`` -- a signal the fast path and the periodic
+    worker are both failing (or not running) for this hotel.
+    """
+
+    _validate_hotel_id(hotel_id)
+    now = now or datetime.now(timezone.utc)
+
+    pending_rows = (
+        db.query(DomainEventOutbox)
+        .filter(
+            DomainEventOutbox.hotel_id == hotel_id,
+            DomainEventOutbox.published_at.is_(None),
+        )
+        .all()
+    )
+    pending_count = len(pending_rows)
+    oldest_age_seconds = 0.0
+    if pending_rows:
+        oldest_occurred_at = min(row.occurred_at for row in pending_rows)
+        if oldest_occurred_at.tzinfo is None:
+            oldest_occurred_at = oldest_occurred_at.replace(tzinfo=timezone.utc)
+        oldest_age_seconds = (now - oldest_occurred_at).total_seconds()
+
+    stale = pending_count > 0 and oldest_age_seconds >= stale_after_seconds
+    if stale:
+        logger.warning(
+            "realtime_events.outbox_stale",
+            extra={
+                "hotel_id": hotel_id,
+                "pending_count": pending_count,
+                "oldest_age_seconds": oldest_age_seconds,
+            },
+        )
+
+    return {
+        "pending_count": pending_count,
+        "oldest_age_seconds": oldest_age_seconds,
+        "stale": stale,
+    }
 
 
 def get_realtime_client() -> redis.Redis | None:

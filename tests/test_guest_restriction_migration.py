@@ -41,11 +41,17 @@ def _engine(db_path: str):
 
 
 def _seed_legacy_tags(engine) -> None:
+    from app.models.domain_event_outbox import DomainEventOutbox
     from app.models.guest import Guest, GuestRatingEnum, GuestTag, GuestTagTypeEnum
 
     SessionLocal = sessionmaker(bind=engine)
     with SessionLocal() as db:
         insert_historical_hotel_config(engine, 7301, 7302)
+        # This historical schema predates domain_event_outbox, but the ORM
+        # writes below still run through app.database's session-level
+        # after_flush hook (current code, not migration-time code), which now
+        # durably queues an outbox row for every hotel-scoped change.
+        DomainEventOutbox.__table__.create(engine, checkfirst=True)
         # This fixture intentionally seeds the schema before the migration
         # under test. Do not use current ORM ``add()`` for User or Guest here:
         # their mappers include columns that do not exist at this historical

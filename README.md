@@ -7,7 +7,8 @@
 - 3. `pip install -r requirements.txt`
 - 4. `cd frontend && npm install`
 - 5. Build UI: `npm run build` (served from `frontend/dist`). If `spawn EPERM` aparece en OneDrive, corré el build en WSL/fuera de OneDrive o permití `esbuild.exe`.
-- 6. Volvé al root y levantá todo con `npx nodemon` (lee `nodemon.json` -> uvicorn con reload). UI + API en `http://127.0.0.1:8000`. Dev UI sigue en `npm run dev`.
+- 6. Volvé al root y levantá Redis antes de iniciar el backend o la UI de desarrollo, para habilitar la colaboración y sincronización en tiempo real: `docker compose up -d redis` (o `redis-server` si lo tenés instalado localmente).
+- 7. Levantá todo con `npx nodemon` (lee `nodemon.json` -> uvicorn con reload). UI + API en `http://127.0.0.1:8040`. Para la UI en modo desarrollo, ejecutá `npm run dev` dentro de `frontend` con Redis ya levantado.
 
 ### Base de datos (arranca vacía)
 - Migraciones: `alembic upgrade head` (usa `DATABASE_URL` de `.env`).
@@ -50,7 +51,7 @@ Toma `DATABASE_URL` del compose. Para SQLite local: `DATABASE_URL=sqlite:///./de
    - Reset vacío (sin seed): `curl -X POST http://localhost:8000/api/reset`
 
 ## Headers
-- Add `X-Hotel-Id` on every mutating call (defaults to the first persisted hotel if omitted).
+- Add `X-Hotel-Id` on every mutating call. Auto-selected only when the user has exactly one active hotel membership; with more than one, the request is rejected with 400 until `X-Hotel-Id` is explicit (`app/dependencies/auth.py::_resolve_membership`).
 
 ## Auth & Email
 - Registro/Login/Verificación/Reset: `/api/auth/*` (usa `EMAIL_PROVIDER=resend`; en desarrollo puede escribir el código en el outbox local si se configura `DEV_EMAIL_OUTBOX_PATH`).

@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit",
     "test:pwa": "node --test pwa-manifest.test.mjs",
     "test:build-meta": "node --test build-meta.test.mjs",
+    "test:i18n": "node --test i18n-auth-literals.test.mjs",
     "preview": "vite preview",
     "lint": "eslint \"src/**/*.{ts,tsx}\" --max-warnings=0",
     "e2e": "playwright test",
@@ -22,8 +23,10 @@
     "@tanstack/react-query": "^5.32.0",
     "@tanstack/react-query-devtools": "^5.32.0",
     "clsx": "^2.1.1",
+    "i18next": "^25.10.10",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "react-i18next": "^16.6.6",
     "react-router-dom": "^7.18.1",
     "zod": "^3.23.8"
   },

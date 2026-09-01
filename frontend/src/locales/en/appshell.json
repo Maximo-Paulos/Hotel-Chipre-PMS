@@ -1,0 +1,111 @@
+{
+  "seo": {
+    "title": "Hotel Chipre PMS | App",
+    "description": "Access to the Hotel Chipre PMS operating system."
+  },
+  "topbar": {
+    "hotelId": "Hotel ID {{id}}",
+    "user": "User {{user}}",
+    "noSession": "No session"
+  },
+  "offline": {
+    "title": "No connection.",
+    "description": "Visible data may be outdated. Reservation actions, check-in/out and payments require a connection and are not saved to retry automatically."
+  },
+  "realtime": {
+    "connected": "Connected: real-time changes active.",
+    "connecting": "Connecting real-time sync…",
+    "reconnecting": "Reconnecting real-time sync…",
+    "degraded": "Real-time sync degraded. Operations keep saving; we will refresh once reconnected."
+  },
+  "viewingAs": {
+    "banner": "Previewing as {{role}} — this does not change permissions or identity; your effective permissions remain those of {{baseRole}}.",
+    "reset": "Back to my role"
+  },
+  "subscription": {
+    "readOnly": "Subscription in read-only mode (can_write=false).",
+    "inactive": "Inactive subscription.",
+    "planSummary": "Plan: {{plan}} · Rooms: {{used}}/{{limit}}.",
+    "noPlan": "no plan",
+    "reactivate": "Reactivate or change plan",
+    "capReached": "Room limit reached ({{used}}/{{limit}}). Adjust your plan in Settings > Subscription."
+  },
+  "onboarding": {
+    "pending": "Pending onboarding: {{steps}}.",
+    "pendingFallback": "review the steps",
+    "completeNow": "Complete now",
+    "error402": "Inactive subscription. Reactivate the plan to keep using the system.",
+    "error403": "You must verify your email to continue.",
+    "errorGeneric": "Unable to connect to the backend. Visible data may be outdated; write actions require reconnection."
+  },
+  "install": {
+    "prompt": "Install Hotel Chipre PMS on this device for quick access.",
+    "install": "Install",
+    "dismiss": "Not now"
+  },
+  "sidebar": {
+    "tagline": "Prototype navigation layout"
+  },
+  "nav": {
+    "daily": {
+      "planning": "Planning",
+      "reservations": "Reservations",
+      "guests": "Guests",
+      "rooms": "Rooms",
+      "cashRegister": "Cash register"
+    },
+    "sections": {
+      "analytics": {
+        "title": "Analytics",
+        "summary": "Summary",
+        "rooms": "Rooms",
+        "segments": "Segments",
+        "channels": "Channels",
+        "operations": "Operations",
+        "aiChat": "AI chat",
+        "roomEvents": "Room events"
+      },
+      "moreOperations": {
+        "title": "More operations",
+        "dashboard": "Dashboard",
+        "reports": "Reports",
+        "waitlist": "Waitlist",
+        "laundry": "Laundry",
+        "stock": "Stock",
+        "rates": "Rates",
+        "promotions": "Promotions",
+        "onboarding": "Onboarding"
+      },
+      "settings": {
+        "title": "Settings",
+        "users": "Users",
+        "assistant": "Assistant",
+        "subscription": "Subscription",
+        "companies": "Companies",
+        "apiKeys": "API keys",
+        "permissions": "Permissions",
+        "connections": "Connections",
+        "tests": "Tests",
+        "hotel": "Hotel",
+        "security": "Security",
+        "notifications": "Notifications"
+      }
+    }
+  },
+  "bottomNav": {
+    "alerts": "Alerts",
+    "more": "More"
+  },
+  "alerts": {
+    "viewUnread": "View alerts ({{count}} unread)",
+    "view": "View alerts"
+  },
+  "mobileMenu": {
+    "ariaLabel": "Navigation menu",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu",
+    "title": "Menu",
+    "navAriaLabel": "Mobile navigation"
+  },
+  "loading": "Loading..."
+}

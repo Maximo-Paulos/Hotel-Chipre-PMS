@@ -1,0 +1,71 @@
+{
+  "subscription": {
+    "readOnly": "Suscripción en modo solo lectura: reactivá tu plan para habilitar cambios.",
+    "inactive": "Suscripción inactiva. Reactivá el plan para operar.",
+    "goToSubscription": "Ir a Suscripción"
+  },
+  "header": {
+    "eyebrow": "Operación",
+    "title": "Habitaciones",
+    "description": "Inventario en vivo con actualización de estado (libre, ocupada, limpieza).",
+    "updating": "Actualizando estado..."
+  },
+  "stats": {
+    "available": "Libres",
+    "occupied": "Ocupadas",
+    "cleaning": "En limpieza"
+  },
+  "inventory": {
+    "eyebrow": "Inventario",
+    "title": "Habitaciones ({{count}})",
+    "loadError": "No se pudo cargar: {{message}}",
+    "roomLabel": "Hab. {{number}}",
+    "categoryFallback": "Categoría {{id}}",
+    "floorAndCode": "Piso {{floor}} · {{code}}",
+    "noCode": "sin código",
+    "rateToday": "Tarifa hoy:",
+    "perNight": "/noche",
+    "noNotes": "Sin notas",
+    "statusLabel": "Estado operativo",
+    "statusAriaLabel": "Estado de habitación {{number}}",
+    "housekeepingHint": "Housekeeping sólo puede alternar Limpieza y Libre.",
+    "saving": "Guardando...",
+    "statusUpdateError": "No se pudo actualizar el estado: {{message}}",
+    "readOnlyRole": "Solo lectura para tu rol.",
+    "empty": "No hay habitaciones cargadas en el sistema.",
+    "statusUpdateDefaultError": "No se pudo actualizar el estado de la habitación."
+  },
+  "blocks": {
+    "eyebrow": "Bloqueos",
+    "title": "Bloqueos activos ({{count}})",
+    "description": "Reservá habitaciones fuera de venta por mantenimiento, limpieza o uso interno.",
+    "loadError": "No se pudo cargar: {{message}}",
+    "updating": "Actualizando bloqueos...",
+    "roomFieldLabel": "Habitación",
+    "select": "Seleccionar",
+    "roomOption": "Hab. {{number}}",
+    "fromLabel": "Desde",
+    "toLabel": "Hasta",
+    "reasonLabel": "Motivo",
+    "detailLabel": "Detalle",
+    "detailPlaceholder": "Ej. reparación de aire acondicionado",
+    "indefinite": "Bloqueo indefinido",
+    "creating": "Creando...",
+    "create": "Crear bloqueo",
+    "createSuccess": "Bloqueo creado.",
+    "createError": "No se pudo crear el bloqueo.",
+    "roomFallback": "Habitación {{id}}",
+    "roomFloor": "Hab. {{number}} · Piso {{floor}}",
+    "resolving": "Resolviendo...",
+    "resolve": "Resolver",
+    "resolveSuccess": "Bloqueo resuelto.",
+    "resolveError": "No se pudo resolver el bloqueo.",
+    "noDetail": "Sin detalle adicional.",
+    "empty": "No hay bloqueos activos.",
+    "selectRoomError": "Seleccioná una habitación para bloquear.",
+    "endDateRequired": "Indicá una fecha de fin o marcá el bloqueo como indefinido.",
+    "datesIndefinite": "Desde {{start}} · indefinido",
+    "datesRange": "Desde {{start}} hasta {{end}}",
+    "noEndDate": "sin fecha de fin"
+  }
+}

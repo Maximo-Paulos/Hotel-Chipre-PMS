@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.models.audit_log import AuditActionEnum
 from app.models.operations import RoomMoveEvent, RoomMovementGroup
 from app.models.reservation import Reservation, ReservationStatusEnum
-from app.models.room import Room
+from app.models.room import Room, RoomStatusEnum
 from app.models.security_audit_log import SecurityAuditLog
 from app.services import audit_log_service
 from app.services.reservation_service import check_room_availability
@@ -16,6 +16,45 @@ from app.services.reservation_service import check_room_availability
 
 class RoomMovementGroupError(Exception):
     """Business error for room movement group operations."""
+
+
+def sync_room_statuses_after_move(
+    db: Session,
+    *,
+    hotel_id: int,
+    reservation: Reservation,
+    from_room_id: int | None,
+    to_room: Room,
+) -> None:
+    """Keep Room.status in sync after a reservation's room changed.
+
+    Room.status is a persisted column, not computed from reservations, so a
+    move has to update it explicitly -- mirrors the check-in/check-out
+    pattern in checkin_service.py. Only a checked-in reservation actually
+    occupies a room, so a move of a pending/future reservation leaves
+    Room.status untouched.
+    """
+    if reservation.status != ReservationStatusEnum.CHECKED_IN:
+        return
+
+    to_room.status = RoomStatusEnum.OCCUPIED
+
+    if from_room_id is None or from_room_id == to_room.id:
+        return
+    from_room = db.query(Room).filter(Room.id == from_room_id, Room.hotel_id == hotel_id).first()
+    if from_room is None:
+        return
+    # Only free the vacated room if no other active reservation still holds
+    # it for this stay window (e.g. a chained/grouped move into it).
+    if check_room_availability(
+        db,
+        from_room_id,
+        reservation.check_in_date,
+        reservation.check_out_date,
+        hotel_id=hotel_id,
+        exclude_reservation_id=reservation.id,
+    ):
+        from_room.status = RoomStatusEnum.CLEANING
 
 
 def get_group(db: Session, *, hotel_id: int, group_id: int) -> RoomMovementGroup | None:
@@ -76,6 +115,9 @@ def create_grouped_room_move(
     reservation.allocation_locked = True
     reservation.requires_manual_review = False
     reservation.allocation_status = "assigned"
+    sync_room_statuses_after_move(
+        db, hotel_id=hotel_id, reservation=reservation, from_room_id=from_room_id, to_room=to_room,
+    )
 
     event = RoomMoveEvent(
         hotel_id=hotel_id,

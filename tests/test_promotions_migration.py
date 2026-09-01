@@ -40,9 +40,15 @@ def _engine(db_path: str):
 
 
 def _seed_pre_migration_surcharge(engine) -> None:
+    from app.models.domain_event_outbox import DomainEventOutbox
     from app.models.payment_surcharge import PaymentSurcharge, PaymentSurchargeTypeEnum
 
     insert_historical_hotel_config(engine, 8401)
+    # This historical schema predates domain_event_outbox, but the ORM write
+    # below still runs through app.database's session-level after_flush hook
+    # (current code, not migration-time code), which now durably queues an
+    # outbox row for every hotel-scoped change.
+    DomainEventOutbox.__table__.create(engine, checkfirst=True)
     SessionLocal = sessionmaker(bind=engine)
     with SessionLocal() as db:
         db.add(

@@ -15,6 +15,32 @@ if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
 
+# Country -> (display name, primary IANA timezone). Curated for Argentina,
+# LATAM, and the rest of the product's current market, not the full ISO list.
+COUNTRY_TIMEZONES: dict[str, tuple[str, str]] = {
+    "AR": ("Argentina", "America/Argentina/Buenos_Aires"),
+    "UY": ("Uruguay", "America/Montevideo"),
+    "CL": ("Chile", "America/Santiago"),
+    "BR": ("Brasil", "America/Sao_Paulo"),
+    "PY": ("Paraguay", "America/Asuncion"),
+    "BO": ("Bolivia", "America/La_Paz"),
+    "PE": ("Peru", "America/Lima"),
+    "CO": ("Colombia", "America/Bogota"),
+    "MX": ("Mexico", "America/Mexico_City"),
+    "ES": ("Espana", "Europe/Madrid"),
+    "US": ("Estados Unidos", "America/New_York"),
+}
+
+
+@lru_cache(maxsize=1)
+def get_country_catalog() -> tuple[dict[str, str], ...]:
+    """Return the curated country -> timezone catalog as {code, name, timezone} dicts."""
+    return tuple(
+        {"code": code, "name": name, "timezone": tz}
+        for code, (name, tz) in COUNTRY_TIMEZONES.items()
+    )
+
+
 @lru_cache(maxsize=1)
 def get_timezone_catalog() -> tuple[str, ...]:
     """

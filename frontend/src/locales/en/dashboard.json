@@ -1,0 +1,61 @@
+{
+  "eyebrow": "Dashboard",
+  "title": "Overview",
+  "subtitle": "Live KPIs, arrivals/departures, and operational actions for the active hotel.",
+  "actions": {
+    "newReservation": "New reservation",
+    "assignRoom": "Assign room"
+  },
+  "cards": {
+    "occupancyToday": {
+      "label": "Occupancy today",
+      "helper": "{{count}} arrivals"
+    },
+    "adr": {
+      "label": "ADR",
+      "helperSingle": "Average monthly rate",
+      "helperMulti": "Month with reservations in different currencies"
+    },
+    "revenue": {
+      "label": "Revenue this month",
+      "helperSingle": "{{count}} departures today",
+      "helperMulti": "Review detail by reservation"
+    },
+    "pendingActions": {
+      "label": "Pending actions",
+      "helperCritical": "{{count}} critical",
+      "helperNone": "No critical actions"
+    },
+    "multiCurrency": "Multi-currency"
+  },
+  "pipeline": {
+    "eyebrow": "Pipeline",
+    "title": "Upcoming reservations",
+    "viewAll": "View all",
+    "table": {
+      "code": "Code",
+      "guest": "Guest",
+      "dates": "Dates",
+      "status": "Status",
+      "amount": "Amount"
+    },
+    "empty": "No upcoming reservations."
+  },
+  "activity": {
+    "eyebrow": "Activity",
+    "title": "Today",
+    "empty": "No activity for today.",
+    "checkIn": "Check-in scheduled {{code}}",
+    "checkOut": "Checkout scheduled {{code}}",
+    "cancelled": "Cancelled reservation {{code}}"
+  },
+  "operations": {
+    "eyebrow": "Operations",
+    "title": "Operations inbox",
+    "goToReservations": "Go to Reservations",
+    "loading": "Loading pending actions...",
+    "empty": "No pending operational actions.",
+    "viewReservation": "View reservation"
+  },
+  "guestFallback": "Guest #{{id}}"
+}
