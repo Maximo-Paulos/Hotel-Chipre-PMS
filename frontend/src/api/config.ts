@@ -22,6 +22,7 @@ export type HotelConfig = {
   allow_cancellation_after_checkin: boolean;
   languages: string[];
   jurisdiction_code: string;
+  interface_language: string;
   allow_overbooking?: boolean;
   no_show_cutoff_hours?: number;
   require_document_for_checkin: boolean;

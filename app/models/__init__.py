@@ -16,6 +16,7 @@ from app.models.transaction import Transaction, PaymentMethodEnum, TransactionSt
 from app.models.hotel_config import HotelConfiguration
 from app.models.hotel_role_visibility_window import HotelRoleVisibilityWindow
 from app.models.company import Company
+from app.models.domain_event_outbox import DomainEventOutbox
 from app.models.ota import OTAReservationMapping, OTAWebhookCredential
 from app.models.ota_core import (
     OTAProvider,
@@ -169,6 +170,7 @@ __all__ = [
     "HotelConfiguration",
     "HotelRoleVisibilityWindow",
     "Company",
+    "DomainEventOutbox",
     "OTAReservationMapping",
     "OTAWebhookCredential",
     "OTAProvider",

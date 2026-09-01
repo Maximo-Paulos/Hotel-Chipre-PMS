@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 
 import { ApiError } from "../../api/client";
 import { Seo } from "../../components/Seo";
@@ -8,6 +9,7 @@ import { register } from "../../api/auth";
 import { storePendingOwner } from "../../state/pendingOwner";
 
 export function RegisterOwnerPage() {
+  const { t } = useTranslation("auth");
   const navigate = useNavigate();
   const [form, setForm] = useState({ name: "", lastName: "", email: "", password: "", phone: "" });
   const [loading, setLoading] = useState(false);
@@ -36,7 +38,7 @@ export function RegisterOwnerPage() {
       navigate("/verify-email", { replace: true });
     } catch (err) {
       if (err instanceof ApiError) setError(err.message);
-      else setError("No se pudo crear la cuenta");
+      else setError(t("register.errors.createAccount"));
     } finally {
       setLoading(false);
     }
@@ -44,7 +46,7 @@ export function RegisterOwnerPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
-      <Seo title="Registrarte | Hotel Chipre PMS" description="Crea tu cuenta de dueño y empieza la prueba de 14 días." noindex />
+      <Seo title={t("seo.registerTitle")} description={t("seo.registerDescription")} noindex />
       <div className="w-full max-w-2xl rounded-2xl bg-white p-8 shadow-lg ring-1 ring-slate-100">
         <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div className="space-y-3">
@@ -53,62 +55,60 @@ export function RegisterOwnerPage() {
               alt="Hotel Chipre PMS"
               className="h-20 w-auto max-w-full object-contain"
             />
-            <h1 className="text-2xl font-semibold text-slate-900">Crear cuenta de dueño</h1>
-            <p className="text-sm text-slate-600">
-              Guardamos el owner en /api/onboarding/owner y luego verificamos tu email.
-            </p>
+            <h1 className="text-2xl font-semibold text-slate-900">{t("register.title")}</h1>
+            <p className="text-sm text-slate-600">{t("register.description")}</p>
           </div>
           <Link to="/login" className="text-sm text-brand-700 hover:underline">
-            Ya tengo cuenta
+            {t("register.alreadyHaveAccount")}
           </Link>
         </div>
         <form className="grid grid-cols-1 gap-4 md:grid-cols-2" onSubmit={handleSubmit}>
           <label className="text-sm font-medium text-slate-700">
-            Nombre
+            {t("register.firstNameLabel")}
             <input
               className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 shadow-sm focus:border-brand-500 focus:ring-brand-500"
-              placeholder="Ej: Lucas"
+              placeholder={t("register.firstNamePlaceholder")}
               value={form.name}
               onChange={(e) => handleChange("name", e.target.value)}
               required
             />
           </label>
           <label className="text-sm font-medium text-slate-700">
-            Apellido
+            {t("register.lastNameLabel")}
             <input
               className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 shadow-sm focus:border-brand-500 focus:ring-brand-500"
-              placeholder="Ej: González"
+              placeholder={t("register.lastNamePlaceholder")}
               value={form.lastName}
               onChange={(e) => handleChange("lastName", e.target.value)}
               required
             />
           </label>
           <label className="text-sm font-medium text-slate-700">
-            Email corporativo
+            {t("register.businessEmailLabel")}
             <input
               type="email"
               className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 shadow-sm focus:border-brand-500 focus:ring-brand-500"
-              placeholder="dueño@hotel.com"
+              placeholder={t("register.businessEmailPlaceholder")}
               value={form.email}
               onChange={(e) => handleChange("email", e.target.value)}
               required
             />
           </label>
           <label className="text-sm font-medium text-slate-700">
-            Teléfono
+            {t("register.phoneLabel")}
             <input
               className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 shadow-sm focus:border-brand-500 focus:ring-brand-500"
-              placeholder="Ej: +54 9 11 5555 1234"
+              placeholder={t("register.phonePlaceholder")}
               value={form.phone}
               onChange={(e) => handleChange("phone", e.target.value)}
             />
           </label>
           <label className="text-sm font-medium text-slate-700">
-            Contraseña
+            {t("register.passwordLabel")}
             <PasswordInput
               value={form.password}
               onChange={(value) => handleChange("password", value)}
-              placeholder="Mínimo 12 caracteres"
+              placeholder={t("register.passwordPlaceholder")}
               required
               autoComplete="new-password"
             />
@@ -121,7 +121,7 @@ export function RegisterOwnerPage() {
               disabled={loading}
               type="submit"
             >
-              {loading ? "Creando..." : "Crear cuenta y verificar email"}
+              {loading ? t("register.creating") : t("register.submit")}
             </button>
           </div>
         </form>

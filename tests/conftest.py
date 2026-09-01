@@ -132,6 +132,24 @@ TEST_DATABASE_URL = "sqlite:///:memory:"
 
 
 @pytest.fixture(autouse=True)
+def _isolate_object_storage(tmp_path, monkeypatch):
+    """Route every test's object storage (payment proofs, analytics exports)
+    to a per-test tmp dir instead of the real ./var/object-storage default,
+    so the test suite never writes disposable files under the repo.
+
+    get_settings() is lru_cache'd, so the env var alone is not enough --
+    cache_clear() on both sides is required (same pattern as
+    test_auth_security.py's _enable_mocked_auth_providers).
+    """
+    from app.config import get_settings
+
+    monkeypatch.setenv("OBJECT_STORAGE_LOCAL_DIR", str(tmp_path / "object-storage"))
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
+
+
+@pytest.fixture(autouse=True)
 def _reset_permission_seed_cache():
     """A1: permission_service seeds the matrix once per DB engine, not per
     request. Each test's engine is a brand new object already, so this is

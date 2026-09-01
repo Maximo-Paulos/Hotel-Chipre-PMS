@@ -61,6 +61,10 @@ class HotelConfiguration(Base):
     languages = Column(JSON, nullable=False, default=lambda: ["es"])
     jurisdiction_code = Column(String(3), nullable=False, default="AR")
 
+    # Frontend interface locale (distinct from `languages`, which is the
+    # languages the hotel staff speaks to guests).
+    interface_language = Column(String(2), nullable=False, default="es")
+
     # Operations / availability. This is a real policy consumed by reservation
     # creation; unlike the retired scaffolding below it has an operator surface.
     allow_overbooking = Column(Boolean, nullable=False, default=False)

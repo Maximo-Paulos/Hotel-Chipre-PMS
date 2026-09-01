@@ -21,6 +21,7 @@ from app.models.reservation import Reservation
 from app.models.transaction import PaymentMethodEnum, TransactionTypeEnum
 from app.schemas.transaction import PaymentRequest
 from app.services.financial_ledger import operational_balance_due
+from app.services.object_storage import ObjectStorageError, get_object_storage
 from app.services.payment_service import PaymentError, process_payment
 from app.services.audit_log_service import queue_audit_log
 
@@ -125,6 +126,10 @@ def submit_transfer_proof(
         raise PaymentProofError("Este comprobante ya fue presentado")
 
     storage_key = f"db://payment-proofs/{hotel_id}/{secrets.token_urlsafe(24)}.{extension}"
+    object_key = f"payment-proofs/{hotel_id}/{secrets.token_urlsafe(24)}.{extension}"
+    # Upload bytes to object storage before touching the DB -- a failed
+    # upload must not leave a metadata row with nothing behind it.
+    get_object_storage().put_bytes(object_key, content, content_type=content_type)
 
     proof = PaymentProof(
         hotel_id=hotel_id,
@@ -147,9 +152,10 @@ def submit_transfer_proof(
             PaymentProofBlob(
                 hotel_id=hotel_id,
                 proof_id=proof.id,
-                content=content,
                 content_type=content_type,
                 sha256_hex=digest,
+                object_key=object_key,
+                byte_size=len(content),
             )
         )
         db.flush()
@@ -289,4 +295,13 @@ def get_transfer_proof_bytes(
     )
     if blob is None:
         raise PaymentProofError("Archivo de comprobante no encontrado")
-    return bytes(blob.content), blob.content_type, proof.original_filename
+    if blob.object_key:
+        try:
+            content = get_object_storage().get_bytes(blob.object_key)
+        except ObjectStorageError as exc:
+            raise PaymentProofError("Archivo de comprobante no encontrado") from exc
+    elif blob.content is not None:
+        content = bytes(blob.content)
+    else:
+        raise PaymentProofError("Archivo de comprobante no encontrado")
+    return content, blob.content_type, proof.original_filename

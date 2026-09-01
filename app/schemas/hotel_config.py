@@ -6,7 +6,17 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field, field_validator
 
+from app.services.fx_service import OTHER_CURRENCIES
 from app.services.timezones import normalize_timezone
+
+SUPPORTED_CURRENCIES = {c.upper() for c in OTHER_CURRENCIES} | {"ARS", "USD"}
+
+
+def _normalize_currency(value: str) -> str:
+    candidate = value.strip().upper()
+    if candidate not in SUPPORTED_CURRENCIES:
+        raise ValueError(f"Unsupported currency: {value}")
+    return candidate
 
 
 class HotelConfigRead(BaseModel):
@@ -33,6 +43,7 @@ class HotelConfigRead(BaseModel):
     default_currency: str
     languages: List[str]
     jurisdiction_code: str
+    interface_language: str
     allow_overbooking: bool
     no_show_cutoff_hours: int
     operational_report_recipients: Optional[List[str]] = None
@@ -65,6 +76,7 @@ class HotelConfigUpdate(BaseModel):
     default_currency: Optional[str] = None
     languages: Optional[List[str]] = None
     jurisdiction_code: Optional[str] = Field(default=None, min_length=2, max_length=3)
+    interface_language: Optional[str] = None
     allow_overbooking: Optional[bool] = None
     no_show_cutoff_hours: Optional[int] = Field(default=None, ge=0, le=72)
     operational_report_recipients: Optional[List[str]] = None
@@ -76,3 +88,20 @@ class HotelConfigUpdate(BaseModel):
         if value is None:
             return None
         return normalize_timezone(value)
+
+    @field_validator("default_currency")
+    @classmethod
+    def normalize_default_currency(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        return _normalize_currency(value)
+
+    @field_validator("interface_language")
+    @classmethod
+    def normalize_interface_language(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        candidate = value.strip().lower()
+        if candidate not in ("es", "en"):
+            raise ValueError(f"Unsupported interface_language: {value}")
+        return candidate

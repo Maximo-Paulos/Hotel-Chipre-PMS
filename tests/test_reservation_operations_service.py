@@ -8,7 +8,7 @@ from app.models.commercial import FxPolicy, ProductRoomCompatibility, RatePlan, 
 from app.models.hotel_config import HotelConfiguration
 from app.models.ota_core import OTACommissionRule, OTACurrencyRate, OTAProvider, OTAReservationLink, OTAReservationLifecycleEnum
 from app.models.reservation import Reservation, ReservationSourceEnum, ReservationStatusEnum
-from app.models.room import Room, RoomCategory
+from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.services.allocation_runtime_service import run_persisted_allocation
 from app.services.reservation_operations_service import preview_ota_rebook_as_direct, rebook_ota_reservation_as_direct
 
@@ -530,6 +530,169 @@ def test_move_reservation_room_creates_manual_audit_event(
     assert persisted_event.to_room_id == new_room_id
     assert persisted_event.trigger_event == "manual"
     assert persisted_event.reason_code == "guest_preference"
+
+
+def test_move_reservation_room_updates_room_status_for_checked_in_reservation(
+    db,
+    hotel_config,
+    sample_categories,
+    sample_rooms,
+    sample_guest,
+):
+    """Room.status is a persisted column, not derived from reservations --
+    a checked-in guest's room move must flip old/new Room.status explicitly
+    (bug: previously left the old room OCCUPIED and the new one untouched)."""
+    from_room = sample_rooms[0]
+    to_room = sample_rooms[1]
+    from_room.status = RoomStatusEnum.OCCUPIED
+    db.flush()
+
+    reservation = Reservation(
+        confirmation_code="ROOM-MOVE-STATUS",
+        hotel_id=hotel_config.id,
+        guest_id=sample_guest.id,
+        room_id=from_room.id,
+        category_id=sample_categories[0].id,
+        check_in_date=date(2026, 8, 16),
+        check_out_date=date(2026, 8, 18),
+        total_amount=120.0,
+        subtotal_amount=120.0,
+        net_amount=120.0,
+        amount_paid=120.0,
+        deposit_amount=36.0,
+        currency_code="ARS",
+        status=ReservationStatusEnum.CHECKED_IN,
+        source=ReservationSourceEnum.DIRECT,
+        num_adults=2,
+        num_children=0,
+    )
+    db.add(reservation)
+    db.flush()
+
+    from app.services.reservation_operations_service import move_reservation_room
+
+    move_reservation_room(
+        db,
+        reservation=reservation,
+        to_room_id=to_room.id,
+        hotel_id=hotel_config.id,
+        moved_by_user_id=None,
+        reason_code="guest_preference",
+        notes="Cambio de habitacion con huesped alojado",
+    )
+    db.commit()
+
+    db.refresh(from_room)
+    db.refresh(to_room)
+    assert to_room.status == RoomStatusEnum.OCCUPIED
+    assert from_room.status == RoomStatusEnum.CLEANING
+
+
+def test_move_reservation_room_ignores_status_for_non_checked_in_reservation(
+    db,
+    hotel_config,
+    sample_categories,
+    sample_rooms,
+    sample_guest,
+):
+    from_room = sample_rooms[0]
+    to_room = sample_rooms[1]
+
+    reservation = Reservation(
+        confirmation_code="ROOM-MOVE-STATUS-PENDING",
+        hotel_id=hotel_config.id,
+        guest_id=sample_guest.id,
+        room_id=from_room.id,
+        category_id=sample_categories[0].id,
+        check_in_date=date(2026, 8, 20),
+        check_out_date=date(2026, 8, 22),
+        total_amount=120.0,
+        subtotal_amount=120.0,
+        net_amount=120.0,
+        amount_paid=0.0,
+        deposit_amount=36.0,
+        currency_code="ARS",
+        status=ReservationStatusEnum.PENDING,
+        source=ReservationSourceEnum.DIRECT,
+        num_adults=2,
+        num_children=0,
+    )
+    db.add(reservation)
+    db.flush()
+
+    from app.services.reservation_operations_service import move_reservation_room
+
+    move_reservation_room(
+        db,
+        reservation=reservation,
+        to_room_id=to_room.id,
+        hotel_id=hotel_config.id,
+        moved_by_user_id=None,
+        reason_code="guest_preference",
+        notes="Reserva futura sin huesped alojado",
+    )
+    db.commit()
+
+    db.refresh(from_room)
+    db.refresh(to_room)
+    assert from_room.status == RoomStatusEnum.AVAILABLE
+    assert to_room.status == RoomStatusEnum.AVAILABLE
+
+
+def test_create_grouped_room_move_updates_room_status_for_checked_in_reservation(
+    db,
+    hotel_config,
+    sample_categories,
+    sample_rooms,
+    sample_guest,
+):
+    from app.models.operations import RoomMoveTypeEnum
+    from app.services.room_movement_group_service import create_grouped_room_move
+
+    from_room = sample_rooms[0]
+    to_room = sample_rooms[1]
+    from_room.status = RoomStatusEnum.OCCUPIED
+    db.flush()
+
+    reservation = Reservation(
+        confirmation_code="GROUPED-MOVE-STATUS",
+        hotel_id=hotel_config.id,
+        guest_id=sample_guest.id,
+        room_id=from_room.id,
+        category_id=sample_categories[0].id,
+        check_in_date=date(2026, 8, 24),
+        check_out_date=date(2026, 8, 26),
+        total_amount=120.0,
+        subtotal_amount=120.0,
+        net_amount=120.0,
+        amount_paid=120.0,
+        deposit_amount=36.0,
+        currency_code="ARS",
+        status=ReservationStatusEnum.CHECKED_IN,
+        source=ReservationSourceEnum.DIRECT,
+        num_adults=2,
+        num_children=0,
+    )
+    db.add(reservation)
+    db.flush()
+
+    create_grouped_room_move(
+        db,
+        hotel_id=hotel_config.id,
+        reservation=reservation,
+        to_room=to_room,
+        trigger_reason="extension_conflict",
+        reason_code="extension_conflict_equivalent",
+        reason_note="Movida agrupada con huesped alojado",
+        move_type=RoomMoveTypeEnum.AUTO_ASSIGNMENT,
+        trigger_event="extension_conflict",
+    )
+    db.commit()
+
+    db.refresh(from_room)
+    db.refresh(to_room)
+    assert to_room.status == RoomStatusEnum.OCCUPIED
+    assert from_room.status == RoomStatusEnum.CLEANING
 
 
 def test_move_reservation_room_requires_reason_code(

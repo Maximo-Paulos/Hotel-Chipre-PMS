@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
-from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -45,6 +44,7 @@ from app.services.analytics_exports import (
     create_xlsx_export_job,
     expire_export_job_if_needed,
     generate_xlsx_export_job,
+    get_export_bytes,
     get_export_job_or_404,
     get_export_job_read,
     list_export_jobs,
@@ -449,10 +449,11 @@ def download_analytics_export(
         raise HTTPException(status_code=409, detail="Export no finalizado")
     if not job.file_path:
         raise HTTPException(status_code=404, detail="Archivo de export no encontrado")
-    return FileResponse(
-        path=job.file_path,
+    file_bytes = get_export_bytes(job)
+    return Response(
+        content=file_bytes,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        filename=Path(job.file_path).name,
+        headers={"Content-Disposition": f'attachment; filename="{job.id}.xlsx"'},
     )
 
 

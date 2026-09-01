@@ -59,6 +59,7 @@ PUBLIC_ALLOWLIST = (
     PublicRoute("/api/email", "Retired legacy email API always returns 410 Gone."),
     PublicRoute("/api/email/*", "Retired legacy email API always returns 410 Gone."),
     PublicRoute("/api/reference/timezones", "Public reference catalog used before hotel onboarding/auth."),
+    PublicRoute("/api/reference/countries", "Public reference catalog used before hotel onboarding/auth."),
 )
 
 

@@ -103,10 +103,12 @@ def test_submit_transfer_proof_validates_image_and_stores_metadata(db):
     assert proof.original_filename == "comprobante_transferencia.png"
     blob = db.query(PaymentProofBlob).filter(PaymentProofBlob.proof_id == proof.id).one()
     assert blob.hotel_id == 1
-    assert blob.content
+    # New writes go to object storage, not the legacy `content` column.
+    assert blob.content is None
+    assert blob.object_key
     assert blob.sha256_hex == proof.sha256_hex
     content, content_type, filename = get_transfer_proof_bytes(db, hotel_id=1, proof_id=proof.id)
-    assert content == blob.content
+    assert blob.byte_size == len(content)
     assert content_type == "image/png"
     assert filename == "comprobante_transferencia.png"
     audit = db.query(AuditLog).filter(AuditLog.table_name == "payment_proofs", AuditLog.record_id == proof.id).one()
@@ -204,6 +206,41 @@ def test_proof_bytes_are_tenant_scoped(db):
 
     with pytest.raises(PaymentProofError, match="no encontrado"):
         get_transfer_proof_bytes(db, hotel_id=2, proof_id=proof.id)
+
+
+def test_get_transfer_proof_bytes_falls_back_to_legacy_content_column(db):
+    """Rows written before the object-storage migration have `content` set
+    and `object_key` NULL; get_transfer_proof_bytes must still read those.
+    """
+    reservation = _reservation(db, 1, "PROOF-LEGACY")
+    proof = PaymentProof(
+        hotel_id=1,
+        reservation_id=reservation.id,
+        amount=Decimal("10.00"),
+        currency="ARS",
+        payment_method="bank_transfer",
+        status=PaymentProofStatusEnum.PENDING.value,
+        storage_key="db://legacy-key",
+        content_type="image/png",
+        file_size_bytes=9,
+        sha256_hex="a" * 64,
+    )
+    db.add(proof)
+    db.flush()
+    db.add(
+        PaymentProofBlob(
+            hotel_id=1,
+            proof_id=proof.id,
+            content=b"legacy-bytes",
+            content_type="image/png",
+            sha256_hex="a" * 64,
+        )
+    )
+    db.flush()
+
+    content, content_type, _ = get_transfer_proof_bytes(db, hotel_id=1, proof_id=proof.id)
+    assert content == b"legacy-bytes"
+    assert content_type == "image/png"
 
 
 def test_approval_creates_completed_transfer_transaction_and_updates_balance(db):

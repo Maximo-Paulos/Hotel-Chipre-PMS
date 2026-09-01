@@ -2,7 +2,7 @@
   "watch": ["app"],
   "ext": "py",
   "ignore": ["frontend/**", "tests/**", ".venv/**"],
-  "exec": ".\\\\.venv\\\\Scripts\\\\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload",
+  "exec": "./.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8040 --reload",
   "env": {
     "DEMO_MODE": "false"
   },

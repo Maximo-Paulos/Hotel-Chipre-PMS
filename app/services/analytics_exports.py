@@ -6,7 +6,6 @@ import io
 import json
 import zipfile
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 from typing import Any
 from xml.sax.saxutils import escape as xml_escape
 
@@ -14,10 +13,10 @@ from fastapi import HTTPException, status
 from PIL import Image, ImageDraw, ImageFont
 from sqlalchemy.orm import Session
 
-from app.config import get_settings
 from app.database import get_session_factory
 from app.models.analytics import AnalyticsExportFormatEnum, AnalyticsExportJob, AnalyticsExportStatusEnum
 from app.schemas.analytics_api import AnalyticsExportJobRead, AnalyticsExportRequest
+from app.services.object_storage import ObjectStorageError, get_object_storage
 from app.services.analytics_service import (
     _analytics_window,
     build_category_detail_payload,
@@ -471,17 +470,20 @@ def create_xlsx_export_job(db: Session, *, hotel_id: int, user_id: int, request:
     return job
 
 
-def _export_job_path(job: AnalyticsExportJob) -> Path:
-    settings = get_settings()
+def _export_object_key(job: AnalyticsExportJob) -> str:
     created_at = job.created_at or _now()
-    return Path(settings.ANALYTICS_EXPORTS_DIR) / str(job.hotel_id) / f"{created_at.year:04d}" / f"{created_at.month:02d}" / f"{job.id}.xlsx"
+    return f"analytics-exports/{job.hotel_id}/{created_at.year:04d}/{created_at.month:02d}/{job.id}.xlsx"
 
 
 def _persist_export_file(job: AnalyticsExportJob, file_bytes: bytes) -> None:
-    path = _export_job_path(job)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(file_bytes)
-    job.file_path = str(path)
+    object_key = _export_object_key(job)
+    get_object_storage().put_bytes(
+        object_key,
+        file_bytes,
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    # job.file_path now holds an object-storage key, not a filesystem path.
+    job.file_path = object_key
     job.file_size_bytes = len(file_bytes)
     job.sha256_hex = hashlib.sha256(file_bytes).hexdigest()
 
@@ -549,10 +551,23 @@ def get_export_job_read(db: Session, *, hotel_id: int, job_id: int) -> Analytics
     return AnalyticsExportJobRead.model_validate(get_export_job_or_404(db, hotel_id=hotel_id, job_id=job_id))
 
 
-def get_export_download_path(job: AnalyticsExportJob) -> Path:
+def get_export_bytes(job: AnalyticsExportJob) -> bytes:
+    """Read a completed export's .xlsx bytes from object storage.
+
+    job.file_path holds an object-storage key (not a filesystem path) since
+    exports moved off the ephemeral container disk -- see _persist_export_file.
+    """
     if not job.file_path:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Export job no finalizado")
-    return Path(job.file_path)
+    try:
+        return get_object_storage().get_bytes(job.file_path)
+    except ObjectStorageError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Archivo de export no encontrado") from exc
+
+
+def delete_export_file(job: AnalyticsExportJob) -> None:
+    if job.file_path:
+        get_object_storage().delete(job.file_path)
 
 
 def expire_export_job_if_needed(db: Session, job: AnalyticsExportJob) -> bool:
