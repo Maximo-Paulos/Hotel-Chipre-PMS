@@ -23,6 +23,7 @@ export const normalizeInterfaceLanguage = (value: unknown): InterfaceLanguage =>
 export const interfaceLanguageToLocale = (language?: string | null): "es-AR" | "en-US" =>
   normalizeInterfaceLanguage(language) === "en" ? "en-US" : "es-AR";
 
+// eslint-disable-next-line import/no-named-as-default-member -- i18next's documented init pattern
 void i18n.use(initReactI18next).init({
   resources: {
     es: { auth: esAuth, common: esCommon, appshell: esAppshell, dashboard: esDashboard, guests: esGuests, rooms: esRooms, reservations: esReservations },
