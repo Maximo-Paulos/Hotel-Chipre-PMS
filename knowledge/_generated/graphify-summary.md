@@ -1,12 +1,12 @@
 # Resumen Graphify
 
-Generado: 2026-09-01T12:12:23.847747+00:00
-Commit: `9aee997`
+Generado: 2026-09-01T12:30:11.604504+00:00
+Commit: `e2ae869`
 
 `graphify summary .graphify/graph.json`:
 ```text
 Graphify First-Hop Summary
-Graph: 12183 nodes, 68538 edges, 450 communities, density 0.0009, average degree 11.2514, undirected
+Graph: 12184 nodes, 68539 edges, 450 communities, density 0.0009, average degree 11.2507, undirected
 
 Top hubs:
   1. Reservation (degree 1322, community 0 Community 0, app/models/reservation.py)
@@ -28,6 +28,7 @@ Next best action: Start with get_neighbors on "Reservation", then use query_grap
 ```text
 [graphify check-update] Pending semantic updates in /Users/maximopaulos/AI-Workspace/worktrees/Hotel-Chipre-PMS-realtime-collaboration.
 [graphify check-update] graph was rebuilt by the fast git hook without descriptions/labels (.graphify_describe_pending)
-[graphify check-update] Fill the batch-*.json / communities.json files and re-run `graphify update` to ingest.
+[graphify check-update] graph.json built from 9aee997 but HEAD is e2ae869
+[graphify check-update] Run the graphify skill with --update to refresh semantic data.
 ```
 Fuente técnica: `.graphify/`. Este artefacto no reemplaza `GRAPH_REPORT.md`.
