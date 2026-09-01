@@ -1141,9 +1141,9 @@
     "video": []
   },
   "total_files": 1131,
-  "total_words": 1748485,
+  "total_words": 1748493,
   "needs_graph": true,
-  "warning": "Large corpus: 1131 files · ~1,748,485 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
+  "warning": "Large corpus: 1131 files · ~1,748,493 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
   "skipped_sensitive": [
     "alembic/versions/20260408_security_tokens.py",
     "alembic/versions/20260725_user_token_version.py",
@@ -1161,7 +1161,7 @@
   "graphifyignore_patterns": 64,
   "git": {
     "source_owner": "git",
-    "source_hash": "9aee997ecaa5f5139f22ae8d34fabaf70b40aac4",
+    "source_hash": "393ea8c3062d71fd0b7195067fea85a0fb465995",
     "branches": [
       "audit/tech-0000-baseline",
       "chore/revert-rls-bypass-diagnostic",
@@ -1171,6 +1171,7 @@
       "codex/debt-rbac-permission-consolidation",
       "codex/debt-subscription-model-consolidation",
       "codex/fix/full-functional-qa",
+      "codex/production-render-qa",
       "codex/public-site-inquiries",
       "codex/tech0000-audit-matrix",
       "codex/tech0010-isolation-audit-closure",
@@ -1241,7 +1242,7 @@
     "source": "cli",
     "root": ".",
     "git_root": ".",
-    "head": "9aee997ecaa5f5139f22ae8d34fabaf70b40aac4",
+    "head": "393ea8c3062d71fd0b7195067fea85a0fb465995",
     "candidate_count": null,
     "included_count": 1131,
     "excluded_untracked_count": 0,
