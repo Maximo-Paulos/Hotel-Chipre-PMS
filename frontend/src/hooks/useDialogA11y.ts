@@ -12,6 +12,13 @@ const FOCUSABLE_SELECTOR =
 export function useDialogA11y(open: boolean, onClose: () => void) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<Element | null>(null);
+  // ponytail: onClose is an inline closure in every caller, so it gets a new
+  // identity on every parent re-render (e.g. typing in a form field inside
+  // the dialog). Reading it via ref keeps the effect below from re-running
+  // on those renders -- otherwise it steals focus back to the first
+  // focusable element (the close button) after every keystroke.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!open) return;
@@ -29,7 +36,7 @@ export function useDialogA11y(open: boolean, onClose: () => void) {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (event.key !== "Tab") return;
@@ -66,7 +73,7 @@ export function useDialogA11y(open: boolean, onClose: () => void) {
       window.visualViewport?.removeEventListener("resize", handleViewportResize);
       (triggerRef.current as HTMLElement | null)?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   return containerRef;
 }
