@@ -8,6 +8,7 @@ import { ReservationDetailDrawer } from "../components/ReservationDetailDrawer";
 import { ReservationGlobalSearch } from "../components/ReservationGlobalSearch";
 import { Seo } from "../components/Seo";
 import { useDialogA11y } from "../hooks/useDialogA11y";
+import { useHotelConfig } from "../hooks/useHotelConfig";
 import { useInstallPrompt } from "../hooks/useInstallPrompt";
 import { useUnreadNotificationCount } from "../hooks/useNotifications";
 import { useOnboardingStatus } from "../hooks/useOnboardingStatus";
@@ -152,6 +153,10 @@ export function AppShell() {
   const realtimeStatus = useRealtimeStatus();
 
   useCrossTabSync();
+  // Mounted once here (not just on ReservationsPage, its only prior caller)
+  // so a hotel's interface_language takes effect on every protected route,
+  // including the Settings page where it's actually changed.
+  useHotelConfig();
 
   const { data: onboarding, isFetching, error } = useOnboardingStatus({
     enabled: isLoggedIn && isVerified && ["owner", "co_owner"].includes(realRole ?? "")
