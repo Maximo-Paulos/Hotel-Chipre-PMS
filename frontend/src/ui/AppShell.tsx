@@ -276,7 +276,11 @@ export function AppShell() {
       {realtimeStatus !== "disabled" && (
         <div
           className={cx(
-            "border-b px-4 py-1.5 text-xs sm:px-6",
+            // Fixed min-height reserves room for the longest status message
+            // (degraded, which wraps to 2 lines on narrow viewports) in every
+            // state, so switching between short and long messages during the
+            // reconnect loop never shifts the layout under the user's click.
+            "flex min-h-[2.75rem] items-center border-b px-4 py-1.5 text-xs sm:px-6",
             realtimeStatus === "connected"
               ? "border-emerald-200 bg-emerald-50 text-emerald-800"
               : realtimeStatus === "degraded"
