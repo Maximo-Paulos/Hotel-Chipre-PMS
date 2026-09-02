@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create and validate non-certifying QA runs on the shared sandbox domains."""
+"""Create and validate non-certifying QA runs on the production Render test hotel."""
 
 from __future__ import annotations
 
@@ -38,7 +38,7 @@ REQUIRED_OBSERVATION_FIELDS = {
     "created_record_refs",
     "cleanup_state",
 }
-REPORT_HEADER = "# QA operativa sobre dominios compartidos — NO ES EVIDENCIA DE RELEASE"
+REPORT_HEADER = "# QA operativa sobre Render producción — NO ES EVIDENCIA DE RELEASE"
 
 
 class OperationalQAError(RuntimeError):
@@ -80,10 +80,12 @@ def initialize(run_id: str, code_sha: str) -> Path:
         run_dir / "run-metadata.json",
         {
             "schema_version": 1,
-            "record_type": "operational-shared-sandbox-run",
+            "record_type": "operational-production-render-run",
             "certification": "none",
             "release_gate_eligible": False,
-            "environment_class": "production-labelled-shared-sandbox",
+            "environment_class": "render-production-test-hotel",
+            "test_surface": "render-production",
+            "test_hotel_required": True,
             "run_id": run_id,
             "code_sha": code_sha,
             "started_at": _utc_now(),

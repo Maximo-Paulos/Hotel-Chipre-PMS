@@ -1,7 +1,10 @@
 {
   "schema_version": 1,
-  "catalog_type": "production-labelled-shared-sandbox-operational",
+  "catalog_type": "production-render-test-hotel-operational",
   "release_gate_eligible": false,
+  "execution_surface": "render-production",
+  "test_hotel_required": true,
+  "external_effects_required": false,
   "origins": {
     "site": "https://hotels-pms.com",
     "app": "https://app.hotels-pms.com",
@@ -966,7 +969,7 @@
       ],
       "area": "capacity",
       "paths": [
-        "isolated preview API"
+        "NOT_APPLICABLE — pruebas de carga excluidas en Render producción"
       ],
       "personas": [
         "master-admin"
@@ -976,7 +979,7 @@
         "mobile-chrome-emulation-390x844"
       ],
       "mutation_policy": "read-only",
-      "expected_operational_observation": "Capacidad solo se mide en infraestructura aislada y nunca en dominios compartidos."
+      "expected_operational_observation": "Las pruebas de carga no se ejecutan sobre Render producción; requieren una campaña de capacidad autorizada y separada."
     },
     {
       "operational_case_id": "ops-master-admin-login",

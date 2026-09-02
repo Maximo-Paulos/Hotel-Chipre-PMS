@@ -1,4 +1,9 @@
-# Bootstrap cloud QA
+# Bootstrap cloud QA (legacy preview isolation)
+
+La campaña funcional vigente ya no usa este bootstrap ni requiere un servicio
+Render QA separado: se ejecuta sobre el hotel de prueba del Render de producción
+con efectos externos desactivados. Este script se conserva únicamente para el
+flujo histórico de preview aislado y no es invocado por el workflow activo.
 
 `bootstrap_cloud_qa.py` crea de forma idempotente un hotel sintético y cuatro
 usuarios de base (`owner`, `manager`, `receptionist`, `housekeeping`). La quinta

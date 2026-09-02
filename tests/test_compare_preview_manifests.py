@@ -68,14 +68,15 @@ def test_final_observation_cannot_predate_probes() -> None:
         verify_manifest_continuity(probed, final)
 
 
-def test_workflow_checks_continuity_before_upload() -> None:
+def test_workflow_verifies_production_sha_before_upload() -> None:
     workflow = (ROOT / ".github/workflows/verify-preview-providers.yml").read_text()
-    compare_at = workflow.index("compare_preview_manifests.py")
-    upload_at = workflow.index("Upload only final sanitized provider evidence")
+    verify_at = workflow.index("verify_production_render.py")
+    upload_at = workflow.index("Upload sanitized production Render evidence")
 
-    assert compare_at < upload_at
-    assert '"$RUNNER_TEMP/post-bootstrap-manifest.json"' in workflow
-    assert "preview-manifest.json" in workflow[compare_at:upload_at]
+    assert verify_at < upload_at
+    assert "--wait-seconds 1800" in workflow
+    assert "production-render-manifest.json" in workflow[verify_at:upload_at]
+    assert "production-render-evidence-${{ env.TARGET_SHA }}" in workflow
 
 
 def test_cli_rejects_symlinked_manifest(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

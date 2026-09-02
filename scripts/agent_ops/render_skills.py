@@ -63,10 +63,10 @@ Actualiza la nota mínima necesaria, enlaza artefactos reproducibles de `knowled
 No copies el contenido masivo de Graphify o OpenAPI; enlázalo.""",
     ),
     "cloud-user-qa": (
-        "Prueba un preview cloud como una persona usuaria real.",
-        """Usa navegador visible y `.env.qa.local` ignorado; primero lee el catálogo y manifest de QA.
+        "Prueba Render producción como una persona usuaria real sobre el hotel de prueba autorizado.",
+        """Usa navegador visible; primero confirma que `Production Render QA cycle` verificó el SHA live y lee el catálogo operativo.
 
-Recorre la matriz completa con owner, manager, recepción, housekeeping y master-admin usando selectores accesibles. Para cada fila registra URL de preview, precondición, acción humana, esperado, observado, evidencia y `code_sha` en `qa/evidence/<task-id>/`.
+Recorre la matriz funcional con las personas autorizadas usando selectores accesibles. Para cada fila registra la URL canónica, precondición, acción humana, esperado, observado, evidencia y `code_sha` en `qa/operational/runs/<run-id>/`.
 
 No accedas al correo, no pagues, no envíes emails, no dispares webhooks/OTAs y no toques datos de terceros. Un fallo, URL inaccesible o evidencia incompleta bloquea el cierre.""",
     ),
@@ -74,23 +74,23 @@ No accedas al correo, no pagues, no envíes emails, no dispares webhooks/OTAs y 
         "Prepara las cinco identidades QA sintéticas una única vez.",
         """Sigue `knowledge/30-operations/qa-personas-and-bootstrap.md`.
 
-Crea únicamente hotel y usuarios sintéticos aislados; la verificación de correo la hace una persona mediante buzón dedicado. Master-admin usa variables Render separadas `MASTER_ADMIN_EMAIL`, `MASTER_ADMIN_PASSWORD`, `MASTER_ADMIN_PIN`.
+Crea o verifica únicamente el hotel de prueba autorizado y usuarios sintéticos; la verificación de correo la hace una persona mediante buzón dedicado. Master-admin usa variables seguras de Render producción `MASTER_ADMIN_EMAIL`, `MASTER_ADMIN_PASSWORD`, `MASTER_ADMIN_PIN`.
 
 Guarda sólo metadatos no sensibles. Nunca escribas contraseñas, cookies, OTPs, tokens ni capturas en Git o vault.""",
     ),
     "release-gate": (
         "Aplica la puerta de entrega antes de cerrar o fusionar.",
-        """Comprueba validación local, paridad de agentes/skills, inventarios/vault, Graphify fresco, revisión de seguridad, preview aislado saludable y evidencia QA posterior al último cambio funcional.
+        """Comprueba validación local, paridad de agentes/skills, inventarios/vault, Graphify fresco, revisión de seguridad y el resultado del ciclo de QA sobre Render producción posterior al merge.
 
 Usa `knowledge/40-delivery/release-gates.md` y el verificador de evidencia. Si falta un requisito, declara el bloqueo con reproducción y no marques la tarea como terminada.
 
-No reduzcas la matriz QA ni aceptes una base compartida como preview.""",
+La QA funcional cloud usa únicamente el hotel de prueba autorizado y datos sintéticos; no exige un servicio Render QA separado.""",
     ),
     "deploy-preview-check": (
-        "Comprueba que un preview sea aislado y apunte al backend correcto.",
-        """Antes de QA cloud, verifica manifest de preview, health del backend, `VITE_API_URL`, `FRONTEND_URL`, CORS y que cada preview use su `DATABASE_URL`/secrets QA aislados.
+        "Comprueba que Render producción esté desplegando el backend correcto.",
+        """Antes de QA cloud, verifica el manifiesto de Render producción, el health del backend, `APP_BASE_URL`, `FRONTEND_URL`, CORS, Redis y el SHA live exacto.
 
-Lee `knowledge/20-system/cloud-and-deployment.md` y `knowledge/30-operations/cloud-surface-manifest.md`. Si Supabase Branches no está disponible, bloquea el preview y solicita una segunda base aislada.
+Lee `knowledge/20-system/cloud-and-deployment.md` y `knowledge/30-operations/cloud-surface-manifest.md`. Si el perfil seguro o el SHA live no coinciden, bloquea la prueba y no muta la infraestructura.
 
 No despliegues, rotes secretos ni modifiques proveedores desde esta skill.""",
     ),

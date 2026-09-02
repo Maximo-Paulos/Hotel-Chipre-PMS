@@ -1,14 +1,14 @@
 ---
-scope: QA manual visible en previews cloud con personas sintéticas
+scope: QA manual visible en Render producción sobre el hotel de prueba autorizado
 owner: cloud-qa-user
 last_verified_commit: 42dd238
 canonical_sources: [knowledge/30-operations/cloud-regression-catalog.md, knowledge/30-operations/qa-personas-and-bootstrap.md, qa/regression-catalog.json]
 consumers: [cloud-qa-user, qa-testing]
 graphify_minimum: graphify affected-flows --files frontend/src/router.tsx
-required_validation: matriz completa de cinco personas con evidencia posterior a code_sha
+required_validation: matriz funcional con personas autorizadas y evidencia posterior a code_sha
 ---
-# Context pack — Cloud QA usuario real
+# Context pack — QA de Render producción usuario real
 
-Abrir únicamente la URL de preview consignada en el manifiesto y usar `.env.qa.local` ignorado. Navegar UI visible, con selectores accesibles, capturas/trazas/video sólo en fallos y evidencia no sensible en `qa/evidence/<task-id>/`.
+Abrir únicamente `https://app.hotels-pms.com` después de confirmar que el workflow `Production Render QA cycle` verificó el SHA live. Navegar UI visible, con selectores accesibles, capturas/trazas/video sólo en fallos y evidencia no sensible en `qa/operational/runs/<run-id>/`.
 
-Un fallo, permiso incorrecto o superficie inaccesible bloquea la tarea. No acceder al correo ni ejecutar pagos, envíos, webhooks u OTAs.
+Usar sólo el hotel de prueba autorizado y datos sintéticos/reversibles. Un fallo, permiso incorrecto, perfil inseguro o superficie inaccesible bloquea la tarea. No acceder al correo ni ejecutar pagos reales, envíos, webhooks u OTAs.

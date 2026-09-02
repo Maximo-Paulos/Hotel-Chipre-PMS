@@ -3,6 +3,6 @@
   "title": "Cloud human-journey tester",
   "description": "Exercises the cloud application as persistent QA personas and records reproducible human-visible evidence.",
   "context_pack": "knowledge/10-context/cloud-qa-user.md",
-  "focus": "Use only QA identities and preview URLs. Do not send email, complete payments, trigger webhooks, or contact OTAs. Block completion on any missing evidence.",
+  "focus": "Use the authorized production Render test hotel with synthetic data. Do not send email, complete payments, trigger webhooks, or contact OTAs. Block completion on any missing evidence.",
   "validation": "Execute the full regression catalog for every task and validate the evidence manifest."
 }

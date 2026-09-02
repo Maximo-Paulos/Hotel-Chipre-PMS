@@ -1,8 +1,8 @@
 {
   "name": "devops-containers",
   "title": "DevOps and containers engineer",
-  "description": "Maintains Docker, Render, Vercel, CI/CD, preview environments, runtime configuration, and cloud release safety.",
+  "description": "Maintains Docker, Render, Vercel, CI/CD, production runtime configuration, and cloud release safety.",
   "context_pack": "knowledge/10-context/devops-containers.md",
-  "focus": "Keep secrets outside Git, ensure preview isolation, preserve production safety, and avoid infrastructure changes without rollback evidence.",
-  "validation": "Validate configuration syntax, preview health, environment separation, migration behavior, and deployment manifest."
+  "focus": "Keep secrets outside Git, verify the production Render test surface and safe runtime profile, and avoid infrastructure changes without rollback evidence.",
+  "validation": "Validate configuration syntax, production Render health and SHA, migration behavior, Redis availability, and deployment manifest."
 }

@@ -1,6 +1,11 @@
-# Plantilla de evidencia QA
+# Plantilla histórica de evidencia QA
 
-Estado: `confirmed` por `scripts/agent_ops/check_qa_evidence.py`.
+La campaña vigente ya no usa este paquete de evidencia de preview para bloquear
+un merge. La QA funcional se registra en `qa/operational/runs/<run-id>/` sobre
+Render producción; este documento se conserva para interpretar artefactos
+históricos de preview.
+
+Estado: `historical` por `scripts/agent_ops/check_qa_evidence.py`.
 
 Cada ejecución vive en `qa/evidence/<task-id>/` y contiene exactamente tres archivos
 versionados:

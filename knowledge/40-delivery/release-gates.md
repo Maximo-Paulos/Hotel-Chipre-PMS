@@ -6,49 +6,35 @@ Una tarea funcional no está terminada hasta que se cumpla todo:
 2. `render_agents.py --check`, sincronía de skills, enlaces vault e inventarios válidos.
 3. Actualización AST, `graphify flows build`, normalización portable, `graphify portable-check` y `graphify check-update` fresco cuando hubo código.
 4. Revisión de auth/tenancy/integraciones proporcional al cambio.
-5. Preview aislado: DB propia, migraciones/seed QA, Render `/health`, CORS/`FRONTEND_URL`, Vercel con `VITE_API_URL` exacta.
-6. Matriz cloud completa de cinco personas y evidencia posterior al último `code_sha` funcional.
+5. Ciclo `Production Render QA cycle` exitoso después del merge: SHA live, health, CORS, Redis y perfil sin efectos externos.
+6. Matriz funcional visible sobre el hotel de prueba autorizado, con datos sintéticos/reversibles y evidencia operativa posterior al último `code_sha`.
 
-La evidencia versionada queda ligada por hash a un único
-`validated-preview-manifest.json` hermano y a una `attestation.json` Ed25519 del
-operador. La firma cubre bytes exactos, task/code SHA, metadatos proveedor, timestamp
-y todos los hashes de artefactos comprobados localmente. Usa SHA completos y conserva
-IDs de run y artefacto. Cambios posteriores en producto, migraciones, workflows, bootstrap,
-`scripts/agent_ops/`, catálogo QA, tests o definiciones de agentes invalidan la
-evidencia anterior.
+La QA funcional cloud ya no depende de un preview Vercel, un servicio Render QA,
+una base Supabase separada ni un artefacto de evidencia previo al merge. El
+workflow `.github/workflows/verify-preview-providers.yml` conserva su nombre por
+compatibilidad histórica, pero ahora se ejecuta en `push` a `main` o manualmente,
+lee únicamente la API de Render, espera el deploy normal y publica un manifiesto
+redactado de `provider-verified-production-render`.
 
-La autoridad permanente es `.github/workflows/trusted-release-gate.yml`, ejecutada
-con `pull_request_target` desde el SHA base inmutable. Lee los JSON del head como
-blobs, nunca hace checkout ni ejecuta código del head, verifica por API el run y el
-artefacto proveedor, exige bytes idénticos y valida la firma con
-`qa/trust/qa-evidence-public-key.pem` del checkout base; nunca confía en una clave
-aportada por el head. `summary.json`, manifiesto y atestación deben cambiar juntos.
-Además, el SHA que ejecutó `verify-preview-providers.yml` debe ser ancestro del SHA
-base actual y el blob exacto de ese workflow debe coincidir con el del base; no se
-aceptan marcadores de texto como sustituto de procedencia histórica.
-El workflow `release-gate.yml` se
-mantiene como diagnóstico local/no autoritativo. Ninguna de las dos puertas recibe
-tokens de proveedores; la puerta confiable entrega su token GitHub sólo al script
-del base y al action oficial de descarga, con permisos de sólo lectura.
+`release-gate.yml` y `trusted-release-gate.yml` mantienen las comprobaciones
+estáticas y de seguridad del PR, pero no bloquean por falta de un servicio QA o
+de una evidencia cloud previa. El resultado funcional queda pendiente hasta que
+Render complete el deploy y la matriz humana se registre en
+`qa/operational/runs/<run-id>/`.
 
-La evidencia proveedor se produce en una única ejecución serializada de
-`.github/workflows/verify-preview-providers.yml` desde la rama por defecto. Ese
-ciclo adquiere un lease aleatorio en el servicio Render QA, verifica GitHub,
-Render, Supabase y Vercel, emite la capacidad Ed25519 sólo en el runner, ejecuta
-bootstrap, elimina la capacidad de Render, vuelve a consultar los proveedores,
-comprueba health, CORS y el bundle frontend, publica sólo el manifiesto final y
-libera el lease con `always()`. No existe un workflow separado de provisión ni un
-artefacto de token.
+El verificador falla cerrado si el servicio no es el backend de `main`, el SHA
+live no coincide, falta Redis, CORS no es canónico o el perfil seguro no está
+activo. No serializa URLs de base de datos, contraseñas, tokens, comprobantes ni
+PII. La configuración productiva debe conservar `EXTERNAL_EFFECTS_ENABLED=false`,
+`INBOUND_PROVIDER_EVENTS_ENABLED=false`, email nulo, PayPal sandbox e IA/Gemma
+deshabilitadas para esta campaña.
 
-Render QA debe observar `EMAIL_PROVIDER=null`, `CONNECTIONS_ENABLED=false`,
-PayPal sandbox e IA/Gemma deshabilitadas, sin credenciales live ni workers/cron
-en el mismo entorno. El manifiesto y la capacidad ligan además el fingerprint
-combinado de run, cinco personas, master-admin y política de migración; cualquier
-drift bloquea antes de conectar a la base.
+La matriz cloud no ejecuta pagos reales, reembolsos reales, emails, webhooks,
+OTAs, pruebas de carga destructivas ni pruebas contra hoteles ajenos. Esas
+integraciones se validan por contrato, adapters, tests locales o una campaña
+operativa expresamente autorizada y separada.
 
-Estado operativo: `needs-verification` hasta que los workflows confiables y
-`qa/trust/qa-evidence-public-key.pem` existan en la rama por defecto; un workflow
-`pull_request_target` nuevo no puede proteger la misma PR que lo introduce antes
-de ese bootstrap.
-
-Si Supabase Branch no está disponible o falta una URL/credencial QA aislada, el gate queda **bloqueado**, no degradado. La primera línea baseline se construye por separado; una vez verde, se aplica a cada cambio.
+El workflow no despliega, muta secretos, ejecuta migraciones manuales ni cambia
+la configuración de Render. Las migraciones del deploy siguen declaradas en
+`render.yaml` y cualquier rollback requiere backup, compatibilidad comprobada y
+autorización operativa.

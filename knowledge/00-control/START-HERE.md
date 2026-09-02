@@ -13,6 +13,19 @@ No leer todo el vault ni todo Graphify. Seguir este flujo:
 4. Ejecutar ese comando y abrir sólo las fuentes que el resultado señale.
 5. Para cambios, validar el área, actualizar la nota mínima y registrar evidencia con el `code_sha`.
 
+## Decisión vigente de QA cloud — 2026-09-01
+
+La QA funcional cloud se ejecuta sobre el deploy de `main` en Render producción,
+usando únicamente el hotel de prueba autorizado y datos sintéticos/reversibles.
+No se exige un servicio Render QA, un preview Vercel ni una base Supabase separada
+para esta campaña. El workflow `Production Render QA cycle` verifica primero el
+SHA live, health, CORS, Redis y el perfil sin efectos externos.
+
+Esta decisión no convierte producción en un entorno para pagos reales, emails,
+webhooks, OTAs, pruebas de carga destructivas ni datos de otros hoteles. Tests
+unitarios, migraciones descartables, lint, typecheck y build continúan ejecutándose
+en CI/local.
+
 ## Estado rápido al `bf14bf5`
 
 | Área | Estado | Evidencia mínima |
@@ -21,8 +34,8 @@ No leer todo el vault ni todo Graphify. Seguir este flujo:
 | Vault, roles y skills | `confirmed` | `scripts/agent_ops/validate_setup.py`, paridad de agentes y espejo de skills |
 | Graphify AST/portabilidad | `confirmed` | `GRAPH_REPORT.md`, `portable-check`, `flows.json` |
 | Producción pública | `confirmed` sólo para disponibilidad HTTP | `knowledge/_generated/cloud-surfaces.*` y comprobaciones públicas |
-| Preview aislado Vercel + Render + Supabase | `needs-verification` | faltan proyecto QA, servicio QA y ciclo confiable real |
-| QA humano de owner/manager/recepción/housekeeping/master-admin | `needs-verification` | requiere bootstrap sintético y catálogo completo en preview |
+| QA funcional en Render producción | `needs-verification` | falta ejecutar la matriz humana sobre el hotel de prueba con el SHA live del deploy |
+| QA humano de owner/manager/recepción/housekeeping/master-admin | `needs-verification` | requiere hotel de prueba autorizado, datos sintéticos y catálogo operativo completo |
 
 El sistema no se considera terminado mientras la última fila siga en `needs-verification`.
 
@@ -33,7 +46,7 @@ El sistema no se considera terminado mientras la última fila siga en `needs-ver
 | FastAPI, reservas, auth, pagos u OTAs | [`backend.md`](../10-context/backend.md) |
 | React, rutas, formularios o UX de aplicación | [`frontend.md`](../10-context/frontend.md) |
 | SQLAlchemy, Alembic o multi-tenancy | [`database.md`](../10-context/database.md) |
-| Vercel, Render, Supabase, CI o previews | [`devops-containers.md`](../10-context/devops-containers.md) |
+| Vercel, Render, Supabase o CI | [`devops-containers.md`](../10-context/devops-containers.md) |
 | Seguridad, roles, secretos o webhooks | [`security.md`](../10-context/security.md) |
 | Navegación cloud como usuario real | [`cloud-qa-user.md`](../10-context/cloud-qa-user.md) |
 | Producto, prioridad o decisión | [`product-ceo.md`](../10-context/product-ceo.md) |
@@ -69,4 +82,4 @@ Los inventarios reproducibles están en [`knowledge/_generated/`](../_generated/
 
 ## Regla de cierre
 
-Un agente puede terminar su implementación local sólo cuando el área está validada y documentada. El coordinador no puede marcar la tarea como finalizada si falta preview aislado saludable, regresión cloud completa con personas QA, evidencia posterior al último `code_sha` o revisión de seguridad. Nunca guardar contraseñas, tokens, cookies, OTPs, PII, capturas privadas o URLs secretas en esta vault.
+Un agente puede terminar su implementación local sólo cuando el área está validada y documentada. El coordinador no puede marcar la tarea como finalizada si falta el ciclo de Render producción saludable, la regresión cloud funcional con personas autorizadas, evidencia operativa posterior al último `code_sha` o revisión de seguridad. Nunca guardar contraseñas, tokens, cookies, OTPs, PII, capturas privadas o URLs secretas en esta vault.

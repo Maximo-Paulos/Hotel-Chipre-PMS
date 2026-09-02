@@ -2552,8 +2552,8 @@
     "hash": "92f303469b92ef1d7e9fab36057b2898"
   },
   "render.yaml": {
-    "mtime": 1788198776485.4006,
-    "hash": "2bed46600b9eb55eb7e579fb59c7fd1a"
+    "mtime": 1788265793701.287,
+    "hash": "39b8d6d9c1c56d698c3a1ebbf7fbc324"
   },
   "requirements.txt": {
     "mtime": 1788208746680.2627,
@@ -2620,12 +2620,12 @@
     "hash": "6e83f1692a084317b7a08f59b0c6df71"
   },
   "scripts/agent_ops/render_agents.py": {
-    "mtime": 1788198776486.9985,
-    "hash": "722ec2dd81d1d6e273d0a5e8f901d850"
+    "mtime": 1788265793701.6892,
+    "hash": "ef3573a297bc25e2e9cd57aeb04513ea"
   },
   "scripts/agent_ops/render_skills.py": {
-    "mtime": 1788198776487.0718,
-    "hash": "14ed7187aa4a632e19602d4cd72883cf"
+    "mtime": 1788265793701.833,
+    "hash": "00637b63556d7075aa9cd55b97f2f755"
   },
   "scripts/agent_ops/sync_skills.py": {
     "mtime": 1788198776487.1228,
@@ -2636,8 +2636,8 @@
     "hash": "60ea5e5d1098d9fe1efd052e6a67b163"
   },
   "scripts/knowledge/generate_inventories.py": {
-    "mtime": 1788198776488.437,
-    "hash": "6f4f020a9f44fbb8f8a86e85bbe760a7"
+    "mtime": 1788265793702.1099,
+    "hash": "4a9151f2c59394c259c9e816db21b143"
   },
   "tests/test_agent_ops_setup.py": {
     "mtime": 1788198776491.6475,
@@ -2648,16 +2648,16 @@
     "hash": "c62b8a7e047aee49ac5e25f3bc5a8af7"
   },
   "knowledge/00-control/DECISION-LOG.md": {
-    "mtime": 1788198776476.4802,
-    "hash": "8d1538613d557db08a714d47e54125fc"
+    "mtime": 1788265793696.8567,
+    "hash": "2295fb77dadb4fffe02b2c2546d47ab2"
   },
   "knowledge/00-control/SOURCE-OF-TRUTH.md": {
     "mtime": 1788198776476.5298,
     "hash": "e82b4c0f2eeafde1697b43150bd2c836"
   },
   "knowledge/00-control/STATUS-TODAY.md": {
-    "mtime": 1788198776476.8503,
-    "hash": "7e80d27ba497d86d02171fc95b44fa8d"
+    "mtime": 1788265793697.1257,
+    "hash": "3bc4aed337a6583fbc9a47b3a6075604"
   },
   "knowledge/00-control/TASK_ROUTER.md": {
     "mtime": 1788198776476.9055,
@@ -2672,8 +2672,8 @@
     "hash": "c970258254ce58b8c21290b45383630c"
   },
   "knowledge/10-context/cloud-qa-user.md": {
-    "mtime": 1788198776477.0745,
-    "hash": "608d1481bcca0833ed25f0e1d6abf1f9"
+    "mtime": 1788265793697.2473,
+    "hash": "a14ea4917229235a1f300ccdf18cf722"
   },
   "knowledge/10-context/data-visualization.md": {
     "mtime": 1788198776477.1272,
@@ -2684,12 +2684,12 @@
     "hash": "14458a7652b117f4c9d5d63f9baf6c76"
   },
   "knowledge/10-context/devops-containers.md": {
-    "mtime": 1788198776477.219,
-    "hash": "68840dfe21c701ba384ed289684bb109"
+    "mtime": 1788265793697.353,
+    "hash": "c091afe8ae703ed55b883c8b13b9e0ce"
   },
   "knowledge/10-context/frontend.md": {
-    "mtime": 1788198776477.267,
-    "hash": "e3a92ad0add78be3f500d851412dff72"
+    "mtime": 1788265793697.4585,
+    "hash": "5ec707cd7a953ce803fe9a1a59b64024"
   },
   "knowledge/10-context/geo-local-seo.md": {
     "mtime": 1788198776477.3145,
@@ -2708,8 +2708,8 @@
     "hash": "dbe009a89b4ce4042f423f64c57f9c0a"
   },
   "knowledge/10-context/release-governor.md": {
-    "mtime": 1788198776477.5005,
-    "hash": "2a750476b165b9e93f2be6d69dbd549b"
+    "mtime": 1788265793697.5708,
+    "hash": "11a9a1bdd7a3c12f70279f06f9c75183"
   },
   "knowledge/10-context/security.md": {
     "mtime": 1788198776477.5464,
@@ -2728,12 +2728,12 @@
     "hash": "e3f881a9744669fbc8eec6c894b3f9fe"
   },
   "knowledge/20-system/auth-security-and-tenancy.md": {
-    "mtime": 1788198776477.7795,
-    "hash": "7110834dc8c6ea4f30e8b50ed03ecae2"
+    "mtime": 1788265793697.6802,
+    "hash": "c85c68f3fbaaef71de8b26f04ba337ab"
   },
   "knowledge/20-system/cloud-and-deployment.md": {
-    "mtime": 1788198776477.828,
-    "hash": "db90c008bb4198f3c2c13b80f0cdf678"
+    "mtime": 1788265793697.7876,
+    "hash": "1a9f9da660eb497dea20b1df16f4dd56"
   },
   "knowledge/20-system/domain-and-data.md": {
     "mtime": 1788198776477.8706,
@@ -2748,64 +2748,64 @@
     "hash": "aabcb1c189625fd99e08226d72e0c2ba"
   },
   "knowledge/20-system/technical-debt-and-risks.md": {
-    "mtime": 1788198776478.0093,
-    "hash": "d822950ae51086200cb46bb0bd876b16"
+    "mtime": 1788265793697.9075,
+    "hash": "b6d3909020a97ef0170569badad5e5a3"
   },
   "knowledge/30-operations/cloud-regression-catalog.md": {
-    "mtime": 1788198776478.0835,
-    "hash": "f37984a0f2947d9f72516f4de408d671"
+    "mtime": 1788265793698.0186,
+    "hash": "fb358e9293357c4d6bcaf90b8c4e44de"
   },
   "knowledge/30-operations/cloud-surface-manifest.md": {
-    "mtime": 1788198776478.1309,
-    "hash": "48c973e3b69246d1c9420c86d8c432e1"
+    "mtime": 1788265793698.1333,
+    "hash": "b5f867e8acbbc45c27a3834ef85c0818"
   },
   "knowledge/30-operations/incident-and-recovery.md": {
-    "mtime": 1788198776478.1775,
-    "hash": "c1e2bef455753b1cc9357f4d620868b4"
+    "mtime": 1788265793698.2495,
+    "hash": "023f5ca301ecdbec64a9f984ae160e68"
   },
   "knowledge/30-operations/qa-personas-and-bootstrap.md": {
-    "mtime": 1788198776478.2231,
-    "hash": "49b6c84c76210016ff301e40223e36b0"
+    "mtime": 1788265793698.3748,
+    "hash": "b78ea93b21c5060f6d777b5d230d7349"
   },
   "knowledge/40-delivery/qa-evidence-template.md": {
-    "mtime": 1788198776478.2986,
-    "hash": "6914d43d6343d100b215f5495297ed4d"
+    "mtime": 1788265793698.5615,
+    "hash": "d10ece46c6f4eb45c54a95c9cd042f22"
   },
   "knowledge/40-delivery/release-gates.md": {
-    "mtime": 1788198776478.3457,
-    "hash": "a1890bdc648e49f31571304b03adf321"
+    "mtime": 1788265793698.6777,
+    "hash": "529dc5a9f2a3e1d4641f823b50f364b8"
   },
   "knowledge/40-delivery/task-handoff-template.md": {
-    "mtime": 1788198776478.385,
-    "hash": "d72457a503e6ab01a330b2a92ba8832e"
+    "mtime": 1788265793698.7888,
+    "hash": "abfca2c8e510c423879c838e74a7ac05"
   },
   "knowledge/README.md": {
     "mtime": 1788198776478.423,
     "hash": "84364af62f8c6b7d15983dd02b1a18bf"
   },
   "knowledge/_generated/README.md": {
-    "mtime": 1788198776479.6638,
-    "hash": "71a0bca9b02ae264bfcddca0d595b6b8"
+    "mtime": 1788265811641.3206,
+    "hash": "6c1b5c023c179d61364eb4ca129f2634"
   },
   "knowledge/_generated/api-surface.md": {
-    "mtime": 1788198776479.863,
-    "hash": "a91457b3ac1eb24bb88ef64551c0da80"
+    "mtime": 1788265810979.306,
+    "hash": "d75232aeb6ba45f5a1f3da4262688436"
   },
   "knowledge/_generated/cloud-surfaces.md": {
-    "mtime": 1788198776480.1338,
-    "hash": "f3aaf790604a43585dd0baa993ffe6bc"
+    "mtime": 1788265811628.8364,
+    "hash": "fa7c993d8ad68a583ca040acac090a24"
   },
   "knowledge/_generated/frontend-routes.md": {
-    "mtime": 1788198776480.246,
-    "hash": "7872b81a1dd319789b4a1cdf0485b5e3"
+    "mtime": 1788265810991.957,
+    "hash": "ae517efec2af69c8b6a69f2630c7e439"
   },
   "knowledge/_generated/graphify-summary.md": {
-    "mtime": 1788198776480.3945,
-    "hash": "19e0cff4b8beba62e6ea7ced2d51ca64"
+    "mtime": 1788265811617.089,
+    "hash": "48ac676076e234d6ead4aa65a948e9ba"
   },
   "knowledge/_generated/migration-head.md": {
-    "mtime": 1788198776480.5383,
-    "hash": "4d9954c9f910a2f48ee0a45419f45b87"
+    "mtime": 1788265811136.961,
+    "hash": "f9b51cb393d751fdfd7817134574c41a"
   },
   "qa/evidence/README.md": {
     "mtime": 1788198776482.2544,
@@ -2836,12 +2836,12 @@
     "hash": "e192e6a093bbd9df9c3e74999123e15e"
   },
   "tests/test_preview_manifest_contract.py": {
-    "mtime": 1788198776505.8533,
-    "hash": "80b4333cd20b2cc06ed806e68bceaf07"
+    "mtime": 1788265793702.3564,
+    "hash": "c9b367acf39c1ac0c62e6c3aa15d34a4"
   },
   "scripts/README.qa-bootstrap.md": {
-    "mtime": 1788198776485.667,
-    "hash": "9db164f7aac4b713c768db81e2f86f22"
+    "mtime": 1788265793701.4224,
+    "hash": "938539c37b852398c172a5eeeb2ddbfb"
   },
   "scripts/agent_ops/verify_preview_bundle.py": {
     "mtime": 1788198776487.4226,
@@ -2864,8 +2864,8 @@
     "hash": "da4b3ba00e0b30aae747f40836320b8a"
   },
   "tests/test_preview_provider_verifier.py": {
-    "mtime": 1788198776506.0266,
-    "hash": "6af1f3339f4a3d0a7597dd45fed07246"
+    "mtime": 1788265793702.485,
+    "hash": "8e3907f9445dba19fc9e302749836b36"
   },
   "scripts/agent_ops/provision_qa_bootstrap.py": {
     "mtime": 1788198776486.6904,
@@ -2880,12 +2880,12 @@
     "hash": "93e86b6d71d3edf2d9e6e0741b880f2b"
   },
   "tests/test_release_evidence_contract.py": {
-    "mtime": 1788198776509.552,
-    "hash": "5add0cae6f493ca3c51018f235a8a109"
+    "mtime": 1788265793702.7712,
+    "hash": "83b6b3a3563e82aec351dca94214a2b7"
   },
   "tests/test_trusted_release_gate.py": {
-    "mtime": 1788198776515.2715,
-    "hash": "588fb14e8c7e9de54b6ccc316488e5e3"
+    "mtime": 1788265793702.9236,
+    "hash": "9746b8c801a003c3b0fb2e1a80ebee2b"
   },
   ".githooks/pre-commit": {
     "mtime": 1788198776234.4175,
@@ -3292,12 +3292,12 @@
     "hash": "3e6104119ea69eb9b7a1c4a05010ae57"
   },
   "tests/test_compare_preview_manifests.py": {
-    "mtime": 1788198776496.0354,
-    "hash": "3a088c470d672b722c1f1923d4fcb260"
+    "mtime": 1788265793702.2246,
+    "hash": "dbec4076a7d3c941892b875f570f4f60"
   },
   "knowledge/00-control/START-HERE.md": {
-    "mtime": 1788198776476.599,
-    "hash": "03af2737f29e44f71cc3e2cbac0b82f3"
+    "mtime": 1788265793696.9792,
+    "hash": "1d3a8da7eab3ccd2ccaa8cb96f7b2e51"
   },
   "tests/test_database_schema_bootstrap.py": {
     "mtime": 1788198776496.4927,
@@ -3944,8 +3944,8 @@
     "hash": "f0d482ba90a66f5d67711c11603bf79e"
   },
   "scripts/agent_ops/operational_qa.py": {
-    "mtime": 1788198776486.6133,
-    "hash": "93bedb7c5fe40746ab3f257e45f41d18"
+    "mtime": 1788265793701.5637,
+    "hash": "6de2d2bc7a3199303a15db158647b715"
   },
   "tests/test_deployment_build_identity.py": {
     "mtime": 1788198776497.001,
@@ -3992,8 +3992,8 @@
     "hash": "b783a5a67eb71f08936604b20964a3a6"
   },
   "qa/operational/README.md": {
-    "mtime": 1788198776482.8499,
-    "hash": "35d209b144d140b3363027ed86fac717"
+    "mtime": 1788265793700.988,
+    "hash": "5d3f70770b8b0238c82f8434ddfd201c"
   },
   "qa/operational/runs/shared-sandbox-campaign-20260812/report.md": {
     "mtime": 1788198776483.1873,
@@ -4764,8 +4764,8 @@
     "hash": "355501156a50e760719111f23ddb1b46"
   },
   "docs/ci-cd-runbook.md": {
-    "mtime": 1788198776345.7224,
-    "hash": "518a645f6bcb7d8b48e43810953a6b22"
+    "mtime": 1788265793696.7256,
+    "hash": "eb815c8dbb68f04e4eb0442dda9c6b29"
   },
   "docs/decisions/tech-0080-warehouse-options.md": {
     "mtime": 1788198776347.732,
@@ -4998,5 +4998,49 @@
   "tests/test_room_soft_delete_counts.py": {
     "mtime": 1788198776512.353,
     "hash": "5d8f02694500c1357cc1a4abe15435d1"
+  },
+  "app/api/collaboration.py": {
+    "mtime": 1788208957257.0063,
+    "hash": "fd170caca4b0ac0d0eafa7792a02aaf8"
+  },
+  "app/schemas/collaboration.py": {
+    "mtime": 1788204175034.8044,
+    "hash": "baaf9f875fbde9afd7f145661557eb14"
+  },
+  "app/services/collaboration.py": {
+    "mtime": 1788208494066.292,
+    "hash": "b8aef97166fa6b85eac21b77458ac0a3"
+  },
+  "frontend/src/api/collaboration.ts": {
+    "mtime": 1788200913619.8901,
+    "hash": "5224612e18a5ab6d5b23340f3ebdf5ea"
+  },
+  "frontend/src/api/queryInvalidation.ts": {
+    "mtime": 1788199575365.9446,
+    "hash": "c2dbe5bc21fb1dcd7ad5dafa3a287e78"
+  },
+  "frontend/src/hooks/useCollaborativeResource.ts": {
+    "mtime": 1788208557949.388,
+    "hash": "36afe5e88ba520347656e981fb854f92"
+  },
+  "scripts/agent_ops/verify_production_render.py": {
+    "mtime": 1788265793701.9583,
+    "hash": "7a2d5ac14321535cd50fd4eaabb52f68"
+  },
+  "tests/test_collaboration_api.py": {
+    "mtime": 1788204175035.2358,
+    "hash": "fbc914632d42202094d8f9f26694f3a1"
+  },
+  "tests/test_collaboration_service.py": {
+    "mtime": 1788199974151.78,
+    "hash": "aeaa639fc995c0513d5fb819d2c8ed5c"
+  },
+  "tests/test_production_render_verifier.py": {
+    "mtime": 1788265793702.6106,
+    "hash": "1a132100ce8f4353325cbf8dfca1d62c"
+  },
+  "docs/realtime-collaboration.md": {
+    "mtime": 1788207431108.3188,
+    "hash": "5d7f4853dd029dd2794c0106d783f557"
   }
 }

@@ -13,5 +13,5 @@ Local memory: Before each task run `/Users/maximopaulos/AI-Workspace/memory/tool
 
 Required skills: obsidian-load-context, graphify-read, graphify-load-context.
 
-Never expose secrets, session data, credentials, PII, webhook secrets, or payment data. Respect the existing working tree and do not revert other agents' changes. Do not claim a task is complete until the applicable tests, documentation updates, Graphify freshness, and release evidence are verified. For cloud work, the required QA evidence must come from isolated preview data and QA personas only.
+Never expose secrets, session data, credentials, PII, webhook secrets, or payment data. Respect the existing working tree and do not revert other agents' changes. Do not claim a task is complete until the applicable tests, documentation updates, Graphify freshness, and production Render QA result are verified. For cloud work, use only the authorized production Render test hotel with synthetic data and the redacted operational evidence path.
 '''

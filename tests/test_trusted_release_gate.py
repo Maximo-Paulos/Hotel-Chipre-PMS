@@ -426,7 +426,7 @@ def test_github_client_error_never_discloses_token_or_body() -> None:
     assert response_secret.decode() not in message
 
 
-def test_workflow_never_checks_out_or_executes_pr_head_with_token() -> None:
+def test_workflow_keeps_pr_checkout_immutable_and_defers_cloud_qa_to_production() -> None:
     workflow = (ROOT / ".github" / "workflows" / "trusted-release-gate.yml").read_text(
         encoding="utf-8"
     )
@@ -442,9 +442,11 @@ def test_workflow_never_checks_out_or_executes_pr_head_with_token() -> None:
     assert "ref: ${{ github.event.pull_request.base.sha }}" in workflow
     assert "ref: ${{ github.event.pull_request.head.sha }}" not in workflow
     assert "persist-credentials: false" in workflow
-    assert "trusted_release_gate.py prepare" in workflow
-    assert "trusted_release_gate.py finalize" in workflow
-    assert "artifact-ids: ${{ steps.prepare.outputs.artifact_id }}" in workflow
-    assert "github.event.pull_request.head.sha" in workflow
+    assert ".github/workflows/verify-preview-providers.yml" in workflow
+    assert "production Render QA cycle runs automatically" in workflow
+    assert "RENDER_QA_SERVICE_ID" not in workflow
+    assert "trusted_release_gate.py prepare" not in workflow
+    assert "trusted_release_gate.py finalize" not in workflow
+    assert "download-artifact" not in workflow
     assert "run: ${{" not in workflow
     assert "secrets." not in workflow

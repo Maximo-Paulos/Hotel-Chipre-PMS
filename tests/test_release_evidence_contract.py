@@ -299,14 +299,13 @@ def test_versioned_evidence_files_do_not_invalidate_the_code_sha() -> None:
     assert not is_release_relevant_path("qa/evidence/task/attestation.json")
 
 
-def test_release_workflow_uses_head_sha_without_exposing_checkout_token() -> None:
+def test_release_workflow_defers_functional_cloud_qa_to_production_render() -> None:
     workflow = (ROOT / ".github" / "workflows" / "release-gate.yml").read_text(encoding="utf-8")
 
     assert "persist-credentials: false" in workflow
-    assert "github.event.pull_request.head.sha" in workflow
-    assert "github.event.pull_request.head.ref" in workflow
-    assert "check_release_evidence.py" in workflow
-    assert "--base \"$BASE_SHA\"" in workflow
+    assert "Production Render QA cycle" in workflow
+    assert "RENDER_PRODUCTION_SERVICE_ID" in workflow
+    assert "check_release_evidence.py" not in workflow
     assert "find qa/evidence" not in workflow
     assert "github.token" not in workflow
     assert "secrets." not in workflow

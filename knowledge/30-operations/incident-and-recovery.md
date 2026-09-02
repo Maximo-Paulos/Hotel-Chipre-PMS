@@ -2,8 +2,8 @@
 
 1. Clasificar severidad: seguridad/PII, pagos, reserva/habitaciones, disponibilidad o UX.
 2. Preservar evidencia redactada: timestamp, entorno, `code_sha`, persona, pasos y observación.
-3. Detener efectos externos y aislar previews antes de intentar mitigación.
-4. Reproducir sobre datos QA aislados; no borrar logs ni datos auditables.
-5. Aplicar mitigación reversible autorizada, validar local + preview + rol afectado y registrar decisión.
+3. Detener efectos externos y separar la prueba del hotel de cualquier dato operativo ajeno antes de intentar mitigación.
+4. Reproducir sobre datos sintéticos del hotel de prueba autorizado; no borrar logs ni datos auditables.
+5. Aplicar mitigación reversible autorizada, validar local + Render producción + rol afectado y registrar decisión.
 
 Escalar inmediatamente ante exposición, pérdida de integridad, duplicación de cobros o operaciones OTA. Nunca atribuir causa raíz sin evidencia.
