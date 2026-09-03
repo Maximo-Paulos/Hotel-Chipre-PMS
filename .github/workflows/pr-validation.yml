@@ -32,6 +32,9 @@ jobs:
       - name: Run backend tests
         run: python -m pytest -q
 
+      - name: Validate static GCP readiness contract
+        run: python scripts/agent_ops/validate_gcp_readiness.py
+
   frontend:
     name: Frontend validation
     runs-on: ubuntu-latest

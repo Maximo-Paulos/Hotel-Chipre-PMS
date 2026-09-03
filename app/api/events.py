@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import get_db
+from app.database import get_session_factory
 from app.dependencies.auth import AuthContext, get_auth_context
 from app.schemas.domain_event import DomainEventRecoveryResponse
 from app.services.domain_events import (
@@ -16,6 +17,9 @@ from app.services.domain_events import (
     get_realtime_client,
     iter_event_stream,
 )
+from app.models.hotel_membership import HotelMembership
+from app.models.user import User
+from app.services.tenant_context import set_tenant_user_context
 
 
 logger = logging.getLogger(__name__)
@@ -73,8 +77,34 @@ def stream_domain_events(
 
     settings = get_settings()
     heartbeat_seconds = max(5, min(int(settings.REALTIME_EVENTS_HEARTBEAT_SECONDS), 60))
+
+    def authorization_check() -> bool:
+        # A short-lived session is opened only during periodic stream checks;
+        # the request/session dependency is not held for the SSE lifetime.
+        check_db = get_session_factory()()
+        try:
+            set_tenant_user_context(check_db, context.user_id)
+            user = check_db.query(User).filter(User.id == context.user_id, User.is_active.is_(True)).one_or_none()
+            membership = (
+                check_db.query(HotelMembership)
+                .filter(
+                    HotelMembership.hotel_id == context.hotel_id,
+                    HotelMembership.user_id == context.user_id,
+                    HotelMembership.status == "active",
+                )
+                .one_or_none()
+            )
+            return user is not None and membership is not None
+        finally:
+            check_db.close()
+
     return StreamingResponse(
-        iter_event_stream(context.hotel_id, client, heartbeat_seconds=heartbeat_seconds),
+        iter_event_stream(
+            context.hotel_id,
+            client,
+            heartbeat_seconds=heartbeat_seconds,
+            authorization_check=authorization_check,
+        ),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache, no-store",

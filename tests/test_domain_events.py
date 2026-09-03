@@ -394,3 +394,32 @@ def test_stream_endpoint_sets_no_cache_headers_and_tenant_stream(monkeypatch: py
 
     first_frame = asyncio.run(read_first_frame())
     assert '"hotel_id": 42' in first_frame
+
+
+def test_stream_closes_with_control_event_when_membership_is_revoked(monkeypatch: pytest.MonkeyPatch):
+    fake = FakeRedis()
+
+    class FakePubSub:
+        def subscribe(self, channel: str):
+            self.channel = channel
+
+        def get_message(self, timeout: int):
+            return None
+
+        def close(self):
+            return None
+
+    fake.pubsub = lambda **kwargs: FakePubSub()
+    clock = iter((0.0, 61.0, 61.0))
+    monkeypatch.setattr(domain_events.time, "monotonic", lambda: next(clock))
+    stream = domain_events.iter_event_stream(
+        42,
+        fake,
+        heartbeat_seconds=1,
+        authorization_check=lambda: False,
+        authorization_revalidate_seconds=60,
+    )
+    assert '"status": "ready"' in next(stream)
+    control = next(stream)
+    assert "event: control" in control
+    assert "authorization_lost" in control

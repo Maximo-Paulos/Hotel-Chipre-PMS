@@ -8,10 +8,11 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Any, Iterable, Mapping, TYPE_CHECKING
+from typing import Any, Callable, Iterable, Mapping, TYPE_CHECKING
 
 import redis
 from sqlalchemy import func
@@ -1062,15 +1063,41 @@ def format_sse(payload: Mapping[str, Any], *, event_name: str = EVENT_NAME) -> s
     return f"{id_line}event: {event_name}\ndata: {encoded}\n\n"
 
 
-def iter_event_stream(hotel_id: int, client: redis.Redis, *, heartbeat_seconds: int = 15) -> Iterable[str]:
-    """Yield a tenant-scoped SSE stream; sync iteration runs in Starlette's worker."""
+def iter_event_stream(
+    hotel_id: int,
+    client: redis.Redis,
+    *,
+    heartbeat_seconds: int = 15,
+    authorization_check: Callable[[], bool] | None = None,
+    authorization_revalidate_seconds: int = 60,
+) -> Iterable[str]:
+    """Yield a tenant-scoped stream and close when membership is revoked."""
 
     pubsub = client.pubsub(ignore_subscribe_messages=True)
     pubsub.subscribe(channel_for_hotel(hotel_id))
+    last_authorization_check = time.monotonic()
     try:
-        yield format_sse({"version": 1, "hotel_id": hotel_id, "status": "ready"}, event_name="ready")
+        yield format_sse({"schema_version": 2, "hotel_id": hotel_id, "status": "ready"}, event_name="ready")
         while True:
             message = pubsub.get_message(timeout=heartbeat_seconds)
+            if authorization_check and time.monotonic() - last_authorization_check >= max(1, authorization_revalidate_seconds):
+                last_authorization_check = time.monotonic()
+                try:
+                    authorized = authorization_check()
+                except Exception as exc:  # pragma: no cover - fail closed on DB/provider errors
+                    logger.warning("realtime_events.authorization_check_failed", extra={"error_type": type(exc).__name__})
+                    authorized = False
+                if not authorized:
+                    yield format_sse(
+                        {
+                            "schema_version": 2,
+                            "hotel_id": hotel_id,
+                            "event_type": "authorization_lost",
+                            "status": "reauthenticate",
+                        },
+                        event_name="control",
+                    )
+                    return
             if message and message.get("type") == "message":
                 raw_data = message.get("data")
                 if isinstance(raw_data, bytes):
