@@ -33,6 +33,9 @@ class Settings(BaseSettings):
 
     # Redis / Celery
     REDIS_URL: str = "redis://localhost:6379/0"
+    REDIS_NAMESPACE: str = ""
+    REDIS_CONNECT_TIMEOUT_SECONDS: float = 1.0
+    REDIS_SOCKET_TIMEOUT_SECONDS: float = 1.0
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/1"
     READ_MODEL_CACHE_ENABLED: bool = True

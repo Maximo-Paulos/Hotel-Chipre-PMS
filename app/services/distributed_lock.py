@@ -14,6 +14,7 @@ import redis
 from sqlalchemy import text
 
 from app.config import get_settings
+from app.infrastructure.redis_backend import get_sync_redis_client, namespaced_key
 
 
 logger = logging.getLogger(__name__)
@@ -39,7 +40,7 @@ def _get_redis_client() -> redis.Redis | None:
     if not _settings().DISTRIBUTED_LOCK_ENABLED:
         return None
     try:
-        return redis.Redis.from_url(_settings().REDIS_URL, decode_responses=True)
+        return get_sync_redis_client(capability="locks")
     except Exception as exc:  # pragma: no cover - defensive configuration fallback
         logger.warning("distributed_lock.redis_unavailable", extra={"error_type": type(exc).__name__})
         return None
@@ -113,7 +114,7 @@ def distributed_lock(key: str, *, db: object | None = None, ttl_seconds: int | N
 
     token = secrets.token_urlsafe(24)
     try:
-        acquired = bool(client.set(key, token, nx=True, ex=ttl))
+        acquired = bool(client.set(namespaced_key(key), token, nx=True, ex=ttl))
     except Exception as exc:
         postgres_acquired = _try_postgres_advisory_lock(db, key)
         if postgres_acquired:
@@ -134,7 +135,7 @@ def distributed_lock(key: str, *, db: object | None = None, ttl_seconds: int | N
         yield
     finally:
         try:
-            client.eval(_RELEASE_SCRIPT, 1, key, token)
+            client.eval(_RELEASE_SCRIPT, 1, namespaced_key(key), token)
         except Exception as exc:  # pragma: no cover - lock TTL remains the recovery mechanism
             logger.warning("distributed_lock.release_failed", extra={"lock_key": key, "error_type": type(exc).__name__})
 

@@ -16,6 +16,7 @@ import redis
 from sqlalchemy import func
 
 from app.config import get_settings
+from app.infrastructure.redis_backend import get_sync_redis_client, namespaced_key
 from app.models.domain_event_outbox import DomainEventOutbox
 
 
@@ -657,14 +658,14 @@ def _settings():
 
 def channel_for_hotel(hotel_id: int) -> str:
     _validate_hotel_id(hotel_id)
-    return EVENT_CHANNEL_TEMPLATE.format(hotel_id=hotel_id)
+    return namespaced_key(EVENT_CHANNEL_TEMPLATE.format(hotel_id=hotel_id))
 
 
 def revision_key_for_hotel(hotel_id: int, domain: str) -> str:
     _validate_hotel_id(hotel_id)
     if domain not in SUPPORTED_DOMAINS:
         raise ValueError("Unsupported domain")
-    return REVISION_KEY_TEMPLATE.format(hotel_id=hotel_id, domain=domain)
+    return namespaced_key(REVISION_KEY_TEMPLATE.format(hotel_id=hotel_id, domain=domain))
 
 
 def validate_event_input(
@@ -705,7 +706,7 @@ def _get_redis_client() -> redis.Redis | None:
     if not bool(getattr(settings, "REALTIME_EVENTS_ENABLED", True)):
         return None
     try:
-        return redis.Redis.from_url(settings.REDIS_URL, decode_responses=True)
+        return get_sync_redis_client(capability="realtime")
     except Exception as exc:  # pragma: no cover - defensive config fallback
         logger.warning("realtime_events.redis_unavailable", extra={"error_type": type(exc).__name__})
         return None
