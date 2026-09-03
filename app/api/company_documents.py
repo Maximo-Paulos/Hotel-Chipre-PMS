@@ -55,6 +55,7 @@ def create_company_document(
             doc_type=payload.doc_type,
             file_name=payload.file_name,
             file_url=payload.file_url,
+            stored_object_id=payload.stored_object_id,
             requires_signature=payload.requires_signature,
             notes=payload.notes,
         )

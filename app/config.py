@@ -188,6 +188,9 @@ class Settings(BaseSettings):
     OBJECT_STORAGE_S3_BUCKET: str = ""
     OBJECT_STORAGE_S3_ENDPOINT_URL: str = ""
     OBJECT_STORAGE_S3_REGION: str = ""
+    OBJECT_STORAGE_GCS_BUCKET: str = ""
+    OBJECT_STORAGE_GCS_PROJECT: str = ""
+    OBJECT_STORAGE_SIGNING_SECRET: str = ""
 
     # "Sign in with Google" (Google Identity Services ID-token flow). Only a
     # Client ID is needed -- no secret -- because the frontend gets a signed

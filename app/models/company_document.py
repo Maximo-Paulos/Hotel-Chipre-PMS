@@ -67,6 +67,7 @@ class CompanyDocument(Base):
 
     file_name = Column(String(300), nullable=True)
     file_url = Column(String(1000), nullable=True)     # storage URL (no cleartext auth)
+    stored_object_id = Column(String(36), ForeignKey("stored_objects.id", ondelete="SET NULL"), nullable=True, index=True)
     requires_signature = Column(Boolean, nullable=False, default=False)
     signed_at = Column(DateTime, nullable=True)
     signed_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
@@ -81,6 +82,7 @@ class CompanyDocument(Base):
     created_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     deleted_at = Column(DateTime, nullable=True)
     deleted_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    stored_object = relationship("StoredObject", foreign_keys=[stored_object_id], lazy="joined")
 
     __table_args__ = (
         Index("ix_company_documents_hotel_reservation", "hotel_id", "reservation_id"),

@@ -13,6 +13,7 @@ class CompanyDocumentCreate(BaseModel):
     doc_type: CompanyDocumentTypeEnum = CompanyDocumentTypeEnum.OTHER
     file_name: str | None = Field(default=None, max_length=300)
     file_url: str | None = Field(default=None, max_length=1000)
+    stored_object_id: str | None = Field(default=None, max_length=36)
     requires_signature: bool = False
     notes: str | None = None
 
@@ -30,6 +31,7 @@ class CompanyDocumentRead(BaseModel):
     status: CompanyDocumentStatusEnum
     file_name: str | None = None
     file_url: str | None = None
+    stored_object_id: str | None = None
     requires_signature: bool
     signed_at: datetime | None = None
     signed_by_user_id: int | None = None

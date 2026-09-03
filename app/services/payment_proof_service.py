@@ -22,6 +22,7 @@ from app.models.transaction import PaymentMethodEnum, TransactionTypeEnum
 from app.schemas.transaction import PaymentRequest
 from app.services.financial_ledger import operational_balance_due
 from app.services.object_storage import ObjectStorageError, get_object_storage
+from app.services.stored_object_service import register_uploaded_object
 from app.services.payment_service import PaymentError, process_payment
 from app.services.audit_log_service import queue_audit_log
 
@@ -129,7 +130,15 @@ def submit_transfer_proof(
     object_key = f"payment-proofs/{hotel_id}/{secrets.token_urlsafe(24)}.{extension}"
     # Upload bytes to object storage before touching the DB -- a failed
     # upload must not leave a metadata row with nothing behind it.
-    get_object_storage().put_bytes(object_key, content, content_type=content_type)
+    register_uploaded_object(
+        db,
+        hotel_id=hotel_id,
+        purpose="payment_proof",
+        object_key=object_key,
+        data=content,
+        content_type=content_type,
+        created_by_user_id=submitted_by_user_id,
+    )
 
     proof = PaymentProof(
         hotel_id=hotel_id,

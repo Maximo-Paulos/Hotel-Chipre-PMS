@@ -26,13 +26,26 @@ once a real bucket is provisioned and OBJECT_STORAGE_BACKEND=s3 is set.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from datetime import timedelta
+import hashlib
+import hmac
+import time
 from pathlib import Path
+from urllib.parse import quote
 
 from app.config import get_settings
 
 
 class ObjectStorageError(RuntimeError):
     """Raised when a storage backend cannot complete an operation."""
+
+
+@dataclass(frozen=True)
+class ObjectStat:
+    byte_size: int
+    sha256_hex: str | None = None
+    content_type: str | None = None
 
 
 class ObjectStorage(ABC):
@@ -46,6 +59,12 @@ class ObjectStorage(ABC):
 
     @abstractmethod
     def delete(self, key: str) -> None: ...
+
+    @abstractmethod
+    def stat(self, key: str) -> ObjectStat: ...
+
+    @abstractmethod
+    def get_signed_url(self, key: str, *, expires_seconds: int = 300) -> str: ...
 
 
 def _safe_relative_path(key: str) -> Path:
@@ -92,6 +111,23 @@ class LocalObjectStorage(ObjectStorage):
         except FileNotFoundError:
             pass
 
+    def stat(self, key: str) -> ObjectStat:
+        path = self._path_for(key)
+        try:
+            data = path.read_bytes()
+        except FileNotFoundError as exc:
+            raise ObjectStorageError(f"Object not found: {key}") from exc
+        return ObjectStat(byte_size=len(data), sha256_hex=hashlib.sha256(data).hexdigest())
+
+    def get_signed_url(self, key: str, *, expires_seconds: int = 300) -> str:
+        if not 1 <= expires_seconds <= 900:
+            raise ObjectStorageError("signed URL expiry must be between 1 and 900 seconds")
+        secret = getattr(get_settings(), "OBJECT_STORAGE_SIGNING_SECRET", "") or "local-object-storage"
+        expires_at = int(time.time()) + expires_seconds
+        payload = f"{key}:{expires_at}".encode("utf-8")
+        signature = hmac.new(secret.encode("utf-8"), payload, hashlib.sha256).hexdigest()
+        return f"local-object://{quote(key, safe='/')}?expires={expires_at}&sig={signature}"
+
 
 class S3ObjectStorage(ObjectStorage):
     """Stub for a real S3-compatible bucket. Not wired to a live bucket --
@@ -128,6 +164,80 @@ class S3ObjectStorage(ObjectStorage):
     def delete(self, key: str) -> None:
         raise NotImplementedError("S3ObjectStorage requires boto3 + bucket credentials -- see class docstring")
 
+    def stat(self, key: str) -> ObjectStat:
+        raise NotImplementedError("S3ObjectStorage requires boto3 + bucket credentials -- see class docstring")
+
+    def get_signed_url(self, key: str, *, expires_seconds: int = 300) -> str:
+        raise NotImplementedError("S3ObjectStorage requires boto3 + bucket credentials -- see class docstring")
+
+
+class GCSObjectStorage(ObjectStorage):
+    """Google Cloud Storage adapter with lazy optional dependency loading."""
+
+    def __init__(self, *, bucket: str, project: str | None = None):
+        if not bucket:
+            raise ObjectStorageError("OBJECT_STORAGE_GCS_BUCKET is required")
+        self._bucket_name = bucket
+        self._project = project or None
+        self._bucket = None
+
+    def _get_bucket(self):
+        if self._bucket is None:
+            try:
+                from google.cloud import storage
+                self._bucket = storage.Client(project=self._project).bucket(self._bucket_name)
+            except ImportError as exc:
+                raise ObjectStorageError("google-cloud-storage is required for the GCS backend") from exc
+            except Exception as exc:
+                raise ObjectStorageError("GCS client initialization failed") from exc
+        return self._bucket
+
+    def put_bytes(self, key: str, data: bytes, *, content_type: str | None = None) -> None:
+        try:
+            self._get_bucket().blob(_safe_relative_path(key).as_posix()).upload_from_string(data, content_type=content_type)
+        except ObjectStorageError:
+            raise
+        except Exception as exc:
+            raise ObjectStorageError("GCS upload failed") from exc
+
+    def get_bytes(self, key: str) -> bytes:
+        try:
+            return self._get_bucket().blob(_safe_relative_path(key).as_posix()).download_as_bytes()
+        except ObjectStorageError:
+            raise
+        except Exception as exc:
+            raise ObjectStorageError("GCS download failed") from exc
+
+    def delete(self, key: str) -> None:
+        try:
+            self._get_bucket().blob(_safe_relative_path(key).as_posix()).delete()
+        except ObjectStorageError:
+            raise
+        except Exception as exc:
+            raise ObjectStorageError("GCS delete failed") from exc
+
+    def stat(self, key: str) -> ObjectStat:
+        try:
+            blob = self._get_bucket().blob(_safe_relative_path(key).as_posix())
+            blob.reload()
+            return ObjectStat(byte_size=int(blob.size or 0), content_type=blob.content_type)
+        except ObjectStorageError:
+            raise
+        except Exception as exc:
+            raise ObjectStorageError("GCS stat failed") from exc
+
+    def get_signed_url(self, key: str, *, expires_seconds: int = 300) -> str:
+        if not 1 <= expires_seconds <= 900:
+            raise ObjectStorageError("signed URL expiry must be between 1 and 900 seconds")
+        try:
+            return self._get_bucket().blob(_safe_relative_path(key).as_posix()).generate_signed_url(
+                version="v4", expiration=timedelta(seconds=expires_seconds), method="GET"
+            )
+        except ObjectStorageError:
+            raise
+        except Exception as exc:
+            raise ObjectStorageError("GCS signed URL generation failed") from exc
+
 
 def get_object_storage() -> ObjectStorage:
     """Backend picked by `settings.OBJECT_STORAGE_BACKEND` (default: local).
@@ -145,5 +255,10 @@ def get_object_storage() -> ObjectStorage:
             bucket=getattr(settings, "OBJECT_STORAGE_S3_BUCKET", ""),
             endpoint_url=getattr(settings, "OBJECT_STORAGE_S3_ENDPOINT_URL", "") or None,
             region=getattr(settings, "OBJECT_STORAGE_S3_REGION", "") or None,
+        )
+    if backend == "gcs":
+        return GCSObjectStorage(
+            bucket=getattr(settings, "OBJECT_STORAGE_GCS_BUCKET", ""),
+            project=getattr(settings, "OBJECT_STORAGE_GCS_PROJECT", "") or None,
         )
     raise ObjectStorageError(f"Unknown OBJECT_STORAGE_BACKEND: {backend!r}")

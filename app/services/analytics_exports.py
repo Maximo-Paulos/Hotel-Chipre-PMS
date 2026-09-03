@@ -17,6 +17,7 @@ from app.database import get_session_factory
 from app.models.analytics import AnalyticsExportFormatEnum, AnalyticsExportJob, AnalyticsExportStatusEnum
 from app.schemas.analytics_api import AnalyticsExportJobRead, AnalyticsExportRequest
 from app.services.object_storage import ObjectStorageError, get_object_storage
+from app.services.stored_object_service import register_uploaded_object
 from app.services.analytics_service import (
     _analytics_window,
     build_category_detail_payload,
@@ -475,12 +476,16 @@ def _export_object_key(job: AnalyticsExportJob) -> str:
     return f"analytics-exports/{job.hotel_id}/{created_at.year:04d}/{created_at.month:02d}/{job.id}.xlsx"
 
 
-def _persist_export_file(job: AnalyticsExportJob, file_bytes: bytes) -> None:
+def _persist_export_file(db: Session, job: AnalyticsExportJob, file_bytes: bytes) -> None:
     object_key = _export_object_key(job)
-    get_object_storage().put_bytes(
-        object_key,
-        file_bytes,
+    register_uploaded_object(
+        db,
+        hotel_id=job.hotel_id,
+        purpose="analytics_export",
+        object_key=object_key,
+        data=file_bytes,
         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        created_by_user_id=job.user_id,
     )
     # job.file_path now holds an object-storage key, not a filesystem path.
     job.file_path = object_key
@@ -507,7 +512,7 @@ def generate_xlsx_export_job(job_id: int, hotel_id: int | None = None) -> None:
         job.started_at = _now()
         db.flush()
         file_bytes = render_export_xlsx(db, hotel_id=job.hotel_id, request=request)
-        _persist_export_file(job, file_bytes)
+        _persist_export_file(db, job, file_bytes)
         job.status = AnalyticsExportStatusEnum.COMPLETED
         job.completed_at = _now()
         job.error_code = None

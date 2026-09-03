@@ -8,6 +8,7 @@ from app.services.object_storage import (
     LocalObjectStorage,
     ObjectStorageError,
     S3ObjectStorage,
+    GCSObjectStorage,
     get_object_storage,
 )
 
@@ -23,6 +24,23 @@ def test_local_object_storage_put_get_roundtrip_preserves_integrity(tmp_path):
     assert fetched == data
     assert hashlib.sha256(fetched).hexdigest() == hashlib.sha256(data).hexdigest()
     assert (tmp_path / "payment-proofs" / "1" / "abc.png").exists()
+
+
+def test_local_object_storage_stat_and_signed_url_are_bounded(tmp_path, monkeypatch):
+    class _Settings:
+        OBJECT_STORAGE_SIGNING_SECRET = "test-secret"
+
+    import app.services.object_storage as object_storage_module
+
+    monkeypatch.setattr(object_storage_module, "get_settings", lambda: _Settings())
+    storage = LocalObjectStorage(tmp_path)
+    storage.put_bytes("private/report.xlsx", b"report")
+    stat = storage.stat("private/report.xlsx")
+    assert stat.byte_size == 6
+    assert stat.sha256_hex == hashlib.sha256(b"report").hexdigest()
+    assert "expires=" in storage.get_signed_url("private/report.xlsx", expires_seconds=300)
+    with pytest.raises(ObjectStorageError):
+        storage.get_signed_url("private/report.xlsx", expires_seconds=901)
 
 
 def test_local_object_storage_get_missing_key_raises():
@@ -59,6 +77,11 @@ def test_s3_object_storage_is_an_unwired_stub():
         storage.get_bytes("key")
     with pytest.raises(NotImplementedError):
         storage.delete("key")
+
+
+def test_gcs_backend_requires_explicit_bucket():
+    with pytest.raises(ObjectStorageError, match="GCS_BUCKET"):
+        GCSObjectStorage(bucket="")
 
 
 def test_get_object_storage_defaults_to_local_backend(monkeypatch, tmp_path):

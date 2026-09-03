@@ -9,6 +9,7 @@ from app.models.company import Company
 from app.models.company_document import CompanyDocument, CompanyDocumentStatusEnum, CompanyDocumentTypeEnum
 from app.models.reservation import Reservation
 from app.models.security_audit_log import SecurityAuditLog
+from app.models.stored_object import StoredObject, StoredObjectStatusEnum
 
 
 class CompanyDocumentError(Exception):
@@ -51,6 +52,7 @@ def create_document(
     doc_type: CompanyDocumentTypeEnum = CompanyDocumentTypeEnum.OTHER,
     file_name: str | None = None,
     file_url: str | None = None,
+    stored_object_id: str | None = None,
     requires_signature: bool = False,
     notes: str | None = None,
 ) -> CompanyDocument:
@@ -60,6 +62,19 @@ def create_document(
         _get_company(db, hotel_id=hotel_id, company_id=resolved_company_id)
         if reservation.company_id is not None and reservation.company_id != resolved_company_id:
             raise CompanyDocumentError("Document company does not match reservation company")
+    if stored_object_id is not None:
+        stored_object = (
+            db.query(StoredObject)
+            .filter(
+                StoredObject.id == stored_object_id,
+                StoredObject.hotel_id == hotel_id,
+                StoredObject.status == StoredObjectStatusEnum.READY.value,
+                StoredObject.deleted_at.is_(None),
+            )
+            .one_or_none()
+        )
+        if stored_object is None:
+            raise CompanyDocumentError("Stored document object does not belong to the active hotel")
 
     document = CompanyDocument(
         hotel_id=hotel_id,
@@ -69,6 +84,7 @@ def create_document(
         status=CompanyDocumentStatusEnum.PENDING,
         file_name=file_name,
         file_url=file_url,
+        stored_object_id=stored_object_id,
         requires_signature=requires_signature or doc_type == CompanyDocumentTypeEnum.SIGNATURE_REQUIRED,
         notes=notes,
         created_by_user_id=user_id,
