@@ -308,7 +308,6 @@ const runEventStream = async (
   }
 
   let retryCount = 0;
-  let hasConnected = false;
   const seenEventIds = new Set<string>();
   const scheduledDomains = new Set<SyncDomain>();
   let refreshTimer: number | null = null;
@@ -363,7 +362,6 @@ const runEventStream = async (
         throw new Error(`realtime stream returned ${response.status}`);
       }
       if (!response.body) throw new Error("realtime stream has no body");
-      hasConnected = true;
       retryCount = 0;
       updateRealtimeStatus(hotelId, "connected");
       const reader = response.body.getReader();

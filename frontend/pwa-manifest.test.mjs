@@ -49,7 +49,8 @@ test("service worker keeps operational API responses out of the shell cache", ()
 
 test("application shell exposes explicit offline and stale-data messaging", () => {
   const appShell = fs.readFileSync(path.join(frontendRoot, "src/ui/AppShell.tsx"), "utf8");
+  const spanishShell = fs.readFileSync(path.join(frontendRoot, "src/locales/es/appshell.json"), "utf8");
   assert.match(appShell, /useOnlineStatus/);
   assert.match(appShell, /data-testid="offline-banner"/);
-  assert.match(appShell, /pueden estar desactualizados/);
+  assert.match(spanishShell, /pueden estar desactualizados/);
 });
