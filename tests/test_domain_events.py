@@ -196,14 +196,14 @@ def test_queued_domain_change_publishes_once_after_commit(monkeypatch: pytest.Mo
     finally:
         session.close()
 
-    assert published == [
-        {
-            "hotel_id": 42,
-            "domain": "payments",
-            "event_type": "payment.changed",
-            "payload": {"reservation_id": 17, "payment_id": 91},
-        }
-    ]
+    assert len(published) == 1
+    assert published[0]["hotel_id"] == 42
+    assert published[0]["domain"] == "payments"
+    assert published[0]["event_type"] == "payment.changed"
+    assert published[0]["payload"] == {"reservation_id": 17, "payment_id": 91}
+    assert published[0]["event_id"]
+    assert published[0]["cursor"] == 1
+    assert published[0]["schema_version"] == 1
 
 
 def test_queued_domain_change_is_discarded_on_rollback(monkeypatch: pytest.MonkeyPatch):
@@ -280,14 +280,12 @@ def test_derived_analytics_changes_are_coalesced_by_family(monkeypatch: pytest.M
     domain_events.queue_model_changes(session)
     domain_events.publish_queued_domain_changes(session)
 
-    assert published == [
-        {
-            "hotel_id": 42,
-            "domain": "analytics",
-            "event_type": "analytics.read_model.changed",
-            "payload": {"family": "reservation_daily"},
-        }
-    ]
+    assert len(published) == 1
+    assert published[0]["hotel_id"] == 42
+    assert published[0]["domain"] == "analytics"
+    assert published[0]["event_type"] == "analytics.read_model.changed"
+    assert published[0]["payload"] == {"family": "reservation_daily"}
+    assert published[0]["event_id"]
 
 
 def test_session_hooks_publish_model_changes_only_after_commit(monkeypatch: pytest.MonkeyPatch):

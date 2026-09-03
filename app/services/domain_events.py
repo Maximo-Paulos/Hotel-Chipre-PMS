@@ -114,6 +114,13 @@ class DomainEvent:
     revision: int
     occurred_at: str
     payload: dict[str, Any]
+    event_id: str | None = None
+    schema_version: int = 1
+    cursor: int | None = None
+
+    def __post_init__(self) -> None:
+        if not self.event_id:
+            object.__setattr__(self, "event_id", str(uuid.uuid4()))
 
     @property
     def channel(self) -> str:
@@ -122,10 +129,13 @@ class DomainEvent:
     def as_payload(self) -> dict[str, Any]:
         return {
             "version": 1,
+            "schema_version": self.schema_version,
+            "event_id": self.event_id,
             "hotel_id": self.hotel_id,
             "domain": self.domain,
             "event_type": self.event_type,
             "revision": self.revision,
+            "cursor": self.cursor,
             "occurred_at": self.occurred_at,
             "payload": dict(self.payload),
         }
@@ -573,12 +583,19 @@ def publish_queued_domain_changes(session: "Session") -> None:
             outbox = change.outbox
             outbox_id = outbox.id if outbox is not None else None
             try:
-                event = publish_domain_event(
-                    hotel_id=change.hotel_id,
-                    domain=change.domain,
-                    event_type=change.event_type,
-                    payload=change.payload,
-                )
+                publish_kwargs = {
+                    "hotel_id": change.hotel_id,
+                    "domain": change.domain,
+                    "event_type": change.event_type,
+                    "payload": change.payload,
+                }
+                if outbox is not None:
+                    publish_kwargs.update(
+                        event_id=outbox.event_id,
+                        cursor=outbox.stream_cursor or outbox.id,
+                        schema_version=outbox.schema_version or 1,
+                    )
+                event = publish_domain_event(**publish_kwargs)
                 if event is None:
                     raise RealtimeEventsUnavailable("publish_domain_event returned no event")
                 _record_outbox_attempt(
@@ -751,6 +768,9 @@ def publish_domain_event(
     client: redis.Redis | None = None,
     revision: int | None = None,
     occurred_at: datetime | str | None = None,
+    event_id: str | None = None,
+    cursor: int | None = None,
+    schema_version: int = 1,
 ) -> DomainEvent | None:
     """Publish one event. ``revision``/``occurred_at`` let an outbox replay
     reuse the values already stored on a durable row instead of minting a new
@@ -784,6 +804,9 @@ def publish_domain_event(
             revision=resolved_revision,
             occurred_at=resolved_occurred_at,
             payload=normalized_payload,
+            event_id=event_id,
+            schema_version=schema_version,
+            cursor=cursor,
         )
         redis_client.publish(event.channel, json.dumps(event.as_payload(), ensure_ascii=True, allow_nan=False))
         return event
@@ -851,6 +874,9 @@ def publish_pending_domain_events(
                 payload=row.payload,
                 revision=row.revision,
                 occurred_at=row_occurred_at,
+                event_id=row.event_id,
+                cursor=row.stream_cursor or row.id,
+                schema_version=row.schema_version or 1,
             )
             if event is None:
                 raise RealtimeEventsUnavailable("publish_domain_event returned no event")
@@ -1026,7 +1052,14 @@ def get_realtime_client() -> redis.Redis | None:
 
 
 def format_sse(payload: Mapping[str, Any], *, event_name: str = EVENT_NAME) -> str:
-    return f"event: {event_name}\ndata: {json.dumps(dict(payload), ensure_ascii=True, allow_nan=False)}\n\n"
+    encoded = json.dumps(dict(payload), ensure_ascii=True, allow_nan=False)
+    if len(encoded.encode("utf-8")) > 4 * 1024:
+        raise ValueError("SSE event exceeds 4 KiB")
+    cursor = payload.get("cursor")
+    event_id = payload.get("event_id")
+    identifier = cursor if cursor is not None else event_id
+    id_line = f"id: {identifier}\n" if identifier is not None else ""
+    return f"{id_line}event: {event_name}\ndata: {encoded}\n\n"
 
 
 def iter_event_stream(hotel_id: int, client: redis.Redis, *, heartbeat_seconds: int = 15) -> Iterable[str]:

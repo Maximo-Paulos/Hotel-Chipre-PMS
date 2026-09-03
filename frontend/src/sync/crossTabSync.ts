@@ -24,10 +24,13 @@ type SyncMessage = {
 
 type ServerEvent = {
   version?: number;
+  schema_version?: number;
+  event_id?: string;
   hotel_id?: number;
   domain?: SyncDomain;
   event_type?: string;
   revision?: number;
+  cursor?: number | string | null;
   payload?: Record<string, string | number | boolean | null>;
 };
 
@@ -36,6 +39,7 @@ const STORAGE_KEY = "hotel-pms-domain-event";
 
 const DOMAIN_QUERY_PREFIXES = QUERY_PREFIXES_BY_DOMAIN;
 const ALL_DOMAINS = Object.keys(QUERY_PREFIXES_BY_DOMAIN) as SyncDomain[];
+const EVENT_ID_LIMIT = 2048;
 
 export type RealtimeConnectionStatus = "disabled" | "connecting" | "connected" | "reconnecting" | "degraded";
 
@@ -234,6 +238,63 @@ const parseSseFrames = (buffer: string, onEvent: (event: ServerEvent) => void) =
   return remainder;
 };
 
+const cursorStorageKey = (session: SessionLike, hotelId: number) =>
+  `hotel-pms:realtime-cursor:${hotelId}:${session.userId}`;
+
+const readCursor = (session: SessionLike, hotelId: number): number => {
+  if (typeof window === "undefined") return 0;
+  try {
+    const value = Number(window.sessionStorage.getItem(cursorStorageKey(session, hotelId)) ?? 0);
+    return Number.isSafeInteger(value) && value >= 0 ? value : 0;
+  } catch {
+    return 0;
+  }
+};
+
+const writeCursor = (session: SessionLike, hotelId: number, cursor: number) => {
+  if (typeof window === "undefined" || !Number.isSafeInteger(cursor) || cursor < 0) return;
+  try {
+    window.sessionStorage.setItem(cursorStorageKey(session, hotelId), String(cursor));
+  } catch {
+    /* sessionStorage can be unavailable in private browsing */
+  }
+};
+
+const recoverRealtime = async (
+  session: SessionLike,
+  queryClient: QueryClient,
+  hotelId: number,
+  signal?: AbortSignal
+) => {
+  const currentCursor = readCursor(session, hotelId);
+  const query = currentCursor > 0 ? `?after_cursor=${currentCursor}` : "";
+  const response = await fetch(buildUrl(`/api/events/recovery${query}`), {
+    headers: buildAuthHeaders(session),
+    credentials: "include",
+    signal
+  });
+  if (response.status === 401 || response.status === 403) {
+    throw Object.assign(new Error("realtime recovery unauthorized"), { status: response.status });
+  }
+  if (!response.ok) throw new Error(`realtime recovery returned ${response.status}`);
+  const payload = (await response.json()) as {
+    latest_cursor?: number;
+    domains?: string[];
+    reset_required?: boolean;
+  };
+  const domains = (payload.domains ?? []).filter((domain): domain is SyncDomain =>
+    ALL_DOMAINS.includes(domain as SyncDomain)
+  );
+  if (payload.reset_required || currentCursor === 0) {
+    await refreshDomains(queryClient, hotelId, ALL_DOMAINS);
+  } else if (domains.length) {
+    await refreshDomains(queryClient, hotelId, domains);
+  }
+  if (Number.isSafeInteger(payload.latest_cursor) && (payload.latest_cursor as number) >= currentCursor) {
+    writeCursor(session, hotelId, payload.latest_cursor as number);
+  }
+};
+
 const runEventStream = async (
   session: SessionLike,
   queryClient: QueryClient,
@@ -248,6 +309,7 @@ const runEventStream = async (
 
   let retryCount = 0;
   let hasConnected = false;
+  const seenEventIds = new Set<string>();
   const scheduledDomains = new Set<SyncDomain>();
   let refreshTimer: number | null = null;
   const waitBeforeRetry = async () => {
@@ -284,6 +346,10 @@ const runEventStream = async (
   updateRealtimeStatus(hotelId, "connecting");
   while (!signal.aborted) {
     try {
+      // Redis pub/sub is ephemeral. Recover committed domains before every
+      // first connection and reconnect so a gap cannot be mistaken for a
+      // healthy stream.
+      await recoverRealtime(session, queryClient, hotelId, signal);
       const response = await fetch(buildUrl("/api/events/stream"), {
         headers: buildAuthHeaders(session),
         credentials: "include",
@@ -297,15 +363,9 @@ const runEventStream = async (
         throw new Error(`realtime stream returned ${response.status}`);
       }
       if (!response.body) throw new Error("realtime stream has no body");
-      const wasReconnect = hasConnected;
       hasConnected = true;
       retryCount = 0;
       updateRealtimeStatus(hotelId, "connected");
-      if (wasReconnect) {
-        // Redis pub/sub is intentionally ephemeral. A complete authoritative
-        // refetch heals every event that arrived while this client was away.
-        await refreshDomains(queryClient, hotelId, ALL_DOMAINS);
-      }
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
@@ -321,6 +381,18 @@ const runEventStream = async (
           ) {
             return;
           }
+          if (event.event_id) {
+            if (seenEventIds.has(event.event_id)) return;
+            seenEventIds.add(event.event_id);
+            if (seenEventIds.size > EVENT_ID_LIMIT) {
+              const first = seenEventIds.values().next().value;
+              if (typeof first === "string") seenEventIds.delete(first);
+            }
+          }
+          const cursor = Number(event.cursor);
+          const currentCursor = readCursor(session, hotelId);
+          if (Number.isSafeInteger(cursor) && cursor <= currentCursor) return;
+          if (Number.isSafeInteger(cursor)) writeCursor(session, hotelId, cursor);
           scheduleRefresh(event.domain);
         });
       }
@@ -340,6 +412,7 @@ export function useCrossTabSync() {
   const { session } = useSession();
   const queryClient = useQueryClient();
   const hotelId = session.hotelId;
+  const realtimeStatus = useRealtimeStatus();
 
   useEffect(() => {
     if (!hotelId) return undefined;
@@ -360,4 +433,39 @@ export function useCrossTabSync() {
     );
     return () => controller.abort();
   }, [hotelId, queryClient, session.accessToken, session.userId]);
+
+  useEffect(() => {
+    if (!hotelId || !session.accessToken || !session.userId || realtimeStatus === "connected" || realtimeStatus === "disabled") {
+      return undefined;
+    }
+    let timer: number | null = null;
+    let stopped = false;
+    const schedule = () => {
+      const delay = typeof document !== "undefined" && document.hidden ? 60_000 : 15_000;
+      timer = window.setTimeout(async () => {
+        if (stopped) return;
+        try {
+          await recoverRealtime(
+            { hotelId, accessToken: session.accessToken, userId: session.userId },
+            queryClient,
+            hotelId
+          );
+        } catch {
+          /* SSE remains the primary path; the next bounded poll retries. */
+        }
+        schedule();
+      }, delay);
+    };
+    const onVisibilityChange = () => {
+      if (timer !== null) window.clearTimeout(timer);
+      schedule();
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    schedule();
+    return () => {
+      stopped = true;
+      if (timer !== null) window.clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [hotelId, queryClient, realtimeStatus, session.accessToken, session.userId]);
 }
