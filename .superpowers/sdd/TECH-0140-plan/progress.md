@@ -82,7 +82,7 @@ Task 6: complete (pending commit; focused database/security/realtime tests 48 pa
 Task 7: complete (pending commit; focused storage/payment/company/analytics tests 37 passed; GCS provider and legacy reconciliation remain provider-bound)
 Task 8: complete (pending commit; dispatcher/heartbeat/schedule tests 12 passed; worker runtime and provider metrics remain provider-bound)
 Task 9: complete (pending commit; health/security tests 13 passed; provider metrics and alerting remain provider-bound)
-Task 10: pending
+Task 10: complete (pending commit; local restore/object verification tests added; provider-bound restore remains blocked pending signed human drill)
 Task 11: pending
 Task 12: pending
 Task 13: pending
