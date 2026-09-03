@@ -30,6 +30,12 @@ class Settings(BaseSettings):
 
     # Database
     DATABASE_URL: str = "postgresql+psycopg2://pms:pms@localhost:5432/hotel_pms"
+    DB_POOL_SIZE: int = 5
+    DB_MAX_OVERFLOW: int = 2
+    DB_POOL_TIMEOUT_SECONDS: float = 5.0
+    DB_CONNECT_TIMEOUT_SECONDS: int = 5
+    DB_POOL_RECYCLE_SECONDS: int = 1800
+    DB_STATEMENT_TIMEOUT_SECONDS: float = 15.0
 
     # Redis / Celery
     REDIS_URL: str = "redis://localhost:6379/0"
@@ -470,6 +476,9 @@ def validate_runtime_security(settings: Settings | None = None) -> None:
                 errors.append(
                     f"{name} must be explicitly false when EXTERNAL_EFFECTS_ENABLED=false in production"
                 )
+
+    if runtime_settings.GOOGLE_LOGIN_ENABLED is True and runtime_settings.GOOGLE_SELF_SIGNUP_ENABLED is None:
+        errors.append("GOOGLE_SELF_SIGNUP_ENABLED must be explicit when Google login is enabled in production")
 
     if not runtime_settings.DISTRIBUTED_LOCK_ENABLED or not runtime_settings.DISTRIBUTED_LOCK_REQUIRED:
         errors.append("DISTRIBUTED_LOCK_ENABLED and DISTRIBUTED_LOCK_REQUIRED must be true in production")

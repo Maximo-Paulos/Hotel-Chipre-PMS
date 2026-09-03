@@ -167,16 +167,32 @@ def get_engine(database_url: str | None = None):
             cursor.close()
 
     else:
-        # PostgreSQL / Supabase: use a bounded pool suitable for web workers.
-        # For serverless (Render free tier, etc.) pool_size=5 prevents exhaustion.
+        # PostgreSQL / Supabase: use a bounded, configurable pool suitable for
+        # web workers. Defaults are the API budget in TECH-0140 (5 + 2).
+        settings = get_settings()
+        pool_size = max(1, min(int(getattr(settings, "DB_POOL_SIZE", 5)), 50))
+        max_overflow = max(0, min(int(getattr(settings, "DB_MAX_OVERFLOW", 2)), 50))
+        pool_timeout = max(float(getattr(settings, "DB_POOL_TIMEOUT_SECONDS", 5.0)), 0.1)
+        connect_timeout = max(int(getattr(settings, "DB_CONNECT_TIMEOUT_SECONDS", 5)), 1)
+        pool_recycle = max(int(getattr(settings, "DB_POOL_RECYCLE_SECONDS", 1800)), 60)
         engine = create_engine(
             url,
             echo=False,
-            pool_size=5,
-            max_overflow=10,
+            pool_size=pool_size,
+            max_overflow=max_overflow,
+            pool_timeout=pool_timeout,
             pool_pre_ping=True,   # drop stale connections
-            pool_recycle=1800,    # recycle every 30 min
+            pool_recycle=pool_recycle,
+            connect_args={"connect_timeout": connect_timeout},
         )
+        statement_timeout_ms = max(int(getattr(settings, "DB_STATEMENT_TIMEOUT_SECONDS", 15) * 1000), 100)
+
+        @event.listens_for(engine, "connect")
+        def _set_postgres_statement_timeout(dbapi_connection, connection_record):
+            del connection_record
+            cursor = dbapi_connection.cursor()
+            cursor.execute(f"SET statement_timeout = {statement_timeout_ms}")
+            cursor.close()
 
     _install_slow_query_listener(engine)
     return engine

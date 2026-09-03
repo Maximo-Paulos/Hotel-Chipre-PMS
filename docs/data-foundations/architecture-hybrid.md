@@ -61,8 +61,8 @@ Pattern: `SELECT FOR UPDATE` on the target room row before inserting reservation
 
 ### Connection pool
 
-- Production: PgBouncer in transaction mode, pool_size=25 per app instance
-- ORM: SQLAlchemy pool_size=10, max_overflow=20, pool_timeout=30
+- Production future: PgBouncer in transaction mode, only after provider capacity is verified
+- ORM baseline: SQLAlchemy pool_size=5, max_overflow=2, pool_timeout=5; statement timeout 15 seconds
 - Never use statement-mode pgBouncer (incompatible with advisory locks and prepared statements)
 
 ### Key indexes (beyond model defaults)

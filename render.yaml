@@ -15,7 +15,7 @@ services:
     # Production capacity profile. Render autoscaling requires a Pro
     # workspace; preview environments deliberately run minInstances only.
     plan: standard
-    # PostgreSQL budget: app/database.py uses pool_size=5 + max_overflow=10 = 15 connections per instance.
+    # PostgreSQL budget: app/database.py defaults to pool_size=5 + max_overflow=2 = 7 connections per instance.
     # The current Supabase free Postgres has max_connections=60, so 60 / 15 = 4 theoretical API instances;
     # maxInstances stays at 3 to reserve the remaining connection budget for Celery, beat, and admin tools.
     # If the Postgres plan changes, recalculate max_connections / (pool_size + max_overflow) and update this limit.
