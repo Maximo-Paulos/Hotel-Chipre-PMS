@@ -349,7 +349,9 @@ const runEventStream = async (
       // first connection and reconnect so a gap cannot be mistaken for a
       // healthy stream.
       await recoverRealtime(session, queryClient, hotelId, signal);
-      const response = await fetch(buildUrl("/api/events/stream"), {
+      const streamCursor = readCursor(session, hotelId);
+      const streamQuery = streamCursor > 0 ? `?after_cursor=${streamCursor}` : "";
+      const response = await fetch(buildUrl(`/api/events/stream${streamQuery}`), {
         headers: buildAuthHeaders(session),
         credentials: "include",
         signal

@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import json
+from datetime import datetime, timezone
 from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import create_engine, text
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.api import events
 from app.config import Settings
@@ -423,3 +424,103 @@ def test_stream_closes_with_control_event_when_membership_is_revoked(monkeypatch
     control = next(stream)
     assert "event: control" in control
     assert "authorization_lost" in control
+
+
+def test_stream_endpoint_uses_postgres_transport_when_redis_is_unavailable(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(events, "get_realtime_client", lambda: None)
+    monkeypatch.setattr(
+        events,
+        "get_settings",
+        lambda: _settings(REALTIME_EVENTS_FALLBACK_POLL_SECONDS=1),
+    )
+    monkeypatch.setattr(
+        events,
+        "iter_postgres_event_stream",
+        lambda *args, **kwargs: iter(["event: ready\ndata: {\"transport\": \"postgres-outbox\"}\n\n"]),
+    )
+
+    class ClosableDb:
+        closed = False
+
+        def close(self):
+            self.closed = True
+
+    db = ClosableDb()
+    response = events.stream_domain_events(
+        AuthContext(hotel_id=42, user_id=9, user_role="owner", is_verified=True),
+        db,
+    )
+    assert response.headers["x-realtime-transport"] == "postgres-outbox"
+    assert db.closed is True
+
+
+def test_postgres_fallback_stream_reads_committed_outbox_without_payload():
+    engine = _event_engine()
+    factory = sessionmaker(bind=engine)
+    session = factory()
+    session.add(
+        DomainEventOutbox(
+            event_id="00000000-0000-0000-0000-000000000042",
+            hotel_id=42,
+            domain="reservations",
+            event_type="reservation.updated",
+            payload={"reservation_id": 7},
+            schema_version=1,
+            stream_cursor=17,
+            revision=3,
+            occurred_at=datetime.now(timezone.utc),
+            status="pending",
+        )
+    )
+    session.commit()
+    session.close()
+
+    stream = domain_events.iter_postgres_event_stream(
+        42,
+        after_cursor=0,
+        poll_seconds=1,
+        session_factory=factory,
+    )
+    assert '"transport": "postgres-outbox"' in next(stream)
+    frame = next(stream)
+    assert '"cursor": 17' in frame
+    assert '"payload": {}' in frame
+    assert '"reservation_id": 7' not in frame
+    stream.close()
+    engine.dispose()
+
+
+def test_postgres_fallback_stream_starts_after_latest_cursor_when_cursor_is_omitted(monkeypatch: pytest.MonkeyPatch):
+    engine = _event_engine()
+    factory = sessionmaker(bind=engine)
+    session = factory()
+    session.add(
+        DomainEventOutbox(
+            event_id="00000000-0000-0000-0000-000000000043",
+            hotel_id=42,
+            domain="reservations",
+            event_type="reservation.updated",
+            payload={},
+            stream_cursor=22,
+            occurred_at=datetime.now(timezone.utc),
+            status="published",
+        )
+    )
+    session.commit()
+    session.close()
+
+    stream = domain_events.iter_postgres_event_stream(
+        42,
+        poll_seconds=1,
+        session_factory=factory,
+    )
+    ready = next(stream)
+    assert '"cursor": 22' in ready
+    class StopPolling(Exception):
+        pass
+
+    monkeypatch.setattr(domain_events.time, "sleep", lambda _seconds: (_ for _ in ()).throw(StopPolling()))
+    assert next(stream) == ": heartbeat\n\n"
+    with pytest.raises(StopPolling):
+        next(stream)
+    engine.dispose()

@@ -43,9 +43,10 @@ obligan a un refetch completo desde la API autoritativa
 
 El recolector de `app.services.domain_events` guarda las señales en la sesión,
 elimina duplicados y las publica desde `after_commit`. `after_rollback`
-descarta las señales. Redis/Valkey es el transporte requerido para que el
-flujo funcione entre workers y dispositivos; los fallos del transporte no
-deshacen una operación ya guardada.
+descarta las señales. Redis/Valkey es el transporte rápido de fan-out cuando
+está disponible; si no responde, `/api/events/stream` lee el outbox confirmado
+de PostgreSQL en sondeo acotado y mantiene la misma semántica de invalidación.
+Los fallos del transporte no deshacen una operación ya guardada.
 
 El cliente combina SSE con `BroadcastChannel` y el fallback de `localStorage`
 para pestañas del mismo navegador. Persiste el cursor por usuario/hotel,
@@ -63,13 +64,17 @@ Configuración relevante:
 REDIS_URL=redis://localhost:6379/0
 REALTIME_EVENTS_ENABLED=true
 REALTIME_EVENTS_HEARTBEAT_SECONDS=15
+REALTIME_EVENTS_FALLBACK_POLL_SECONDS=5
 DISTRIBUTED_LOCK_ENABLED=true
 DISTRIBUTED_LOCK_REQUIRED=true   # producción
 ```
 
 Para tests E2E locales sin Redis, Playwright desactiva explícitamente el
-cliente realtime; para verificar el camino distribuido se puede ejecutar con
-`REALTIME_E2E=true` y Redis/Valkey activo. En producción, Redis/Valkey debe estar disponible: la
+cliente realtime; para verificar el camino Redis se puede ejecutar con
+`REALTIME_E2E=true` y Redis/Valkey activo. El fallback de SSE con PostgreSQL
+requiere un preview con la migración del outbox aplicada y debe validarse con
+el proveedor antes de medir latencia. En producción, Redis/Valkey sigue siendo
+recomendado para fan-out de baja latencia, locks y coedición WebSocket; la
 validación de arranque exige `REALTIME_EVENTS_ENABLED=true` y los locks
 distribuidos.
 
