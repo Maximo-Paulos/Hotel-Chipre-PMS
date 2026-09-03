@@ -2,11 +2,11 @@
 
 ## Baseline de trazabilidad TECH-0140
 
-Esta copia fue revisada el 2026-09-02 desde la rama
+Esta copia fue revisada el 2026-09-03 desde la rama
 `feature/tech-0140-realtime-recovery-contract`, commit completo
-`0fc3f497841b8da166631d5ca5d476943ed1dbd5`. El árbol estaba limpio antes de
+`d907adc` como base de esta actualización. El árbol estaba limpio antes de
 los cambios documentales y la cabeza Alembic observada es
-`20260902_ota_lifecycle_enum_lowercase (head)`.
+`tech0140_job_runtime (head)`.
 
 Configuración no sensible confirmada en código/plantillas: `APP_ENV` separa
 development/test/production; `REALTIME_EVENTS_ENABLED=true`,
@@ -19,11 +19,11 @@ para preview QA. `CORS_ORIGINS` debe ser explícito y no contener `*`.
 no valores confirmados en este documento.
 
 El endpoint `GET /api/events/recovery` permite recuperar invalidaciones por
-cursor sin exponer payloads. Para una reconexión, el cliente debe refetchar la
-API respaldada por PostgreSQL cuando `reset_required=true`, cuando falte el
-cursor o cuando realtime esté degradado. La disponibilidad de Redis/Valkey y
-las URLs privadas de proveedor quedan `needs-verification` hasta una QA
-aislada autorizada. Esta baseline no provisiona ni muta proveedores externos.
+cursor sin exponer payloads. El cliente ejecuta recovery antes de abrir o
+reabrir SSE, persiste el cursor por usuario/hotel y usa polling acotado cuando
+realtime está degradado. La disponibilidad de Redis/Valkey y las URLs privadas
+de proveedor quedan `needs-verification` hasta una QA aislada autorizada. Esta
+baseline no provisiona ni muta proveedores externos.
 
 Arquitectura objetivo:
 - Frontend/landing/app: Vercel

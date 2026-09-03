@@ -73,11 +73,11 @@ branch protection lo impide, se conserva la rama y se entrega el motivo.
 ## Task status
 
 Task 0: complete (commit 4c7ec61, reviewer CLEAN, focused tests 7 passed)
-Task 1: complete (commit 50f02d8; self-review clean; auth tests 43 passed; frontend typecheck pending node_modules)
+Task 1: complete (commit 50f02d8; self-review clean; auth tests 43 passed; frontend lint/typecheck/build passed)
 Task 2: complete (commit 0fc3f49, verified in prior turn)
 Task 3: complete (commit 4cbb226; focused ephemeral/lock/cache/health tests 38 passed; collaboration migration remains a follow-up)
 Task 4: complete (commit 078e798; focused outbox/recovery/migration tests 18 passed; sequence enforcement remains a follow-up)
-Task 5: complete (commit e562e7e; focused realtime tests 31 passed; frontend dependency/E2E and long-lived membership revalidation remain provider/browser gates)
+Task 5: complete (commits e562e7e and 8feca40; focused realtime tests 66 passed; frontend lint/typecheck/build passed; provider/browser E2E remains pending)
 Task 6: complete (commit 3c0704b; focused database/security/realtime tests 48 passed; provider connection budget remains needs-verification)
 Task 7: complete (commit 02908b1; focused storage/payment/company/analytics tests 37 passed; GCS provider and legacy reconciliation remain provider-bound)
 Task 8: complete (commit 7667a6b; dispatcher/heartbeat/schedule tests 12 passed; worker runtime and provider metrics remain provider-bound)
@@ -85,4 +85,4 @@ Task 9: complete (commit 24b1c28; health/security tests 13 passed; provider metr
 Task 10: complete (commits fc940df and 3b19096; local restore/object verification tests 60 passed; provider-bound restore remains blocked pending signed human drill)
 Task 11: complete (commit f3d99b6; static GCP readiness validator passes; no provider resources provisioned)
 Task 12: complete (commit f3d99b6; analytics gate documented; no warehouse/NoSQL activation)
-Task 13: complete (current worktree; local release checklist/load runner/static CI gate added; provider-bound QA/restore/load/signature remain blocking)
+Task 13: complete (commits 8feca40 and d907adc; local release checklist/load runner/static CI gate added; provider-bound QA/restore/load/signature remain blocking)

@@ -34,12 +34,12 @@ contiene `latest_cursor`, los `domains` modificados, `reset_required` y
 limitada al hotel resuelto por la membresía autenticada e incluye filas del
 outbox pendientes y publicadas, porque ambas representan commits reales.
 
-En esta primera versión `latest_cursor` es el `id` entero del outbox actual.
-La ausencia de cursor, `after_cursor=0`, un cursor anterior a las filas
-retenidas o más de 500 filas posteriores obligan a un refetch completo desde
-la API autoritativa (`reset_required=true`). El barrido devuelve como máximo
-500 filas y `has_more` informa que el límite fue alcanzado. T4 puede reemplazar
-el cursor físico por `stream_cursor` sin cambiar este contrato público.
+`latest_cursor` usa `stream_cursor` en outbox v2 y conserva el `id` entero como
+fallback durante un despliegue mixto. La ausencia de cursor, `after_cursor=0`,
+un cursor anterior a las filas retenidas o más de 500 filas posteriores
+obligan a un refetch completo desde la API autoritativa
+(`reset_required=true`). El barrido devuelve como máximo 500 filas y
+`has_more` informa que el límite fue alcanzado.
 
 El recolector de `app.services.domain_events` guarda las señales en la sesión,
 elimina duplicados y las publica desde `after_commit`. `after_rollback`
@@ -48,11 +48,14 @@ flujo funcione entre workers y dispositivos; los fallos del transporte no
 deshacen una operación ya guardada.
 
 El cliente combina SSE con `BroadcastChannel` y el fallback de `localStorage`
-para pestañas del mismo navegador. SSE reconecta con backoff exponencial y
-jitter. Al reconectar hace un refetch completo de los dominios activos para
-reparar eventos efímeros que se hayan perdido. El shell muestra `Conectado`,
-`Reconectando` o `Sincronización degradada`; en estado degradado se puede
-seguir guardando y la interfaz se pone al día al reconectar.
+para pestañas del mismo navegador. Persiste el cursor por usuario/hotel,
+deduplica `event_id`, ejecuta recovery antes de abrir o reabrir SSE y repara
+gaps sin retroceder cursores. SSE reconecta con backoff exponencial y jitter.
+Si nunca conecta o queda degradado, hace polling en primer plano cada 15
+segundos y en segundo plano cada 60 segundos. El shell conserva los datos
+visibles y muestra que pueden estar desactualizados. El backend revalida la
+membresía cada 60 segundos; al revocarse envía una señal de control, cierra el
+stream y obliga a reautenticarse.
 
 Configuración relevante:
 

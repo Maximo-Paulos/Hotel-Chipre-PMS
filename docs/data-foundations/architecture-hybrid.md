@@ -204,8 +204,8 @@ This ensures emails/webhooks are never lost even if the app crashes after the DB
 
 The current recovery contract is implemented at
 `app/api/events.py` and `app/services/domain_events.py` and is documented as
-`confirmed` for local code at commit
-`0fc3f497841b8da166631d5ca5d476943ed1dbd5`.
+`confirmed` for local code at the TECH-0140 implementation branch (base
+commit `d907adc`).
 
 - PostgreSQL `domain_event_outbox` is the durable record of a committed domain
   change; migration `20260901_domain_event_outbox` creates it with
@@ -214,12 +214,19 @@ The current recovery contract is implemented at
 - `GET /api/events/recovery` resolves `hotel_id` from the authenticated
   membership. It returns invalidation metadata only, never event payloads or
   business data.
-- `latest_cursor` currently uses the integer outbox `id`. Missing cursor,
-  `after_cursor=0`, a cursor older than retained rows, or more than 500 later
-  rows sets `reset_required=true`; the bounded response reports `has_more`.
+- `latest_cursor` uses `stream_cursor` after the additive outbox-v2 migration
+  and falls back to the legacy integer outbox `id` during mixed deployment.
+  Missing cursor, `after_cursor=0`, a cursor older than retained rows, or more
+  than 500 later rows sets `reset_required=true`; the bounded response reports
+  `has_more`.
 - Redis/Valkey remains transport, not authority. A transport failure can
   degrade realtime delivery but cannot roll back a PostgreSQL commit; the
   client must refetch the authoritative API.
+- SSE emits a cursor-bearing `id` and revalidates the user's active membership
+  periodically; a revoked membership receives a control event and the stream
+  closes. The frontend persists the cursor per user/hotel, deduplicates event
+  IDs, recovers before reconnecting and polls at bounded foreground/background
+  intervals when SSE is degraded.
 
 `confirmed`: implementation and local contract tests are present. `inferred`:
 the recovery path is suitable for later cursor evolution because the public

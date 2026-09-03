@@ -168,18 +168,21 @@ P3  IA avanzada, apps/store y tecnologías adicionales no esenciales
 **Estado:** `VERIFIED` para la trazabilidad local de este checkout; la
 configuración privada de proveedores y la QA cloud siguen `needs-verification`.
 
-Baseline documentada el 2026-09-02 desde la rama
+Baseline documentada el 2026-09-03 desde la rama
 `feature/tech-0140-realtime-recovery-contract`, commit completo
-`0fc3f497841b8da166631d5ca5d476943ed1dbd5`. El árbol estaba limpio antes de
+`d907adc` como base de esta actualización. El árbol estaba limpio antes de
 la actualización documental. La cabeza Alembic observada es
-`20260902_ota_lifecycle_enum_lowercase (head)`.
+`tech0140_job_runtime (head)`.
 
-Task 2 ya implementada en ese commit expone
+TECH-0140 ya implementado localmente expone
 `GET /api/events/recovery?after_cursor=N`: responde sólo
 `latest_cursor`, `domains`, `reset_required` y `has_more`; está limitada al
 hotel de la membresía autenticada y barre como máximo 500 filas. El cursor
-actual es el `id` entero de `domain_event_outbox`; el reemplazo por
-`stream_cursor` queda para T4.
+usa `stream_cursor` cuando está disponible y conserva `id` como fallback para
+despliegues mixtos. SSE entrega `id=<stream_cursor>`, el frontend deduplica y
+persiste cursor por usuario/hotel, ejecuta recovery antes de reconectar y
+degrada a polling de 15/60 segundos. La membership se revalida cada 60
+segundos durante una conexión larga.
 
 La fuente de verdad operacional continúa siendo PostgreSQL. Redis/Valkey sólo
 transporta invalidaciones, locks y estado efímero; una caída del transporte no
