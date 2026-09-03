@@ -200,6 +200,33 @@ For email sends, OTA webhooks, payment link creation, and WhatsApp notifications
 
 This ensures emails/webhooks are never lost even if the app crashes after the DB write.
 
+## Realtime recovery baseline (TECH-0140)
+
+The current recovery contract is implemented at
+`app/api/events.py` and `app/services/domain_events.py` and is documented as
+`confirmed` for local code at commit
+`0fc3f497841b8da166631d5ca5d476943ed1dbd5`.
+
+- PostgreSQL `domain_event_outbox` is the durable record of a committed domain
+  change; migration `20260901_domain_event_outbox` creates it with
+  `hotel_id`, `domain`, `revision`, `occurred_at`, `published_at` and retry
+  metadata, plus PostgreSQL RLS.
+- `GET /api/events/recovery` resolves `hotel_id` from the authenticated
+  membership. It returns invalidation metadata only, never event payloads or
+  business data.
+- `latest_cursor` currently uses the integer outbox `id`. Missing cursor,
+  `after_cursor=0`, a cursor older than retained rows, or more than 500 later
+  rows sets `reset_required=true`; the bounded response reports `has_more`.
+- Redis/Valkey remains transport, not authority. A transport failure can
+  degrade realtime delivery but cannot roll back a PostgreSQL commit; the
+  client must refetch the authoritative API.
+
+`confirmed`: implementation and local contract tests are present. `inferred`:
+the recovery path is suitable for later cursor evolution because the public
+response is metadata-only. `needs-verification`: provider-bound Redis/Valkey
+health, retention under production load, and cross-device QA; no provider was
+provisioned or mutated by this baseline.
+
 ---
 
 ## Search strategy

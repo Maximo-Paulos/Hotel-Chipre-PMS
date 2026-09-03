@@ -29,7 +29,7 @@ def heading(title: str) -> str:
     return (
         f"# {title}\n\n"
         f"Generado: {datetime.now(UTC).isoformat()}\n"
-        f"Commit: `{command('git', 'rev-parse', '--short', 'HEAD')}`\n\n"
+        f"Commit: `{command('git', 'rev-parse', 'HEAD')}`\n\n"
     )
 
 
@@ -49,7 +49,7 @@ def write(path: str, content: str) -> None:
 
 def main() -> int:
     OUT.mkdir(parents=True, exist_ok=True)
-    sha = command("git", "rev-parse", "--short", "HEAD")
+    sha = command("git", "rev-parse", "HEAD")
 
     try:
         from app.main import app  # Imported only to obtain FastAPI's declared contract.
