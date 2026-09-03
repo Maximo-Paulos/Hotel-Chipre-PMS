@@ -6,6 +6,8 @@ import json
 import logging
 import os
 import re
+import time
+import uuid
 from contextlib import asynccontextmanager
 from decimal import Decimal
 from pathlib import Path
@@ -205,6 +207,27 @@ async def security_headers(request: Request, call_next):
     response.headers["Content-Security-Policy"] = _CSP
     if is_production_mode():
         response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
+    return response
+
+
+@app.middleware("http")
+async def request_telemetry(request: Request, call_next):
+    """Emit bounded HTTP timing fields and make correlation IDs observable."""
+    started = time.perf_counter()
+    request_id = request.headers.get("X-Request-Id", "")[:128]
+    if not request_id or not re.fullmatch(r"[A-Za-z0-9._:-]{1,128}", request_id):
+        request_id = str(uuid.uuid4())
+    response = await call_next(request)
+    duration_ms = (time.perf_counter() - started) * 1000.0
+    LOGGER.info(
+        "http.request route=%s method=%s status=%s duration_ms=%.2f request_id=%s",
+        request.url.path,
+        request.method,
+        response.status_code,
+        duration_ms,
+        request_id,
+    )
+    response.headers["X-Request-Id"] = request_id
     return response
 
 # CORS: local dev origins and Vercel previews are development/QA conveniences.

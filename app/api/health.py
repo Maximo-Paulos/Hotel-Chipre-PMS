@@ -4,6 +4,7 @@ import logging
 from typing import Any
 
 from fastapi import APIRouter
+from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
 import app.database as db_module
@@ -12,6 +13,7 @@ from app.db.cassandra import cassandra_healthcheck
 from app.db.mongo import mongo_healthcheck
 from app.db.neo4j import neo4j_healthcheck
 from app.services.analytics_warehouse import AnalyticsWarehouseUnavailable, get_clickhouse_client
+from app.infrastructure.redis_backend import get_sync_redis_client
 
 
 logger = logging.getLogger(__name__)
@@ -45,11 +47,10 @@ def _redis_healthcheck() -> dict[str, Any]:
             "realtime_events_enabled": False,
             "error": None,
         }
-
     try:
-        import redis
-
-        client = redis.Redis.from_url(settings.REDIS_URL, decode_responses=True, socket_connect_timeout=1, socket_timeout=1)
+        client = get_sync_redis_client(capability="health")
+        if client is None:
+            raise RuntimeError("Redis client unavailable")
         client.ping()
         return {
             "status": "ok",
@@ -73,6 +74,47 @@ def _redis_healthcheck() -> dict[str, Any]:
             "realtime_events_enabled": realtime_enabled,
             "error": "Redis healthcheck failed",
         }
+
+
+def _critical_lock_readiness(redis_payload: dict[str, Any]) -> dict[str, Any]:
+    settings = get_settings()
+    if not settings.DISTRIBUTED_LOCK_ENABLED:
+        return {
+            "status": "error" if settings.DISTRIBUTED_LOCK_REQUIRED else "disabled",
+            "safe": not settings.DISTRIBUTED_LOCK_REQUIRED,
+            "mechanism": "none",
+        }
+    if redis_payload.get("connected"):
+        return {"status": "ok", "safe": True, "mechanism": "redis"}
+    # distributed_lock.py uses a transaction-scoped PostgreSQL advisory lock
+    # when Redis is unavailable. PostgreSQL is checked by the same readiness
+    # response, so this is safe but explicitly degraded.
+    return {"status": "degraded", "safe": True, "mechanism": "postgres_advisory_xact_lock"}
+
+
+@router.get("/live")
+def live_healthcheck() -> dict[str, Any]:
+    """Process liveness only; never depends on PostgreSQL or Redis."""
+    return {"status": "ok"}
+
+
+@router.get("/ready")
+def ready_healthcheck() -> JSONResponse:
+    """Report whether the API can safely accept critical writes."""
+    settings = get_settings()
+    postgres = _postgres_healthcheck()
+    redis = _redis_healthcheck()
+    critical_lock = _critical_lock_readiness(redis)
+    ready = postgres.get("connected") is True and critical_lock["safe"]
+    payload = {
+        "status": "ok" if ready else "error",
+        "ready": ready,
+        "postgres": postgres,
+        "redis": redis,
+        "critical_lock": critical_lock,
+        "optional_degraded": bool(redis.get("status") == "error" and not settings.DISTRIBUTED_LOCK_REQUIRED),
+    }
+    return JSONResponse(status_code=200 if ready else 503, content=payload)
 
 
 def _clickhouse_healthcheck() -> dict[str, Any]:
