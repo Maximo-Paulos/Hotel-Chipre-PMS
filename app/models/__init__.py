@@ -17,6 +17,7 @@ from app.models.hotel_config import HotelConfiguration
 from app.models.hotel_role_visibility_window import HotelRoleVisibilityWindow
 from app.models.company import Company
 from app.models.domain_event_outbox import DomainEventOutbox
+from app.models.domain_event_retention_watermark import DomainEventRetentionWatermark
 from app.models.ota import OTAReservationMapping, OTAWebhookCredential
 from app.models.ota_core import (
     OTAProvider,
@@ -171,6 +172,7 @@ __all__ = [
     "HotelRoleVisibilityWindow",
     "Company",
     "DomainEventOutbox",
+    "DomainEventRetentionWatermark",
     "OTAReservationMapping",
     "OTAWebhookCredential",
     "OTAProvider",

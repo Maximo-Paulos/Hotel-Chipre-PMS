@@ -8,8 +8,9 @@ from __future__ import annotations
 
 import json
 import logging
+import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Iterable, Mapping, TYPE_CHECKING
 
 import redis
@@ -32,7 +33,9 @@ PENDING_EVENTS_KEY = "_hotel_pms_pending_domain_events"
 
 # Exponential backoff base for outbox replay (worker/Celery retries), in
 # seconds: attempt 1 waits this long, attempt 2 waits 2x, attempt 3 4x, etc.
-OUTBOX_RETRY_BASE_SECONDS = 30
+OUTBOX_RETRY_BASE_SECONDS = 5
+OUTBOX_RETRY_MAX_SECONDS = 15 * 60
+OUTBOX_MAX_ATTEMPTS = 8
 RECOVERY_MAX_ROWS = 500
 SUPPORTED_DOMAINS = frozenset(
     {
@@ -526,9 +529,13 @@ def queue_domain_change(
     if durable:
         outbox_row = DomainEventOutbox(
             hotel_id=hotel_id,
+            event_id=str(uuid.uuid4()),
             domain=domain.strip().lower(),
             event_type=event_type.strip(),
             payload=normalized_payload,
+            schema_version=1,
+            deduplication_key=f"{hotel_id}:{domain.strip().lower()}:{event_type.strip()}:{uuid.uuid4()}",
+            status="pending",
         )
         session.add(outbox_row)
     pending[dedupe_key] = QueuedDomainChange(
@@ -614,11 +621,24 @@ def _record_outbox_attempt(
         return
     row.attempts += 1
     if published:
+        row.status = "published"
         row.revision = revision
         row.published_at = datetime.now(timezone.utc)
         row.last_error = None
+        row.next_attempt_at = None
     else:
         row.last_error = error
+        if row.attempts >= OUTBOX_MAX_ATTEMPTS:
+            row.status = "dead_letter"
+            row.dead_lettered_at = datetime.now(timezone.utc)
+        else:
+            row.status = "pending"
+            # The after-commit fast path is already the first delivery
+            # attempt. Leave its row immediately eligible so the next worker
+            # sweep can recover a process/Redis failure without waiting for a
+            # second in-memory timer; worker-originated failures apply the
+            # exponential delay below.
+            row.next_attempt_at = datetime.now(timezone.utc)
 
 
 def discard_queued_domain_changes(session: "Session", transaction_id: int | None = None) -> None:
@@ -774,7 +794,7 @@ def publish_domain_event(
 
 def _outbox_backoff_seconds(attempts: int) -> int:
     """Exponential backoff for outbox replay: base, 2x, 4x, ... per attempt."""
-    return OUTBOX_RETRY_BASE_SECONDS * (2 ** max(attempts - 1, 0))
+    return min(OUTBOX_RETRY_MAX_SECONDS, OUTBOX_RETRY_BASE_SECONDS * (2 ** max(attempts - 1, 0)))
 
 
 def publish_pending_domain_events(
@@ -802,6 +822,8 @@ def publish_pending_domain_events(
         .filter(
             DomainEventOutbox.hotel_id == hotel_id,
             DomainEventOutbox.published_at.is_(None),
+            DomainEventOutbox.status != "dead_letter",
+            (DomainEventOutbox.next_attempt_at.is_(None) | (DomainEventOutbox.next_attempt_at <= datetime.now(timezone.utc))),
         )
         .order_by(DomainEventOutbox.id.asc())
         .limit(max(batch_size, 1))
@@ -833,13 +855,23 @@ def publish_pending_domain_events(
             if event is None:
                 raise RealtimeEventsUnavailable("publish_domain_event returned no event")
             row.attempts += 1
+            row.status = "published"
             row.revision = event.revision
             row.published_at = datetime.now(timezone.utc)
             row.last_error = None
+            row.next_attempt_at = None
             published += 1
         except Exception as exc:
             row.attempts += 1
             row.last_error = f"publish_failed:{type(exc).__name__}"
+            if row.attempts >= OUTBOX_MAX_ATTEMPTS:
+                row.status = "dead_letter"
+                row.dead_lettered_at = datetime.now(timezone.utc)
+            else:
+                row.status = "pending"
+                row.next_attempt_at = datetime.now(timezone.utc) + timedelta(
+                    seconds=_outbox_backoff_seconds(row.attempts)
+                )
             failed += 1
             backoff = _outbox_backoff_seconds(row.attempts)
             retry_after_seconds = backoff if retry_after_seconds is None else min(retry_after_seconds, backoff)
@@ -911,10 +943,10 @@ def get_domain_event_recovery(
 ) -> dict[str, Any]:
     """Return changed domains after a tenant-scoped outbox cursor.
 
-    The current outbox ``id`` is the temporary cursor until the v2 schema adds
-    ``stream_cursor``. Both published and pending rows represent committed
-    business changes, so neither is filtered out here. Only ``id`` and
-    ``domain`` are selected; event payloads never cross this recovery contract.
+    V2 rows use ``stream_cursor``; legacy rows fall back to ``id`` during the
+    expand/backfill rollout. Both published and pending rows represent
+    committed business changes, so neither is filtered out here. Only a cursor
+    and domain are selected; event payloads never cross this contract.
 
     A missing/zero cursor, a cursor before the retained tenant rows, or more
     than ``RECOVERY_MAX_ROWS`` changes requires a full authoritative refetch.
@@ -924,24 +956,25 @@ def get_domain_event_recovery(
     if after_cursor is not None and after_cursor < 0:
         raise ValueError("after_cursor must be non-negative")
 
+    cursor_value = func.coalesce(DomainEventOutbox.stream_cursor, DomainEventOutbox.id)
     latest_value = (
-        db.query(func.max(DomainEventOutbox.id))
+        db.query(func.max(cursor_value))
         .filter(DomainEventOutbox.hotel_id == hotel_id)
         .scalar()
     )
     oldest_value = (
-        db.query(func.min(DomainEventOutbox.id))
+        db.query(func.min(cursor_value))
         .filter(DomainEventOutbox.hotel_id == hotel_id)
         .scalar()
     )
 
     cursor = after_cursor or 0
-    recovery_query = db.query(DomainEventOutbox.id, DomainEventOutbox.domain).filter(
+    recovery_query = db.query(cursor_value.label("cursor"), DomainEventOutbox.domain).filter(
         DomainEventOutbox.hotel_id == hotel_id,
-        DomainEventOutbox.id > cursor,
+        cursor_value > cursor,
     )
     has_more = (
-        recovery_query.order_by(DomainEventOutbox.id.asc())
+        recovery_query.order_by(cursor_value.asc())
         .offset(RECOVERY_MAX_ROWS)
         .limit(1)
         .first()
@@ -949,11 +982,11 @@ def get_domain_event_recovery(
     )
     rows = (
         recovery_query
-        .order_by(DomainEventOutbox.id.asc())
+        .order_by(cursor_value.asc())
         .limit(RECOVERY_MAX_ROWS)
         .all()
     )
-    domains = sorted({str(domain) for _event_id, domain in rows if domain})
+    domains = sorted({str(domain) for _event_cursor, domain in rows if domain})
 
     reset_required = after_cursor in (None, 0)
     if (
