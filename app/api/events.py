@@ -2,15 +2,17 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import get_db
 from app.dependencies.auth import AuthContext, get_auth_context
+from app.schemas.domain_event import DomainEventRecoveryResponse
 from app.services.domain_events import (
     RealtimeEventsUnavailable,
+    get_domain_event_recovery,
     get_realtime_client,
     iter_event_stream,
 )
@@ -18,6 +20,25 @@ from app.services.domain_events import (
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/events", tags=["Realtime events"])
+
+
+@router.get("/recovery", response_model=DomainEventRecoveryResponse)
+def recover_domain_events(
+    after_cursor: int | None = Query(
+        default=None,
+        ge=0,
+        description="Último cursor de outbox procesado para el hotel autorizado.",
+    ),
+    context: AuthContext = Depends(get_auth_context),
+    db: Session = Depends(get_db),
+):
+    """Recover invalidation domains after a cursor without exposing payloads."""
+
+    return get_domain_event_recovery(
+        db,
+        hotel_id=context.hotel_id,
+        after_cursor=after_cursor,
+    )
 
 
 @router.get("/stream")

@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from typing import Any, Iterable, Mapping, TYPE_CHECKING
 
 import redis
+from sqlalchemy import func
 
 from app.config import get_settings
 from app.models.domain_event_outbox import DomainEventOutbox
@@ -31,6 +32,7 @@ PENDING_EVENTS_KEY = "_hotel_pms_pending_domain_events"
 # Exponential backoff base for outbox replay (worker/Celery retries), in
 # seconds: attempt 1 waits this long, attempt 2 waits 2x, attempt 3 4x, etc.
 OUTBOX_RETRY_BASE_SECONDS = 30
+RECOVERY_MAX_ROWS = 500
 SUPPORTED_DOMAINS = frozenset(
     {
         "analytics",
@@ -897,6 +899,78 @@ def get_domain_event_outbox_metrics(
         "pending_count": pending_count,
         "oldest_age_seconds": oldest_age_seconds,
         "stale": stale,
+    }
+
+
+def get_domain_event_recovery(
+    db: "Session",
+    *,
+    hotel_id: int,
+    after_cursor: int | None = None,
+) -> dict[str, Any]:
+    """Return changed domains after a tenant-scoped outbox cursor.
+
+    The current outbox ``id`` is the temporary cursor until the v2 schema adds
+    ``stream_cursor``. Both published and pending rows represent committed
+    business changes, so neither is filtered out here. Only ``id`` and
+    ``domain`` are selected; event payloads never cross this recovery contract.
+
+    A missing/zero cursor, a cursor before the retained tenant rows, or more
+    than ``RECOVERY_MAX_ROWS`` changes requires a full authoritative refetch.
+    """
+
+    _validate_hotel_id(hotel_id)
+    if after_cursor is not None and after_cursor < 0:
+        raise ValueError("after_cursor must be non-negative")
+
+    latest_value = (
+        db.query(func.max(DomainEventOutbox.id))
+        .filter(DomainEventOutbox.hotel_id == hotel_id)
+        .scalar()
+    )
+    oldest_value = (
+        db.query(func.min(DomainEventOutbox.id))
+        .filter(DomainEventOutbox.hotel_id == hotel_id)
+        .scalar()
+    )
+
+    cursor = after_cursor or 0
+    recovery_query = db.query(DomainEventOutbox.id, DomainEventOutbox.domain).filter(
+        DomainEventOutbox.hotel_id == hotel_id,
+        DomainEventOutbox.id > cursor,
+    )
+    has_more = (
+        recovery_query.order_by(DomainEventOutbox.id.asc())
+        .offset(RECOVERY_MAX_ROWS)
+        .limit(1)
+        .first()
+        is not None
+    )
+    rows = (
+        recovery_query
+        .order_by(DomainEventOutbox.id.asc())
+        .limit(RECOVERY_MAX_ROWS)
+        .all()
+    )
+    domains = sorted({str(domain) for _event_id, domain in rows if domain})
+
+    reset_required = after_cursor in (None, 0)
+    if (
+        after_cursor is not None
+        and after_cursor > 0
+        and oldest_value is not None
+        and after_cursor < int(oldest_value)
+    ):
+        reset_required = True
+    if has_more:
+        reset_required = True
+
+    latest_cursor = max(after_cursor or 0, int(latest_value or 0))
+    return {
+        "latest_cursor": latest_cursor,
+        "domains": domains,
+        "reset_required": reset_required,
+        "has_more": has_more,
     }
 
 

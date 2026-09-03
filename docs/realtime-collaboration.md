@@ -27,6 +27,20 @@ evento por hotel y dominio después del `commit` de SQLAlchemy. El payload es
 un aviso mínimo con identificadores operativos; nunca incluye importes,
 comprobantes, credenciales, tokens ni PII innecesaria.
 
+Si el navegador pierde una señal o se reconecta desde un cursor conocido,
+puede llamar a `GET /api/events/recovery?after_cursor=N`. La respuesta sólo
+contiene `latest_cursor`, los `domains` modificados, `reset_required` y
+`has_more`; no devuelve payloads ni datos de negocio. La consulta está siempre
+limitada al hotel resuelto por la membresía autenticada e incluye filas del
+outbox pendientes y publicadas, porque ambas representan commits reales.
+
+En esta primera versión `latest_cursor` es el `id` entero del outbox actual.
+La ausencia de cursor, `after_cursor=0`, un cursor anterior a las filas
+retenidas o más de 500 filas posteriores obligan a un refetch completo desde
+la API autoritativa (`reset_required=true`). El barrido devuelve como máximo
+500 filas y `has_more` informa que el límite fue alcanzado. T4 puede reemplazar
+el cursor físico por `stream_cursor` sin cambiar este contrato público.
+
 El recolector de `app.services.domain_events` guarda las señales en la sesión,
 elimina duplicados y las publica desde `after_commit`. `after_rollback`
 descarta las señales. Redis/Valkey es el transporte requerido para que el
