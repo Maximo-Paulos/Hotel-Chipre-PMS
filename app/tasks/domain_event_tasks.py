@@ -42,8 +42,17 @@ def publish_outbox(database_url: Optional[str] = None) -> dict:
     db = _session(database_url)
     totals = {"selected": 0, "published": 0, "failed": 0}
     try:
-        record_heartbeat(db, service_name="celery-worker", instance_id="domain-events", queue_name="critical", metadata={"task": "domain_events.publish_outbox"})
-        db.commit()
+        try:
+            record_heartbeat(db, service_name="celery-worker", instance_id="domain-events", queue_name="critical", metadata={"task": "domain_events.publish_outbox"})
+            db.commit()
+        except Exception as exc:
+            # A rolling deployment can run replay before the optional
+            # heartbeat table exists. Durable event replay still proceeds.
+            db.rollback()
+            logger.warning(
+                "domain_event_tasks.heartbeat_unavailable error_type=%s",
+                type(exc).__name__,
+            )
         for hotel_id in _active_hotel_ids(db):
             try:
                 set_tenant_hotel_context(db, hotel_id)

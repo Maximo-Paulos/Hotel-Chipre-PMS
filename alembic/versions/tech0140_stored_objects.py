@@ -50,21 +50,19 @@ def upgrade() -> None:
             with op.batch_alter_table("company_documents", recreate="always") as batch:
                 batch.add_column(sa.Column("stored_object_id", sa.String(length=36), nullable=True))
                 batch.create_foreign_key(
-                    "fk_company_documents_stored_object",
+                    "fk_company_documents_hotel_stored_object",
                     "stored_objects",
-                    ["stored_object_id"],
-                    ["id"],
-                    ondelete="SET NULL",
+                    ["hotel_id", "stored_object_id"],
+                    ["hotel_id", "id"],
                 )
         else:
             op.add_column("company_documents", sa.Column("stored_object_id", sa.String(length=36), nullable=True))
             op.create_foreign_key(
-                "fk_company_documents_stored_object",
+                "fk_company_documents_hotel_stored_object",
                 "company_documents",
                 "stored_objects",
-                ["stored_object_id"],
-                ["id"],
-                ondelete="SET NULL",
+                ["hotel_id", "stored_object_id"],
+                ["hotel_id", "id"],
             )
         op.create_index("ix_company_documents_stored_object_id", "company_documents", ["stored_object_id"])
     if op.get_bind().dialect.name == "postgresql":
@@ -79,13 +77,13 @@ def downgrade() -> None:
     inspector = sa.inspect(op.get_bind())
     if "company_documents" in inspector.get_table_names() and "stored_object_id" in {column["name"] for column in inspector.get_columns("company_documents")}:
         if op.get_bind().dialect.name != "sqlite":
-            op.drop_constraint("fk_company_documents_stored_object", "company_documents", type_="foreignkey")
+            op.drop_constraint("fk_company_documents_hotel_stored_object", "company_documents", type_="foreignkey")
             op.drop_index("ix_company_documents_stored_object_id", table_name="company_documents")
             op.drop_column("company_documents", "stored_object_id")
         else:
             op.drop_index("ix_company_documents_stored_object_id", table_name="company_documents")
             with op.batch_alter_table("company_documents", recreate="always") as batch:
-                batch.drop_constraint("fk_company_documents_stored_object", type_="foreignkey")
+                batch.drop_constraint("fk_company_documents_hotel_stored_object", type_="foreignkey")
                 batch.drop_column("stored_object_id")
     if op.get_bind().dialect.name == "postgresql":
         op.execute('DROP POLICY IF EXISTS "tenant_isolation_stored_objects" ON "stored_objects"')

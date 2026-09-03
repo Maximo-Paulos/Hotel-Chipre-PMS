@@ -19,9 +19,9 @@ from app.config import get_settings
 logger = logging.getLogger(__name__)
 _lock = RLock()
 _sync_client: redis.Redis | None = None
-_sync_signature: tuple[str, float, float] | None = None
+_sync_signature: tuple[str, float, float, int] | None = None
 _async_client: redis_async.Redis | None = None
-_async_signature: tuple[str, float, float] | None = None
+_async_signature: tuple[str, float, float, int] | None = None
 
 
 def redis_namespace() -> str:
@@ -41,12 +41,15 @@ def namespaced_key(key: str) -> str:
     return f"{namespace}:{key}" if namespace else key
 
 
-def _client_signature() -> tuple[str, float, float]:
+def _client_signature() -> tuple[str, float, float, int]:
     settings = get_settings()
     url = str(settings.REDIS_URL or "").strip()
     connect_timeout = max(float(getattr(settings, "REDIS_CONNECT_TIMEOUT_SECONDS", 1.0)), 0.1)
     socket_timeout = max(float(getattr(settings, "REDIS_SOCKET_TIMEOUT_SECONDS", 1.0)), 0.1)
-    return url, connect_timeout, socket_timeout
+    # Keep test doubles and hot-reloaded workers from retaining a client built
+    # by a previous constructor while preserving one client per process for
+    # the normal production factory.
+    return url, connect_timeout, socket_timeout, id(redis.Redis.from_url)
 
 
 def get_sync_redis_client(*, capability: str = "general") -> redis.Redis | None:
@@ -107,4 +110,3 @@ def reset_clients() -> None:
         _sync_signature = None
         _async_client = None
         _async_signature = None
-

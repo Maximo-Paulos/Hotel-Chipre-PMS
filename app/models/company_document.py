@@ -8,7 +8,7 @@ import enum
 from datetime import datetime, timezone
 
 from sqlalchemy import (
-    Boolean, Column, DateTime, ForeignKey, Index, Integer, String, Text,
+    Boolean, Column, DateTime, ForeignKey, ForeignKeyConstraint, Index, Integer, String, Text,
     Enum, UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
@@ -67,7 +67,7 @@ class CompanyDocument(Base):
 
     file_name = Column(String(300), nullable=True)
     file_url = Column(String(1000), nullable=True)     # storage URL (no cleartext auth)
-    stored_object_id = Column(String(36), ForeignKey("stored_objects.id", ondelete="SET NULL"), nullable=True, index=True)
+    stored_object_id = Column(String(36), nullable=True, index=True)
     requires_signature = Column(Boolean, nullable=False, default=False)
     signed_at = Column(DateTime, nullable=True)
     signed_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
@@ -87,6 +87,11 @@ class CompanyDocument(Base):
     __table_args__ = (
         Index("ix_company_documents_hotel_reservation", "hotel_id", "reservation_id"),
         Index("ix_company_documents_hotel_company", "hotel_id", "company_id"),
+        ForeignKeyConstraint(
+            ["hotel_id", "stored_object_id"],
+            ["stored_objects.hotel_id", "stored_objects.id"],
+            name="fk_company_documents_hotel_stored_object",
+        ),
     )
 
     def __repr__(self) -> str:
