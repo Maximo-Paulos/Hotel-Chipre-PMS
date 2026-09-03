@@ -30,11 +30,14 @@ from app.database import get_db
 from app.models.security_audit_log import SecurityAuditLog
 from app.models.user import User
 from app.schemas.auth import (
+    AuthProvidersResponse,
     AuthResponse,
     AppleAuthRequest,
     AppleUnlinkRequest,
     AppleUserPayload,
     GoogleAuthRequest,
+    GoogleLinkRequest,
+    GoogleProviderCapabilities,
     GoogleUnlinkRequest,
     LoginRequest,
     MfaChallengeResponse,
@@ -311,6 +314,94 @@ def _build_login_response(
     )
 
 
+def _google_allowed_domains(settings) -> list[str]:
+    return sorted({
+        item.strip().lower().lstrip("@")
+        for item in str(getattr(settings, "GOOGLE_ALLOWED_DOMAINS", "") or "").split(",")
+        if item.strip()
+    })
+
+
+def _google_self_signup_enabled(settings) -> bool:
+    # A missing value is tolerated only outside production to keep local/test
+    # development fixtures useful. Production must opt in explicitly.
+    if is_production_mode(settings):
+        return settings.GOOGLE_SELF_SIGNUP_ENABLED is True
+    return settings.GOOGLE_SELF_SIGNUP_ENABLED is not False
+
+
+def _verify_google_claims(id_token: str, settings) -> tuple[dict, str, str]:
+    """Verify the Google token and return (claims, normalized email, sub).
+
+    The library validates the signature and standard token timing. The
+    explicit checks below keep the application contract visible and protect
+    tests/adapters that provide already-decoded claims.
+    """
+    client_id = (getattr(settings, "GOOGLE_CLIENT_ID", "") or "").strip()
+    if not client_id:
+        raise HTTPException(status_code=503, detail="Login con Google no esta configurado")
+    try:
+        claims = google_id_token.verify_oauth2_token(
+            id_token, google_requests.Request(), client_id
+        )
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=401, detail="Token de Google invalido")
+
+    issuer = claims.get("iss")
+    if issuer not in {"https://accounts.google.com", "accounts.google.com"}:
+        raise HTTPException(status_code=401, detail="Issuer de Google invalido")
+    audience = claims.get("aud")
+    if audience != client_id:
+        raise HTTPException(status_code=401, detail="Audience de Google invalida")
+    expires_at = claims.get("exp")
+    try:
+        if float(expires_at) <= datetime.now(timezone.utc).timestamp():
+            raise HTTPException(status_code=401, detail="Token de Google expirado")
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=401, detail="Token de Google invalido")
+
+    if claims.get("email_verified") is not True:
+        raise HTTPException(status_code=401, detail="El email de Google no esta verificado")
+    raw_email = claims.get("email")
+    if not isinstance(raw_email, str) or not raw_email.strip():
+        raise HTTPException(status_code=401, detail="Token de Google invalido")
+    email = raw_email.strip().lower()
+    raw_google_sub = claims.get("sub")
+    if not isinstance(raw_google_sub, str) or not raw_google_sub.strip():
+        raise HTTPException(status_code=401, detail="Token de Google invalido")
+    google_sub = raw_google_sub.strip()
+
+    allowed_domains = _google_allowed_domains(settings)
+    if allowed_domains:
+        email_domain = email.rsplit("@", 1)[-1]
+        hosted_domain = claims.get("hd")
+        if email_domain not in allowed_domains or not isinstance(hosted_domain, str):
+            raise HTTPException(status_code=403, detail="El dominio de Google no esta permitido")
+        if hosted_domain.strip().lower().lstrip("@") not in allowed_domains:
+            raise HTTPException(status_code=403, detail="El dominio de Google no esta permitido")
+
+    return claims, email, google_sub
+
+
+@router.get("/providers", response_model=AuthProvidersResponse)
+def auth_providers() -> AuthProvidersResponse:
+    """Expose public auth capabilities without returning secrets."""
+    settings = get_settings()
+    enabled = bool(
+        getattr(settings, "GOOGLE_LOGIN_ENABLED", False) is True
+        and getattr(settings, "EXTERNAL_EFFECTS_ENABLED", False) is True
+        and (getattr(settings, "GOOGLE_CLIENT_ID", "") or "").strip()
+    )
+    return AuthProvidersResponse(
+        google=GoogleProviderCapabilities(
+            enabled=enabled,
+            client_id=(settings.GOOGLE_CLIENT_ID or "").strip() or None,
+            self_signup_enabled=enabled and _google_self_signup_enabled(settings),
+            allowed_domains=_google_allowed_domains(settings),
+        )
+    )
+
+
 def _mfa_attempt_key(action: str, user_id: int) -> str:
     return f"{action}:{user_id}"
 
@@ -545,29 +636,7 @@ def google_login(
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     settings = get_settings()
-    client_id = getattr(settings, "GOOGLE_CLIENT_ID", "") or ""
-    if not client_id:
-        raise HTTPException(status_code=503, detail="Login con Google no esta configurado")
-
-    try:
-        claims = google_id_token.verify_oauth2_token(
-            payload.id_token, google_requests.Request(), client_id
-        )
-    except ValueError:
-        raise HTTPException(status_code=401, detail="Token de Google invalido")
-
-    if not claims.get("email_verified"):
-        raise HTTPException(status_code=401, detail="El email de Google no esta verificado")
-
-    raw_email = claims.get("email")
-    if not isinstance(raw_email, str) or not raw_email.strip():
-        raise HTTPException(status_code=401, detail="Token de Google invalido")
-    email = raw_email.strip().lower()
-
-    raw_google_sub = claims.get("sub")
-    if not isinstance(raw_google_sub, str) or not raw_google_sub.strip():
-        raise HTTPException(status_code=401, detail="Token de Google invalido")
-    google_sub = raw_google_sub.strip()
+    claims, email, google_sub = _verify_google_claims(payload.id_token, settings)
 
     # The Google subject is the identity key. Never let an email-only match
     # silently select an account: a password registration can exist before
@@ -583,10 +652,11 @@ def google_login(
     if user is None:
         user = db.query(User).filter(User.email.ilike(email)).first()
         if user is None:
-            # Case (c): no account is associated with either the subject or
-            # email. Create the same Google-owned account as before, now
-            # retaining the subject for future re-logins. The random password
-            # is required by the schema but is never given to the user.
+            if not _google_self_signup_enabled(settings):
+                raise HTTPException(status_code=403, detail="El alta con Google no esta habilitada")
+            # No account is associated with either the subject or email. Create
+            # a Google-owned account only when self-signup is explicitly
+            # enabled for this environment.
             user = User(
                 email=email,
                 password_hash=hash_password(secrets.token_urlsafe(32)),
@@ -601,21 +671,13 @@ def google_login(
         elif not user.is_active:
             raise HTTPException(status_code=403, detail="Usuario deshabilitado")
         elif user.google_sub is None:
-            # Case (b): Google has now proved control of an email that was
-            # previously used to create a password account without
-            # verification. Bind the stable subject, replace the password
-            # that may have been chosen by an email squatter, and revoke JWTs
-            # issued before this proof. Google has also verified the email for
-            # this account.
-            user.google_sub = google_sub
-            user.password_hash = hash_password(secrets.token_urlsafe(32))
-            user.token_version = (user.token_version or 0) + 1
-            user.is_verified = True
-            google_audit_action = "google_auth.account_reclaimed"
-            google_audit_details = {
-                "password_invalidated": True,
-                "provider": "google",
-            }
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "google_link_required",
+                    "message": "La cuenta existente requiere una vinculacion explicita con Google",
+                },
+            )
         else:
             # A different Google subject must never overwrite an existing
             # link or fall back to email-only login. Fail closed on this
@@ -637,6 +699,47 @@ def google_login(
     db.commit()
     db.refresh(user)
     return _build_login_response(db, user, request=request, response=response)
+
+
+@router.post("/google/link")
+def link_google(
+    payload: GoogleLinkRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Link Google only after both local-password and Google proof."""
+    try:
+        require_google_login()
+    except GoogleLoginDisabled as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    if not verify_password(payload.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Reautenticacion invalida")
+    if user.google_sub:
+        raise HTTPException(status_code=409, detail="La cuenta ya tiene un login de Google vinculado")
+
+    settings = get_settings()
+    _claims, email, google_sub = _verify_google_claims(payload.id_token, settings)
+    if email != (user.email or "").strip().lower():
+        raise HTTPException(status_code=409, detail="El email de Google no coincide con la cuenta")
+    other_user = (
+        db.query(User)
+        .filter(User.google_sub == google_sub, User.id != user.id)
+        .first()
+    )
+    if other_user is not None:
+        raise HTTPException(status_code=409, detail="El login de Google ya esta vinculado a otra cuenta")
+
+    user.google_sub = google_sub
+    _audit_security_event(
+        db,
+        user=user,
+        action="google_auth.linked",
+        details={"account_state": "explicit_link", "provider": "google"},
+    )
+    db.add(user)
+    db.commit()
+    return {"linked": True}
 
 
 @router.post("/google/unlink")

@@ -107,6 +107,11 @@ class Settings(BaseSettings):
     EXTERNAL_EFFECTS_ENABLED: bool | None = None
     INBOUND_PROVIDER_EVENTS_ENABLED: bool | None = None
     GOOGLE_LOGIN_ENABLED: bool | None = None
+    # None preserves the development/test default for backwards-compatible
+    # local fixtures. Production requires an explicit true value before a
+    # Google-only account may be created.
+    GOOGLE_SELF_SIGNUP_ENABLED: bool | None = None
+    GOOGLE_ALLOWED_DOMAINS: str = ""
     APPLE_LOGIN_ENABLED: bool | None = None
 
     # OTA Credentials

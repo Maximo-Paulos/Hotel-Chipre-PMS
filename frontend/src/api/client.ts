@@ -188,6 +188,7 @@ const isPublicAuthPath = (path: string) =>
     "/api/auth/login",
     "/api/auth/register",
     "/api/auth/google",
+    "/api/auth/providers",
     "/api/auth/request-verify",
     "/api/auth/verify-email",
     "/api/auth/request-reset",

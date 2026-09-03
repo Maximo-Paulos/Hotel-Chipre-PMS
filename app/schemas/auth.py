@@ -59,8 +59,24 @@ class GoogleAuthRequest(BaseModel):
     id_token: str = Field(min_length=1)
 
 
+class GoogleLinkRequest(BaseModel):
+    id_token: str = Field(min_length=1)
+    password: str = Field(min_length=1)
+
+
 class GoogleUnlinkRequest(BaseModel):
     password: str = Field(min_length=1)
+
+
+class GoogleProviderCapabilities(BaseModel):
+    enabled: bool
+    client_id: str | None = None
+    self_signup_enabled: bool = False
+    allowed_domains: list[str] = Field(default_factory=list)
+
+
+class AuthProvidersResponse(BaseModel):
+    google: GoogleProviderCapabilities
 
 
 class AppleUserName(BaseModel):

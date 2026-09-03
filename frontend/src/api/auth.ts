@@ -19,6 +19,18 @@ export type RegistrationResponse = {
   message: string;
 };
 
+export type AuthProvidersResponse = {
+  google: {
+    enabled: boolean;
+    client_id: string | null;
+    self_signup_enabled: boolean;
+    allowed_domains: string[];
+  };
+};
+
+export const getAuthProviders = () =>
+  apiFetch<AuthProvidersResponse>("/api/auth/providers", { method: "GET" });
+
 export const register = (email: string, password: string, role: string = "owner") =>
   apiFetch<RegistrationResponse>("/api/auth/register", {
     method: "POST",
@@ -35,6 +47,12 @@ export const loginWithGoogle = (idToken: string) =>
   apiFetch<AuthResponse>("/api/auth/google", {
     method: "POST",
     data: { id_token: idToken }
+  });
+
+export const linkGoogle = (idToken: string, password: string) =>
+  apiFetch<{ linked: true }>("/api/auth/google/link", {
+    method: "POST",
+    data: { id_token: idToken, password }
   });
 
 export const loginWithApple = (

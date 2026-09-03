@@ -46,6 +46,7 @@ def _enable_mocked_auth_providers(monkeypatch):
     monkeypatch.setenv("EXTERNAL_EFFECTS_ENABLED", "true")
     monkeypatch.setenv("CONNECTIONS_ENABLED", "true")
     monkeypatch.setenv("GOOGLE_LOGIN_ENABLED", "true")
+    monkeypatch.setenv("GOOGLE_SELF_SIGNUP_ENABLED", "true")
     monkeypatch.setenv("APPLE_LOGIN_ENABLED", "true")
     get_settings.cache_clear()
     yield
@@ -634,7 +635,15 @@ def test_self_registration_cannot_grant_platform_admin_role(client_and_db, fixed
 def _fake_google_claims(
     email: str, email_verified: bool = True, sub: str = "google-sub-123"
 ) -> dict:
-    return {"email": email, "email_verified": email_verified, "sub": sub, "name": "Test User"}
+    return {
+        "email": email,
+        "email_verified": email_verified,
+        "sub": sub,
+        "name": "Test User",
+        "iss": "https://accounts.google.com",
+        "aud": "test-client-id.apps.googleusercontent.com",
+        "exp": int(time.time()) + 300,
+    }
 
 
 def _fake_apple_claims(email: str, sub: str = "apple-sub-123") -> dict:
@@ -721,13 +730,12 @@ def test_google_login_relogin_with_same_sub_preserves_password(client_and_db, mo
     assert [json.loads(audit.details)["account_state"] for audit in audits] == ["created", "existing"]
 
 
-def test_google_login_replaces_password_for_unverified_email_squatter(
+def test_google_login_requires_explicit_link_for_existing_email(
     client_and_db, fixed_code_patch, monkeypatch
 ):
     client, db, _session_factory = client_and_db
     _configure_resend(monkeypatch, [])
     _register_owner(client, "existinguser@example.com")
-    old_access_token = None
     stored_user = db.query(User).filter(User.email == "existinguser@example.com").one()
     old_password_hash = stored_user.password_hash
 
@@ -736,8 +744,6 @@ def test_google_login_replaces_password_for_unverified_email_squatter(
         json={"email": "existinguser@example.com", "code": "123456"},
     )
     assert verify.status_code == 200, verify.text
-    old_access_token = verify.json()["access_token"]
-
     monkeypatch.setenv("GOOGLE_CLIENT_ID", "test-client-id.apps.googleusercontent.com")
     get_settings.cache_clear()
 
@@ -747,34 +753,128 @@ def test_google_login_replaces_password_for_unverified_email_squatter(
     ):
         response = client.post("/api/auth/google", json={"id_token": "fake-jwt-from-google"})
 
-    assert response.status_code == 200, response.text
-    body = response.json()
-    assert body["user"]["email"] == "existinguser@example.com"
-    assert body["user"]["is_verified"] is True
+    assert response.status_code == 409, response.text
+    assert response.json()["detail"]["code"] == "google_link_required"
 
     db.refresh(stored_user)
-    assert stored_user.google_sub == "google-victim-sub"
-    assert stored_user.password_hash != old_password_hash
-    assert stored_user.token_version == 1
-
-    audit = db.query(SecurityAuditLog).filter_by(action="google_auth.account_reclaimed").one()
-    assert audit.hotel_id == body["hotel_id"]
-    assert json.loads(audit.details) == {"password_invalidated": True, "provider": "google"}
-
-    password_login = client.post(
-        "/api/auth/login",
-        json={"email": "existinguser@example.com", "password": "Demo123!pass"},
-    )
-    assert password_login.status_code == 401, password_login.text
-
-    old_session = client.get(
-        "/api/auth/me",
-        headers={"Authorization": f"Bearer {old_access_token}"},
-    )
-    assert old_session.status_code == 401, old_session.text
+    assert stored_user.google_sub is None
+    assert stored_user.password_hash == old_password_hash
+    assert stored_user.token_version == 0
+    assert db.query(SecurityAuditLog).filter(SecurityAuditLog.action.like("google_auth.%")).count() == 0
 
     users_with_email = db.query(User).filter(User.email == "existinguser@example.com").all()
     assert len(users_with_email) == 1
+
+
+def test_google_self_signup_can_be_disabled(client_and_db, monkeypatch):
+    client, db, _session_factory = client_and_db
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "test-client-id.apps.googleusercontent.com")
+    monkeypatch.setenv("GOOGLE_SELF_SIGNUP_ENABLED", "false")
+    get_settings.cache_clear()
+    with patch(
+        "app.api.auth.google_id_token.verify_oauth2_token",
+        return_value=_fake_google_claims("disabled-signup@example.com"),
+    ):
+        response = client.post("/api/auth/google", json={"id_token": "fake-google-jwt"})
+    assert response.status_code == 403, response.text
+    assert db.query(User).filter(User.email == "disabled-signup@example.com").count() == 0
+
+
+def test_auth_providers_exposes_only_public_google_capabilities(client_and_db, monkeypatch):
+    client, _db, _session_factory = client_and_db
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "public-client.apps.googleusercontent.com")
+    monkeypatch.setenv("GOOGLE_ALLOWED_DOMAINS", "example.com, hotel.example")
+    get_settings.cache_clear()
+    response = client.get("/api/auth/providers")
+    assert response.status_code == 200, response.text
+    assert response.json() == {
+        "google": {
+            "enabled": True,
+            "client_id": "public-client.apps.googleusercontent.com",
+            "self_signup_enabled": True,
+            "allowed_domains": ["example.com", "hotel.example"],
+        }
+    }
+
+
+def test_google_link_requires_password_and_matching_verified_identity(
+    client_and_db, fixed_code_patch, monkeypatch
+):
+    client, db, _session_factory = client_and_db
+    _configure_resend(monkeypatch, [])
+    _register_owner(client, "link-target@example.com")
+    verified = client.post(
+        "/api/auth/verify-email",
+        json={"email": "link-target@example.com", "code": "123456"},
+    )
+    assert verified.status_code == 200, verified.text
+    access_token = verified.json()["access_token"]
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "test-client-id.apps.googleusercontent.com")
+    get_settings.cache_clear()
+    claims = _fake_google_claims("link-target@example.com", sub="explicit-link-sub")
+
+    with patch("app.api.auth.google_id_token.verify_oauth2_token", return_value=claims):
+        link = client.post(
+            "/api/auth/google/link",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={"id_token": "google-link-jwt", "password": "Demo123!pass"},
+        )
+    assert link.status_code == 200, link.text
+    assert link.json() == {"linked": True}
+    user = db.query(User).filter(User.email == "link-target@example.com").one()
+    assert user.google_sub == "explicit-link-sub"
+
+
+def test_google_link_rejects_mismatched_email_without_mutation(
+    client_and_db, fixed_code_patch, monkeypatch
+):
+    client, db, _session_factory = client_and_db
+    _configure_resend(monkeypatch, [])
+    _register_owner(client, "link-owner@example.com")
+    verified = client.post(
+        "/api/auth/verify-email",
+        json={"email": "link-owner@example.com", "code": "123456"},
+    )
+    assert verified.status_code == 200, verified.text
+    access_token = verified.json()["access_token"]
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "test-client-id.apps.googleusercontent.com")
+    get_settings.cache_clear()
+    claims = _fake_google_claims("different@example.com", sub="mismatched-sub")
+    with patch("app.api.auth.google_id_token.verify_oauth2_token", return_value=claims):
+        link = client.post(
+            "/api/auth/google/link",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={"id_token": "google-link-jwt", "password": "Demo123!pass"},
+        )
+    assert link.status_code == 409, link.text
+    assert db.query(User).filter(User.email == "link-owner@example.com").one().google_sub is None
+
+
+@pytest.mark.parametrize(
+    ("claim", "expected_detail"),
+    [
+        ("iss", "Issuer de Google invalido"),
+        ("aud", "Audience de Google invalida"),
+        ("exp", "Token de Google expirado"),
+    ],
+)
+def test_google_login_rejects_invalid_issuer_audience_or_expiry(
+    client_and_db, monkeypatch, claim, expected_detail
+):
+    client, _db, _session_factory = client_and_db
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "test-client-id.apps.googleusercontent.com")
+    get_settings.cache_clear()
+    claims = _fake_google_claims("invalid-claim@example.com")
+    if claim == "iss":
+        claims[claim] = "https://evil.example"
+    elif claim == "aud":
+        claims[claim] = "another-client.apps.googleusercontent.com"
+    else:
+        claims[claim] = int(time.time()) - 10
+    with patch("app.api.auth.google_id_token.verify_oauth2_token", return_value=claims):
+        response = client.post("/api/auth/google", json={"id_token": "fake-google-jwt"})
+    assert response.status_code == 401, response.text
+    assert response.json()["detail"] == expected_detail
 
 
 def test_google_unlink_requires_password_and_revokes_previous_bearer_session(
