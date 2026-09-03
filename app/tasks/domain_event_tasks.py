@@ -14,6 +14,7 @@ from sqlalchemy.orm import sessionmaker
 from app.config import get_settings
 from app.database import get_engine
 from app.services.tenant_context import set_tenant_hotel_context
+from app.services.service_heartbeat import record_heartbeat
 from app.tasks.celery_app import celery_app
 from app.tasks.report_tasks import _active_hotel_ids
 
@@ -41,6 +42,8 @@ def publish_outbox(database_url: Optional[str] = None) -> dict:
     db = _session(database_url)
     totals = {"selected": 0, "published": 0, "failed": 0}
     try:
+        record_heartbeat(db, service_name="celery-worker", instance_id="domain-events", queue_name="critical", metadata={"task": "domain_events.publish_outbox"})
+        db.commit()
         for hotel_id in _active_hotel_ids(db):
             try:
                 set_tenant_hotel_context(db, hotel_id)

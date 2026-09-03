@@ -27,6 +27,19 @@ celery_app.conf.update(
     task_track_started=True,
     task_acks_late=True,
     worker_prefetch_multiplier=1,
+    task_default_queue="critical",
+    task_routes={
+        "domain_events.publish_outbox": {"queue": "critical"},
+        "notifications.process_outbox": {"queue": "critical"},
+        "notifications.generate_daily_reports": {"queue": "heavy"},
+        "reports.*": {"queue": "heavy"},
+        "analytics.*": {"queue": "heavy"},
+        "ota.*": {"queue": "heavy"},
+    },
+    task_annotations={
+        "domain_events.publish_outbox": {"rate_limit": "30/m", "time_limit": 60, "soft_time_limit": 30},
+        "notifications.process_outbox": {"rate_limit": "30/m", "time_limit": 60, "soft_time_limit": 30},
+    },
 )
 
 def build_beat_schedule(runtime_settings: Settings) -> dict:

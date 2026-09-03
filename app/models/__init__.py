@@ -19,6 +19,7 @@ from app.models.company import Company
 from app.models.domain_event_outbox import DomainEventOutbox
 from app.models.domain_event_retention_watermark import DomainEventRetentionWatermark
 from app.models.stored_object import StoredObject, StoredObjectStatusEnum
+from app.models.job_runtime import JobDispatchRecord, ServiceHeartbeat
 from app.models.ota import OTAReservationMapping, OTAWebhookCredential
 from app.models.ota_core import (
     OTAProvider,
@@ -175,6 +176,7 @@ __all__ = [
     "DomainEventOutbox",
     "DomainEventRetentionWatermark",
     "StoredObject", "StoredObjectStatusEnum",
+    "JobDispatchRecord", "ServiceHeartbeat",
     "OTAReservationMapping",
     "OTAWebhookCredential",
     "OTAProvider",

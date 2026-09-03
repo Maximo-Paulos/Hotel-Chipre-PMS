@@ -80,7 +80,7 @@ Task 4: complete (commit 078e798; focused outbox/recovery/migration tests 18 pas
 Task 5: complete (commit e562e7e; focused realtime tests 31 passed; frontend dependency/E2E and long-lived membership revalidation remain provider/browser gates)
 Task 6: complete (pending commit; focused database/security/realtime tests 48 passed; provider connection budget remains needs-verification)
 Task 7: complete (pending commit; focused storage/payment/company/analytics tests 37 passed; GCS provider and legacy reconciliation remain provider-bound)
-Task 8: pending
+Task 8: complete (pending commit; dispatcher/heartbeat/schedule tests 12 passed; worker runtime and provider metrics remain provider-bound)
 Task 9: pending
 Task 10: pending
 Task 11: pending
