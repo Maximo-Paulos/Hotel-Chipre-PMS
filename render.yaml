@@ -10,7 +10,7 @@ services:
     runtime: python
     buildCommand: pip install -r requirements.txt
     preDeployCommand: python -m alembic upgrade head
-    startCommand: exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}
+    startCommand: exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --timeout-graceful-shutdown 30
     healthCheckPath: /health
     # Production capacity profile. Render autoscaling requires a Pro
     # workspace; preview environments deliberately run minInstances only.

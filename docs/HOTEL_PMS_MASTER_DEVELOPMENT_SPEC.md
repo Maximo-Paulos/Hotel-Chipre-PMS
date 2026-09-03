@@ -667,6 +667,20 @@ El agente puede investigar y recomendar, pero no decidir silenciosamente:
 
 Toda contradicción material se marca `needs-verification` y se presenta al Product/Project Lead.
 
+### TECH-0140 — Fundaciones pre-lanzamiento
+
+Status: `IMPLEMENTED LOCALLY / PROVIDER-VALIDATION PENDING`  
+Priority: `P0/P1`  
+Depends on: `TECH-0110`, `TECH-0111`, `TECH-0120`
+
+Este bloque consolida recovery realtime, identidad Google segura, outbox
+durable, Redis/Valkey efímero, PostgreSQL bounded, object storage, jobs,
+readiness, restore local y portabilidad GCP. PostgreSQL permanece como fuente
+operacional de verdad. La implementación local no autoriza OAuth externo,
+billing, recursos GCP, migración/cutover, carga contra producción ni un restore
+provider-bound. Sus gates restantes son QA humana, métricas de proveedor,
+restore firmado y pentest/release cuando corresponda.
+
 ## 8. Acciones reservadas al responsable humano
 
 - crear cuentas/organizaciones cloud y usuarios break-glass;

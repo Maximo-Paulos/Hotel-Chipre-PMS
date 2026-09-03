@@ -48,3 +48,12 @@ cannot replace provider-bound evidence.
 Changes to these targets require updating the goal evidence, the benchmark
 methodology and the release gate together. Do not define a second SLO table in
 an architecture or QA document; link back here instead.
+
+## Analytics activation gate — TECH-0140
+
+Do not activate a warehouse only because it is available. Require two
+consecutive measurement periods showing at least one of: optimized Analytics
+queries above p95 2 s; OLTP CPU or pool utilization above 70% for 15 minutes
+because of analytics; or a retention/regulatory requirement that PostgreSQL
+cannot reasonably satisfy. The decision bundle must include cost, lag,
+reconciliation, lineage and PII review.

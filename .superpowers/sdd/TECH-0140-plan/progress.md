@@ -83,6 +83,6 @@ Task 7: complete (pending commit; focused storage/payment/company/analytics test
 Task 8: complete (pending commit; dispatcher/heartbeat/schedule tests 12 passed; worker runtime and provider metrics remain provider-bound)
 Task 9: complete (pending commit; health/security tests 13 passed; provider metrics and alerting remain provider-bound)
 Task 10: complete (pending commit; local restore/object verification tests added; provider-bound restore remains blocked pending signed human drill)
-Task 11: pending
-Task 12: pending
+Task 11: complete (pending commit; static GCP readiness validator passes; no provider resources provisioned)
+Task 12: complete (pending commit; analytics gate documented; no warehouse/NoSQL activation)
 Task 13: pending

@@ -80,6 +80,22 @@ El cliente devuelve `None` si `CLICKHOUSE_ENABLED` es falso y falla cerrado si s
 
 No se encontraron clientes, datasets, jobs ni configuración de BigQuery. No se creó una cuenta ni se consultó ningún proveedor cloud.
 
+## Addendum TECH-0140 — gate de activación analítica
+
+La implementación de TECH-0140 mantiene la decisión en PostgreSQL/read models
+para el lanzamiento y agrega contratos de outbox, jobs y telemetría que hacen
+posible una salida futura. No se activa BigQuery ni ClickHouse por tener un
+cliente o un `render.yaml`: la activación requiere dos períodos consecutivos con
+alguna señal habilitante:
+
+- consultas Analytics optimizadas incumpliendo p95 de 2 s;
+- CPU o pool OLTP por encima de 70% durante 15 minutos por carga analítica;
+- requisito regulatorio/retención que no quepa razonablemente en PostgreSQL.
+
+La señal debe acompañarse de benchmark co-localizado, costo mensual, lag,
+reconciliación contra PostgreSQL, lineage y PII minimizada. Hasta entonces las
+facts derivadas son reconstruibles y PostgreSQL sigue siendo la autoridad.
+
 ### 1.5 Qué cubre y qué no cubre hoy
 
 | Área | Estado verificado |
