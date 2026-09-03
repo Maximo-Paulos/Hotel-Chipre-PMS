@@ -368,6 +368,22 @@ def test_register_verify_and_reset_use_resend_provider(client_and_db, fixed_code
     assert sent_payloads[0]["reply_to"] == ["hotelxpms@gmail.com"]
 
 
+@pytest.mark.parametrize("path", ["/api/auth/request-verify", "/api/auth/request-reset"])
+def test_code_requests_reject_invalid_email_before_delivery(client_and_db, path, monkeypatch):
+    client, _db, _session_factory = client_and_db
+    with (
+        patch("app.api.auth.send_verification_email") as send_verification,
+        patch("app.api.auth.send_reset_password_email") as send_reset,
+        patch("app.api.auth.send_generic_auth_notice_email") as send_generic,
+    ):
+        response = client.post(path, json={"email": ""})
+
+    assert response.status_code == 422
+    send_verification.assert_not_called()
+    send_reset.assert_not_called()
+    send_generic.assert_not_called()
+
+
 def test_register_is_anti_enumeration_and_does_not_touch_existing_credentials(
     client_and_db, fixed_code_patch, monkeypatch
 ):

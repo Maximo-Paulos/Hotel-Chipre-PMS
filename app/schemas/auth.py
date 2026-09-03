@@ -15,19 +15,32 @@ class RegisterRequest(BaseModel):
     @field_validator("email")
     @classmethod
     def _validate_email(cls, value: str) -> str:
-        # Same syntax validation EmailStr uses (email-validator, no DNS
-        # deliverability check either way), except reserved test TLDs like
-        # ".test" are allowed only in pytest/E2E so synthetic addresses used
-        # by automated tests don't get rejected as "special-use" domains.
-        try:
-            validated = email_validator.validate_email(
-                value,
-                check_deliverability=False,
-                test_environment=is_test_mode(),
-            )
-        except email_validator.EmailNotValidError as exc:
-            raise ValueError(str(exc)) from exc
-        return validated.normalized
+        return _normalize_auth_email(value)
+
+
+def _normalize_auth_email(value: str) -> str:
+    # Same syntax validation EmailStr uses (email-validator, no DNS
+    # deliverability check either way), except reserved test TLDs like
+    # ".test" are allowed only in pytest/E2E so synthetic addresses used
+    # by automated tests don't get rejected as "special-use" domains.
+    try:
+        validated = email_validator.validate_email(
+            value,
+            check_deliverability=False,
+            test_environment=is_test_mode(),
+        )
+    except email_validator.EmailNotValidError as exc:
+        raise ValueError(str(exc)) from exc
+    return validated.normalized
+
+
+class _AuthEmailRequest(BaseModel):
+    email: str
+
+    @field_validator("email")
+    @classmethod
+    def _validate_email(cls, value: str) -> str:
+        return _normalize_auth_email(value)
 
 
 class RegistrationResponse(BaseModel):
@@ -100,13 +113,12 @@ class AppleUnlinkRequest(BaseModel):
     password: str = Field(min_length=1)
 
 
-class RequestCode(BaseModel):
-    email: str
+class RequestCode(_AuthEmailRequest):
+    pass
 
 
-class VerifyCodeRequest(BaseModel):
-    email: str
-    code: str
+class VerifyCodeRequest(_AuthEmailRequest):
+    code: str = Field(min_length=1)
 
 
 class ResetPasswordRequest(BaseModel):

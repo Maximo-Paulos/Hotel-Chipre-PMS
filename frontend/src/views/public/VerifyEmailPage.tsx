@@ -8,6 +8,8 @@ import { getOnboardingStatus, setOwner } from "../../api/onboarding";
 import { clearPendingOwner, getPendingOwner } from "../../state/pendingOwner";
 import { normalizeRole, useSession } from "../../state/session";
 
+const AUTH_EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export function VerifyEmailPage() {
   const navigate = useNavigate();
   const { session, login } = useSession();
@@ -22,9 +24,15 @@ export function VerifyEmailPage() {
   const handleSend = async () => {
     setError(null);
     setMessage(null);
+    const normalizedEmail = email.trim();
+    if (!AUTH_EMAIL_PATTERN.test(normalizedEmail)) {
+      setError("Ingresá un email válido.");
+      return;
+    }
+    setEmail(normalizedEmail);
     setLoading(true);
     try {
-      const resp = await requestVerification(email);
+      const resp = await requestVerification(normalizedEmail);
       if (resp.code) {
         setSentCode(resp.code);
         setMessage(`Codigo demo: ${resp.code}`);
@@ -41,9 +49,21 @@ export function VerifyEmailPage() {
   const handleVerify = async () => {
     setError(null);
     setMessage(null);
+    const normalizedEmail = email.trim();
+    const normalizedCode = code.trim();
+    if (!AUTH_EMAIL_PATTERN.test(normalizedEmail)) {
+      setError("Ingresá un email válido.");
+      return;
+    }
+    if (!normalizedCode) {
+      setError("Ingresá el código de verificación.");
+      return;
+    }
+    setEmail(normalizedEmail);
+    setCode(normalizedCode);
     setLoading(true);
     try {
-      const res = await verifyEmail(email, code);
+      const res = await verifyEmail(normalizedEmail, normalizedCode);
       if (!res.hotel_id) {
         throw new ApiError(500, "La respuesta de verificación no devolvió un hotel válido.");
       }
@@ -102,6 +122,8 @@ export function VerifyEmailPage() {
           <label className="text-sm font-medium text-slate-700">
             Email
             <input
+              type="email"
+              autoComplete="email"
               value={email}
               placeholder="tu@correo.com"
               onChange={(e) => setEmail(e.target.value)}
@@ -128,6 +150,8 @@ export function VerifyEmailPage() {
           <label className="text-sm font-medium text-slate-700">
             Codigo
             <input
+              inputMode="numeric"
+              autoComplete="one-time-code"
               value={code}
               placeholder="Ej: 123456"
               onChange={(e) => setCode(e.target.value)}
