@@ -14,6 +14,7 @@ Examples:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -27,7 +28,18 @@ from urllib.parse import unquote, urlsplit
 import uuid
 
 
-DEFAULT_TABLES = ("guests", "reservations", "payments", "audit_logs")
+DEFAULT_TABLES = (
+    "hotel_configuration",
+    "hotel_memberships",
+    "rooms",
+    "reservations",
+    "transactions",
+    "payments",
+    "cash_sessions",
+    "audit_logs",
+    "domain_event_outbox",
+    "stored_objects",
+)
 IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 LOCAL_POSTGRES_HOSTS = {"", "localhost", "127.0.0.1", "::1"}
 
@@ -74,12 +86,35 @@ def _sqlite_counts(connection: sqlite3.Connection, tables: tuple[str, ...]) -> d
     }
 
 
-def _run_sqlite(source: Path, tables: tuple[str, ...]) -> dict[str, object]:
+def _verify_local_objects(connection: sqlite3.Connection, root: Path) -> dict[str, int]:
+    """Verify every ready metadata row against the local blob before restore."""
+    columns = {
+        row[1] for row in connection.execute("PRAGMA table_info(stored_objects)").fetchall()
+    }
+    if not columns:
+        return {"ready": 0, "verified": 0}
+    rows = connection.execute(
+        "SELECT object_key, byte_size, sha256_hex, status FROM stored_objects WHERE status = 'ready'"
+    ).fetchall()
+    verified = 0
+    for object_key, byte_size, sha256_hex, _status in rows:
+        path = root / Path(object_key)
+        if not path.is_file():
+            raise DrillError(f"ready stored object is missing from local storage: {object_key}")
+        data = path.read_bytes()
+        if len(data) != int(byte_size) or hashlib.sha256(data).hexdigest() != sha256_hex:
+            raise DrillError(f"stored object checksum/size mismatch: {object_key}")
+        verified += 1
+    return {"ready": len(rows), "verified": verified}
+
+
+def _run_sqlite(source: Path, tables: tuple[str, ...], object_storage_dir: Path | None = None) -> dict[str, object]:
     with tempfile.TemporaryDirectory(prefix="hcp-backup-restore-") as temp_dir:
         dump_path = Path(temp_dir) / "database.dump.sql"
         restored_path = Path(temp_dir) / "restored.sqlite3"
         with sqlite3.connect(source) as source_db:
             source_counts = _sqlite_counts(source_db, tables)
+            source_objects = _verify_local_objects(source_db, object_storage_dir) if object_storage_dir else {"ready": 0, "verified": 0}
             dump_sql = "\n".join(source_db.iterdump()) + "\n"
         dump_path.write_text(dump_sql, encoding="utf-8")
 
@@ -97,6 +132,7 @@ def _run_sqlite(source: Path, tables: tuple[str, ...]) -> dict[str, object]:
             if foreign_key_errors:
                 raise DrillError("SQLite foreign_key_check found violations")
             restored_counts = _sqlite_counts(restored_db, tables)
+            restored_objects = _verify_local_objects(restored_db, object_storage_dir) if object_storage_dir else {"ready": 0, "verified": 0}
 
         if source_counts != restored_counts:
             raise DrillError(
@@ -109,6 +145,7 @@ def _run_sqlite(source: Path, tables: tuple[str, ...]) -> dict[str, object]:
             "foreign_key_check": "ok",
             "tables": source_counts,
             "dump_bytes": len(dump_sql.encode("utf-8")),
+            "objects": {"source": source_objects, "restored": restored_objects},
         }
 
 
@@ -218,6 +255,11 @@ def main() -> int:
         default=None,
         help="key table to compare; may be repeated (default: guests, reservations, payments, audit_logs)",
     )
+    parser.add_argument(
+        "--object-storage-dir",
+        default=os.environ.get("OBJECT_STORAGE_LOCAL_DIR"),
+        help="local object-storage root; when set, ready stored_objects are checksum-verified",
+    )
     args = parser.parse_args()
     try:
         if not args.database_url:
@@ -225,7 +267,8 @@ def main() -> int:
         tables = _validate_tables(args.tables or DEFAULT_TABLES)
         scheme = urlsplit(args.database_url).scheme
         if scheme.startswith("sqlite"):
-            result = _run_sqlite(_sqlite_path(args.database_url), tables)
+            object_root = Path(args.object_storage_dir).expanduser().resolve() if args.object_storage_dir else None
+            result = _run_sqlite(_sqlite_path(args.database_url), tables, object_root)
         elif scheme in {"postgresql", "postgres", "postgresql+psycopg2", "postgresql+psycopg"}:
             result = _run_postgres(args.database_url, tables)
         else:

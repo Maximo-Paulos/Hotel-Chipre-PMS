@@ -43,8 +43,10 @@ Estos valores son una propuesta operativa, no una configuración aplicada.
   `payments`, con índices `(hotel_id, deleted_at)`. No habilita endpoints de
   borrado ni cambia el ledger financiero.
 - `scripts/backup/verify_local_backup_restore.py` hace dump, restore a un
-  destino descartable y compara filas de `guests`, `reservations`, `payments` y
-  `audit_logs`; en PostgreSQL sólo acepta hosts locales.
+  destino descartable y compara las tablas operativas críticas, incluyendo
+  outbox y `stored_objects`; con `--object-storage-dir` también verifica
+  presencia, tamaño y SHA-256 de cada objeto `ready`. En PostgreSQL sólo acepta
+  hosts locales.
 - El export CSV de la timeline de auditoría de TECH-0070 es un patrón de
   exportación redacted y tenant-scoped. No se considera un backup de base.
 
@@ -59,12 +61,14 @@ DB_DIR="$(mktemp -d)"
 DATABASE_URL="sqlite:///$DB_DIR/source.sqlite3" \
   "$PYTHON_BIN" -m alembic upgrade head
 DATABASE_URL="sqlite:///$DB_DIR/source.sqlite3" \
-  "$PYTHON_BIN" scripts/backup/verify_local_backup_restore.py
+  OBJECT_STORAGE_LOCAL_DIR="$DB_DIR/object-storage" \
+  "$PYTHON_BIN" scripts/backup/verify_local_backup_restore.py \
+  --object-storage-dir "$DB_DIR/object-storage"
 ```
 
 Resultado esperado: una línea JSON con `"status": "verified"`,
-`"integrity_check": "ok"`, `"foreign_key_check": "ok"` y conteos iguales para
-las cuatro tablas clave. El script elimina el dump y la base restaurada
+`"integrity_check": "ok"`, `"foreign_key_check": "ok"`, conteos iguales y el
+resumen de objetos verificados. El script elimina el dump y la base restaurada
 temporales al finalizar; la base fuente efímera queda bajo `DB_DIR` para
 inspección y puede borrarse manualmente al terminar el ensayo.
 
