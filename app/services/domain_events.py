@@ -40,6 +40,12 @@ OUTBOX_RETRY_MAX_SECONDS = 15 * 60
 OUTBOX_MAX_ATTEMPTS = 8
 RECOVERY_MAX_ROWS = 500
 POSTGRES_FALLBACK_BATCH_SIZE = 100
+# The normal poll leaves most of the ten-second freshness budget for the
+# network hop and authoritative refetch after an invalidation arrives.
+POSTGRES_FALLBACK_DEFAULT_POLL_SECONDS = 2.0
+# Even a direct caller that bypasses Settings must leave room for the client
+# refetch and network latency inside the ten-second freshness budget.
+POSTGRES_FALLBACK_MAX_POLL_SECONDS = 5.0
 SUPPORTED_DOMAINS = frozenset(
     {
         "analytics",
@@ -1105,7 +1111,7 @@ def iter_postgres_event_stream(
     hotel_id: int,
     *,
     after_cursor: int | None = None,
-    poll_seconds: float = 5.0,
+    poll_seconds: float = POSTGRES_FALLBACK_DEFAULT_POLL_SECONDS,
     authorization_check: Callable[[], bool] | None = None,
     authorization_revalidate_seconds: int = 60,
     session_factory: Callable[[], Any] | None = None,
@@ -1127,7 +1133,7 @@ def iter_postgres_event_stream(
 
         session_factory = get_session_factory()
 
-    poll_delay = max(1.0, min(float(poll_seconds), 60.0))
+    poll_delay = max(1.0, min(float(poll_seconds), POSTGRES_FALLBACK_MAX_POLL_SECONDS))
     cursor_value = func.coalesce(DomainEventOutbox.stream_cursor, DomainEventOutbox.id)
     cursor = int(after_cursor or 0)
     if after_cursor is None:

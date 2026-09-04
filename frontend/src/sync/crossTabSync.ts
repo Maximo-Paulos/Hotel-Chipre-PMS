@@ -40,6 +40,10 @@ const STORAGE_KEY = "hotel-pms-domain-event";
 const DOMAIN_QUERY_PREFIXES = QUERY_PREFIXES_BY_DOMAIN;
 const ALL_DOMAINS = Object.keys(QUERY_PREFIXES_BY_DOMAIN) as SyncDomain[];
 const EVENT_ID_LIMIT = 2048;
+// Recovery remains bounded below the ten-second freshness budget when the
+// SSE transport is unavailable. Hidden tabs are included so visibility changes
+// do not leave an employee's session stale for a full minute.
+const REALTIME_RECOVERY_POLL_MS = 5_000;
 
 export type RealtimeConnectionStatus = "disabled" | "connecting" | "connected" | "reconnecting" | "degraded";
 
@@ -441,7 +445,7 @@ export function useCrossTabSync() {
     let timer: number | null = null;
     let stopped = false;
     const schedule = () => {
-      const delay = typeof document !== "undefined" && document.hidden ? 60_000 : 15_000;
+      const delay = REALTIME_RECOVERY_POLL_MS;
       timer = window.setTimeout(async () => {
         if (stopped) return;
         try {

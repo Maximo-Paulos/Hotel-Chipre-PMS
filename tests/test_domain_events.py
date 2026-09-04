@@ -54,6 +54,12 @@ def _settings(**overrides) -> Settings:
     return Settings(**values)
 
 
+def test_realtime_fallback_poll_budget_is_below_ten_seconds():
+    assert _settings().REALTIME_EVENTS_FALLBACK_POLL_SECONDS == 2.0
+    with pytest.raises(ValueError):
+        _settings(REALTIME_EVENTS_FALLBACK_POLL_SECONDS=6)
+
+
 def test_publish_domain_event_scopes_channel_and_increments_revision(monkeypatch: pytest.MonkeyPatch):
     fake = FakeRedis()
     monkeypatch.setattr(domain_events, "_settings", lambda: _settings())
@@ -523,4 +529,33 @@ def test_postgres_fallback_stream_starts_after_latest_cursor_when_cursor_is_omit
     assert next(stream) == ": heartbeat\n\n"
     with pytest.raises(StopPolling):
         next(stream)
+    engine.dispose()
+
+
+def test_postgres_fallback_stream_caps_poll_interval_at_five_seconds(monkeypatch: pytest.MonkeyPatch):
+    engine = _event_engine()
+    factory = sessionmaker(bind=engine)
+    stream = domain_events.iter_postgres_event_stream(
+        42,
+        after_cursor=0,
+        poll_seconds=60,
+        session_factory=factory,
+    )
+    assert '"transport": "postgres-outbox"' in next(stream)
+
+    class StopPolling(Exception):
+        pass
+
+    sleep_calls: list[float] = []
+
+    def stop_after_recording(seconds: float):
+        sleep_calls.append(seconds)
+        raise StopPolling()
+
+    monkeypatch.setattr(domain_events.time, "sleep", stop_after_recording)
+    assert next(stream) == ": heartbeat\n\n"
+    with pytest.raises(StopPolling):
+        next(stream)
+    assert sleep_calls == [5.0]
+    stream.close()
     engine.dispose()

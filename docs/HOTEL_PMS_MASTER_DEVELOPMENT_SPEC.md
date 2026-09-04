@@ -181,7 +181,7 @@ hotel de la membresía autenticada y barre como máximo 500 filas. El cursor
 usa `stream_cursor` cuando está disponible y conserva `id` como fallback para
 despliegues mixtos. SSE entrega `id=<stream_cursor>`, el frontend deduplica y
 persiste cursor por usuario/hotel, ejecuta recovery antes de reconectar y
-degrada a polling de 15/60 segundos. La membership se revalida cada 60
+degrada a polling de 5 segundos. La membership se revalida cada 60
 segundos durante una conexión larga.
 
 La fuente de verdad operacional continúa siendo PostgreSQL. Redis/Valkey sólo

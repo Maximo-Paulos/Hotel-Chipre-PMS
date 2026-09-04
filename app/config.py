@@ -57,7 +57,9 @@ class Settings(BaseSettings):
     DISTRIBUTED_LOCK_DEFAULT_TTL_SECONDS: int = 60
     REALTIME_EVENTS_ENABLED: bool = True
     REALTIME_EVENTS_HEARTBEAT_SECONDS: int = 15
-    REALTIME_EVENTS_FALLBACK_POLL_SECONDS: float = 5.0
+    # Keep the PostgreSQL SSE fallback below the product's ten-second
+    # cross-session freshness budget, including network/refetch headroom.
+    REALTIME_EVENTS_FALLBACK_POLL_SECONDS: float = Field(default=2.0, gt=0, le=5.0)
     # Collaboration tickets are intentionally short-lived and one-use. Redis
     # / Valkey is required for issuing them so a multi-worker deployment cannot
     # accidentally accept a ticket twice.

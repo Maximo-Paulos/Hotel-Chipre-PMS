@@ -52,9 +52,9 @@ El cliente combina SSE con `BroadcastChannel` y el fallback de `localStorage`
 para pestañas del mismo navegador. Persiste el cursor por usuario/hotel,
 deduplica `event_id`, ejecuta recovery antes de abrir o reabrir SSE y repara
 gaps sin retroceder cursores. SSE reconecta con backoff exponencial y jitter.
-Si nunca conecta o queda degradado, hace polling en primer plano cada 15
-segundos y en segundo plano cada 60 segundos. El shell conserva los datos
-visibles y muestra que pueden estar desactualizados. El backend revalida la
+Si nunca conecta o queda degradado, hace polling cada 5 segundos tanto en
+primer plano como en segundo plano. El shell conserva los datos visibles y
+muestra que pueden estar desactualizados. El backend revalida la
 membresía cada 60 segundos; al revocarse envía una señal de control, cierra el
 stream y obliga a reautenticarse.
 
@@ -64,7 +64,7 @@ Configuración relevante:
 REDIS_URL=redis://localhost:6379/0
 REALTIME_EVENTS_ENABLED=true
 REALTIME_EVENTS_HEARTBEAT_SECONDS=15
-REALTIME_EVENTS_FALLBACK_POLL_SECONDS=5
+REALTIME_EVENTS_FALLBACK_POLL_SECONDS=2
 DISTRIBUTED_LOCK_ENABLED=true
 DISTRIBUTED_LOCK_REQUIRED=true   # producción
 ```
