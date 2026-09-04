@@ -4,7 +4,9 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from app.schemas.reservation import _normalize_arrival_time_hint, _normalize_reservation_comment
 
 
 class ManualOTAReservationCreate(BaseModel):
@@ -22,6 +24,8 @@ class ManualOTAReservationCreate(BaseModel):
     external_id: str = Field(min_length=1, max_length=100)
     external_confirmation_code: str | None = Field(default=None, max_length=120)
     notes: str | None = None
+    arrival_time_hint: str | None = None
+    reservation_comment: str | None = Field(default=None, max_length=1000)
     pricing_channel_code: str | None = Field(default=None, max_length=50)
     guest_scope: str = Field(default="all", max_length=30)
     target_currency: str | None = Field(default=None, min_length=3, max_length=3)
@@ -33,3 +37,14 @@ class ManualOTAReservationCreate(BaseModel):
     amount_paid: Decimal | None = Field(default=None, ge=0)
     payment_collection_model: str = Field(default="hotel_collect", max_length=40)
     settlement_status: str | None = Field(default=None, max_length=40)
+    client_version: int | None = Field(default=None, ge=0)
+
+    @field_validator("arrival_time_hint", mode="before")
+    @classmethod
+    def normalize_arrival_time_hint(cls, value: object) -> str | None:
+        return _normalize_arrival_time_hint(value)
+
+    @field_validator("reservation_comment", mode="before")
+    @classmethod
+    def normalize_reservation_comment(cls, value: object) -> str | None:
+        return _normalize_reservation_comment(value)

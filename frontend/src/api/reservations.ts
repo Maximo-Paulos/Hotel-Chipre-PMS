@@ -59,6 +59,8 @@ export type Reservation = {
   payment_collection_model?: string;
   settlement_status?: string;
   notes?: string | null;
+  arrival_time_hint?: string | null;
+  reservation_comment?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
   version?: number;
@@ -233,6 +235,8 @@ export type ReservationPayload = {
   num_adults?: number;
   num_children?: number;
   notes?: string | null;
+  arrival_time_hint?: string | null;
+  reservation_comment?: string | null;
   source?: ReservationSource;
   external_id?: string | null;
   pricing_payment_method?: string | null;
@@ -393,6 +397,8 @@ export type ManualOtaReservationPayload = {
   num_adults?: number;
   num_children?: number;
   notes?: string | null;
+  arrival_time_hint?: string | null;
+  reservation_comment?: string | null;
   channel: ManualOtaChannel;
   external_id: string;
   external_confirmation_code?: string | null;

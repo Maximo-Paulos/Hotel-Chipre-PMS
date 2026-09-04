@@ -331,6 +331,9 @@ class Reservation(Base):
     wait_list_reason = Column(String(255), nullable=True)
 
     notes = Column(Text, nullable=True)
+    # Internal hotel-team comment/request. Kept separate from the legacy
+    # `notes` field so existing integrations retain their meaning.
+    reservation_comment = Column(Text, nullable=True)
 
     # Metadata
     created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))

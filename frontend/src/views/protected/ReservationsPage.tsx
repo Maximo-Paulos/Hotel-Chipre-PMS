@@ -89,6 +89,8 @@ type FormState = {
   num_adults: string;
   num_children: string;
   notes: string;
+  arrival_time_hint: string;
+  reservation_comment: string;
   source: ReservationSource;
   status: ReservationStatus;
 };
@@ -140,6 +142,8 @@ const defaultFormState = (): FormState => ({
   num_adults: "1",
   num_children: "0",
   notes: "",
+  arrival_time_hint: "",
+  reservation_comment: "",
   source: "direct",
   status: "pending"
 });
@@ -165,6 +169,26 @@ const formatDateTime = (value?: string | null) => {
     hour: "2-digit",
     minute: "2-digit"
   });
+};
+
+const auditMetadataLines = (
+  details: Record<string, unknown>,
+  labels: { arrival: string; comment: string; empty: string }
+) => {
+  const before = details.before && typeof details.before === "object" ? details.before as Record<string, unknown> : {};
+  const after = details.after && typeof details.after === "object" ? details.after as Record<string, unknown> : {};
+  const beforeMetadata = details.metadata && typeof details.metadata === "object" ? details.metadata as Record<string, unknown> : before;
+  const afterMetadata = details.metadata && typeof details.metadata === "object" ? details.metadata as Record<string, unknown> : after;
+  const lines: string[] = [];
+  for (const [field, label] of [["arrival_time_hint", labels.arrival], ["reservation_comment", labels.comment]] as const) {
+    const hasChange = Object.prototype.hasOwnProperty.call(beforeMetadata, field) || Object.prototype.hasOwnProperty.call(afterMetadata, field);
+    if (!hasChange) continue;
+    const previous = beforeMetadata[field] ?? labels.empty;
+    const next = afterMetadata[field] ?? labels.empty;
+    if (previous === next) continue;
+    lines.push(`${label}: ${String(previous)} → ${String(next)}`);
+  }
+  return lines;
 };
 
 const diffNights = (checkIn: string, checkOut: string) => {
@@ -314,6 +338,8 @@ export function ReservationsPage() {
           num_adults: editing.num_adults,
           num_children: editing.num_children,
           notes: editing.notes ?? null,
+          arrival_time_hint: editing.arrival_time_hint ?? null,
+          reservation_comment: editing.reservation_comment ?? null,
           mobility_restriction: false
         }
       : null,
@@ -626,6 +652,8 @@ export function ReservationsPage() {
       num_adults: String(reservation.num_adults),
       num_children: String(reservation.num_children),
       notes: reservation.notes || "",
+      arrival_time_hint: reservation.arrival_time_hint || "",
+      reservation_comment: reservation.reservation_comment || "",
       source: reservation.source,
       status: reservation.status
     });
@@ -673,12 +701,14 @@ export function ReservationsPage() {
         check_out_date: String(collaborativeReservation.draftValues.check_out_date ?? formValues.check_out_date),
         num_adults: String(collaborativeReservation.draftValues.num_adults ?? formValues.num_adults),
         num_children: String(collaborativeReservation.draftValues.num_children ?? formValues.num_children),
-        notes: String(collaborativeReservation.draftValues.notes ?? "")
+        notes: String(collaborativeReservation.draftValues.notes ?? ""),
+        arrival_time_hint: String(collaborativeReservation.draftValues.arrival_time_hint ?? ""),
+        reservation_comment: String(collaborativeReservation.draftValues.reservation_comment ?? "")
       }
     : formValues;
 
   const setReservationField = (
-    field: "room_id" | "check_in_date" | "check_out_date" | "num_adults" | "num_children" | "notes",
+    field: "room_id" | "check_in_date" | "check_out_date" | "num_adults" | "num_children" | "notes" | "arrival_time_hint" | "reservation_comment",
     value: string
   ) => {
     setFormValues((previous) => ({ ...previous, [field]: value }));
@@ -690,7 +720,9 @@ export function ReservationsPage() {
           : null
         : field === "num_adults" || field === "num_children"
           ? Number(value)
-          : value;
+          : field === "arrival_time_hint" || field === "reservation_comment"
+            ? value || null
+            : value;
     collaborativeReservation.setField(field, normalizedValue);
   };
 
@@ -770,7 +802,9 @@ export function ReservationsPage() {
       check_out_date: currentFormValues.check_out_date,
       num_adults: Number(currentFormValues.num_adults) || 1,
       num_children: Number(currentFormValues.num_children) || 0,
-      notes: currentFormValues.notes || undefined
+      notes: currentFormValues.notes || undefined,
+      arrival_time_hint: currentFormValues.arrival_time_hint || null,
+      reservation_comment: currentFormValues.reservation_comment.trim() || null
     };
 
     if (editing) {
@@ -873,6 +907,9 @@ export function ReservationsPage() {
   const canNoShow = (status: ReservationStatus) => ["pending", "deposit_paid", "fully_paid"].includes(status);
   const canMoveRoom = (status: ReservationStatus) => !["cancelled", "checked_out", "no_show"].includes(status);
   const canAddCharge = (status: ReservationStatus) => !["cancelled", "checked_out", "no_show"].includes(status);
+  const metadataOnlyEdit = Boolean(
+    editing && ["checked_in", "checked_out", "cancelled", "no_show"].includes(editing.status)
+  );
 
   const handleCancel = async (id: number) => {
     try {
@@ -2024,6 +2061,7 @@ export function ReservationsPage() {
                 <th className="px-4 py-2">{t("page.list.columns.guest")}</th>
                 <th className="px-4 py-2">{t("page.list.columns.roomCat")}</th>
                 <th className="px-4 py-2">{t("page.list.columns.checkIn")}</th>
+                <th className="px-4 py-2">{t("page.list.columns.arrivalTime")}</th>
                 <th className="px-4 py-2">{t("page.list.columns.checkOut")}</th>
                 <th className="px-4 py-2">{t("page.list.columns.status")}</th>
                 <th className="px-4 py-2 text-right">{t("page.list.columns.amount")}</th>
@@ -2033,7 +2071,7 @@ export function ReservationsPage() {
             <tbody className="divide-y divide-slate-200 bg-white">
               {!isLoading && reservations.length === 0 && (
                 <tr>
-                  <td className="px-4 py-4 text-sm text-slate-500" colSpan={8}>
+                  <td className="px-4 py-4 text-sm text-slate-500" colSpan={9}>
                     {t("page.list.noResults")}
                   </td>
                 </tr>
@@ -2055,6 +2093,9 @@ export function ReservationsPage() {
                       })}
                     </td>
                     <td className="px-4 py-2 text-slate-600">{reservation.check_in_date}</td>
+                    <td className="px-4 py-2 text-slate-600">
+                      {reservation.arrival_time_hint || <span className="text-slate-400">—</span>}
+                    </td>
                     <td className="px-4 py-2 text-slate-600">{reservation.check_out_date}</td>
                     <td className="px-4 py-2">
                       <span className={`rounded-full px-2 py-1 text-xs font-semibold ${cfg?.className ?? "bg-slate-100 text-slate-800"}`}>
@@ -2153,6 +2194,12 @@ export function ReservationsPage() {
                 <p className="text-xs text-slate-600">
                   {reservation.check_in_date} → {reservation.check_out_date}
                 </p>
+                {reservation.arrival_time_hint ? (
+                  <p className="text-xs font-semibold text-slate-700">{t("page.list.columns.arrivalTime")}: {reservation.arrival_time_hint}</p>
+                ) : null}
+                {reservation.reservation_comment ? (
+                  <p className="truncate text-xs text-amber-700" title={reservation.reservation_comment}>📝 {reservation.reservation_comment}</p>
+                ) : null}
                 <p className="text-sm font-semibold text-slate-900">
                   {formatMoney(reservation.total_amount ?? 0, reservation.currency_code)}
                 </p>
@@ -2337,7 +2384,9 @@ export function ReservationsPage() {
                     onChange={(e) => setReservationField("room_id", e.target.value)}
                     onFocus={() => editing && collaborativeReservation.focusField("room_id")}
                     onBlur={() => editing && collaborativeReservation.blurField("room_id")}
-                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
+                    disabled={metadataOnlyEdit}
+                    title={metadataOnlyEdit ? t("page.form.metadataOnlyEditTitle") : undefined}
+                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm disabled:bg-slate-50"
                   >
                     <option value="">{t("page.common.unassigned")}</option>
                     {availableRooms.map((room) => (
@@ -2372,7 +2421,9 @@ export function ReservationsPage() {
                     onChange={(e) => setReservationField("check_in_date", e.target.value)}
                     onFocus={() => editing && collaborativeReservation.focusField("check_in_date")}
                     onBlur={() => editing && collaborativeReservation.blurField("check_in_date")}
-                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
+                    disabled={metadataOnlyEdit}
+                    title={metadataOnlyEdit ? t("page.form.metadataOnlyEditTitle") : undefined}
+                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm disabled:bg-slate-50"
                   />
                 </label>
                 <label className="text-xs font-semibold text-slate-600">
@@ -2383,7 +2434,9 @@ export function ReservationsPage() {
                     onChange={(e) => setReservationField("check_out_date", e.target.value)}
                     onFocus={() => editing && collaborativeReservation.focusField("check_out_date")}
                     onBlur={() => editing && collaborativeReservation.blurField("check_out_date")}
-                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
+                    disabled={metadataOnlyEdit}
+                    title={metadataOnlyEdit ? t("page.form.metadataOnlyEditTitle") : undefined}
+                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm disabled:bg-slate-50"
                   />
                 </label>
               </div>
@@ -2656,7 +2709,8 @@ export function ReservationsPage() {
                     onChange={(e) => setReservationField("num_adults", e.target.value)}
                     onFocus={() => editing && collaborativeReservation.focusField("num_adults")}
                     onBlur={() => editing && collaborativeReservation.blurField("num_adults")}
-                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
+                    disabled={metadataOnlyEdit}
+                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm disabled:bg-slate-50"
                   />
                 </label>
                 <label className="text-xs font-semibold text-slate-600">
@@ -2668,7 +2722,8 @@ export function ReservationsPage() {
                     onChange={(e) => setReservationField("num_children", e.target.value)}
                     onFocus={() => editing && collaborativeReservation.focusField("num_children")}
                     onBlur={() => editing && collaborativeReservation.blurField("num_children")}
-                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
+                    disabled={metadataOnlyEdit}
+                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm disabled:bg-slate-50"
                   />
                 </label>
                 <label className="text-xs font-semibold text-slate-600">
@@ -2699,10 +2754,43 @@ export function ReservationsPage() {
                   onChange={(e) => setReservationField("notes", e.target.value)}
                   onFocus={() => editing && collaborativeReservation.focusField("notes")}
                   onBlur={() => editing && collaborativeReservation.blurField("notes")}
-                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
+                  disabled={metadataOnlyEdit}
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm disabled:bg-slate-50"
                   rows={3}
                 />
               </label>
+
+              {metadataOnlyEdit ? (
+                <p className="text-xs text-slate-500">{t("page.form.metadataOnlyEditHint")}</p>
+              ) : null}
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="text-xs font-semibold text-slate-600">
+                  {t("page.form.arrivalTimeHint")}
+                  <input
+                    type="time"
+                    value={collaborativeFormValues.arrival_time_hint}
+                    onChange={(e) => setReservationField("arrival_time_hint", e.target.value)}
+                    onFocus={() => editing && collaborativeReservation.focusField("arrival_time_hint")}
+                    onBlur={() => editing && collaborativeReservation.blurField("arrival_time_hint")}
+                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
+                  />
+                </label>
+                <label className="text-xs font-semibold text-slate-600">
+                  {t("page.form.reservationComment")}
+                  <textarea
+                    value={collaborativeFormValues.reservation_comment}
+                    maxLength={1000}
+                    onChange={(e) => setReservationField("reservation_comment", e.target.value)}
+                    onFocus={() => editing && collaborativeReservation.focusField("reservation_comment")}
+                    onBlur={() => editing && collaborativeReservation.blurField("reservation_comment")}
+                    placeholder={t("page.form.reservationCommentPlaceholder")}
+                    rows={3}
+                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
+                  />
+                  <span className="mt-1 block text-xs font-normal text-slate-500">{t("page.form.reservationCommentHint")}</span>
+                </label>
+              </div>
 
               {editing && (
                 <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
@@ -3122,6 +3210,10 @@ export function ReservationsPage() {
                     <span className="font-semibold">{t("page.details.timelineCheckOut")}</span> {detailsReservation.check_out_date}
                   </li>
                   <li>
+                    <span className="font-semibold">{t("page.details.timelineArrivalTime")}</span>{" "}
+                    {detailsReservation.arrival_time_hint || "—"}
+                  </li>
+                  <li>
                     <span className="font-semibold">{t("page.details.timelineStatus")}</span> {statusConfig[detailsReservation.status]?.label ?? detailsReservation.status}
                   </li>
                   {detailsSummary?.transactions?.length ? (
@@ -3131,6 +3223,13 @@ export function ReservationsPage() {
                     </li>
                   ) : null}
                 </ul>
+              </div>
+
+              <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-3 md:col-span-2">
+                <p className="text-xs uppercase tracking-wide text-amber-700">{t("page.details.reservationComment")}</p>
+                <p className="whitespace-pre-wrap text-sm text-amber-950">
+                  {detailsReservation.reservation_comment || "—"}
+                </p>
               </div>
 
               <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
@@ -3628,6 +3727,11 @@ export function ReservationsPage() {
                       <li key={`${item.source}-${item.source_id}`} className="py-2 text-sm">
                         <p className="font-semibold text-slate-900">{item.summary}</p>
                         <p className="text-xs text-slate-600">{item.action} · {item.actor_name} · {new Date(item.occurred_at).toLocaleString("es-AR")}</p>
+                        {auditMetadataLines(item.details, {
+                          arrival: t("page.details.timelineArrivalTime"),
+                          comment: t("page.details.reservationComment"),
+                          empty: t("page.form.collab.emptyValue")
+                        }).map((line) => <p key={line} className="text-xs text-amber-700">{line}</p>)}
                         {item.origin_room_disposition ? <p className="text-xs text-brand-700">Origen: {item.origin_room_disposition} ({item.origin_room_status_before ?? "?"} → {item.origin_room_status_after ?? "?"})</p> : null}
                         {item.payment_method ? <p className="text-xs text-slate-500">Medio: {item.payment_method}{item.amount !== null && item.amount !== undefined ? ` · ${formatMoney(item.amount, item.currency_code)}` : ""}</p> : null}
                       </li>

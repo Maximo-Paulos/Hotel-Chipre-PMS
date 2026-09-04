@@ -113,6 +113,8 @@ _RESERVATION_FIELDS = frozenset(
         "num_adults",
         "num_children",
         "notes",
+        "arrival_time_hint",
+        "reservation_comment",
         "mobility_restriction",
     }
 )

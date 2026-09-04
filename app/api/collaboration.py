@@ -238,6 +238,7 @@ def patch_collaborative_resource(
             }
 
         if changes:
+            before_editable_values = editable_resource_values(canonical_type, resource)
             apply_resource_changes(
                 db,
                 canonical_type,
@@ -248,9 +249,20 @@ def patch_collaborative_resource(
                 actor_role=context.user_role,
             )
             # Persist collaboration edits in the same transaction as the
-            # authoritative resource. Store field names only; values may be
-            # guest contact data or operational notes and do not belong in an
-            # audit payload or realtime event.
+            # authoritative resource. Most fields remain names-only because
+            # they may contain guest contact data. The two reservation
+            # metadata fields are intentionally included so reservation
+            # activity can explain the operational change.
+            after_editable_values = editable_resource_values(canonical_type, resource)
+            audited_metadata_fields = {"arrival_time_hint", "reservation_comment"}
+            before_metadata = {
+                field: before_editable_values.get(field)
+                for field in sorted(set(changes) & audited_metadata_fields)
+            }
+            after_metadata = {
+                field: after_editable_values.get(field)
+                for field in sorted(set(changes) & audited_metadata_fields)
+            }
             audit_log_service.safe_create_audit_log(
                 db,
                 hotel_id=context.hotel_id,
@@ -258,8 +270,12 @@ def patch_collaborative_resource(
                 record_id=resource_id,
                 action=AuditActionEnum.UPDATE,
                 actor_user_id=context.user_id,
-                payload_before={"changed_fields": sorted(changes)},
-                payload_after={"changed_fields": sorted(changes), "source": "collaboration"},
+                payload_before={"changed_fields": sorted(changes), "metadata": before_metadata},
+                payload_after={
+                    "changed_fields": sorted(changes),
+                    "metadata": after_metadata,
+                    "source": "collaboration",
+                },
             )
         db.commit()
         db.refresh(resource)

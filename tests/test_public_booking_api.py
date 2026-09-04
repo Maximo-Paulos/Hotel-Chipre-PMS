@@ -142,6 +142,8 @@ def test_public_reservation_is_scoped_to_key_hotel(public_client_with_db):
         "check_in_date": "2026-09-01",
         "check_out_date": "2026-09-02",
         "num_adults": 1,
+        "arrival_time_hint": " 16:20 ",
+        "reservation_comment": "Pedido interno que no debe salir",
     }
     quote = client.get(
         "/api/public/booking/rates",
@@ -158,10 +160,13 @@ def test_public_reservation_is_scoped_to_key_hotel(public_client_with_db):
     assert created.status_code == 201, created.text
     body = created.json()
     assert body["category_id"] == category_a.id
+    assert body["arrival_time_hint"] == "16:20"
+    assert "reservation_comment" not in body
 
     reservation = db.query(Reservation).filter(Reservation.id == body["id"]).one()
     assert reservation.hotel_id == 1
     assert reservation.hotel_id != 2
+    assert reservation.reservation_comment == "Pedido interno que no debe salir"
 
 
 def test_revoked_key_is_rejected(public_client_with_db):
@@ -197,6 +202,9 @@ def test_public_reservation_status_returns_own_reservation(public_client_with_db
     _hotel, category, _room, guest = _seed_hotel(db, 1)
     _key, secret = _issue_public_key(db, 1)
     reservation = _seed_reservation(db, 1, category, guest, "CONF-OWN-1", total=200, paid=50)
+    reservation.arrival_time_hint = "11:10"
+    reservation.reservation_comment = "Internal comment must stay private"
+    db.commit()
 
     resp = client.get(f"/api/public/booking/reservations/{reservation.id}", headers=_headers(secret))
     assert resp.status_code == 200, resp.text
@@ -207,6 +215,8 @@ def test_public_reservation_status_returns_own_reservation(public_client_with_db
     assert float(body["balance_due"]) == 150.0
     assert float(body["amount_paid"]) == 50.0
     assert body["payment_status"] == "partially_paid"
+    assert body["arrival_time_hint"] == "11:10"
+    assert "reservation_comment" not in body
 
     # Lookup by confirmation code also works and is scoped.
     by_code = client.get("/api/public/booking/reservations/by-code/CONF-OWN-1", headers=_headers(secret))

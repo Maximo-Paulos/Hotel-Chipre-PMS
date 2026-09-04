@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.models.audit_log import AuditActionEnum
 from app.dependencies.api_key_auth import PublicAPIContext, require_web_engine_api_context
 from app.models.reservation import (
     Reservation,
@@ -32,6 +33,7 @@ from app.services.reservation_service import (
     find_available_rooms,
 )
 from app.services.reservation_quote_service import build_reservation_quote
+from app.services import audit_log_service
 
 
 router = APIRouter(prefix="/api/public/booking", tags=["Public Booking"])
@@ -119,6 +121,18 @@ def public_create_reservation(
         reservation = create_reservation(db, reservation_payload, hotel_id=context.hotel_id)
         reservation.channel_code = ReservationChannelCodeEnum.WEBSITE_DIRECT
         reservation.source_provider_code = "website_direct"
+        audit_log_service.safe_create_audit_log(
+            db,
+            hotel_id=context.hotel_id,
+            table_name="reservations",
+            record_id=reservation.id,
+            action=AuditActionEnum.CREATE,
+            actor_user_id=None,
+            payload_after={
+                **(audit_log_service.model_snapshot(reservation) or {}),
+                "source": "public_api",
+            },
+        )
         db.commit()
         db.refresh(reservation)
         return reservation
@@ -150,6 +164,7 @@ def _serialize_reservation_status(reservation: Reservation) -> PublicReservation
         status=getattr(reservation.status, "value", reservation.status),
         check_in_date=reservation.check_in_date,
         check_out_date=reservation.check_out_date,
+        arrival_time_hint=reservation.arrival_time_hint,
         total_amount=reservation.total_amount,
         amount_paid=reservation.amount_paid,
         balance_due=reservation.balance_due,

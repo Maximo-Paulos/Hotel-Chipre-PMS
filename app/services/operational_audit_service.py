@@ -200,6 +200,14 @@ def list_operational_audit(
         audit_query = audit_query.filter(~AuditLog.table_name.in_(_SPECIALIZED_TABLES))
     audit_query = audit_query.filter(*_date_filter(AuditLog, start, end, "created_at"))
     for event in audit_query.order_by(AuditLog.created_at.desc(), AuditLog.id.desc()).limit(_MAX_CANDIDATES).all():
+        after_payload = _parse_redacted_json(event.payload_after)
+        system_actor = "Sistema"
+        if isinstance(after_payload, dict):
+            source_marker = after_payload.get("source")
+            if source_marker in {"ota", "manual_ota"}:
+                system_actor = "Sistema/OTA"
+            elif source_marker in {"public_api", "whatsapp"}:
+                system_actor = "Sistema/Canal público"
         row = _row(
             source="row_mutation",
             source_id=event.id,
@@ -207,12 +215,16 @@ def list_operational_audit(
             action=_value(event.action),
             summary=f"{event.table_name}: {_value(event.action)} #{event.record_id}",
             actor_user_id=event.actor_user_id,
-            actor_name=_actor_name(_user(event.actor_user_id, event.actor)),
+            actor_name=(
+                _actor_name(_user(event.actor_user_id, event.actor))
+                if event.actor_user_id is not None
+                else system_actor
+            ),
             occurred_at=event.created_at,
             details={
                 "record_id": event.record_id,
                 "before": _parse_redacted_json(event.payload_before),
-                "after": _parse_redacted_json(event.payload_after),
+                "after": after_payload,
             },
         )
         if event.table_name == "reservations":

@@ -104,6 +104,8 @@ class _ReservationListProjection:
     num_adults: int
     num_children: int
     notes: str | None
+    arrival_time_hint: str | None
+    reservation_comment: str | None
     created_at: Any
     updated_at: Any
     allocation_status: str
@@ -1261,6 +1263,8 @@ def create_reservation(
         is_wait_listed=is_wait_listed,
         wait_list_reason=wait_list_reason if is_wait_listed else None,
         notes=data.notes,
+        arrival_time_hint=data.arrival_time_hint,
+        reservation_comment=data.reservation_comment,
         mobility_restriction=data.mobility_restriction,
         pricing_snapshot=pricing.pricing_snapshot,
         allocation_locked=bool(company and (company.requires_signature or company.payment_deferred)),
@@ -1474,6 +1478,8 @@ def list_reservations(
         Reservation.num_adults,
         Reservation.num_children,
         Reservation.notes,
+        Reservation.arrival_time_hint,
+        Reservation.reservation_comment,
         Reservation.created_at,
         Reservation.updated_at,
         Reservation.allocation_status,
@@ -1573,6 +1579,8 @@ def list_reservations(
             num_adults=row.num_adults,
             num_children=row.num_children,
             notes=row.notes,
+            arrival_time_hint=row.arrival_time_hint,
+            reservation_comment=row.reservation_comment,
             created_at=row.created_at,
             updated_at=row.updated_at,
             allocation_status=row.allocation_status,
@@ -1856,7 +1864,14 @@ def update_reservation_fields(
                 )
             )
 
-    for field in ("num_adults", "num_children", "notes", "mobility_restriction"):
+    for field in (
+        "num_adults",
+        "num_children",
+        "notes",
+        "arrival_time_hint",
+        "reservation_comment",
+        "mobility_restriction",
+    ):
         if field in update_data:
             setattr(reservation, field, update_data[field])
 
