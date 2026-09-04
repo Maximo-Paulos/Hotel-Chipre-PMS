@@ -139,8 +139,10 @@ lock:cash_close:{hotel_id}:{session_id}                TTL=60s   (arqueo lock)
 
 ### Tenant-scoped realtime invalidation
 
-`/api/events/stream` is an authenticated SSE stream backed by Redis/Valkey
-pub/sub. Channels and revision counters are hotel-scoped:
+`/api/events/stream` is an authenticated SSE stream that uses Redis/Valkey
+pub/sub for low-latency fan-out and falls back to the committed PostgreSQL
+outbox when Redis is unavailable. Channels and revision counters are
+hotel-scoped:
 
 ```text
 hotel:{hotel_id}:events
@@ -219,20 +221,23 @@ commit `d907adc`).
   Missing cursor, `after_cursor=0`, a cursor older than retained rows, or more
   than 500 later rows sets `reset_required=true`; the bounded response reports
   `has_more`.
-- Redis/Valkey remains transport, not authority. A transport failure can
-  degrade realtime delivery but cannot roll back a PostgreSQL commit; the
-  client must refetch the authoritative API.
+- Redis/Valkey remains an optional transport, not authority. A transport
+  failure cannot roll back a PostgreSQL commit: the SSE route polls committed
+  outbox rows with short-lived database sessions and the client refetches the
+  authoritative API. WebSocket coediting and the lowest-latency cross-worker
+  fan-out still require Redis/Valkey.
 - SSE emits a cursor-bearing `id` and revalidates the user's active membership
   periodically; a revoked membership receives a control event and the stream
   closes. The frontend persists the cursor per user/hotel, deduplicates event
   IDs, recovers before reconnecting and polls at bounded foreground/background
   intervals when SSE is degraded.
 
-`confirmed`: implementation and local contract tests are present. `inferred`:
-the recovery path is suitable for later cursor evolution because the public
-response is metadata-only. `needs-verification`: provider-bound Redis/Valkey
-health, retention under production load, and cross-device QA; no provider was
-provisioned or mutated by this baseline.
+`confirmed`: implementation and local contract tests are present, including
+the PostgreSQL SSE fallback. `inferred`: the recovery path is suitable for
+later cursor evolution because the public response is metadata-only.
+`needs-verification`: provider-bound Redis/Valkey and PostgreSQL health,
+retention/load of the fallback, and cross-device QA; no production cutover is
+claimed by this change.
 
 ---
 

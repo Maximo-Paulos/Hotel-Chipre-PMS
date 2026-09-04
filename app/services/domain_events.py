@@ -20,6 +20,7 @@ from sqlalchemy import func
 from app.config import get_settings
 from app.infrastructure.redis_backend import get_sync_redis_client, namespaced_key
 from app.models.domain_event_outbox import DomainEventOutbox
+from app.services.tenant_context import set_tenant_hotel_context
 
 
 logger = logging.getLogger(__name__)
@@ -38,6 +39,13 @@ OUTBOX_RETRY_BASE_SECONDS = 5
 OUTBOX_RETRY_MAX_SECONDS = 15 * 60
 OUTBOX_MAX_ATTEMPTS = 8
 RECOVERY_MAX_ROWS = 500
+POSTGRES_FALLBACK_BATCH_SIZE = 100
+# The normal poll leaves most of the ten-second freshness budget for the
+# network hop and authoritative refetch after an invalidation arrives.
+POSTGRES_FALLBACK_DEFAULT_POLL_SECONDS = 2.0
+# Even a direct caller that bypasses Settings must leave room for the client
+# refetch and network latency inside the ten-second freshness budget.
+POSTGRES_FALLBACK_MAX_POLL_SECONDS = 5.0
 SUPPORTED_DOMAINS = frozenset(
     {
         "analytics",
@@ -1050,6 +1058,171 @@ def get_realtime_client() -> redis.Redis | None:
         _unavailable("Redis/Valkey realtime backend is unavailable", exc)
         return None
     return client
+
+
+def _outbox_sse_payload(row: DomainEventOutbox, cursor: int) -> dict[str, Any] | None:
+    """Build a safe invalidation frame from a committed outbox row.
+
+    The PostgreSQL fallback deliberately carries no business payload. Clients
+    refetch the authoritative, tenant-scoped API representation after seeing
+    the domain signal, just as they do for Redis messages.
+    """
+
+    try:
+        domain = str(row.domain or "").strip().lower()
+        event_type = str(row.event_type or "").strip()
+        validate_event_input(
+            hotel_id=int(row.hotel_id),
+            domain=domain,
+            event_type=event_type,
+            payload={},
+        )
+        occurred_at = row.occurred_at
+        if occurred_at is None:
+            occurred_at_value = None
+        elif isinstance(occurred_at, datetime):
+            occurred_at_value = occurred_at.isoformat()
+        else:
+            occurred_at_value = str(occurred_at)
+        return {
+            "version": 1,
+            "schema_version": int(row.schema_version or 1),
+            "event_id": str(row.event_id),
+            "hotel_id": int(row.hotel_id),
+            "domain": domain,
+            "event_type": event_type,
+            "revision": int(row.revision or 0),
+            "cursor": cursor,
+            "occurred_at": occurred_at_value,
+            "payload": {},
+            "transport": "postgres-outbox",
+        }
+    except (TypeError, ValueError) as exc:
+        # A malformed row must not take down every tenant's stream, and the
+        # error log must not echo its payload or provider details.
+        logger.warning(
+            "realtime_events.invalid_outbox_row",
+            extra={"row_id": getattr(row, "id", None), "error_type": type(exc).__name__},
+        )
+        return None
+
+
+def iter_postgres_event_stream(
+    hotel_id: int,
+    *,
+    after_cursor: int | None = None,
+    poll_seconds: float = POSTGRES_FALLBACK_DEFAULT_POLL_SECONDS,
+    authorization_check: Callable[[], bool] | None = None,
+    authorization_revalidate_seconds: int = 60,
+    session_factory: Callable[[], Any] | None = None,
+) -> Iterable[str]:
+    """Stream committed outbox invalidations when Redis is unavailable.
+
+    Each poll uses a short-lived PostgreSQL session and closes it before a
+    frame is yielded, so a long-lived SSE connection never pins a database
+    connection. ``None`` means start after the current latest cursor; this is
+    important for a first connection because the recovery endpoint has already
+    refetched the current state. An explicit cursor replays rows after it.
+    """
+
+    _validate_hotel_id(hotel_id)
+    if after_cursor is not None and after_cursor < 0:
+        raise ValueError("after_cursor must be non-negative")
+    if session_factory is None:
+        from app.database import get_session_factory
+
+        session_factory = get_session_factory()
+
+    poll_delay = max(1.0, min(float(poll_seconds), POSTGRES_FALLBACK_MAX_POLL_SECONDS))
+    cursor_value = func.coalesce(DomainEventOutbox.stream_cursor, DomainEventOutbox.id)
+    cursor = int(after_cursor or 0)
+    if after_cursor is None:
+        initial_db = session_factory()
+        try:
+            set_tenant_hotel_context(initial_db, hotel_id)
+            latest = (
+                initial_db.query(func.max(cursor_value))
+                .filter(DomainEventOutbox.hotel_id == hotel_id)
+                .scalar()
+            )
+            cursor = int(latest or 0)
+        finally:
+            initial_db.close()
+
+    last_authorization_check = time.monotonic()
+    yield format_sse(
+        {
+            "schema_version": 2,
+            "hotel_id": hotel_id,
+            "status": "ready",
+            "transport": "postgres-outbox",
+            "cursor": cursor,
+        },
+        event_name="ready",
+    )
+
+    while True:
+        now = time.monotonic()
+        if (
+            authorization_check
+            and now - last_authorization_check >= max(1, authorization_revalidate_seconds)
+        ):
+            last_authorization_check = now
+            try:
+                authorized = authorization_check()
+            except Exception as exc:  # pragma: no cover - fail closed on provider errors
+                logger.warning(
+                    "realtime_events.authorization_check_failed",
+                    extra={"error_type": type(exc).__name__},
+                )
+                authorized = False
+            if not authorized:
+                yield format_sse(
+                    {
+                        "schema_version": 2,
+                        "hotel_id": hotel_id,
+                        "event_type": "authorization_lost",
+                        "status": "reauthenticate",
+                        "transport": "postgres-outbox",
+                    },
+                    event_name="control",
+                )
+                return
+
+        rows: list[DomainEventOutbox] = []
+        try:
+            poll_db = session_factory()
+            try:
+                set_tenant_hotel_context(poll_db, hotel_id)
+                rows = (
+                    poll_db.query(DomainEventOutbox)
+                    .filter(
+                        DomainEventOutbox.hotel_id == hotel_id,
+                        cursor_value > cursor,
+                    )
+                    .order_by(cursor_value.asc())
+                    .limit(POSTGRES_FALLBACK_BATCH_SIZE)
+                    .all()
+                )
+            finally:
+                poll_db.close()
+        except Exception as exc:  # pragma: no cover - provider/runtime failure
+            logger.warning(
+                "realtime_events.postgres_fallback_poll_failed",
+                extra={"hotel_id": hotel_id, "error_type": type(exc).__name__},
+            )
+
+        if rows:
+            for row in rows:
+                row_cursor = int(row.stream_cursor or row.id)
+                cursor = max(cursor, row_cursor)
+                payload = _outbox_sse_payload(row, row_cursor)
+                if payload is not None:
+                    yield format_sse(payload)
+            continue
+
+        yield ": heartbeat\n\n"
+        time.sleep(poll_delay)
 
 
 def format_sse(payload: Mapping[str, Any], *, event_name: str = EVENT_NAME) -> str:

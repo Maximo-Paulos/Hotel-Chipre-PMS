@@ -158,7 +158,7 @@ test("owner opens the reservation drawer from the dashboard, global search, and 
 });
 
 test("an authenticated second context sees a committed payment through realtime events", async ({ page, browser }) => {
-  test.skip(process.env.REALTIME_E2E !== "true", "Requires REALTIME_E2E=true and Redis/Valkey");
+  test.skip(process.env.REALTIME_E2E !== "true", "Requires REALTIME_E2E=true and a realtime-capable preview");
 
   const suffix = Date.now().toString();
   const guestLastName = `RealtimeQA-${suffix}`;

@@ -7,6 +7,8 @@ import { useEffect, useRef } from "react";
 // authorized JavaScript origins to register in Google Cloud Console.
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
 const GSI_SCRIPT_SRC = "https://accounts.google.com/gsi/client";
+let initializedClientId: string | null = null;
+let activeCredentialCallback: ((idToken: string) => void) | null = null;
 
 type CredentialResponse = { credential: string };
 
@@ -42,25 +44,34 @@ function loadGsiScript(): Promise<void> {
 
 export function GoogleSignInButton({ onCredential }: { onCredential: (idToken: string) => void }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const credentialRef = useRef(onCredential);
+  credentialRef.current = onCredential;
 
   useEffect(() => {
     if (!CLIENT_ID || !containerRef.current) return;
     let cancelled = false;
+    const callback = (idToken: string) => credentialRef.current(idToken);
+    activeCredentialCallback = callback;
 
     loadGsiScript()
       .then(() => {
         if (cancelled || !containerRef.current || !window.google) return;
-        window.google.accounts.id.initialize({
-          client_id: CLIENT_ID,
-          callback: (resp) => onCredential(resp.credential)
-        });
-        window.google.accounts.id.renderButton(containerRef.current, {
-          type: "standard",
-          theme: "outline",
-          size: "large",
-          width: 320,
-          text: "continue_with"
-        });
+        if (initializedClientId !== CLIENT_ID) {
+          window.google.accounts.id.initialize({
+            client_id: CLIENT_ID,
+            callback: (resp) => activeCredentialCallback?.(resp.credential)
+          });
+          initializedClientId = CLIENT_ID;
+        }
+        if (containerRef.current.childElementCount === 0) {
+          window.google.accounts.id.renderButton(containerRef.current, {
+            type: "standard",
+            theme: "outline",
+            size: "large",
+            width: 320,
+            text: "continue_with"
+          });
+        }
       })
       .catch(() => {
         // Google's script failed to load (offline, blocked, etc). The normal
@@ -69,8 +80,9 @@ export function GoogleSignInButton({ onCredential }: { onCredential: (idToken: s
 
     return () => {
       cancelled = true;
+      if (activeCredentialCallback === callback) activeCredentialCallback = null;
     };
-  }, [onCredential]);
+  }, []);
 
   if (!CLIENT_ID) return null;
 

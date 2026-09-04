@@ -16,6 +16,7 @@ from app.services.domain_events import (
     get_domain_event_recovery,
     get_realtime_client,
     iter_event_stream,
+    iter_postgres_event_stream,
 )
 from app.models.hotel_membership import HotelMembership
 from app.models.user import User
@@ -49,33 +50,44 @@ def recover_domain_events(
 def stream_domain_events(
     context: AuthContext = Depends(get_auth_context),
     db: Session = Depends(get_db),
+    after_cursor: int | None = Query(
+        default=None,
+        ge=0,
+        description="Último cursor de outbox procesado para iniciar el transporte.",
+    ),
 ):
     """Stream tenant-scoped invalidation signals; clients refetch from Postgres-backed APIs."""
 
+    settings = get_settings()
+    if not bool(settings.REALTIME_EVENTS_ENABLED):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Realtime events are disabled",
+        )
+
+    transport = "redis"
     try:
         client = get_realtime_client()
     except RealtimeEventsUnavailable as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Realtime event backend unavailable",
-        ) from exc
-    if client is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Realtime event backend unavailable",
+        logger.warning(
+            "realtime_events.redis_transport_unavailable",
+            extra={"error_type": type(exc).__name__},
         )
+        client = None
+    if client is None:
+        transport = "postgres-outbox"
 
     # Authentication has already resolved the tenant and permissions. The
-    # stream itself reads only Redis, so do not hold a synchronous SQLAlchemy
-    # connection for the lifetime of this long-lived response. ``get_db`` is
-    # also used by ``get_auth_context`` and FastAPI reuses that dependency
-    # instance; closing it here is safe and the dependency cleanup remains
-    # idempotent. The getattr guard keeps direct unit calls convenient.
+    # stream uses Redis or short-lived PostgreSQL fallback sessions, so do not
+    # hold the request's synchronous SQLAlchemy connection for the lifetime of
+    # this long-lived response. ``get_db`` is also used by ``get_auth_context``
+    # and FastAPI reuses that dependency instance; closing it here is safe and
+    # the dependency cleanup remains idempotent. The getattr guard keeps direct
+    # unit calls convenient.
     close = getattr(db, "close", None)
     if callable(close):
         close()
 
-    settings = get_settings()
     heartbeat_seconds = max(5, min(int(settings.REALTIME_EVENTS_HEARTBEAT_SECONDS), 60))
 
     def authorization_check() -> bool:
@@ -98,17 +110,28 @@ def stream_domain_events(
         finally:
             check_db.close()
 
-    return StreamingResponse(
+    stream = (
         iter_event_stream(
             context.hotel_id,
             client,
             heartbeat_seconds=heartbeat_seconds,
             authorization_check=authorization_check,
-        ),
+        )
+        if client is not None
+        else iter_postgres_event_stream(
+            context.hotel_id,
+            after_cursor=after_cursor,
+            poll_seconds=float(getattr(settings, "REALTIME_EVENTS_FALLBACK_POLL_SECONDS", 2.0)),
+            authorization_check=authorization_check,
+        )
+    )
+    return StreamingResponse(
+        stream,
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache, no-store",
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
+            "X-Realtime-Transport": transport,
         },
     )

@@ -6,6 +6,12 @@ Blueprint; no se modificó ningún recurso cloud durante esta tarea.
 
 ## ¿Qué cambio para activar Redis y el cache de read-models?
 
+El flujo SSE de invalidación no queda inutilizable si Redis/Valkey está caído:
+el backend puede leer el outbox confirmado de PostgreSQL mediante el fallback
+acotado de `REALTIME_EVENTS_FALLBACK_POLL_SECONDS`. Redis/Valkey sigue siendo
+recomendado para fan-out de baja latencia entre workers, locks, Celery y la
+coedición WebSocket.
+
 En el proceso que atiende el API, cambie `READ_MODEL_CACHE_ENABLED` de `false` a
 `true` y configure `REDIS_URL` con la URL del Redis/Valkey contratado. En el
 Blueprint de Render, `REDIS_URL` se obtiene de
