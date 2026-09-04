@@ -104,10 +104,13 @@ def test_manual_ota_requires_channel_and_external_id(db):
 
 def test_duplicate_channel_external_id_updates_existing_reservation_and_audits(db):
     category, room, guest = _seed_hotel(db, hotel_id=1)
+    first_payload = _manual_payload(guest_id=guest.id, category_id=category.id, room_id=room.id, external_id="BKG-DUP")
+    first_payload.arrival_time_hint = "08:30"
+    first_payload.reservation_comment = "Cuna"
     first = create_or_update_manual_ota_reservation(
         db,
         hotel_id=1,
-        data=_manual_payload(guest_id=guest.id, category_id=category.id, room_id=room.id, external_id="BKG-DUP"),
+        data=first_payload,
         actor_user_id=7,
     )
     db.flush()
@@ -120,6 +123,8 @@ def test_duplicate_channel_external_id_updates_existing_reservation_and_audits(d
     )
     second_payload.check_out_date = date(2026, 7, 4)
     second_payload.notes = "updated manual ota"
+    second_payload.arrival_time_hint = " 19:15 "
+    second_payload.reservation_comment = "  Late arrival  "
     second = create_or_update_manual_ota_reservation(
         db,
         hotel_id=1,
@@ -132,6 +137,8 @@ def test_duplicate_channel_external_id_updates_existing_reservation_and_audits(d
     assert db.query(Reservation).filter_by(hotel_id=1, source_provider_code="booking", external_id="BKG-DUP").count() == 1
     assert second.check_out_date == date(2026, 7, 4)
     assert second.notes == "updated manual ota"
+    assert second.arrival_time_hint == "19:15"
+    assert second.reservation_comment == "Late arrival"
     assert second.version == 1
 
     audit = db.query(SecurityAuditLog).filter_by(

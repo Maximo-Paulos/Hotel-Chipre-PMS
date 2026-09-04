@@ -8,7 +8,8 @@ from typing import Any, Optional
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from app.schemas.payment_link import PaymentLinkCreate, PaymentLinkRead
-from app.schemas.reservation import ReservationRead
+from app.schemas.hotel_api_key import PublicReservationRead
+from app.schemas.reservation import _normalize_arrival_time_hint, _normalize_reservation_comment
 
 
 class WhatsAppAvailabilityResponse(BaseModel):
@@ -68,8 +69,20 @@ class WhatsAppReservationCreate(BaseModel):
     num_adults: int = Field(default=1, gt=0)
     num_children: int = Field(default=0, ge=0)
     notes: Optional[str] = None
+    arrival_time_hint: Optional[str] = None
+    reservation_comment: Optional[str] = Field(default=None, max_length=1000)
     external_id: Optional[str] = None
     quote_token: Optional[str] = Field(default=None, min_length=20, max_length=24000)
+
+    @field_validator("arrival_time_hint", mode="before")
+    @classmethod
+    def normalize_arrival_time_hint(cls, value: object) -> str | None:
+        return _normalize_arrival_time_hint(value)
+
+    @field_validator("reservation_comment", mode="before")
+    @classmethod
+    def normalize_reservation_comment(cls, value: object) -> str | None:
+        return _normalize_reservation_comment(value)
 
 
 class WhatsAppPaymentLinkCreate(BaseModel):
@@ -105,7 +118,7 @@ class WhatsAppPaymentConfirmationResponse(BaseModel):
     payment_id: int
 
 
-class WhatsAppReservationRead(ReservationRead):
+class WhatsAppReservationRead(PublicReservationRead):
     pass
 
 

@@ -16,7 +16,7 @@ from app.models.audit_log import AuditActionEnum
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.guest import Guest
 from app.schemas.booking import BookingCreate, BookingRead, BookingUpdate
-from app.schemas.reservation import ReservationCreate
+from app.schemas.reservation import ReservationCreate, ReservationUpdate
 from app.services.reservation_service import (
     ReservationError,
     check_room_availability,
@@ -30,7 +30,7 @@ from app.services.checkin_service import perform_checkin, perform_checkout, Chec
 from app.services.guest_restriction_service import GuestProhibitedError, get_active_guest_restrictions
 from app.services.graph_projection import project_company_link, project_reservation_assignment
 from app.services import audit_log_service
-from app.services.permission_service import PERMISSION_RESERVATION_CREATE
+from app.services.permission_service import PERMISSION_RESERVATION_CREATE, PERMISSION_RESERVATION_UPDATE
 
 router = APIRouter(prefix="/api/bookings", tags=["Bookings"])
 
@@ -181,6 +181,18 @@ def create_booking(
     reservation_payload = ReservationCreate(**payload.model_dump())
     try:
         booking = create_reservation(db, reservation_payload, hotel_id=context.hotel_id)
+        audit_log_service.safe_create_audit_log(
+            db,
+            hotel_id=context.hotel_id,
+            table_name="reservations",
+            record_id=booking.id,
+            action=AuditActionEnum.CREATE,
+            actor_user_id=context.user_id,
+            payload_after={
+                **(audit_log_service.model_snapshot(booking) or {}),
+                "source": "legacy_bookings",
+            },
+        )
         db.commit()
         db.refresh(booking)
         _project_booking_graph(context.hotel_id, booking)
@@ -274,7 +286,7 @@ def update_booking(
     booking_id: int,
     payload: BookingUpdate,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_UPDATE)),
 ):
     booking = (
         db.query(Reservation)
@@ -287,6 +299,54 @@ def update_booking(
     )
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
+
+    metadata_fields = {"arrival_time_hint", "reservation_comment", "client_version"}
+    terminal_mutation_fields = set(payload.model_fields_set) - metadata_fields
+    if booking.status in {
+        ReservationStatusEnum.CHECKED_IN,
+        ReservationStatusEnum.CHECKED_OUT,
+        ReservationStatusEnum.CANCELLED,
+        ReservationStatusEnum.NO_SHOW,
+    } and terminal_mutation_fields:
+        raise HTTPException(status_code=400, detail=("Cannot modify: reservation is " + booking.status.value))
+
+    before = audit_log_service.model_snapshot(booking)
+    if payload.client_version is not None and booking.version != payload.client_version:
+        raise HTTPException(status_code=409, detail="Reservation was modified concurrently. Reload and retry.")
+
+    # Route legacy metadata-only edits through the canonical service so version
+    # checks, reservation.updated events and field normalization stay aligned
+    # with the primary reservations endpoint.
+    if set(payload.model_fields_set) <= metadata_fields:
+        try:
+            update_reservation_fields(
+                db,
+                booking,
+                ReservationUpdate(**payload.model_dump(exclude_unset=True)),
+                context.hotel_id,
+                changed_by_user_id=context.user_id,
+                actor_role=context.user_role,
+                client_version=payload.client_version,
+            )
+        except ReservationError as exc:
+            db.rollback()
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        audit_log_service.safe_create_audit_log(
+            db,
+            hotel_id=context.hotel_id,
+            table_name="reservations",
+            record_id=booking.id,
+            action=AuditActionEnum.UPDATE,
+            actor_user_id=context.user_id,
+            payload_before=before,
+            payload_after={
+                **(audit_log_service.model_snapshot(booking) or {}),
+                "source": "legacy_bookings",
+            },
+        )
+        db.commit()
+        db.refresh(booking)
+        return _booking_to_read(booking)
 
     data = payload.model_dump(exclude_unset=True)
     new_category_id = data.get("category_id", booking.category_id)
@@ -368,7 +428,7 @@ def update_booking(
         except ReservationError as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-    for field in ("num_adults", "num_children", "notes"):
+    for field in ("num_adults", "num_children", "notes", "arrival_time_hint", "reservation_comment"):
         if field in data:
             setattr(booking, field, data[field])
 
@@ -378,6 +438,20 @@ def update_booking(
         except ReservationError as e:
             raise HTTPException(status_code=400, detail=str(e))
 
+    booking.version = (booking.version or 0) + 1
+    audit_log_service.safe_create_audit_log(
+        db,
+        hotel_id=context.hotel_id,
+        table_name="reservations",
+        record_id=booking.id,
+        action=AuditActionEnum.UPDATE,
+        actor_user_id=context.user_id,
+        payload_before=before,
+        payload_after={
+            **(audit_log_service.model_snapshot(booking) or {}),
+            "source": "legacy_bookings",
+        },
+    )
     db.commit()
     db.refresh(booking)
     return _booking_to_read(booking)

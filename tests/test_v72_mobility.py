@@ -12,6 +12,7 @@ from app.database import Base, get_db
 from app.dependencies.auth import AuthContext, get_auth_context
 from app.main import app as fastapi_app
 from app.models.guest import Guest
+from app.models.audit_log import AuditLog
 from app.models.hotel_config import HotelConfiguration
 from app.models.reservation import Reservation, ReservationSourceEnum, ReservationStatusEnum
 from app.models.room import Room, RoomCategory, RoomStatusEnum
@@ -160,6 +161,68 @@ def test_create_reservation_persists_mobility_restriction(reservation_api_client
     assert body["mobility_restriction"] is True
     saved = db.get(Reservation, body["id"])
     assert saved.mobility_restriction is True
+
+
+def test_terminal_reservation_allows_only_arrival_metadata_and_audits_values(reservation_api_client):
+    client, db = reservation_api_client
+    guest, category, room, _ = _seed_reservation_prerequisites(db)
+    reservation = Reservation(
+        confirmation_code="ARRIVAL-METADATA-1",
+        hotel_id=1,
+        guest_id=guest.id,
+        room_id=room.id,
+        category_id=category.id,
+        check_in_date=date(2027, 4, 20),
+        check_out_date=date(2027, 4, 22),
+        total_amount=200.0,
+        subtotal_amount=200.0,
+        net_amount=200.0,
+        amount_paid=200.0,
+        deposit_amount=60.0,
+        currency_code="ARS",
+        status=ReservationStatusEnum.CHECKED_OUT,
+        source=ReservationSourceEnum.DIRECT,
+        num_adults=1,
+        num_children=0,
+        notes="legacy note",
+        arrival_time_hint="09:00",
+        reservation_comment="Original request",
+    )
+    db.add(reservation)
+    db.commit()
+
+    response = client.patch(
+        f"/api/reservations/{reservation.id}",
+        json={
+            "arrival_time_hint": " 18:45 ",
+            "reservation_comment": "  Updated request  ",
+            "client_version": reservation.version,
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["arrival_time_hint"] == "18:45"
+    assert response.json()["reservation_comment"] == "Updated request"
+    db.refresh(reservation)
+    assert reservation.notes == "legacy note"
+    assert reservation.version == 1
+
+    blocked = client.patch(
+        f"/api/reservations/{reservation.id}",
+        json={"notes": "must remain unchanged", "client_version": reservation.version},
+    )
+    assert blocked.status_code == 400
+
+    audit = (
+        db.query(AuditLog)
+        .filter(AuditLog.table_name == "reservations", AuditLog.record_id == reservation.id)
+        .order_by(AuditLog.id.desc())
+        .first()
+    )
+    assert audit is not None
+    assert '"arrival_time_hint": "09:00"' in (audit.payload_before or "")
+    assert '"arrival_time_hint": "18:45"' in (audit.payload_after or "")
+    assert '"reservation_comment": "Original request"' in (audit.payload_before or "")
 
 
 def test_update_mobility_restriction_triggers_reoptimization(reservation_api_client, monkeypatch):

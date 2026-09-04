@@ -119,6 +119,8 @@
       "roomOption": "Room {{number}}",
       "checkIn": "Check-in",
       "checkOut": "Check-out",
+      "arrivalTimeHint": "Estimated arrival time",
+      "reservationComment": "Internal request/comment",
       "adults": "Adults",
       "children": "Children",
       "channelSectionTitle": "Channel details",
@@ -193,7 +195,8 @@
       "confirm": "Confirm"
     },
     "errors": {
-      "moveFailed": "Could not move the reservation."
+      "moveFailed": "Could not move the reservation.",
+      "roomMoveOriginDispositionRequired": "Choose the origin room status and justify it when it is not sent to cleaning."
     }
   },
   "page": {
@@ -340,6 +343,7 @@
         "guest": "Guest",
         "roomCat": "Room/Cat",
         "checkIn": "Check-in",
+        "arrivalTime": "ETA",
         "checkOut": "Check-out",
         "status": "Status",
         "amount": "Amount",
@@ -393,6 +397,12 @@
       },
       "checkIn": "Check-in",
       "checkOut": "Check-out",
+      "arrivalTimeHint": "Estimated arrival time",
+      "reservationComment": "Reservation request/comment",
+      "reservationCommentPlaceholder": "Request or detail for the hotel team",
+      "reservationCommentHint": "Internal hotel note; visible to the team, not to the guest through public responses.",
+      "metadataOnlyEditTitle": "Only the arrival time and internal comment can be edited in this state.",
+      "metadataOnlyEditHint": "This reservation is finished or cancelled. Only the ETA and internal comment are editable.",
       "pricingMethod": "Method to calculate total",
       "manualDeposit": "Manual deposit",
       "depositPlaceholder": "Use hotel configuration",
@@ -510,6 +520,8 @@
       "timelineTitle": "Timeline",
       "timelineCheckIn": "Check-in:",
       "timelineCheckOut": "Check-out:",
+      "timelineArrivalTime": "Estimated arrival:",
+      "reservationComment": "Internal request/comment",
       "timelineStatus": "Status:",
       "timelineLastPayment": "Last payment:",
       "financeTitle": "Finances",

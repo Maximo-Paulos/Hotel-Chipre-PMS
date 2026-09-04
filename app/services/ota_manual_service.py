@@ -94,6 +94,8 @@ def create_or_update_manual_ota_reservation(
         num_adults=data.num_adults,
         num_children=data.num_children,
         notes=data.notes,
+        arrival_time_hint=data.arrival_time_hint,
+        reservation_comment=data.reservation_comment,
         source=source,
         external_id=external_id,
         pricing_channel_code=data.pricing_channel_code or channel,
@@ -272,11 +274,14 @@ def _update_existing_manual_ota_reservation(
                 num_adults=data.num_adults,
                 num_children=data.num_children,
                 notes=data.notes,
+                arrival_time_hint=data.arrival_time_hint,
+                reservation_comment=data.reservation_comment,
             ),
             reservation.hotel_id,
             changed_by_user_id=actor_user_id,
             room_move_reason_code="manual_ota_update",
             room_move_notes="Manual OTA duplicate update",
+            client_version=data.client_version,
         )
     except ReservationError as exc:
         raise OTAManualReservationError(str(exc)) from exc
@@ -353,6 +358,8 @@ def _reservation_snapshot(reservation: Reservation) -> dict[str, Any]:
         "room_id": reservation.room_id,
         "guest_id": reservation.guest_id,
         "notes": reservation.notes,
+        "arrival_time_hint": reservation.arrival_time_hint,
+        "reservation_comment": reservation.reservation_comment,
         "source_provider_code": reservation.source_provider_code,
         "external_id": reservation.external_id,
         "status": reservation.status.value if hasattr(reservation.status, "value") else str(reservation.status),

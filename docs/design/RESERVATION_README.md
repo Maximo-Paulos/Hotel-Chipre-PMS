@@ -89,6 +89,23 @@ Dedicated fields for external booking integration:
 
 **Why:** Separate OTA sync logic from core reservation logic.
 
+### 7. Arrival and Internal Request Metadata
+
+Reservations also expose two independent operational fields:
+
+- `arrival_time_hint`: optional estimated arrival time in local hotel time,
+  normalized as `HH:MM`.
+- `reservation_comment`: optional internal hotel-team request, trimmed and
+  limited to 1000 characters. Empty values are stored as `NULL` and the field
+  remains separate from the legacy `notes` field.
+
+Both fields can be edited with `reservation:update` while a reservation is not
+soft-deleted, including terminal states. Every change is recorded in the
+existing reservation audit activity with before/after values. Public creation
+accepts the fields, but public responses expose only `arrival_time_hint`; the
+internal comment is never returned publicly. OTA updates may refresh the
+arrival hint but must preserve the internal comment.
+
 ---
 
 ## Data Model Highlights

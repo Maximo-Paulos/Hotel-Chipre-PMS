@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.models.audit_log import AuditActionEnum
 from app.dependencies.api_key_auth import PublicAPIContext, require_whatsapp_api_context
 from app.schemas.whatsapp_hooks import (
     WhatsAppAvailabilityResponse,
@@ -24,6 +25,7 @@ from app.services.whatsapp_booking_service import (
     options_with_prices,
     price_quote,
 )
+from app.services import audit_log_service
 
 
 router = APIRouter(prefix="/api/public/whatsapp", tags=["WhatsApp Hooks"])
@@ -95,6 +97,18 @@ def whatsapp_create_reservation(
         raise HTTPException(status_code=400, detail="Se requiere una cotización vigente para crear la reserva.")
     try:
         reservation = create_reservation(db, hotel_id=context.hotel_id, payload=payload)
+        audit_log_service.safe_create_audit_log(
+            db,
+            hotel_id=context.hotel_id,
+            table_name="reservations",
+            record_id=reservation.id,
+            action=AuditActionEnum.CREATE,
+            actor_user_id=None,
+            payload_after={
+                **(audit_log_service.model_snapshot(reservation) or {}),
+                "source": "whatsapp",
+            },
+        )
         db.commit()
         db.refresh(reservation)
         return reservation

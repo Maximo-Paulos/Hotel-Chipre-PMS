@@ -1,7 +1,9 @@
 """
 Pydantic schemas for Reservation.
 """
-from pydantic import BaseModel, Field
+import re
+
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional
 from datetime import date, datetime
 from decimal import Decimal
@@ -10,6 +12,31 @@ from app.schemas.payment_link import PaymentLinkCreate, PaymentLinkRead
 from app.schemas.transaction import PaymentRequest, TransactionRead
 from app.schemas.guest import GuestRead
 from app.schemas.guest_restriction import GuestRestrictionOverrideRequest
+
+
+_ARRIVAL_TIME_PATTERN = re.compile(r"^(?:[01]\d|2[0-3]):[0-5]\d$")
+
+
+def _normalize_arrival_time_hint(value: object) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ValueError("arrival_time_hint must use HH:MM format")
+    cleaned = value.strip()
+    if not cleaned:
+        return None
+    if not _ARRIVAL_TIME_PATTERN.fullmatch(cleaned):
+        raise ValueError("arrival_time_hint must use HH:MM format")
+    return cleaned
+
+
+def _normalize_reservation_comment(value: object) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ValueError("reservation_comment must be text")
+    cleaned = value.strip()
+    return cleaned or None
 
 class GuestSummary(BaseModel):
     id: int
@@ -31,6 +58,8 @@ class ReservationCreate(BaseModel):
     num_adults: int = Field(default=1, gt=0)
     num_children: int = Field(default=0, ge=0)
     notes: Optional[str] = None
+    arrival_time_hint: Optional[str] = None
+    reservation_comment: Optional[str] = Field(default=None, max_length=1000)
     source: ReservationSourceEnum = ReservationSourceEnum.DIRECT
     channel_code: Optional[ReservationChannelCodeEnum] = None
     external_id: Optional[str] = None
@@ -46,6 +75,16 @@ class ReservationCreate(BaseModel):
     is_wait_listed: bool = False
     wait_list_reason: Optional[str] = Field(default=None, max_length=255)
     restriction_override: Optional[GuestRestrictionOverrideRequest] = None
+
+    @field_validator("arrival_time_hint", mode="before")
+    @classmethod
+    def normalize_arrival_time_hint(cls, value: object) -> str | None:
+        return _normalize_arrival_time_hint(value)
+
+    @field_validator("reservation_comment", mode="before")
+    @classmethod
+    def normalize_reservation_comment(cls, value: object) -> str | None:
+        return _normalize_reservation_comment(value)
 
 
 class ReservationRead(BaseModel):
@@ -85,6 +124,8 @@ class ReservationRead(BaseModel):
     num_adults: int
     num_children: int
     notes: Optional[str]
+    arrival_time_hint: Optional[str] = None
+    reservation_comment: Optional[str] = None
     created_at: Optional[datetime]
     updated_at: Optional[datetime]
     balance_due: float = 0.0
@@ -107,9 +148,21 @@ class ReservationUpdate(BaseModel):
     num_adults: Optional[int] = None
     num_children: Optional[int] = None
     notes: Optional[str] = None
+    arrival_time_hint: Optional[str] = None
+    reservation_comment: Optional[str] = Field(default=None, max_length=1000)
     mobility_restriction: Optional[bool] = None
     client_version: Optional[int] = None
     restriction_override: Optional[GuestRestrictionOverrideRequest] = None
+
+    @field_validator("arrival_time_hint", mode="before")
+    @classmethod
+    def normalize_arrival_time_hint(cls, value: object) -> str | None:
+        return _normalize_arrival_time_hint(value)
+
+    @field_validator("reservation_comment", mode="before")
+    @classmethod
+    def normalize_reservation_comment(cls, value: object) -> str | None:
+        return _normalize_reservation_comment(value)
 
 
 class ReservationNoShowRequest(BaseModel):

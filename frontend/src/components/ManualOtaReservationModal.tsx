@@ -32,6 +32,8 @@ type FormState = {
   check_out_date: string;
   num_adults: string;
   num_children: string;
+  arrival_time_hint: string;
+  reservation_comment: string;
   channel: string;
   external_id: string;
   // Two independent prices the operator types by hand -- NOT a converter.
@@ -54,6 +56,8 @@ const emptyFormState = (): FormState => ({
   check_out_date: tomorrowIso(),
   num_adults: "1",
   num_children: "0",
+  arrival_time_hint: "",
+  reservation_comment: "",
   channel: "booking",
   external_id: "",
   amount_ars: "",
@@ -177,6 +181,8 @@ export default function ManualOtaReservationModal({ open, onClose }: ManualOtaRe
         check_out_date: form.check_out_date,
         num_adults: Number(form.num_adults) || 1,
         num_children: Number(form.num_children) || 0,
+        arrival_time_hint: form.arrival_time_hint || null,
+        reservation_comment: form.reservation_comment.trim() || null,
         channel: form.channel as "booking" | "expedia" | "despegar" | "other_ota",
         external_id: form.external_id.trim(),
         total_amount: totalAmount,
@@ -317,6 +323,29 @@ export default function ManualOtaReservationModal({ open, onClose }: ManualOtaRe
                     </option>
                   ))}
                 </select>
+              </label>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="text-xs font-semibold text-slate-600">
+                Hora estimada de llegada
+                <input
+                  type="time"
+                  value={form.arrival_time_hint}
+                  onChange={(e) => setForm((prev) => ({ ...prev, arrival_time_hint: e.target.value }))}
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
+                />
+              </label>
+              <label className="text-xs font-semibold text-slate-600">
+                Pedido/comentario interno
+                <textarea
+                  value={form.reservation_comment}
+                  maxLength={1000}
+                  onChange={(e) => setForm((prev) => ({ ...prev, reservation_comment: e.target.value }))}
+                  rows={2}
+                  placeholder="Visible para el equipo del hotel"
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
+                />
               </label>
             </div>
 

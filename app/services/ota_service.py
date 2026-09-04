@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_
 
 from app.models.commercial import ProductRoomCompatibility, RatePlan, SellableProduct
+from app.models.audit_log import AuditActionEnum
 from app.models.reservation import Reservation, ReservationStatusEnum, ReservationSourceEnum
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.services.room_service import active_rooms
@@ -41,6 +42,7 @@ from app.services.reservation_service import (
     update_reservation_fields,
 )
 from app.schemas.reservation import ReservationCreate, ReservationUpdate
+from app.services import audit_log_service
 
 
 class OTAError(Exception):
@@ -1012,14 +1014,38 @@ class OTAIntegrationService:
         adapter = get_default_adapter(provider_code)
         normalized = adapter.normalize_reservation_payload(payload)
         if existing:
+            before = audit_log_service.model_snapshot(existing.reservation)
             try:
-                return OTAIntegrationService._process_existing_incoming_reservation(
+                result = OTAIntegrationService._process_existing_incoming_reservation(
                     db,
                     hotel_id=hotel_id,
                     mapping=existing,
                     normalized=normalized,
                     payload=payload,
                 )
+                after_reservation = (
+                    db.query(Reservation)
+                    .filter(Reservation.id == result.reservation_id, Reservation.hotel_id == hotel_id)
+                    .first()
+                    if result.reservation_id is not None
+                    else None
+                )
+                if after_reservation is not None:
+                    audit_log_service.safe_create_audit_log(
+                        db,
+                        hotel_id=hotel_id,
+                        table_name="reservations",
+                        record_id=after_reservation.id,
+                        action=AuditActionEnum.UPDATE if before is not None else AuditActionEnum.CREATE,
+                        actor_user_id=None,
+                        payload_before=before,
+                        payload_after={
+                            **(audit_log_service.model_snapshot(after_reservation) or {}),
+                            "source": "ota",
+                            "provider_code": normalized.provider_code,
+                        },
+                    )
+                return result
             except OTAError:
                 raise
             except Exception as exc:
@@ -1068,13 +1094,35 @@ class OTAIntegrationService:
             return mapping
 
         try:
-            return OTAIntegrationService._materialize_incoming_reservation(
+            result = OTAIntegrationService._materialize_incoming_reservation(
                 db,
                 hotel_id=hotel_id,
                 mapping=mapping,
                 normalized=normalized,
                 payload=payload,
             )
+            reservation = (
+                db.query(Reservation)
+                .filter(Reservation.id == result.reservation_id, Reservation.hotel_id == hotel_id)
+                .first()
+                if result.reservation_id is not None
+                else None
+            )
+            if reservation is not None:
+                audit_log_service.safe_create_audit_log(
+                    db,
+                    hotel_id=hotel_id,
+                    table_name="reservations",
+                    record_id=reservation.id,
+                    action=AuditActionEnum.CREATE,
+                    actor_user_id=None,
+                    payload_after={
+                        **(audit_log_service.model_snapshot(reservation) or {}),
+                        "source": "ota",
+                        "provider_code": normalized.provider_code,
+                    },
+                )
+            return result
         except OTAError:
             raise
         except Exception as exc:

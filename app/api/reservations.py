@@ -257,8 +257,6 @@ def create_new_reservation(
             db, data, hotel_id=context.hotel_id,
             actor_user_id=context.user_id, actor_role=context.user_role,
         )
-        db.commit()
-        db.refresh(reservation)
         audit_log_service.safe_create_audit_log(
             db,
             hotel_id=context.hotel_id,
@@ -266,8 +264,13 @@ def create_new_reservation(
             record_id=reservation.id,
             action=AuditActionEnum.CREATE,
             actor_user_id=context.user_id,
-            payload_after=audit_log_service.model_snapshot(reservation),
+            payload_after={
+                **(audit_log_service.model_snapshot(reservation) or {}),
+                "source": "reservations_api",
+            },
         )
+        db.commit()
+        db.refresh(reservation)
         _project_reservation_graph(context.hotel_id, reservation)
         background_tasks.add_task(_trigger_reoptimization_bg, hotel_id=context.hotel_id)
         return _to_read(reservation)
@@ -300,12 +303,35 @@ def create_or_update_manual_ota(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
             detail="Suscripción inactiva. Reactivá el plan para crear nuevas reservas.",
         )
+    existing = (
+        db.query(Reservation)
+        .filter(
+            Reservation.hotel_id == context.hotel_id,
+            Reservation.source_provider_code == data.channel.strip().lower(),
+            Reservation.external_id == data.external_id.strip(),
+        )
+        .first()
+    )
+    before = audit_log_service.model_snapshot(existing)
     try:
         reservation = create_or_update_manual_ota_reservation(
             db,
             hotel_id=context.hotel_id,
             data=data,
             actor_user_id=context.user_id,
+        )
+        audit_log_service.safe_create_audit_log(
+            db,
+            hotel_id=context.hotel_id,
+            table_name="reservations",
+            record_id=reservation.id,
+            action=AuditActionEnum.UPDATE if before is not None else AuditActionEnum.CREATE,
+            actor_user_id=context.user_id,
+            payload_before=before,
+            payload_after={
+                **(audit_log_service.model_snapshot(reservation) or {}),
+                "source": "manual_ota",
+            },
         )
         db.commit()
         db.refresh(reservation)
@@ -878,7 +904,7 @@ def modify_reservation(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_UPDATE)),
 ):
-    """Modify a reservation (dates, notes, room). Only allowed for pre-check-in states."""
+    """Modify a reservation, including arrival metadata in any non-deleted state."""
     if "room_id" in data.model_fields_set:
         # update_reservation_fields rejects cross-category rooms, so this
         # legacy edit path can only make a same-category (tier 1) move.
@@ -897,7 +923,14 @@ def modify_reservation(
     r = get_reservation_by_id(db, reservation_id, context.hotel_id)
     if not r:
         raise HTTPException(status_code=404, detail="Reservation not found")
-    if r.status in (ReservationStatusEnum.CHECKED_IN, ReservationStatusEnum.CHECKED_OUT, ReservationStatusEnum.CANCELLED):
+    metadata_fields = {"arrival_time_hint", "reservation_comment", "client_version"}
+    terminal_mutation_fields = set(data.model_fields_set) - metadata_fields
+    if r.status in (
+        ReservationStatusEnum.CHECKED_IN,
+        ReservationStatusEnum.CHECKED_OUT,
+        ReservationStatusEnum.CANCELLED,
+        ReservationStatusEnum.NO_SHOW,
+    ) and terminal_mutation_fields:
         raise HTTPException(status_code=400, detail=("Cannot modify: reservation is " + r.status.value))
     before = audit_log_service.model_snapshot(r)
     mobility_restriction_changed = (
@@ -916,8 +949,6 @@ def modify_reservation(
             room_move_notes="Cambio manual desde API de reservas",
             client_version=data.client_version,
         )
-        db.commit()
-        db.refresh(r)
         audit_log_service.safe_create_audit_log(
             db,
             hotel_id=context.hotel_id,
@@ -926,8 +957,13 @@ def modify_reservation(
             action=AuditActionEnum.UPDATE,
             actor_user_id=context.user_id,
             payload_before=before,
-            payload_after=audit_log_service.model_snapshot(r),
+            payload_after={
+                **(audit_log_service.model_snapshot(r) or {}),
+                "source": "reservations_api",
+            },
         )
+        db.commit()
+        db.refresh(r)
         if any(value is not None for value in (data.check_in_date, data.check_out_date, data.room_id)) or mobility_restriction_changed:
             background_tasks.add_task(
                 _trigger_reoptimization_bg,
