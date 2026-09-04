@@ -81,6 +81,7 @@ const groupedNav: NavSection[] = [
     items: [
       { label: "nav.sections.moreOperations.dashboard", to: "/dashboard", requiresAnyPermission: ["dashboard:view"], hideForPreviewRoles: ["housekeeping"] },
       { label: "nav.sections.moreOperations.reports", to: "/reportes", requiresAnyPermission: ["reports:operational:view"], hideForPreviewRoles: ["housekeeping"] },
+      { label: "nav.sections.moreOperations.audit", to: "/operacion/auditoria", requiresAnyPermission: ["operations:audit:view"], hideForPreviewRoles: ["housekeeping"] },
       { label: "nav.sections.moreOperations.waitlist", to: "/operacion/lista-espera", requiresAnyPermission: ["waitlist:view"], hideForPreviewRoles: ["housekeeping"] },
       { label: "nav.sections.moreOperations.laundry", to: "/operacion/lavanderia", requiresAnyPermission: ["laundry:read"] },
       { label: "nav.sections.moreOperations.stock", to: "/operacion/stock", requiresAnyPermission: ["stock:read"], hideForPreviewRoles: ["housekeeping"] },

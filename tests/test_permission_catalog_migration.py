@@ -4,7 +4,7 @@ import os
 import subprocess
 import sys
 
-from sqlalchemy import bindparam, create_engine, text
+from sqlalchemy import bindparam, create_engine, inspect, text
 from tests.migration_helpers import insert_historical_hotel_config
 
 
@@ -128,6 +128,66 @@ def test_permission_catalog_migration_is_additive_and_reversible(tmp_path):
                     "AND permission_code = 'dashboard:view'"
                 )
             ).scalar() == 1
+    finally:
+        engine.dispose()
+
+
+def test_operational_audit_cash_migration_is_safe_on_existing_schema(tmp_path):
+    cwd = os.path.dirname(os.path.dirname(__file__))
+    db_path = str(tmp_path / "operational-audit-cash.db")
+    previous_head = "tech0140_job_runtime"
+    new_head = "20260904_operational_audit_cash_daily"
+
+    _alembic(cwd, db_path, "upgrade", previous_head)
+    engine = create_engine(f"sqlite:///{db_path}")
+    try:
+        insert_historical_hotel_config(engine, 1)
+    finally:
+        engine.dispose()
+
+    _alembic(cwd, db_path, "upgrade", new_head)
+    engine = create_engine(f"sqlite:///{db_path}")
+    try:
+        inspector = inspect(engine)
+        room_move_columns = {column["name"] for column in inspector.get_columns("room_move_events")}
+        assert {
+            "origin_room_disposition",
+            "origin_room_disposition_note",
+            "origin_room_status_before",
+            "origin_room_status_after",
+        }.issubset(room_move_columns)
+        assert "ix_transactions_hotel_processed_status_method" in {
+            index["name"] for index in inspector.get_indexes("transactions")
+        }
+        with engine.connect() as connection:
+            assert connection.execute(
+                text("SELECT COUNT(*) FROM permissions WHERE code = 'operations:audit:view'")
+            ).scalar() == 1
+            assert connection.execute(
+                text(
+                    "SELECT COUNT(*) FROM role_permission_defaults "
+                    "WHERE permission_code = 'operations:audit:view' AND allowed = 1"
+                )
+            ).scalar() == 2
+            assert connection.execute(
+                text(
+                    "SELECT allowed FROM role_permission_defaults "
+                    "WHERE role = 'manager' AND permission_code = 'cash:view'"
+                )
+            ).scalar() == 1
+    finally:
+        engine.dispose()
+
+    _alembic(cwd, db_path, "downgrade", previous_head)
+    engine = create_engine(f"sqlite:///{db_path}")
+    try:
+        inspector = inspect(engine)
+        room_move_columns = {column["name"] for column in inspector.get_columns("room_move_events")}
+        assert "origin_room_disposition" not in room_move_columns
+        with engine.connect() as connection:
+            assert connection.execute(
+                text("SELECT COUNT(*) FROM permissions WHERE code = 'operations:audit:view'")
+            ).scalar() == 0
     finally:
         engine.dispose()
 

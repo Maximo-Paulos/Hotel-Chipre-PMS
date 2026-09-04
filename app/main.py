@@ -82,6 +82,7 @@ from app.api import (
     events,
     collaboration,
     settings_security,
+    operations_audit,
     notifications,
 )
 import app.master_admin.models  # noqa: F401
@@ -310,6 +311,7 @@ app.include_router(health.router)
 app.include_router(events.router)
 app.include_router(collaboration.router)
 app.include_router(settings_security.router)
+app.include_router(operations_audit.router)
 app.include_router(notifications.router)
 
 # Frontend build paths

@@ -76,6 +76,7 @@ import { useEffectivePermissions } from "../../hooks/usePermissions";
 import { useCollaborativeResource } from "../../hooks/useCollaborativeResource";
 import { refreshReservationState } from "../../api/queryInvalidation";
 import { useGuardedMutation } from "../../hooks/useGuardedMutation";
+import { useOperationalAudit } from "../../hooks/useOperationalAudit";
 
 
 
@@ -225,7 +226,9 @@ export function ReservationsPage() {
     to_room_id: "",
     reason_code: "",
     notes: "",
-    price_action: "keep" as "keep" | "reprice"
+    price_action: "keep" as "keep" | "reprice",
+    origin_room_disposition: "",
+    origin_room_disposition_note: ""
   });
   const [chargeForm, setChargeForm] = useState({ description: "", amount: "" });
   const [noShowNotes, setNoShowNotes] = useState("");
@@ -283,6 +286,10 @@ export function ReservationsPage() {
   );
   const detailsSummaryQuery = usePaymentSummary(detailsReservationId || undefined);
   const detailsOperationsQuery = useReservationOperationsSummary(detailsReservationId || undefined);
+  const detailsAuditQuery = useOperationalAudit(
+    { limit: 50, reservation_id: detailsReservationId || undefined },
+    Boolean(detailsReservationId && hasPermission("operations:audit:view"))
+  );
   const paymentMutation = usePaymentMutation(editing?.id || undefined);
   const availabilityMutation = useGuardedMutation<RoomAvailabilityResponse, unknown, { category_id: number; check_in_date: string; check_out_date: string }>({
     mutationFn: (payload) => checkRoomAvailability(payload, session)
@@ -323,7 +330,7 @@ export function ReservationsPage() {
     mutationFn: ({ reservationId, payload }) => moveReservationRoom(reservationId, payload, session),
     onSuccess: async (result) => {
       await invalidateAllocationState();
-      setRoomMoveForm({ to_room_id: "", reason_code: "", notes: "", price_action: "keep" });
+      setRoomMoveForm({ to_room_id: "", reason_code: "", notes: "", price_action: "keep", origin_room_disposition: "", origin_room_disposition_note: "" });
       const currency = normalizeCurrencyCode(result.currency_code);
       if (!result.category_changed || result.amount_delta === 0) {
         showToast("success", t("page.messages.roomChanged"));
@@ -1288,19 +1295,19 @@ export function ReservationsPage() {
 
   const openDetails = (reservation: Reservation) => {
     setDetailsReservationId(reservation.id);
-    setRoomMoveForm({ to_room_id: "", reason_code: "", notes: "", price_action: "keep" });
+    setRoomMoveForm({ to_room_id: "", reason_code: "", notes: "", price_action: "keep", origin_room_disposition: "", origin_room_disposition_note: "" });
     setNoShowNotes("");
     setChargeForm({ description: "", amount: "" });
   };
   const openDetailsById = (reservationId: number) => {
     setDetailsReservationId(reservationId);
-    setRoomMoveForm({ to_room_id: "", reason_code: "", notes: "", price_action: "keep" });
+    setRoomMoveForm({ to_room_id: "", reason_code: "", notes: "", price_action: "keep", origin_room_disposition: "", origin_room_disposition_note: "" });
     setNoShowNotes("");
     setChargeForm({ description: "", amount: "" });
   };
   const closeDetails = () => {
     setDetailsReservationId(null);
-    setRoomMoveForm({ to_room_id: "", reason_code: "", notes: "", price_action: "keep" });
+    setRoomMoveForm({ to_room_id: "", reason_code: "", notes: "", price_action: "keep", origin_room_disposition: "", origin_room_disposition_note: "" });
     setNoShowNotes("");
     setChargeForm({ description: "", amount: "" });
   };
@@ -1337,6 +1344,10 @@ export function ReservationsPage() {
       showToast("error", t("page.errors.roomMoveFieldsRequired"));
       return;
     }
+    if (detailsReservation.status === "checked_in" && (!roomMoveForm.origin_room_disposition || (roomMoveForm.origin_room_disposition !== "cleaning" && !roomMoveForm.origin_room_disposition_note.trim()))) {
+      showToast("error", t("page.errors.roomMoveOriginDispositionRequired"));
+      return;
+    }
     try {
       await roomMoveMutation.mutateAsync({
         reservationId: detailsReservation.id,
@@ -1344,7 +1355,9 @@ export function ReservationsPage() {
           to_room_id: Number(roomMoveForm.to_room_id),
           reason_code: roomMoveForm.reason_code.trim(),
           notes: roomMoveForm.notes.trim() || null,
-          price_action: roomMoveForm.price_action
+          price_action: roomMoveForm.price_action,
+          origin_room_disposition: detailsReservation.status === "checked_in" ? roomMoveForm.origin_room_disposition as "cleaning" | "available" | "maintenance" : null,
+          origin_room_disposition_note: detailsReservation.status === "checked_in" ? roomMoveForm.origin_room_disposition_note.trim() || null : null
         }
       });
     } catch (err: unknown) {
@@ -3372,6 +3385,37 @@ export function ReservationsPage() {
                       </span>
                     ) : null}
                   </label>
+                  {detailsReservation.status === "checked_in" ? (
+                    <>
+                      <label className="space-y-1 text-sm">
+                        <span className="text-slate-600">Estado de la habitación origen</span>
+                        <select
+                          value={roomMoveForm.origin_room_disposition}
+                          onChange={(event) => setRoomMoveForm((current) => ({ ...current, origin_room_disposition: event.target.value }))}
+                          required
+                          disabled={!canMoveRoom(detailsReservation.status) || roomMoveMutation.isPending}
+                          className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                        >
+                          <option value="">Elegí una opción</option>
+                          <option value="cleaning">Pasar a limpieza</option>
+                          <option value="available">Dejar libre</option>
+                          <option value="maintenance">Enviar a mantenimiento</option>
+                        </select>
+                      </label>
+                      {roomMoveForm.origin_room_disposition && roomMoveForm.origin_room_disposition !== "cleaning" ? (
+                        <label className="space-y-1 text-sm">
+                          <span className="text-slate-600">Justificación obligatoria</span>
+                          <textarea
+                            value={roomMoveForm.origin_room_disposition_note}
+                            onChange={(event) => setRoomMoveForm((current) => ({ ...current, origin_room_disposition_note: event.target.value }))}
+                            required
+                            rows={2}
+                            className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                          />
+                        </label>
+                      ) : null}
+                    </>
+                  ) : null}
                   <label className="space-y-1 text-sm">
                     <span className="text-slate-600">{t("page.details.changeNotesLabel")}</span>
                     <textarea
@@ -3384,7 +3428,7 @@ export function ReservationsPage() {
                   </label>
                   <button
                     type="submit"
-                    disabled={!canMoveRoom(detailsReservation.status) || roomMoveMutation.isPending || moveRoomOptions.length === 0}
+                    disabled={!canMoveRoom(detailsReservation.status) || roomMoveMutation.isPending || moveRoomOptions.length === 0 || (detailsReservation.status === "checked_in" && (!roomMoveForm.origin_room_disposition || (roomMoveForm.origin_room_disposition !== "cleaning" && !roomMoveForm.origin_room_disposition_note.trim())))}
                     className="w-full rounded-lg border border-brand-200 bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {roomMoveMutation.isPending ? t("page.details.movingRoom") : t("page.details.moveRoom")}
@@ -3572,6 +3616,26 @@ export function ReservationsPage() {
                 )}
               </div>
             </div>
+            {hasPermission("operations:audit:view") ? (
+              <div className="mt-4 rounded-lg border border-brand-100 bg-brand-50/30 p-3" data-testid="reservation-audit-activity">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs uppercase tracking-wide text-brand-700">Actividad auditada</p>
+                  {detailsAuditQuery.isFetching ? <span className="text-xs text-slate-500">Actualizando...</span> : null}
+                </div>
+                {detailsAuditQuery.isError ? <p className="mt-2 text-sm text-rose-700">No se pudo cargar la actividad.</p> : detailsAuditQuery.data?.items.length ? (
+                  <ul className="mt-2 divide-y divide-brand-100">
+                    {detailsAuditQuery.data.items.map((item) => (
+                      <li key={`${item.source}-${item.source_id}`} className="py-2 text-sm">
+                        <p className="font-semibold text-slate-900">{item.summary}</p>
+                        <p className="text-xs text-slate-600">{item.action} · {item.actor_name} · {new Date(item.occurred_at).toLocaleString("es-AR")}</p>
+                        {item.origin_room_disposition ? <p className="text-xs text-brand-700">Origen: {item.origin_room_disposition} ({item.origin_room_status_before ?? "?"} → {item.origin_room_status_after ?? "?"})</p> : null}
+                        {item.payment_method ? <p className="text-xs text-slate-500">Medio: {item.payment_method}{item.amount !== null && item.amount !== undefined ? ` · ${formatMoney(item.amount, item.currency_code)}` : ""}</p> : null}
+                      </li>
+                    ))}
+                  </ul>
+                ) : <p className="mt-2 text-sm text-slate-600">No hay actividad registrada para esta reserva.</p>}
+              </div>
+            ) : null}
           </div>
         </div>
       )}

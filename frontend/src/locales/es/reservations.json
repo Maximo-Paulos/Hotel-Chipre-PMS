@@ -181,13 +181,20 @@
       "reasonLabel": "Motivo del cambio",
       "reasonPlaceholder": "Elegí un motivo",
       "guestComplaintHint": "Se va a registrar un rechazo: la asignación automática va a evitar esta habitación para este huésped en estadías futuras, hasta que alguien lo resuelva.",
+      "originDispositionLabel": "Estado de la habitación origen",
+      "originDispositionPlaceholder": "Elegí una opción (obligatorio)",
+      "originCleaning": "Pasar a limpieza",
+      "originAvailable": "Dejar libre",
+      "originMaintenance": "Enviar a mantenimiento",
+      "originDispositionNoteLabel": "Justificación obligatoria",
       "notesLabel": "Notas del cambio",
       "cancel": "Cancelar",
       "confirming": "Moviendo...",
       "confirm": "Confirmar"
     },
     "errors": {
-      "moveFailed": "No se pudo mover la reserva."
+      "moveFailed": "No se pudo mover la reserva.",
+      "roomMoveOriginDispositionRequired": "Elegí el estado de la habitación origen y justificá si no va a limpieza."
     }
   },
   "page": {

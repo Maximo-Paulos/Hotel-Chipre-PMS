@@ -261,6 +261,10 @@ class RoomMoveResult:
     quoted_total_amount: Decimal
     amount_delta: Decimal
     currency_code: str
+    origin_room_disposition: str | None = None
+    origin_room_disposition_note: str | None = None
+    origin_room_status_before: str | None = None
+    origin_room_status_after: str | None = None
 
 
 def add_reservation_charge(
@@ -870,12 +874,22 @@ def move_reservation_room(
     notes: Optional[str] = None,
     move_type: RoomMoveTypeEnum = RoomMoveTypeEnum.MANUAL_MOVE,
     price_action: str = "keep",
+    origin_room_disposition: str | None = None,
+    origin_room_disposition_note: str | None = None,
 ) -> RoomMoveResult:
     if price_action not in ("keep", "reprice"):
         raise ReservationOperationsError("price_action debe ser 'keep' o 'reprice'")
     if reason_code is None or not reason_code.strip():
         raise ReservationOperationsError("reason_code is required for room moves")
     reason_code = reason_code.strip()
+    is_checked_in = reservation.status == ReservationStatusEnum.CHECKED_IN
+    allowed_dispositions = {"cleaning", "available", "maintenance"}
+    if is_checked_in and origin_room_disposition not in allowed_dispositions:
+        raise ReservationOperationsError("Para trasladar una reserva alojada debes elegir el estado de la habitación origen")
+    if not is_checked_in and origin_room_disposition is not None:
+        raise ReservationOperationsError("La decisión sobre la habitación origen sólo aplica a reservas alojadas")
+    if is_checked_in and origin_room_disposition != "cleaning" and not (origin_room_disposition_note or "").strip():
+        raise ReservationOperationsError("Si la habitación origen no va a limpieza debes dejar una justificación")
 
     room = (
         db.query(Room)
@@ -942,8 +956,15 @@ def move_reservation_room(
     if move_type == RoomMoveTypeEnum.MANUAL_MOVE:
         reservation.allocation_locked = True
         reservation.requires_manual_review = False
-    sync_room_statuses_after_move(
-        db, hotel_id=hotel_id, reservation=reservation, from_room_id=previous_room_id, to_room=room,
+    origin_room_status_before, origin_room_status_after = sync_room_statuses_after_move(
+        db,
+        hotel_id=hotel_id,
+        reservation=reservation,
+        from_room_id=previous_room_id,
+        to_room=room,
+        origin_room_disposition=origin_room_disposition,
+        origin_room_disposition_note=origin_room_disposition_note,
+        actor_user_id=moved_by_user_id,
     )
     event = RoomMoveEvent(
         hotel_id=hotel_id,
@@ -956,6 +977,10 @@ def move_reservation_room(
         trigger_event="manual" if move_type == RoomMoveTypeEnum.MANUAL_MOVE else None,
         state_before=f"status={status_value};room_id={previous_room_id}",
         state_after=f"status={status_value};room_id={room.id}",
+        origin_room_disposition=origin_room_disposition,
+        origin_room_disposition_note=origin_room_disposition_note,
+        origin_room_status_before=origin_room_status_before,
+        origin_room_status_after=origin_room_status_after,
         notes=notes,
         created_by_user_id=moved_by_user_id,
     )
@@ -990,6 +1015,10 @@ def move_reservation_room(
         quoted_total_amount=quoted_total,
         amount_delta=amount_delta,
         currency_code=pricing.currency_code,
+        origin_room_disposition=origin_room_disposition,
+        origin_room_disposition_note=origin_room_disposition_note,
+        origin_room_status_before=origin_room_status_before,
+        origin_room_status_after=origin_room_status_after,
     )
 
 

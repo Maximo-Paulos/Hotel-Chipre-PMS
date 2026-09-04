@@ -21,11 +21,27 @@ class ManualRoomMoveReasonCodeEnum(str, enum.Enum):
     UPGRADE = "upgrade"
 
 
+class OriginRoomDispositionEnum(str, enum.Enum):
+    CLEANING = "cleaning"
+    AVAILABLE = "available"
+    MAINTENANCE = "maintenance"
+
+
 class RoomMoveRequest(BaseModel):
     to_room_id: int
     reason_code: str = Field(..., min_length=1)
     notes: Optional[str] = None
     price_action: Literal["keep", "reprice"] = "keep"
+    origin_room_disposition: Optional[OriginRoomDispositionEnum] = None
+    origin_room_disposition_note: Optional[str] = Field(default=None, max_length=500)
+
+    @field_validator("origin_room_disposition_note")
+    @classmethod
+    def normalize_origin_room_disposition_note(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
 
     @field_validator("reason_code")
     @classmethod
@@ -44,6 +60,10 @@ class RoomMoveResponse(BaseModel):
     quoted_total_amount: Decimal
     amount_delta: Decimal
     currency_code: str
+    origin_room_disposition: Optional[OriginRoomDispositionEnum] = None
+    origin_room_disposition_note: Optional[str] = None
+    origin_room_status_before: Optional[str] = None
+    origin_room_status_after: Optional[str] = None
 
 
 class ReservationChargeCreate(BaseModel):

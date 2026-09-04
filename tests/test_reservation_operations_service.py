@@ -579,6 +579,7 @@ def test_move_reservation_room_updates_room_status_for_checked_in_reservation(
         moved_by_user_id=None,
         reason_code="guest_preference",
         notes="Cambio de habitacion con huesped alojado",
+        origin_room_disposition="cleaning",
     )
     db.commit()
 
@@ -586,6 +587,120 @@ def test_move_reservation_room_updates_room_status_for_checked_in_reservation(
     db.refresh(to_room)
     assert to_room.status == RoomStatusEnum.OCCUPIED
     assert from_room.status == RoomStatusEnum.CLEANING
+
+
+def test_checked_in_room_move_requires_explicit_origin_disposition(
+    db,
+    hotel_config,
+    sample_categories,
+    sample_rooms,
+    sample_guest,
+):
+    from app.services.reservation_operations_service import ReservationOperationsError, move_reservation_room
+
+    from_room = sample_rooms[0]
+    to_room = sample_rooms[1]
+    from_room.status = RoomStatusEnum.OCCUPIED
+    reservation = Reservation(
+        confirmation_code="ROOM-MOVE-DISPOSITION-REQUIRED",
+        hotel_id=hotel_config.id,
+        guest_id=sample_guest.id,
+        room_id=from_room.id,
+        category_id=sample_categories[0].id,
+        check_in_date=date(2026, 8, 19),
+        check_out_date=date(2026, 8, 21),
+        total_amount=120.0,
+        subtotal_amount=120.0,
+        net_amount=120.0,
+        amount_paid=120.0,
+        deposit_amount=36.0,
+        currency_code="ARS",
+        status=ReservationStatusEnum.CHECKED_IN,
+        source=ReservationSourceEnum.DIRECT,
+        num_adults=2,
+        num_children=0,
+    )
+    db.add(reservation)
+    db.flush()
+
+    with pytest.raises(ReservationOperationsError, match="elegir el estado"):
+        move_reservation_room(
+            db,
+            reservation=reservation,
+            to_room_id=to_room.id,
+            hotel_id=hotel_config.id,
+            reason_code="guest_preference",
+        )
+
+    assert reservation.room_id == from_room.id
+    assert from_room.status == RoomStatusEnum.OCCUPIED
+    assert to_room.status == RoomStatusEnum.AVAILABLE
+
+
+def test_checked_in_room_move_persists_non_cleaning_disposition_and_note(
+    db,
+    hotel_config,
+    sample_categories,
+    sample_rooms,
+    sample_guest,
+):
+    from app.models.operations import RoomMoveEvent
+    from app.services.reservation_operations_service import ReservationOperationsError, move_reservation_room
+
+    from_room = sample_rooms[0]
+    to_room = sample_rooms[1]
+    from_room.status = RoomStatusEnum.OCCUPIED
+    reservation = Reservation(
+        confirmation_code="ROOM-MOVE-DISPOSITION-NOTE",
+        hotel_id=hotel_config.id,
+        guest_id=sample_guest.id,
+        room_id=from_room.id,
+        category_id=sample_categories[0].id,
+        check_in_date=date(2026, 8, 22),
+        check_out_date=date(2026, 8, 24),
+        total_amount=120.0,
+        subtotal_amount=120.0,
+        net_amount=120.0,
+        amount_paid=120.0,
+        deposit_amount=36.0,
+        currency_code="ARS",
+        status=ReservationStatusEnum.CHECKED_IN,
+        source=ReservationSourceEnum.DIRECT,
+        num_adults=2,
+        num_children=0,
+    )
+    db.add(reservation)
+    db.flush()
+
+    with pytest.raises(ReservationOperationsError, match="justificaci\u00f3n"):
+        move_reservation_room(
+            db,
+            reservation=reservation,
+            to_room_id=to_room.id,
+            hotel_id=hotel_config.id,
+            reason_code="guest_preference",
+            origin_room_disposition="maintenance",
+        )
+
+    result = move_reservation_room(
+        db,
+        reservation=reservation,
+        to_room_id=to_room.id,
+        hotel_id=hotel_config.id,
+        reason_code="guest_preference",
+        notes="El huésped usó parcialmente la habitación y reportó una falla.",
+        origin_room_disposition="maintenance",
+        origin_room_disposition_note="El huésped usó parcialmente la habitación y reportó una falla.",
+    )
+    db.commit()
+    persisted_event = db.get(RoomMoveEvent, result.event.id)
+
+    assert from_room.status == RoomStatusEnum.MAINTENANCE
+    assert to_room.status == RoomStatusEnum.OCCUPIED
+    assert result.origin_room_status_before == RoomStatusEnum.OCCUPIED.value
+    assert result.origin_room_status_after == RoomStatusEnum.MAINTENANCE.value
+    assert persisted_event.origin_room_disposition == "maintenance"
+    assert persisted_event.origin_room_disposition_note.startswith("El huésped")
 
 
 def test_move_reservation_room_ignores_status_for_non_checked_in_reservation(
@@ -622,7 +737,7 @@ def test_move_reservation_room_ignores_status_for_non_checked_in_reservation(
 
     from app.services.reservation_operations_service import move_reservation_room
 
-    move_reservation_room(
+    result = move_reservation_room(
         db,
         reservation=reservation,
         to_room_id=to_room.id,
@@ -637,6 +752,7 @@ def test_move_reservation_room_ignores_status_for_non_checked_in_reservation(
     db.refresh(to_room)
     assert from_room.status == RoomStatusEnum.AVAILABLE
     assert to_room.status == RoomStatusEnum.AVAILABLE
+    assert result.event.origin_room_disposition is None
 
 
 def test_create_grouped_room_move_updates_room_status_for_checked_in_reservation(

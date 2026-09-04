@@ -1043,11 +1043,11 @@ def room_move(
             reason_code=manual_reason_code.value,
             notes=payload.notes,
             price_action=payload.price_action,
+            origin_room_disposition=payload.origin_room_disposition.value if payload.origin_room_disposition else None,
+            origin_room_disposition_note=payload.origin_room_disposition_note,
         )
         event = result.event
-        db.commit()
-        db.refresh(reservation)
-        audit_log_service.safe_create_audit_log(
+        audit_log_service.queue_audit_log(
             db,
             hotel_id=context.hotel_id,
             table_name="reservations",
@@ -1057,6 +1057,8 @@ def room_move(
             payload_before=before,
             payload_after=audit_log_service.model_snapshot(reservation),
         )
+        db.commit()
+        db.refresh(reservation)
         _project_reservation_graph(context.hotel_id, reservation)
         project_room_movement(
             context.hotel_id,
@@ -1078,6 +1080,10 @@ def room_move(
             quoted_total_amount=result.quoted_total_amount,
             amount_delta=result.amount_delta,
             currency_code=result.currency_code,
+            origin_room_disposition=result.origin_room_disposition,
+            origin_room_disposition_note=result.origin_room_disposition_note,
+            origin_room_status_before=result.origin_room_status_before,
+            origin_room_status_after=result.origin_room_status_after,
         )
     except RoomMovePermissionError as e:
         db.rollback()

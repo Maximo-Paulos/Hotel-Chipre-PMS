@@ -160,6 +160,13 @@ class RoomMoveEvent(Base):
     trigger_event = Column(String(100), nullable=True)  # v72 §5.5: e.g. "new_reservation", "block_created"
     state_before = Column(String(50), nullable=True)    # v72 §5.5: reservation/room state before move
     state_after = Column(String(50), nullable=True)     # v72 §5.5: reservation/room state after move
+    # For an occupied-stay move the operator must explicitly decide what
+    # happens to the vacated room. These remain nullable for historical and
+    # system-generated moves; legacy rows must not be backfilled by inference.
+    origin_room_disposition = Column(String(20), nullable=True)
+    origin_room_disposition_note = Column(Text, nullable=True)
+    origin_room_status_before = Column(String(30), nullable=True)
+    origin_room_status_after = Column(String(30), nullable=True)
     notes = Column(Text, nullable=True)
     occurred_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
     created_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
@@ -177,6 +184,8 @@ class RoomMoveEvent(Base):
         ),
         Index("ix_room_move_events_hotel_id", "hotel_id"),
         Index("ix_room_move_events_reservation_id", "reservation_id"),
+        Index("ix_room_move_events_hotel_occurred_at", "hotel_id", "occurred_at", "id"),
+        Index("ix_room_move_events_hotel_rooms", "hotel_id", "from_room_id", "to_room_id"),
     )
 
 
@@ -238,4 +247,5 @@ class ReservationStatusHistory(Base):
     __table_args__ = (
         Index("ix_reservation_status_history_hotel_id", "hotel_id"),
         Index("ix_reservation_status_history_reservation_id", "reservation_id"),
+        Index("ix_reservation_status_history_hotel_changed_actor", "hotel_id", "changed_at", "changed_by_user_id"),
     )

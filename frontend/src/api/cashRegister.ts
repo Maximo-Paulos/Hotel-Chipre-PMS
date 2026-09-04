@@ -71,6 +71,85 @@ export type CashSessionSummary = {
   movements_count: number;
 };
 
+export type CashDailyPaymentMethod = {
+  payment_method: string;
+  gross_collected: number;
+  refunds: number;
+  net_collected: number;
+  transaction_count: number;
+};
+
+export type CashDailyCollector = {
+  collector_user_id?: number | null;
+  collector_name: string;
+  gross_collected: number;
+  refunds: number;
+  net_collected: number;
+  transaction_count: number;
+};
+
+export type CashDailyEntry = {
+  entry_type: "payment" | "manual_movement";
+  actor_user_id?: number | null;
+  actor_name: string;
+  transaction_id?: number | null;
+  cash_movement_id?: number | null;
+  reservation_id?: number | null;
+  amount: number;
+  signed_amount: number;
+  currency_code: string;
+  payment_method?: string | null;
+  transaction_type?: string | null;
+  transaction_status?: string | null;
+  movement_type?: string | null;
+  occurred_at: string;
+  description?: string | null;
+  provider_code?: string | null;
+};
+
+export type CashDailySession = {
+  session_id: number;
+  status: CashSessionStatus;
+  currency_code: string;
+  opened_at: string;
+  closed_at?: string | null;
+  opened_by_user_id?: number | null;
+  closed_by_user_id?: number | null;
+  opening_balance: number;
+  expected_balance: number;
+  declared_balance?: number | null;
+  difference?: number | null;
+};
+
+export type CashDailySummary = {
+  hotel_id: number;
+  report_date: string;
+  timezone: string;
+  currency_code: string;
+  gross_collected: number;
+  refunds: number;
+  net_collected: number;
+  physical_cash_net_collected: number;
+  digital_net_collected: number;
+  by_payment_method: CashDailyPaymentMethod[];
+  by_collector: CashDailyCollector[];
+  physical_cash: {
+    opening_balance: number;
+    income_total: number;
+    expense_total: number;
+    adjustment_total: number;
+    expected_balance: number;
+    declared_balance?: number | null;
+    difference?: number | null;
+    manual_income_total: number;
+    manual_expense_total: number;
+  };
+  sessions: CashDailySession[];
+  entries: CashDailyEntry[];
+  entries_truncated: boolean;
+  generated_at: string;
+};
+
 export type CashSessionOpenPayload = {
   opening_balance: number;
   currency_code?: string;
@@ -105,6 +184,9 @@ export const listCashMovements = (sessionId: number, session?: SessionLike) =>
 
 export const getCashSessionSummary = (sessionId: number, session?: SessionLike) =>
   apiFetch<CashSessionSummary>(`/api/cash-register/sessions/${sessionId}/summary`, { session });
+
+export const getCashDailySummary = (date: string, session?: SessionLike) =>
+  apiFetch<CashDailySummary>(`/api/cash-register/daily-summary?date=${encodeURIComponent(date)}`, { session });
 
 export const addCashMovement = (sessionId: number, payload: CashMovementPayload, session?: SessionLike) =>
   apiFetch<CashMovement>(`/api/cash-register/sessions/${sessionId}/movements`, {

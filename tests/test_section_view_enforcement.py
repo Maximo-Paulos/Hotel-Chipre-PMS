@@ -71,6 +71,7 @@ def section_client():
         ),
         ("waitlist:view", "/api/waitlist/", {}),
         ("cash:view", "/api/cash-register/sessions", {}),
+        ("operations:audit:view", "/api/operations/audit", {}),
         ("company:view", "/api/companies", {}),
         ("settings:users:view", "/api/users/", {}),
         ("settings:integrations:view", "/api/integrations", {}),

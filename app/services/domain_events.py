@@ -171,7 +171,10 @@ class QueuedDomainChange:
 # intentionally ignored, especially credentials, sessions, blobs and global
 # catalog tables.
 MODEL_DOMAIN_DEPENDENCIES: dict[str, tuple[str, ...]] = {
-    "reservations": ("reservations", "analytics"),
+    # Room assignment is rendered in Habitaciones as well as Planilla. A
+    # reservation move must therefore invalidate both projections, including
+    # the Redis-less PostgreSQL/SSE recovery path.
+    "reservations": ("reservations", "rooms", "analytics"),
     "reservation_adjustments": ("reservations", "analytics"),
     "reservation_status_history": ("reservations", "analytics"),
     "billing_adjustments": ("reservations", "payments", "analytics"),

@@ -157,6 +157,18 @@ def test_cash_register_api_difference_approval_requires_permission(client_with_d
     assert db.get(CashSession, session_id).status == CashSessionStatusEnum.CLOSED
 
 
+def test_manager_can_read_daily_cash_summary_without_cash_mutation_permission(client_with_db):
+    client, _db, ctx = client_with_db
+    ctx["role"] = "manager"
+
+    summary = client.get("/api/cash-register/daily-summary", params={"date": "2026-09-04"})
+
+    assert summary.status_code == 200, summary.text
+    assert summary.json()["report_date"] == "2026-09-04"
+    assert summary.json()["entries"] == []
+    assert client.post("/api/cash-register/sessions", json={"opening_balance": "10.00"}).status_code == 403
+
+
 def test_cash_custody_receipt_is_owner_only(client_with_db):
     client, _db, ctx = client_with_db
 

@@ -6,6 +6,7 @@ import {
   cashSessionStatusLabel,
   useLatestCashCloseReport,
   useCashMovements,
+  useCashDailySummary,
   useCashRegisterMutations,
   useCashSessions,
   useCashSessionSummary
@@ -13,6 +14,7 @@ import {
 import { useSession } from "../../state/session";
 import { useEffectivePermissions } from "../../hooks/usePermissions";
 import { useCollaborativeResource } from "../../hooks/useCollaborativeResource";
+import { todayIso } from "../../utils/date";
 
 const emptyMovementForm: CashMovementPayload = {
   movement_type: "income",
@@ -35,8 +37,10 @@ export function CashRegisterPage() {
   const [approveOnClose, setApproveOnClose] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [closeReport, setCloseReport] = useState<CashCloseReport | null>(null);
+  const [reportDate, setReportDate] = useState(() => todayIso());
 
   const sessionsQuery = useCashSessions();
+  const dailySummaryQuery = useCashDailySummary(reportDate);
   const latestCloseReportQuery = useLatestCashCloseReport();
   const sessions = useMemo(() => sessionsQuery.data ?? [], [sessionsQuery.data]);
   const openSession = useMemo(() => sessions.find((session) => session.status === "open") ?? null, [sessions]);
@@ -64,6 +68,7 @@ export function CashRegisterPage() {
       : 0;
   const canApproveDifference = ["owner", "co_owner", "manager"].includes(session.baseRole ?? "");
   const canReceiveCustody = session.baseRole === "owner";
+  const canOperateCash = hasPermission("cash:operate");
 
   // Authoritative figures come from the backend summary (same logic as the
   // arqueo), so the displayed "Esperado" always matches what the close computes.
@@ -194,6 +199,112 @@ export function CashRegisterPage() {
 
       {message ? <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">{message}</div> : null}
 
+      <section className="space-y-4 rounded-xl border border-brand-100 bg-brand-50/40 p-5 shadow-sm" data-testid="cash-daily-summary">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-wide text-brand-700">Control diario</p>
+            <h2 className="text-xl font-semibold text-slate-900">Caja diaria</h2>
+            <p className="text-sm text-slate-600">Día calendario local del hotel: cobros confirmados, devoluciones y caja física.</p>
+          </div>
+          <label className="space-y-1 text-sm font-semibold text-slate-700">
+            <span>Fecha</span>
+            <input
+              type="date"
+              value={reportDate}
+              onChange={(event) => setReportDate(event.target.value)}
+              className="block rounded-lg border border-slate-300 bg-white px-3 py-2 font-normal"
+              data-testid="cash-daily-date"
+            />
+          </label>
+        </div>
+        {dailySummaryQuery.isLoading ? <p className="text-sm text-slate-600">Cargando resumen diario...</p> : null}
+        {dailySummaryQuery.isError ? <p className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">No se pudo cargar el resumen diario: {(dailySummaryQuery.error as Error).message}</p> : null}
+        {dailySummaryQuery.data ? (
+          <>
+            <div className="grid gap-3 sm:grid-cols-4">
+              <Metric label="Cobrado" value={money(dailySummaryQuery.data.gross_collected, dailySummaryQuery.data.currency_code)} />
+              <Metric label="Devoluciones" value={money(dailySummaryQuery.data.refunds, dailySummaryQuery.data.currency_code)} />
+              <Metric label="Neto" value={money(dailySummaryQuery.data.net_collected, dailySummaryQuery.data.currency_code)} />
+              <Metric label="Efectivo neto" value={money(dailySummaryQuery.data.physical_cash_net_collected, dailySummaryQuery.data.currency_code)} />
+            </div>
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+                <div className="border-b border-slate-200 px-4 py-3">
+                  <h3 className="font-semibold text-slate-900">Por medio de pago</h3>
+                  <p className="text-xs text-slate-500">Pendientes y fallidos quedan fuera.</p>
+                </div>
+                <div className="divide-y divide-slate-100">
+                  {dailySummaryQuery.data.by_payment_method.length === 0 ? <p className="px-4 py-3 text-sm text-slate-500">Sin cobros confirmados.</p> : dailySummaryQuery.data.by_payment_method.map((item) => (
+                    <div key={item.payment_method} className="flex items-center justify-between px-4 py-3 text-sm">
+                      <span className="font-medium text-slate-700">{paymentMethodLabel(item.payment_method)}</span>
+                      <span className="font-semibold text-slate-900">{money(item.net_collected, dailySummaryQuery.data?.currency_code)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+                <div className="border-b border-slate-200 px-4 py-3">
+                  <h3 className="font-semibold text-slate-900">Caja física</h3>
+                  <p className="text-xs text-slate-500">Apertura, movimientos manuales, esperado y arqueo.</p>
+                </div>
+                <div className="grid grid-cols-2 gap-3 px-4 py-3 text-sm">
+                  <SummaryLine label="Apertura" value={money(dailySummaryQuery.data.physical_cash.opening_balance, dailySummaryQuery.data.currency_code)} />
+                  <SummaryLine label="Ingresos" value={money(dailySummaryQuery.data.physical_cash.income_total, dailySummaryQuery.data.currency_code)} />
+                  <SummaryLine label="Egresos" value={money(dailySummaryQuery.data.physical_cash.expense_total, dailySummaryQuery.data.currency_code)} />
+                  <SummaryLine label="Esperado" value={money(dailySummaryQuery.data.physical_cash.expected_balance, dailySummaryQuery.data.currency_code)} />
+                  <SummaryLine label="Manual +" value={money(dailySummaryQuery.data.physical_cash.manual_income_total, dailySummaryQuery.data.currency_code)} />
+                  <SummaryLine label="Manual -" value={money(dailySummaryQuery.data.physical_cash.manual_expense_total, dailySummaryQuery.data.currency_code)} />
+                  <SummaryLine label="Diferencia" value={money(dailySummaryQuery.data.physical_cash.difference, dailySummaryQuery.data.currency_code)} />
+                </div>
+              </div>
+            </div>
+            <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+              <div className="border-b border-slate-200 px-4 py-3">
+                <h3 className="font-semibold text-slate-900">Resumen por cobrador</h3>
+                <p className="text-xs text-slate-500">Cobros y devoluciones confirmados atribuidos a cada persona o proveedor.</p>
+              </div>
+              <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4">
+                {dailySummaryQuery.data.by_collector.length === 0 ? (
+                  <p className="text-sm text-slate-500">Sin cobradores en la fecha seleccionada.</p>
+                ) : (
+                  dailySummaryQuery.data.by_collector.map((collector) => (
+                    <div key={`${collector.collector_user_id ?? "system"}-${collector.collector_name}`} className="rounded-lg bg-slate-50 p-3">
+                      <p className="truncate text-sm font-semibold text-slate-800">{collector.collector_name}</p>
+                      <p className="mt-1 text-xs text-slate-500">{collector.transaction_count} operación(es)</p>
+                      <p className="mt-1 font-semibold text-slate-900">{money(collector.net_collected, dailySummaryQuery.data.currency_code)}</p>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+            <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+              <div className="border-b border-slate-200 px-4 py-3">
+                <h3 className="font-semibold text-slate-900">Detalle por cobrador</h3>
+                <p className="text-xs text-slate-500">Quién cobró, por qué medio, reserva, devolución y hora.</p>
+              </div>
+              <table className="min-w-full text-left text-sm">
+                <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                  <tr><th className="px-4 py-3">Cobrador</th><th className="px-4 py-3">Medio</th><th className="px-4 py-3">Reserva</th><th className="px-4 py-3">Operación</th><th className="px-4 py-3">Importe</th><th className="px-4 py-3">Hora</th></tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {dailySummaryQuery.data.entries.length === 0 ? <tr><td colSpan={6} className="px-4 py-4 text-slate-500">Sin movimientos en la fecha seleccionada.</td></tr> : dailySummaryQuery.data.entries.map((entry) => (
+                    <tr key={`${entry.entry_type}-${entry.transaction_id ?? entry.cash_movement_id}`}>
+                      <td className="px-4 py-3 font-medium text-slate-800">{entry.actor_name}</td>
+                      <td className="px-4 py-3 text-slate-600">{entry.payment_method ? paymentMethodLabel(entry.payment_method) : "Caja física"}</td>
+                      <td className="px-4 py-3 text-slate-600">{entry.reservation_id ? `#${entry.reservation_id}` : "-"}</td>
+                      <td className="px-4 py-3 text-slate-600">{entry.entry_type === "manual_movement" ? movementLabel(entry.movement_type) : entry.transaction_type === "refund" ? "Devolución" : "Cobro"}</td>
+                      <td className={`px-4 py-3 font-semibold ${entry.signed_amount < 0 ? "text-rose-700" : "text-slate-900"}`}>{money(entry.signed_amount, entry.currency_code)}</td>
+                      <td className="whitespace-nowrap px-4 py-3 text-slate-500">{new Date(entry.occurred_at).toLocaleTimeString("es-AR")}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {dailySummaryQuery.data.entries_truncated ? <p className="px-4 py-3 text-xs text-amber-700">Se muestran los primeros 500 movimientos; el ledger conserva el detalle completo.</p> : null}
+            </div>
+          </>
+        ) : null}
+      </section>
+
       {successorNeedsApproval ? (
         <div className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 sm:flex-row sm:items-center sm:justify-between">
           <p>
@@ -292,7 +403,7 @@ export function CashRegisterPage() {
             </label>
             <button
               type="submit"
-              disabled={busy || Boolean(openSession) || successorNeedsApproval}
+              disabled={busy || !canOperateCash || Boolean(openSession) || successorNeedsApproval}
               className="w-full rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
             >
               {openSession ? "Ya hay una caja abierta" : "Abrir caja"}
@@ -406,7 +517,7 @@ export function CashRegisterPage() {
               <div className="md:col-span-2 flex justify-end">
                 <button
                   type="submit"
-                  disabled={busy || !selectedSession || selectedSession.status !== "open" || Number(movementForm.amount) <= 0}
+                  disabled={busy || !canOperateCash || !selectedSession || selectedSession.status !== "open" || Number(movementForm.amount) <= 0}
                   className="rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
                 >
                   Registrar movimiento
@@ -477,7 +588,7 @@ export function CashRegisterPage() {
             <div className="flex justify-end">
               <button
                 type="submit"
-                disabled={busy || !selectedSession || selectedSession.status !== "open"}
+                disabled={busy || !canOperateCash || !selectedSession || selectedSession.status !== "open"}
                 className="rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
               >
                 Cerrar caja
@@ -544,4 +655,26 @@ function Metric({ label, value }: { label: string; value: string }) {
       <p className="mt-1 text-xl font-semibold text-slate-900">{value}</p>
     </div>
   );
+}
+
+function SummaryLine({ label, value }: { label: string; value: string }) {
+  return <div><p className="text-xs text-slate-500">{label}</p><p className="font-semibold text-slate-800">{value}</p></div>;
+}
+
+function paymentMethodLabel(method: string) {
+  const labels: Record<string, string> = {
+    cash: "Efectivo",
+    credit_card: "Tarjeta de crédito",
+    debit_card: "Tarjeta de débito",
+    bank_transfer: "Transferencia",
+    mercado_pago: "Mercado Pago",
+    paypal: "PayPal"
+  };
+  return labels[method] ?? method;
+}
+
+function movementLabel(movementType?: string | null) {
+  if (movementType === "income") return "Ingreso manual";
+  if (movementType === "expense") return "Egreso manual";
+  return "Ajuste manual";
 }
