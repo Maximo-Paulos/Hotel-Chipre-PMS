@@ -25,6 +25,7 @@ export const queryKeys = {
   cashSessions: (hotelId: number | null) => ["cash-sessions", hotelId] as const,
   cashMovements: (hotelId: number | null, sessionId?: number) => ["cash-movements", hotelId, sessionId] as const,
   cashSummary: (hotelId: number | null, sessionId?: number) => ["cash-summary", hotelId, sessionId] as const,
+  cashDailySummary: (hotelId: number | null, date: string) => ["cash-daily-summary", hotelId, date] as const,
   reports: (hotelId: number | null, reportType = "all") => ["reports", reportType, hotelId] as const,
   analytics: (hotelId: number | null) => ["analytics", hotelId] as const,
   guests: (hotelId: number | null) => ["guests", hotelId] as const,
@@ -63,6 +64,7 @@ export const HOTEL_ID_INDEX_BY_QUERY_PREFIX: Readonly<Record<string, number>> = 
   "cash-movements": 1,
   "cash-sessions": 1,
   "cash-summary": 1,
+  "cash-daily-summary": 1,
   "category-daily-rates": 1,
   "company-documents": 1,
   "daily-rates": 1,
@@ -131,7 +133,8 @@ export const HOTEL_ID_INDEX_BY_QUERY_PREFIX: Readonly<Record<string, number>> = 
   users: 1,
   waitlist: 1,
   "occupancy-grid": 1,
-  "onboarding-status": 1
+  "onboarding-status": 1,
+  "operational-audit": 1
 };
 
 /** Query prefixes grouped by the server's tenant-scoped invalidation domains. */
@@ -144,9 +147,10 @@ export const QUERY_PREFIXES_BY_DOMAIN: Readonly<Record<QueryDomain, readonly str
     "gemma-chat",
     "gemma-chat-history",
     "gemma-insights",
-    "gemma-runtime-status"
+    "gemma-runtime-status",
+    "operational-audit"
   ],
-  cash: ["cash", "cash-register", "cash-sessions", "cash-movements", "cash-summary", "cash-latest-close-report"],
+  cash: ["cash", "cash-register", "cash-sessions", "cash-movements", "cash-summary", "cash-daily-summary", "cash-latest-close-report", "operational-audit"],
   guests: [
     "guests",
     "guest",
@@ -154,10 +158,11 @@ export const QUERY_PREFIXES_BY_DOMAIN: Readonly<Record<QueryDomain, readonly str
     "guest-quick-profile",
     "guest-search",
     "guest-restrictions",
-    "guest-checkin-validation"
+    "guest-checkin-validation",
+    "operational-audit"
   ],
   onboarding: ["onboarding", "onboarding-status"],
-  payments: ["payments", "payment-summary", "payment-links", "payment-proofs", "payment-link-tests"],
+  payments: ["payments", "payment-summary", "payment-links", "payment-proofs", "payment-link-tests", "operational-audit"],
   reservations: [
     "reservations",
     "reservation",
@@ -169,7 +174,8 @@ export const QUERY_PREFIXES_BY_DOMAIN: Readonly<Record<QueryDomain, readonly str
     "payment-proofs",
     "room-movement-groups",
     "occupancy-grid",
-    "waitlist"
+    "waitlist",
+    "operational-audit"
   ],
   rooms: [
     "rooms",
@@ -183,9 +189,10 @@ export const QUERY_PREFIXES_BY_DOMAIN: Readonly<Record<QueryDomain, readonly str
     "price-periods",
     "room-state-events",
     "occupancy-grid",
-    "reservation-quote"
+    "reservation-quote",
+    "operational-audit"
   ],
-  security: ["permissions", "permissions-catalog", "permissions-matrix", "permissions-role-profiles", "permissions-user-overrides", "permissions-users", "permissions-visibility-windows", "settings-security"],
+  security: ["permissions", "permissions-catalog", "permissions-matrix", "permissions-role-profiles", "permissions-user-overrides", "permissions-users", "permissions-visibility-windows", "settings-security", "operational-audit"],
   settings: [
     "hotel-config",
     "permissions-matrix",
@@ -199,9 +206,9 @@ export const QUERY_PREFIXES_BY_DOMAIN: Readonly<Record<QueryDomain, readonly str
     "settings-sessions",
     "notifications",
     "notification-preferences",
-    "daily-report-schedules"
+    "daily-report-schedules", "operational-audit"
   ],
-  notifications: ["notifications", "notification-preferences", "daily-report-schedules"],
+  notifications: ["notifications", "notification-preferences", "daily-report-schedules", "operational-audit"],
   stock: [
     "stock",
     "stock-items",
@@ -220,9 +227,9 @@ export const QUERY_PREFIXES_BY_DOMAIN: Readonly<Record<QueryDomain, readonly str
     "linen-items",
     "linen-locations",
     "linen-summary",
-    "laundry-remitos"
+    "laundry-remitos", "operational-audit"
   ],
-  users: ["users"]
+  users: ["users", "operational-audit"]
 };
 
 export const hotelIdForQueryKey = (queryKey: readonly unknown[]): number | null => {

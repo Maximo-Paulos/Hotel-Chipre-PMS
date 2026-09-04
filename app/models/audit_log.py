@@ -74,6 +74,7 @@ class AuditLog(Base):
     __table_args__ = (
         Index("ix_audit_logs_hotel_created", "hotel_id", "created_at"),
         Index("ix_audit_logs_hotel_table_record", "hotel_id", "table_name", "record_id"),
+        Index("ix_audit_logs_hotel_created_actor", "hotel_id", "created_at", "actor_user_id"),
     )
 
     def __repr__(self) -> str:

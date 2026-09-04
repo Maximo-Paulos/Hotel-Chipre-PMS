@@ -115,6 +115,7 @@ PERMISSION_SETTINGS_SECURITY_VIEW = "settings:security:view"
 PERMISSION_SETTINGS_NOTIFICATIONS_VIEW = "settings:notifications:view"
 PERMISSION_SETTINGS_ASSISTANT_VIEW = "settings:assistant:view"
 PERMISSION_SETTINGS_TESTS_VIEW = "settings:tests:view"
+PERMISSION_OPERATIONS_AUDIT_VIEW = "operations:audit:view"
 
 # Import-compatible legacy constants. Existing routes and the current frontend
 # may keep requesting these during the expand/contract window; resolution
@@ -371,6 +372,10 @@ _CANONICAL_DEFINITIONS: dict[str, tuple[str, str, str]] = {
         "operations", "Read occupancy planning",
         "Permite abrir la planilla de ocupación y consultar disponibilidad operativa. No permite modificar reservas ni asignaciones.",
     ),
+    PERMISSION_OPERATIONS_AUDIT_VIEW: (
+        "operations", "Read the integral operations audit",
+        "Permite consultar el historial integral de operaciones del hotel. Está reservado al owner y co-owner y redacta datos sensibles.",
+    ),
     PERMISSION_WAITLIST_VIEW: (
         "operations", "Read waitlist",
         "Permite consultar la lista de espera. No permite crear, editar ni quitar entradas.",
@@ -494,6 +499,7 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
         PERMISSION_COMPANY_MANAGE, PERMISSION_COMPANY_VIEW,
         PERMISSION_DASHBOARD_VIEW, PERMISSION_OCCUPANCY_VIEW,
         PERMISSION_WAITLIST_VIEW, PERMISSION_WAITLIST_MANAGE,
+        PERMISSION_CASH_VIEW,
         PERMISSION_SETTINGS_NOTIFICATIONS_VIEW, PERMISSION_SETTINGS_ASSISTANT_VIEW,
     ),
     ROLE_RECEPTIONIST: _role_permissions(

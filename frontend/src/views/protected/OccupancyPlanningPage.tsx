@@ -43,6 +43,8 @@ export function OccupancyPlanningPage() {
   const [draggingId, setDraggingId] = useState<number | null>(null);
   const [moveReason, setMoveReason] = useState("");
   const [moveNotes, setMoveNotes] = useState("");
+  const [originRoomDisposition, setOriginRoomDisposition] = useState("");
+  const [originRoomDispositionNote, setOriginRoomDispositionNote] = useState("");
   const [moveError, setMoveError] = useState<string | null>(null);
 
   const categoryById = useMemo(() => {
@@ -70,7 +72,14 @@ export function OccupancyPlanningPage() {
     mutationFn: ({ reservationId, toRoomId }: { reservationId: number; toRoomId: number }) =>
       moveReservationRoom(
         reservationId,
-        { to_room_id: toRoomId, reason_code: moveReason, notes: moveNotes || null, price_action: "keep" },
+        {
+          to_room_id: toRoomId,
+          reason_code: moveReason,
+          notes: moveNotes || null,
+          price_action: "keep",
+          origin_room_disposition: draggedReservation?.status === "checked_in" ? originRoomDisposition as "cleaning" | "available" | "maintenance" : null,
+          origin_room_disposition_note: draggedReservation?.status === "checked_in" ? originRoomDispositionNote.trim() || null : null
+        },
         session
       ),
     onSuccess: async () => {
@@ -78,6 +87,8 @@ export function OccupancyPlanningPage() {
       setPendingMove(null);
       setMoveReason("");
       setMoveNotes("");
+      setOriginRoomDisposition("");
+      setOriginRoomDispositionNote("");
       setMoveError(null);
     },
     onError: (error: unknown) => {
@@ -90,6 +101,7 @@ export function OccupancyPlanningPage() {
 
   const handleConfirmMove = async () => {
     if (!pendingMove || !moveReason || moveMutation.isPending) return;
+    if (draggedReservation?.status === "checked_in" && (!originRoomDisposition || (originRoomDisposition !== "cleaning" && !originRoomDispositionNote.trim()))) return;
     try {
       await moveMutation.mutateAsync(pendingMove);
     } catch {
@@ -224,6 +236,36 @@ export function OccupancyPlanningPage() {
               </p>
             ) : null}
 
+            {draggedReservation?.status === "checked_in" ? (
+              <>
+                <label className="block space-y-1 text-sm">
+                  <span className="text-slate-600">{t("occupancy.moveDialog.originDispositionLabel")}</span>
+                  <select
+                    value={originRoomDisposition}
+                    onChange={(event) => setOriginRoomDisposition(event.target.value)}
+                    required
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                  >
+                    <option value="">{t("occupancy.moveDialog.originDispositionPlaceholder")}</option>
+                    <option value="cleaning">{t("occupancy.moveDialog.originCleaning")}</option>
+                    <option value="available">{t("occupancy.moveDialog.originAvailable")}</option>
+                    <option value="maintenance">{t("occupancy.moveDialog.originMaintenance")}</option>
+                  </select>
+                </label>
+                {originRoomDisposition && originRoomDisposition !== "cleaning" ? (
+                  <label className="block space-y-1 text-sm">
+                    <span className="text-slate-600">{t("occupancy.moveDialog.originDispositionNoteLabel")}</span>
+                    <textarea
+                      value={originRoomDispositionNote}
+                      onChange={(event) => setOriginRoomDispositionNote(event.target.value)}
+                      required
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                    />
+                  </label>
+                ) : null}
+              </>
+            ) : null}
+
             <label className="block space-y-1 text-sm">
               <span className="text-slate-600">{t("occupancy.moveDialog.notesLabel")}</span>
               <textarea
@@ -241,6 +283,8 @@ export function OccupancyPlanningPage() {
                 onClick={() => {
                   setPendingMove(null);
                   setMoveError(null);
+                  setOriginRoomDisposition("");
+                  setOriginRoomDispositionNote("");
                 }}
                 className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
               >
@@ -248,7 +292,7 @@ export function OccupancyPlanningPage() {
               </button>
               <button
                 type="button"
-                disabled={!moveReason || moveMutation.isPending}
+                disabled={!moveReason || moveMutation.isPending || (draggedReservation?.status === "checked_in" && (!originRoomDisposition || (originRoomDisposition !== "cleaning" && !originRoomDispositionNote.trim())))}
                 onClick={() => void handleConfirmMove()}
                 className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
               >

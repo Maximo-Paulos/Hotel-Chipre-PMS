@@ -285,9 +285,12 @@ function occupancyGridQueryOptions(session: SessionState, dateFrom: string, date
   };
 }
 
-export function useOccupancyGrid(dateFrom: string, dateTo: string) {
+export function useOccupancyGrid(dateFrom: string, dateTo: string, enabled = true) {
   const { session } = useSession();
-  return useQuery<OccupancyGridResponse>(occupancyGridQueryOptions(session, dateFrom, dateTo));
+  return useQuery<OccupancyGridResponse>({
+    ...occupancyGridQueryOptions(session, dateFrom, dateTo),
+    enabled: enabled && hasValidSession(session)
+  });
 }
 
 export function usePrefetchOccupancyGrid() {

@@ -65,6 +65,7 @@ const ReservationsPage = lazy(() =>
   import("./views/protected/ReservationsPage").then((m) => ({ default: m.ReservationsPage }))
 );
 const ReportsPage = lazy(() => import("./views/protected/ReportsPage").then((m) => ({ default: m.ReportsPage })));
+const OperationalAuditPage = lazy(() => import("./views/protected/OperationalAuditPage").then((m) => ({ default: m.OperationalAuditPage })));
 const RoomsPage = lazy(() => import("./views/protected/RoomsPage").then((m) => ({ default: m.RoomsPage })));
 const SettingsAssistantPage = lazy(() => import("./views/protected/SettingsAssistantPage"));
 const SettingsSubscriptionPage = lazy(() => import("./views/protected/SettingsSubscriptionPage"));
@@ -215,6 +216,7 @@ const appRoutes = APP_HOST
           { path: "analytics/companies/:companyId", element: <PermissionGate anyPermission={["analytics:advanced:view"]}><AnalyticsCompanyDetailPage /></PermissionGate> },
           { path: "analytics/channels", element: <PermissionGate anyPermission={["analytics:advanced:view"]}><AnalyticsChannelsPage /></PermissionGate> },
           { path: "analytics/operations", element: <PermissionGate anyPermission={["reports:operational:view"]}><AnalyticsOperationsPage /></PermissionGate> },
+          { path: "operacion/auditoria", element: <PermissionGate anyPermission={["operations:audit:view"]}><OperationalAuditPage /></PermissionGate> },
           { path: "analytics/ai-chat", element: <PermissionGate anyPermission={["analytics:ai:view"]}><AnalyticsAIChatPage /></PermissionGate> },
           { path: "settings/companies", element: <PermissionGate anyPermission={["company:view"]}><CompaniesPage /></PermissionGate> },
           { path: "operacion/room-state-events", element: <PermissionGate anyPermission={["reports:operational:view"]}><RoomStateEventsPage /></PermissionGate> },

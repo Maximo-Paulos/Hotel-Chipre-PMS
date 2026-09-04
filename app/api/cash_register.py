@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies.auth import AuthContext, require_all_permissions, require_permission
+from app.dependencies.auth import AuthContext, require_permission
 from app.schemas.cash_register import (
     CashCloseReportRead,
     CashMovementCreate,
@@ -11,6 +11,7 @@ from app.schemas.cash_register import (
     CashSessionOpen,
     CashSessionRead,
     CashSessionSummaryRead,
+    CashDailySummaryRead,
 )
 from app.services.cash_register_service import (
     CashRegisterError,
@@ -30,9 +31,29 @@ from app.services.permission_service import (
     PERMISSION_CASH_VIEW,
 )
 from app.services.distributed_lock import DistributedLockBusy, DistributedLockUnavailable
+from app.services.cash_daily_summary_service import get_daily_summary
 
 
 router = APIRouter(tags=["Cash Register"])
+
+
+@router.get("/api/cash-register/daily-summary", response_model=CashDailySummaryRead)
+@router.get("/cash-register/daily-summary", response_model=CashDailySummaryRead)
+def cash_daily_summary(
+    date: str,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_CASH_VIEW)),
+):
+    from datetime import date as date_type
+
+    try:
+        report_date = date_type.fromisoformat(date)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="date debe tener formato YYYY-MM-DD") from exc
+    try:
+        return get_daily_summary(db, hotel_id=context.hotel_id, report_date=report_date)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="La zona horaria del hotel no es valida") from exc
 
 
 @router.post("/api/cash-register/sessions", response_model=CashSessionRead, status_code=status.HTTP_201_CREATED)
@@ -63,7 +84,7 @@ def open_cash_session(
 @router.get("/cash-register/sessions", response_model=list[CashSessionRead])
 def list_cash_sessions(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_all_permissions(PERMISSION_CASH_OPERATE, PERMISSION_CASH_VIEW)),
+    context: AuthContext = Depends(require_permission(PERMISSION_CASH_VIEW)),
 ):
     return list_sessions(db, hotel_id=context.hotel_id)
 
@@ -72,7 +93,7 @@ def list_cash_sessions(
 @router.get("/cash-register/close-reports/latest", response_model=CashCloseReportRead | None)
 def latest_cash_close_report(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_all_permissions(PERMISSION_CASH_OPERATE, PERMISSION_CASH_VIEW)),
+    context: AuthContext = Depends(require_permission(PERMISSION_CASH_VIEW)),
 ):
     return get_latest_close_report(db, hotel_id=context.hotel_id)
 
@@ -118,7 +139,7 @@ def add_cash_movement(
 def cash_session_summary(
     session_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_all_permissions(PERMISSION_CASH_OPERATE, PERMISSION_CASH_VIEW)),
+    context: AuthContext = Depends(require_permission(PERMISSION_CASH_VIEW)),
 ):
     try:
         return get_session_summary(db, hotel_id=context.hotel_id, session_id=session_id)
@@ -131,7 +152,7 @@ def cash_session_summary(
 def list_cash_movements(
     session_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_all_permissions(PERMISSION_CASH_OPERATE, PERMISSION_CASH_VIEW)),
+    context: AuthContext = Depends(require_permission(PERMISSION_CASH_VIEW)),
 ):
     return list_movements(db, hotel_id=context.hotel_id, session_id=session_id)
 

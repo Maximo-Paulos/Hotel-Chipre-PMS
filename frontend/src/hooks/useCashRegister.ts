@@ -7,6 +7,7 @@ import {
   closeCashSession,
   getLatestCashCloseReport,
   getCashSessionSummary,
+  getCashDailySummary,
   listCashMovements,
   listCashSessions,
   openCashSession,
@@ -16,7 +17,8 @@ import {
   type CashSession,
   type CashSessionClosePayload,
   type CashSessionOpenPayload,
-  type CashSessionSummary
+  type CashSessionSummary,
+  type CashDailySummary
 } from "../api/cashRegister";
 import { hasValidSession } from "../api/client";
 import { refreshCashState } from "../api/queryInvalidation";
@@ -28,6 +30,7 @@ const cashSessionsKey = (hotelId: number | null) => ["cash-sessions", hotelId];
 const cashMovementsKey = (hotelId: number | null, sessionId: number) => ["cash-movements", hotelId, sessionId];
 
 const latestCloseReportKey = (hotelId: number | null) => ["cash-latest-close-report", hotelId];
+const dailySummaryKey = (hotelId: number | null, date: string) => ["cash-daily-summary", hotelId, date];
 
 /**
  * Payments created outside the cash screen still change the current cash
@@ -55,6 +58,16 @@ export function useLatestCashCloseReport() {
     queryFn: () => getLatestCashCloseReport(session),
     enabled: hasValidSession(session),
     staleTime: 15 * 1000
+  });
+}
+
+export function useCashDailySummary(reportDate: string) {
+  const { session } = useSession();
+  return useQuery<CashDailySummary>({
+    queryKey: dailySummaryKey(session.hotelId, reportDate),
+    queryFn: () => getCashDailySummary(reportDate, session),
+    enabled: hasValidSession(session) && Boolean(reportDate),
+    staleTime: 10 * 1000
   });
 }
 

@@ -11,6 +11,8 @@ import { roomStatusLabel, useRooms } from "../../hooks/useRooms";
 import { useEffectivePermissions } from "../../hooks/usePermissions";
 import { useSession } from "../../state/session";
 import { todayIso } from "../../utils/date";
+import { addDaysIso } from "../../hooks/useRateCalendar";
+import { useOccupancyGrid } from "../../hooks/useReservations";
 
 const statusColors: Record<RoomStatus, string> = {
   available: "bg-emerald-100 text-emerald-800",
@@ -50,10 +52,15 @@ export function RoomsPage() {
   const canToggleCleaningStatus = hasPermission("room:status_update");
   const canCreateBlocks = hasPermission("room:block_create");
   const canReleaseBlocks = hasPermission("room:block_release");
+  const showAssignments = !isHousekeeping && hasPermission("occupancy:view");
   const { roomsQuery, categoriesQuery, updateStatusMutation, updateCleaningStatusMutation } = useRooms({
     includeCategories: !isHousekeeping
   });
   const { blocksQuery, createBlockMutation, resolveBlockMutation } = useRoomBlocks({ enabled: !isHousekeeping });
+  const today = todayIso();
+  // Keep the persisted physical status independent from future allocations,
+  // while still showing the next/current reservation after a Planilla move.
+  const occupancyQuery = useOccupancyGrid(today, addDaysIso(today, 92), showAssignments);
   const rooms = useMemo(() => roomsQuery.data || [], [roomsQuery.data]);
   const categories = useMemo(() => categoriesQuery.data || [], [categoriesQuery.data]);
   const activeBlocks = useMemo(() => blocksQuery.data || [], [blocksQuery.data]);
@@ -91,6 +98,22 @@ export function RoomsPage() {
     rooms.forEach((room) => map.set(room.id, { room_number: room.room_number, floor: room.floor }));
     return map;
   }, [rooms]);
+
+  const assignmentByRoomId = useMemo(() => {
+    const map = new Map<number, { confirmation_code: string; guest_name: string; status: string; check_in_date: string }>();
+    for (const reservation of occupancyQuery.data?.reservations ?? []) {
+      if (reservation.room_id !== null) {
+        const current = map.get(reservation.room_id);
+        const replacesCurrent = !current
+          || reservation.status === "checked_in"
+          || (current.status !== "checked_in" && reservation.check_in_date < current.check_in_date);
+        if (replacesCurrent) {
+          map.set(reservation.room_id, reservation);
+        }
+      }
+    }
+    return map;
+  }, [occupancyQuery.data]);
 
   const stats = useMemo(() => {
     return rooms.reduce(
@@ -230,6 +253,17 @@ export function RoomsPage() {
                       </span>
                       {t("inventory.perNight")}
                     </p>}
+                    {showAssignments ? (() => {
+                      const assignment = assignmentByRoomId.get(room.id);
+                      return assignment ? (
+                        <p className="mt-2 text-xs text-brand-700" data-testid={`room-assignment-${room.id}`}>
+                          Asignación vigente: <span className="font-semibold">#{assignment.confirmation_code || assignment.guest_name || assignment.status}</span>
+                          {assignment.guest_name ? ` · ${assignment.guest_name}` : ""}
+                        </p>
+                      ) : (
+                        <p className="mt-2 text-xs text-slate-500">Sin asignación vigente</p>
+                      );
+                    })() : null}
                   </div>
                   <span className={`rounded-full px-2 py-1 text-xs font-semibold ${statusColors[room.status]}`}>
                     {roomStatusLabel[room.status]}

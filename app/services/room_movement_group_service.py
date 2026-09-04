@@ -25,7 +25,10 @@ def sync_room_statuses_after_move(
     reservation: Reservation,
     from_room_id: int | None,
     to_room: Room,
-) -> None:
+    origin_room_disposition: str | None = None,
+    origin_room_disposition_note: str | None = None,
+    actor_user_id: int | None = None,
+) -> tuple[str | None, str | None]:
     """Keep Room.status in sync after a reservation's room changed.
 
     Room.status is a persisted column, not computed from reservations, so a
@@ -35,18 +38,21 @@ def sync_room_statuses_after_move(
     Room.status untouched.
     """
     if reservation.status != ReservationStatusEnum.CHECKED_IN:
-        return
+        return None, None
 
+    destination_status_before = to_room.status.value if hasattr(to_room.status, "value") else str(to_room.status)
     to_room.status = RoomStatusEnum.OCCUPIED
+    source_before: str | None = None
+    source_after: str | None = None
 
-    if from_room_id is None or from_room_id == to_room.id:
-        return
-    from_room = db.query(Room).filter(Room.id == from_room_id, Room.hotel_id == hotel_id).first()
-    if from_room is None:
-        return
+    if from_room_id is not None and from_room_id != to_room.id:
+        from_room = db.query(Room).filter(Room.id == from_room_id, Room.hotel_id == hotel_id).first()
+    else:
+        from_room = None
+
     # Only free the vacated room if no other active reservation still holds
     # it for this stay window (e.g. a chained/grouped move into it).
-    if check_room_availability(
+    if from_room is not None and check_room_availability(
         db,
         from_room_id,
         reservation.check_in_date,
@@ -54,7 +60,50 @@ def sync_room_statuses_after_move(
         hotel_id=hotel_id,
         exclude_reservation_id=reservation.id,
     ):
-        from_room.status = RoomStatusEnum.CLEANING
+        before_status = from_room.status.value if hasattr(from_room.status, "value") else str(from_room.status)
+        source_before = before_status
+        if origin_room_disposition == "cleaning":
+            from_room.status = RoomStatusEnum.CLEANING
+        elif origin_room_disposition == "available":
+            from_room.status = RoomStatusEnum.AVAILABLE
+        elif origin_room_disposition == "maintenance":
+            from_room.status = RoomStatusEnum.MAINTENANCE
+        else:
+            # System/grouped moves keep the historical safe default. Manual
+            # occupied moves are validated by move_reservation_room before
+            # reaching this helper and therefore always provide a choice.
+            from_room.status = RoomStatusEnum.CLEANING
+        after_status = from_room.status.value if hasattr(from_room.status, "value") else str(from_room.status)
+        source_after = after_status
+        if before_status != after_status:
+            audit_log_service.queue_audit_log(
+                db,
+                hotel_id=hotel_id,
+                table_name="rooms",
+                record_id=from_room.id,
+                action=AuditActionEnum.STATUS_CHANGE,
+                actor_user_id=actor_user_id,
+                payload_before={"id": from_room.id, "status": before_status},
+                payload_after={
+                    "id": from_room.id,
+                    "status": after_status,
+                    "reservation_id": reservation.id,
+                    "origin_room_disposition": origin_room_disposition,
+                    "origin_room_disposition_note": origin_room_disposition_note,
+                },
+            )
+    if destination_status_before != RoomStatusEnum.OCCUPIED.value:
+        audit_log_service.queue_audit_log(
+            db,
+            hotel_id=hotel_id,
+            table_name="rooms",
+            record_id=to_room.id,
+            action=AuditActionEnum.STATUS_CHANGE,
+            actor_user_id=actor_user_id,
+            payload_before={"id": to_room.id, "status": destination_status_before},
+            payload_after={"id": to_room.id, "status": RoomStatusEnum.OCCUPIED.value, "reservation_id": reservation.id},
+        )
+    return source_before, source_after
 
 
 def get_group(db: Session, *, hotel_id: int, group_id: int) -> RoomMovementGroup | None:

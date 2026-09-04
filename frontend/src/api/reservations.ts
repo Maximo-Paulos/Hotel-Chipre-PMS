@@ -323,6 +323,8 @@ export type ReservationRoomMovePayload = {
   reason_code: string;
   notes?: string | null;
   price_action?: "keep" | "reprice";
+  origin_room_disposition?: "cleaning" | "available" | "maintenance" | null;
+  origin_room_disposition_note?: string | null;
 };
 
 export type ReservationRoomMoveResponse = {
@@ -333,6 +335,10 @@ export type ReservationRoomMoveResponse = {
   quoted_total_amount: number;
   amount_delta: number;
   currency_code: string;
+  origin_room_disposition?: "cleaning" | "available" | "maintenance" | null;
+  origin_room_disposition_note?: string | null;
+  origin_room_status_before?: string | null;
+  origin_room_status_after?: string | null;
 };
 
 export type ReservationChargePayload = {
