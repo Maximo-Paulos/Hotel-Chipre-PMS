@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-31T00:42:28.811Z",
+  "generatedAt": "2026-09-10T20:30:40.970Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -450,8 +450,11 @@
         "api_auth_audit_security_event",
         "api_auth_build_auth_response",
         "api_auth_build_login_response",
+        "api_auth_google_self_signup_enabled",
+        "api_auth_verify_google_claims",
         "api_auth_pick_default_hotel_id",
         "api_auth_issue_auth_response",
+        "api_auth_google_allowed_domains",
         "api_auth_attach_user_session_cookies",
         "api_auth_run_notification_cycle_best_effort"
       ],
@@ -460,13 +463,16 @@
         "api_auth_audit_security_event",
         "api_auth_build_auth_response",
         "api_auth_build_login_response",
+        "api_auth_google_self_signup_enabled",
+        "api_auth_verify_google_claims",
         "api_auth_pick_default_hotel_id",
         "api_auth_issue_auth_response",
+        "api_auth_google_allowed_domains",
         "api_auth_attach_user_session_cookies",
         "api_auth_run_notification_cycle_best_effort"
       ],
       "depth": 3,
-      "nodeCount": 8,
+      "nodeCount": 11,
       "fileCount": 1,
       "files": [
         "app/api/auth.py"
@@ -963,6 +969,32 @@
       "warnings": []
     },
     {
+      "id": "flow:api_auth_link_google",
+      "name": "link_google",
+      "entryPoint": "api_auth_link_google",
+      "entryPointId": "api_auth_link_google",
+      "path": [
+        "api_auth_link_google",
+        "api_auth_audit_security_event",
+        "api_auth_verify_google_claims",
+        "api_auth_google_allowed_domains"
+      ],
+      "qualifiedPath": [
+        "api_auth_link_google",
+        "api_auth_audit_security_event",
+        "api_auth_verify_google_claims",
+        "api_auth_google_allowed_domains"
+      ],
+      "depth": 2,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/api/auth.py"
+      ],
+      "criticality": 0.42,
+      "warnings": []
+    },
+    {
       "id": "flow:agent_ops_build_shared_sandbox_bootstrap_sql_main",
       "name": "main",
       "entryPoint": "agent_ops_build_shared_sandbox_bootstrap_sql_main",
@@ -1030,7 +1062,8 @@
         "backup_verify_local_backup_restore_pg_count",
         "backup_verify_local_backup_restore_postgres_parts",
         "backup_verify_local_backup_restore_run_pg_command",
-        "backup_verify_local_backup_restore_sqlite_counts"
+        "backup_verify_local_backup_restore_sqlite_counts",
+        "backup_verify_local_backup_restore_verify_local_objects"
       ],
       "qualifiedPath": [
         "backup_verify_local_backup_restore_main",
@@ -1043,10 +1076,11 @@
         "backup_verify_local_backup_restore_pg_count",
         "backup_verify_local_backup_restore_postgres_parts",
         "backup_verify_local_backup_restore_run_pg_command",
-        "backup_verify_local_backup_restore_sqlite_counts"
+        "backup_verify_local_backup_restore_sqlite_counts",
+        "backup_verify_local_backup_restore_verify_local_objects"
       ],
       "depth": 2,
-      "nodeCount": 11,
+      "nodeCount": 12,
       "fileCount": 1,
       "files": [
         "scripts/backup/verify_local_backup_restore.py"
@@ -1078,6 +1112,30 @@
       "fileCount": 1,
       "files": [
         "app/master_admin/security.py"
+      ],
+      "criticality": 0.42,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_queryinvalidation_refreshpaymentstate",
+      "name": "refreshPaymentState",
+      "entryPoint": "api_queryinvalidation_refreshpaymentstate",
+      "entryPointId": "api_queryinvalidation_refreshpaymentstate",
+      "path": [
+        "api_queryinvalidation_refreshpaymentstate",
+        "api_queryinvalidation_refreshreservationstate",
+        "api_queryinvalidation_refreshaftermutation"
+      ],
+      "qualifiedPath": [
+        "api_queryinvalidation_refreshpaymentstate",
+        "api_queryinvalidation_refreshreservationstate",
+        "api_queryinvalidation_refreshaftermutation"
+      ],
+      "depth": 2,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/api/queryInvalidation.ts"
       ],
       "criticality": 0.42,
       "warnings": []
@@ -1711,6 +1769,72 @@
       "warnings": []
     },
     {
+      "id": "flow:schemas_auth_authemailrequest_validate_email",
+      "name": "._validate_email",
+      "entryPoint": "schemas_auth_authemailrequest_validate_email",
+      "entryPointId": "schemas_auth_authemailrequest_validate_email",
+      "path": [
+        "schemas_auth_authemailrequest_validate_email",
+        "schemas_auth_normalize_auth_email"
+      ],
+      "qualifiedPath": [
+        "schemas_auth_authemailrequest_validate_email",
+        "schemas_auth_normalize_auth_email"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/schemas/auth.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
+      "id": "flow:schemas_auth_registerrequest_validate_email",
+      "name": "._validate_email",
+      "entryPoint": "schemas_auth_registerrequest_validate_email",
+      "entryPointId": "schemas_auth_registerrequest_validate_email",
+      "path": [
+        "schemas_auth_registerrequest_validate_email",
+        "schemas_auth_normalize_auth_email"
+      ],
+      "qualifiedPath": [
+        "schemas_auth_registerrequest_validate_email",
+        "schemas_auth_normalize_auth_email"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/schemas/auth.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
+      "id": "flow:schemas_auth_resetpasswordrequest_validate_email",
+      "name": "._validate_email",
+      "entryPoint": "schemas_auth_resetpasswordrequest_validate_email",
+      "entryPointId": "schemas_auth_resetpasswordrequest_validate_email",
+      "path": [
+        "schemas_auth_resetpasswordrequest_validate_email",
+        "schemas_auth_normalize_auth_email"
+      ],
+      "qualifiedPath": [
+        "schemas_auth_resetpasswordrequest_validate_email",
+        "schemas_auth_normalize_auth_email"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/schemas/auth.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
       "id": "flow:agent_ops_verify_preview_providers_readonlyjsonapi_get",
       "name": ".get",
       "entryPoint": "agent_ops_verify_preview_providers_readonlyjsonapi_get",
@@ -1864,6 +1988,30 @@
       "fileCount": 1,
       "files": [
         "app/services/permission_service.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_auth_auth_providers",
+      "name": "auth_providers",
+      "entryPoint": "api_auth_auth_providers",
+      "entryPointId": "api_auth_auth_providers",
+      "path": [
+        "api_auth_auth_providers",
+        "api_auth_google_allowed_domains",
+        "api_auth_google_self_signup_enabled"
+      ],
+      "qualifiedPath": [
+        "api_auth_auth_providers",
+        "api_auth_google_allowed_domains",
+        "api_auth_google_self_signup_enabled"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/api/auth.py"
       ],
       "criticality": 0.41,
       "warnings": []
@@ -2475,6 +2623,28 @@
       "warnings": []
     },
     {
+      "id": "flow:agent_ops_validate_gcp_readiness_main",
+      "name": "main",
+      "entryPoint": "agent_ops_validate_gcp_readiness_main",
+      "entryPointId": "agent_ops_validate_gcp_readiness_main",
+      "path": [
+        "agent_ops_validate_gcp_readiness_main",
+        "agent_ops_validate_gcp_readiness_validate"
+      ],
+      "qualifiedPath": [
+        "agent_ops_validate_gcp_readiness_main",
+        "agent_ops_validate_gcp_readiness_validate"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "scripts/agent_ops/validate_gcp_readiness.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
       "id": "flow:agent_ops_validate_setup_main",
       "name": "main",
       "entryPoint": "agent_ops_validate_setup_main",
@@ -2628,6 +2798,160 @@
       "fileCount": 1,
       "files": [
         "app/api/permissions.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_queryinvalidation_refreshcashstate",
+      "name": "refreshCashState",
+      "entryPoint": "api_queryinvalidation_refreshcashstate",
+      "entryPointId": "api_queryinvalidation_refreshcashstate",
+      "path": [
+        "api_queryinvalidation_refreshcashstate",
+        "api_queryinvalidation_refreshaftermutation"
+      ],
+      "qualifiedPath": [
+        "api_queryinvalidation_refreshcashstate",
+        "api_queryinvalidation_refreshaftermutation"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/api/queryInvalidation.ts"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_queryinvalidation_refreshdomains",
+      "name": "refreshDomains",
+      "entryPoint": "api_queryinvalidation_refreshdomains",
+      "entryPointId": "api_queryinvalidation_refreshdomains",
+      "path": [
+        "api_queryinvalidation_refreshdomains",
+        "api_queryinvalidation_refreshaftermutation"
+      ],
+      "qualifiedPath": [
+        "api_queryinvalidation_refreshdomains",
+        "api_queryinvalidation_refreshaftermutation"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/api/queryInvalidation.ts"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_queryinvalidation_refreshgueststate",
+      "name": "refreshGuestState",
+      "entryPoint": "api_queryinvalidation_refreshgueststate",
+      "entryPointId": "api_queryinvalidation_refreshgueststate",
+      "path": [
+        "api_queryinvalidation_refreshgueststate",
+        "api_queryinvalidation_refreshaftermutation"
+      ],
+      "qualifiedPath": [
+        "api_queryinvalidation_refreshgueststate",
+        "api_queryinvalidation_refreshaftermutation"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/api/queryInvalidation.ts"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_queryinvalidation_refreshroomstate",
+      "name": "refreshRoomState",
+      "entryPoint": "api_queryinvalidation_refreshroomstate",
+      "entryPointId": "api_queryinvalidation_refreshroomstate",
+      "path": [
+        "api_queryinvalidation_refreshroomstate",
+        "api_queryinvalidation_refreshaftermutation"
+      ],
+      "qualifiedPath": [
+        "api_queryinvalidation_refreshroomstate",
+        "api_queryinvalidation_refreshaftermutation"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/api/queryInvalidation.ts"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_queryinvalidation_refreshsettingsstate",
+      "name": "refreshSettingsState",
+      "entryPoint": "api_queryinvalidation_refreshsettingsstate",
+      "entryPointId": "api_queryinvalidation_refreshsettingsstate",
+      "path": [
+        "api_queryinvalidation_refreshsettingsstate",
+        "api_queryinvalidation_refreshaftermutation"
+      ],
+      "qualifiedPath": [
+        "api_queryinvalidation_refreshsettingsstate",
+        "api_queryinvalidation_refreshaftermutation"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/api/queryInvalidation.ts"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_queryinvalidation_refreshstockstate",
+      "name": "refreshStockState",
+      "entryPoint": "api_queryinvalidation_refreshstockstate",
+      "entryPointId": "api_queryinvalidation_refreshstockstate",
+      "path": [
+        "api_queryinvalidation_refreshstockstate",
+        "api_queryinvalidation_refreshaftermutation"
+      ],
+      "qualifiedPath": [
+        "api_queryinvalidation_refreshstockstate",
+        "api_queryinvalidation_refreshaftermutation"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/api/queryInvalidation.ts"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_queryinvalidation_refreshuserstate",
+      "name": "refreshUserState",
+      "entryPoint": "api_queryinvalidation_refreshuserstate",
+      "entryPointId": "api_queryinvalidation_refreshuserstate",
+      "path": [
+        "api_queryinvalidation_refreshuserstate",
+        "api_queryinvalidation_refreshaftermutation"
+      ],
+      "qualifiedPath": [
+        "api_queryinvalidation_refreshuserstate",
+        "api_queryinvalidation_refreshaftermutation"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/api/queryInvalidation.ts"
       ],
       "criticality": 0.41,
       "warnings": []
@@ -3971,6 +4295,28 @@
       "warnings": []
     },
     {
+      "id": "flow:services_object_storage_localobjectstorage_get_signed_url",
+      "name": ".get_signed_url",
+      "entryPoint": "services_object_storage_localobjectstorage_get_signed_url",
+      "entryPointId": "services_object_storage_localobjectstorage_get_signed_url",
+      "path": [
+        "services_object_storage_localobjectstorage_get_signed_url",
+        "services_object_storage_objectstorageerror"
+      ],
+      "qualifiedPath": [
+        "services_object_storage_localobjectstorage_get_signed_url",
+        "services_object_storage_objectstorageerror"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/services/object_storage.py"
+      ],
+      "criticality": 0.285,
+      "warnings": []
+    },
+    {
       "id": "flow:api_settings_security_audit_timeline",
       "name": "audit_timeline",
       "entryPoint": "api_settings_security_audit_timeline",
@@ -4032,6 +4378,28 @@
       "fileCount": 1,
       "files": [
         "app/api/checkin.py"
+      ],
+      "criticality": 0.285,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_public_marketing_create_lead",
+      "name": "create_lead",
+      "entryPoint": "api_public_marketing_create_lead",
+      "entryPointId": "api_public_marketing_create_lead",
+      "path": [
+        "api_public_marketing_create_lead",
+        "api_public_marketing_request_source"
+      ],
+      "qualifiedPath": [
+        "api_public_marketing_create_lead",
+        "api_public_marketing_request_source"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/public_marketing.py"
       ],
       "criticality": 0.285,
       "warnings": []
@@ -4125,6 +4493,28 @@
       "warnings": []
     },
     {
+      "id": "flow:infrastructure_redis_backend_get_async_redis_client",
+      "name": "get_async_redis_client",
+      "entryPoint": "infrastructure_redis_backend_get_async_redis_client",
+      "entryPointId": "infrastructure_redis_backend_get_async_redis_client",
+      "path": [
+        "infrastructure_redis_backend_get_async_redis_client",
+        "infrastructure_redis_backend_client_signature"
+      ],
+      "qualifiedPath": [
+        "infrastructure_redis_backend_get_async_redis_client",
+        "infrastructure_redis_backend_client_signature"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/infrastructure/redis_backend.py"
+      ],
+      "criticality": 0.285,
+      "warnings": []
+    },
+    {
       "id": "flow:api_gemma_chat_get_chat_history",
       "name": "get_chat_history",
       "entryPoint": "api_gemma_chat_get_chat_history",
@@ -4142,6 +4532,72 @@
       "fileCount": 1,
       "files": [
         "app/api/gemma_chat.py"
+      ],
+      "criticality": 0.285,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_domain_events_get_domain_event_outbox_metrics",
+      "name": "get_domain_event_outbox_metrics",
+      "entryPoint": "services_domain_events_get_domain_event_outbox_metrics",
+      "entryPointId": "services_domain_events_get_domain_event_outbox_metrics",
+      "path": [
+        "services_domain_events_get_domain_event_outbox_metrics",
+        "services_domain_events_validate_hotel_id"
+      ],
+      "qualifiedPath": [
+        "services_domain_events_get_domain_event_outbox_metrics",
+        "services_domain_events_validate_hotel_id"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/services/domain_events.py"
+      ],
+      "criticality": 0.285,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_domain_events_get_domain_event_recovery",
+      "name": "get_domain_event_recovery",
+      "entryPoint": "services_domain_events_get_domain_event_recovery",
+      "entryPointId": "services_domain_events_get_domain_event_recovery",
+      "path": [
+        "services_domain_events_get_domain_event_recovery",
+        "services_domain_events_validate_hotel_id"
+      ],
+      "qualifiedPath": [
+        "services_domain_events_get_domain_event_recovery",
+        "services_domain_events_validate_hotel_id"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/services/domain_events.py"
+      ],
+      "criticality": 0.285,
+      "warnings": []
+    },
+    {
+      "id": "flow:infrastructure_redis_backend_get_sync_redis_client",
+      "name": "get_sync_redis_client",
+      "entryPoint": "infrastructure_redis_backend_get_sync_redis_client",
+      "entryPointId": "infrastructure_redis_backend_get_sync_redis_client",
+      "path": [
+        "infrastructure_redis_backend_get_sync_redis_client",
+        "infrastructure_redis_backend_client_signature"
+      ],
+      "qualifiedPath": [
+        "infrastructure_redis_backend_get_sync_redis_client",
+        "infrastructure_redis_backend_client_signature"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/infrastructure/redis_backend.py"
       ],
       "criticality": 0.285,
       "warnings": []
@@ -4256,6 +4712,28 @@
       "fileCount": 1,
       "files": [
         "scripts/agent_ops/check_preview_manifest.py"
+      ],
+      "criticality": 0.285,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_payment_link_test_service_mercadopago_connection_payload",
+      "name": "mercadopago_connection_payload",
+      "entryPoint": "services_payment_link_test_service_mercadopago_connection_payload",
+      "entryPointId": "services_payment_link_test_service_mercadopago_connection_payload",
+      "path": [
+        "services_payment_link_test_service_mercadopago_connection_payload",
+        "services_payment_link_test_service_paymentlinktesterror"
+      ],
+      "qualifiedPath": [
+        "services_payment_link_test_service_mercadopago_connection_payload",
+        "services_payment_link_test_service_paymentlinktesterror"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/services/payment_link_test_service.py"
       ],
       "criticality": 0.285,
       "warnings": []
@@ -4397,6 +4875,28 @@
       "warnings": []
     },
     {
+      "id": "flow:tasks_domain_event_tasks_publish_outbox",
+      "name": "publish_outbox",
+      "entryPoint": "tasks_domain_event_tasks_publish_outbox",
+      "entryPointId": "tasks_domain_event_tasks_publish_outbox",
+      "path": [
+        "tasks_domain_event_tasks_publish_outbox",
+        "tasks_domain_event_tasks_session"
+      ],
+      "qualifiedPath": [
+        "tasks_domain_event_tasks_publish_outbox",
+        "tasks_domain_event_tasks_session"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/tasks/domain_event_tasks.py"
+      ],
+      "criticality": 0.285,
+      "warnings": []
+    },
+    {
       "id": "flow:services_tenant_context_reapply_tenant_context_on_connection",
       "name": "reapply_tenant_context_on_connection",
       "entryPoint": "services_tenant_context_reapply_tenant_context_on_connection",
@@ -4488,6 +4988,28 @@
       "fileCount": 1,
       "files": [
         "app/services/analytics_warehouse.py"
+      ],
+      "criticality": 0.285,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_marketing_service_record_lead",
+      "name": "record_lead",
+      "entryPoint": "services_marketing_service_record_lead",
+      "entryPointId": "services_marketing_service_record_lead",
+      "path": [
+        "services_marketing_service_record_lead",
+        "services_marketing_service_hash_source"
+      ],
+      "qualifiedPath": [
+        "services_marketing_service_record_lead",
+        "services_marketing_service_hash_source"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/services/marketing_service.py"
       ],
       "criticality": 0.285,
       "warnings": []
@@ -4710,6 +5232,46 @@
         "scripts/bootstrap_cloud_qa.py"
       ],
       "criticality": 0.2842,
+      "warnings": []
+    },
+    {
+      "id": "flow:adapters_booking_bookingadapter_verify_connection",
+      "name": ".verify_connection",
+      "entryPoint": "adapters_booking_bookingadapter_verify_connection",
+      "entryPointId": "adapters_booking_bookingadapter_verify_connection",
+      "path": [
+        "adapters_booking_bookingadapter_verify_connection",
+        "adapters_booking_bookingadapter_endpoint",
+        "adapters_booking_bookingadapter_remember",
+        "adapters_booking_bookingadapter_request",
+        "adapters_booking_bookingadapter_validate_context",
+        "adapters_booking_bookingadapter_base_url",
+        "adapters_booking_bookingadapter_auth_headers",
+        "adapters_booking_bookingadapter_decode_response",
+        "adapters_booking_bookingadapter_provider_error",
+        "adapters_booking_bookingadapter_safe_request_summary",
+        "adapters_booking_bookingadapter_timeout"
+      ],
+      "qualifiedPath": [
+        "adapters_booking_bookingadapter_verify_connection",
+        "adapters_booking_bookingadapter_endpoint",
+        "adapters_booking_bookingadapter_remember",
+        "adapters_booking_bookingadapter_request",
+        "adapters_booking_bookingadapter_validate_context",
+        "adapters_booking_bookingadapter_base_url",
+        "adapters_booking_bookingadapter_auth_headers",
+        "adapters_booking_bookingadapter_decode_response",
+        "adapters_booking_bookingadapter_provider_error",
+        "adapters_booking_bookingadapter_safe_request_summary",
+        "adapters_booking_bookingadapter_timeout"
+      ],
+      "depth": 2,
+      "nodeCount": 11,
+      "fileCount": 1,
+      "files": [
+        "app/services/ota/adapters/booking.py"
+      ],
+      "criticality": 0.2836,
       "warnings": []
     },
     {
@@ -5005,6 +5567,34 @@
       "warnings": []
     },
     {
+      "id": "flow:services_domain_events_iter_postgres_event_stream",
+      "name": "iter_postgres_event_stream",
+      "entryPoint": "services_domain_events_iter_postgres_event_stream",
+      "entryPointId": "services_domain_events_iter_postgres_event_stream",
+      "path": [
+        "services_domain_events_iter_postgres_event_stream",
+        "services_domain_events_format_sse",
+        "services_domain_events_outbox_sse_payload",
+        "services_domain_events_validate_hotel_id",
+        "services_domain_events_validate_event_input"
+      ],
+      "qualifiedPath": [
+        "services_domain_events_iter_postgres_event_stream",
+        "services_domain_events_format_sse",
+        "services_domain_events_outbox_sse_payload",
+        "services_domain_events_validate_hotel_id",
+        "services_domain_events_validate_event_input"
+      ],
+      "depth": 2,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "app/services/domain_events.py"
+      ],
+      "criticality": 0.27,
+      "warnings": []
+    },
+    {
       "id": "flow:services_temporary_action_grant_service_request_grant",
       "name": "request_grant",
       "entryPoint": "services_temporary_action_grant_service_request_grant",
@@ -5211,6 +5801,122 @@
       "warnings": []
     },
     {
+      "id": "flow:services_domain_events_queue_model_changes",
+      "name": "queue_model_changes",
+      "entryPoint": "services_domain_events_queue_model_changes",
+      "entryPointId": "services_domain_events_queue_model_changes",
+      "path": [
+        "services_domain_events_queue_model_changes",
+        "services_domain_events_model_event_payload",
+        "services_domain_events_model_hotel_id",
+        "services_domain_events_queue_domain_change",
+        "services_domain_events_scalar_event_value",
+        "services_domain_events_validate_event_input",
+        "services_domain_events_queueddomainchange",
+        "services_domain_events_session_transaction_id",
+        "services_domain_events_validate_hotel_id"
+      ],
+      "qualifiedPath": [
+        "services_domain_events_queue_model_changes",
+        "services_domain_events_model_event_payload",
+        "services_domain_events_model_hotel_id",
+        "services_domain_events_queue_domain_change",
+        "services_domain_events_scalar_event_value",
+        "services_domain_events_validate_event_input",
+        "services_domain_events_queueddomainchange",
+        "services_domain_events_session_transaction_id",
+        "services_domain_events_validate_hotel_id"
+      ],
+      "depth": 3,
+      "nodeCount": 9,
+      "fileCount": 1,
+      "files": [
+        "app/services/domain_events.py"
+      ],
+      "criticality": 0.2633,
+      "warnings": []
+    },
+    {
+      "id": "flow:adapters_booking_bookingadapter_acknowledge_reservations",
+      "name": ".acknowledge_reservations",
+      "entryPoint": "adapters_booking_bookingadapter_acknowledge_reservations",
+      "entryPointId": "adapters_booking_bookingadapter_acknowledge_reservations",
+      "path": [
+        "adapters_booking_bookingadapter_acknowledge_reservations",
+        "adapters_booking_bookingadapter_endpoint",
+        "adapters_booking_bookingadapter_remember",
+        "adapters_booking_bookingadapter_request",
+        "adapters_booking_bookingadapter_base_url",
+        "adapters_booking_bookingadapter_auth_headers",
+        "adapters_booking_bookingadapter_decode_response",
+        "adapters_booking_bookingadapter_provider_error",
+        "adapters_booking_bookingadapter_safe_request_summary",
+        "adapters_booking_bookingadapter_timeout",
+        "adapters_booking_bookingadapter_validate_context"
+      ],
+      "qualifiedPath": [
+        "adapters_booking_bookingadapter_acknowledge_reservations",
+        "adapters_booking_bookingadapter_endpoint",
+        "adapters_booking_bookingadapter_remember",
+        "adapters_booking_bookingadapter_request",
+        "adapters_booking_bookingadapter_base_url",
+        "adapters_booking_bookingadapter_auth_headers",
+        "adapters_booking_bookingadapter_decode_response",
+        "adapters_booking_bookingadapter_provider_error",
+        "adapters_booking_bookingadapter_safe_request_summary",
+        "adapters_booking_bookingadapter_timeout",
+        "adapters_booking_bookingadapter_validate_context"
+      ],
+      "depth": 2,
+      "nodeCount": 11,
+      "fileCount": 1,
+      "files": [
+        "app/services/ota/adapters/booking.py"
+      ],
+      "criticality": 0.2609,
+      "warnings": []
+    },
+    {
+      "id": "flow:adapters_booking_bookingadapter_reconcile_reservation",
+      "name": ".reconcile_reservation",
+      "entryPoint": "adapters_booking_bookingadapter_reconcile_reservation",
+      "entryPointId": "adapters_booking_bookingadapter_reconcile_reservation",
+      "path": [
+        "adapters_booking_bookingadapter_reconcile_reservation",
+        "adapters_booking_bookingadapter_endpoint",
+        "adapters_booking_bookingadapter_remember",
+        "adapters_booking_bookingadapter_request",
+        "adapters_booking_bookingadapter_base_url",
+        "adapters_booking_bookingadapter_auth_headers",
+        "adapters_booking_bookingadapter_decode_response",
+        "adapters_booking_bookingadapter_provider_error",
+        "adapters_booking_bookingadapter_safe_request_summary",
+        "adapters_booking_bookingadapter_timeout",
+        "adapters_booking_bookingadapter_validate_context"
+      ],
+      "qualifiedPath": [
+        "adapters_booking_bookingadapter_reconcile_reservation",
+        "adapters_booking_bookingadapter_endpoint",
+        "adapters_booking_bookingadapter_remember",
+        "adapters_booking_bookingadapter_request",
+        "adapters_booking_bookingadapter_base_url",
+        "adapters_booking_bookingadapter_auth_headers",
+        "adapters_booking_bookingadapter_decode_response",
+        "adapters_booking_bookingadapter_provider_error",
+        "adapters_booking_bookingadapter_safe_request_summary",
+        "adapters_booking_bookingadapter_timeout",
+        "adapters_booking_bookingadapter_validate_context"
+      ],
+      "depth": 2,
+      "nodeCount": 11,
+      "fileCount": 1,
+      "files": [
+        "app/services/ota/adapters/booking.py"
+      ],
+      "criticality": 0.2609,
+      "warnings": []
+    },
+    {
       "id": "flow:services_room_block_service_create_block",
       "name": "create_block",
       "entryPoint": "services_room_block_service_create_block",
@@ -5267,6 +5973,138 @@
       "warnings": []
     },
     {
+      "id": "flow:adapters_booking_bookingadapter_push_inventory",
+      "name": ".push_inventory",
+      "entryPoint": "adapters_booking_bookingadapter_push_inventory",
+      "entryPointId": "adapters_booking_bookingadapter_push_inventory",
+      "path": [
+        "adapters_booking_bookingadapter_push_inventory",
+        "adapters_booking_bookingadapter_push_availability",
+        "adapters_booking_bookingadapter_build_availability_xml",
+        "adapters_booking_bookingadapter_endpoint",
+        "adapters_booking_bookingadapter_remember",
+        "adapters_booking_bookingadapter_request",
+        "adapters_booking_bookingadapter_base_url",
+        "adapters_booking_bookingadapter_auth_headers",
+        "adapters_booking_bookingadapter_decode_response",
+        "adapters_booking_bookingadapter_provider_error",
+        "adapters_booking_bookingadapter_safe_request_summary",
+        "adapters_booking_bookingadapter_timeout",
+        "adapters_booking_bookingadapter_validate_context"
+      ],
+      "qualifiedPath": [
+        "adapters_booking_bookingadapter_push_inventory",
+        "adapters_booking_bookingadapter_push_availability",
+        "adapters_booking_bookingadapter_build_availability_xml",
+        "adapters_booking_bookingadapter_endpoint",
+        "adapters_booking_bookingadapter_remember",
+        "adapters_booking_bookingadapter_request",
+        "adapters_booking_bookingadapter_base_url",
+        "adapters_booking_bookingadapter_auth_headers",
+        "adapters_booking_bookingadapter_decode_response",
+        "adapters_booking_bookingadapter_provider_error",
+        "adapters_booking_bookingadapter_safe_request_summary",
+        "adapters_booking_bookingadapter_timeout",
+        "adapters_booking_bookingadapter_validate_context"
+      ],
+      "depth": 3,
+      "nodeCount": 13,
+      "fileCount": 1,
+      "files": [
+        "app/services/ota/adapters/booking.py"
+      ],
+      "criticality": 0.2569,
+      "warnings": []
+    },
+    {
+      "id": "flow:adapters_booking_bookingadapter_push_rates",
+      "name": ".push_rates",
+      "entryPoint": "adapters_booking_bookingadapter_push_rates",
+      "entryPointId": "adapters_booking_bookingadapter_push_rates",
+      "path": [
+        "adapters_booking_bookingadapter_push_rates",
+        "adapters_booking_bookingadapter_push_availability",
+        "adapters_booking_bookingadapter_build_availability_xml",
+        "adapters_booking_bookingadapter_endpoint",
+        "adapters_booking_bookingadapter_remember",
+        "adapters_booking_bookingadapter_request",
+        "adapters_booking_bookingadapter_base_url",
+        "adapters_booking_bookingadapter_auth_headers",
+        "adapters_booking_bookingadapter_decode_response",
+        "adapters_booking_bookingadapter_provider_error",
+        "adapters_booking_bookingadapter_safe_request_summary",
+        "adapters_booking_bookingadapter_timeout",
+        "adapters_booking_bookingadapter_validate_context"
+      ],
+      "qualifiedPath": [
+        "adapters_booking_bookingadapter_push_rates",
+        "adapters_booking_bookingadapter_push_availability",
+        "adapters_booking_bookingadapter_build_availability_xml",
+        "adapters_booking_bookingadapter_endpoint",
+        "adapters_booking_bookingadapter_remember",
+        "adapters_booking_bookingadapter_request",
+        "adapters_booking_bookingadapter_base_url",
+        "adapters_booking_bookingadapter_auth_headers",
+        "adapters_booking_bookingadapter_decode_response",
+        "adapters_booking_bookingadapter_provider_error",
+        "adapters_booking_bookingadapter_safe_request_summary",
+        "adapters_booking_bookingadapter_timeout",
+        "adapters_booking_bookingadapter_validate_context"
+      ],
+      "depth": 3,
+      "nodeCount": 13,
+      "fileCount": 1,
+      "files": [
+        "app/services/ota/adapters/booking.py"
+      ],
+      "criticality": 0.2569,
+      "warnings": []
+    },
+    {
+      "id": "flow:adapters_booking_bookingadapter_push_restrictions",
+      "name": ".push_restrictions",
+      "entryPoint": "adapters_booking_bookingadapter_push_restrictions",
+      "entryPointId": "adapters_booking_bookingadapter_push_restrictions",
+      "path": [
+        "adapters_booking_bookingadapter_push_restrictions",
+        "adapters_booking_bookingadapter_push_availability",
+        "adapters_booking_bookingadapter_build_availability_xml",
+        "adapters_booking_bookingadapter_endpoint",
+        "adapters_booking_bookingadapter_remember",
+        "adapters_booking_bookingadapter_request",
+        "adapters_booking_bookingadapter_base_url",
+        "adapters_booking_bookingadapter_auth_headers",
+        "adapters_booking_bookingadapter_decode_response",
+        "adapters_booking_bookingadapter_provider_error",
+        "adapters_booking_bookingadapter_safe_request_summary",
+        "adapters_booking_bookingadapter_timeout",
+        "adapters_booking_bookingadapter_validate_context"
+      ],
+      "qualifiedPath": [
+        "adapters_booking_bookingadapter_push_restrictions",
+        "adapters_booking_bookingadapter_push_availability",
+        "adapters_booking_bookingadapter_build_availability_xml",
+        "adapters_booking_bookingadapter_endpoint",
+        "adapters_booking_bookingadapter_remember",
+        "adapters_booking_bookingadapter_request",
+        "adapters_booking_bookingadapter_base_url",
+        "adapters_booking_bookingadapter_auth_headers",
+        "adapters_booking_bookingadapter_decode_response",
+        "adapters_booking_bookingadapter_provider_error",
+        "adapters_booking_bookingadapter_safe_request_summary",
+        "adapters_booking_bookingadapter_timeout",
+        "adapters_booking_bookingadapter_validate_context"
+      ],
+      "depth": 3,
+      "nodeCount": 13,
+      "fileCount": 1,
+      "files": [
+        "app/services/ota/adapters/booking.py"
+      ],
+      "criticality": 0.2569,
+      "warnings": []
+    },
+    {
       "id": "flow:services_domain_events_domainevent_channel",
       "name": ".channel",
       "entryPoint": "services_domain_events_domainevent_channel",
@@ -5286,6 +6124,30 @@
       "fileCount": 1,
       "files": [
         "app/services/domain_events.py"
+      ],
+      "criticality": 0.2533,
+      "warnings": []
+    },
+    {
+      "id": "flow:adapters_booking_bookingadapter_request_modification",
+      "name": ".request_modification",
+      "entryPoint": "adapters_booking_bookingadapter_request_modification",
+      "entryPointId": "adapters_booking_bookingadapter_request_modification",
+      "path": [
+        "adapters_booking_bookingadapter_request_modification",
+        "adapters_booking_bookingadapter_unsupported_outbound",
+        "adapters_booking_bookingadapter_remember"
+      ],
+      "qualifiedPath": [
+        "adapters_booking_bookingadapter_request_modification",
+        "adapters_booking_bookingadapter_unsupported_outbound",
+        "adapters_booking_bookingadapter_remember"
+      ],
+      "depth": 2,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/services/ota/adapters/booking.py"
       ],
       "criticality": 0.2533,
       "warnings": []
@@ -5358,6 +6220,36 @@
       "fileCount": 1,
       "files": [
         "app/db/cassandra.py"
+      ],
+      "criticality": 0.2533,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_operational_task_service_create_task",
+      "name": "create_task",
+      "entryPoint": "services_operational_task_service_create_task",
+      "entryPointId": "services_operational_task_service_create_task",
+      "path": [
+        "services_operational_task_service_create_task",
+        "services_operational_task_service_append_event",
+        "services_operational_task_service_operationaltaskerror",
+        "services_operational_task_service_validate_links",
+        "services_operational_task_service_validate_user_membership",
+        "services_operational_task_service_enum_value"
+      ],
+      "qualifiedPath": [
+        "services_operational_task_service_create_task",
+        "services_operational_task_service_append_event",
+        "services_operational_task_service_operationaltaskerror",
+        "services_operational_task_service_validate_links",
+        "services_operational_task_service_validate_user_membership",
+        "services_operational_task_service_enum_value"
+      ],
+      "depth": 2,
+      "nodeCount": 6,
+      "fileCount": 1,
+      "files": [
+        "app/services/operational_task_service.py"
       ],
       "criticality": 0.2533,
       "warnings": []
@@ -5609,6 +6501,162 @@
       "warnings": []
     },
     {
+      "id": "flow:adapters_booking_bookingadapter_pull_cancellations",
+      "name": ".pull_cancellations",
+      "entryPoint": "adapters_booking_bookingadapter_pull_cancellations",
+      "entryPointId": "adapters_booking_bookingadapter_pull_cancellations",
+      "path": [
+        "adapters_booking_bookingadapter_pull_cancellations",
+        "adapters_booking_bookingadapter_endpoint",
+        "adapters_booking_bookingadapter_infer_event_type",
+        "adapters_booking_bookingadapter_request",
+        "adapters_booking_bookingadapter_reservation_payloads",
+        "adapters_booking_bookingadaptererror",
+        "adapters_booking_bookingadapter_base_url",
+        "adapters_booking_bookingadapter_auth_headers",
+        "adapters_booking_bookingadapter_decode_response",
+        "adapters_booking_bookingadapter_provider_error",
+        "adapters_booking_bookingadapter_safe_request_summary",
+        "adapters_booking_bookingadapter_timeout",
+        "adapters_booking_bookingadapter_validate_context",
+        "adapters_booking_bookingadapter_xml_reservation_to_payload",
+        "adapters_booking_bookingadapter_local_name"
+      ],
+      "qualifiedPath": [
+        "adapters_booking_bookingadapter_pull_cancellations",
+        "adapters_booking_bookingadapter_endpoint",
+        "adapters_booking_bookingadapter_infer_event_type",
+        "adapters_booking_bookingadapter_request",
+        "adapters_booking_bookingadapter_reservation_payloads",
+        "adapters_booking_bookingadaptererror",
+        "adapters_booking_bookingadapter_base_url",
+        "adapters_booking_bookingadapter_auth_headers",
+        "adapters_booking_bookingadapter_decode_response",
+        "adapters_booking_bookingadapter_provider_error",
+        "adapters_booking_bookingadapter_safe_request_summary",
+        "adapters_booking_bookingadapter_timeout",
+        "adapters_booking_bookingadapter_validate_context",
+        "adapters_booking_bookingadapter_xml_reservation_to_payload",
+        "adapters_booking_bookingadapter_local_name"
+      ],
+      "depth": 3,
+      "nodeCount": 15,
+      "fileCount": 1,
+      "files": [
+        "app/services/ota/adapters/booking.py"
+      ],
+      "criticality": 0.2467,
+      "warnings": []
+    },
+    {
+      "id": "flow:adapters_booking_bookingadapter_pull_modifications",
+      "name": ".pull_modifications",
+      "entryPoint": "adapters_booking_bookingadapter_pull_modifications",
+      "entryPointId": "adapters_booking_bookingadapter_pull_modifications",
+      "path": [
+        "adapters_booking_bookingadapter_pull_modifications",
+        "adapters_booking_bookingadapter_pull_reservations",
+        "adapters_booking_bookingadapter_endpoint",
+        "adapters_booking_bookingadapter_normalize_reservation_payload",
+        "adapters_booking_bookingadapter_request",
+        "adapters_booking_bookingadapter_reservation_payloads",
+        "adapters_booking_bookingadaptererror",
+        "adapters_booking_bookingadapter_base_url",
+        "adapters_booking_bookingadapter_coerce_amount",
+        "adapters_booking_bookingadapter_infer_event_type",
+        "adapters_booking_bookingadapter_auth_headers",
+        "adapters_booking_bookingadapter_decode_response",
+        "adapters_booking_bookingadapter_provider_error",
+        "adapters_booking_bookingadapter_safe_request_summary",
+        "adapters_booking_bookingadapter_timeout",
+        "adapters_booking_bookingadapter_validate_context",
+        "adapters_booking_bookingadapter_xml_reservation_to_payload",
+        "adapters_booking_bookingadapter_local_name"
+      ],
+      "qualifiedPath": [
+        "adapters_booking_bookingadapter_pull_modifications",
+        "adapters_booking_bookingadapter_pull_reservations",
+        "adapters_booking_bookingadapter_endpoint",
+        "adapters_booking_bookingadapter_normalize_reservation_payload",
+        "adapters_booking_bookingadapter_request",
+        "adapters_booking_bookingadapter_reservation_payloads",
+        "adapters_booking_bookingadaptererror",
+        "adapters_booking_bookingadapter_base_url",
+        "adapters_booking_bookingadapter_coerce_amount",
+        "adapters_booking_bookingadapter_infer_event_type",
+        "adapters_booking_bookingadapter_auth_headers",
+        "adapters_booking_bookingadapter_decode_response",
+        "adapters_booking_bookingadapter_provider_error",
+        "adapters_booking_bookingadapter_safe_request_summary",
+        "adapters_booking_bookingadapter_timeout",
+        "adapters_booking_bookingadapter_validate_context",
+        "adapters_booking_bookingadapter_xml_reservation_to_payload",
+        "adapters_booking_bookingadapter_local_name"
+      ],
+      "depth": 4,
+      "nodeCount": 18,
+      "fileCount": 1,
+      "files": [
+        "app/services/ota/adapters/booking.py"
+      ],
+      "criticality": 0.2456,
+      "warnings": []
+    },
+    {
+      "id": "flow:adapters_booking_bookingadapter_pull_new_reservations",
+      "name": ".pull_new_reservations",
+      "entryPoint": "adapters_booking_bookingadapter_pull_new_reservations",
+      "entryPointId": "adapters_booking_bookingadapter_pull_new_reservations",
+      "path": [
+        "adapters_booking_bookingadapter_pull_new_reservations",
+        "adapters_booking_bookingadapter_pull_reservations",
+        "adapters_booking_bookingadapter_endpoint",
+        "adapters_booking_bookingadapter_normalize_reservation_payload",
+        "adapters_booking_bookingadapter_request",
+        "adapters_booking_bookingadapter_reservation_payloads",
+        "adapters_booking_bookingadaptererror",
+        "adapters_booking_bookingadapter_base_url",
+        "adapters_booking_bookingadapter_coerce_amount",
+        "adapters_booking_bookingadapter_infer_event_type",
+        "adapters_booking_bookingadapter_auth_headers",
+        "adapters_booking_bookingadapter_decode_response",
+        "adapters_booking_bookingadapter_provider_error",
+        "adapters_booking_bookingadapter_safe_request_summary",
+        "adapters_booking_bookingadapter_timeout",
+        "adapters_booking_bookingadapter_validate_context",
+        "adapters_booking_bookingadapter_xml_reservation_to_payload",
+        "adapters_booking_bookingadapter_local_name"
+      ],
+      "qualifiedPath": [
+        "adapters_booking_bookingadapter_pull_new_reservations",
+        "adapters_booking_bookingadapter_pull_reservations",
+        "adapters_booking_bookingadapter_endpoint",
+        "adapters_booking_bookingadapter_normalize_reservation_payload",
+        "adapters_booking_bookingadapter_request",
+        "adapters_booking_bookingadapter_reservation_payloads",
+        "adapters_booking_bookingadaptererror",
+        "adapters_booking_bookingadapter_base_url",
+        "adapters_booking_bookingadapter_coerce_amount",
+        "adapters_booking_bookingadapter_infer_event_type",
+        "adapters_booking_bookingadapter_auth_headers",
+        "adapters_booking_bookingadapter_decode_response",
+        "adapters_booking_bookingadapter_provider_error",
+        "adapters_booking_bookingadapter_safe_request_summary",
+        "adapters_booking_bookingadapter_timeout",
+        "adapters_booking_bookingadapter_validate_context",
+        "adapters_booking_bookingadapter_xml_reservation_to_payload",
+        "adapters_booking_bookingadapter_local_name"
+      ],
+      "depth": 4,
+      "nodeCount": 18,
+      "fileCount": 1,
+      "files": [
+        "app/services/ota/adapters/booking.py"
+      ],
+      "criticality": 0.2456,
+      "warnings": []
+    },
+    {
       "id": "flow:app_database_get_db",
       "name": "get_db",
       "entryPoint": "app_database_get_db",
@@ -5779,6 +6827,30 @@
       "warnings": []
     },
     {
+      "id": "flow:services_operational_task_service_create_handoff",
+      "name": "create_handoff",
+      "entryPoint": "services_operational_task_service_create_handoff",
+      "entryPointId": "services_operational_task_service_create_handoff",
+      "path": [
+        "services_operational_task_service_create_handoff",
+        "services_operational_task_service_operationaltaskerror",
+        "services_operational_task_service_validate_user_membership"
+      ],
+      "qualifiedPath": [
+        "services_operational_task_service_create_handoff",
+        "services_operational_task_service_operationaltaskerror",
+        "services_operational_task_service_validate_user_membership"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/services/operational_task_service.py"
+      ],
+      "criticality": 0.2433,
+      "warnings": []
+    },
+    {
       "id": "flow:api_settings_security_export_audit_timeline",
       "name": "export_audit_timeline",
       "entryPoint": "api_settings_security_export_audit_timeline",
@@ -5918,6 +6990,30 @@
       "fileCount": 1,
       "files": [
         "app/services/membership_service.py"
+      ],
+      "criticality": 0.2433,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_operational_task_service_validate_task_operator_scope",
+      "name": "validate_task_operator_scope",
+      "entryPoint": "services_operational_task_service_validate_task_operator_scope",
+      "entryPointId": "services_operational_task_service_validate_task_operator_scope",
+      "path": [
+        "services_operational_task_service_validate_task_operator_scope",
+        "services_operational_task_service_get_task",
+        "services_operational_task_service_operationaltaskerror"
+      ],
+      "qualifiedPath": [
+        "services_operational_task_service_validate_task_operator_scope",
+        "services_operational_task_service_get_task",
+        "services_operational_task_service_operationaltaskerror"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/services/operational_task_service.py"
       ],
       "criticality": 0.2433,
       "warnings": []
@@ -6257,6 +7353,32 @@
       "warnings": []
     },
     {
+      "id": "flow:e2e_marketing_shots_main",
+      "name": "main",
+      "entryPoint": "e2e_marketing_shots_main",
+      "entryPointId": "e2e_marketing_shots_main",
+      "path": [
+        "e2e_marketing_shots_main",
+        "e2e_marketing_shots_capture",
+        "e2e_marketing_shots_login",
+        "e2e_marketing_shots_towebp"
+      ],
+      "qualifiedPath": [
+        "e2e_marketing_shots_main",
+        "e2e_marketing_shots_capture",
+        "e2e_marketing_shots_login",
+        "e2e_marketing_shots_towebp"
+      ],
+      "depth": 2,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "frontend/e2e/marketing-shots.mjs"
+      ],
+      "criticality": 0.2325,
+      "warnings": []
+    },
+    {
       "id": "flow:services_checkin_service_perform_checkin",
       "name": "perform_checkin",
       "entryPoint": "services_checkin_service_perform_checkin",
@@ -6286,32 +7408,6 @@
       "fileCount": 1,
       "files": [
         "app/services/checkin_service.py"
-      ],
-      "criticality": 0.2325,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_room_block_service_resolve_block",
-      "name": "resolve_block",
-      "entryPoint": "services_room_block_service_resolve_block",
-      "entryPointId": "services_room_block_service_resolve_block",
-      "path": [
-        "services_room_block_service_resolve_block",
-        "services_room_block_service_get_block",
-        "services_room_block_service_invalidate_availability_cache",
-        "services_room_block_service_roomblockerror"
-      ],
-      "qualifiedPath": [
-        "services_room_block_service_resolve_block",
-        "services_room_block_service_get_block",
-        "services_room_block_service_invalidate_availability_cache",
-        "services_room_block_service_roomblockerror"
-      ],
-      "depth": 2,
-      "nodeCount": 4,
-      "fileCount": 1,
-      "files": [
-        "app/services/room_block_service.py"
       ],
       "criticality": 0.2325,
       "warnings": []
@@ -6396,6 +7492,34 @@
         "app/services/financial_ledger.py"
       ],
       "criticality": 0.2317,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_marketing_service_replace_pricing",
+      "name": "replace_pricing",
+      "entryPoint": "services_marketing_service_replace_pricing",
+      "entryPointId": "services_marketing_service_replace_pricing",
+      "path": [
+        "services_marketing_service_replace_pricing",
+        "services_marketing_service_admin_pricing",
+        "services_marketing_service_ordered_plans",
+        "services_marketing_service_plan_to_public",
+        "services_marketing_service_decode_features"
+      ],
+      "qualifiedPath": [
+        "services_marketing_service_replace_pricing",
+        "services_marketing_service_admin_pricing",
+        "services_marketing_service_ordered_plans",
+        "services_marketing_service_plan_to_public",
+        "services_marketing_service_decode_features"
+      ],
+      "depth": 3,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "app/services/marketing_service.py"
+      ],
+      "criticality": 0.23,
       "warnings": []
     },
     {
@@ -6795,6 +7919,32 @@
       "warnings": []
     },
     {
+      "id": "flow:services_object_storage_gcsobjectstorage_get_signed_url",
+      "name": ".get_signed_url",
+      "entryPoint": "services_object_storage_gcsobjectstorage_get_signed_url",
+      "entryPointId": "services_object_storage_gcsobjectstorage_get_signed_url",
+      "path": [
+        "services_object_storage_gcsobjectstorage_get_signed_url",
+        "services_object_storage_gcsobjectstorage_get_bucket",
+        "services_object_storage_objectstorageerror",
+        "services_object_storage_safe_relative_path"
+      ],
+      "qualifiedPath": [
+        "services_object_storage_gcsobjectstorage_get_signed_url",
+        "services_object_storage_gcsobjectstorage_get_bucket",
+        "services_object_storage_objectstorageerror",
+        "services_object_storage_safe_relative_path"
+      ],
+      "depth": 1,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/services/object_storage.py"
+      ],
+      "criticality": 0.2225,
+      "warnings": []
+    },
+    {
       "id": "flow:analytics_analyticspages_reportscreen",
       "name": "ReportScreen",
       "entryPoint": "analytics_analyticspages_reportscreen",
@@ -6977,6 +8127,32 @@
       "warnings": []
     },
     {
+      "id": "flow:api_collaboration_patch_collaborative_resource",
+      "name": "patch_collaborative_resource",
+      "entryPoint": "api_collaboration_patch_collaborative_resource",
+      "entryPointId": "api_collaboration_patch_collaborative_resource",
+      "path": [
+        "api_collaboration_patch_collaborative_resource",
+        "api_collaboration_patch_conflict_response",
+        "api_collaboration_require_permission",
+        "api_collaboration_require_resource_lane"
+      ],
+      "qualifiedPath": [
+        "api_collaboration_patch_collaborative_resource",
+        "api_collaboration_patch_conflict_response",
+        "api_collaboration_require_permission",
+        "api_collaboration_require_resource_lane"
+      ],
+      "depth": 1,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/api/collaboration.py"
+      ],
+      "criticality": 0.2225,
+      "warnings": []
+    },
+    {
       "id": "flow:api_users_update_role",
       "name": "update_role",
       "entryPoint": "api_users_update_role",
@@ -7100,6 +8276,36 @@
       "fileCount": 1,
       "files": [
         "app/services/reservation_operations_service.py"
+      ],
+      "criticality": 0.2217,
+      "warnings": []
+    },
+    {
+      "id": "flow:scale_staged_realtime_load_main",
+      "name": "main",
+      "entryPoint": "scale_staged_realtime_load_main",
+      "entryPointId": "scale_staged_realtime_load_main",
+      "path": [
+        "scale_staged_realtime_load_main",
+        "scale_staged_realtime_load_run",
+        "scale_staged_realtime_load_realtimemetrics_payload",
+        "scale_staged_realtime_load_run_load",
+        "scale_staged_realtime_load_validate_target",
+        "scale_staged_realtime_load_realtimemetrics"
+      ],
+      "qualifiedPath": [
+        "scale_staged_realtime_load_main",
+        "scale_staged_realtime_load_run",
+        "scale_staged_realtime_load_realtimemetrics_payload",
+        "scale_staged_realtime_load_run_load",
+        "scale_staged_realtime_load_validate_target",
+        "scale_staged_realtime_load_realtimemetrics"
+      ],
+      "depth": 3,
+      "nodeCount": 6,
+      "fileCount": 1,
+      "files": [
+        "scripts/scale/staged_realtime_load.py"
       ],
       "criticality": 0.2217,
       "warnings": []
@@ -7273,6 +8479,122 @@
       "warnings": []
     },
     {
+      "id": "flow:versions_20260904_operational_audit_cash_daily_upgrade",
+      "name": "upgrade",
+      "entryPoint": "versions_20260904_operational_audit_cash_daily_upgrade",
+      "entryPointId": "versions_20260904_operational_audit_cash_daily_upgrade",
+      "path": [
+        "versions_20260904_operational_audit_cash_daily_upgrade",
+        "versions_20260904_operational_audit_cash_daily_columns",
+        "versions_20260904_operational_audit_cash_daily_create_index_if_missing",
+        "versions_20260904_operational_audit_cash_daily_seed_audit_permission",
+        "versions_20260904_operational_audit_cash_daily_indexes"
+      ],
+      "qualifiedPath": [
+        "versions_20260904_operational_audit_cash_daily_upgrade",
+        "versions_20260904_operational_audit_cash_daily_columns",
+        "versions_20260904_operational_audit_cash_daily_create_index_if_missing",
+        "versions_20260904_operational_audit_cash_daily_seed_audit_permission",
+        "versions_20260904_operational_audit_cash_daily_indexes"
+      ],
+      "depth": 2,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20260904_operational_audit_cash_daily.py"
+      ],
+      "criticality": 0.22,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_domain_events_publish_pending_domain_events",
+      "name": "publish_pending_domain_events",
+      "entryPoint": "services_domain_events_publish_pending_domain_events",
+      "entryPointId": "services_domain_events_publish_pending_domain_events",
+      "path": [
+        "services_domain_events_publish_pending_domain_events",
+        "services_domain_events_outbox_backoff_seconds",
+        "services_domain_events_publish_domain_event",
+        "services_domain_events_realtimeeventsunavailable",
+        "services_domain_events_validate_hotel_id",
+        "services_domain_events_domainevent",
+        "services_domain_events_domainevent_as_payload",
+        "services_domain_events_get_redis_client",
+        "services_domain_events_revision_key_for_hotel",
+        "services_domain_events_settings",
+        "services_domain_events_unavailable",
+        "services_domain_events_validate_event_input",
+        "services_domain_events_required"
+      ],
+      "qualifiedPath": [
+        "services_domain_events_publish_pending_domain_events",
+        "services_domain_events_outbox_backoff_seconds",
+        "services_domain_events_publish_domain_event",
+        "services_domain_events_realtimeeventsunavailable",
+        "services_domain_events_validate_hotel_id",
+        "services_domain_events_domainevent",
+        "services_domain_events_domainevent_as_payload",
+        "services_domain_events_get_redis_client",
+        "services_domain_events_revision_key_for_hotel",
+        "services_domain_events_settings",
+        "services_domain_events_unavailable",
+        "services_domain_events_validate_event_input",
+        "services_domain_events_required"
+      ],
+      "depth": 3,
+      "nodeCount": 13,
+      "fileCount": 1,
+      "files": [
+        "app/services/domain_events.py"
+      ],
+      "criticality": 0.2185,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_domain_events_publish_queued_domain_changes",
+      "name": "publish_queued_domain_changes",
+      "entryPoint": "services_domain_events_publish_queued_domain_changes",
+      "entryPointId": "services_domain_events_publish_queued_domain_changes",
+      "path": [
+        "services_domain_events_publish_queued_domain_changes",
+        "services_domain_events_publish_domain_event",
+        "services_domain_events_realtimeeventsunavailable",
+        "services_domain_events_record_outbox_attempt",
+        "services_domain_events_domainevent",
+        "services_domain_events_domainevent_as_payload",
+        "services_domain_events_get_redis_client",
+        "services_domain_events_revision_key_for_hotel",
+        "services_domain_events_settings",
+        "services_domain_events_unavailable",
+        "services_domain_events_validate_event_input",
+        "services_domain_events_validate_hotel_id",
+        "services_domain_events_required"
+      ],
+      "qualifiedPath": [
+        "services_domain_events_publish_queued_domain_changes",
+        "services_domain_events_publish_domain_event",
+        "services_domain_events_realtimeeventsunavailable",
+        "services_domain_events_record_outbox_attempt",
+        "services_domain_events_domainevent",
+        "services_domain_events_domainevent_as_payload",
+        "services_domain_events_get_redis_client",
+        "services_domain_events_revision_key_for_hotel",
+        "services_domain_events_settings",
+        "services_domain_events_unavailable",
+        "services_domain_events_validate_event_input",
+        "services_domain_events_validate_hotel_id",
+        "services_domain_events_required"
+      ],
+      "depth": 3,
+      "nodeCount": 13,
+      "fileCount": 1,
+      "files": [
+        "app/services/domain_events.py"
+      ],
+      "criticality": 0.2185,
+      "warnings": []
+    },
+    {
       "id": "flow:services_reservation_service_create_reservation",
       "name": "create_reservation",
       "entryPoint": "services_reservation_service_create_reservation",
@@ -7415,6 +8737,38 @@
       "warnings": []
     },
     {
+      "id": "flow:services_collaboration_apply_resource_changes",
+      "name": "apply_resource_changes",
+      "entryPoint": "services_collaboration_apply_resource_changes",
+      "entryPointId": "services_collaboration_apply_resource_changes",
+      "path": [
+        "services_collaboration_apply_resource_changes",
+        "services_collaboration_get_resource_spec",
+        "services_collaboration_model_dump_for_database",
+        "services_collaboration_validate_draft_changes",
+        "services_collaboration_normalize_resource_type",
+        "services_collaboration_model_dump_for_wire",
+        "services_collaboration_json_safe"
+      ],
+      "qualifiedPath": [
+        "services_collaboration_apply_resource_changes",
+        "services_collaboration_get_resource_spec",
+        "services_collaboration_model_dump_for_database",
+        "services_collaboration_validate_draft_changes",
+        "services_collaboration_normalize_resource_type",
+        "services_collaboration_model_dump_for_wire",
+        "services_collaboration_json_safe"
+      ],
+      "depth": 3,
+      "nodeCount": 7,
+      "fileCount": 1,
+      "files": [
+        "app/services/collaboration.py"
+      ],
+      "criticality": 0.2157,
+      "warnings": []
+    },
+    {
       "id": "flow:api_movement_groups_revert_movement_group",
       "name": "revert_movement_group",
       "entryPoint": "api_movement_groups_revert_movement_group",
@@ -7444,46 +8798,6 @@
         "app/api/movement_groups.py"
       ],
       "criticality": 0.2157,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_domain_events_publish_domain_event",
-      "name": "publish_domain_event",
-      "entryPoint": "services_domain_events_publish_domain_event",
-      "entryPointId": "services_domain_events_publish_domain_event",
-      "path": [
-        "services_domain_events_publish_domain_event",
-        "services_domain_events_domainevent",
-        "services_domain_events_domainevent_as_payload",
-        "services_domain_events_get_redis_client",
-        "services_domain_events_revision_key_for_hotel",
-        "services_domain_events_settings",
-        "services_domain_events_unavailable",
-        "services_domain_events_validate_event_input",
-        "services_domain_events_validate_hotel_id",
-        "services_domain_events_realtimeeventsunavailable",
-        "services_domain_events_required"
-      ],
-      "qualifiedPath": [
-        "services_domain_events_publish_domain_event",
-        "services_domain_events_domainevent",
-        "services_domain_events_domainevent_as_payload",
-        "services_domain_events_get_redis_client",
-        "services_domain_events_revision_key_for_hotel",
-        "services_domain_events_settings",
-        "services_domain_events_unavailable",
-        "services_domain_events_validate_event_input",
-        "services_domain_events_validate_hotel_id",
-        "services_domain_events_realtimeeventsunavailable",
-        "services_domain_events_required"
-      ],
-      "depth": 2,
-      "nodeCount": 11,
-      "fileCount": 1,
-      "files": [
-        "app/services/domain_events.py"
-      ],
-      "criticality": 0.2155,
       "warnings": []
     },
     {
@@ -7697,6 +9011,56 @@
       "warnings": []
     },
     {
+      "id": "flow:api_collaboration_collaboration_websocket",
+      "name": "collaboration_websocket",
+      "entryPoint": "api_collaboration_collaboration_websocket",
+      "entryPointId": "api_collaboration_collaboration_websocket",
+      "path": [
+        "api_collaboration_collaboration_websocket",
+        "api_collaboration_collaborationmanager_join",
+        "api_collaboration_collaborationmanager_leave",
+        "api_collaboration_collaborationmanager_publish",
+        "api_collaboration_consume_ticket",
+        "api_collaboration_live_ticket_is_authorized",
+        "api_collaboration_message_allowed",
+        "api_collaboration_peer",
+        "api_collaboration_room_name",
+        "api_collaboration_send_peer",
+        "api_collaboration_collaborationmanager_retry_transport",
+        "api_collaboration_collaborationmanager_start_transport",
+        "api_collaboration_collaborationmanager_broadcast_local",
+        "api_collaboration_ticket_key",
+        "api_collaboration_collaborationmanager_listen",
+        "api_collaboration_roomtransport"
+      ],
+      "qualifiedPath": [
+        "api_collaboration_collaboration_websocket",
+        "api_collaboration_collaborationmanager_join",
+        "api_collaboration_collaborationmanager_leave",
+        "api_collaboration_collaborationmanager_publish",
+        "api_collaboration_consume_ticket",
+        "api_collaboration_live_ticket_is_authorized",
+        "api_collaboration_message_allowed",
+        "api_collaboration_peer",
+        "api_collaboration_room_name",
+        "api_collaboration_send_peer",
+        "api_collaboration_collaborationmanager_retry_transport",
+        "api_collaboration_collaborationmanager_start_transport",
+        "api_collaboration_collaborationmanager_broadcast_local",
+        "api_collaboration_ticket_key",
+        "api_collaboration_collaborationmanager_listen",
+        "api_collaboration_roomtransport"
+      ],
+      "depth": 3,
+      "nodeCount": 16,
+      "fileCount": 1,
+      "files": [
+        "app/api/collaboration.py"
+      ],
+      "criticality": 0.2113,
+      "warnings": []
+    },
+    {
       "id": "flow:agent_ops_operational_qa_main",
       "name": "main",
       "entryPoint": "agent_ops_operational_qa_main",
@@ -7838,6 +9202,62 @@
         "app/services/payment_link_test_service.py"
       ],
       "criticality": 0.2108,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_operational_task_service_acknowledge_handoff",
+      "name": "acknowledge_handoff",
+      "entryPoint": "services_operational_task_service_acknowledge_handoff",
+      "entryPointId": "services_operational_task_service_acknowledge_handoff",
+      "path": [
+        "services_operational_task_service_acknowledge_handoff",
+        "services_operational_task_service_handoffversionconflict",
+        "services_operational_task_service_now",
+        "services_operational_task_service_operationaltaskerror",
+        "services_operational_task_service_validate_user_membership"
+      ],
+      "qualifiedPath": [
+        "services_operational_task_service_acknowledge_handoff",
+        "services_operational_task_service_handoffversionconflict",
+        "services_operational_task_service_now",
+        "services_operational_task_service_operationaltaskerror",
+        "services_operational_task_service_validate_user_membership"
+      ],
+      "depth": 1,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "app/services/operational_task_service.py"
+      ],
+      "criticality": 0.21,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_collaboration_create_collaboration_ticket",
+      "name": "create_collaboration_ticket",
+      "entryPoint": "api_collaboration_create_collaboration_ticket",
+      "entryPointId": "api_collaboration_create_collaboration_ticket",
+      "path": [
+        "api_collaboration_create_collaboration_ticket",
+        "api_collaboration_realtime_client_or_503",
+        "api_collaboration_require_permission",
+        "api_collaboration_require_resource_lane",
+        "api_collaboration_ticket_key"
+      ],
+      "qualifiedPath": [
+        "api_collaboration_create_collaboration_ticket",
+        "api_collaboration_realtime_client_or_503",
+        "api_collaboration_require_permission",
+        "api_collaboration_require_resource_lane",
+        "api_collaboration_ticket_key"
+      ],
+      "depth": 1,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "app/api/collaboration.py"
+      ],
+      "criticality": 0.21,
       "warnings": []
     },
     {
@@ -8017,6 +9437,34 @@
       "warnings": []
     },
     {
+      "id": "flow:services_room_block_service_resolve_block",
+      "name": "resolve_block",
+      "entryPoint": "services_room_block_service_resolve_block",
+      "entryPointId": "services_room_block_service_resolve_block",
+      "path": [
+        "services_room_block_service_resolve_block",
+        "services_room_block_service_get_block",
+        "services_room_block_service_invalidate_availability_cache",
+        "services_room_block_service_roomblockerror",
+        "services_room_block_service_roomblockreleaseconflicterror"
+      ],
+      "qualifiedPath": [
+        "services_room_block_service_resolve_block",
+        "services_room_block_service_get_block",
+        "services_room_block_service_invalidate_availability_cache",
+        "services_room_block_service_roomblockerror",
+        "services_room_block_service_roomblockreleaseconflicterror"
+      ],
+      "depth": 1,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "app/services/room_block_service.py"
+      ],
+      "criticality": 0.21,
+      "warnings": []
+    },
+    {
       "id": "flow:services_analytics_service_update_company",
       "name": "update_company",
       "entryPoint": "services_analytics_service_update_company",
@@ -8055,6 +9503,7 @@
         "services_analytics_exports_persist_export_file",
         "services_analytics_exports_render_export_xlsx",
         "services_analytics_exports_export_job_path",
+        "services_analytics_exports_export_object_key",
         "services_analytics_exports_build_export_payload",
         "services_analytics_exports_build_xlsx_bytes",
         "services_analytics_exports_flatten_payload_rows",
@@ -8070,6 +9519,7 @@
         "services_analytics_exports_persist_export_file",
         "services_analytics_exports_render_export_xlsx",
         "services_analytics_exports_export_job_path",
+        "services_analytics_exports_export_object_key",
         "services_analytics_exports_build_export_payload",
         "services_analytics_exports_build_xlsx_bytes",
         "services_analytics_exports_flatten_payload_rows",
@@ -8080,12 +9530,12 @@
         "services_analytics_exports_normalize_export_payload"
       ],
       "depth": 4,
-      "nodeCount": 13,
+      "nodeCount": 14,
       "fileCount": 1,
       "files": [
         "app/services/analytics_exports.py"
       ],
-      "criticality": 0.2092,
+      "criticality": 0.2079,
       "warnings": []
     },
     {
@@ -8310,6 +9760,40 @@
       "fileCount": 1,
       "files": [
         "scripts/agent_ops/check_release_evidence.py"
+      ],
+      "criticality": 0.2012,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_operational_task_service_update_task",
+      "name": "update_task",
+      "entryPoint": "services_operational_task_service_update_task",
+      "entryPointId": "services_operational_task_service_update_task",
+      "path": [
+        "services_operational_task_service_update_task",
+        "services_operational_task_service_append_event",
+        "services_operational_task_service_get_task",
+        "services_operational_task_service_now",
+        "services_operational_task_service_operationaltaskerror",
+        "services_operational_task_service_taskversionconflict",
+        "services_operational_task_service_validate_user_membership",
+        "services_operational_task_service_enum_value"
+      ],
+      "qualifiedPath": [
+        "services_operational_task_service_update_task",
+        "services_operational_task_service_append_event",
+        "services_operational_task_service_get_task",
+        "services_operational_task_service_now",
+        "services_operational_task_service_operationaltaskerror",
+        "services_operational_task_service_taskversionconflict",
+        "services_operational_task_service_validate_user_membership",
+        "services_operational_task_service_enum_value"
+      ],
+      "depth": 2,
+      "nodeCount": 8,
+      "fileCount": 1,
+      "files": [
+        "app/services/operational_task_service.py"
       ],
       "criticality": 0.2012,
       "warnings": []
@@ -9273,6 +10757,58 @@
       "warnings": []
     },
     {
+      "id": "flow:services_object_storage_localobjectstorage_delete",
+      "name": ".delete",
+      "entryPoint": "services_object_storage_localobjectstorage_delete",
+      "entryPointId": "services_object_storage_localobjectstorage_delete",
+      "path": [
+        "services_object_storage_localobjectstorage_delete",
+        "services_object_storage_localobjectstorage_path_for",
+        "services_object_storage_safe_relative_path",
+        "services_object_storage_objectstorageerror"
+      ],
+      "qualifiedPath": [
+        "services_object_storage_localobjectstorage_delete",
+        "services_object_storage_localobjectstorage_path_for",
+        "services_object_storage_safe_relative_path",
+        "services_object_storage_objectstorageerror"
+      ],
+      "depth": 3,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/services/object_storage.py"
+      ],
+      "criticality": 0.18,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_object_storage_localobjectstorage_put_bytes",
+      "name": ".put_bytes",
+      "entryPoint": "services_object_storage_localobjectstorage_put_bytes",
+      "entryPointId": "services_object_storage_localobjectstorage_put_bytes",
+      "path": [
+        "services_object_storage_localobjectstorage_put_bytes",
+        "services_object_storage_localobjectstorage_path_for",
+        "services_object_storage_safe_relative_path",
+        "services_object_storage_objectstorageerror"
+      ],
+      "qualifiedPath": [
+        "services_object_storage_localobjectstorage_put_bytes",
+        "services_object_storage_localobjectstorage_path_for",
+        "services_object_storage_safe_relative_path",
+        "services_object_storage_objectstorageerror"
+      ],
+      "depth": 3,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/services/object_storage.py"
+      ],
+      "criticality": 0.18,
+      "warnings": []
+    },
+    {
       "id": "flow:services_analytics_contracts_build_analytics_window",
       "name": "build_analytics_window",
       "entryPoint": "services_analytics_contracts_build_analytics_window",
@@ -10107,6 +11643,34 @@
       "warnings": []
     },
     {
+      "id": "flow:services_collaboration_serialize_resource",
+      "name": "serialize_resource",
+      "entryPoint": "services_collaboration_serialize_resource",
+      "entryPointId": "services_collaboration_serialize_resource",
+      "path": [
+        "services_collaboration_serialize_resource",
+        "services_collaboration_editable_resource_values",
+        "services_collaboration_get_resource_spec",
+        "services_collaboration_json_safe",
+        "services_collaboration_normalize_resource_type"
+      ],
+      "qualifiedPath": [
+        "services_collaboration_serialize_resource",
+        "services_collaboration_editable_resource_values",
+        "services_collaboration_get_resource_spec",
+        "services_collaboration_json_safe",
+        "services_collaboration_normalize_resource_type"
+      ],
+      "depth": 3,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "app/services/collaboration.py"
+      ],
+      "criticality": 0.18,
+      "warnings": []
+    },
+    {
       "id": "flow:services_tenant_context_set_tenant_context",
       "name": "set_tenant_context",
       "entryPoint": "services_tenant_context_set_tenant_context",
@@ -10189,6 +11753,56 @@
       "warnings": []
     },
     {
+      "id": "flow:adapters_booking_bookingadapter_cancel_reservation",
+      "name": ".cancel_reservation",
+      "entryPoint": "adapters_booking_bookingadapter_cancel_reservation",
+      "entryPointId": "adapters_booking_bookingadapter_cancel_reservation",
+      "path": [
+        "adapters_booking_bookingadapter_cancel_reservation",
+        "adapters_booking_bookingadapter_unsupported_outbound",
+        "adapters_booking_bookingadapter_remember"
+      ],
+      "qualifiedPath": [
+        "adapters_booking_bookingadapter_cancel_reservation",
+        "adapters_booking_bookingadapter_unsupported_outbound",
+        "adapters_booking_bookingadapter_remember"
+      ],
+      "depth": 2,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/services/ota/adapters/booking.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_object_storage_localobjectstorage_get_bytes",
+      "name": ".get_bytes",
+      "entryPoint": "services_object_storage_localobjectstorage_get_bytes",
+      "entryPointId": "services_object_storage_localobjectstorage_get_bytes",
+      "path": [
+        "services_object_storage_localobjectstorage_get_bytes",
+        "services_object_storage_localobjectstorage_path_for",
+        "services_object_storage_objectstorageerror",
+        "services_object_storage_safe_relative_path"
+      ],
+      "qualifiedPath": [
+        "services_object_storage_localobjectstorage_get_bytes",
+        "services_object_storage_localobjectstorage_path_for",
+        "services_object_storage_objectstorageerror",
+        "services_object_storage_safe_relative_path"
+      ],
+      "depth": 2,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/services/object_storage.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
       "id": "flow:email_providers_resendemailprovider_send",
       "name": ".send",
       "entryPoint": "email_providers_resendemailprovider_send",
@@ -10212,6 +11826,34 @@
       "fileCount": 1,
       "files": [
         "app/services/email/providers.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_object_storage_localobjectstorage_stat",
+      "name": ".stat",
+      "entryPoint": "services_object_storage_localobjectstorage_stat",
+      "entryPointId": "services_object_storage_localobjectstorage_stat",
+      "path": [
+        "services_object_storage_localobjectstorage_stat",
+        "services_object_storage_localobjectstorage_path_for",
+        "services_object_storage_objectstat",
+        "services_object_storage_objectstorageerror",
+        "services_object_storage_safe_relative_path"
+      ],
+      "qualifiedPath": [
+        "services_object_storage_localobjectstorage_stat",
+        "services_object_storage_localobjectstorage_path_for",
+        "services_object_storage_objectstat",
+        "services_object_storage_objectstorageerror",
+        "services_object_storage_safe_relative_path"
+      ],
+      "depth": 2,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "app/services/object_storage.py"
       ],
       "criticality": 0.17,
       "warnings": []
@@ -10772,6 +12414,7 @@
         "services_onboarding_service_status_from_state",
         "services_onboarding_service_onboardingerror",
         "services_onboarding_service_build_finish_gates",
+        "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
@@ -10784,13 +12427,14 @@
         "services_onboarding_service_status_from_state",
         "services_onboarding_service_onboardingerror",
         "services_onboarding_service_build_finish_gates",
+        "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
       ],
       "depth": 2,
-      "nodeCount": 10,
+      "nodeCount": 11,
       "fileCount": 1,
       "files": [
         "app/services/onboarding_service.py"
@@ -11129,6 +12773,32 @@
       "warnings": []
     },
     {
+      "id": "flow:versions_20260904_operational_audit_cash_daily_downgrade",
+      "name": "downgrade",
+      "entryPoint": "versions_20260904_operational_audit_cash_daily_downgrade",
+      "entryPointId": "versions_20260904_operational_audit_cash_daily_downgrade",
+      "path": [
+        "versions_20260904_operational_audit_cash_daily_downgrade",
+        "versions_20260904_operational_audit_cash_daily_columns",
+        "versions_20260904_operational_audit_cash_daily_drop_index_if_present",
+        "versions_20260904_operational_audit_cash_daily_indexes"
+      ],
+      "qualifiedPath": [
+        "versions_20260904_operational_audit_cash_daily_downgrade",
+        "versions_20260904_operational_audit_cash_daily_columns",
+        "versions_20260904_operational_audit_cash_daily_drop_index_if_present",
+        "versions_20260904_operational_audit_cash_daily_indexes"
+      ],
+      "depth": 2,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20260904_operational_audit_cash_daily.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
       "id": "flow:services_onboarding_service_finish_onboarding",
       "name": "finish_onboarding",
       "entryPoint": "services_onboarding_service_finish_onboarding",
@@ -11140,6 +12810,7 @@
         "services_onboarding_service_resolve_hotel_id",
         "services_onboarding_service_status_from_state",
         "services_onboarding_service_build_finish_gates",
+        "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
@@ -11152,13 +12823,14 @@
         "services_onboarding_service_resolve_hotel_id",
         "services_onboarding_service_status_from_state",
         "services_onboarding_service_build_finish_gates",
+        "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
       ],
       "depth": 2,
-      "nodeCount": 10,
+      "nodeCount": 11,
       "fileCount": 1,
       "files": [
         "app/services/onboarding_service.py"
@@ -11613,6 +13285,30 @@
       "warnings": []
     },
     {
+      "id": "flow:services_collaboration_get_resource",
+      "name": "get_resource",
+      "entryPoint": "services_collaboration_get_resource",
+      "entryPointId": "services_collaboration_get_resource",
+      "path": [
+        "services_collaboration_get_resource",
+        "services_collaboration_get_resource_spec",
+        "services_collaboration_normalize_resource_type"
+      ],
+      "qualifiedPath": [
+        "services_collaboration_get_resource",
+        "services_collaboration_get_resource_spec",
+        "services_collaboration_normalize_resource_type"
+      ],
+      "depth": 2,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/services/collaboration.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
       "id": "flow:api_allocation_policy_get_run",
       "name": "get_run",
       "entryPoint": "api_allocation_policy_get_run",
@@ -11648,6 +13344,7 @@
         "services_onboarding_service_status_from_state",
         "services_onboarding_service_onboardingerror",
         "services_onboarding_service_build_finish_gates",
+        "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
@@ -11660,13 +13357,14 @@
         "services_onboarding_service_status_from_state",
         "services_onboarding_service_onboardingerror",
         "services_onboarding_service_build_finish_gates",
+        "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
       ],
       "depth": 2,
-      "nodeCount": 10,
+      "nodeCount": 11,
       "fileCount": 1,
       "files": [
         "app/services/onboarding_service.py"
@@ -11980,6 +13678,32 @@
       "fileCount": 1,
       "files": [
         "app/tasks/analytics_tasks.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_marketing_service_public_pricing",
+      "name": "public_pricing",
+      "entryPoint": "services_marketing_service_public_pricing",
+      "entryPointId": "services_marketing_service_public_pricing",
+      "path": [
+        "services_marketing_service_public_pricing",
+        "services_marketing_service_ordered_plans",
+        "services_marketing_service_plan_to_public",
+        "services_marketing_service_decode_features"
+      ],
+      "qualifiedPath": [
+        "services_marketing_service_public_pricing",
+        "services_marketing_service_ordered_plans",
+        "services_marketing_service_plan_to_public",
+        "services_marketing_service_decode_features"
+      ],
+      "depth": 2,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/services/marketing_service.py"
       ],
       "criticality": 0.17,
       "warnings": []
@@ -12355,6 +14079,40 @@
       "warnings": []
     },
     {
+      "id": "flow:sync_crosstabsync_runeventstream",
+      "name": "runEventStream",
+      "entryPoint": "sync_crosstabsync_runeventstream",
+      "entryPointId": "sync_crosstabsync_runeventstream",
+      "path": [
+        "sync_crosstabsync_runeventstream",
+        "sync_crosstabsync_normalizehotelid",
+        "sync_crosstabsync_parsesseframes",
+        "sync_crosstabsync_readcursor",
+        "sync_crosstabsync_recoverrealtime",
+        "sync_crosstabsync_updaterealtimestatus",
+        "sync_crosstabsync_cursorstoragekey",
+        "sync_crosstabsync_writecursor"
+      ],
+      "qualifiedPath": [
+        "sync_crosstabsync_runeventstream",
+        "sync_crosstabsync_normalizehotelid",
+        "sync_crosstabsync_parsesseframes",
+        "sync_crosstabsync_readcursor",
+        "sync_crosstabsync_recoverrealtime",
+        "sync_crosstabsync_updaterealtimestatus",
+        "sync_crosstabsync_cursorstoragekey",
+        "sync_crosstabsync_writecursor"
+      ],
+      "depth": 2,
+      "nodeCount": 8,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/sync/crossTabSync.ts"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
       "id": "flow:services_hotel_outbound_email_service_send_hotel_email",
       "name": "send_hotel_email",
       "entryPoint": "services_hotel_outbound_email_service_send_hotel_email",
@@ -12432,6 +14190,38 @@
       "fileCount": 1,
       "files": [
         "app/tasks/report_tasks.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_reservation_communication_service_send_reservation_email",
+      "name": "send_reservation_email",
+      "entryPoint": "services_reservation_communication_service_send_reservation_email",
+      "entryPointId": "services_reservation_communication_service_send_reservation_email",
+      "path": [
+        "services_reservation_communication_service_send_reservation_email",
+        "services_reservation_communication_service_build_reservation_email",
+        "services_reservation_communication_service_clean_email",
+        "services_reservation_communication_service_kind_value",
+        "services_reservation_communication_service_reservationcommunicationerror",
+        "services_reservation_communication_service_reservationemailsendoutcome",
+        "services_reservation_communication_service_money"
+      ],
+      "qualifiedPath": [
+        "services_reservation_communication_service_send_reservation_email",
+        "services_reservation_communication_service_build_reservation_email",
+        "services_reservation_communication_service_clean_email",
+        "services_reservation_communication_service_kind_value",
+        "services_reservation_communication_service_reservationcommunicationerror",
+        "services_reservation_communication_service_reservationemailsendoutcome",
+        "services_reservation_communication_service_money"
+      ],
+      "depth": 2,
+      "nodeCount": 7,
+      "fileCount": 1,
+      "files": [
+        "app/services/reservation_communication_service.py"
       ],
       "criticality": 0.17,
       "warnings": []
@@ -12521,6 +14311,7 @@
         "services_onboarding_service_status_from_state",
         "services_onboarding_service_onboardingerror",
         "services_onboarding_service_build_finish_gates",
+        "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
@@ -12534,13 +14325,14 @@
         "services_onboarding_service_status_from_state",
         "services_onboarding_service_onboardingerror",
         "services_onboarding_service_build_finish_gates",
+        "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
       ],
       "depth": 2,
-      "nodeCount": 11,
+      "nodeCount": 12,
       "fileCount": 1,
       "files": [
         "app/services/onboarding_service.py"
@@ -12562,6 +14354,7 @@
         "services_onboarding_service_status_from_state",
         "services_onboarding_service_onboardingerror",
         "services_onboarding_service_build_finish_gates",
+        "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
@@ -12576,13 +14369,14 @@
         "services_onboarding_service_status_from_state",
         "services_onboarding_service_onboardingerror",
         "services_onboarding_service_build_finish_gates",
+        "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
       ],
       "depth": 2,
-      "nodeCount": 12,
+      "nodeCount": 13,
       "fileCount": 1,
       "files": [
         "app/services/onboarding_service.py"
@@ -12603,6 +14397,7 @@
         "services_onboarding_service_status_from_state",
         "services_onboarding_service_onboardingerror",
         "services_onboarding_service_build_finish_gates",
+        "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
@@ -12616,13 +14411,14 @@
         "services_onboarding_service_status_from_state",
         "services_onboarding_service_onboardingerror",
         "services_onboarding_service_build_finish_gates",
+        "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
       ],
       "depth": 2,
-      "nodeCount": 11,
+      "nodeCount": 12,
       "fileCount": 1,
       "files": [
         "app/services/onboarding_service.py"
@@ -12697,6 +14493,7 @@
         "services_onboarding_service_resolve_hotel_id",
         "services_onboarding_service_status_from_state",
         "services_onboarding_service_build_finish_gates",
+        "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
@@ -12710,13 +14507,14 @@
         "services_onboarding_service_resolve_hotel_id",
         "services_onboarding_service_status_from_state",
         "services_onboarding_service_build_finish_gates",
+        "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
       ],
       "depth": 2,
-      "nodeCount": 11,
+      "nodeCount": 12,
       "fileCount": 1,
       "files": [
         "app/services/onboarding_service.py"
@@ -12868,6 +14666,7 @@
         "services_onboarding_service_resolve_hotel_id",
         "services_onboarding_service_status_from_state",
         "services_onboarding_service_build_finish_gates",
+        "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
@@ -12880,13 +14679,14 @@
         "services_onboarding_service_resolve_hotel_id",
         "services_onboarding_service_status_from_state",
         "services_onboarding_service_build_finish_gates",
+        "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
       ],
       "depth": 2,
-      "nodeCount": 10,
+      "nodeCount": 11,
       "fileCount": 1,
       "files": [
         "app/services/onboarding_service.py"
@@ -12914,6 +14714,30 @@
       "fileCount": 1,
       "files": [
         "app/api/subscription.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_operational_task_service_task_history",
+      "name": "task_history",
+      "entryPoint": "services_operational_task_service_task_history",
+      "entryPointId": "services_operational_task_service_task_history",
+      "path": [
+        "services_operational_task_service_task_history",
+        "services_operational_task_service_get_task",
+        "services_operational_task_service_operationaltaskerror"
+      ],
+      "qualifiedPath": [
+        "services_operational_task_service_task_history",
+        "services_operational_task_service_get_task",
+        "services_operational_task_service_operationaltaskerror"
+      ],
+      "depth": 2,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/services/operational_task_service.py"
       ],
       "criticality": 0.17,
       "warnings": []
@@ -13128,6 +14952,7 @@
         "services_onboarding_service_status_from_state",
         "services_onboarding_service_onboardingerror",
         "services_onboarding_service_build_finish_gates",
+        "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
@@ -13140,13 +14965,14 @@
         "services_onboarding_service_status_from_state",
         "services_onboarding_service_onboardingerror",
         "services_onboarding_service_build_finish_gates",
+        "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
       ],
       "depth": 2,
-      "nodeCount": 10,
+      "nodeCount": 11,
       "fileCount": 1,
       "files": [
         "app/services/onboarding_service.py"
@@ -13168,6 +14994,7 @@
         "services_onboarding_service_status_from_state",
         "services_onboarding_service_onboardingerror",
         "services_onboarding_service_build_finish_gates",
+        "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
@@ -13182,13 +15009,14 @@
         "services_onboarding_service_status_from_state",
         "services_onboarding_service_onboardingerror",
         "services_onboarding_service_build_finish_gates",
+        "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
       ],
       "depth": 2,
-      "nodeCount": 12,
+      "nodeCount": 13,
       "fileCount": 1,
       "files": [
         "app/services/onboarding_service.py"
@@ -13210,6 +15038,7 @@
         "services_onboarding_service_status_from_state",
         "services_onboarding_service_onboardingerror",
         "services_onboarding_service_build_finish_gates",
+        "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
@@ -13224,13 +15053,14 @@
         "services_onboarding_service_status_from_state",
         "services_onboarding_service_onboardingerror",
         "services_onboarding_service_build_finish_gates",
+        "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
       ],
       "depth": 2,
-      "nodeCount": 12,
+      "nodeCount": 13,
       "fileCount": 1,
       "files": [
         "app/services/onboarding_service.py"
@@ -13250,6 +15080,7 @@
         "services_onboarding_service_resolve_hotel_id",
         "services_onboarding_service_status_from_state",
         "services_onboarding_service_build_finish_gates",
+        "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
@@ -13262,13 +15093,14 @@
         "services_onboarding_service_resolve_hotel_id",
         "services_onboarding_service_status_from_state",
         "services_onboarding_service_build_finish_gates",
+        "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
       ],
       "depth": 2,
-      "nodeCount": 10,
+      "nodeCount": 11,
       "fileCount": 1,
       "files": [
         "app/services/onboarding_service.py"
@@ -13371,6 +15203,28 @@
       "warnings": []
     },
     {
+      "id": "flow:services_object_storage_gcsobjectstorage_init",
+      "name": ".__init",
+      "entryPoint": "services_object_storage_gcsobjectstorage_init",
+      "entryPointId": "services_object_storage_gcsobjectstorage_init",
+      "path": [
+        "services_object_storage_gcsobjectstorage_init",
+        "services_object_storage_objectstorageerror"
+      ],
+      "qualifiedPath": [
+        "services_object_storage_gcsobjectstorage_init",
+        "services_object_storage_objectstorageerror"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/services/object_storage.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:adapters_rate_limiter_simpleratelimiter_allow",
       "name": ".allow",
       "entryPoint": "adapters_rate_limiter_simpleratelimiter_allow",
@@ -13461,6 +15315,54 @@
       "warnings": []
     },
     {
+      "id": "flow:services_object_storage_gcsobjectstorage_delete",
+      "name": ".delete",
+      "entryPoint": "services_object_storage_gcsobjectstorage_delete",
+      "entryPointId": "services_object_storage_gcsobjectstorage_delete",
+      "path": [
+        "services_object_storage_gcsobjectstorage_delete",
+        "services_object_storage_gcsobjectstorage_get_bucket",
+        "services_object_storage_objectstorageerror",
+        "services_object_storage_safe_relative_path"
+      ],
+      "qualifiedPath": [
+        "services_object_storage_gcsobjectstorage_delete",
+        "services_object_storage_gcsobjectstorage_get_bucket",
+        "services_object_storage_objectstorageerror",
+        "services_object_storage_safe_relative_path"
+      ],
+      "depth": 1,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/services/object_storage.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:adapters_job_dispatcher_celeryjobdispatcher_dispatch",
+      "name": ".dispatch",
+      "entryPoint": "adapters_job_dispatcher_celeryjobdispatcher_dispatch",
+      "entryPointId": "adapters_job_dispatcher_celeryjobdispatcher_dispatch",
+      "path": [
+        "adapters_job_dispatcher_celeryjobdispatcher_dispatch",
+        "adapters_job_dispatcher_jobspec"
+      ],
+      "qualifiedPath": [
+        "adapters_job_dispatcher_celeryjobdispatcher_dispatch",
+        "adapters_job_dispatcher_jobspec"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/adapters/job_dispatcher.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:schemas_promotion_promotionread_from_model",
       "name": ".from_model",
       "entryPoint": "schemas_promotion_promotionread_from_model",
@@ -13524,6 +15426,32 @@
       "fileCount": 1,
       "files": [
         "app/services/analytics_ai_providers.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_object_storage_gcsobjectstorage_get_bytes",
+      "name": ".get_bytes",
+      "entryPoint": "services_object_storage_gcsobjectstorage_get_bytes",
+      "entryPointId": "services_object_storage_gcsobjectstorage_get_bytes",
+      "path": [
+        "services_object_storage_gcsobjectstorage_get_bytes",
+        "services_object_storage_gcsobjectstorage_get_bucket",
+        "services_object_storage_objectstorageerror",
+        "services_object_storage_safe_relative_path"
+      ],
+      "qualifiedPath": [
+        "services_object_storage_gcsobjectstorage_get_bytes",
+        "services_object_storage_gcsobjectstorage_get_bucket",
+        "services_object_storage_objectstorageerror",
+        "services_object_storage_safe_relative_path"
+      ],
+      "depth": 1,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/services/object_storage.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -13685,25 +15613,111 @@
       "warnings": []
     },
     {
-      "id": "flow:adapters_booking_bookingadapter_normalize_reservation_payload",
-      "name": ".normalize_reservation_payload",
-      "entryPoint": "adapters_booking_bookingadapter_normalize_reservation_payload",
-      "entryPointId": "adapters_booking_bookingadapter_normalize_reservation_payload",
+      "id": "flow:schemas_reservation_reservationcreate_normalize_arrival_time_hint",
+      "name": ".normalize_arrival_time_hint",
+      "entryPoint": "schemas_reservation_reservationcreate_normalize_arrival_time_hint",
+      "entryPointId": "schemas_reservation_reservationcreate_normalize_arrival_time_hint",
       "path": [
-        "adapters_booking_bookingadapter_normalize_reservation_payload",
-        "adapters_booking_bookingadapter_coerce_amount",
-        "adapters_booking_bookingadapter_infer_event_type"
+        "schemas_reservation_reservationcreate_normalize_arrival_time_hint",
+        "schemas_reservation_normalize_arrival_time_hint"
       ],
       "qualifiedPath": [
-        "adapters_booking_bookingadapter_normalize_reservation_payload",
-        "adapters_booking_bookingadapter_coerce_amount",
-        "adapters_booking_bookingadapter_infer_event_type"
+        "schemas_reservation_reservationcreate_normalize_arrival_time_hint",
+        "schemas_reservation_normalize_arrival_time_hint"
       ],
       "depth": 1,
-      "nodeCount": 3,
+      "nodeCount": 2,
       "fileCount": 1,
       "files": [
-        "app/services/ota/adapters/booking.py"
+        "app/schemas/reservation.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:schemas_reservation_reservationupdate_normalize_arrival_time_hint",
+      "name": ".normalize_arrival_time_hint",
+      "entryPoint": "schemas_reservation_reservationupdate_normalize_arrival_time_hint",
+      "entryPointId": "schemas_reservation_reservationupdate_normalize_arrival_time_hint",
+      "path": [
+        "schemas_reservation_reservationupdate_normalize_arrival_time_hint",
+        "schemas_reservation_normalize_arrival_time_hint"
+      ],
+      "qualifiedPath": [
+        "schemas_reservation_reservationupdate_normalize_arrival_time_hint",
+        "schemas_reservation_normalize_arrival_time_hint"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/schemas/reservation.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:schemas_hotel_config_hotelconfigupdate_normalize_default_currency",
+      "name": ".normalize_default_currency",
+      "entryPoint": "schemas_hotel_config_hotelconfigupdate_normalize_default_currency",
+      "entryPointId": "schemas_hotel_config_hotelconfigupdate_normalize_default_currency",
+      "path": [
+        "schemas_hotel_config_hotelconfigupdate_normalize_default_currency",
+        "schemas_hotel_config_normalize_currency"
+      ],
+      "qualifiedPath": [
+        "schemas_hotel_config_hotelconfigupdate_normalize_default_currency",
+        "schemas_hotel_config_normalize_currency"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/schemas/hotel_config.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:schemas_reservation_reservationcreate_normalize_reservation_comment",
+      "name": ".normalize_reservation_comment",
+      "entryPoint": "schemas_reservation_reservationcreate_normalize_reservation_comment",
+      "entryPointId": "schemas_reservation_reservationcreate_normalize_reservation_comment",
+      "path": [
+        "schemas_reservation_reservationcreate_normalize_reservation_comment",
+        "schemas_reservation_normalize_reservation_comment"
+      ],
+      "qualifiedPath": [
+        "schemas_reservation_reservationcreate_normalize_reservation_comment",
+        "schemas_reservation_normalize_reservation_comment"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/schemas/reservation.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:schemas_reservation_reservationupdate_normalize_reservation_comment",
+      "name": ".normalize_reservation_comment",
+      "entryPoint": "schemas_reservation_reservationupdate_normalize_reservation_comment",
+      "entryPointId": "schemas_reservation_reservationupdate_normalize_reservation_comment",
+      "path": [
+        "schemas_reservation_reservationupdate_normalize_reservation_comment",
+        "schemas_reservation_normalize_reservation_comment"
+      ],
+      "qualifiedPath": [
+        "schemas_reservation_reservationupdate_normalize_reservation_comment",
+        "schemas_reservation_normalize_reservation_comment"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/schemas/reservation.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -13774,6 +15788,32 @@
       "fileCount": 1,
       "files": [
         "app/adapters/mercadopago_adapter.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_object_storage_gcsobjectstorage_put_bytes",
+      "name": ".put_bytes",
+      "entryPoint": "services_object_storage_gcsobjectstorage_put_bytes",
+      "entryPointId": "services_object_storage_gcsobjectstorage_put_bytes",
+      "path": [
+        "services_object_storage_gcsobjectstorage_put_bytes",
+        "services_object_storage_gcsobjectstorage_get_bucket",
+        "services_object_storage_objectstorageerror",
+        "services_object_storage_safe_relative_path"
+      ],
+      "qualifiedPath": [
+        "services_object_storage_gcsobjectstorage_put_bytes",
+        "services_object_storage_gcsobjectstorage_get_bucket",
+        "services_object_storage_objectstorageerror",
+        "services_object_storage_safe_relative_path"
+      ],
+      "depth": 1,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/services/object_storage.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -13999,6 +16039,34 @@
       "warnings": []
     },
     {
+      "id": "flow:services_object_storage_gcsobjectstorage_stat",
+      "name": ".stat",
+      "entryPoint": "services_object_storage_gcsobjectstorage_stat",
+      "entryPointId": "services_object_storage_gcsobjectstorage_stat",
+      "path": [
+        "services_object_storage_gcsobjectstorage_stat",
+        "services_object_storage_gcsobjectstorage_get_bucket",
+        "services_object_storage_objectstat",
+        "services_object_storage_objectstorageerror",
+        "services_object_storage_safe_relative_path"
+      ],
+      "qualifiedPath": [
+        "services_object_storage_gcsobjectstorage_stat",
+        "services_object_storage_gcsobjectstorage_get_bucket",
+        "services_object_storage_objectstat",
+        "services_object_storage_objectstorageerror",
+        "services_object_storage_safe_relative_path"
+      ],
+      "depth": 1,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "app/services/object_storage.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:services_analytics_ai_providers_disabledanalyticsaiprovider_status",
       "name": ".status",
       "entryPoint": "services_analytics_ai_providers_disabledanalyticsaiprovider_status",
@@ -14216,6 +16284,28 @@
       "fileCount": 1,
       "files": [
         "frontend/src/views/protected/LaundryPage.tsx"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:sections_pricingsection_plancolumn",
+      "name": "PlanColumn",
+      "entryPoint": "sections_pricingsection_plancolumn",
+      "entryPointId": "sections_pricingsection_plancolumn",
+      "path": [
+        "sections_pricingsection_plancolumn",
+        "sections_pricingsection_formatprice"
+      ],
+      "qualifiedPath": [
+        "sections_pricingsection_plancolumn",
+        "sections_pricingsection_formatprice"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/components/marketing/sections/PricingSection.tsx"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -14563,6 +16653,28 @@
       "warnings": []
     },
     {
+      "id": "flow:api_operational_tasks_acknowledge_shift_handoff",
+      "name": "acknowledge_shift_handoff",
+      "entryPoint": "api_operational_tasks_acknowledge_shift_handoff",
+      "entryPointId": "api_operational_tasks_acknowledge_shift_handoff",
+      "path": [
+        "api_operational_tasks_acknowledge_shift_handoff",
+        "api_operational_tasks_conflict"
+      ],
+      "qualifiedPath": [
+        "api_operational_tasks_acknowledge_shift_handoff",
+        "api_operational_tasks_conflict"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/operational_tasks.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:services_laundry_service_add_item",
       "name": "add_item",
       "entryPoint": "services_laundry_service_add_item",
@@ -14902,17 +17014,19 @@
       "path": [
         "sync_crosstabsync_broadcastdomainchange",
         "sync_crosstabsync_domainforpath",
+        "sync_crosstabsync_domainsforpath",
         "sync_crosstabsync_getsenderid",
         "sync_crosstabsync_normalizehotelid"
       ],
       "qualifiedPath": [
         "sync_crosstabsync_broadcastdomainchange",
         "sync_crosstabsync_domainforpath",
+        "sync_crosstabsync_domainsforpath",
         "sync_crosstabsync_getsenderid",
         "sync_crosstabsync_normalizehotelid"
       ],
       "depth": 1,
-      "nodeCount": 4,
+      "nodeCount": 5,
       "fileCount": 1,
       "files": [
         "frontend/src/sync/crossTabSync.ts"
@@ -15811,14 +17925,16 @@
       "entryPointId": "services_room_movement_group_service_create_grouped_room_move",
       "path": [
         "services_room_movement_group_service_create_grouped_room_move",
-        "services_room_movement_group_service_roommovementgrouperror"
+        "services_room_movement_group_service_roommovementgrouperror",
+        "services_room_movement_group_service_sync_room_statuses_after_move"
       ],
       "qualifiedPath": [
         "services_room_movement_group_service_create_grouped_room_move",
-        "services_room_movement_group_service_roommovementgrouperror"
+        "services_room_movement_group_service_roommovementgrouperror",
+        "services_room_movement_group_service_sync_room_statuses_after_move"
       ],
       "depth": 1,
-      "nodeCount": 2,
+      "nodeCount": 3,
       "fileCount": 1,
       "files": [
         "app/services/room_movement_group_service.py"
@@ -15912,6 +18028,30 @@
       "fileCount": 1,
       "files": [
         "app/services/payment_link_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_operational_tasks_create_operational_task",
+      "name": "create_operational_task",
+      "entryPoint": "api_operational_tasks_create_operational_task",
+      "entryPointId": "api_operational_tasks_create_operational_task",
+      "path": [
+        "api_operational_tasks_create_operational_task",
+        "api_operational_tasks_can",
+        "api_operational_tasks_report_type_allowed"
+      ],
+      "qualifiedPath": [
+        "api_operational_tasks_create_operational_task",
+        "api_operational_tasks_can",
+        "api_operational_tasks_report_type_allowed"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/api/operational_tasks.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -16639,6 +18779,94 @@
       "warnings": []
     },
     {
+      "id": "flow:versions_20260901_domain_event_outbox_downgrade",
+      "name": "downgrade",
+      "entryPoint": "versions_20260901_domain_event_outbox_downgrade",
+      "entryPointId": "versions_20260901_domain_event_outbox_downgrade",
+      "path": [
+        "versions_20260901_domain_event_outbox_downgrade",
+        "versions_20260901_domain_event_outbox_remove_rls"
+      ],
+      "qualifiedPath": [
+        "versions_20260901_domain_event_outbox_downgrade",
+        "versions_20260901_domain_event_outbox_remove_rls"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20260901_domain_event_outbox.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:versions_20260901_interface_language_downgrade",
+      "name": "downgrade",
+      "entryPoint": "versions_20260901_interface_language_downgrade",
+      "entryPointId": "versions_20260901_interface_language_downgrade",
+      "path": [
+        "versions_20260901_interface_language_downgrade",
+        "versions_20260901_interface_language_has_column"
+      ],
+      "qualifiedPath": [
+        "versions_20260901_interface_language_downgrade",
+        "versions_20260901_interface_language_has_column"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20260901_interface_language.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:versions_20260910_operational_tasks_handoff_downgrade",
+      "name": "downgrade",
+      "entryPoint": "versions_20260910_operational_tasks_handoff_downgrade",
+      "entryPointId": "versions_20260910_operational_tasks_handoff_downgrade",
+      "path": [
+        "versions_20260910_operational_tasks_handoff_downgrade",
+        "versions_20260910_operational_tasks_handoff_remove_rls"
+      ],
+      "qualifiedPath": [
+        "versions_20260910_operational_tasks_handoff_downgrade",
+        "versions_20260910_operational_tasks_handoff_remove_rls"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20260910_operational_tasks_handoff.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:versions_20260910_reservation_email_deliveries_downgrade",
+      "name": "downgrade",
+      "entryPoint": "versions_20260910_reservation_email_deliveries_downgrade",
+      "entryPointId": "versions_20260910_reservation_email_deliveries_downgrade",
+      "path": [
+        "versions_20260910_reservation_email_deliveries_downgrade",
+        "versions_20260910_reservation_email_deliveries_remove_rls"
+      ],
+      "qualifiedPath": [
+        "versions_20260910_reservation_email_deliveries_downgrade",
+        "versions_20260910_reservation_email_deliveries_remove_rls"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20260910_reservation_email_deliveries.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:versions_3bc5882f756d_add_role_visibility_windows_downgrade",
       "name": "downgrade",
       "entryPoint": "versions_3bc5882f756d_add_role_visibility_windows_downgrade",
@@ -16700,6 +18928,28 @@
       "fileCount": 1,
       "files": [
         "alembic/versions/e6aadf684343_add_subscription_adjustment_ledger.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:versions_tech0140_domain_event_outbox_v2_downgrade",
+      "name": "downgrade",
+      "entryPoint": "versions_tech0140_domain_event_outbox_v2_downgrade",
+      "entryPointId": "versions_tech0140_domain_event_outbox_v2_downgrade",
+      "path": [
+        "versions_tech0140_domain_event_outbox_v2_downgrade",
+        "versions_tech0140_domain_event_outbox_v2_remove_rls"
+      ],
+      "qualifiedPath": [
+        "versions_tech0140_domain_event_outbox_v2_downgrade",
+        "versions_tech0140_domain_event_outbox_v2_remove_rls"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/tech0140_domain_event_outbox_v2.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -17025,6 +19275,28 @@
       "warnings": []
     },
     {
+      "id": "flow:services_payment_webhook_service_fetch_mercadopago_payment",
+      "name": "fetch_mercadopago_payment",
+      "entryPoint": "services_payment_webhook_service_fetch_mercadopago_payment",
+      "entryPointId": "services_payment_webhook_service_fetch_mercadopago_payment",
+      "path": [
+        "services_payment_webhook_service_fetch_mercadopago_payment",
+        "services_payment_webhook_service_paymentwebhookerror"
+      ],
+      "qualifiedPath": [
+        "services_payment_webhook_service_fetch_mercadopago_payment",
+        "services_payment_webhook_service_paymentwebhookerror"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/services/payment_webhook_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:services_promotion_service_find_applicable_promotions",
       "name": "find_applicable_promotions",
       "entryPoint": "services_promotion_service_find_applicable_promotions",
@@ -17088,6 +19360,28 @@
       "fileCount": 1,
       "files": [
         "app/services/whatsapp_booking_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:protected_settingshotelpage_getroomdeleteblockeddetail",
+      "name": "getRoomDeleteBlockedDetail",
+      "entryPoint": "protected_settingshotelpage_getroomdeleteblockeddetail",
+      "entryPointId": "protected_settingshotelpage_getroomdeleteblockeddetail",
+      "path": [
+        "protected_settingshotelpage_getroomdeleteblockeddetail",
+        "protected_settingshotelpage_isroomdeleteblockeddetail"
+      ],
+      "qualifiedPath": [
+        "protected_settingshotelpage_getroomdeleteblockeddetail",
+        "protected_settingshotelpage_isroomdeleteblockeddetail"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/views/protected/SettingsHotelPage.tsx"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -17327,6 +19621,38 @@
       "warnings": []
     },
     {
+      "id": "flow:services_cash_daily_summary_service_get_daily_summary",
+      "name": "get_daily_summary",
+      "entryPoint": "services_cash_daily_summary_service_get_daily_summary",
+      "entryPointId": "services_cash_daily_summary_service_get_daily_summary",
+      "path": [
+        "services_cash_daily_summary_service_get_daily_summary",
+        "services_cash_daily_summary_service_actor_name",
+        "services_cash_daily_summary_service_db_utc_bounds",
+        "services_cash_daily_summary_service_decimal",
+        "services_cash_daily_summary_service_utc",
+        "services_cash_daily_summary_service_utc_bounds",
+        "services_cash_daily_summary_service_value"
+      ],
+      "qualifiedPath": [
+        "services_cash_daily_summary_service_get_daily_summary",
+        "services_cash_daily_summary_service_actor_name",
+        "services_cash_daily_summary_service_db_utc_bounds",
+        "services_cash_daily_summary_service_decimal",
+        "services_cash_daily_summary_service_utc",
+        "services_cash_daily_summary_service_utc_bounds",
+        "services_cash_daily_summary_service_value"
+      ],
+      "depth": 1,
+      "nodeCount": 7,
+      "fileCount": 1,
+      "files": [
+        "app/services/cash_daily_summary_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:ota_registry_get_default_adapter",
       "name": "get_default_adapter",
       "entryPoint": "ota_registry_get_default_adapter",
@@ -17482,6 +19808,34 @@
       "fileCount": 1,
       "files": [
         "app/adapters/mercadopago_adapter.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_object_storage_get_object_storage",
+      "name": "get_object_storage",
+      "entryPoint": "services_object_storage_get_object_storage",
+      "entryPointId": "services_object_storage_get_object_storage",
+      "path": [
+        "services_object_storage_get_object_storage",
+        "services_object_storage_gcsobjectstorage",
+        "services_object_storage_localobjectstorage",
+        "services_object_storage_objectstorageerror",
+        "services_object_storage_s3objectstorage"
+      ],
+      "qualifiedPath": [
+        "services_object_storage_get_object_storage",
+        "services_object_storage_gcsobjectstorage",
+        "services_object_storage_localobjectstorage",
+        "services_object_storage_objectstorageerror",
+        "services_object_storage_s3objectstorage"
+      ],
+      "depth": 1,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "app/services/object_storage.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -17779,6 +20133,28 @@
       "warnings": []
     },
     {
+      "id": "flow:src_i18n_interfacelanguagetolocale",
+      "name": "interfaceLanguageToLocale",
+      "entryPoint": "src_i18n_interfacelanguagetolocale",
+      "entryPointId": "src_i18n_interfacelanguagetolocale",
+      "path": [
+        "src_i18n_interfacelanguagetolocale",
+        "src_i18n_normalizeinterfacelanguage"
+      ],
+      "qualifiedPath": [
+        "src_i18n_interfacelanguagetolocale",
+        "src_i18n_normalizeinterfacelanguage"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/i18n.ts"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:app_config_is_demo_mode",
       "name": "is_demo_mode",
       "entryPoint": "app_config_is_demo_mode",
@@ -17974,6 +20350,44 @@
       "fileCount": 1,
       "files": [
         "app/api/laundry_vendor.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_operational_audit_service_list_operational_audit",
+      "name": "list_operational_audit",
+      "entryPoint": "services_operational_audit_service_list_operational_audit",
+      "entryPointId": "services_operational_audit_service_list_operational_audit",
+      "path": [
+        "services_operational_audit_service_list_operational_audit",
+        "services_operational_audit_service_actor_name",
+        "services_operational_audit_service_area_for",
+        "services_operational_audit_service_bounds",
+        "services_operational_audit_service_date_filter",
+        "services_operational_audit_service_matches",
+        "services_operational_audit_service_money",
+        "services_operational_audit_service_row",
+        "services_operational_audit_service_utc",
+        "services_operational_audit_service_value"
+      ],
+      "qualifiedPath": [
+        "services_operational_audit_service_list_operational_audit",
+        "services_operational_audit_service_actor_name",
+        "services_operational_audit_service_area_for",
+        "services_operational_audit_service_bounds",
+        "services_operational_audit_service_date_filter",
+        "services_operational_audit_service_matches",
+        "services_operational_audit_service_money",
+        "services_operational_audit_service_row",
+        "services_operational_audit_service_utc",
+        "services_operational_audit_service_value"
+      ],
+      "depth": 1,
+      "nodeCount": 10,
+      "fileCount": 1,
+      "files": [
+        "app/services/operational_audit_service.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -18439,6 +20853,28 @@
       "warnings": []
     },
     {
+      "id": "flow:services_collaboration_merge_field_changes",
+      "name": "merge_field_changes",
+      "entryPoint": "services_collaboration_merge_field_changes",
+      "entryPointId": "services_collaboration_merge_field_changes",
+      "path": [
+        "services_collaboration_merge_field_changes",
+        "services_collaboration_mergeresult"
+      ],
+      "qualifiedPath": [
+        "services_collaboration_merge_field_changes",
+        "services_collaboration_mergeresult"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/services/collaboration.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:db_mongo_mongo_healthcheck",
       "name": "mongo_healthcheck",
       "entryPoint": "db_mongo_mongo_healthcheck",
@@ -18456,6 +20892,28 @@
       "fileCount": 1,
       "files": [
         "app/db/mongo.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:infrastructure_redis_backend_namespaced_key",
+      "name": "namespaced_key",
+      "entryPoint": "infrastructure_redis_backend_namespaced_key",
+      "entryPointId": "infrastructure_redis_backend_namespaced_key",
+      "path": [
+        "infrastructure_redis_backend_namespaced_key",
+        "infrastructure_redis_backend_redis_namespace"
+      ],
+      "qualifiedPath": [
+        "infrastructure_redis_backend_namespaced_key",
+        "infrastructure_redis_backend_redis_namespace"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/infrastructure/redis_backend.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -18531,6 +20989,28 @@
       "warnings": []
     },
     {
+      "id": "flow:hooks_usecollaborativeresource_parsewsmessage",
+      "name": "parseWsMessage",
+      "entryPoint": "hooks_usecollaborativeresource_parsewsmessage",
+      "entryPointId": "hooks_usecollaborativeresource_parsewsmessage",
+      "path": [
+        "hooks_usecollaborativeresource_parsewsmessage",
+        "hooks_usecollaborativeresource_isrecord"
+      ],
+      "qualifiedPath": [
+        "hooks_usecollaborativeresource_parsewsmessage",
+        "hooks_usecollaborativeresource_isrecord"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/hooks/useCollaborativeResource.ts"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:services_analytics_service_patch_alert_settings",
       "name": "patch_alert_settings",
       "entryPoint": "services_analytics_service_patch_alert_settings",
@@ -18550,6 +21030,30 @@
       "fileCount": 1,
       "files": [
         "app/services/analytics_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_operational_tasks_patch_operational_task",
+      "name": "patch_operational_task",
+      "entryPoint": "api_operational_tasks_patch_operational_task",
+      "entryPointId": "api_operational_tasks_patch_operational_task",
+      "path": [
+        "api_operational_tasks_patch_operational_task",
+        "api_operational_tasks_can",
+        "api_operational_tasks_conflict"
+      ],
+      "qualifiedPath": [
+        "api_operational_tasks_patch_operational_task",
+        "api_operational_tasks_can",
+        "api_operational_tasks_conflict"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/api/operational_tasks.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -18740,6 +21244,32 @@
       "fileCount": 1,
       "files": [
         "app/services/analytics_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_health_ready_healthcheck",
+      "name": "ready_healthcheck",
+      "entryPoint": "api_health_ready_healthcheck",
+      "entryPointId": "api_health_ready_healthcheck",
+      "path": [
+        "api_health_ready_healthcheck",
+        "api_health_critical_lock_readiness",
+        "api_health_postgres_healthcheck",
+        "api_health_redis_healthcheck"
+      ],
+      "qualifiedPath": [
+        "api_health_ready_healthcheck",
+        "api_health_critical_lock_readiness",
+        "api_health_postgres_healthcheck",
+        "api_health_redis_healthcheck"
+      ],
+      "depth": 1,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/api/health.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -19317,6 +21847,28 @@
       "warnings": []
     },
     {
+      "id": "flow:api_operational_tasks_resolve_operational_task",
+      "name": "resolve_operational_task",
+      "entryPoint": "api_operational_tasks_resolve_operational_task",
+      "entryPointId": "api_operational_tasks_resolve_operational_task",
+      "path": [
+        "api_operational_tasks_resolve_operational_task",
+        "api_operational_tasks_conflict"
+      ],
+      "qualifiedPath": [
+        "api_operational_tasks_resolve_operational_task",
+        "api_operational_tasks_conflict"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/operational_tasks.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:services_pricing_service_resolve_rate_calendar",
       "name": "resolve_rate_calendar",
       "entryPoint": "services_pricing_service_resolve_rate_calendar",
@@ -19633,30 +22185,6 @@
       "warnings": []
     },
     {
-      "id": "flow:sync_crosstabsync_runeventstream",
-      "name": "runEventStream",
-      "entryPoint": "sync_crosstabsync_runeventstream",
-      "entryPointId": "sync_crosstabsync_runeventstream",
-      "path": [
-        "sync_crosstabsync_runeventstream",
-        "sync_crosstabsync_normalizehotelid",
-        "sync_crosstabsync_parsesseframes"
-      ],
-      "qualifiedPath": [
-        "sync_crosstabsync_runeventstream",
-        "sync_crosstabsync_normalizehotelid",
-        "sync_crosstabsync_parsesseframes"
-      ],
-      "depth": 1,
-      "nodeCount": 3,
-      "fileCount": 1,
-      "files": [
-        "frontend/src/sync/crossTabSync.ts"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
       "id": "flow:alembic_env_run_migrations_offline",
       "name": "run_migrations_offline",
       "entryPoint": "alembic_env_run_migrations_offline",
@@ -19749,6 +22277,28 @@
       "warnings": []
     },
     {
+      "id": "flow:scripts_seed_marketing_demo_seed",
+      "name": "seed",
+      "entryPoint": "scripts_seed_marketing_demo_seed",
+      "entryPointId": "scripts_seed_marketing_demo_seed",
+      "path": [
+        "scripts_seed_marketing_demo_seed",
+        "scripts_seed_marketing_demo_prepare_environment"
+      ],
+      "qualifiedPath": [
+        "scripts_seed_marketing_demo_seed",
+        "scripts_seed_marketing_demo_prepare_environment"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "scripts/seed_marketing_demo.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:api_demo_seed_demo",
       "name": "seed_demo",
       "entryPoint": "api_demo_seed_demo",
@@ -19832,6 +22382,50 @@
       "fileCount": 1,
       "files": [
         "app/api/email.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_operational_task_service_serialize_handoff",
+      "name": "serialize_handoff",
+      "entryPoint": "services_operational_task_service_serialize_handoff",
+      "entryPointId": "services_operational_task_service_serialize_handoff",
+      "path": [
+        "services_operational_task_service_serialize_handoff",
+        "services_operational_task_service_enum_value"
+      ],
+      "qualifiedPath": [
+        "services_operational_task_service_serialize_handoff",
+        "services_operational_task_service_enum_value"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/services/operational_task_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_operational_task_service_serialize_task",
+      "name": "serialize_task",
+      "entryPoint": "services_operational_task_service_serialize_task",
+      "entryPointId": "services_operational_task_service_serialize_task",
+      "path": [
+        "services_operational_task_service_serialize_task",
+        "services_operational_task_service_enum_value"
+      ],
+      "qualifiedPath": [
+        "services_operational_task_service_serialize_task",
+        "services_operational_task_service_enum_value"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/services/operational_task_service.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -20729,6 +23323,120 @@
       "warnings": []
     },
     {
+      "id": "flow:versions_20260901_domain_event_outbox_upgrade",
+      "name": "upgrade",
+      "entryPoint": "versions_20260901_domain_event_outbox_upgrade",
+      "entryPointId": "versions_20260901_domain_event_outbox_upgrade",
+      "path": [
+        "versions_20260901_domain_event_outbox_upgrade",
+        "versions_20260901_domain_event_outbox_install_rls"
+      ],
+      "qualifiedPath": [
+        "versions_20260901_domain_event_outbox_upgrade",
+        "versions_20260901_domain_event_outbox_install_rls"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20260901_domain_event_outbox.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:versions_20260901_interface_language_upgrade",
+      "name": "upgrade",
+      "entryPoint": "versions_20260901_interface_language_upgrade",
+      "entryPointId": "versions_20260901_interface_language_upgrade",
+      "path": [
+        "versions_20260901_interface_language_upgrade",
+        "versions_20260901_interface_language_has_column"
+      ],
+      "qualifiedPath": [
+        "versions_20260901_interface_language_upgrade",
+        "versions_20260901_interface_language_has_column"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20260901_interface_language.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:versions_20260901_payment_proof_object_storage_upgrade",
+      "name": "upgrade",
+      "entryPoint": "versions_20260901_payment_proof_object_storage_upgrade",
+      "entryPointId": "versions_20260901_payment_proof_object_storage_upgrade",
+      "path": [
+        "versions_20260901_payment_proof_object_storage_upgrade",
+        "versions_20260901_payment_proof_object_storage_columns"
+      ],
+      "qualifiedPath": [
+        "versions_20260901_payment_proof_object_storage_upgrade",
+        "versions_20260901_payment_proof_object_storage_columns"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20260901_payment_proof_object_storage.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:versions_20260910_operational_tasks_handoff_upgrade",
+      "name": "upgrade",
+      "entryPoint": "versions_20260910_operational_tasks_handoff_upgrade",
+      "entryPointId": "versions_20260910_operational_tasks_handoff_upgrade",
+      "path": [
+        "versions_20260910_operational_tasks_handoff_upgrade",
+        "versions_20260910_operational_tasks_handoff_enum",
+        "versions_20260910_operational_tasks_handoff_install_rls"
+      ],
+      "qualifiedPath": [
+        "versions_20260910_operational_tasks_handoff_upgrade",
+        "versions_20260910_operational_tasks_handoff_enum",
+        "versions_20260910_operational_tasks_handoff_install_rls"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20260910_operational_tasks_handoff.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:versions_20260910_reservation_email_deliveries_upgrade",
+      "name": "upgrade",
+      "entryPoint": "versions_20260910_reservation_email_deliveries_upgrade",
+      "entryPointId": "versions_20260910_reservation_email_deliveries_upgrade",
+      "path": [
+        "versions_20260910_reservation_email_deliveries_upgrade",
+        "versions_20260910_reservation_email_deliveries_enum",
+        "versions_20260910_reservation_email_deliveries_install_rls"
+      ],
+      "qualifiedPath": [
+        "versions_20260910_reservation_email_deliveries_upgrade",
+        "versions_20260910_reservation_email_deliveries_enum",
+        "versions_20260910_reservation_email_deliveries_install_rls"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20260910_reservation_email_deliveries.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:versions_3bc5882f756d_add_role_visibility_windows_upgrade",
       "name": "upgrade",
       "entryPoint": "versions_3bc5882f756d_add_role_visibility_windows_upgrade",
@@ -20768,6 +23476,52 @@
       "fileCount": 1,
       "files": [
         "alembic/versions/d4f8c21e7b10_extend_payment_link_tests_states.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:versions_tech0140_domain_event_outbox_v2_upgrade",
+      "name": "upgrade",
+      "entryPoint": "versions_tech0140_domain_event_outbox_v2_upgrade",
+      "entryPointId": "versions_tech0140_domain_event_outbox_v2_upgrade",
+      "path": [
+        "versions_tech0140_domain_event_outbox_v2_upgrade",
+        "versions_tech0140_domain_event_outbox_v2_event_id_type",
+        "versions_tech0140_domain_event_outbox_v2_install_rls"
+      ],
+      "qualifiedPath": [
+        "versions_tech0140_domain_event_outbox_v2_upgrade",
+        "versions_tech0140_domain_event_outbox_v2_event_id_type",
+        "versions_tech0140_domain_event_outbox_v2_install_rls"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/tech0140_domain_event_outbox_v2.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:versions_tech0140_job_runtime_upgrade",
+      "name": "upgrade",
+      "entryPoint": "versions_tech0140_job_runtime_upgrade",
+      "entryPointId": "versions_tech0140_job_runtime_upgrade",
+      "path": [
+        "versions_tech0140_job_runtime_upgrade",
+        "versions_tech0140_job_runtime_rls"
+      ],
+      "qualifiedPath": [
+        "versions_tech0140_job_runtime_upgrade",
+        "versions_tech0140_job_runtime_rls"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/tech0140_job_runtime.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -20863,6 +23617,28 @@
       "warnings": []
     },
     {
+      "id": "flow:hooks_usecashregister_usecashdailysummary",
+      "name": "useCashDailySummary",
+      "entryPoint": "hooks_usecashregister_usecashdailysummary",
+      "entryPointId": "hooks_usecashregister_usecashdailysummary",
+      "path": [
+        "hooks_usecashregister_usecashdailysummary",
+        "hooks_usecashregister_dailysummarykey"
+      ],
+      "qualifiedPath": [
+        "hooks_usecashregister_usecashdailysummary",
+        "hooks_usecashregister_dailysummarykey"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/hooks/useCashRegister.ts"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:hooks_usecashregister_usecashmovements",
       "name": "useCashMovements",
       "entryPoint": "hooks_usecashregister_usecashmovements",
@@ -20924,6 +23700,28 @@
       "fileCount": 1,
       "files": [
         "frontend/src/hooks/useCompanies.ts"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:sync_crosstabsync_usecrosstabsync",
+      "name": "useCrossTabSync",
+      "entryPoint": "sync_crosstabsync_usecrosstabsync",
+      "entryPointId": "sync_crosstabsync_usecrosstabsync",
+      "path": [
+        "sync_crosstabsync_usecrosstabsync",
+        "sync_crosstabsync_userealtimestatus"
+      ],
+      "qualifiedPath": [
+        "sync_crosstabsync_usecrosstabsync",
+        "sync_crosstabsync_userealtimestatus"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/sync/crossTabSync.ts"
       ],
       "criticality": 0.16,
       "warnings": []
