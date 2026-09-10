@@ -143,6 +143,9 @@ const MasterAdminDashboardPage = lazy(() =>
 const MasterAdminEmailPage = lazy(() =>
   import("./master_admin/pages/EmailPage").then((m) => ({ default: m.MasterAdminEmailPage }))
 );
+const MasterAdminPricingPage = lazy(() =>
+  import("./master_admin/pages/PricingPage").then((m) => ({ default: m.MasterAdminPricingPage }))
+);
 const MasterAdminLoginPage = lazy(() =>
   import("./master_admin/pages/LoginPage").then((m) => ({ default: m.MasterAdminLoginPage }))
 );
@@ -261,6 +264,7 @@ const appRoutes = APP_HOST
             children: [
               { path: "dashboard", element: <MasterAdminDashboardPage /> },
               { path: "billing", element: <MasterAdminBillingPage /> },
+              { path: "pricing", element: <MasterAdminPricingPage /> },
               { path: "email", element: <MasterAdminEmailPage /> },
               { path: "stripe", element: <MasterAdminStripePage /> },
               { path: "audit", element: <MasterAdminAuditPage /> }

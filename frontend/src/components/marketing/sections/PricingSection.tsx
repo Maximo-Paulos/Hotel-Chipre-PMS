@@ -24,6 +24,16 @@ function formatPrice(plan: PublicPricingPlan): string | null {
   }
 }
 
+// The column count follows the data: publishing a single plan used to leave
+// the grid's own background showing through as empty grey cells. Written as
+// literal classes so Tailwind emits them.
+const COLUMN_CLASSES: Record<number, string> = {
+  1: "md:grid-cols-1",
+  2: "md:grid-cols-2",
+  3: "md:grid-cols-3",
+  4: "md:grid-cols-4"
+};
+
 function PlanColumn({ plan, trialDays }: { plan: PublicPricingPlan; trialDays: number }) {
   const price = formatPrice(plan);
 
@@ -103,7 +113,11 @@ export function PricingSection() {
           No pudimos cargar los planes ahora mismo. Escribinos y te los pasamos por mail.
         </p>
       ) : (
-        <div className="mt-12 grid gap-px overflow-hidden rounded-panel bg-ink-200 md:grid-cols-3">
+        <div
+          className={`mt-12 grid gap-px overflow-hidden rounded-panel bg-ink-200 ${
+            COLUMN_CLASSES[Math.min(data?.plans.length || 3, 4)] ?? "md:grid-cols-3"
+          }`}
+        >
           {isPending
             ? [0, 1, 2].map((index) => (
                 <div key={index} className="min-h-[22rem] bg-white px-6 py-8" aria-hidden="true">
