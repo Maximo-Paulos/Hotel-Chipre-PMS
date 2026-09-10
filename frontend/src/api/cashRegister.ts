@@ -1,4 +1,4 @@
-import { apiFetch, type SessionLike } from "./client";
+import { apiFetch, buildAuthHeaders, buildUrl, type SessionLike } from "./client";
 
 export type CashSessionStatus = "open" | "closed" | "pending_approval";
 export type CashMovementType = "income" | "expense" | "adjustment";
@@ -185,8 +185,35 @@ export const listCashMovements = (sessionId: number, session?: SessionLike) =>
 export const getCashSessionSummary = (sessionId: number, session?: SessionLike) =>
   apiFetch<CashSessionSummary>(`/api/cash-register/sessions/${sessionId}/summary`, { session });
 
-export const getCashDailySummary = (date: string, session?: SessionLike) =>
-  apiFetch<CashDailySummary>(`/api/cash-register/daily-summary?date=${encodeURIComponent(date)}`, { session });
+export const getCashDailySummary = (date: string, session?: SessionLike, currency?: string | null) => {
+  const query = new URLSearchParams({ date });
+  if (currency) query.set("currency", currency);
+  return apiFetch<CashDailySummary>(`/api/cash-register/daily-summary?${query.toString()}`, { session });
+};
+
+export const downloadCashLedgerCsv = async (
+  date: string,
+  session?: SessionLike,
+  currency?: string | null
+): Promise<Blob> => {
+  const query = new URLSearchParams({ date });
+  if (currency) query.set("currency", currency);
+  const response = await fetch(buildUrl(`/api/cash-register/export.csv?${query.toString()}`), {
+    headers: buildAuthHeaders(session),
+    credentials: "include"
+  });
+  if (!response.ok) {
+    let message = response.statusText || "No se pudo exportar la caja";
+    try {
+      const payload = await response.json() as { detail?: string };
+      message = payload.detail || message;
+    } catch {
+      // Keep the safe HTTP status message when the response is not JSON.
+    }
+    throw new Error(message);
+  }
+  return response.blob();
+};
 
 export const addCashMovement = (sessionId: number, payload: CashMovementPayload, session?: SessionLike) =>
   apiFetch<CashMovement>(`/api/cash-register/sessions/${sessionId}/movements`, {

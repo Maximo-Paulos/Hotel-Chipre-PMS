@@ -24,7 +24,8 @@
     "pendingActions": {
       "label": "Acciones pendientes",
       "helperCritical": "{{count}} críticas",
-      "helperNone": "Sin críticas"
+      "helperNone": "Sin críticas",
+      "helperError": "No se pudo consultar la bandeja"
     },
     "multiCurrency": "Multimoneda"
   },
@@ -54,6 +55,8 @@
     "title": "Bandeja operativa",
     "goToReservations": "Ir a Reservas",
     "loading": "Cargando acciones pendientes...",
+    "error": "No se pudo consultar la bandeja operativa.",
+    "retry": "Reintentar",
     "empty": "No hay acciones operativas pendientes.",
     "viewReservation": "Ver reserva"
   },

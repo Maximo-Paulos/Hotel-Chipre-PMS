@@ -54,6 +54,7 @@ const dailyNav: NavItem[] = [
   { label: "nav.daily.reservations", to: "/reservas", requiresAnyPermission: ["reservation:read"], hideForPreviewRoles: ["housekeeping"] },
   { label: "nav.daily.guests", to: "/huespedes", requiresAnyPermission: ["guest:read"], hideForPreviewRoles: ["housekeeping"] },
   { label: "nav.daily.rooms", to: "/habitaciones", requiresAnyPermission: ["room:read"] },
+  { label: "nav.daily.tasks", to: "/operacion/tareas", requiresAnyPermission: ["operations:tasks:view", "operations:tasks:report", "operations:tasks:manage"] },
   { label: "nav.daily.cashRegister", to: "/caja", requiresAnyPermission: ["cash:view"], hideForPreviewRoles: ["housekeeping"] },
 ];
 

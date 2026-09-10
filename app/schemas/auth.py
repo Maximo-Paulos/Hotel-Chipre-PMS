@@ -118,13 +118,34 @@ class RequestCode(_AuthEmailRequest):
 
 
 class VerifyCodeRequest(_AuthEmailRequest):
-    code: str = Field(min_length=1)
+    code: str = Field(min_length=1, max_length=64)
+
+    @field_validator("code")
+    @classmethod
+    def _normalize_code(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("El código es obligatorio")
+        return cleaned
 
 
 class ResetPasswordRequest(BaseModel):
     email: str
-    code: str
+    code: str = Field(min_length=1, max_length=64)
     new_password: str = Field(min_length=12)
+
+    @field_validator("email")
+    @classmethod
+    def _validate_email(cls, value: str) -> str:
+        return _normalize_auth_email(value)
+
+    @field_validator("code")
+    @classmethod
+    def _normalize_code(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("El código es obligatorio")
+        return cleaned
 
 
 class UserInfo(BaseModel):

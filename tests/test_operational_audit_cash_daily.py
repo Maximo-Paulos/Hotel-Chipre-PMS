@@ -1,18 +1,28 @@
 """Focused coverage for the operational audit and hotel-local cash projection."""
 
 import json
+import pytest
 from datetime import date, datetime, timezone
 from decimal import Decimal
 
 from app.models.analytics import HotelAuditEvent
 from app.models.audit_log import AuditActionEnum, AuditLog
-from app.models.cash_register import CashCloseReport, CashMovement, CashMovementTypeEnum, CashSession, CashSessionStatusEnum
+from app.models.cash_register import (
+    CashCloseReport,
+    CashCustodyHandoff,
+    CashCustodyStatusEnum,
+    CashMovement,
+    CashMovementTypeEnum,
+    CashSession,
+    CashSessionStatusEnum,
+)
 from app.models.hotel_config import HotelConfiguration
 from app.models.operations import RoomMoveEvent, RoomMoveTypeEnum
 from app.models.reservation import Reservation, ReservationSourceEnum, ReservationStatusEnum
 from app.models.security_audit_log import SecurityAuditLog
 from app.models.transaction import PaymentMethodEnum, Transaction, TransactionStatusEnum, TransactionTypeEnum
 from app.models.user import User
+from app.schemas.cash_register import CashDailySummaryRead
 from app.services.cash_daily_summary_service import get_daily_summary
 from app.services.operational_audit_service import list_operational_audit
 
@@ -205,6 +215,9 @@ def test_daily_summary_uses_hotel_local_day_and_separates_physical_cash(
     db.flush()
 
     summary = get_daily_summary(db, hotel_id=hotel_config.id, report_date=date(2026, 9, 4))
+    # The API response model must accept the exact PostgreSQL/SQLite read
+    # model, including closed sessions that cross the local-day boundary.
+    CashDailySummaryRead.model_validate(summary)
 
     assert summary["gross_collected"] == Decimal("300.00")
     assert summary["refunds"] == Decimal("50.00")
@@ -223,6 +236,177 @@ def test_daily_summary_uses_hotel_local_day_and_separates_physical_cash(
     assert all(entry.get("transaction_id") is not None for entry in summary["entries"] if entry["entry_type"] == "payment")
     assert any(entry["entry_type"] == "manual_movement" for entry in summary["entries"])
     assert summary["by_collector"][0]["collector_name"] == "Recepción de prueba"
+
+
+def test_daily_summary_requires_explicit_currency_when_turns_use_multiple_currencies(
+    db,
+    hotel_config,
+):
+    day_start = datetime(2026, 9, 4, 3, 0, tzinfo=timezone.utc)
+    db.add_all(
+        [
+            CashSession(
+                hotel_id=hotel_config.id,
+                status=CashSessionStatusEnum.CLOSED,
+                opening_balance=Decimal("10.00"),
+                currency_code="ARS",
+                opened_at=day_start,
+                closed_at=day_start.replace(hour=4),
+            ),
+            CashSession(
+                hotel_id=hotel_config.id,
+                status=CashSessionStatusEnum.CLOSED,
+                opening_balance=Decimal("20.00"),
+                currency_code="USD",
+                opened_at=day_start.replace(hour=5),
+                closed_at=day_start.replace(hour=6),
+            ),
+        ]
+    )
+    db.flush()
+
+    with pytest.raises(ValueError, match="Elegí una moneda"):
+        get_daily_summary(db, hotel_id=hotel_config.id, report_date=date(2026, 9, 4))
+
+    ars = get_daily_summary(
+        db,
+        hotel_id=hotel_config.id,
+        report_date=date(2026, 9, 4),
+        currency_code="ARS",
+    )
+    assert ars["currency_code"] == "ARS"
+    assert ars["physical_cash"]["opening_balance"] == Decimal("10.00")
+
+
+def test_daily_summary_carries_confirmed_cash_custody_into_successor_turn_at_day_boundary(
+    db,
+    hotel_config,
+):
+    hotel_config.hotel_timezone = "UTC"
+    previous_session = CashSession(
+        hotel_id=hotel_config.id,
+        status=CashSessionStatusEnum.CLOSED,
+        opening_balance=Decimal("25.00"),
+        currency_code="ARS",
+        opened_at=datetime(2026, 9, 3, 12, tzinfo=timezone.utc),
+        closed_at=datetime(2026, 9, 3, 23, tzinfo=timezone.utc),
+    )
+    successor_session = CashSession(
+        hotel_id=hotel_config.id,
+        status=CashSessionStatusEnum.OPEN,
+        opening_balance=Decimal("0.00"),
+        currency_code="ARS",
+        opened_at=datetime(2026, 9, 3, 23, tzinfo=timezone.utc),
+    )
+    db.add_all([previous_session, successor_session])
+    db.flush()
+    report = CashCloseReport(
+        hotel_id=hotel_config.id,
+        session_id=previous_session.id,
+        successor_session_id=successor_session.id,
+        expected_balance=Decimal("150.00"),
+        declared_balance=Decimal("150.00"),
+        difference=Decimal("0.00"),
+        closed_at=datetime(2026, 9, 3, 23, tzinfo=timezone.utc),
+    )
+    db.add(report)
+    db.flush()
+    db.add(
+        CashCustodyHandoff(
+            hotel_id=hotel_config.id,
+            close_report_id=report.id,
+            delivered_amount=Decimal("150.00"),
+            status=CashCustodyStatusEnum.CONFIRMED,
+            delivered_at=datetime(2026, 9, 3, 23, tzinfo=timezone.utc),
+        )
+    )
+    db.flush()
+
+    summary = get_daily_summary(db, hotel_id=hotel_config.id, report_date=date(2026, 9, 4))
+
+    assert summary["physical_cash"]["opening_balance"] == Decimal("150.00")
+    successor_read = next(item for item in summary["sessions"] if item["session_id"] == successor_session.id)
+    assert successor_read["opening_balance"] == Decimal("150.00")
+
+
+def test_daily_summary_does_not_backdate_handoff_confirmed_after_day_started(
+    db,
+    hotel_config,
+):
+    hotel_config.hotel_timezone = "UTC"
+    previous_session = CashSession(
+        hotel_id=hotel_config.id,
+        status=CashSessionStatusEnum.CLOSED,
+        opening_balance=Decimal("25.00"),
+        currency_code="ARS",
+        opened_at=datetime(2026, 9, 3, 12, tzinfo=timezone.utc),
+        closed_at=datetime(2026, 9, 3, 23, tzinfo=timezone.utc),
+    )
+    successor_session = CashSession(
+        hotel_id=hotel_config.id,
+        status=CashSessionStatusEnum.OPEN,
+        opening_balance=Decimal("0.00"),
+        currency_code="ARS",
+        opened_at=datetime(2026, 9, 3, 23, tzinfo=timezone.utc),
+    )
+    db.add_all([previous_session, successor_session])
+    db.flush()
+    report = CashCloseReport(
+        hotel_id=hotel_config.id,
+        session_id=previous_session.id,
+        successor_session_id=successor_session.id,
+        expected_balance=Decimal("150.00"),
+        declared_balance=Decimal("150.00"),
+        difference=Decimal("0.00"),
+        closed_at=datetime(2026, 9, 3, 23, tzinfo=timezone.utc),
+    )
+    db.add(report)
+    db.flush()
+    db.add(
+        CashCustodyHandoff(
+            hotel_id=hotel_config.id,
+            close_report_id=report.id,
+            delivered_amount=Decimal("150.00"),
+            status=CashCustodyStatusEnum.CONFIRMED,
+            delivered_at=datetime(2026, 9, 3, 23, tzinfo=timezone.utc),
+            received_at=datetime(2026, 9, 4, 3, tzinfo=timezone.utc),
+        )
+    )
+    db.flush()
+
+    summary = get_daily_summary(db, hotel_id=hotel_config.id, report_date=date(2026, 9, 4))
+
+    assert summary["physical_cash"]["opening_balance"] == Decimal("0.00")
+
+
+def test_daily_summary_includes_prior_movements_of_a_shift_spanning_midnight(
+    db,
+    hotel_config,
+):
+    hotel_config.hotel_timezone = "UTC"
+    session = CashSession(
+        hotel_id=hotel_config.id,
+        status=CashSessionStatusEnum.OPEN,
+        opening_balance=Decimal("20.00"),
+        currency_code="ARS",
+        opened_at=datetime(2026, 9, 3, 20, tzinfo=timezone.utc),
+    )
+    db.add(session)
+    db.flush()
+    db.add(
+        CashMovement(
+            hotel_id=hotel_config.id,
+            session_id=session.id,
+            movement_type=CashMovementTypeEnum.INCOME,
+            amount=Decimal("30.00"),
+            recorded_at=datetime(2026, 9, 3, 23, 30, tzinfo=timezone.utc),
+        )
+    )
+    db.flush()
+
+    summary = get_daily_summary(db, hotel_id=hotel_config.id, report_date=date(2026, 9, 4))
+
+    assert summary["physical_cash"]["opening_balance"] == Decimal("50.00")
 
 
 def test_operational_audit_unifies_sources_filters_and_preserves_tenant_boundary(

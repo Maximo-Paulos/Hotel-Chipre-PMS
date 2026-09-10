@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.models.cash_register import (
     CashCloseReport,
+    CashCustodyHandoff,
     CashMovement,
     CashMovementTypeEnum,
     CashSession,
@@ -52,24 +53,47 @@ def _utc_bounds(report_date: date, timezone_name: str) -> tuple[datetime, dateti
     return start, end
 
 
+def _db_utc_bounds(report_date: date, timezone_name: str) -> tuple[datetime, datetime]:
+    """Return UTC bounds in the representation used by the ledger columns.
+
+    The legacy cash/transaction tables use ``DateTime`` without timezone.
+    Binding an aware value to PostgreSQL can fail when a historic session is
+    queried, even though the same query appears to work against SQLite. Keep
+    comparisons naive at the database boundary and attach UTC only when
+    serializing values back to the API.
+    """
+    start, end = _utc_bounds(report_date, timezone_name)
+    return start.replace(tzinfo=None), end.replace(tzinfo=None)
+
+
 def _actor_name(user: User | None, *, provider_code: str | None = None) -> str:
     if user is not None:
         return user.display_name or user.email
     return "Sistema/Proveedor" if provider_code else "Sistema"
 
 
-def get_daily_summary(db: Session, *, hotel_id: int, report_date: date) -> dict:
+def get_daily_summary(
+    db: Session,
+    *,
+    hotel_id: int,
+    report_date: date,
+    currency_code: str | None = None,
+) -> dict:
     hotel = db.get(HotelConfiguration, hotel_id)
     timezone_name = normalize_timezone((hotel.hotel_timezone if hotel else None) or "UTC")
     start, end = _utc_bounds(report_date, timezone_name)
+    db_start, db_end = _db_utc_bounds(report_date, timezone_name)
+    selected_currency = (currency_code or "").strip().upper() or None
+    if selected_currency and len(selected_currency) != 3:
+        raise ValueError("La moneda debe usar un código de tres letras")
 
     transactions = (
         db.query(Transaction)
         .filter(
             Transaction.hotel_id == hotel_id,
             Transaction.status == TransactionStatusEnum.COMPLETED,
-            Transaction.processed_at >= start,
-            Transaction.processed_at < end,
+            Transaction.processed_at >= db_start,
+            Transaction.processed_at < db_end,
         )
         .order_by(Transaction.processed_at.asc(), Transaction.id.asc())
         .all()
@@ -78,14 +102,39 @@ def get_daily_summary(db: Session, *, hotel_id: int, report_date: date) -> dict:
         db.query(CashMovement)
         .filter(
             CashMovement.hotel_id == hotel_id,
-            CashMovement.recorded_at >= start,
-            CashMovement.recorded_at < end,
+            CashMovement.recorded_at >= db_start,
+            CashMovement.recorded_at < db_end,
         )
         .order_by(CashMovement.recorded_at.asc(), CashMovement.id.asc())
         .all()
     )
+    sessions = (
+        db.query(CashSession)
+        .filter(
+            CashSession.hotel_id == hotel_id,
+            CashSession.opened_at < db_end,
+            (CashSession.closed_at.is_(None) | (CashSession.closed_at > db_start)),
+        )
+        .order_by(CashSession.opened_at.asc(), CashSession.id.asc())
+        .all()
+    )
+    session_ids = [session.id for session in sessions]
+    prior_movements = (
+        db.query(CashMovement)
+        .filter(
+            CashMovement.hotel_id == hotel_id,
+            CashMovement.session_id.in_(session_ids),
+            CashMovement.recorded_at < db_start,
+        )
+        .order_by(CashMovement.recorded_at.asc(), CashMovement.id.asc())
+        .all()
+        if session_ids
+        else []
+    )
     movement_transaction_ids = {
-        movement.transaction_id for movement in movements if movement.transaction_id is not None
+        movement.transaction_id
+        for movement in [*movements, *prior_movements]
+        if movement.transaction_id is not None
     }
     movement_transactions = {
         transaction.id: transaction
@@ -100,16 +149,54 @@ def get_daily_summary(db: Session, *, hotel_id: int, report_date: date) -> dict:
             else []
         )
     }
-    sessions = (
-        db.query(CashSession)
-        .filter(
-            CashSession.hotel_id == hotel_id,
-            CashSession.opened_at < end,
-            (CashSession.closed_at.is_(None) | (CashSession.closed_at >= start)),
+    session_currencies = {
+        session.id: str(session.currency_code or (hotel.default_currency if hotel else "ARS")).upper()
+        for session in sessions
+    }
+    # Successor turns intentionally start at zero; the custody record is the
+    # evidence for cash carried over from a previous turn. Include a confirmed
+    # handoff only when its successor was already active at the selected local
+    # day boundary. A handoff created during the day must not become a second
+    # income in that day's totals.
+    custody_rows = (
+        db.query(
+            CashCloseReport.successor_session_id,
+            CashCustodyHandoff.delivered_amount,
+            CashCustodyHandoff.status,
+            CashCustodyHandoff.received_at,
+            CashCustodyHandoff.delivered_at,
         )
-        .order_by(CashSession.opened_at.asc(), CashSession.id.asc())
+        .join(CashCustodyHandoff, CashCustodyHandoff.close_report_id == CashCloseReport.id)
+        .filter(
+            CashCloseReport.hotel_id == hotel_id,
+            CashCloseReport.successor_session_id.is_not(None),
+            CashCustodyHandoff.hotel_id == hotel_id,
+        )
         .all()
     )
+    confirmed_carry_in = {
+        successor_id: _decimal(delivered_amount)
+        for successor_id, delivered_amount, handoff_status, received_at, delivered_at in custody_rows
+        if successor_id is not None
+        and _value(handoff_status) == "confirmed"
+        # A handoff acknowledged after the local day started belongs to that
+        # later operational moment, not to the opening balance being reported.
+        # ``delivered_at`` is the safe legacy fallback for old confirmed rows
+        # that predate ``received_at`` being recorded.
+        and _utc(received_at or delivered_at) is not None
+        and _utc(received_at or delivered_at) <= start
+    }
+    observed_currencies = {
+        str(transaction.currency or (hotel.default_currency if hotel else "ARS")).upper()
+        for transaction in transactions
+    }
+    observed_currencies.update(session_currencies.values())
+    if selected_currency:
+        report_currency = selected_currency
+    elif len(observed_currencies) > 1:
+        raise ValueError("Elegí una moneda: el resumen no convierte monedas automáticamente")
+    else:
+        report_currency = next(iter(observed_currencies), str(hotel.default_currency if hotel else "ARS").upper())
 
     actor_ids = {
         transaction.created_by_user_id
@@ -145,6 +232,9 @@ def get_daily_summary(db: Session, *, hotel_id: int, report_date: date) -> dict:
     digital_net = ZERO
 
     for transaction in transactions:
+        transaction_currency = str(transaction.currency or (hotel.default_currency if hotel else "ARS")).upper()
+        if transaction_currency != report_currency:
+            continue
         method = _value(transaction.payment_method)
         transaction_type = _value(transaction.transaction_type)
         amount = _decimal(transaction.gross_amount if transaction.gross_amount is not None else transaction.amount)
@@ -182,7 +272,7 @@ def get_daily_summary(db: Session, *, hotel_id: int, report_date: date) -> dict:
                 "reservation_id": transaction.reservation_id,
                 "amount": positive_amount,
                 "signed_amount": signed_amount,
-                "currency_code": transaction.currency,
+                "currency_code": transaction_currency,
                 "payment_method": method,
                 "transaction_type": transaction_type,
                 "transaction_status": _value(transaction.status),
@@ -199,6 +289,12 @@ def get_daily_summary(db: Session, *, hotel_id: int, report_date: date) -> dict:
     cash_adjustment = ZERO
     physical_movements: list[CashMovement] = []
     for movement in movements:
+        movement_currency = session_currencies.get(
+            movement.session_id,
+            str(hotel.default_currency if hotel else "ARS").upper(),
+        )
+        if movement_currency != report_currency:
+            continue
         # Payment movements already appear in the transaction section. Keep
         # them in the physical cash calculation but not as duplicate dashboard
         # entries; manual movements are the operator's additional detail.
@@ -236,7 +332,7 @@ def get_daily_summary(db: Session, *, hotel_id: int, report_date: date) -> dict:
                     "reservation_id": movement.reservation_id,
                     "amount": _decimal(movement.amount),
                     "signed_amount": signed_amount,
-                    "currency_code": "ARS",
+                    "currency_code": movement_currency,
                     "movement_type": movement_type,
                     "occurred_at": _utc(movement.recorded_at),
                     "description": movement.description,
@@ -258,15 +354,45 @@ def get_daily_summary(db: Session, *, hotel_id: int, report_date: date) -> dict:
     opening_balance = ZERO
     declared_values: list[Decimal] = []
     difference_values: list[Decimal] = []
+    prior_net_by_session: dict[int, Decimal] = defaultdict(lambda: ZERO)
+    for movement in prior_movements:
+        linked_transaction = movement_transactions.get(movement.transaction_id) if movement.transaction_id else None
+        if movement.transaction_id is not None and (
+            linked_transaction is None
+            or linked_transaction.status != TransactionStatusEnum.COMPLETED
+            or linked_transaction.payment_method != PaymentMethodEnum.CASH
+        ):
+            continue
+        movement_currency = session_currencies.get(
+            movement.session_id,
+            str(hotel.default_currency if hotel else "ARS").upper(),
+        )
+        if movement_currency != report_currency:
+            continue
+        signed_amount = _decimal(movement.amount)
+        movement_type = _value(movement.movement_type)
+        if movement_type == CashMovementTypeEnum.EXPENSE.value:
+            signed_amount = -signed_amount
+        prior_net_by_session[movement.session_id] += signed_amount
     for session in sessions:
+        if session_currencies.get(session.id) != report_currency:
+            continue
         close_report = db.query(CashCloseReport).filter(
             CashCloseReport.hotel_id == hotel_id,
             CashCloseReport.session_id == session.id,
         ).one_or_none()
-        if session.opened_at <= start and (session.closed_at is None or session.closed_at >= start):
-            opening_balance += _decimal(session.opening_balance)
-        elif start <= session.opened_at < end:
-            opening_balance += _decimal(session.opening_balance)
+        opened_at = _utc(session.opened_at)
+        closed_at = _utc(session.closed_at)
+        session_opening_balance = _decimal(session.opening_balance)
+        if opened_at is not None and opened_at <= start and (closed_at is None or closed_at > start):
+            # A successor turn is created with a zero opening balance. Once
+            # its custody handoff is confirmed, that handoff is the evidence
+            # for cash already present at the start of the selected day.
+            session_opening_balance += confirmed_carry_in.get(session.id, ZERO)
+            session_opening_balance += prior_net_by_session.get(session.id, ZERO)
+            opening_balance += session_opening_balance
+        elif opened_at is not None and start <= opened_at < end:
+            opening_balance += session_opening_balance
         if close_report is not None:
             declared = _decimal(close_report.declared_balance)
             difference = _decimal(close_report.difference)
@@ -279,12 +405,12 @@ def get_daily_summary(db: Session, *, hotel_id: int, report_date: date) -> dict:
             {
                 "session_id": session.id,
                 "status": _value(session.status),
-                "currency_code": session.currency_code,
+                "currency_code": session_currencies.get(session.id, report_currency),
                 "opened_at": _utc(session.opened_at),
                 "closed_at": _utc(session.closed_at),
                 "opened_by_user_id": session.opened_by_user_id,
                 "closed_by_user_id": session.closed_by_user_id,
-                "opening_balance": _decimal(session.opening_balance),
+                "opening_balance": session_opening_balance,
                 "expected_balance": None,
                 "declared_balance": declared,
                 "difference": difference,
@@ -314,7 +440,7 @@ def get_daily_summary(db: Session, *, hotel_id: int, report_date: date) -> dict:
         "hotel_id": hotel_id,
         "report_date": report_date.isoformat(),
         "timezone": timezone_name,
-        "currency_code": hotel.default_currency if hotel and hotel.default_currency else "ARS",
+        "currency_code": report_currency,
         "gross_collected": _decimal(gross_total),
         "refunds": _decimal(refunds_total),
         "net_collected": _decimal(gross_total - refunds_total),

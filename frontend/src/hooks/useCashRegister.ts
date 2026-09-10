@@ -30,7 +30,7 @@ const cashSessionsKey = (hotelId: number | null) => ["cash-sessions", hotelId];
 const cashMovementsKey = (hotelId: number | null, sessionId: number) => ["cash-movements", hotelId, sessionId];
 
 const latestCloseReportKey = (hotelId: number | null) => ["cash-latest-close-report", hotelId];
-const dailySummaryKey = (hotelId: number | null, date: string) => ["cash-daily-summary", hotelId, date];
+const dailySummaryKey = (hotelId: number | null, date: string, currency?: string | null) => ["cash-daily-summary", hotelId, date, currency || "auto"];
 
 /**
  * Payments created outside the cash screen still change the current cash
@@ -51,21 +51,21 @@ export function useCashSessions() {
   });
 }
 
-export function useLatestCashCloseReport() {
+export function useLatestCashCloseReport(options?: { enabled?: boolean }) {
   const { session } = useSession();
   return useQuery<CashCloseReport | null>({
     queryKey: latestCloseReportKey(session.hotelId),
     queryFn: () => getLatestCashCloseReport(session),
-    enabled: hasValidSession(session),
+    enabled: hasValidSession(session) && (options?.enabled ?? true),
     staleTime: 15 * 1000
   });
 }
 
-export function useCashDailySummary(reportDate: string) {
+export function useCashDailySummary(reportDate: string, currency?: string | null) {
   const { session } = useSession();
   return useQuery<CashDailySummary>({
-    queryKey: dailySummaryKey(session.hotelId, reportDate),
-    queryFn: () => getCashDailySummary(reportDate, session),
+    queryKey: dailySummaryKey(session.hotelId, reportDate, currency),
+    queryFn: () => getCashDailySummary(reportDate, session, currency),
     enabled: hasValidSession(session) && Boolean(reportDate),
     staleTime: 10 * 1000
   });

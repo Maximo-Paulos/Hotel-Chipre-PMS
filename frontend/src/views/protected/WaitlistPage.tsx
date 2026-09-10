@@ -205,7 +205,7 @@ export function WaitlistPage() {
                         {guest ? `${guest.first_name} ${guest.last_name}` : `Huesped #${entry.guest_id}`}
                       </h3>
                       <p className="text-xs text-slate-500">
-                        {category?.name || `Categoria ${entry.category_id}`} - {entry.check_in_date} a {entry.check_out_date}
+                        {category?.name || "Información no disponible"} - {entry.check_in_date} a {entry.check_out_date}
                       </p>
                     </div>
                     <span className={`rounded-full px-2 py-1 text-xs font-semibold ${waitlistStatusColors[entry.status]}`}>

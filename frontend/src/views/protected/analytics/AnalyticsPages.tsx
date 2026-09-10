@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { ApiError, apiFetch } from "../../../api/client";
 import { useSubscriptionStatus } from "../../../hooks/useSubscription";
+import { useRooms } from "../../../hooks/useRooms";
 import { formatMoney } from "../../../utils/currency";
 import { StatCard } from "../../../components/StatCard";
 import { useSession } from "../../../state/session";
@@ -1059,6 +1060,7 @@ export function CompaniesSettingsPage() {
 export function RoomStateEventsPage() {
   const plan = usePlan();
   const { session } = useSession();
+  const { roomsQuery } = useRooms({ includeCategories: false });
   const queryClient = useQueryClient();
   const [form, setForm] = useState<RoomStateEventCreate>({
     room_id: 0,
@@ -1094,6 +1096,10 @@ export function RoomStateEventsPage() {
   });
 
   const events = eventsQuery.data || [];
+  const roomLabels = useMemo(
+    () => new Map((roomsQuery.data ?? []).map((room) => [room.id, room.room_number])),
+    [roomsQuery.data]
+  );
   const handleCreateRoomStateEvent = async () => {
     try {
       await createMutation.mutateAsync();
@@ -1115,22 +1121,24 @@ export function RoomStateEventsPage() {
   return (
     <PageShell
       eyebrow="Operacion"
-      title="Room state events"
+      title="Eventos de estado de habitaciones"
       subtitle="Eventos operativos de bloqueo y cierre por habitación."
-      actions={<Link to="/analytics" className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800">Analytics</Link>}
+      actions={<Link to="/analytics" className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800">Analítica</Link>}
     >
       <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <h2 className="text-lg font-semibold text-slate-900">Nuevo evento</h2>
           <div className="mt-4 grid gap-3">
             <label className="grid gap-1 text-sm">
-              <span className="text-slate-600">Room ID</span>
-              <input
-                type="number"
+              <span className="text-slate-600">Habitación</span>
+              <select
                 value={form.room_id || ""}
                 onChange={(event) => setForm((current) => ({ ...current, room_id: Number(event.target.value) }))}
                 className="rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-brand-500"
-              />
+              >
+                <option value="">Seleccioná una habitación</option>
+                {(roomsQuery.data ?? []).map((room) => <option key={room.id} value={room.id}>Habitación {room.room_number}</option>)}
+              </select>
             </label>
             <label className="grid gap-1 text-sm">
               <span className="text-slate-600">Tipo</span>
@@ -1139,10 +1147,10 @@ export function RoomStateEventsPage() {
                 onChange={(event) => setForm((current) => ({ ...current, event_type: event.target.value as RoomStateEventCreate["event_type"] }))}
                 className="rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-brand-500"
               >
-                <option value="out_of_service">Out of service</option>
-                <option value="maintenance">Maintenance</option>
-                <option value="housekeeping_block">Housekeeping block</option>
-                <option value="renovation">Renovation</option>
+                <option value="out_of_service">Fuera de servicio</option>
+                <option value="maintenance">Mantenimiento</option>
+                <option value="housekeeping_block">Bloqueo de limpieza</option>
+                <option value="renovation">Reforma</option>
               </select>
             </label>
             <label className="grid gap-1 text-sm">
@@ -1152,12 +1160,12 @@ export function RoomStateEventsPage() {
                 onChange={(event) => setForm((current) => ({ ...current, reason_code: event.target.value as RoomStateEventCreate["reason_code"] }))}
                 className="rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-brand-500"
               >
-                <option value="plumbing">Plumbing</option>
-                <option value="electrical">Electrical</option>
-                <option value="furniture">Furniture</option>
-                <option value="deep_clean">Deep clean</option>
-                <option value="inspection">Inspection</option>
-                <option value="other">Other</option>
+                <option value="plumbing">Plomería</option>
+                <option value="electrical">Electricidad</option>
+                <option value="furniture">Mobiliario</option>
+                <option value="deep_clean">Limpieza profunda</option>
+                <option value="inspection">Inspección</option>
+                <option value="other">Otro</option>
               </select>
             </label>
             <label className="grid gap-1 text-sm">
@@ -1191,9 +1199,9 @@ export function RoomStateEventsPage() {
             <div key={event.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Event #{event.id}</p>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Evento #{event.id}</p>
                   <h3 className="text-lg font-semibold text-slate-900">{event.event_type}</h3>
-                  <p className="text-sm text-slate-600">Room {event.room_id} · {event.reason_code}</p>
+                  <p className="text-sm text-slate-600">Habitación {roomLabels.get(event.room_id) ?? "Información no disponible"} · {event.reason_code}</p>
                 </div>
                 <div className="flex gap-2">
                   {event.ended_at ? (

@@ -68,7 +68,13 @@ def decrypt_payload(encrypted: Optional[Dict[str, Any]]) -> Dict[str, Any]:
 
 def seed_catalog(db: Session):
     defaults = [
-        ("booking", "Booking.com", "api_key", "content,availability", "https://developers.booking.com/connectivity"),
+        (
+            "booking",
+            "Booking.com",
+            "bearer_token",
+            "content,availability,reservations",
+            "https://developers.booking.com/connectivity",
+        ),
         ("expedia", "Expedia", "signature", "content,availability", "https://developers.expediagroup.com/"),
         ("mercadopago", "MercadoPago", "oauth_code", "payments,offline_access", "https://www.mercadopago.com.ar/developers/en"),
         ("paypal", "PayPal", "oauth_code", "payments,openid,email,offline_access", "https://developer.paypal.com/docs/api/overview/"),

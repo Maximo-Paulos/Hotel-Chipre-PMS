@@ -8,8 +8,9 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.models.reservation import Reservation, ReservationStatusEnum
-from app.models.room import Room
+from app.models.room import Room, RoomStatusEnum
 from app.models.room_block import RoomBlock, RoomBlockReasonEnum
+from app.models.operational_task import OperationalTask, OperationalTaskStatusEnum, OperationalTaskTypeEnum
 from app.services.read_model_cache import invalidate_hotel_operational_caches
 
 
@@ -28,6 +29,22 @@ class ProtectedReservationConflictError(RoomBlockError):
         super().__init__(
             "Room block overlaps protected or checked-in reservations that require manual resolution"
         )
+
+
+class RoomBlockReleaseConflictError(RoomBlockError):
+    """Raised when releasing a block would make an unsafe room state appear sellable."""
+
+    def __init__(
+        self,
+        *,
+        reservation_ids: list[int] | None = None,
+        other_block_ids: list[int] | None = None,
+        reason: str,
+    ):
+        self.reservation_ids = reservation_ids or []
+        self.other_block_ids = other_block_ids or []
+        self.reason = reason
+        super().__init__(reason)
 
 
 def _invalidate_availability_cache(hotel_id: int) -> None:
@@ -179,6 +196,73 @@ def resolve_block(
 ) -> RoomBlock:
     block = get_block(db, hotel_id=hotel_id, block_id=block_id)
     if block.resolved_at is None:
+        room = (
+            db.query(Room)
+            .filter(Room.id == block.room_id, Room.hotel_id == hotel_id, Room.deleted_at.is_(None))
+            .first()
+        )
+        if room is None:
+            raise RoomBlockError("La habitación del bloqueo ya no está disponible")
+        if room.status != RoomStatusEnum.AVAILABLE:
+            raise RoomBlockReleaseConflictError(
+                reason="La habitación debe estar disponible y lista para vender antes de liberar el bloqueo"
+            )
+
+        window_end = block.ends_at or date.max
+        other_blocks = (
+            db.query(RoomBlock.id)
+            .filter(
+                RoomBlock.hotel_id == hotel_id,
+                RoomBlock.room_id == block.room_id,
+                RoomBlock.id != block.id,
+                RoomBlock.resolved_at.is_(None),
+                RoomBlock.starts_at < window_end,
+                or_(RoomBlock.ends_at.is_(None), RoomBlock.ends_at > block.starts_at),
+            )
+            .order_by(RoomBlock.id.asc())
+            .all()
+        )
+        if other_blocks:
+            raise RoomBlockReleaseConflictError(
+                other_block_ids=[row[0] for row in other_blocks],
+                reason="La habitación todavía tiene otro bloqueo operativo superpuesto",
+            )
+
+        pending_maintenance = (
+            db.query(OperationalTask.id)
+            .filter(
+                OperationalTask.hotel_id == hotel_id,
+                OperationalTask.room_block_id == block.id,
+                OperationalTask.task_type == OperationalTaskTypeEnum.MAINTENANCE,
+                OperationalTask.status != OperationalTaskStatusEnum.RESOLVED,
+            )
+            .order_by(OperationalTask.id.asc())
+            .all()
+        )
+        if pending_maintenance:
+            raise RoomBlockReleaseConflictError(
+                reason="La incidencia de mantenimiento debe quedar resuelta antes de liberar la habitación"
+            )
+
+        affected_reservations = (
+            db.query(Reservation.id)
+            .filter(
+                Reservation.hotel_id == hotel_id,
+                Reservation.room_id == block.room_id,
+                Reservation.status.notin_(
+                    [ReservationStatusEnum.CANCELLED, ReservationStatusEnum.CHECKED_OUT, ReservationStatusEnum.NO_SHOW]
+                ),
+                Reservation.check_in_date < window_end,
+                Reservation.check_out_date > block.starts_at,
+            )
+            .order_by(Reservation.id.asc())
+            .all()
+        )
+        if affected_reservations:
+            raise RoomBlockReleaseConflictError(
+                reservation_ids=[row[0] for row in affected_reservations],
+                reason="La habitación tiene reservas afectadas; reasignalas antes de liberarla",
+            )
         block.resolved_at = datetime.now(timezone.utc)
         block.resolved_by_user_id = resolved_by_user_id
         db.flush()

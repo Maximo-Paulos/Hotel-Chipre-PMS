@@ -93,7 +93,12 @@ class ReservationRead(BaseModel):
     guest_id: int
     guest: Optional[GuestSummary] = None
     room_id: Optional[int]
+    # Human-facing room number. Keep the internal room_id for relations only.
+    room_number: Optional[str] = None
     category_id: int
+    # Human-facing category name. Keep category_id only for relations and
+    # filters; operators should not have to interpret internal identifiers.
+    category_name: Optional[str] = None
     company_id: Optional[int] = None
     sellable_product_id: Optional[int] = None
     rate_plan_id: Optional[int] = None

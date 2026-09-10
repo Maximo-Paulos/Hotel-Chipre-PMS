@@ -138,10 +138,12 @@ export function LoginPage() {
         </div>
         <form className="space-y-4" onSubmit={handleSubmit}>
           <div>
-            <label className="text-sm font-medium text-slate-700">{t("login.emailLabel")}</label>
+            <label htmlFor="login-email" className="text-sm font-medium text-slate-700">{t("login.emailLabel")}</label>
             <input
+              id="login-email"
               required
               type="email"
+              autoComplete="email"
               className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-900 shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
               placeholder={t("login.emailPlaceholder")}
               value={email}
@@ -149,8 +151,9 @@ export function LoginPage() {
             />
           </div>
           <div>
-            <label className="text-sm font-medium text-slate-700">{t("login.passwordLabel")}</label>
+            <label htmlFor="login-password" className="text-sm font-medium text-slate-700">{t("login.passwordLabel")}</label>
             <PasswordInput
+              id="login-password"
               value={password}
               onChange={setPassword}
               placeholder={t("login.passwordPlaceholder")}
@@ -158,7 +161,7 @@ export function LoginPage() {
               autoComplete="current-password"
             />
           </div>
-          {error && <p className="rounded-md bg-rose-50 p-2 text-sm text-rose-700">{error}</p>}
+          {error && <p id="login-error" role="alert" className="rounded-md bg-rose-50 p-2 text-sm text-rose-700">{error}</p>}
           {loading && slowLogin && (
             <p className="rounded-md bg-amber-50 p-2 text-sm text-amber-800" data-testid="login-slow-hint" role="status">
               {t("login.slowHint")}

@@ -1,4 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+import csv
+from datetime import date as date_type, timedelta
+from io import StringIO
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -41,19 +46,120 @@ router = APIRouter(tags=["Cash Register"])
 @router.get("/cash-register/daily-summary", response_model=CashDailySummaryRead)
 def cash_daily_summary(
     date: str,
+    currency: str | None = Query(default=None, min_length=3, max_length=3),
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_CASH_VIEW)),
 ):
-    from datetime import date as date_type
-
     try:
         report_date = date_type.fromisoformat(date)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail="date debe tener formato YYYY-MM-DD") from exc
     try:
-        return get_daily_summary(db, hotel_id=context.hotel_id, report_date=report_date)
+        return get_daily_summary(
+            db,
+            hotel_id=context.hotel_id,
+            report_date=report_date,
+            currency_code=currency,
+        )
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail="La zona horaria del hotel no es valida") from exc
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/api/cash-register/export.csv")
+@router.get("/cash-register/export.csv")
+def export_cash_ledger_csv(
+    date: str | None = Query(default=None, description="Día único YYYY-MM-DD"),
+    from_date: str | None = Query(default=None, alias="from"),
+    to_date: str | None = Query(default=None, alias="to"),
+    currency: str | None = Query(default=None, min_length=3, max_length=3),
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_CASH_VIEW)),
+):
+    """Export the existing transaction/cash ledger without creating a second balance."""
+    try:
+        if date:
+            start = date_type.fromisoformat(date)
+            end = start
+        else:
+            start = date_type.fromisoformat(from_date) if from_date else date_type.today()
+            end = date_type.fromisoformat(to_date) if to_date else start
+        if end < start:
+            raise ValueError("El período de caja es inválido")
+        if (end - start).days > 366:
+            raise ValueError("El período máximo de exportación es de 367 días")
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="El período debe usar fechas YYYY-MM-DD válidas") from exc
+
+    selected_currency = currency.strip().upper() if currency else None
+    reports = []
+    currencies: set[str] = set()
+    current = start
+    while current <= end:
+        try:
+            report = get_daily_summary(
+                db,
+                hotel_id=context.hotel_id,
+                report_date=current,
+                currency_code=selected_currency,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        reports.append(report)
+        currencies.update(
+            str(entry.get("currency_code") or "").upper()
+            for entry in report.get("entries", [])
+            if entry.get("currency_code")
+        )
+        current += timedelta(days=1)
+    if selected_currency:
+        currencies = {selected_currency}
+    elif len(currencies) > 1:
+        raise HTTPException(
+            status_code=422,
+            detail="Elegí una moneda para exportar: el sistema no convierte monedas automáticamente",
+        )
+
+    columns = [
+        "report_date", "hotel_id", "currency_code", "entry_type", "occurred_at",
+        "actor", "actor_user_id", "reservation_id", "transaction_id", "cash_movement_id",
+        "amount", "signed_amount", "payment_method", "transaction_type", "movement_type",
+        "provider_code", "description",
+    ]
+    output = StringIO(newline="")
+    writer = csv.DictWriter(output, fieldnames=columns, lineterminator="\n")
+    writer.writeheader()
+    for report in reports:
+        for entry in report.get("entries", []):
+            entry_currency = str(entry.get("currency_code") or "").upper()
+            if selected_currency and entry_currency != selected_currency:
+                continue
+            writer.writerow(
+                {
+                    "report_date": report["report_date"],
+                    "hotel_id": report["hotel_id"],
+                    "currency_code": entry_currency,
+                    "entry_type": entry.get("entry_type"),
+                    "occurred_at": entry.get("occurred_at").isoformat() if entry.get("occurred_at") else "",
+                    "actor": entry.get("actor_name"),
+                    "actor_user_id": entry.get("actor_user_id"),
+                    "reservation_id": entry.get("reservation_id"),
+                    "transaction_id": entry.get("transaction_id"),
+                    "cash_movement_id": entry.get("cash_movement_id"),
+                    "amount": entry.get("amount"),
+                    "signed_amount": entry.get("signed_amount"),
+                    "payment_method": entry.get("payment_method"),
+                    "transaction_type": entry.get("transaction_type"),
+                    "movement_type": entry.get("movement_type"),
+                    "provider_code": entry.get("provider_code"),
+                    "description": entry.get("description"),
+                }
+            )
+    filename = f"caja-{start.isoformat()}-{end.isoformat()}.csv"
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.post("/api/cash-register/sessions", response_model=CashSessionRead, status_code=status.HTTP_201_CREATED)

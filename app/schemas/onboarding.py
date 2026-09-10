@@ -122,3 +122,5 @@ class OnboardingStatus(BaseModel):
     categories: List[dict] = Field(default_factory=list)
     rooms: List[dict] = Field(default_factory=list)
     staff: List[dict] = Field(default_factory=list)
+    readiness_checklist: List[dict] = Field(default_factory=list)
+    readiness_complete: bool = False

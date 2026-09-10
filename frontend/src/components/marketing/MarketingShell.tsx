@@ -1,7 +1,8 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 import { resolveAppUrl } from "../../config/publicUrls";
+import { useDialogA11y } from "../../hooks/useDialogA11y";
 
 import { PublicButtonLink } from "./PublicButtonLink";
 
@@ -18,6 +19,10 @@ type MarketingShellProps = {
 export function MarketingShell({ children }: MarketingShellProps) {
   const loginUrl = resolveAppUrl("/login");
   const registerUrl = resolveAppUrl("/register-owner");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const mobileMenuRef = useDialogA11y(mobileMenuOpen, () => setMobileMenuOpen(false));
+
+  const closeMobileMenu = () => setMobileMenuOpen(false);
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.14),_transparent_38%),linear-gradient(180deg,_#f8fafc_0%,_#eef7ff_52%,_#ffffff_100%)] text-slate-900">
@@ -40,14 +45,38 @@ export function MarketingShell({ children }: MarketingShellProps) {
           </nav>
 
           <div className="flex items-center gap-2">
-            <PublicButtonLink href={loginUrl} variant="ghost" className="hidden sm:inline-flex">
+            <PublicButtonLink href={loginUrl} variant="ghost" className="inline-flex">
               Ingresar
             </PublicButtonLink>
             <PublicButtonLink href={registerUrl} variant="primary">
               Registrarte
             </PublicButtonLink>
+            <button
+              type="button"
+              className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-slate-700 shadow-sm hover:border-brand-300 hover:text-brand-700 md:hidden"
+              aria-label={mobileMenuOpen ? "Cerrar menú" : "Abrir menú"}
+              aria-controls="marketing-mobile-menu"
+              aria-expanded={mobileMenuOpen}
+              onClick={() => setMobileMenuOpen((open) => !open)}
+            >
+              <span aria-hidden="true" className="text-lg leading-none">{mobileMenuOpen ? "×" : "☰"}</span>
+            </button>
           </div>
         </div>
+        {mobileMenuOpen && (
+          <div id="marketing-mobile-menu" ref={mobileMenuRef} className="border-t border-slate-200 bg-white px-4 py-3 md:hidden">
+            <nav aria-label="Navegación principal" className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+              {navItems.map((item) => (
+                <Link key={item.to} to={item.to} onClick={closeMobileMenu} className="rounded-lg px-3 py-3 hover:bg-slate-50 hover:text-brand-700">
+                  {item.label}
+                </Link>
+              ))}
+              <a href={loginUrl} onClick={closeMobileMenu} className="rounded-lg px-3 py-3 hover:bg-slate-50 hover:text-brand-700">
+                Ingresar
+              </a>
+            </nav>
+          </div>
+        )}
       </header>
 
       <main>{children}</main>

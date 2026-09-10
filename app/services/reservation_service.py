@@ -40,7 +40,7 @@ from app.services.pricing_service import build_pricing_revision, get_price_for_d
 from app.services.quote_token_service import QuoteTokenError, verify_quote_token
 from app.services.read_model_cache import invalidate_hotel_operational_caches
 from app.services.room_block_service import blocked_room_ids_for_range, list_active_blocks, room_has_active_block
-from app.services.timezones import normalize_timezone
+from app.services.timezones import hotel_today, normalize_timezone
 
 if TYPE_CHECKING:
     from app.dependencies.auth import AuthContext
@@ -73,7 +73,9 @@ class _ReservationListProjection:
     guest_id: int
     guest: _ReservationGuestProjection | None
     room_id: int | None
+    room_number: str | None
     category_id: int
+    category_name: str | None
     company_id: int | None
     sellable_product_id: int | None
     rate_plan_id: int | None
@@ -1404,6 +1406,7 @@ def list_reservations(
     skip: int = 0,
     limit: int = 50,
     order: str = "recent",
+    upcoming_only: bool = False,
     *,
     context: "AuthContext | None" = None,
 ) -> list[_ReservationListProjection]:
@@ -1416,6 +1419,14 @@ def list_reservations(
     query = query.outerjoin(
         Guest,
         (Guest.id == Reservation.guest_id) & (Guest.hotel_id == hotel_id),
+    ).outerjoin(
+        Room,
+        (Room.id == Reservation.room_id)
+        & (Room.hotel_id == hotel_id)
+        & (Room.deleted_at.is_(None)),
+    ).outerjoin(
+        RoomCategory,
+        (RoomCategory.id == Reservation.category_id) & (RoomCategory.hotel_id == hotel_id),
     )
     if status_filter:
         query = query.filter(Reservation.status == status_filter)
@@ -1423,6 +1434,22 @@ def list_reservations(
         query = query.filter(Reservation.check_in_date >= from_date)
     if to_date:
         query = query.filter(Reservation.check_out_date <= to_date)
+    if upcoming_only:
+        # Dashboard arrivals are an operational query, not recent activity:
+        # use the hotel's calendar, exclude stays that already entered, and
+        # let the server apply the allowed pre-arrival states before paging.
+        query = query.filter(
+            Reservation.check_in_date >= hotel_today(db, hotel_id),
+            Reservation.actual_check_in.is_(None),
+            Reservation.status.in_(
+                {
+                    ReservationStatusEnum.PENDING,
+                    ReservationStatusEnum.DEPOSIT_PAID,
+                    ReservationStatusEnum.FULLY_PAID,
+                    ReservationStatusEnum.PRE_CHECK_IN,
+                }
+            ),
+        )
     if search:
         term = search.strip()
         if term:
@@ -1438,7 +1465,7 @@ def list_reservations(
     # the pre-A2 ordering (check_in_date ASC) for operational views that
     # already assume arrivals are sorted by stay date, not creation date.
     if order == "check_in":
-        query = query.order_by(Reservation.check_in_date.asc())
+        query = query.order_by(Reservation.check_in_date.asc(), Reservation.id.asc())
     else:
         query = query.order_by(Reservation.created_at.desc(), Reservation.id.desc())
     rows = query.with_entities(
@@ -1447,7 +1474,9 @@ def list_reservations(
         Reservation.confirmation_code,
         Reservation.guest_id,
         Reservation.room_id,
+        Room.room_number,
         Reservation.category_id,
+        RoomCategory.name.label("category_name"),
         Reservation.company_id,
         Reservation.sellable_product_id,
         Reservation.rate_plan_id,
@@ -1548,7 +1577,9 @@ def list_reservations(
                 else None
             ),
             room_id=row.room_id,
+            room_number=row.room_number,
             category_id=row.category_id,
+            category_name=row.category_name,
             company_id=row.company_id,
             sellable_product_id=row.sellable_product_id,
             rate_plan_id=row.rate_plan_id,

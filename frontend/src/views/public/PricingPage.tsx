@@ -50,11 +50,11 @@ export function PricingPage() {
         </div>
 
         <div className="mt-10 rounded-[2rem] border border-slate-200 bg-slate-950 p-6 text-white shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-300">Regla de pricing</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-300">Condiciones verificadas</p>
           <ul className="mt-4 grid gap-3 text-sm leading-6 text-slate-300 md:grid-cols-3">
-            <li>No publicar detalle fino no cerrado.</li>
-            <li>No publicar integraciones específicas en las cards.</li>
-            <li>No publicar límites, staff limits, Stripe ni capacidades avanzadas no cerradas.</li>
+            <li>Starter incluye una prueba de 14 días.</li>
+            <li>Pro y Ultra se cotizan con el equipo comercial.</li>
+            <li>La disponibilidad de funciones puede depender del plan contratado.</li>
           </ul>
         </div>
 

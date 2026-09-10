@@ -90,6 +90,10 @@ PERMISSION_HOTEL_SECURITY_MANAGE = "hotel_settings:security_manage"
 PERMISSION_COMPANY_MANAGE = "company:manage"
 PERMISSION_CASH_OPERATE = "cash:operate"
 PERMISSION_CASH_APPROVE_DIFFERENCE = "cash:approve_difference"
+PERMISSION_OPERATIONAL_TASK_READ = "operations:tasks:view"
+PERMISSION_OPERATIONAL_TASK_REPORT = "operations:tasks:report"
+PERMISSION_OPERATIONAL_TASK_MANAGE = "operations:tasks:manage"
+PERMISSION_SHIFT_HANDOFF_MANAGE = "operations:handoff:manage"
 PERMISSION_REPORTS_OPERATIONAL_VIEW = "reports:operational:view"
 PERMISSION_REPORTS_FINANCIAL_VIEW = "reports:financial:view"
 PERMISSION_APIKEY_MANAGE = "apikey:manage"
@@ -340,6 +344,22 @@ _CANONICAL_DEFINITIONS: dict[str, tuple[str, str, str]] = {
         "cash", "Approve cash close differences",
         "Permite aprobar diferencias al cerrar caja. No permite operar sesiones ni registrar movimientos por sí solo.",
     ),
+    PERMISSION_OPERATIONAL_TASK_READ: (
+        "operations", "Read shared operational tasks",
+        "Permite consultar tareas operativas compartidas del hotel, su contexto y su historial. No permite cambiar su estado ni reasignarlas.",
+    ),
+    PERMISSION_OPERATIONAL_TASK_REPORT: (
+        "operations", "Report and work on operational tasks",
+        "Permite informar tareas operativas y avanzar las tareas asignadas a la operación. No permite resolverlas definitivamente ni administrar pases de turno.",
+    ),
+    PERMISSION_OPERATIONAL_TASK_MANAGE: (
+        "operations", "Manage operational tasks",
+        "Permite crear, asignar, revisar y resolver tareas operativas del hotel. No libera automáticamente una habitación bloqueada.",
+    ),
+    PERMISSION_SHIFT_HANDOFF_MANAGE: (
+        "operations", "Deliver and acknowledge shift handoffs",
+        "Permite preparar y reconocer pases de turno con sus pendientes y el cierre de caja relacionado. No crea otro saldo financiero.",
+    ),
     PERMISSION_REPORTS_OPERATIONAL_VIEW: (
         "reports", "Read operational reports",
         "Permite consultar reportes operativos del hotel. No permite consultar reportes financieros ni modificar datos.",
@@ -500,6 +520,8 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
         PERMISSION_DASHBOARD_VIEW, PERMISSION_OCCUPANCY_VIEW,
         PERMISSION_WAITLIST_VIEW, PERMISSION_WAITLIST_MANAGE,
         PERMISSION_CASH_VIEW,
+        PERMISSION_OPERATIONAL_TASK_READ, PERMISSION_OPERATIONAL_TASK_REPORT,
+        PERMISSION_OPERATIONAL_TASK_MANAGE, PERMISSION_SHIFT_HANDOFF_MANAGE,
         PERMISSION_SETTINGS_NOTIFICATIONS_VIEW, PERMISSION_SETTINGS_ASSISTANT_VIEW,
     ),
     ROLE_RECEPTIONIST: _role_permissions(
@@ -512,11 +534,13 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
         PERMISSION_CHECKOUT_PERFORM, PERMISSION_CASH_OPERATE,
         PERMISSION_DASHBOARD_VIEW, PERMISSION_OCCUPANCY_VIEW,
         PERMISSION_WAITLIST_VIEW, PERMISSION_WAITLIST_MANAGE,
-        PERMISSION_CASH_VIEW, PERMISSION_SETTINGS_NOTIFICATIONS_VIEW,
+        PERMISSION_CASH_VIEW, PERMISSION_OPERATIONAL_TASK_READ,
+        PERMISSION_OPERATIONAL_TASK_REPORT, PERMISSION_SETTINGS_NOTIFICATIONS_VIEW,
     ),
     ROLE_HOUSEKEEPING: _role_permissions(
         PERMISSION_ROOM_READ, PERMISSION_ROOM_STATUS_UPDATE, PERMISSION_LAUNDRY_READ,
         PERMISSION_LAUNDRY_MOVE, PERMISSION_LAUNDRY_REMITO_MANAGE,
+        PERMISSION_OPERATIONAL_TASK_READ, PERMISSION_OPERATIONAL_TASK_REPORT,
     ),
 }
 

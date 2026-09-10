@@ -11,8 +11,11 @@ from typing import Iterable, Optional
 from sqlalchemy.orm import Session
 
 from app.models.hotel_config import HotelConfiguration
+from app.models.hotel_membership import HotelMembership
 from app.models.onboarding import OnboardingState
 from app.models.room import Room, RoomCategory
+from app.models.daily_rate import DailyRate, PricePeriod
+from app.models.reservation import Reservation
 from app.services.room_service import active_rooms
 from app.schemas.onboarding import (
     DepositPolicyPayload,
@@ -184,8 +187,48 @@ def _build_finish_gates(status_payload: dict, actor_role: str | None = None) -> 
     return {"can_finish": len(missing) == 0, "missing": missing}
 
 
+def _build_readiness_checklist(
+    db: Session,
+    *,
+    hotel_id: int,
+    categories_count: int,
+    rooms_count: int,
+    staff_count: int,
+    policy_done: bool,
+    payments_done: bool,
+) -> list[dict]:
+    """Project setup readiness from the operational tables, without a second state flag.
+
+    The onboarding wizard can finish its account setup while this checklist
+    remains visible for the first live shift. Optional integrations never block
+    manual operation; the first reservation is a useful proof step rather than
+    a synthetic example mixed into the hotel's data.
+    """
+    rates_count = (
+        db.query(DailyRate.id).filter(DailyRate.hotel_id == hotel_id).count()
+        + db.query(PricePeriod.id)
+        .filter(PricePeriod.hotel_id == hotel_id, PricePeriod.deleted_at.is_(None))
+        .count()
+    )
+    reservations_count = db.query(Reservation.id).filter(Reservation.hotel_id == hotel_id).count()
+    return [
+        {"key": "categories", "label": "Categorías de habitación", "done": categories_count > 0, "count": categories_count, "route": "/habitaciones"},
+        {"key": "rooms", "label": "Habitaciones activas", "done": rooms_count > 0, "count": rooms_count, "route": "/habitaciones"},
+        {"key": "rates", "label": "Tarifas cargadas", "done": rates_count > 0, "count": rates_count, "route": "/operacion/tarifas"},
+        {"key": "policy", "label": "Política de reservas", "done": policy_done, "count": 1 if policy_done else 0, "route": "/settings/hotel"},
+        {"key": "payments", "label": "Medios de cobro", "done": payments_done, "count": 1 if payments_done else 0, "route": "/settings/hotel"},
+        {"key": "staff", "label": "Personal y turnos", "done": staff_count > 0, "count": staff_count, "route": "/settings/users"},
+        {"key": "first_reservation", "label": "Primera reserva real", "done": reservations_count > 0, "count": reservations_count, "route": "/reservas", "optional": True},
+    ]
+
+
 def _status_from_state(db: Session, state: OnboardingState, actor_role: str | None = None) -> dict:
     staff_list = state.get_staff()
+    active_memberships_count = (
+        db.query(HotelMembership.id)
+        .filter(HotelMembership.hotel_id == state.hotel_id, HotelMembership.status == "active")
+        .count()
+    )
     categories = _serialize_categories(db, state.hotel_id)
     rooms = _serialize_rooms(db, state.hotel_id)
     current_subscription = _current_subscription_context(db, state.hotel_id)
@@ -256,6 +299,17 @@ def _status_from_state(db: Session, state: OnboardingState, actor_role: str | No
         "rooms": rooms,
         "staff": staff_list,
     }
+    checklist = _build_readiness_checklist(
+        db,
+        hotel_id=state.hotel_id,
+        categories_count=len(categories),
+        rooms_count=len(rooms),
+        staff_count=active_memberships_count,
+        policy_done=policy_done,
+        payments_done=payments_done,
+    )
+    status_payload["readiness_checklist"] = checklist
+    status_payload["readiness_complete"] = all(item["done"] for item in checklist if not item.get("optional"))
     if owner_done:
         status_payload["owner"] = {
             "name": state.owner_name,

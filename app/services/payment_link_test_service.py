@@ -43,11 +43,27 @@ def _mercadopago_access_token(db: Session, hotel_id: int) -> str:
     try:
         payload = get_connection_payload(db, hotel_id, "mercadopago")
     except ValueError as exc:
-        raise PaymentLinkTestError(str(exc))
+        raise PaymentLinkTestError(str(exc)) from exc
     access_token = payload.get("access_token")
     if not access_token:
         raise PaymentLinkTestError("Conecta Mercado Pago primero desde Configuracion > Conexiones.")
     return str(access_token)
+
+
+def _mercadopago_connection_payload(db: Session, hotel_id: int) -> dict[str, Any]:
+    """Return the active hotel's MP credentials and account metadata.
+
+    Payment links must never fall back to a process-wide token: a payment
+    belongs to the hotel whose connection created its preference.
+    """
+    try:
+        require_external_connections("Mercado Pago account access")
+        payload = get_connection_payload(db, hotel_id, "mercadopago")
+    except ValueError as exc:
+        raise PaymentLinkTestError(str(exc)) from exc
+    if not isinstance(payload, dict) or not payload.get("access_token"):
+        raise PaymentLinkTestError("Conecta Mercado Pago primero desde Configuracion > Conexiones.")
+    return payload
 
 
 def _friendly_mercadopago_error(detail: object, status_code: int | None = None) -> str:

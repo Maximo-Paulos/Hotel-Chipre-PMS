@@ -6,12 +6,14 @@ type PasswordInputProps = {
   placeholder?: string;
   required?: boolean;
   autoComplete?: string;
+  id?: string;
 };
 
 /** Password field with a show/hide toggle (eye icon), reused across login/register/reset. */
-export function PasswordInput({ value, onChange, placeholder, required, autoComplete }: PasswordInputProps) {
+export function PasswordInput({ value, onChange, placeholder, required, autoComplete, id }: PasswordInputProps) {
   const [visible, setVisible] = useState(false);
-  const inputId = useId();
+  const generatedId = useId();
+  const inputId = id ?? generatedId;
 
   return (
     <div className="relative mt-1">

@@ -64,6 +64,25 @@ def client_with_db(monkeypatch):
     patched_settings = get_settings().model_copy(update={"MERCADOPAGO_WEBHOOK_SECRET": WEBHOOK_SECRET})
     monkeypatch.setattr("app.api.payment_links.get_settings", lambda: patched_settings)
 
+    # The route now verifies provider-originated notifications against the
+    # hotel's Mercado Pago account before posting a ledger transaction. Keep
+    # this HTTP journey fully deterministic by replacing that provider read;
+    # the endpoint still exercises the signature, reference and idempotency
+    # boundaries without opening a real Mercado Pago connection.
+    def fake_provider_fetch(_db, _hotel_id, payment_id):
+        is_rejected = "rejected" in str(payment_id)
+        return {
+            "id": payment_id,
+            "status": "rejected" if is_rejected else "approved",
+            "transaction_amount": 90.0,
+            "currency_id": "ARS",
+        }
+
+    monkeypatch.setattr(
+        "app.services.payment_webhook_service.fetch_mercadopago_payment",
+        fake_provider_fetch,
+    )
+
     fastapi_app.dependency_overrides[get_db] = override_get_db
     fastapi_app.dependency_overrides[get_auth_context] = override_auth
     client = TestClient(fastapi_app)

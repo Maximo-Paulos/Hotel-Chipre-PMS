@@ -288,11 +288,11 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                   {reservation.check_in_date} → {reservation.check_out_date}
                 </p>
                 <p className="text-xs text-slate-500">
-                  {reservation.room_id
-                    ? t("drawer.stay.roomNumber", { id: reservation.room_id })
+                  {reservation.room_number
+                    ? t("drawer.stay.roomNumber", { id: reservation.room_number })
                     : t("drawer.stay.noRoomAssigned")}{" "}
                   · {t("drawer.stay.category")}{" "}
-                  {reservation.category_id}
+                  {reservation.category_name ?? t("drawer.stay.informationUnavailable")}
                 </p>
               </section>
 

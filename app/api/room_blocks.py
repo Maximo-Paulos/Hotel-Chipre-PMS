@@ -13,6 +13,7 @@ from app.services.permission_service import (
 )
 from app.services.room_block_service import (
     ProtectedReservationConflictError,
+    RoomBlockReleaseConflictError,
     RoomBlockError,
     create_block,
     get_block,
@@ -122,6 +123,15 @@ def resolve_room_block(
             block_id=block_id,
             resolved_by_user_id=context.user_id,
         )
+    except RoomBlockReleaseConflictError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "message": str(exc),
+                "reservation_ids": exc.reservation_ids,
+                "other_block_ids": exc.other_block_ids,
+            },
+        ) from exc
     except RoomBlockError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     db.commit()

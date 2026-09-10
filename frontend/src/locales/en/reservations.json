@@ -8,7 +8,8 @@
       "title": "Stay",
       "roomNumber": "Room #{{id}}",
       "noRoomAssigned": "No room assigned",
-      "category": "Category"
+      "category": "Category",
+      "informationUnavailable": "Information unavailable"
     },
     "guests": {
       "title": "Guests",
@@ -206,7 +207,8 @@
       "close": "Close",
       "room": "Room {{number}}",
       "roomHash": "Room #{{id}}",
-      "unassigned": "Unassigned"
+      "unassigned": "Unassigned",
+      "informationUnavailable": "Information unavailable"
     },
     "toast": {
       "success": "Done",
@@ -246,6 +248,9 @@
       "openCount": "{{count}} open",
       "criticalCount": "{{count}} critical",
       "loading": "Loading operations queue...",
+      "error": "The operations inbox could not be loaded.",
+      "retry": "Retry",
+      "unavailableCount": "Count unavailable",
       "empty": "There are no pending operational actions at this hotel.",
       "statusPrefix": "Status: {{status}}",
       "sourcePrefix": "Source: {{source}}",
@@ -517,6 +522,24 @@
       "title": "Reservation {{code}}",
       "subtitle": "{{guest}} - Cat {{category}} - {{room}}",
       "exportVoucher": "Export PDF voucher",
+      "communicationEyebrow": "Guest communication",
+      "communicationTitle": "Send reservation information",
+      "communicationHint": "The status reflects the provider response; accepted does not mean delivered.",
+      "communicationRecipient": "Recipient",
+      "communicationRecipientPlaceholder": "guest@example.com",
+      "sendConfirmation": "Send confirmation",
+      "sendVoucher": "Send voucher",
+      "communicationLoading": "Loading send history…",
+      "communicationLoadError": "Could not load send history.",
+      "communicationEmpty": "No messages have been sent from this reservation yet.",
+      "communicationConfirmation": "Confirmation",
+      "communicationVoucher": "Voucher",
+      "communicationStatus": {
+        "pending": "Pending",
+        "accepted": "Accepted by provider",
+        "failed": "Failed",
+        "unknown": "Unknown response"
+      },
       "timelineTitle": "Timeline",
       "timelineCheckIn": "Check-in:",
       "timelineCheckOut": "Check-out:",
@@ -664,7 +687,7 @@
       "blockedBySubscriptionAllocation": "Action blocked by subscription.",
       "guestRequired": "Enter the guest's ID or fill in the details to create them automatically.",
       "guestCreateFailed": "Could not create the guest",
-      "categoryRequired": "Choose a category (numeric ID).",
+      "categoryRequired": "Choose a category.",
       "datesRequired": "Choose check-in and check-out dates.",
       "datesInvalid": "The check-out date must be after the check-in date.",
       "invalidManualRate": "Enter a valid manual rate (greater than or equal to 0).",
@@ -703,7 +726,12 @@
       "noShowFailed": "Could not register the no-show",
       "chargeFailed": "Could not add the charge.",
       "chargeFieldsRequired": "Enter a detail and a positive amount for the charge.",
-      "proofReadFailed": "Could not read the proof file."
+      "proofReadFailed": "Could not read the proof file.",
+      "communicationFailed": "Could not send the email.",
+      "communicationReservationMissing": "Open a reservation before sending information.",
+      "communicationAccepted": "The provider accepted the email. Final delivery cannot be confirmed.",
+      "communicationUnknown": "The provider response could not be confirmed. Check the history before resending.",
+      "communicationPending": "The send remains pending."
     },
     "voucher": {
       "title": "Voucher {{code}}",

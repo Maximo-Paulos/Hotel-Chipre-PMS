@@ -57,10 +57,16 @@ def _create_mercadopago_preference(db: Session, hotel_id: int, link: PaymentLink
     require_external_connections("Mercado Pago payment-link creation")
 
     # Imported lazily so the local-only path never pulls in network code.
-    from app.services.payment_link_test_service import _mercadopago_access_token  # noqa: PLC0415
+    from app.services.payment_link_test_service import _mercadopago_connection_payload  # noqa: PLC0415
     import requests  # noqa: PLC0415
 
-    access_token = _mercadopago_access_token(db, hotel_id)
+    connection_payload = _mercadopago_connection_payload(db, hotel_id)
+    access_token = str(connection_payload["access_token"])
+    account_id = (
+        connection_payload.get("user_id")
+        or connection_payload.get("collector_id")
+        or connection_payload.get("merchant_id")
+    )
     preference_payload: dict[str, Any] = {
         "items": [
             {
@@ -72,7 +78,12 @@ def _create_mercadopago_preference(db: Session, hotel_id: int, link: PaymentLink
         ],
         "payer": {"email": link.recipient_email},
         "external_reference": link.external_reference,
-        "metadata": {"source": "hotel_chipre_pms", "hotel_id": hotel_id, "link_code": link.link_code},
+        "metadata": {
+            "source": "hotel_chipre_pms",
+            "hotel_id": hotel_id,
+            "link_code": link.link_code,
+            **({"account_id": str(account_id)} if account_id else {}),
+        },
         "statement_descriptor": "HOTEL CHIPRE",
     }
     if link.expires_at:
@@ -107,7 +118,12 @@ def _create_mercadopago_preference(db: Session, hotel_id: int, link: PaymentLink
     checkout_url = data.get("init_point") or data.get("sandbox_init_point")
     if not checkout_url:
         raise PaymentLinkError("Mercado Pago no devolvio un link de pago.")
-    return {"checkout_url": checkout_url, "preference_id": data.get("id"), "raw": data}
+    return {
+        "checkout_url": checkout_url,
+        "preference_id": data.get("id"),
+        "account_id": str(account_id) if account_id else None,
+        "raw": data,
+    }
 
 
 def _default_email_delivery(db: Session, hotel_id: int, link: PaymentLink) -> str:
@@ -378,9 +394,17 @@ def create_link(
             link.external_checkout_url = checkout_url
             link.execution_mode = "provider"
             link.payable = True
+            account_id = result.get("account_id")
+            if not account_id and isinstance(result.get("raw"), dict):
+                account_id = (
+                    result["raw"].get("collector_id")
+                    or result["raw"].get("user_id")
+                    or (result["raw"].get("metadata") or {}).get("account_id")
+                )
             link.gateway_response = {
                 **(result.get("raw") or {}),
                 "preference_id": preference_id,
+                **({"pms_account_id": str(account_id)} if account_id else {}),
             }
             link.last_error = None
         except Exception as exc:  # noqa: BLE001 - persist a safe local artifact

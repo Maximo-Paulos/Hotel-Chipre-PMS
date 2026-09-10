@@ -20,6 +20,12 @@ import {
   type ReservationUpdatePayload
 } from "../../api/reservations";
 import {
+  listReservationCommunications,
+  sendReservationCommunication,
+  type ReservationEmailDelivery,
+  type ReservationEmailKind
+} from "../../api/reservationCommunications";
+import {
   listRoomMovementGroups,
   revertRoomMovementGroup,
   triggerAllocationRecalculation,
@@ -246,6 +252,7 @@ export function ReservationsPage() {
   });
   const [calendarRange, setCalendarRange] = useState<"week" | "month">("week");
   const [detailsReservationId, setDetailsReservationId] = useState<number | null>(null);
+  const [communicationRecipient, setCommunicationRecipient] = useState("");
   const [roomMoveForm, setRoomMoveForm] = useState({
     to_room_id: "",
     reason_code: "",
@@ -298,6 +305,11 @@ export function ReservationsPage() {
   const pendingActionsQuery = usePendingReservationActions(12);
   const { roomsQuery } = useRooms();
   const { data: categoriesData = [] } = useCategories();
+  const categoryNameById = useMemo(() => {
+    const map = new Map<number, string>();
+    categoriesData.forEach((category) => map.set(category.id, category.name));
+    return map;
+  }, [categoriesData]);
   const guestMutation = useGuestCreate();
   const guestQuery = useGuest(guestIdOpen ?? undefined);
   const paymentSummaryQuery = usePaymentSummary(editing?.id || undefined);
@@ -310,6 +322,12 @@ export function ReservationsPage() {
   );
   const detailsSummaryQuery = usePaymentSummary(detailsReservationId || undefined);
   const detailsOperationsQuery = useReservationOperationsSummary(detailsReservationId || undefined);
+  const communicationsQuery = useQuery<ReservationEmailDelivery[]>({
+    queryKey: ["reservation-communications", session.hotelId, detailsReservationId],
+    queryFn: () => listReservationCommunications(detailsReservationId as number, session),
+    enabled: Boolean(detailsReservationId && hasValidSession(session)),
+    staleTime: 10_000
+  });
   const detailsAuditQuery = useOperationalAudit(
     { limit: 50, reservation_id: detailsReservationId || undefined },
     Boolean(detailsReservationId && hasPermission("operations:audit:view"))
@@ -457,12 +475,6 @@ export function ReservationsPage() {
     return map;
   }, [categoryById, detailsReservation, moveRoomOptions, hasPermission]);
 
-  const categoryNameById = useMemo(() => {
-    const map = new Map<number, string>();
-    categoriesData.forEach((cat) => map.set(cat.id, cat.name));
-    return map;
-  }, [categoriesData]);
-
   const selectedMoveRoom = useMemo(
     () => moveRoomOptions.find((room) => String(room.id) === roomMoveForm.to_room_id) ?? null,
     [moveRoomOptions, roomMoveForm.to_room_id]
@@ -472,7 +484,7 @@ export function ReservationsPage() {
   );
 
   const categoryOptions = useMemo(
-    () => categoriesData.map((cat) => ({ value: String(cat.id), label: `${cat.name} (#${cat.id})` })),
+    () => categoriesData.map((cat) => ({ value: String(cat.id), label: cat.name })),
     [categoriesData]
   );
 
@@ -1082,6 +1094,9 @@ export function ReservationsPage() {
   const detailsOperations = detailsOperationsQuery.data;
   const detailsFinancialsLoading = detailsSummaryQuery.isLoading;
   const detailsGuest = useGuest(detailsReservation?.guest_id || undefined).data;
+  React.useEffect(() => {
+    setCommunicationRecipient(detailsGuest?.email ?? "");
+  }, [detailsReservationId, detailsGuest?.email]);
   const editingCurrencyCode = normalizeCurrencyCode(paymentSummary?.currency_code ?? editing?.currency_code);
   const canApprovePaymentProof = ["owner", "co_owner", "manager"].includes(session.baseRole ?? "");
   // Security fix: reads baseRole -- not the "Cambiar vista" preview role --
@@ -1094,6 +1109,32 @@ export function ReservationsPage() {
       detailsOperations?.financial_summary.currency_code ??
       detailsReservation?.currency_code
   );
+  const communicationMutation = useGuardedMutation<
+    { delivery: ReservationEmailDelivery; deduplicated: boolean },
+    unknown,
+    { kind: ReservationEmailKind; resend: boolean; recipient?: string }
+  >({
+    mutationFn: ({ kind, resend, recipient }) => {
+      if (!detailsReservationId) throw new Error(t("page.errors.communicationReservationMissing"));
+      return sendReservationCommunication(
+        detailsReservationId,
+        { kind, recipient_email: (recipient ?? communicationRecipient).trim() || null, resend },
+        session
+      );
+    },
+    onSuccess: async (result) => {
+      await communicationsQuery.refetch();
+      const statusMessage = result.delivery.status === "accepted"
+        ? t("page.messages.communicationAccepted")
+        : result.delivery.status === "unknown"
+          ? t("page.messages.communicationUnknown")
+          : result.delivery.status === "failed"
+            ? t("page.messages.communicationFailed")
+            : t("page.messages.communicationPending");
+      showToast(result.deduplicated ? "info" : result.delivery.status === "accepted" ? "success" : "error", statusMessage);
+    },
+    onError: (err: unknown) => showToast("error", err instanceof Error ? err.message : t("page.errors.communicationFailed"))
+  });
 
   const handlePayDeposit = async () => {
     if (!editing || !paymentSummary) return;
@@ -1344,6 +1385,7 @@ export function ReservationsPage() {
   };
   const closeDetails = () => {
     setDetailsReservationId(null);
+    setCommunicationRecipient("");
     setRoomMoveForm({ to_room_id: "", reason_code: "", notes: "", price_action: "keep", origin_room_disposition: "", origin_room_disposition_note: "" });
     setNoShowNotes("");
     setChargeForm({ description: "", amount: "" });
@@ -1446,7 +1488,7 @@ export function ReservationsPage() {
               <p class="label">${t("page.voucher.reservationLabel")}</p>
               <p>${t("page.voucher.checkIn")} <strong>${detailsReservation.check_in_date}</strong></p>
               <p>${t("page.voucher.checkOut")} <strong>${detailsReservation.check_out_date}</strong></p>
-              <p>${t("page.voucher.roomCat")} <strong>${detailsReservation.room_id ?? t("page.voucher.unassigned")} / ${detailsReservation.category_id}</strong></p>
+              <p>${t("page.voucher.roomCat")} <strong>${detailsReservation.room_number ?? t("page.voucher.unassigned")} / ${detailsReservation.category_name ?? categoryNameById.get(detailsReservation.category_id) ?? t("page.common.informationUnavailable")}</strong></p>
               <p>${t("page.voucher.status")} <strong>${statusConfig[detailsReservation.status]?.label ?? detailsReservation.status}</strong></p>
             </div>
             <div class="card">
@@ -1573,7 +1615,9 @@ export function ReservationsPage() {
           </div>
           <div className="flex items-center gap-2">
             <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-              {t("page.pendingActions.openCount", { count: pendingActions.length })}
+              {pendingActionsQuery.isError
+                ? t("page.pendingActions.unavailableCount")
+                : t("page.pendingActions.openCount", { count: pendingActions.length })}
             </span>
             {criticalPendingActions > 0 ? (
               <span className="rounded-full bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-700">
@@ -1586,6 +1630,17 @@ export function ReservationsPage() {
         <div className="mt-4 space-y-3">
           {pendingActionsQuery.isLoading ? (
             <p className="text-sm text-slate-500">{t("page.pendingActions.loading")}</p>
+          ) : pendingActionsQuery.isError ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+              <span>{t("page.pendingActions.error")}</span>
+              <button
+                type="button"
+                onClick={() => void pendingActionsQuery.refetch()}
+                className="min-h-11 rounded-lg border border-rose-300 bg-white px-3 py-1 text-xs font-semibold text-rose-800 hover:bg-rose-100"
+              >
+                {t("page.pendingActions.retry")}
+              </button>
+            </div>
           ) : pendingActions.length === 0 ? (
             <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
               {t("page.pendingActions.empty")}
@@ -2008,7 +2063,7 @@ export function ReservationsPage() {
                 return (
                   <tr key={room.id} className="border-t border-slate-100">
                     <td className="sticky left-0 z-10 bg-white px-2 py-1 text-left font-semibold text-slate-800">
-                      {t("page.common.room", { number: room.room_number || room.id })}
+                      {t("page.common.room", { number: room.room_number || t("page.common.informationUnavailable") })}
                     </td>
                     {calendarDays.map((day) => {
                       const target = new Date(day.iso);
@@ -2088,8 +2143,8 @@ export function ReservationsPage() {
                     </td>
                     <td className="px-4 py-2 text-slate-600">
                       {t("page.list.roomCat", {
-                        room: reservation.room_id ? t("page.common.room", { number: reservation.room_id }) : t("page.common.unassigned"),
-                        category: reservation.category_id
+                        room: reservation.room_number ? t("page.common.room", { number: reservation.room_number }) : t("page.common.unassigned"),
+                        category: reservation.category_name ?? categoryNameById.get(reservation.category_id) ?? t("page.common.informationUnavailable")
                       })}
                     </td>
                     <td className="px-4 py-2 text-slate-600">{reservation.check_in_date}</td>
@@ -2187,8 +2242,8 @@ export function ReservationsPage() {
                 </div>
                 <p className="text-xs text-slate-600">
                   {t("page.list.roomCat", {
-                    room: reservation.room_id ? t("page.common.room", { number: reservation.room_id }) : t("page.common.unassigned"),
-                    category: reservation.category_id
+                    room: reservation.room_number ? t("page.common.room", { number: reservation.room_number }) : t("page.common.unassigned"),
+                    category: reservation.category_name ?? categoryNameById.get(reservation.category_id) ?? t("page.common.informationUnavailable")
                   })}
                 </p>
                 <p className="text-xs text-slate-600">
@@ -2391,7 +2446,7 @@ export function ReservationsPage() {
                     <option value="">{t("page.common.unassigned")}</option>
                     {availableRooms.map((room) => (
                       <option key={room.id} value={room.id}>
-                        {t("page.form.roomOption", { number: room.room_number || room.id, category: room.category_id })}
+                        {t("page.form.roomOption", { number: room.room_number || t("page.common.informationUnavailable"), category: categoryNameById.get(room.category_id) ?? t("page.common.informationUnavailable") })}
                       </option>
                     ))}
                   </select>
@@ -3176,11 +3231,11 @@ export function ReservationsPage() {
                 <p className="text-xs text-slate-500">
                   {t("page.details.subtitle", {
                     guest: reservationGuestLabel(t, detailsReservation),
-                    category: detailsReservation.category_id,
+                    category: detailsReservation.category_name ?? categoryNameById.get(detailsReservation.category_id) ?? t("page.common.informationUnavailable"),
                     room: detailsRoom
                       ? t("page.common.room", { number: detailsRoom.room_number })
-                      : detailsReservation.room_id
-                        ? t("page.common.roomHash", { id: detailsReservation.room_id })
+                      : detailsReservation.room_number
+                        ? t("page.common.room", { number: detailsReservation.room_number })
                         : t("page.common.unassigned")
                   })}
                 </p>
@@ -3200,6 +3255,82 @@ export function ReservationsPage() {
             </div>
 
             <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <div className="space-y-3 rounded-lg border border-sky-200 bg-sky-50 p-3 md:col-span-2">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-sky-700">{t("page.details.communicationEyebrow")}</p>
+                    <p className="text-sm font-semibold text-slate-900">{t("page.details.communicationTitle")}</p>
+                    <p className="text-xs text-slate-600">{t("page.details.communicationHint")}</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className="rounded-lg border border-sky-300 bg-white px-3 py-2 text-xs font-semibold text-sky-800 hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled={!hasPermission("reservation:update") || communicationMutation.isPending || !communicationRecipient.trim()}
+                      onClick={() => void communicationMutation.mutateAsync({ kind: "confirmation", resend: false })}
+                    >
+                      {t("page.details.sendConfirmation")}
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-lg border border-sky-300 bg-white px-3 py-2 text-xs font-semibold text-sky-800 hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled={!hasPermission("reservation:update") || communicationMutation.isPending || !communicationRecipient.trim()}
+                      onClick={() => void communicationMutation.mutateAsync({ kind: "voucher", resend: false })}
+                    >
+                      {t("page.details.sendVoucher")}
+                    </button>
+                  </div>
+                </div>
+                <label className="block text-xs font-semibold text-slate-700" htmlFor="reservation-communication-recipient">
+                  {t("page.details.communicationRecipient")}
+                </label>
+                <input
+                  id="reservation-communication-recipient"
+                  type="email"
+                  value={communicationRecipient}
+                  onChange={(event) => setCommunicationRecipient(event.target.value)}
+                  placeholder={t("page.details.communicationRecipientPlaceholder")}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                  autoComplete="email"
+                />
+                {communicationsQuery.isLoading ? (
+                  <p className="text-xs text-slate-600">{t("page.details.communicationLoading")}</p>
+                ) : communicationsQuery.isError ? (
+                  <p className="text-xs text-rose-700">{t("page.details.communicationLoadError")}</p>
+                ) : communicationsQuery.data?.length ? (
+                  <ul className="space-y-1 text-xs text-slate-700">
+                    {communicationsQuery.data.slice(0, 4).map((delivery) => (
+                      <li key={delivery.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-white px-2 py-1.5">
+                        <span>
+                          {delivery.kind === "confirmation" ? t("page.details.communicationConfirmation") : t("page.details.communicationVoucher")}
+                          {" · "}{delivery.recipient_email}
+                        </span>
+                        <span className="flex items-center gap-2">
+                          <span className={delivery.status === "accepted" ? "font-semibold text-emerald-700" : delivery.status === "failed" ? "font-semibold text-rose-700" : "font-semibold text-amber-700"}>
+                            {t(`page.details.communicationStatus.${delivery.status}`)}
+                          </span>
+                          {(delivery.status === "failed" || delivery.status === "unknown") && hasPermission("reservation:update") ? (
+                            <button
+                              type="button"
+                              className="font-semibold text-sky-700 underline hover:text-sky-900 disabled:opacity-60"
+                              disabled={communicationMutation.isPending}
+                              onClick={() => {
+                                setCommunicationRecipient(delivery.recipient_email);
+                                void communicationMutation.mutateAsync({ kind: delivery.kind, resend: true, recipient: delivery.recipient_email });
+                              }}
+                            >
+                              {t("page.details.communicationResend")}
+                            </button>
+                          ) : null}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-xs text-slate-600">{t("page.details.communicationEmpty")}</p>
+                )}
+              </div>
+
               <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
                 <p className="text-xs uppercase tracking-wide text-slate-500">{t("page.details.timelineTitle")}</p>
                 <ul className="space-y-2 text-sm text-slate-800">

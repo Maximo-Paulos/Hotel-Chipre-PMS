@@ -8,7 +8,8 @@
       "title": "Estadía",
       "roomNumber": "Habitación #{{id}}",
       "noRoomAssigned": "Sin habitación asignada",
-      "category": "Categoría"
+      "category": "Categoría",
+      "informationUnavailable": "Información no disponible"
     },
     "guests": {
       "title": "Huéspedes",
@@ -206,7 +207,8 @@
       "close": "Cerrar",
       "room": "Hab {{number}}",
       "roomHash": "Hab #{{id}}",
-      "unassigned": "Sin asignar"
+      "unassigned": "Sin asignar",
+      "informationUnavailable": "Información no disponible"
     },
     "toast": {
       "success": "Listo",
@@ -246,6 +248,9 @@
       "openCount": "{{count}} abiertas",
       "criticalCount": "{{count}} críticas",
       "loading": "Cargando bandeja operativa...",
+      "error": "No se pudo consultar la bandeja operativa.",
+      "retry": "Reintentar",
+      "unavailableCount": "Cantidad no disponible",
       "empty": "No hay acciones operativas pendientes en este hotel.",
       "statusPrefix": "Estado: {{status}}",
       "sourcePrefix": "Origen: {{source}}",
@@ -517,6 +522,24 @@
       "title": "Reserva {{code}}",
       "subtitle": "{{guest}} - Cat {{category}} - {{room}}",
       "exportVoucher": "Exportar voucher PDF",
+      "communicationEyebrow": "Comunicación",
+      "communicationTitle": "Enviar información al huésped",
+      "communicationHint": "El estado refleja la respuesta del proveedor; aceptado no significa entregado.",
+      "communicationRecipient": "Destinatario",
+      "communicationRecipientPlaceholder": "email@huésped.com",
+      "sendConfirmation": "Enviar confirmación",
+      "sendVoucher": "Enviar comprobante",
+      "communicationLoading": "Cargando historial de envíos…",
+      "communicationLoadError": "No se pudo cargar el historial de envíos.",
+      "communicationEmpty": "Todavía no hay envíos desde esta reserva.",
+      "communicationConfirmation": "Confirmación",
+      "communicationVoucher": "Comprobante",
+      "communicationStatus": {
+        "pending": "Pendiente",
+        "accepted": "Aceptado por el proveedor",
+        "failed": "Fallido",
+        "unknown": "Respuesta desconocida"
+      },
       "timelineTitle": "Timeline",
       "timelineCheckIn": "Check-in:",
       "timelineCheckOut": "Check-out:",
@@ -664,7 +687,7 @@
       "blockedBySubscriptionAllocation": "Accion bloqueada por suscripcion.",
       "guestRequired": "Ingresá el ID del huésped o completá los datos para crearlo automáticamente.",
       "guestCreateFailed": "No se pudo crear el huésped",
-      "categoryRequired": "Seleccioná una Categoría (ID numérico).",
+      "categoryRequired": "Seleccioná una categoría.",
       "datesRequired": "Elegí fechas de ingreso y salida.",
       "datesInvalid": "La fecha de salida debe ser posterior al ingreso.",
       "invalidManualRate": "Ingresá una tarifa manual válida (mayor o igual a 0).",
@@ -703,7 +726,12 @@
       "noShowFailed": "No se pudo registrar el no-show",
       "chargeFailed": "No se pudo cargar el consumo.",
       "chargeFieldsRequired": "Ingresá un detalle y un importe positivo para el consumo.",
-      "proofReadFailed": "No se pudo leer el comprobante."
+      "proofReadFailed": "No se pudo leer el comprobante.",
+      "communicationFailed": "No se pudo enviar el correo.",
+      "communicationReservationMissing": "Abrí una reserva para enviar información.",
+      "communicationAccepted": "El proveedor aceptó el correo. No se puede confirmar la entrega final.",
+      "communicationUnknown": "No se pudo confirmar la respuesta del proveedor. Revisá el historial antes de reenviar.",
+      "communicationPending": "El envío quedó pendiente."
     },
     "voucher": {
       "title": "Voucher {{code}}",

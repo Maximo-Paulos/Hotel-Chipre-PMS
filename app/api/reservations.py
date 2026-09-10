@@ -113,11 +113,28 @@ logger = logging.getLogger(__name__)
 
 def _to_read(r: Reservation) -> ReservationRead:
     result = ReservationRead.model_validate(r)
-    result.balance_due = r.balance_due
-    result.nights = r.nights
+    room = getattr(r, "room", None)
+    result.room_number = (
+        room.room_number
+        if room is not None and getattr(room, "hotel_id", None) == r.hotel_id
+        else getattr(r, "room_number", None)
+    )
+    category = getattr(r, "category", None)
+    result.category_name = (
+        category.name
+        if category is not None and getattr(category, "hotel_id", None) == r.hotel_id
+        else getattr(r, "category_name", None)
+    )
+    result.balance_due = getattr(
+        r,
+        "balance_due",
+        max(0, float(r.total_amount or 0) - float(r.amount_paid or 0)),
+    )
+    result.nights = getattr(r, "nights", (r.check_out_date - r.check_in_date).days)
+    additional_guests = getattr(r, "additional_guests", None) or []
     result.additional_guests = [
         {"id": g.id, "first_name": g.first_name, "last_name": g.last_name, "document_type": g.document_type, "document_number": g.document_number}
-        for g in r.additional_guests
+        for g in additional_guests
     ]
     return result
 
@@ -352,6 +369,7 @@ def list_reservations(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     order: Literal["recent", "check_in"] = "recent",
+    upcoming_only: bool = False,
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_READ)),
 ):
@@ -365,6 +383,7 @@ def list_reservations(
         skip=skip,
         limit=limit,
         order=order,
+        upcoming_only=upcoming_only,
         context=context,
     )
     try:

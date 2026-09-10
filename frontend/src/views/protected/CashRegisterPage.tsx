@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 
-import { type CashCloseReport, type CashMovementPayload } from "../../api/cashRegister";
+import { downloadCashLedgerCsv, type CashCloseReport, type CashMovementPayload } from "../../api/cashRegister";
 import {
   cashMovementTypeLabel,
   cashSessionStatusLabel,
@@ -30,6 +30,7 @@ export function CashRegisterPage() {
   const { hasPermission } = useEffectivePermissions();
   const [selectedSessionId, setSelectedSessionId] = useState<number | null>(null);
   const [openingBalance, setOpeningBalance] = useState<number | null>(null);
+  const [openingCurrency, setOpeningCurrency] = useState("ARS");
   const [openingNotes, setOpeningNotes] = useState("");
   const [movementForm, setMovementForm] = useState<CashMovementPayload>(emptyMovementForm);
   const [countedBalance, setCountedBalance] = useState(0);
@@ -38,11 +39,16 @@ export function CashRegisterPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [closeReport, setCloseReport] = useState<CashCloseReport | null>(null);
   const [reportDate, setReportDate] = useState(() => todayIso());
+  const [reportCurrency, setReportCurrency] = useState("");
 
   const sessionsQuery = useCashSessions();
-  const dailySummaryQuery = useCashDailySummary(reportDate);
   const latestCloseReportQuery = useLatestCashCloseReport();
   const sessions = useMemo(() => sessionsQuery.data ?? [], [sessionsQuery.data]);
+  const availableCurrencies = useMemo(
+    () => Array.from(new Set(sessions.map((item) => item.currency_code.toUpperCase()))).sort(),
+    [sessions]
+  );
+  const dailySummaryQuery = useCashDailySummary(reportDate, reportCurrency || undefined);
   const openSession = useMemo(() => sessions.find((session) => session.status === "open") ?? null, [sessions]);
   const selectedSession = useMemo(
     () => sessions.find((session) => session.id === selectedSessionId) ?? openSession ?? sessions[0] ?? null,
@@ -98,7 +104,7 @@ export function CashRegisterPage() {
     try {
       const session = await mutations.openSessionMutation.mutateAsync({
         opening_balance: Number(openingBalance ?? successorOpeningBalance),
-        currency_code: "ARS",
+        currency_code: openingCurrency,
         notes: openingNotes.trim() || null
       });
       setSelectedSessionId(session.id);
@@ -186,6 +192,23 @@ export function CashRegisterPage() {
     }
   };
 
+  const handleExport = async () => {
+    try {
+      const blob = await downloadCashLedgerCsv(reportDate, session, reportCurrency || dailySummaryQuery.data?.currency_code);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `caja-${reportDate}.csv`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      setMessage("Exportación de caja descargada.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "No se pudo exportar la caja.");
+    }
+  };
+
   return (
     <div className="space-y-6">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -216,6 +239,29 @@ export function CashRegisterPage() {
               data-testid="cash-daily-date"
             />
           </label>
+          <label className="space-y-1 text-sm font-semibold text-slate-700">
+            <span>Moneda</span>
+            <select
+              value={reportCurrency}
+              onChange={(event) => setReportCurrency(event.target.value)}
+              className="block rounded-lg border border-slate-300 bg-white px-3 py-2 font-normal"
+              aria-describedby="cash-daily-currency-help"
+            >
+              <option value="">Detectar automáticamente</option>
+              {availableCurrencies.map((currencyCode) => <option key={currencyCode} value={currencyCode}>{currencyCode}</option>)}
+            </select>
+            <span id="cash-daily-currency-help" className="block max-w-48 text-xs font-normal text-slate-500">
+              Si hay más de una moneda, elegí una para no mezclar importes.
+            </span>
+          </label>
+          <button
+            type="button"
+            onClick={() => void handleExport()}
+            disabled={dailySummaryQuery.isLoading || dailySummaryQuery.isError || !hasPermission("cash:view")}
+            className="rounded-lg border border-brand-200 bg-white px-3 py-2 text-sm font-semibold text-brand-700 hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Exportar CSV
+          </button>
         </div>
         {dailySummaryQuery.isLoading ? <p className="text-sm text-slate-600">Cargando resumen diario...</p> : null}
         {dailySummaryQuery.isError ? <p className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">No se pudo cargar el resumen diario: {(dailySummaryQuery.error as Error).message}</p> : null}
@@ -391,6 +437,18 @@ export function CashRegisterPage() {
                 onChange={(event) => setOpeningBalance(Number(event.target.value))}
                 className="w-full rounded-lg border border-slate-300 px-3 py-2"
               />
+            </label>
+            <label className="space-y-1 text-sm">
+              <span className="text-slate-600">Moneda</span>
+              <select
+                value={openingCurrency}
+                onChange={(event) => setOpeningCurrency(event.target.value)}
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
+              >
+                {Array.from(new Set(["ARS", ...availableCurrencies])).map((currencyCode) => (
+                  <option key={currencyCode} value={currencyCode}>{currencyCode}</option>
+                ))}
+              </select>
             </label>
             <label className="space-y-1 text-sm">
               <span className="text-slate-600">Notas</span>

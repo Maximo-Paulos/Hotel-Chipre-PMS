@@ -18,7 +18,6 @@ export function VerifyEmailPage() {
   const [email, setEmail] = useState(session.email || session.userId || pendingOwner?.email || "");
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [sentCode, setSentCode] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const handleSend = async () => {
@@ -32,13 +31,8 @@ export function VerifyEmailPage() {
     setEmail(normalizedEmail);
     setLoading(true);
     try {
-      const resp = await requestVerification(normalizedEmail);
-      if (resp.code) {
-        setSentCode(resp.code);
-        setMessage(`Codigo demo: ${resp.code}`);
-      } else {
-        setMessage("Enviamos un codigo a tu correo.");
-      }
+      await requestVerification(normalizedEmail);
+      setMessage("Enviamos un código a tu correo.");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "No se pudo enviar el correo");
     } finally {
@@ -113,15 +107,16 @@ export function VerifyEmailPage() {
             alt="Hotel Chipre PMS"
             className="h-20 w-auto max-w-full object-contain"
           />
-          <h1 className="text-2xl font-semibold text-slate-900">Verifica tu email</h1>
+          <h1 className="text-2xl font-semibold text-slate-900">Verificá tu email</h1>
           <p className="text-sm text-slate-600">
             Necesitamos validar tu correo para habilitar acciones y completar el onboarding.
           </p>
         </div>
         <div className="space-y-3 text-sm text-slate-700">
-          <label className="text-sm font-medium text-slate-700">
+          <label htmlFor="verify-email" className="text-sm font-medium text-slate-700">
             Email
             <input
+              id="verify-email"
               type="email"
               autoComplete="email"
               value={email}
@@ -137,7 +132,7 @@ export function VerifyEmailPage() {
               disabled={loading}
               className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-60"
             >
-              {loading ? "Enviando..." : "Enviar codigo"}
+              {loading ? "Enviando..." : "Enviar código"}
             </button>
             <button
               type="button"
@@ -147,13 +142,14 @@ export function VerifyEmailPage() {
               Ir al onboarding
             </button>
           </div>
-          <label className="text-sm font-medium text-slate-700">
-            Codigo
+          <label htmlFor="verify-code" className="text-sm font-medium text-slate-700">
+            Código
             <input
+              id="verify-code"
               inputMode="numeric"
               autoComplete="one-time-code"
               value={code}
-              placeholder="Ej: 123456"
+              placeholder="Ej.: 123456"
               onChange={(e) => setCode(e.target.value)}
               className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:ring-brand-500"
             />
@@ -164,12 +160,11 @@ export function VerifyEmailPage() {
             disabled={loading}
             className="w-full rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800 hover:border-emerald-300 disabled:opacity-60"
           >
-            Verificar codigo
+            Verificar código
           </button>
         </div>
-        {message && <p className="mt-3 rounded-md bg-emerald-50 p-3 text-emerald-700">{message}</p>}
-        {sentCode && <p className="mt-1 text-xs text-amber-700">Codigo demo: {sentCode}</p>}
-        {error && <p className="mt-3 rounded-md bg-rose-50 p-3 text-sm text-rose-700">{error}</p>}
+        {message && <p role="status" className="mt-3 rounded-md bg-emerald-50 p-3 text-emerald-700">{message}</p>}
+        {error && <p role="alert" className="mt-3 rounded-md bg-rose-50 p-3 text-sm text-rose-700">{error}</p>}
         <div className="mt-6 flex items-center justify-between text-sm">
           <Link to="/login" className="text-brand-700 hover:underline">
             Volver al login

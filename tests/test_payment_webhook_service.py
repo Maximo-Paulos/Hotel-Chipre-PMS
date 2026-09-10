@@ -10,7 +10,7 @@ from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.room import RoomCategory
 from app.models.transaction import Transaction, TransactionStatusEnum
 from app.services.payment_link_service import balance_due_from_transactions
-from app.services.payment_webhook_service import ingest_webhook
+from app.services.payment_webhook_service import PaymentWebhookError, ingest_webhook
 from app.config import get_settings
 
 
@@ -260,3 +260,51 @@ def test_balance_due_uses_transactions_not_payments(db):
     db.flush()
 
     assert balance_due_from_transactions(db, 1, reservation.id) == Decimal("300.00")
+
+
+def test_minimal_mercadopago_notification_is_verified_by_provider_fetcher(db):
+    reservation = _reservation(db)
+    link = _link(db, reservation)
+    link.gateway_response = {"pms_account_id": "collector-1"}
+    fetched = {
+        "id": "mp-payment-fetched",
+        "status": "approved",
+        "transaction_amount": 100.0,
+        "currency_id": "ARS",
+        "collector_id": "collector-1",
+    }
+
+    result = ingest_webhook(
+        db,
+        hotel_id=1,
+        provider="mercado_pago",
+        webhook_id="mp-hook-minimal",
+        payload={"type": "payment", "data": {"id": "mp-payment-fetched"}},
+        payment_link_id=link.id,
+        provider_fetcher=lambda _db, _hotel_id, _payment_id: fetched,
+    )
+
+    assert result["status"] == "ok"
+    assert db.query(Payment).one().external_payment_id == "mp-payment-fetched"
+
+
+def test_mercadopago_notification_rejects_different_collector_account(db):
+    reservation = _reservation(db)
+    link = _link(db, reservation)
+    link.gateway_response = {"pms_account_id": "collector-1"}
+
+    with pytest.raises(PaymentWebhookError, match="cuenta de Mercado Pago distinta"):
+        ingest_webhook(
+            db,
+            hotel_id=1,
+            provider="mercado_pago",
+            webhook_id="mp-hook-wrong-account",
+            payload={
+                "payment_id": "mp-payment-wrong-account",
+                "status": "approved",
+                "amount": 100.0,
+                "currency": "ARS",
+                "collector_id": "collector-2",
+            },
+            payment_link_id=link.id,
+        )

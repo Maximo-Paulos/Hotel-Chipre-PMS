@@ -170,7 +170,10 @@ function scopeSummary(promo: Pick<Promotion, "scope" | "from_night_number">) {
   return promo.scope === "full_stay" ? "Toda la estadía" : `Desde la noche ${promo.from_night_number ?? "?"}`;
 }
 
-function conditionChips(conditions: PromotionConditions): string[] {
+function conditionChips(
+  conditions: PromotionConditions,
+  labels?: { categories?: Map<number, string>; rooms?: Map<number, string> }
+): string[] {
   const chips: string[] = [];
   if (conditions.booking_from || conditions.booking_to) {
     chips.push(`Reserva: ${conditions.booking_from ?? "…"} → ${conditions.booking_to ?? "…"}`);
@@ -182,8 +185,8 @@ function conditionChips(conditions: PromotionConditions): string[] {
     chips.push(`Noches: ${conditions.min_nights ?? "1"}–${conditions.max_nights ?? "∞"}`);
   }
   if (conditions.weekdays?.length) chips.push(`Días: ${conditions.weekdays.join(", ")}`);
-  if (conditions.category_id) chips.push(`Categoría #${conditions.category_id}`);
-  if (conditions.room_id) chips.push(`Habitación #${conditions.room_id}`);
+  if (conditions.category_id) chips.push(`Categoría: ${labels?.categories?.get(conditions.category_id) ?? "seleccionada"}`);
+  if (conditions.room_id) chips.push(`Habitación: ${labels?.rooms?.get(conditions.room_id) ?? "seleccionada"}`);
   if (conditions.sales_channel_code) chips.push(`Canal: ${conditions.sales_channel_code}`);
   if (conditions.guest_id) chips.push(`Huésped #${conditions.guest_id}`);
   if (conditions.company_id) chips.push(`Empresa #${conditions.company_id}`);
@@ -200,6 +203,10 @@ export function PromotionsPage() {
   const { createMutation, updateMutation, deactivateMutation, reactivateMutation } = usePromotionMutations();
   const { categoriesQuery, roomsQuery } = useRooms();
   const companiesQuery = useCompanies();
+  const conditionLabels = {
+    categories: new Map((categoriesQuery.data ?? []).map((category) => [category.id, category.name])),
+    rooms: new Map((roomsQuery.data ?? []).map((room) => [room.id, room.room_number]))
+  };
 
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -362,9 +369,9 @@ export function PromotionsPage() {
                     {promo.is_active ? "Activa" : "Inactiva"}
                   </span>
                 </div>
-                {conditionChips(promo.conditions).length > 0 ? (
+                {conditionChips(promo.conditions, conditionLabels).length > 0 ? (
                   <div className="mt-2 flex flex-wrap gap-1.5">
-                    {conditionChips(promo.conditions).map((chip) => (
+                    {conditionChips(promo.conditions, conditionLabels).map((chip) => (
                       <span key={chip} className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">
                         {chip}
                       </span>

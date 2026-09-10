@@ -126,6 +126,20 @@ from app.models.cash_register import (
 from app.models.waitlist import WaitlistEntry, WaitlistStatusEnum
 from app.models.hotel_api_key import HotelAPIKey, APIKeyPurposeEnum
 from app.models.room_block import RoomBlock, RoomBlockReasonEnum
+from app.models.operational_task import (
+    OperationalTask,
+    OperationalTaskEvent,
+    OperationalTaskTypeEnum,
+    OperationalTaskStatusEnum,
+    OperationalTaskPriorityEnum,
+    ShiftHandoff,
+    ShiftHandoffStatusEnum,
+)
+from app.models.reservation_communication import (
+    ReservationEmailDelivery,
+    ReservationEmailKindEnum,
+    ReservationEmailStatusEnum,
+)
 from app.models.fx_rate_snapshot import FxRateSnapshot
 from app.models.company_document import CompanyDocument, CompanyDocumentTypeEnum, CompanyDocumentStatusEnum
 from app.models.promotion import Promotion, PromotionBenefitTypeEnum, PromotionScopeEnum
@@ -162,6 +176,12 @@ from app.models.analytics import (
 
 __all__ = [
     "Room", "RoomCategory",
+    "OperationalTask", "OperationalTaskEvent", "OperationalTaskTypeEnum",
+    "OperationalTaskStatusEnum", "OperationalTaskPriorityEnum", "ShiftHandoff",
+    "ShiftHandoffStatusEnum",
+    "ReservationEmailDelivery",
+    "ReservationEmailKindEnum",
+    "ReservationEmailStatusEnum",
     "Guest", "GuestCompanion", "GuestTag", "GuestRatingEnum", "GuestTagTypeEnum",
     "GuestRestriction", "GuestRestrictionStatusEnum",
     "GuestRoomAvoidance", "GuestRoomAvoidanceStatusEnum",

@@ -26,7 +26,9 @@ export type Reservation = {
     document_number?: string | null;
   } | null;
   room_id: number | null;
+  room_number?: string | null;
   category_id: number;
+  category_name?: string | null;
   check_in_date: string;
   check_out_date: string;
   actual_check_in?: string | null;
@@ -224,6 +226,8 @@ export type ReservationFilters = {
    * assume arrivals are sorted by stay date.
    */
   order?: ReservationOrder;
+  /** Server-side operational filter for arrivals that have not entered yet. */
+  upcomingOnly?: boolean;
 };
 
 export type ReservationPayload = {
@@ -362,6 +366,7 @@ const buildQueryString = (filters: ReservationFilters = {}) => {
   if (typeof filters.skip === "number") params.set("skip", String(filters.skip));
   if (typeof filters.limit === "number") params.set("limit", String(filters.limit));
   if (filters.order) params.set("order", filters.order);
+  if (filters.upcomingOnly) params.set("upcoming_only", "true");
   const qs = params.toString();
   return qs ? `?${qs}` : "";
 };

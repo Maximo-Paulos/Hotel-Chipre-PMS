@@ -12,7 +12,9 @@ A completed gateway Payment writes exactly one Transaction via payment_service.p
 from datetime import datetime, timezone
 from decimal import Decimal
 import json
-from typing import Any
+from typing import Any, Callable
+
+import requests
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -26,11 +28,43 @@ from app.services.payment_link_test_service import (
     validate_mercadopago_webhook_signature as _validate_signature_or_raise,
 )
 from app.services.payment_service import calculate_base_amount_before_surcharge, process_payment
-from app.services.external_effects_policy import require_inbound_provider_events
+from app.services.external_effects_policy import (
+    external_connections_enabled,
+    require_external_connections,
+    require_inbound_provider_events,
+)
 
 
 class PaymentWebhookError(Exception):
     pass
+
+
+def fetch_mercadopago_payment(db: Session, hotel_id: int, external_payment_id: str) -> dict[str, Any]:
+    """Verify a signed notification against the active hotel's MP account."""
+    require_external_connections("Mercado Pago payment verification")
+    from app.services.integration_service import get_connection_payload  # noqa: PLC0415
+
+    connection_payload = get_connection_payload(db, hotel_id, "mercadopago")
+    access_token = str(connection_payload.get("access_token") or "").strip()
+    if not access_token:
+        raise PaymentWebhookError("El hotel no tiene una cuenta de Mercado Pago conectada")
+    try:
+        response = requests.get(
+            f"https://api.mercadopago.com/v1/payments/{external_payment_id}",
+            headers={"Authorization": f"Bearer {access_token}"},
+            timeout=20,
+        )
+    except requests.RequestException as exc:
+        raise PaymentWebhookError("No se pudo consultar el pago en Mercado Pago") from exc
+    if not response.ok:
+        raise PaymentWebhookError("Mercado Pago no pudo verificar el pago informado")
+    try:
+        data = response.json()
+    except ValueError as exc:
+        raise PaymentWebhookError("Mercado Pago devolvio una respuesta de pago invalida") from exc
+    if not isinstance(data, dict):
+        raise PaymentWebhookError("Mercado Pago devolvio una respuesta de pago invalida")
+    return data
 
 
 def validate_mercadopago_webhook_signature(
@@ -209,6 +243,7 @@ def ingest_webhook(
     webhook_id: str,
     payload: dict[str, Any],
     payment_link_id: int | None = None,
+    provider_fetcher: Callable[[Session, int, str], dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     # Direct service callers get the same fail-closed boundary as HTTP routes.
     # Keep this before all queries and inserts so a disabled lane cannot persist
@@ -251,6 +286,53 @@ def ingest_webhook(
         raise PaymentWebhookError("El artefacto local_only no acepta pagos de proveedor")
     if link.status in {"cancelled", "expired"}:
         raise PaymentWebhookError("El link de pago ya no acepta eventos de cobro")
+
+    event_reference = _payload_value(
+        payload,
+        "external_reference",
+        "data.external_reference",
+        "metadata.external_reference",
+    )
+    if event_reference and link.external_reference and str(event_reference) != str(link.external_reference):
+        raise PaymentWebhookError("La referencia del evento no coincide con el link de pago")
+
+    required_fields = (
+        _payload_value(payload, "amount", "transaction_amount", "data.amount"),
+        _payload_value(payload, "currency", "currency_id", "data.currency"),
+        _payload_value(payload, "status", "data.status"),
+    )
+    # In a real connected runtime the provider response is authoritative even
+    # when a notification happens to include amount/status fields. Tests and
+    # local-only callers stay deterministic because the external lane is
+    # disabled unless they inject an explicit fetcher.
+    must_verify_with_provider = provider == "mercado_pago" and (
+        provider_fetcher is not None or external_connections_enabled()
+    )
+    if must_verify_with_provider or any(value in (None, "") for value in required_fields):
+        fetcher = provider_fetcher or (fetch_mercadopago_payment if external_connections_enabled() else None)
+        if fetcher is None:
+            raise PaymentWebhookError(
+                "El evento no trae datos suficientes y la consulta a Mercado Pago esta deshabilitada"
+            )
+        verified_payload = fetcher(db, hotel_id, external_payment_id)
+        original_data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
+        payload = {**payload, **verified_payload, "data": {**original_data, **verified_payload}}
+
+    expected_account = _payload_value(
+        link.gateway_response or {},
+        "pms_account_id",
+        "collector_id",
+        "metadata.account_id",
+    )
+    incoming_account = _payload_value(
+        payload,
+        "collector_id",
+        "user_id",
+        "data.collector_id",
+        "metadata.account_id",
+    )
+    if expected_account and incoming_account and str(expected_account) != str(incoming_account):
+        raise PaymentWebhookError("El pago proviene de una cuenta de Mercado Pago distinta a la del hotel")
 
     raw_amount = _payload_value(payload, "amount", "transaction_amount", "data.amount")
     raw_currency = _payload_value(payload, "currency", "currency_id", "data.currency")

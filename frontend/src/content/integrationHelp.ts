@@ -13,11 +13,12 @@ export const integrationHelp: IntegrationHelp[] = [
     title: "Booking.com (token-based)",
     steps: [
       "Desde tu cuenta de Booking Connectivity, genera un token JWT de machine account.",
-      "En la tarjeta de Booking, pega el token en el campo API key y guarda.",
+      "En la tarjeta de Booking, pega el token en el campo de conexión y guarda.",
       "Pulsa Conectar para validar. Si falla, revisa que el token no haya expirado.",
     ],
     tips: [
       "Nunca compartas el token por chat o email.",
+      "La conexión queda preparada, pero no publica cambios hasta que el alojamiento tenga permisos y certificación de Connectivity.",
       "Si ves phishing que simula Booking, entra solo a https://admin.booking.com o al portal de conectividad oficial."
     ],
     docUrl: "https://developers.booking.com/connectivity/docs/token-based-authentication",

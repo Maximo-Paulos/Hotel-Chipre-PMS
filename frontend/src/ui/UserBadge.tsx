@@ -8,9 +8,9 @@ import type { SessionState } from "../state/session";
 // same label for a given role instead of drifting apart.
 export const roleLabels: Record<NonNullable<SessionState["role"]>, string> = {
   owner: "Dueño",
-  co_owner: "Co-dueño",
-  manager: "Manager",
-  housekeeping: "Housekeeping",
+  co_owner: "Copropietario",
+  manager: "Gerencia",
+  housekeeping: "Limpieza",
   receptionist: "Recepción"
 };
 
@@ -45,7 +45,7 @@ export function UserBadge() {
             type="button"
             data-testid="logout-btn"
           >
-            Logout
+            Salir
           </button>
         </div>
         {(session.baseRole === "owner") && (
@@ -56,18 +56,18 @@ export function UserBadge() {
               value={currentRole ?? ""}
               onChange={handleRoleChange}
               data-testid="role-switcher"
-              aria-description="Solo previsualiza la navegación; no cambia tus permisos efectivos"
+              aria-describedby="role-switcher-help"
             >
               <option value="" disabled>
                 Seleccionar rol
               </option>
               <option value="owner">Dueño (propietario)</option>
-              <option value="co_owner">Co-dueño</option>
-              <option value="manager">Manager</option>
-              <option value="housekeeping">Housekeeping</option>
+              <option value="co_owner">Copropietario</option>
+              <option value="manager">Gerencia</option>
+              <option value="housekeeping">Limpieza</option>
               <option value="receptionist">Recepción</option>
             </select>
-            <span className="mt-1 block text-[11px] text-slate-500">No cambia tus permisos efectivos.</span>
+            <span id="role-switcher-help" className="mt-1 block text-[11px] text-slate-500">Solo cambia la vista; tus permisos efectivos no cambian.</span>
           </label>
         )}
       </div>

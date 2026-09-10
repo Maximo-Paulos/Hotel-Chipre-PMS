@@ -44,7 +44,7 @@
     "dismiss": "Not now"
   },
   "sidebar": {
-    "tagline": "Prototype navigation layout"
+    "tagline": "Hotel operations in one place"
   },
   "nav": {
     "daily": {
@@ -52,6 +52,7 @@
       "reservations": "Reservations",
       "guests": "Guests",
       "rooms": "Rooms",
+      "tasks": "Tasks",
       "cashRegister": "Cash register"
     },
     "sections": {

@@ -9,6 +9,8 @@ from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import event
 
+from app.api.reservations import _to_read
+from app.models.reservation import ReservationStatusEnum
 from app.schemas.reservation import ReservationCreate
 from app.services.reservation_service import create_reservation, list_reservations
 
@@ -105,6 +107,39 @@ def test_order_check_in_preserves_pre_a2_default(db, sample_guest, sample_rooms,
     assert [r.id for r in results] == [earlier.id, later.id]
 
 
+def test_upcoming_only_returns_unentered_allowed_states_in_server_order(db, sample_guest, sample_rooms, hotel_config):
+    today = date.today()
+
+    def make(code, check_in, status=ReservationStatusEnum.PENDING, actual_check_in=None):
+        reservation = create_reservation(
+            db,
+            ReservationCreate(
+                guest_id=sample_guest.id,
+                category_id=sample_rooms[0].category_id,
+                room_id=None,
+                check_in_date=check_in,
+                check_out_date=check_in + timedelta(days=2),
+            ),
+            hotel_id=1,
+        )
+        reservation.confirmation_code = code
+        reservation.status = status
+        reservation.actual_check_in = actual_check_in
+        db.flush()
+        return reservation
+
+    early = make("ARRIVAL-EARLY", today + timedelta(days=1))
+    late = make("ARRIVAL-LATE", today + timedelta(days=3), ReservationStatusEnum.PRE_CHECK_IN)
+    make("ARRIVAL-PAST", today - timedelta(days=1))
+    make("ARRIVAL-IN", today + timedelta(days=2), ReservationStatusEnum.CHECKED_IN, datetime.now(timezone.utc))
+    make("ARRIVAL-CANCELLED", today + timedelta(days=2), ReservationStatusEnum.CANCELLED)
+    db.commit()
+
+    results = list_reservations(db, hotel_id=1, upcoming_only=True, order="check_in", limit=20)
+
+    assert [r.id for r in results] == [early.id, late.id]
+
+
 def test_selectin_fan_out_is_bounded_by_limit_not_by_hotel_history(db, sample_guest, sample_rooms, hotel_config):
     """A2 hidden cost: additional_guests/guest.companions/guest.tags are
     lazy="selectin" on Reservation/Guest. Before A2 this listing fetched the
@@ -159,5 +194,23 @@ def test_listing_uses_one_scalar_reservation_query(db, sample_guest, sample_room
     ]
     assert len(results) == 3
     assert len(reservation_selects) == 1
-    assert " join rooms " not in reservation_selects[0]
-    assert " join room_categories " not in reservation_selects[0]
+    assert " join rooms " in reservation_selects[0]
+    assert " join room_categories " in reservation_selects[0]
+    assert results[0].room_number == sample_rooms[2].room_number
+    assert results[0].category_name is not None
+
+
+def test_list_projection_keeps_human_room_and_category_fields_in_api_response(
+    db,
+    sample_guest,
+    sample_rooms,
+    hotel_config,
+):
+    created = _make_reservations(db, sample_guest, sample_rooms, hotel_id=1, count=1)[0]
+
+    response = _to_read(list_reservations(db, hotel_id=1, limit=1)[0])
+
+    assert response.id == created.id
+    assert response.room_number == sample_rooms[0].room_number
+    assert response.category_name == sample_rooms[0].category.name
+    assert response.nights == 2

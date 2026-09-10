@@ -46,6 +46,15 @@ const providerPriority: Record<string, number> = {
   whatsapp: 5,
 };
 
+const connectionDescription: Record<string, string> = {
+  booking: "Token del alojamiento en Booking Connectivity",
+  expedia: "Credenciales de Expedia",
+  mercadopago: "Cuenta de cobros del hotel",
+  paypal: "Cuenta de cobros del hotel",
+  gmail: "Correo operativo del hotel",
+  whatsapp: "Cuenta de mensajería del hotel",
+};
+
 export function SettingsConnectionsPage() {
   const { data, isLoading, refetch } = useIntegrations();
   const connect = useConnectIntegration();
@@ -251,7 +260,7 @@ export function SettingsConnectionsPage() {
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-slate-500">{isGmail ? "Correo del hotel" : `Auth: ${cat.auth_type}`}</p>
+                  <p className="text-xs text-slate-500">{connectionDescription[cat.provider] || "Conexión del hotel"}</p>
                 </div>
                 <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
                   {status === "not_connected" ? "No conectado" : status}
@@ -286,7 +295,7 @@ export function SettingsConnectionsPage() {
                   <p className="text-xs text-slate-600">Ingresa las credenciales requeridas para este hotel.</p>
                   <input
                     className="w-full rounded border border-slate-200 px-3 py-2 text-sm"
-                    placeholder="api_key / token"
+                    placeholder={cat.provider === "booking" ? "Token de Booking Connectivity" : "Credencial del proveedor"}
                     value={form[cat.id]?.token || ""}
                     onChange={(e) => setField(cat.id, "token", e.target.value)}
                   />

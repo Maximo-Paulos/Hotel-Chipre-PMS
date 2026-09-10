@@ -141,7 +141,7 @@ export function ReportsPage() {
                   ) : (
                     report.active_room_blocks.map((block) => (
                       <div key={block.room_block_id} className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
-                        <p className="font-semibold text-slate-900">Hab. {block.room_number || block.room_id}</p>
+                        <p className="font-semibold text-slate-900">Hab. {block.room_number || "Información no disponible"}</p>
                         <p className="text-xs text-slate-500">
                           {block.reason_code} - {block.is_indefinite ? "sin fecha de fin" : `hasta ${block.ends_at}`}
                         </p>
@@ -242,7 +242,7 @@ function ReservationRow({ reservation, showBalance }: { reservation: Operational
           {reservation.guest_name || `Huesped #${reservation.guest_id}`} - {reservation.confirmation_code}
         </p>
         <p className="text-xs text-slate-500">
-          Hab. {reservation.room_number || reservation.room_id || "sin asignar"} - {reservation.status} - {reservation.check_in_date} a {reservation.check_out_date}
+          Hab. {reservation.room_number || "Información no disponible"} - {reservation.status} - {reservation.check_in_date} a {reservation.check_out_date}
         </p>
       </div>
       {showBalance ? <p className="font-semibold text-slate-900">{money(reservation.balance_due)}</p> : null}

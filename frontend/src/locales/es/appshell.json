@@ -44,7 +44,7 @@
     "dismiss": "Ahora no"
   },
   "sidebar": {
-    "tagline": "Layout de navegacion prototipo"
+    "tagline": "Operación del hotel en un solo lugar"
   },
   "nav": {
     "daily": {
@@ -52,6 +52,7 @@
       "reservations": "Reservas",
       "guests": "Huespedes",
       "rooms": "Habitaciones",
+      "tasks": "Pendientes",
       "cashRegister": "Caja"
     },
     "sections": {

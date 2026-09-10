@@ -84,6 +84,8 @@ from app.api import (
     settings_security,
     operations_audit,
     notifications,
+    operational_tasks,
+    reservation_communications,
 )
 import app.master_admin.models  # noqa: F401
 from app.master_admin.router import router as master_admin_router
@@ -313,6 +315,8 @@ app.include_router(collaboration.router)
 app.include_router(settings_security.router)
 app.include_router(operations_audit.router)
 app.include_router(notifications.router)
+app.include_router(operational_tasks.router)
+app.include_router(reservation_communications.router)
 
 # Frontend build paths
 BASE_DIR = Path(__file__).resolve().parent

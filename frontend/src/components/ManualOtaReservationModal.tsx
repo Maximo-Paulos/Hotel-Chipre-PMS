@@ -319,7 +319,7 @@ export default function ManualOtaReservationModal({ open, onClose }: ManualOtaRe
                   <option value="">Sin asignar</option>
                   {availableRooms.map((room) => (
                     <option key={room.id} value={room.id}>
-                      {`Hab ${room.room_number || room.id}`}
+                      {`Hab ${room.room_number || "Información no disponible"}`}
                     </option>
                   ))}
                 </select>

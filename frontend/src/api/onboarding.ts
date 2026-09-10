@@ -27,6 +27,15 @@ export type OnboardingStatus = {
   categories?: CategoryPayload[];
   rooms?: RoomPayload[];
   staff?: StaffPayload[];
+  readiness_checklist?: Array<{
+    key: string;
+    label: string;
+    done: boolean;
+    count: number;
+    route: string;
+    optional?: boolean;
+  }>;
+  readiness_complete?: boolean;
 };
 
 export type OwnerPayload = {

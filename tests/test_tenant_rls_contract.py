@@ -74,6 +74,14 @@ ADDITIVE_RLS_TABLE_CONTRACT = (
         "20260830_guest_room_avoidance.py",
         ("guest_room_avoidance",),
     ),
+    (
+        "20260910_operational_tasks_handoff.py",
+        ("operational_tasks", "operational_task_events", "shift_handoffs", "shift_handoff_tasks"),
+    ),
+    (
+        "20260910_reservation_email_deliveries.py",
+        ("reservation_email_deliveries",),
+    ),
 )
 
 
@@ -242,6 +250,11 @@ def test_rls_migration_covers_every_hotel_scoped_model_table():
         "domain_event_outbox_retention_watermarks",
         "stored_objects",
         "job_dispatch_records",
+        "operational_tasks",
+        "operational_task_events",
+        "shift_handoffs",
+        "shift_handoff_tasks",
+        "reservation_email_deliveries",
     }
     assert set(migration.TENANT_TABLES) == expected
     assert "hotel_memberships" not in migration.TENANT_TABLES

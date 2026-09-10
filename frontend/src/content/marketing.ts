@@ -136,17 +136,17 @@ export const screenshotFrames = [
   {
     title: "Dashboard operativo",
     description: "Vista general con indicadores, próximas reservas y acciones del día.",
-    src: "/marketing/screenshots/dashboard.png"
+    src: "/marketing/screenshots/dashboard.svg"
   },
   {
     title: "Reservas",
     description: "Operación de reservas con estado, fechas y detalle del huésped.",
-    src: "/marketing/screenshots/reservas.png"
+    src: "/marketing/screenshots/reservas.svg"
   },
   {
     title: "Conexiones",
     description: "Integraciones y conexiones del hotel desde la configuración del sistema.",
-    src: "/marketing/screenshots/conexiones.png"
+    src: "/marketing/screenshots/conexiones.svg"
   }
 ];
 

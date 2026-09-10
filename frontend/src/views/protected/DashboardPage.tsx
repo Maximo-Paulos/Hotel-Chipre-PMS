@@ -41,9 +41,10 @@ export function DashboardPage() {
   // falls inside this range, so today's check-ins/check-outs are covered.
   const { fromDate: monthFrom, toDate: monthTo } = useMemo(() => monthRangeIso(new Date()), []);
   const { data: reservations = [] } = useReservations({ fromDate: monthFrom, toDate: monthTo, order: "check_in", limit: 200 });
-  // Upcoming reservations widget: the 10 most recently booked reservations,
-  // newest first -- what the user asked this widget to show.
-  const { data: recentReservations = [] } = useReservations({ limit: 10, order: "recent" });
+  // Upcoming arrivals are filtered and ordered by the server from the
+  // hotel's local day. This avoids hiding an arrival merely because newer
+  // reservations were created afterwards.
+  const { data: upcomingReservations = [] } = useReservations({ upcomingOnly: true, order: "check_in", limit: 5 });
   const pendingActionsQuery = usePendingReservationActions(8);
   const { openReservation } = useReservationDrawer();
   const { roomsQuery } = useRooms();
@@ -84,19 +85,17 @@ export function DashboardPage() {
       },
       {
         label: t("cards.pendingActions.label"),
-        value: String(pendingActions.length),
-        helper: criticalPendingActions > 0 ? t("cards.pendingActions.helperCritical", { count: criticalPendingActions }) : t("cards.pendingActions.helperNone")
+        value: pendingActionsQuery.isError ? "—" : String(pendingActions.length),
+        helper: pendingActionsQuery.isError
+          ? t("cards.pendingActions.helperError")
+          : criticalPendingActions > 0
+            ? t("cards.pendingActions.helperCritical", { count: criticalPendingActions })
+            : t("cards.pendingActions.helperNone")
       }
     ];
-  }, [criticalPendingActions, pendingActions.length, reservations, rooms, today, t]);
+  }, [criticalPendingActions, pendingActions.length, pendingActionsQuery.isError, reservations, rooms, today, t]);
 
-  const arrivals = useMemo(
-    () =>
-      [...recentReservations]
-        .sort((a, b) => a.check_in_date.localeCompare(b.check_in_date))
-        .slice(0, 5),
-    [recentReservations]
-  );
+  const arrivals = upcomingReservations;
 
   const activities = useMemo(() => {
     const list = reservations
@@ -282,6 +281,17 @@ export function DashboardPage() {
         <div className="mt-3 space-y-3">
           {pendingActionsQuery.isLoading ? (
             <p className="text-sm text-slate-500">{t("operations.loading")}</p>
+          ) : pendingActionsQuery.isError ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
+              <span>{t("operations.error")}</span>
+              <button
+                type="button"
+                onClick={() => void pendingActionsQuery.refetch()}
+                className="min-h-11 rounded-lg border border-rose-300 bg-white px-3 py-1 text-xs font-semibold text-rose-800 hover:bg-rose-100"
+              >
+                {t("operations.retry")}
+              </button>
+            </div>
           ) : pendingActions.length === 0 ? (
             <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
               {t("operations.empty")}

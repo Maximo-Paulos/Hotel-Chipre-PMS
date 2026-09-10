@@ -314,8 +314,11 @@ def _mk_reservation(db, *, code, guest_id, category_id, hotel_id=1, room_id=None
         guest_id=guest_id,
         room_id=room_id,
         category_id=category_id,
-        check_in_date=date(2026, 9, 1),
-        check_out_date=date(2026, 9, 3),
+        # Keep the generic fixtures inside the service's active window. The
+        # explicit January fixture below remains the regression for pruning
+        # stale active reservations.
+        check_in_date=date.today() - timedelta(days=1),
+        check_out_date=date.today() + timedelta(days=1),
         total_amount=0.0,
         subtotal_amount=0.0,
         net_amount=0.0,

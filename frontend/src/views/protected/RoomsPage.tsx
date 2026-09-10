@@ -241,8 +241,8 @@ export function RoomsPage() {
               <div key={room.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="flex items-start justify-between">
                   <div>
-                    <p className="text-xs uppercase tracking-wide text-slate-500">{t("inventory.roomLabel", { number: room.room_number })}</p>
-                    <h2 className="text-lg font-semibold text-slate-900">{category?.name || room.category?.name || t("inventory.categoryFallback", { id: room.category_id })}</h2>
+                    <p className="text-xs uppercase tracking-wide text-slate-500">{t("inventory.roomLabel", { number: room.room_number || t("inventory.roomFallback") })}</p>
+                    <h2 className="text-lg font-semibold text-slate-900">{category?.name || room.category?.name || t("inventory.categoryFallback")}</h2>
                     <p className="text-xs text-slate-500">
                       {t("inventory.floorAndCode", { floor: room.floor, code: category?.code || room.category?.code || t("inventory.noCode") })}
                     </p>
@@ -277,7 +277,7 @@ export function RoomsPage() {
                     </label>
                     <select
                       id={`room-status-${room.id}`}
-                      aria-label={t("inventory.statusAriaLabel", { number: room.room_number })}
+                      aria-label={t("inventory.statusAriaLabel", { number: room.room_number || t("inventory.roomFallback") })}
                       value={room.status}
                       onChange={(e) => void handleStatusUpdate(room.id, e.target.value as RoomStatus)}
                       className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-brand-400 focus:outline-none disabled:bg-slate-50"
@@ -436,7 +436,7 @@ export function RoomsPage() {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-xs uppercase tracking-wide text-slate-500">
-                      {room ? t("blocks.roomFloor", { number: room.room_number, floor: room.floor }) : t("blocks.roomFallback", { id: block.room_id })}
+                      {room ? t("blocks.roomFloor", { number: room.room_number, floor: room.floor }) : t("blocks.roomFallback")}
                     </p>
                     <h3 className="text-base font-semibold text-slate-900">{roomBlockReasonLabel[block.reason_code]}</h3>
                     <p className="text-xs text-slate-500">{formatBlockDates(block.starts_at, block.ends_at, block.is_indefinite, t)}</p>

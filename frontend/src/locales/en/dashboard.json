@@ -24,7 +24,8 @@
     "pendingActions": {
       "label": "Pending actions",
       "helperCritical": "{{count}} critical",
-      "helperNone": "No critical actions"
+      "helperNone": "No critical actions",
+      "helperError": "The operations inbox could not be loaded"
     },
     "multiCurrency": "Multi-currency"
   },
@@ -54,6 +55,8 @@
     "title": "Operations inbox",
     "goToReservations": "Go to Reservations",
     "loading": "Loading pending actions...",
+    "error": "The operations inbox could not be loaded.",
+    "retry": "Retry",
     "empty": "No pending operational actions.",
     "viewReservation": "View reservation"
   },

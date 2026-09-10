@@ -8,6 +8,7 @@ import { requestPasswordReset, resetPassword } from "../../api/auth";
 import { normalizeRole, useSession } from "../../state/session";
 
 type Step = 1 | 2 | 3;
+const AUTH_EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function ResetPasswordPage() {
   const navigate = useNavigate();
@@ -25,14 +26,16 @@ export function ResetPasswordPage() {
 
   const sendCode = async () => {
     setError(null);
-    if (!email.trim()) {
-      setError("Ingresá tu correo.");
+    const normalizedEmail = email.trim();
+    if (!AUTH_EMAIL_PATTERN.test(normalizedEmail)) {
+      setError("Ingresá un email válido.");
       return;
     }
+    setEmail(normalizedEmail);
     setLoading(true);
     try {
-      const resp = await requestPasswordReset(email.trim());
-      setInfo(resp.code ? `Código demo: ${resp.code}` : "Enviamos el código si el correo existe.");
+      await requestPasswordReset(normalizedEmail);
+      setInfo("Enviamos el código si el correo existe.");
       setStep(2);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "No se pudo enviar el código");
@@ -43,10 +46,12 @@ export function ResetPasswordPage() {
 
   const validateCode = () => {
     setError(null);
-    if (!code.trim()) {
+    const normalizedCode = code.trim();
+    if (!normalizedCode) {
       setError("Ingresá el código recibido por correo.");
       return;
     }
+    setCode(normalizedCode);
     setStep(3);
   };
 
@@ -100,10 +105,12 @@ export function ResetPasswordPage() {
 
         {step === 1 && (
           <div className="space-y-4">
-            <label className="text-sm font-medium text-slate-700">
+            <label htmlFor="reset-email" className="text-sm font-medium text-slate-700">
               Email
               <input
+                id="reset-email"
                 type="email"
+                autoComplete="email"
                 className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 shadow-sm focus:border-brand-500 focus:ring-brand-500"
                 placeholder="tu@hotel.com"
                 value={email}
@@ -123,10 +130,14 @@ export function ResetPasswordPage() {
 
         {step === 2 && (
           <div className="space-y-4">
-            <label className="text-sm font-medium text-slate-700">
+            <label htmlFor="reset-code" className="text-sm font-medium text-slate-700">
               Código recibido
               <input
+                id="reset-code"
                 type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={64}
                 className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 shadow-sm focus:border-brand-500 focus:ring-brand-500"
                 placeholder="Ej: 123456"
                 value={code}
@@ -184,13 +195,13 @@ export function ResetPasswordPage() {
           </form>
         )}
 
-        {info && <p className="mt-3 rounded-md bg-amber-50 p-3 text-sm text-amber-800">{info}</p>}
+        {info && <p role="status" className="mt-3 rounded-md bg-amber-50 p-3 text-sm text-amber-800">{info}</p>}
         {saved && (
           <p className="mt-3 rounded-md bg-emerald-50 p-3 text-sm text-emerald-700">
             Contraseña actualizada. Redirigiendo al login.
           </p>
         )}
-        {error && <p className="mt-3 rounded-md bg-rose-50 p-3 text-sm text-rose-700">{error}</p>}
+        {error && <p role="alert" className="mt-3 rounded-md bg-rose-50 p-3 text-sm text-rose-700">{error}</p>}
         <div className="mt-4 text-sm">
           <Link to="/login" className="text-brand-700 hover:underline">
             Volver al login

@@ -123,6 +123,11 @@ def _candidate_reservation_ids(db: Session, *, hotel_id: int) -> list[int]:
     real action is silently dropped -- see tests/test_reservation_action_service.py
     for the before/after correctness comparison.
     """
+    # Keep the active window bounded while retaining terminal reservations:
+    # checked-out/cancelled stays can still have an unresolved OTA settlement,
+    # adjustment or payment reconciliation gap. Clean historical reservations
+    # outside the window are therefore skipped, but terminal rows remain
+    # eligible for the explicit reconciliation checks below.
     cutoff = hotel_today(db, hotel_id) - timedelta(days=_ACTIVE_WINDOW_DAYS)
     rows = db.execute(
         active_reservations_select(hotel_id)
@@ -139,7 +144,12 @@ def _candidate_reservation_ids(db: Session, *, hotel_id: int) -> list[int]:
             Reservation.total_amount,
             Reservation.check_in_date,
         )
-        .where(Reservation.check_out_date >= cutoff)
+        .where(
+            or_(
+                Reservation.check_out_date >= cutoff,
+                Reservation.status.in_(_TERMINAL_STATUSES),
+            )
+        )
         .order_by(Reservation.check_in_date, Reservation.id)
     ).all()
     if not rows:
