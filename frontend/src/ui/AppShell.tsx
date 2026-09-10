@@ -19,6 +19,7 @@ import { useSubscriptionStatus } from "../hooks/useSubscription";
 import { defaultPathForRole, useSession } from "../state/session";
 import { ApiError, hasValidSession } from "../api/client";
 import { useCrossTabSync, useRealtimeStatus } from "../sync/crossTabSync";
+import { BrandMark } from "../components/brand/BrandMark";
 
 import { BottomNav, type BottomNavTab } from "./BottomNav";
 import { HotelSelector } from "./HotelSelector";
@@ -261,8 +262,11 @@ export function AppShell() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <Seo title={t("seo.title")} description={t("seo.description")} noindex />
-      <div className="flex flex-wrap gap-x-3 gap-y-1 border-b bg-slate-900 px-4 py-2 text-xs text-white sm:px-6">
-        <span className="font-semibold">Hotel Chipre PMS</span>
+      <div
+        data-testid="app-topbar"
+        className="flex flex-wrap gap-x-3 gap-y-1 border-b bg-slate-900 px-4 py-2 text-xs text-white sm:px-6"
+      >
+        <span className="font-semibold">Hotels-PMS</span>
         <span className="text-slate-200">{t("topbar.hotelId", { id: session.hotelId ?? "-" })}</span>
         <span className="min-w-0 break-all text-slate-200">
           {t("topbar.user", { user: session.email || session.userId || t("topbar.noSession") })}
@@ -389,11 +393,7 @@ export function AppShell() {
         <aside className="hidden w-72 shrink-0 border-r border-slate-200 bg-white/90 backdrop-blur md:flex md:flex-col">
           <div className="px-5 pb-4 pt-6">
             <Link to={homePath} className="block">
-              <img
-                src="/brand/logo-full.png"
-                alt="Hotel Chipre PMS"
-                className="h-16 w-auto object-contain"
-              />
+              <BrandMark />
             </Link>
             <p className="mt-2 text-xs text-slate-500">{t("sidebar.tagline")}</p>
           </div>
@@ -453,11 +453,7 @@ export function AppShell() {
                 selector, user badge) lives in the slide-over panel below. */}
             <div className="flex items-center justify-between gap-3 px-4 py-3 md:hidden">
               <Link to={homePath} className="flex min-h-11 shrink-0 items-center text-slate-900">
-                <img
-                  src="/brand/logo-avatar.png"
-                  alt="Hotel Chipre PMS"
-                  className="h-9 w-9 rounded-full border border-slate-200 object-cover"
-                />
+                <BrandMark variant="mark" className="h-8 w-8" />
               </Link>
               <div className="flex items-center gap-2">
                 <button

@@ -6,6 +6,7 @@ import { Seo } from "../../components/Seo";
 import { PasswordInput } from "../../components/PasswordInput";
 import { requestPasswordReset, resetPassword } from "../../api/auth";
 import { normalizeRole, useSession } from "../../state/session";
+import { BrandMark } from "../../components/brand/BrandMark";
 
 type Step = 1 | 2 | 3;
 const AUTH_EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -91,14 +92,10 @@ export function ResetPasswordPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
-      <Seo title="Restablecer contraseña | Hotel Chipre PMS" description="Restablece tu contraseña de acceso." noindex />
+      <Seo title="Restablecer contraseña | Hotels-PMS" description="Restablece tu contraseña de acceso." noindex />
       <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-lg ring-1 ring-slate-100">
         <div className="mb-6 space-y-3">
-          <img
-            src="/brand/logo-full.png"
-            alt="Hotel Chipre PMS"
-            className="h-20 w-auto max-w-full object-contain"
-          />
+          <BrandMark />
           <h1 className="text-2xl font-semibold text-slate-900">Restablecer contraseña</h1>
           <p className="text-sm text-slate-600">Seguí los pasos para recuperar tu acceso.</p>
         </div>

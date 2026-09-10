@@ -23,7 +23,7 @@ export function PmsHoteleroPage() {
   return (
     <MarketingShell>
       <Seo
-        title="PMS hotelero | Hotel Chipre PMS"
+        title="PMS hotelero | Hotels-PMS"
         description="Sistema de gestión hotelera para hoteles independientes que centraliza reservas, habitaciones, huéspedes y cobros."
         canonicalPath="/pms-hotelero"
         noindex={!ALLOW_INDEXING}

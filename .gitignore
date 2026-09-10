@@ -96,3 +96,8 @@ _verify*.db
 .env.bak*
 # Timestamped local database backups (the bare *.db rule misses these).
 *.db.bak-*
+.playwright-mcp/
+
+# Demo database for marketing screenshots (regenerate with scripts/seed_marketing_demo.py)
+demo-marketing.db
+demo-marketing.db-*

@@ -60,6 +60,15 @@ PUBLIC_ALLOWLIST = (
     PublicRoute("/api/email/*", "Retired legacy email API always returns 410 Gone."),
     PublicRoute("/api/reference/timezones", "Public reference catalog used before hotel onboarding/auth."),
     PublicRoute("/api/reference/countries", "Public reference catalog used before hotel onboarding/auth."),
+    PublicRoute(
+        "/api/public/pricing",
+        "Marketing site pricing; read-only, carries no tenant data, and only returns plans flagged public.",
+    ),
+    PublicRoute(
+        "/api/public/leads",
+        "Marketing early-access capture; anonymous by design, rate limited per source, honeypotted, "
+        "and idempotent so it cannot be used to probe which addresses already signed up.",
+    ),
 )
 
 

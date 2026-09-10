@@ -23,7 +23,7 @@ export function SoftwareParaHotelesPage() {
   return (
     <MarketingShell>
       <Seo
-        title="Software para hoteles | Hotel Chipre PMS"
+        title="Software para hoteles | Hotels-PMS"
         description="Software para hoteles pensado para ordenar la operación, con onboarding guiado y un sistema de gestión hotelera claro."
         canonicalPath="/software-para-hoteles"
         noindex={!ALLOW_INDEXING}
@@ -35,7 +35,7 @@ export function SoftwareParaHotelesPage() {
             Software para hoteles que necesitan orden y control operativo
           </h1>
           <p className="text-lg leading-8 text-slate-700">
-            Hotel Chipre PMS habla al hotel que sigue operando con herramientas separadas y quiere una base web más clara para el día a día.
+            Hotels-PMS habla al hotel que sigue operando con herramientas separadas y quiere una base web más clara para el día a día.
           </p>
           <div className="flex flex-wrap gap-3">
             <PublicButtonLink href="/precios" variant="primary">

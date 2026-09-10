@@ -40,48 +40,48 @@ def send_platform_email(to: Iterable[str] | str, subject: str, body: str) -> boo
 
 
 def send_verification_email(email: str, code: str) -> bool:
-    subject = "Verifica tu cuenta en Hotel Chipre PMS"
+    subject = "Verifica tu cuenta en Hotels-PMS"
     body = (
         "Hola,\n\n"
-        "Usa este codigo de 6 digitos para verificar tu cuenta en Hotel Chipre PMS:\n\n"
+        "Usa este codigo de 6 digitos para verificar tu cuenta en Hotels-PMS:\n\n"
         f"{code}\n\n"
         "Si no solicitaste este correo, puedes ignorarlo.\n\n"
-        "Hotel Chipre PMS"
+        "Hotels-PMS"
     )
     return send_platform_email(email, subject, body)
 
 
 def send_reset_password_email(email: str, code: str) -> bool:
-    subject = "Recupera tu acceso a Hotel Chipre PMS"
+    subject = "Recupera tu acceso a Hotels-PMS"
     body = (
         "Hola,\n\n"
-        "Usa este codigo de 6 digitos para restablecer tu acceso a Hotel Chipre PMS:\n\n"
+        "Usa este codigo de 6 digitos para restablecer tu acceso a Hotels-PMS:\n\n"
         f"{code}\n\n"
         "Si no solicitaste este correo, puedes ignorarlo.\n\n"
-        "Hotel Chipre PMS"
+        "Hotels-PMS"
     )
     return send_platform_email(email, subject, body)
 
 
 def send_verification_success_email(email: str) -> bool:
-    subject = "Tu cuenta fue verificada en Hotel Chipre PMS"
+    subject = "Tu cuenta fue verificada en Hotels-PMS"
     body = (
         "Hola,\n\n"
         "Tu email fue verificado con exito. Ya podes iniciar sesion y usar el sistema.\n\n"
         "Si no realizaste esta accion, respondé a este correo o contacta al soporte.\n\n"
-        "Hotel Chipre PMS"
+        "Hotels-PMS"
     )
     return send_platform_email(email, subject, body)
 
 
 def send_generic_auth_notice_email(email: str) -> bool:
     """Send a neutral notice without revealing whether an account exists."""
-    subject = "Solicitud recibida en Hotel Chipre PMS"
+    subject = "Solicitud recibida en Hotels-PMS"
     body = (
         "Hola,\n\n"
-        "Recibimos una solicitud relacionada con el acceso a Hotel Chipre PMS. "
+        "Recibimos una solicitud relacionada con el acceso a Hotels-PMS. "
         "Si corresponde, recibiras otro correo con los pasos para continuar.\n\n"
         "Si no realizaste esta solicitud, puedes ignorar este correo.\n\n"
-        "Hotel Chipre PMS"
+        "Hotels-PMS"
     )
     return send_platform_email(email, subject, body)

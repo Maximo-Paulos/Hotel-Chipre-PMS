@@ -59,6 +59,7 @@ from app.api import (
     promotions,
     hotel_api_keys,
     public_booking,
+    public_marketing,
     whatsapp_hooks,
     permissions,
     laundry,
@@ -289,6 +290,7 @@ app.include_router(payment_surcharges.router)
 app.include_router(promotions.router)
 app.include_router(hotel_api_keys.router)
 app.include_router(public_booking.router)
+app.include_router(public_marketing.router)
 app.include_router(whatsapp_hooks.router)
 app.include_router(permissions.router)
 app.include_router(laundry.router)

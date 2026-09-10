@@ -1,4 +1,4 @@
-"""PostgreSQL performance benchmark for Hotel Chipre PMS critical queries.
+"""PostgreSQL performance benchmark for Hotels-PMS critical queries.
 
 This script is intentionally scoped to the PostgreSQL test database only.
 It derives DATABASE_URL_TEST the same way tests/conftest.py does: read the

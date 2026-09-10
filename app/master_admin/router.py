@@ -17,6 +17,12 @@ from app.schemas.auth import MfaChallengeResponse, MfaEnrollmentResponse, MfaRec
 from app.services import mfa_service
 from app.services.security import verify_password
 from app.services.subscription_entitlements import get_subscription_snapshot
+from app.services import marketing_service
+from app.schemas.marketing import (
+    MasterLeadListPayload,
+    MasterPricingPlanListPayload,
+)
+from app.models.marketing import MarketingLead
 from .billing_policy import BillingDecision, evaluate_hotel_write_access, get_policy_payload, update_policy
 from .email_provider import (
     MasterEmailConnectionError,
@@ -369,6 +375,63 @@ def put_billing_policy(
     )
     db.commit()
     return BillingPolicyPayload(**policy)
+
+
+@router.get("/pricing/plans", response_model=MasterPricingPlanListPayload)
+def get_pricing_plans(request: Request, db: Session = Depends(get_db)):
+    require_master_admin(request=request, db=db, write=False)
+    return MasterPricingPlanListPayload(plans=marketing_service.admin_pricing(db))
+
+
+@router.put("/pricing/plans", response_model=MasterPricingPlanListPayload)
+def put_pricing_plans(
+    payload: MasterPricingPlanListPayload,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Replace the public pricing table.
+
+    The landing page renders exactly what this writes; leaving price_amount
+    null is what makes a plan show "Consultar" instead of a number.
+    """
+    context = require_master_admin(
+        request=request, db=db, csrf_header=request.headers.get("X-CSRF-Token"), write=True
+    )
+    plans = marketing_service.replace_pricing(
+        db, [plan.model_dump() for plan in payload.plans]
+    )
+    audit_master_action(
+        db,
+        actor_user_id=context.user.id,
+        action="master_admin_update_pricing_plans",
+        metadata={"codes": [plan["code"] for plan in plans]},
+        request=request,
+    )
+    db.commit()
+    return MasterPricingPlanListPayload(plans=plans)
+
+
+@router.get("/leads", response_model=MasterLeadListPayload)
+def get_leads(request: Request, db: Session = Depends(get_db), limit: int = 200):
+    require_master_admin(request=request, db=db, write=False)
+    capped = max(1, min(limit, 1000))
+    query = db.query(MarketingLead).order_by(MarketingLead.created_at.desc())
+    total = query.count()
+    items = [
+        {
+            "id": lead.id,
+            "email": lead.email,
+            "name": lead.name,
+            "hotel_name": lead.hotel_name,
+            "rooms_estimate": lead.rooms_estimate,
+            "city": lead.city,
+            "phone": lead.phone,
+            "source": lead.source,
+            "created_at": lead.created_at.isoformat() if lead.created_at else "",
+        }
+        for lead in query.limit(capped).all()
+    ]
+    return MasterLeadListPayload(items=items, total=total)
 
 
 @router.get("/email/status", response_model=MasterEmailStatusPayload)

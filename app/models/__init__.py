@@ -156,6 +156,7 @@ from app.models.notification import (
 # master_admin models live outside app/models but share Base — import them so
 # Base.metadata is complete (create_all/drop_all in tests must see every table)
 import app.master_admin.models  # noqa: F401
+from app.models.marketing import MarketingPricingPlan, MarketingLead  # noqa: F401
 from app.models.analytics import (
     AnalyticsExportFormatEnum,
     AnalyticsCurrencyDisplayEnum,
@@ -342,4 +343,6 @@ __all__ = [
     "NotificationSeverityEnum",
     "NotificationChannelEnum",
     "NotificationOutboxStatusEnum",
+    "MarketingPricingPlan",
+    "MarketingLead",
 ]

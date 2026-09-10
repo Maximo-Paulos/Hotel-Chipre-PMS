@@ -80,7 +80,7 @@ export function AcceptInvitationPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
-      <Seo title="Aceptar invitación | Hotel Chipre PMS" description="Activa tu usuario invitado y crea tu contraseña." noindex />
+      <Seo title="Aceptar invitación | Hotels-PMS" description="Activa tu usuario invitado y crea tu contraseña." noindex />
       <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-lg ring-1 ring-slate-100">
         <h1 className="text-2xl font-semibold text-slate-900">Aceptar invitación</h1>
         <p className="mb-4 text-sm text-slate-600">Creá tu contraseña para empezar a usar el sistema.</p>
