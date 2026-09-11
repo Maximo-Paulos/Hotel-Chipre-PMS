@@ -6,6 +6,7 @@ import { MasterAdminSessionProvider, useMasterAdminSession } from "./session";
 const navItems = [
   { to: "/adminpmsmaster/dashboard", label: "Dashboard" },
   { to: "/adminpmsmaster/billing", label: "Billing Policy" },
+  { to: "/adminpmsmaster/pricing", label: "Precios públicos" },
   { to: "/adminpmsmaster/email", label: "System Email" },
   { to: "/adminpmsmaster/stripe", label: "Stripe Owner" },
   { to: "/adminpmsmaster/audit", label: "Audit Log" }
@@ -69,7 +70,7 @@ export function MasterAdminProtectedShell() {
       <div className="mx-auto flex min-h-screen max-w-7xl gap-6 px-4 py-4 md:px-6">
         <aside className="hidden w-72 shrink-0 rounded-3xl border border-white/10 bg-slate-950/80 p-5 shadow-2xl shadow-black/20 backdrop-blur md:flex md:flex-col">
           <div className="mb-8">
-            <p className="text-xs uppercase tracking-[0.3em] text-amber-300/80">Hotel Chipre</p>
+            <p className="text-xs uppercase tracking-[0.3em] text-amber-300/80">Hotels-PMS</p>
             <h1 className="mt-2 text-2xl font-semibold text-white">Owner Master Panel</h1>
             <p className="mt-2 text-sm text-slate-300">Sesión aislada para operaciones de plataforma.</p>
           </div>

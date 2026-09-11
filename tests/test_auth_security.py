@@ -207,7 +207,7 @@ def _complete_onboarding(db, hotel_id: int, owner_email: str) -> None:
 def _configure_resend(monkeypatch: pytest.MonkeyPatch, sent_payloads: list[dict] | None = None):
     monkeypatch.setenv("EMAIL_PROVIDER", "resend")
     monkeypatch.setenv("RESEND_API_KEY", "re_test_key")
-    monkeypatch.setenv("SYSTEM_EMAIL_FROM", "Hotel Chipre PMS <noreply@auth.hotels-pms.com>")
+    monkeypatch.setenv("SYSTEM_EMAIL_FROM", "Hotels-PMS <noreply@auth.hotels-pms.com>")
     monkeypatch.setenv("SYSTEM_EMAIL_REPLY_TO", "hotelxpms@gmail.com")
     get_settings.cache_clear()
     payloads = sent_payloads if sent_payloads is not None else []
@@ -350,7 +350,7 @@ def test_register_verify_and_reset_use_resend_provider(client_and_db, fixed_code
     reset_unknown = client.post("/api/auth/request-reset", json={"email": "unknown@example.com"})
     assert reset_unknown.status_code == 200
     assert reset_unknown.json() == reset_known.json() == {"sent": True}
-    assert sent_payloads[-1]["subject"] == "Solicitud recibida en Hotel Chipre PMS"
+    assert sent_payloads[-1]["subject"] == "Solicitud recibida en Hotels-PMS"
 
     reset = client.post(
         "/api/auth/reset-password",
@@ -364,7 +364,7 @@ def test_register_verify_and_reset_use_resend_provider(client_and_db, fixed_code
     assert login.json()["user"]["email"] == "owner@example.com"
 
     assert len(sent_payloads) >= 4
-    assert sent_payloads[0]["from"] == "Hotel Chipre PMS <noreply@auth.hotels-pms.com>"
+    assert sent_payloads[0]["from"] == "Hotels-PMS <noreply@auth.hotels-pms.com>"
     assert sent_payloads[0]["reply_to"] == ["hotelxpms@gmail.com"]
 
 

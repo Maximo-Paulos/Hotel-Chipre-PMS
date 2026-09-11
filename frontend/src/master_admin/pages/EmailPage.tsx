@@ -14,7 +14,7 @@ type EmailTestResult = {
 export function MasterAdminEmailPage() {
   const [status, setStatus] = useState<MasterEmailStatus | null>(null);
   const [recipient, setRecipient] = useState("");
-  const [subject, setSubject] = useState("Hotel Chipre master panel test");
+  const [subject, setSubject] = useState("Hotels-PMS master panel test");
   const [body, setBody] = useState("Mensaje de prueba desde el panel master.");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);

@@ -8,5 +8,5 @@ export function ForgotPasswordPage() {
   useEffect(() => {
     navigate("/reset-password", { replace: true });
   }, [navigate]);
-  return <Seo title="Recuperar acceso | Hotel Chipre PMS" description="Recupera tu acceso al sistema." noindex />;
+  return <Seo title="Recuperar acceso | Hotels-PMS" description="Recupera tu acceso al sistema." noindex />;
 }

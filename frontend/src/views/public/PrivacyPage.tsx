@@ -10,8 +10,8 @@ export function PrivacyPage() {
   return (
     <MarketingShell>
       <Seo
-        title="Política de Privacidad | Hotel Chipre PMS"
-        description="Cómo Hotel Chipre PMS recolecta, usa y protege los datos personales de usuarios y huéspedes."
+        title="Política de Privacidad | Hotels-PMS"
+        description="Cómo Hotels-PMS recolecta, usa y protege los datos personales de usuarios y huéspedes."
         canonicalPath="/privacy"
         noindex={!ALLOW_INDEXING}
       />

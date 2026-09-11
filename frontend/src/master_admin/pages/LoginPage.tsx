@@ -66,7 +66,7 @@ export function MasterAdminLoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top,_rgba(251,191,36,0.16),_transparent_35%),linear-gradient(180deg,#020617_0%,#0f172a_55%,#111827_100%)] px-4 text-slate-100">
       <div className="w-full max-w-md rounded-[2rem] border border-white/10 bg-slate-950/80 p-8 shadow-2xl shadow-black/30 backdrop-blur">
-        <p className="text-xs uppercase tracking-[0.35em] text-amber-300/80">Hotel Chipre</p>
+        <p className="text-xs uppercase tracking-[0.35em] text-amber-300/80">Hotels-PMS</p>
         <h1 className="mt-3 text-3xl font-semibold text-white">Owner Master Panel</h1>
         <p className="mt-2 text-sm text-slate-300">
           Sesión separada del PMS normal. Requiere usuario platform_admin, contraseña, PIN y MFA TOTP.

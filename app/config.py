@@ -105,7 +105,7 @@ class Settings(BaseSettings):
     MERCADOPAGO_REDIRECT_URI: str = "http://127.0.0.1:8040/api/integrations/oauth/mercadopago/callback"
     EMAIL_PROVIDER: str = "resend"
     RESEND_API_KEY: str = ""
-    SYSTEM_EMAIL_FROM: str = "Hotel Chipre PMS <noreply@auth.hotels-pms.com>"
+    SYSTEM_EMAIL_FROM: str = "Hotels-PMS <noreply@auth.hotels-pms.com>"
     SYSTEM_EMAIL_REPLY_TO: str = "hotelxpms@gmail.com"
     DEV_EMAIL_OUTBOX_PATH: str = ""
     GMAIL_CLIENT_ID: str = Field(default="", validation_alias=AliasChoices("GMAIL_CLIENT_ID", "GOOGLE_OAUTH_CLIENT_ID"))

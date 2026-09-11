@@ -184,7 +184,7 @@ def _seed_subscription(db, hotel_id: int, status: str = "suspended") -> Subscrip
 def _configure_resend(monkeypatch: pytest.MonkeyPatch, sent_payloads: list[dict] | None = None):
     monkeypatch.setenv("EMAIL_PROVIDER", "resend")
     monkeypatch.setenv("RESEND_API_KEY", "re_test_key")
-    monkeypatch.setenv("SYSTEM_EMAIL_FROM", "Hotel Chipre PMS <noreply@auth.hotels-pms.com>")
+    monkeypatch.setenv("SYSTEM_EMAIL_FROM", "Hotels-PMS <noreply@auth.hotels-pms.com>")
     monkeypatch.setenv("SYSTEM_EMAIL_REPLY_TO", "hotelxpms@gmail.com")
     get_settings.cache_clear()
     payloads = sent_payloads if sent_payloads is not None else []

@@ -45,7 +45,7 @@ export class ApiError extends Error {
 // with VITE_API_URL set to the deployed backend (e.g. https://<render-service>.onrender.com/api,
 // per APP_BASE_URL's production value in .env.example) before `npm run build && npx cap sync`.
 const DEFAULT_API_BASE = "http://127.0.0.1:8040/api";
-const API_BASE =
+export const API_BASE =
   (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "") || DEFAULT_API_BASE;
 
 const normalizeHotelId = (hotelId?: number | string | null) => {

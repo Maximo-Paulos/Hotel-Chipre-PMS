@@ -7,6 +7,7 @@ import { Seo } from "../../components/Seo";
 import { PasswordInput } from "../../components/PasswordInput";
 import { register } from "../../api/auth";
 import { storePendingOwner } from "../../state/pendingOwner";
+import { BrandMark } from "../../components/brand/BrandMark";
 
 export function RegisterOwnerPage() {
   const { t } = useTranslation("auth");
@@ -50,11 +51,7 @@ export function RegisterOwnerPage() {
       <div className="w-full max-w-2xl rounded-2xl bg-white p-8 shadow-lg ring-1 ring-slate-100">
         <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div className="space-y-3">
-            <img
-              src="/brand/logo-full.png"
-              alt="Hotel Chipre PMS"
-              className="h-20 w-auto max-w-full object-contain"
-            />
+            <BrandMark />
             <h1 className="text-2xl font-semibold text-slate-900">{t("register.title")}</h1>
             <p className="text-sm text-slate-600">{t("register.description")}</p>
           </div>

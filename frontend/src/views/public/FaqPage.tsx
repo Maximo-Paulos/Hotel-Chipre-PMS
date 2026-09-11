@@ -8,8 +8,8 @@ export function FaqPage() {
   return (
     <MarketingShell>
       <Seo
-        title="FAQ | Hotel Chipre PMS"
-        description="Preguntas frecuentes sobre Hotel Chipre PMS, la prueba de 14 días, el acceso y el tratamiento comercial de los planes."
+        title="FAQ | Hotels-PMS"
+        description="Preguntas frecuentes sobre Hotels-PMS, la prueba de 14 días, el acceso y el tratamiento comercial de los planes."
         canonicalPath="/faq"
         noindex={!ALLOW_INDEXING}
         structuredData={{

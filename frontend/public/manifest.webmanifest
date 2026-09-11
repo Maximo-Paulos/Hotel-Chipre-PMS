@@ -1,6 +1,6 @@
 {
-  "name": "Hotel Chipre PMS",
-  "short_name": "Chipre PMS",
+  "name": "Hotels-PMS",
+  "short_name": "Hotels-PMS",
   "lang": "es",
   "id": "/",
   "description": "Sistema de gestión hotelera para centralizar reservas, habitaciones, huéspedes y cobros en un solo lugar.",

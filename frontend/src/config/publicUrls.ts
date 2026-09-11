@@ -32,8 +32,19 @@ export const PUBLIC_APP_HOSTNAME = ENV_APP_HOSTNAME || APP_URL_HOSTNAME || "app.
 export const PUBLIC_SITE_HOSTNAME =
   SITE_URL_HOSTNAME || (PUBLIC_APP_HOSTNAME.startsWith("app.") ? PUBLIC_APP_HOSTNAME.slice(4) : "");
 export const ALLOW_INDEXING = String(import.meta.env.VITE_ALLOW_INDEXING ?? "").toLowerCase() === "true";
+/**
+ * What the primary call to action does today. While access is invitation-only
+ * the site captures interest; flipping this env var to "register" points every
+ * primary CTA back at self-serve signup without touching a component.
+ */
+export type PublicCtaMode = "early_access" | "register";
+export const PUBLIC_CTA_MODE: PublicCtaMode =
+  (import.meta.env.VITE_PUBLIC_CTA_MODE as PublicCtaMode | undefined) === "register"
+    ? "register"
+    : "early_access";
+
 export const PUBLIC_SALES_EMAIL = "ventas@hotels-pms.com";
-export const resolveSalesContactUrl = (subject = "Consulta sobre Hotel Chipre PMS") =>
+export const resolveSalesContactUrl = (subject = "Consulta sobre Hotels-PMS") =>
   `mailto:${PUBLIC_SALES_EMAIL}?subject=${encodeURIComponent(subject)}`;
 
 export const isAppHostname = (hostname?: string) => {

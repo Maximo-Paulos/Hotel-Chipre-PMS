@@ -10,8 +10,8 @@ export function TermsPage() {
   return (
     <MarketingShell>
       <Seo
-        title="Términos y Condiciones | Hotel Chipre PMS"
-        description="Términos y condiciones del servicio Hotel Chipre PMS: cuentas, datos de huéspedes, planes, facturación y responsabilidad."
+        title="Términos y Condiciones | Hotels-PMS"
+        description="Términos y condiciones del servicio Hotels-PMS: cuentas, datos de huéspedes, planes, facturación y responsabilidad."
         canonicalPath="/terms"
         noindex={!ALLOW_INDEXING}
       />
@@ -26,7 +26,7 @@ export function TermsPage() {
 
         <Section title="1. Aceptación">
           <p>
-            Estos términos regulan el uso de Hotel Chipre PMS (&laquo;el
+            Estos términos regulan el uso de Hotels-PMS (&laquo;el
             Servicio&raquo;), disponible en{" "}
             <a className="text-brand-700 underline" href="https://hotels-pms.com">
               hotels-pms.com

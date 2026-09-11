@@ -3,16 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>Hotel Chipre PMS | PMS hotelero para hoteles independientes</title>
+    <title>Hotels-PMS | PMS hotelero para hoteles independientes</title>
     <meta name="description" content="Sistema de gestión hotelera para centralizar reservas, habitaciones, huéspedes y cobros en un solo lugar." />
     <meta name="theme-color" content="#12324f" />
-    <meta property="og:title" content="Hotel Chipre PMS | PMS hotelero para hoteles independientes" />
+    <meta property="og:title" content="Hotels-PMS | PMS hotelero para hoteles independientes" />
     <meta property="og:description" content="Sistema de gestión hotelera para centralizar reservas, habitaciones, huéspedes y cobros en un solo lugar." />
-    <meta property="og:site_name" content="Hotel Chipre PMS" />
-    <meta property="og:image" content="/brand/logo-full.png" />
+    <meta property="og:site_name" content="Hotels-PMS" />
+    <meta property="og:image" content="https://hotels-pms.com/brand/og-default.png" />
     <meta property="og:url" content="https://hotels-pms.com/" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Hotel Chipre PMS | PMS hotelero para hoteles independientes" />
+    <meta name="twitter:title" content="Hotels-PMS | PMS hotelero para hoteles independientes" />
     <meta name="twitter:description" content="Sistema de gestión hotelera para centralizar reservas, habitaciones, huéspedes y cobros en un solo lugar." />
     <meta name="robots" content="index, follow" />
     <link rel="canonical" href="https://hotels-pms.com/" />
@@ -36,9 +36,16 @@
           return path === route || path.indexOf(route + "/") === 0;
         });
         var shouldNoindex = isAppHost || isPrivatePath;
-        var title = shouldNoindex
-          ? "Hotel Chipre PMS | Acceso al sistema"
-          : "Hotel Chipre PMS | PMS hotelero para hoteles independientes";
+
+        // Marketing pages are built with their own title, description,
+        // canonical and og:* already in the markup (see marketing-html.mjs).
+        // Rewriting them here would replace a correct per-route value with a
+        // generic one before React even mounts, so this pre-hydration pass now
+        // only runs where it is actually needed: forcing noindex on the app
+        // host and on auth paths.
+        if (!shouldNoindex) return;
+
+        var title = "Hotels-PMS | Acceso al sistema";
         var description = "Sistema de gestión hotelera para centralizar reservas, habitaciones, huéspedes y cobros en un solo lugar.";
 
         document.title = title;
@@ -60,7 +67,7 @@
         upsertMeta('meta[name="robots"]', "content", shouldNoindex ? "noindex, nofollow" : "index, follow");
         upsertMeta('meta[property="og:title"]', "content", title);
         upsertMeta('meta[property="og:description"]', "content", description);
-        upsertMeta('meta[property="og:site_name"]', "content", "Hotel Chipre PMS");
+        upsertMeta('meta[property="og:site_name"]', "content", "Hotels-PMS");
         upsertMeta('meta[property="og:url"]', "content", window.location.origin + path);
         upsertMeta('meta[name="twitter:title"]', "content", title);
         upsertMeta('meta[name="twitter:description"]', "content", description);

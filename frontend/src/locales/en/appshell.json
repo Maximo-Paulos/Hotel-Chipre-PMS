@@ -1,7 +1,7 @@
 {
   "seo": {
-    "title": "Hotel Chipre PMS | App",
-    "description": "Access to the Hotel Chipre PMS operating system."
+    "title": "Hotels-PMS | App",
+    "description": "Access to the Hotels-PMS operating system."
   },
   "topbar": {
     "hotelId": "Hotel ID {{id}}",
@@ -39,7 +39,7 @@
     "errorGeneric": "Unable to connect to the backend. Visible data may be outdated; write actions require reconnection."
   },
   "install": {
-    "prompt": "Install Hotel Chipre PMS on this device for quick access.",
+    "prompt": "Install Hotels-PMS on this device for quick access.",
     "install": "Install",
     "dismiss": "Not now"
   },

@@ -49,7 +49,7 @@ export function UserBadge() {
           </button>
         </div>
         {(session.baseRole === "owner") && (
-          <label className="mt-2 block text-xs text-slate-600">
+          <label data-testid="role-preview" className="mt-2 block text-xs text-slate-600">
             <span className="mr-2 font-semibold text-slate-700">Vista previa de rol</span>
             <select
               className="h-11 rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 shadow-sm focus:border-brand-400 focus:outline-none"

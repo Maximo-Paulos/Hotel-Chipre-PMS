@@ -10,6 +10,7 @@ import { PasswordInput } from "../../components/PasswordInput";
 import { login as loginApi, loginWithApple, loginWithGoogle, type AuthResponse } from "../../api/auth";
 import { getOnboardingStatus } from "../../api/onboarding";
 import { defaultPathForRole, normalizeRole, useSession, type SessionState } from "../../state/session";
+import { BrandMark } from "../../components/brand/BrandMark";
 
 export function LoginPage() {
   const { t } = useTranslation("auth");
@@ -128,11 +129,7 @@ export function LoginPage() {
       <Seo title={t("seo.loginTitle")} description={t("seo.loginDescription")} noindex />
       <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-lg ring-1 ring-slate-100">
         <div className="mb-6 flex flex-col items-start gap-4">
-          <img
-            src="/brand/logo-full.png"
-            alt="Hotel Chipre PMS"
-            className="h-20 w-auto max-w-full object-contain"
-          />
+          <BrandMark />
           <h1 className="text-2xl font-semibold text-slate-900">{t("login.title")}</h1>
           <p className="text-sm text-slate-600">{t("login.description")}</p>
         </div>

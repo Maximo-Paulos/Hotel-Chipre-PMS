@@ -55,7 +55,7 @@ function PushSubscriptionCard() {
         </p>
         <p className="mt-2 text-sm text-slate-600">
           Para instalarla: tocá el botón <strong>Compartir</strong> en Safari y elegí{" "}
-          <strong>Agregar a pantalla de inicio</strong>. Después abrí Hotel Chipre PMS desde el ícono que se creó y
+          <strong>Agregar a pantalla de inicio</strong>. Después abrí Hotels-PMS desde el ícono que se creó y
           volvé a esta pantalla.
         </p>
       </Card>

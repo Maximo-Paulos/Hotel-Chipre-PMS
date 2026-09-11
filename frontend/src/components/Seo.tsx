@@ -40,13 +40,13 @@ export function Seo({ title, description, canonicalPath = "/", noindex = false, 
     setMetaTag('meta[property="og:title"]', "content", title);
     setMetaTag('meta[property="og:description"]', "content", description);
     setMetaTag('meta[property="og:type"]', "content", "website");
-    setMetaTag('meta[property="og:site_name"]', "content", "Hotel Chipre PMS");
+    setMetaTag('meta[property="og:site_name"]', "content", "Hotels-PMS");
     setMetaTag('meta[property="og:url"]', "content", canonicalUrl);
-    setMetaTag('meta[property="og:image"]', "content", resolveAssetUrl("/brand/logo-full.png"));
+    setMetaTag('meta[property="og:image"]', "content", resolveAssetUrl("/brand/og-default.png"));
     setMetaTag('meta[name="twitter:card"]', "content", "summary_large_image");
     setMetaTag('meta[name="twitter:title"]', "content", title);
     setMetaTag('meta[name="twitter:description"]', "content", description);
-    setMetaTag('meta[name="twitter:image"]', "content", resolveAssetUrl("/brand/logo-full.png"));
+    setMetaTag('meta[name="twitter:image"]', "content", resolveAssetUrl("/brand/og-default.png"));
 
     let canonical = document.head.querySelector<HTMLLinkElement>('link[rel="canonical"]');
     if (!canonical) {
