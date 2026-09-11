@@ -235,12 +235,21 @@ async def request_telemetry(request: Request, call_next):
     return response
 
 # CORS: local dev origins and Vercel previews are development/QA conveniences.
-# Production must use explicit origins from CORS_ORIGINS only.
+# Production adds explicit origins from CORS_ORIGINS on top of our own hosts.
 _base_origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+]
+# Our own public hosts. These are first-party, fixed, and the marketing site
+# cannot load pricing or submit a lead without them, so they are not left to
+# an environment variable somebody has to remember to set on every service.
+# CORS_ORIGINS still applies and is still the place for anything else.
+_first_party_origins = [
+    "https://hotels-pms.com",
+    "https://www.hotels-pms.com",
+    "https://app.hotels-pms.com",
 ]
 _runtime_settings = get_settings()
 _extra = _runtime_settings.CORS_ORIGINS
@@ -248,7 +257,11 @@ _extra_entries = [o.strip() for o in _extra.split(",") if o.strip()]
 _wildcard = any(entry == "*" for entry in _extra_entries)
 _extra_origins = [entry for entry in _extra_entries if entry != "*"]
 _production = is_production_mode(_runtime_settings)
-allowed_origins = ([] if _production else _base_origins) + _extra_origins
+allowed_origins = list(
+    dict.fromkeys(
+        ([] if _production else _base_origins) + _first_party_origins + _extra_origins
+    )
+)
 _allow_origin_regex = None if _production else (r".*" if _wildcard else r"https://.*\.vercel\.app")
 
 app.add_middleware(
