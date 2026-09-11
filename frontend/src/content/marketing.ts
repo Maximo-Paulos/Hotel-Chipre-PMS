@@ -141,6 +141,52 @@ export const integrations = [
 export const integrationsCaveat =
   "Las reservas de las OTA entran por webhook y también se cargan a mano. Todavía no somos un channel manager: el envío de tarifas y disponibilidad hacia todos los canales está en camino, y lo vas a ver acá cuando esté.";
 
+/**
+ * What a hotel is usually paying for separately. Deliberately unpriced: we do
+ * not know what any given hotel pays for these, and inventing a saving would
+ * be the first claim a buyer could catch.
+ */
+export const replacedTools = [
+  { name: "La planilla de ocupación", detail: "en Excel, que abre una sola persona" },
+  { name: "El control de caja", detail: "en otra planilla, cuadrada a mano" },
+  { name: "El cuaderno de recepción", detail: "y el grupo de WhatsApp del turno" },
+  { name: "El control de stock y ropa blanca", detail: "cuando existe" },
+  { name: "Los reportes para dirección", detail: "armados a fin de mes, a mano" }
+];
+
+export const riskReversal = [
+  {
+    title: "14 días con todo abierto",
+    body: "La prueba no recorta funciones ni pide tarjeta para empezar."
+  },
+  {
+    title: "Tus datos salen cuando quieras",
+    body: "Reservas, ingresos y ocupación se exportan a CSV y Excel desde la analítica. No quedan secuestrados adentro."
+  },
+  {
+    title: "Sin contrato de permanencia",
+    body: "Es una suscripción mensual por hotel. Si no te sirve, dejás de pagarla."
+  }
+];
+
+/** The honest disqualification. It costs a few leads and buys the rest. */
+export const notForYou = [
+  "Cadenas con casa matriz y consolidación entre hoteles.",
+  "Hoteles de más de 80 habitaciones: hoy los planes no llegan a esa escala.",
+  "Quien necesita hoy envío automático de tarifas y cupos a todos los canales.",
+  "Quien busca un motor de reservas para su propia web: eso no lo cubrimos."
+];
+
+export const founder = {
+  title: "Lo construí para mi propio hotel.",
+  body: [
+    "Hotel Chipre es mi hotel. Todo lo que ves acá salió de necesitarlo un martes a las siete de la mañana, con gente esperando en el mostrador y la planilla desactualizada.",
+    "Por eso el sistema está armado alrededor del turno y no alrededor de un módulo de facturación: porque el problema real no es cargar la reserva, es que la persona que entra a las seis sepa exactamente en qué estado quedó el hotel.",
+    "Y por eso también, cuando algo todavía no está, lo digo. Prefiero perder una venta antes que explicarte en el mes dos por qué el sistema no hace lo que la landing prometía."
+  ],
+  signature: "Máximo, dueño de Hotel Chipre"
+};
+
 export const onboardingSteps = [
   {
     title: "Cargás el hotel",
@@ -190,6 +236,16 @@ export const faqItems = [
     question: "¿Puedo entrar ahora mismo?",
     answer:
       "Estamos abriendo por tandas mientras terminamos de endurecer la plataforma. Dejá tu mail y te avisamos cuando le toque a tu hotel."
+  },
+  {
+    question: "¿Puedo traer los datos que ya tengo cargados?",
+    answer:
+      "Todavía no hay importación masiva desde Excel. El alta guiada carga categorías, habitaciones y tarifas, y las reservas se van cargando a medida que entran. Si tenés mucho volumen histórico, escribinos antes de arrancar y lo vemos."
+  },
+  {
+    question: "¿Y si después me quiero ir?",
+    answer:
+      "Te llevás tus datos. Reservas, ingresos y ocupación se exportan a CSV y a Excel desde la analítica, sin pedir permiso a nadie. No hay contrato de permanencia."
   },
   {
     question: "¿Funciona en el celular?",

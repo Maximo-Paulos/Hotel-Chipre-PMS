@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { fetchPublicPricing, type PublicPricingPlan } from "../../../api/marketing";
 import { Section, SectionHeading } from "../Section";
+import { notForYou } from "../../../content/marketing";
 
 /**
  * Rendered from /api/public/pricing, which the owner edits in the master-admin
@@ -138,6 +139,20 @@ export function PricingSection() {
       <p className="mt-6 max-w-2xl text-sm leading-7 text-ink-500">
         La prueba corre con el sistema completo y no pide tarjeta para empezar.
       </p>
+
+      {/* Said before the number, not after it. Disqualifying the wrong hotel
+          up front costs a few leads and buys credibility for everything above. */}
+      <div className="mt-14 border-t border-ink-200 pt-8">
+        <h3 className="font-display text-xl font-semibold text-ink-950">Para quién no es</h3>
+        <ul className="mt-4 grid max-w-4xl gap-x-10 gap-y-2.5 text-base leading-7 text-ink-600 sm:grid-cols-2">
+          {notForYou.map((item) => (
+            <li key={item} className="flex gap-3">
+              <span aria-hidden="true" className="mt-3 h-px w-3 shrink-0 bg-ink-300" />
+              {item}
+            </li>
+          ))}
+        </ul>
+      </div>
     </Section>
   );
 }

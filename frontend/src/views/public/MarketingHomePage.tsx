@@ -3,6 +3,7 @@ import { MarketingShell } from "../../components/marketing/MarketingShell";
 import { DifferentiatorsSection } from "../../components/marketing/sections/DifferentiatorsSection";
 import { FaqSection } from "../../components/marketing/sections/FaqSection";
 import { FinalCtaSection } from "../../components/marketing/sections/FinalCtaSection";
+import { FounderSection } from "../../components/marketing/sections/FounderSection";
 import { HeroSection } from "../../components/marketing/sections/HeroSection";
 import { IntegrationsStrip } from "../../components/marketing/sections/IntegrationsStrip";
 import { ModulesSection } from "../../components/marketing/sections/ModulesSection";
@@ -10,6 +11,7 @@ import { OnboardingSection } from "../../components/marketing/sections/Onboardin
 import { PricingSection } from "../../components/marketing/sections/PricingSection";
 import { ProblemSection } from "../../components/marketing/sections/ProblemSection";
 import { ProductTourSection } from "../../components/marketing/sections/ProductTourSection";
+import { StackSection } from "../../components/marketing/sections/StackSection";
 import { ALLOW_INDEXING, resolveSiteUrl } from "../../config/publicUrls";
 import { brandName, faqItems, positioning } from "../../content/marketing";
 
@@ -49,9 +51,11 @@ export function MarketingHomePage() {
       <HeroSection />
       <IntegrationsStrip />
       <ProblemSection />
+      <StackSection />
       <ModulesSection />
       <ProductTourSection />
       <DifferentiatorsSection />
+      <FounderSection />
       <OnboardingSection />
       <PricingSection />
       <FaqSection />
