@@ -4,7 +4,7 @@ from decimal import Decimal
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -78,6 +78,17 @@ class TestPublicPricing:
         plans = client.get("/api/public/pricing").json()["plans"]
 
         assert [plan["code"] for plan in plans] == ["starter"]
+
+    def test_survives_a_missing_table(self, client_with_db):
+        """A deploy that has not run the migration yet must not 500 the page."""
+        client, db = client_with_db
+        db.execute(text("DROP TABLE marketing_pricing_plans"))
+        db.commit()
+
+        body = client.get("/api/public/pricing").json()
+
+        assert [plan["code"] for plan in body["plans"]] == ["starter", "pro", "ultra"]
+        assert all(plan["price_amount"] is None for plan in body["plans"])
 
     def test_decodes_features(self, client_with_db):
         client, db = client_with_db

@@ -10,6 +10,7 @@ import hashlib
 import json
 from typing import Any, Iterable
 
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.models.marketing import MarketingLead, MarketingPricingPlan
@@ -51,31 +52,49 @@ def _ordered_plans(db: Session, *, public_only: bool) -> list[MarketingPricingPl
     return query.order_by(MarketingPricingPlan.sort_order, MarketingPricingPlan.id).all()
 
 
+def _plan_catalog_fallback() -> list[dict[str, Any]]:
+    """The enforced plan caps, with no price.
+
+    Used when nothing is published yet and, deliberately, when the table
+    itself cannot be read: the public site must degrade to a correct pricing
+    section rather than to a 500, and these limits come from the same catalog
+    the application enforces.
+    """
+    return [
+        {
+            "code": code,
+            "name": data["name"],
+            "price_amount": None,
+            "currency": None,
+            "billing_period": "month",
+            "headline": None,
+            "description": None,
+            "features": [],
+            "room_limit": data.get("room_limit"),
+            "staff_limit": data.get("staff_limit"),
+            "cta_label": None,
+            "cta_kind": "early_access",
+            "highlight": code == "pro",
+        }
+        for code, data in PLAN_CATALOG.items()
+    ]
+
+
 def public_pricing(db: Session) -> dict[str, Any]:
     """What the landing page renders. Falls back to the enforced plan caps so a
     database that has not been seeded still shows the real room/staff limits
     rather than an empty pricing section."""
-    plans = _ordered_plans(db, public_only=True)
+    try:
+        plans = _ordered_plans(db, public_only=True)
+    except SQLAlchemyError:
+        # Most likely the migration has not run on this environment yet.
+        # Falling back keeps the pricing section correct instead of failing
+        # the whole page on a deploy-ordering problem.
+        db.rollback()
+        plans = []
+
     if not plans:
-        fallback = [
-            {
-                "code": code,
-                "name": data["name"],
-                "price_amount": None,
-                "currency": None,
-                "billing_period": "month",
-                "headline": None,
-                "description": None,
-                "features": [],
-                "room_limit": data.get("room_limit"),
-                "staff_limit": data.get("staff_limit"),
-                "cta_label": None,
-                "cta_kind": "early_access",
-                "highlight": code == "pro",
-            }
-            for code, data in PLAN_CATALOG.items()
-        ]
-        return {"plans": fallback, "trial_days": TRIAL_DURATION_DAYS}
+        return {"plans": _plan_catalog_fallback(), "trial_days": TRIAL_DURATION_DAYS}
 
     return {"plans": [_plan_to_public(plan) for plan in plans], "trial_days": TRIAL_DURATION_DAYS}
 
