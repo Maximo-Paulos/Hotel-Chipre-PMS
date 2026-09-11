@@ -220,6 +220,12 @@ class Settings(BaseSettings):
     SUBSCRIPTION_ENFORCEMENT: bool = False  # primary toggle: when False, can_write stays allowed
     CONNECTIONS_ENABLED: bool = True
     INTEGRATIONS_ENCRYPTION_KEY: str = "ZGVmYXVsdC1pbnRlZ3JhdGlvbnMta2V5LXNlY3JldA=="  # base64 fernet
+    # Meta WhatsApp webhook/app secrets are runtime-only. Embedded Signup
+    # exchanges its short-lived result server-side; the browser never sees
+    # these values.
+    META_WHATSAPP_VERIFY_TOKEN: str = ""
+    META_WHATSAPP_APP_SECRET: str = ""
+    META_WHATSAPP_APP_ID: str = ""
 
     # Notification backend (Task 8). Off by default: a hotel that never
     # configures these must never silently start sending real push/email.

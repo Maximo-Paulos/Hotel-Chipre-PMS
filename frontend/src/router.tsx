@@ -67,11 +67,15 @@ const ReservationsPage = lazy(() =>
 const ReportsPage = lazy(() => import("./views/protected/ReportsPage").then((m) => ({ default: m.ReportsPage })));
 const OperationalAuditPage = lazy(() => import("./views/protected/OperationalAuditPage").then((m) => ({ default: m.OperationalAuditPage })));
 const OperationalTasksPage = lazy(() => import("./views/protected/OperationalTasksPage").then((m) => ({ default: m.OperationalTasksPage })));
+const WhatsAppInboxPage = lazy(() => import("./views/protected/WhatsAppInboxPage").then((m) => ({ default: m.WhatsAppInboxPage })));
 const RoomsPage = lazy(() => import("./views/protected/RoomsPage").then((m) => ({ default: m.RoomsPage })));
 const SettingsAssistantPage = lazy(() => import("./views/protected/SettingsAssistantPage"));
 const SettingsSubscriptionPage = lazy(() => import("./views/protected/SettingsSubscriptionPage"));
 const SettingsConnectionsPage = lazy(() =>
   import("./views/protected/SettingsConnectionsPage").then((m) => ({ default: m.SettingsConnectionsPage }))
+);
+const SettingsWhatsAppPage = lazy(() =>
+  import("./views/protected/SettingsWhatsAppPage").then((m) => ({ default: m.SettingsWhatsAppPage }))
 );
 const SettingsHotelPage = lazy(() => import("./views/protected/SettingsHotelPage"));
 const SettingsNotificationsPage = lazy(() => import("./views/protected/SettingsNotificationsPage"));
@@ -225,6 +229,7 @@ const appRoutes = APP_HOST
           { path: "analytics/operations", element: <PermissionGate anyPermission={["reports:operational:view"]}><AnalyticsOperationsPage /></PermissionGate> },
           { path: "operacion/auditoria", element: <PermissionGate anyPermission={["operations:audit:view"]}><OperationalAuditPage /></PermissionGate> },
           { path: "operacion/tareas", element: <PermissionGate anyPermission={["operations:tasks:view", "operations:tasks:report", "operations:tasks:manage"]}><OperationalTasksPage /></PermissionGate> },
+          { path: "operacion/whatsapp", element: <PermissionGate anyPermission={["whatsapp:inbox:view"]}><WhatsAppInboxPage /></PermissionGate> },
           { path: "analytics/ai-chat", element: <PermissionGate anyPermission={["analytics:ai:view"]}><AnalyticsAIChatPage /></PermissionGate> },
           { path: "settings/companies", element: <PermissionGate anyPermission={["company:view"]}><CompaniesPage /></PermissionGate> },
           { path: "operacion/room-state-events", element: <PermissionGate anyPermission={["reports:operational:view"]}><RoomStateEventsPage /></PermissionGate> },
@@ -245,7 +250,7 @@ const appRoutes = APP_HOST
           { path: "settings/users", element: <PermissionGate anyPermission={["settings:users:view"]}><SettingsUsersPage /></PermissionGate> },
           { path: "settings/api-keys", element: <PermissionGate anyPermission={["apikey:manage"]}><SettingsApiKeysPage /></PermissionGate> },
           { path: "settings/permissions", element: <PermissionGate anyPermission={["permissions:manage"]}><SettingsPermissionsPage /></PermissionGate> },
-          { path: "settings/whatsapp", element: <PermissionGate anyPermission={["settings:integrations:view"]}><Navigate to="/settings/connections" replace /></PermissionGate> },
+          { path: "settings/whatsapp", element: <PermissionGate anyPermission={["settings:integrations:view"]}><SettingsWhatsAppPage /></PermissionGate> },
           { path: "settings/assistant", element: <PermissionGate anyPermission={["settings:assistant:view"]}><SettingsAssistantPage /></PermissionGate> },
           { path: "settings/subscription", element: <PermissionGate anyPermission={["settings:subscription:view"]}><SettingsSubscriptionPage /></PermissionGate> },
           { path: "settings/connections", element: <PermissionGate anyPermission={["settings:integrations:view"]}><SettingsConnectionsPage /></PermissionGate> },

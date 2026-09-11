@@ -290,7 +290,15 @@ export function SettingsConnectionsPage() {
                 </div>
               )}
 
-              {!isConnected && ["api_key", "signature", "bearer_token"].includes(cat.auth_type) && (
+              {!isConnected && cat.provider === "whatsapp" && (
+                <div className="mt-3 rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-900">
+                  <p className="font-semibold">Conexión administrada por Meta</p>
+                  <p className="mt-1 text-xs">WhatsApp no acepta tokens ni IDs pegados manualmente. Completa Embedded Signup desde la pantalla de WhatsApp.</p>
+                  <a className="mt-2 inline-block text-xs font-semibold text-violet-700 hover:underline" href="/settings/whatsapp">Abrir configuración de WhatsApp</a>
+                </div>
+              )}
+
+              {!isConnected && cat.provider !== "whatsapp" && ["api_key", "signature", "bearer_token"].includes(cat.auth_type) && (
                 <div className="mt-3 space-y-2">
                   <p className="text-xs text-slate-600">Ingresa las credenciales requeridas para este hotel.</p>
                   <input
@@ -306,22 +314,6 @@ export function SettingsConnectionsPage() {
                       value={form[cat.id]?.secret || ""}
                       onChange={(e) => setField(cat.id, "secret", e.target.value)}
                     />
-                  )}
-                  {cat.provider === "whatsapp" && (
-                    <>
-                      <input
-                        className="w-full rounded border border-slate-200 px-3 py-2 text-sm"
-                        placeholder="phone_number_id"
-                        value={form[cat.id]?.phone_number_id || ""}
-                        onChange={(e) => setField(cat.id, "phone_number_id", e.target.value)}
-                      />
-                      <input
-                        className="w-full rounded border border-slate-200 px-3 py-2 text-sm"
-                        placeholder="waba_id"
-                        value={form[cat.id]?.waba_id || ""}
-                        onChange={(e) => setField(cat.id, "waba_id", e.target.value)}
-                      />
-                    </>
                   )}
                 </div>
               )}

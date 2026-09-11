@@ -121,6 +121,20 @@ PERMISSION_SETTINGS_ASSISTANT_VIEW = "settings:assistant:view"
 PERMISSION_SETTINGS_TESTS_VIEW = "settings:tests:view"
 PERMISSION_OPERATIONS_AUDIT_VIEW = "operations:audit:view"
 
+# WhatsApp CRM capabilities are intentionally split so reading a queue never
+# implies sending a message, changing assignments, or invoking another domain.
+PERMISSION_WHATSAPP_INBOX_VIEW = "whatsapp:inbox:view"
+PERMISSION_WHATSAPP_INBOX_ALL = "whatsapp:inbox:all"
+PERMISSION_WHATSAPP_MESSAGE_SEND = "whatsapp:message:send"
+PERMISSION_WHATSAPP_NOTE_MANAGE = "whatsapp:note:manage"
+PERMISSION_WHATSAPP_ASSIGN = "whatsapp:conversation:assign"
+PERMISSION_WHATSAPP_CLOSE = "whatsapp:conversation:close"
+PERMISSION_WHATSAPP_CONTEXT_GUEST = "whatsapp:context:guest"
+PERMISSION_WHATSAPP_CONTEXT_RESERVATION = "whatsapp:context:reservation"
+PERMISSION_WHATSAPP_ACTION_QUOTE = "whatsapp:action:quote"
+PERMISSION_WHATSAPP_ACTION_PAYMENT = "whatsapp:action:payment"
+PERMISSION_WHATSAPP_SETTINGS_MANAGE = "whatsapp:settings:manage"
+
 # Import-compatible legacy constants. Existing routes and the current frontend
 # may keep requesting these during the expand/contract window; resolution
 # canonicalizes them and effective responses include readable aliases.
@@ -448,6 +462,50 @@ _CANONICAL_DEFINITIONS: dict[str, tuple[str, str, str]] = {
         "settings", "Read test tools and settings",
         "Permite abrir las herramientas de prueba del hotel y consultar sus resultados. No permite ejecutar efectos externos sin las protecciones correspondientes.",
     ),
+    PERMISSION_WHATSAPP_INBOX_VIEW: (
+        "whatsapp", "Read the WhatsApp inbox",
+        "Permite ver conversaciones de WhatsApp dentro del hotel. No permite responder ni reasignar.",
+    ),
+    PERMISSION_WHATSAPP_INBOX_ALL: (
+        "whatsapp", "Read all WhatsApp conversations",
+        "Permite consultar toda la bandeja de WhatsApp y no solo las conversaciones asignadas.",
+    ),
+    PERMISSION_WHATSAPP_MESSAGE_SEND: (
+        "whatsapp", "Send WhatsApp messages",
+        "Permite enviar mensajes externos desde conversaciones autorizadas. No habilita acciones de pagos.",
+    ),
+    PERMISSION_WHATSAPP_NOTE_MANAGE: (
+        "whatsapp", "Manage internal WhatsApp notes",
+        "Permite crear notas internas en conversaciones. Las notas nunca se envían al huésped.",
+    ),
+    PERMISSION_WHATSAPP_ASSIGN: (
+        "whatsapp", "Assign WhatsApp conversations",
+        "Permite asignar o reasignar conversaciones y cambiar su departamento.",
+    ),
+    PERMISSION_WHATSAPP_CLOSE: (
+        "whatsapp", "Close WhatsApp conversations",
+        "Permite cerrar o reabrir conversaciones y dejar el evento auditable.",
+    ),
+    PERMISSION_WHATSAPP_CONTEXT_GUEST: (
+        "whatsapp", "Read guest context in WhatsApp",
+        "Permite consultar el huésped asociado después de confirmar la asociación.",
+    ),
+    PERMISSION_WHATSAPP_CONTEXT_RESERVATION: (
+        "whatsapp", "Read reservation context in WhatsApp",
+        "Permite consultar reservas relacionadas con una conversación.",
+    ),
+    PERMISSION_WHATSAPP_ACTION_QUOTE: (
+        "whatsapp", "Request reservation quotes from WhatsApp",
+        "Permite invocar el servicio de disponibilidad y cotización sin duplicar sus reglas.",
+    ),
+    PERMISSION_WHATSAPP_ACTION_PAYMENT: (
+        "whatsapp", "Request payment actions from WhatsApp",
+        "Permite solicitar al servicio de pagos un resultado autorizado. No acredita pagos.",
+    ),
+    PERMISSION_WHATSAPP_SETTINGS_MANAGE: (
+        "whatsapp", "Manage WhatsApp channel settings",
+        "Permite administrar turnos, plantillas y el estado operativo del canal; la conexión Meta sigue siendo crítica.",
+    ),
 }
 
 PERMISSION_DEFINITIONS: dict[str, str] = {
@@ -523,6 +581,11 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
         PERMISSION_OPERATIONAL_TASK_READ, PERMISSION_OPERATIONAL_TASK_REPORT,
         PERMISSION_OPERATIONAL_TASK_MANAGE, PERMISSION_SHIFT_HANDOFF_MANAGE,
         PERMISSION_SETTINGS_NOTIFICATIONS_VIEW, PERMISSION_SETTINGS_ASSISTANT_VIEW,
+        PERMISSION_WHATSAPP_INBOX_VIEW, PERMISSION_WHATSAPP_INBOX_ALL,
+        PERMISSION_WHATSAPP_MESSAGE_SEND, PERMISSION_WHATSAPP_NOTE_MANAGE,
+        PERMISSION_WHATSAPP_ASSIGN, PERMISSION_WHATSAPP_CLOSE,
+        PERMISSION_WHATSAPP_CONTEXT_GUEST, PERMISSION_WHATSAPP_CONTEXT_RESERVATION,
+        PERMISSION_WHATSAPP_ACTION_QUOTE, PERMISSION_WHATSAPP_ACTION_PAYMENT,
     ),
     ROLE_RECEPTIONIST: _role_permissions(
         PERMISSION_GUEST_READ, PERMISSION_GUEST_CREATE, PERMISSION_GUEST_UPDATE,
@@ -536,11 +599,15 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
         PERMISSION_WAITLIST_VIEW, PERMISSION_WAITLIST_MANAGE,
         PERMISSION_CASH_VIEW, PERMISSION_OPERATIONAL_TASK_READ,
         PERMISSION_OPERATIONAL_TASK_REPORT, PERMISSION_SETTINGS_NOTIFICATIONS_VIEW,
+        PERMISSION_WHATSAPP_INBOX_VIEW, PERMISSION_WHATSAPP_MESSAGE_SEND,
+        PERMISSION_WHATSAPP_NOTE_MANAGE, PERMISSION_WHATSAPP_CONTEXT_GUEST,
+        PERMISSION_WHATSAPP_CONTEXT_RESERVATION, PERMISSION_WHATSAPP_ACTION_QUOTE,
     ),
     ROLE_HOUSEKEEPING: _role_permissions(
         PERMISSION_ROOM_READ, PERMISSION_ROOM_STATUS_UPDATE, PERMISSION_LAUNDRY_READ,
         PERMISSION_LAUNDRY_MOVE, PERMISSION_LAUNDRY_REMITO_MANAGE,
         PERMISSION_OPERATIONAL_TASK_READ, PERMISSION_OPERATIONAL_TASK_REPORT,
+        PERMISSION_WHATSAPP_INBOX_VIEW, PERMISSION_WHATSAPP_NOTE_MANAGE,
     ),
 }
 

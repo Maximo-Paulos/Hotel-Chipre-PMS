@@ -46,6 +46,7 @@ from app.services.permission_service import (
     PERMISSION_GUEST_PROHIBITION_READ,
     PERMISSION_RESERVATION_READ,
     PERMISSION_STOCK_READ,
+    PERMISSION_WHATSAPP_INBOX_VIEW,
     resolve as resolve_permission,
 )
 
@@ -63,6 +64,7 @@ ENTITY_READ_PERMISSIONS: dict[str, str] = {
     "reservation": PERMISSION_RESERVATION_READ,
     "guest_restriction": PERMISSION_GUEST_PROHIBITION_READ,
     "stock_item": PERMISSION_STOCK_READ,
+    "whatsapp_conversation": PERMISSION_WHATSAPP_INBOX_VIEW,
 }
 
 
