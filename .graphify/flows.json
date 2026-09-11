@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-09-11T00:43:53.145Z",
+  "generatedAt": "2026-09-11T02:02:17.133Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -13690,17 +13690,19 @@
       "path": [
         "services_marketing_service_public_pricing",
         "services_marketing_service_ordered_plans",
+        "services_marketing_service_plan_catalog_fallback",
         "services_marketing_service_plan_to_public",
         "services_marketing_service_decode_features"
       ],
       "qualifiedPath": [
         "services_marketing_service_public_pricing",
         "services_marketing_service_ordered_plans",
+        "services_marketing_service_plan_catalog_fallback",
         "services_marketing_service_plan_to_public",
         "services_marketing_service_decode_features"
       ],
       "depth": 2,
-      "nodeCount": 4,
+      "nodeCount": 5,
       "fileCount": 1,
       "files": [
         "app/services/marketing_service.py"

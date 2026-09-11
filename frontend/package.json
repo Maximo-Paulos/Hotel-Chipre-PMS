@@ -14,7 +14,8 @@
     "lint": "eslint \"src/**/*.{ts,tsx}\" --max-warnings=0",
     "e2e": "playwright test",
     "e2e:headed": "playwright test --headed",
-    "test:marketing-html": "node --test marketing-html.test.mjs"
+    "test:marketing-html": "node --test marketing-html.test.mjs",
+    "test:csv": "node --test csv-cell.test.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.0",

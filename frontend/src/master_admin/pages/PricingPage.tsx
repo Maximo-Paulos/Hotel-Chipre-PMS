@@ -43,8 +43,10 @@ const EMPTY_PLAN: PricingPlan = {
   highlight: false
 };
 
-const field = "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm";
-const label = "block text-xs font-semibold uppercase tracking-wide text-slate-500";
+const field =
+  "mt-2 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-amber-300/60";
+const label = "block text-sm font-medium text-slate-200";
+const checkbox = "h-5 w-5 rounded border-white/20 bg-white/10 text-amber-300 focus:ring-amber-300";
 
 const asNumber = (value: string): number | null => {
   const parsed = parseInt(value, 10);
@@ -93,22 +95,23 @@ export function MasterAdminPricingPage() {
 
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-semibold text-slate-900">Precios públicos</h1>
-        <p className="mt-1 max-w-3xl text-sm text-slate-600">
+      <section className="rounded-[2rem] border border-white/10 bg-white/5 p-6 shadow-2xl shadow-black/10 backdrop-blur">
+        <p className="text-xs uppercase tracking-[0.35em] text-amber-300/80">Sitio público</p>
+        <h2 className="mt-2 text-3xl font-semibold text-white">Precios públicos</h2>
+        <p className="mt-2 max-w-3xl text-sm text-slate-300">
           Esto es lo que muestra hotels-pms.com. Si dejás el precio vacío, la landing muestra
           &laquo;Consultar&raquo; en vez de un número. Los topes de habitaciones y usuarios deberían
           coincidir con los que el sistema realmente aplica.
         </p>
-      </header>
+      </section>
 
       {message ? (
-        <p className="rounded-lg bg-slate-100 px-4 py-3 text-sm text-slate-700">{message}</p>
+        <p role="status" className="rounded-3xl border border-white/10 bg-white/5 px-6 py-4 text-sm text-slate-200">{message}</p>
       ) : null}
 
       <form onSubmit={submit} className="space-y-5">
         {plans.map((plan, index) => (
-          <section key={plan.code || index} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <section key={plan.code || index} className="rounded-[2rem] border border-white/10 bg-slate-950/50 p-5">
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <div>
                 <label className={label} htmlFor={`code-${index}`}>Código</label>
@@ -183,10 +186,11 @@ export function MasterAdminPricingPage() {
                   onChange={(e) => update(index, { sort_order: asNumber(e.target.value) ?? 0 })}
                 />
               </div>
-              <div className="flex items-end gap-4 text-sm text-slate-700">
+              <div className="flex items-end gap-5 pb-3 text-sm text-slate-200">
                 <label className="inline-flex items-center gap-2">
                   <input
                     type="checkbox"
+                    className={checkbox}
                     checked={plan.is_public}
                     onChange={(e) => update(index, { is_public: e.target.checked })}
                   />
@@ -195,6 +199,7 @@ export function MasterAdminPricingPage() {
                 <label className="inline-flex items-center gap-2">
                   <input
                     type="checkbox"
+                    className={checkbox}
                     checked={plan.highlight}
                     onChange={(e) => update(index, { highlight: e.target.checked })}
                   />
@@ -217,7 +222,7 @@ export function MasterAdminPricingPage() {
                 </label>
                 <textarea
                   id={`features-${index}`}
-                  className={`${field} min-h-24`}
+                  className={`${field} min-h-28`}
                   value={plan.features.join("\n")}
                   onChange={(e) =>
                     update(index, {
@@ -234,14 +239,14 @@ export function MasterAdminPricingPage() {
           <button
             type="submit"
             disabled={saving}
-            className="rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+            className="rounded-2xl bg-amber-300 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-70"
           >
             {saving ? "Publicando…" : "Publicar precios"}
           </button>
           <button
             type="button"
             onClick={() => setPlans((current) => [...current, { ...EMPTY_PLAN, sort_order: (current.length + 1) * 10 }])}
-            className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700"
+            className="rounded-2xl border border-white/15 bg-white/5 px-5 py-3 text-sm font-semibold text-slate-100 transition hover:bg-white/10"
           >
             Agregar plan
           </button>

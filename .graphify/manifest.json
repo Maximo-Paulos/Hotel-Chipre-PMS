@@ -196,7 +196,7 @@
     "hash": "2dbe43c8f2211bae4a5f289d4d1e0164"
   },
   "app/adapters/rate_limiter.py": {
-    "mtime": 1789064254121.0203,
+    "mtime": 1789087448515.6072,
     "hash": "655a251edf7c169d852416dd46516443"
   },
   "app/api/__init__.py": {
@@ -380,7 +380,7 @@
     "hash": "b613008c907585f15c32fa8303b43574"
   },
   "app/config.py": {
-    "mtime": 1789071175840.3123,
+    "mtime": 1789087448515.8716,
     "hash": "88dc2db5b44d8bef1c4d590b9c0a149b"
   },
   "app/database.py": {
@@ -424,8 +424,8 @@
     "hash": "9950d74c9d8eff387774d1423188c07b"
   },
   "app/main.py": {
-    "mtime": 1789064320694.5525,
-    "hash": "d2412536062f8407e1e2b5cae9c0e887"
+    "mtime": 1789087913497.441,
+    "hash": "907557814d6ede9f88cf52423483dad2"
   },
   "app/master_admin/__init__.py": {
     "mtime": 1783103274878.9458,
@@ -444,7 +444,7 @@
     "hash": "b72b8aba303c879eca8b844f95e785a4"
   },
   "app/master_admin/router.py": {
-    "mtime": 1789064344284.2134,
+    "mtime": 1789087448516.1992,
     "hash": "0901de2ec3a5e646e141a808d8230f46"
   },
   "app/master_admin/schemas.py": {
@@ -468,7 +468,7 @@
     "hash": "62ef3eaf849f09518abe70f4b804b84a"
   },
   "app/models/__init__.py": {
-    "mtime": 1789064282536.7107,
+    "mtime": 1789087448516.4114,
     "hash": "015a46a03e0096f781bcb812d05448c0"
   },
   "app/models/ai_assistant.py": {
@@ -856,7 +856,7 @@
     "hash": "3f4d781501d18cf32af52a7a9ed97b6f"
   },
   "app/services/email_service.py": {
-    "mtime": 1789071175845.2751,
+    "mtime": 1789087448516.7637,
     "hash": "e8add152839f1459048c317955e98462"
   },
   "app/services/fx_service.py": {
@@ -1124,7 +1124,7 @@
     "hash": "295cb406ea26fb1ee80d8ffac736b24c"
   },
   "frontend/src/api/client.ts": {
-    "mtime": 1789064587172.3264,
+    "mtime": 1789087448522.3772,
     "hash": "be00f6960de9e7103954f4a50c48cbfc"
   },
   "frontend/src/api/companies.ts": {
@@ -1240,7 +1240,7 @@
     "hash": "54429f9dde73357ce720cf3b49b98ba5"
   },
   "frontend/src/components/Seo.tsx": {
-    "mtime": 1789071168561.2383,
+    "mtime": 1789087448522.6116,
     "hash": "216938d0eb6f80f8f758f66f26b04d3e"
   },
   "frontend/src/components/StatCard.tsx": {
@@ -1248,15 +1248,15 @@
     "hash": "eb3b5d96ceaf48143b6fd0a145b14158"
   },
   "frontend/src/components/marketing/MarketingShell.tsx": {
-    "mtime": 1789069755369.892,
+    "mtime": 1789087448523.0476,
     "hash": "768954b4d5a01819490aec7262e85d7d"
   },
   "frontend/src/components/marketing/PublicButtonLink.tsx": {
-    "mtime": 1789064601815.179,
+    "mtime": 1789087448523.1692,
     "hash": "354552937bdaf1e2091187f2f8012aa8"
   },
   "frontend/src/config/publicUrls.ts": {
-    "mtime": 1789069718683.3745,
+    "mtime": 1789087448524.705,
     "hash": "fc9143d8c7dc9c897db48bb2874cc269"
   },
   "frontend/src/content/integrationHelp.ts": {
@@ -1264,7 +1264,7 @@
     "hash": "8d7a53eaf007909a8ad5e36f482fe86d"
   },
   "frontend/src/content/marketing.ts": {
-    "mtime": 1789086928759.84,
+    "mtime": 1789087448524.8508,
     "hash": "f61626e62e68593c07059a6bc3ae73c7"
   },
   "frontend/src/data/mock.ts": {
@@ -1356,8 +1356,8 @@
     "hash": "8b54dc49ccc876736644eace76b959dd"
   },
   "frontend/src/master_admin/layout.tsx": {
-    "mtime": 1789072349908.5315,
-    "hash": "8e677144d72653cc987e022fa8c08734"
+    "mtime": 1789091447966.1062,
+    "hash": "9407fef364ca9e9e1f26f4216492f6a9"
   },
   "frontend/src/master_admin/pages/AuditPage.tsx": {
     "mtime": 1783103274908.6887,
@@ -1372,11 +1372,11 @@
     "hash": "bd688c14a532a10cb3b2b2a25fc847e3"
   },
   "frontend/src/master_admin/pages/EmailPage.tsx": {
-    "mtime": 1789069725580.747,
+    "mtime": 1789087448525.6528,
     "hash": "4e6a2071889cc8559e57829d41aa530f"
   },
   "frontend/src/master_admin/pages/LoginPage.tsx": {
-    "mtime": 1789069725585.1792,
+    "mtime": 1789087448525.81,
     "hash": "ba6090ac598e10c79df9589312637f94"
   },
   "frontend/src/master_admin/pages/StripePage.tsx": {
@@ -1388,15 +1388,15 @@
     "hash": "5850ae0d93dcaa99a607e48fd8274b74"
   },
   "frontend/src/router.tsx": {
-    "mtime": 1789072367434.577,
-    "hash": "1081c0dcb59481e62e0fc66baaf67db2"
+    "mtime": 1789091447965.7942,
+    "hash": "a38d7ecdf15e1629a87416d230d7c4bf"
   },
   "frontend/src/state/session.tsx": {
     "mtime": 1787360063378.94,
     "hash": "6acea01e9771ad459993dc7d8f386ced"
   },
   "frontend/src/ui/AppShell.tsx": {
-    "mtime": 1789070591546.7915,
+    "mtime": 1789087448526.4019,
     "hash": "faa7e845501a70140011b1e2846d3645"
   },
   "frontend/src/ui/HotelSelector.tsx": {
@@ -1404,7 +1404,7 @@
     "hash": "e0bf34ee43b354c2acc83b4bb8111b6f"
   },
   "frontend/src/ui/UserBadge.tsx": {
-    "mtime": 1789070105750.281,
+    "mtime": 1789087448526.5466,
     "hash": "5645cd0aef6591a118bd8dbf1747c4d7"
   },
   "frontend/src/utils/currency.ts": {
@@ -1504,47 +1504,47 @@
     "hash": "55b4db4f190db89894431c17ee981735"
   },
   "frontend/src/views/public/AcceptInvitationPage.tsx": {
-    "mtime": 1789069718710.6685,
+    "mtime": 1789087448526.8572,
     "hash": "6a1f1e2c3c59dc5914cb16505272c109"
   },
   "frontend/src/views/public/FaqPage.tsx": {
-    "mtime": 1789069718720.747,
+    "mtime": 1789087448526.9805,
     "hash": "358c2ecbb3f0f5d4037ffbdc2f028c1a"
   },
   "frontend/src/views/public/FunctionsPage.tsx": {
-    "mtime": 1789070673240.5957,
+    "mtime": 1789087448527.2146,
     "hash": "3727cd0de85336a21cb8d20258fef56b"
   },
   "frontend/src/views/public/LoginPage.tsx": {
-    "mtime": 1789070264851.146,
+    "mtime": 1789087448527.363,
     "hash": "41715fc7cd3877b3fe8c85144e7cb63f"
   },
   "frontend/src/views/public/MarketingHomePage.tsx": {
-    "mtime": 1789086958642.9832,
+    "mtime": 1789087448527.4731,
     "hash": "a7d4126aa6eb3e79a58eed6dbc0560d3"
   },
   "frontend/src/views/public/PmsHoteleroPage.tsx": {
-    "mtime": 1789069718697.6082,
+    "mtime": 1789087448527.619,
     "hash": "d66da7c739bb6f7b4c6e698d231d0a91"
   },
   "frontend/src/views/public/PricingPage.tsx": {
-    "mtime": 1789069725593.3853,
+    "mtime": 1789087448527.7305,
     "hash": "b6c2431a286d6f2045a17f7619a7db5a"
   },
   "frontend/src/views/public/RegisterOwnerPage.tsx": {
-    "mtime": 1789070264851.297,
+    "mtime": 1789087448528.048,
     "hash": "64b9af557e0a8f366b29424ae416279b"
   },
   "frontend/src/views/public/SoftwareParaHotelesPage.tsx": {
-    "mtime": 1789069718715.6313,
+    "mtime": 1789087448528.3562,
     "hash": "c84792d06635b9210e5a1a48862ba0f1"
   },
   "frontend/src/views/public/VerifyEmailPage.tsx": {
-    "mtime": 1789070264851.4365,
+    "mtime": 1789087448528.6936,
     "hash": "71c2262f251ce508484b41cbb26abe80"
   },
   "frontend/vite.config.mjs": {
-    "mtime": 1789087050042.0083,
+    "mtime": 1789087448530.224,
     "hash": "93c381bc4a18574c5c6c606994c240d7"
   },
   "reset.py": {
@@ -1572,7 +1572,7 @@
     "hash": "d41d8cd98f00b204e9800998ecf8427e"
   },
   "tests/perf/benchmark_pg.py": {
-    "mtime": 1789071323403.0156,
+    "mtime": 1789087448530.5479,
     "hash": "aa6c7eb691282b8b0ded2020f7c482db"
   },
   "tests/perf/explain_probe.py": {
@@ -1684,7 +1684,7 @@
     "hash": "1bc508df359d0d074ffbf2d00be5ca3c"
   },
   "tests/test_auth_security.py": {
-    "mtime": 1789071323393.8467,
+    "mtime": 1789087448530.7263,
     "hash": "0472c8f95f3cdac0e1bbe48a501dc2d7"
   },
   "tests/test_business_requirements_db.py": {
@@ -1816,7 +1816,7 @@
     "hash": "faef5712014e865983d6a999d88480b7"
   },
   "tests/test_master_admin_panel.py": {
-    "mtime": 1789071323398.9583,
+    "mtime": 1789087448530.8882,
     "hash": "69779168f91de12fa464d3905ff198d2"
   },
   "tests/test_mercadopago_webhook_signature.py": {
@@ -1996,11 +1996,11 @@
     "hash": "3f9f4b0293fdcef5abdb6536dbf08b16"
   },
   "tests/test_route_security_guardrail.py": {
-    "mtime": 1789071873713.9854,
+    "mtime": 1789087448531.4011,
     "hash": "10f4d70063a489f623a680af2fad23ba"
   },
   "tests/test_runtime_security.py": {
-    "mtime": 1789071323388.3774,
+    "mtime": 1789087448531.5442,
     "hash": "d1b5b75e7833051b4fdf5471bf3023c9"
   },
   "tests/test_soft_delete.py": {
@@ -2544,7 +2544,7 @@
     "hash": "98856cef822cb5995ee6f69b85e683f3"
   },
   "frontend/index.html": {
-    "mtime": 1789087063586.4998,
+    "mtime": 1789087448517.2375,
     "hash": "0b2c81196a65f85a476a41ac16c6958b"
   },
   "frontend/public/robots.txt": {
@@ -4236,7 +4236,7 @@
     "hash": "69ffcb3b18ad971a95d55b2df0c34732"
   },
   "frontend/src/views/protected/SettingsNotificationsPage.tsx": {
-    "mtime": 1789069718718.2236,
+    "mtime": 1789087448526.6865,
     "hash": "c07660428b4d10274e1dd9c9376265b8"
   },
   "tests/test_financial_reports.py": {
@@ -4776,11 +4776,11 @@
     "hash": "103cd72a9cd0e6bdcc3c00637707e021"
   },
   "frontend/src/views/public/PrivacyPage.tsx": {
-    "mtime": 1789069718702.9478,
+    "mtime": 1789087448527.8835,
     "hash": "6818174cf4e7e298bd058885cb256a34"
   },
   "frontend/src/views/public/TermsPage.tsx": {
-    "mtime": 1789069718694.9739,
+    "mtime": 1789087448528.5193,
     "hash": "97b16bb01a22b527e47aee7d25de1b9f"
   },
   "tests/test_integrations_oauth_callback_page.py": {
@@ -5356,187 +5356,191 @@
     "hash": "14249cf2f7abffdd1f1f60ed4e8afffe"
   },
   "alembic/versions/20260910_marketing_pricing_and_leads.py": {
-    "mtime": 1789064240416.0007,
+    "mtime": 1789087448515.4573,
     "hash": "4b841759fc79946defc2875d9236f5e7"
   },
   "app/api/public_marketing.py": {
-    "mtime": 1789064320659.927,
+    "mtime": 1789087448515.7148,
     "hash": "c834e4fc5f1895723b3990fb3b846d50"
   },
   "app/models/marketing.py": {
-    "mtime": 1789064205907.803,
+    "mtime": 1789087448516.5344,
     "hash": "c057725c5fecfafeb17cad04f35a6845"
   },
   "app/schemas/marketing.py": {
-    "mtime": 1789064274979.8953,
+    "mtime": 1789087448516.6362,
     "hash": "d4814701117e63998ad06a4d7a35d96f"
   },
   "app/services/marketing_service.py": {
-    "mtime": 1789071917909.9133,
-    "hash": "06265b8122a05806fabd0a38189847fc"
+    "mtime": 1789087721993.3293,
+    "hash": "f6a2d355cae5c18178e870783a4858b8"
   },
   "frontend/e2e/marketing-shots.mjs": {
-    "mtime": 1789070438842.9648,
+    "mtime": 1789087448517.0613,
     "hash": "78689ce0c66e0af7bfc7c7cdfeb0d745"
   },
   "frontend/src/api/marketing.ts": {
-    "mtime": 1789064732072.3638,
+    "mtime": 1789087448522.477,
     "hash": "2a0a94da44c497e3dca6caadea694d8f"
   },
   "frontend/src/components/brand/BrandMark.tsx": {
-    "mtime": 1789069735991.6804,
+    "mtime": 1789087448522.7407,
     "hash": "b29e71cba103d75e00c321d7dd76459e"
   },
   "frontend/src/components/marketing/EarlyAccessForm.tsx": {
-    "mtime": 1789064732072.4797,
+    "mtime": 1789087448522.8809,
     "hash": "ad9cb4048afd7ce19cf2e365c055c02a"
   },
   "frontend/src/components/marketing/Section.tsx": {
-    "mtime": 1789064612122.724,
+    "mtime": 1789087448523.2693,
     "hash": "05322dad4afdf161ceca060b4f352702"
   },
   "frontend/src/components/marketing/sections/DifferentiatorsSection.tsx": {
-    "mtime": 1789065060257.3867,
+    "mtime": 1789087448523.3901,
     "hash": "62c97bd1346d9278ede80a0718e370f2"
   },
   "frontend/src/components/marketing/sections/FaqSection.tsx": {
-    "mtime": 1789064787213.2593,
+    "mtime": 1789087448523.4731,
     "hash": "d80e1aa5f4e0a260f88390f34181a5b0"
   },
   "frontend/src/components/marketing/sections/FinalCtaSection.tsx": {
-    "mtime": 1789064821126.216,
+    "mtime": 1789087448523.5593,
     "hash": "3d3766ceff60fd53378963b699647864"
   },
   "frontend/src/components/marketing/sections/HeroSection.tsx": {
-    "mtime": 1789069062631.5605,
+    "mtime": 1789087448523.7375,
     "hash": "b691eb262ac2114a171c049a3ceee84c"
   },
   "frontend/src/components/marketing/sections/IntegrationsStrip.tsx": {
-    "mtime": 1789064750666.5417,
+    "mtime": 1789087448523.8362,
     "hash": "a32273ccfe53f288c14cc5a0e22239ca"
   },
   "frontend/src/components/marketing/sections/ModulesSection.tsx": {
-    "mtime": 1789065106040.7158,
+    "mtime": 1789087448523.9226,
     "hash": "6f79dc02c4e5e1a5c37fccb8dc0c734e"
   },
   "frontend/src/components/marketing/sections/OnboardingSection.tsx": {
-    "mtime": 1789065060257.472,
+    "mtime": 1789087448524.0063,
     "hash": "3551654e431c8586fe3e411cddb62f39"
   },
   "frontend/src/components/marketing/sections/PricingSection.tsx": {
-    "mtime": 1789086958642.7913,
+    "mtime": 1789087448524.1316,
     "hash": "41740e1ef85340e8ee27e0a8958d3517"
   },
   "frontend/src/components/marketing/sections/ProblemSection.tsx": {
-    "mtime": 1789065060257.2783,
+    "mtime": 1789087448524.223,
     "hash": "d78d6950b247e71ad71f8b072355d8b7"
   },
   "frontend/src/components/marketing/sections/ProductTourSection.tsx": {
-    "mtime": 1789072037096.689,
+    "mtime": 1789087448524.314,
     "hash": "65d04e30f47945d7bd25ef07db9aacff"
   },
   "frontend/src/components/marketing/ui/OccupancyBoard.tsx": {
-    "mtime": 1789069020180.5989,
+    "mtime": 1789087448524.5461,
     "hash": "81ed937ee0bd8e94ad14fe67eb8947ed"
   },
   "scripts/seed_marketing_demo.py": {
-    "mtime": 1789070283901.7686,
+    "mtime": 1789087448530.3354,
     "hash": "1bce331f7d3c50df00de5b9f0a8f431b"
   },
   "tests/test_master_admin_pricing.py": {
-    "mtime": 1789064424734.99,
+    "mtime": 1789087448531.0618,
     "hash": "ae846bc1282de2fc8e3df6d74e65ad0a"
   },
   "tests/test_public_marketing.py": {
-    "mtime": 1789071933629.696,
-    "hash": "e505a345f1e7d700d61d000f834f7126"
+    "mtime": 1789087722017.6226,
+    "hash": "6b4d038f3cf43df0c79b14009853e811"
   },
   "frontend/public/fonts/README.md": {
-    "mtime": 1789064071072.9358,
+    "mtime": 1789087448518.509,
     "hash": "7cfed1465b4cb4b3c3920933ef2e34ce"
   },
   "frontend/public/brand/og-default.png": {
-    "mtime": 1789070729142.9333,
+    "mtime": 1789087448518.3337,
     "hash": "574a7b051e5aaaebf989b345a68f7a2e"
   },
   "frontend/public/marketing/screenshots/analitica-mobile.webp": {
-    "mtime": 1789070458443.2336,
+    "mtime": 1789087448519.5234,
     "hash": "f88dec3f2ebfd77d0263a1beddbb6a02"
   },
   "frontend/public/marketing/screenshots/analitica.webp": {
-    "mtime": 1789070449282.3318,
+    "mtime": 1789087448519.8406,
     "hash": "c9c1b8a36f4fddf21cbd1296796cda0c"
   },
   "frontend/public/marketing/screenshots/caja-mobile.webp": {
-    "mtime": 1789070455767.8396,
+    "mtime": 1789087448519.9958,
     "hash": "c36100e9723bbab121b24b48b236c76f"
   },
   "frontend/public/marketing/screenshots/caja.webp": {
-    "mtime": 1789070446314.1245,
+    "mtime": 1789087448520.2854,
     "hash": "ff284b6641689e859d09069dec5c56c7"
   },
   "frontend/public/marketing/screenshots/dashboard-mobile.webp": {
-    "mtime": 1789070451821.5103,
+    "mtime": 1789087448520.4507,
     "hash": "81a677c604d2f337213d8eaca56933f1"
   },
   "frontend/public/marketing/screenshots/dashboard.webp": {
-    "mtime": 1789070441936.236,
+    "mtime": 1789087448520.7795,
     "hash": "69a87cfad9afe7c789ba659313d3ad6f"
   },
   "frontend/public/marketing/screenshots/planilla-mobile.webp": {
-    "mtime": 1789070453139.1897,
+    "mtime": 1789087448520.9067,
     "hash": "7c1b8052288278f0843ecde2d4ef75a6"
   },
   "frontend/public/marketing/screenshots/planilla.webp": {
-    "mtime": 1789070443396.932,
+    "mtime": 1789087448521.134,
     "hash": "f1951c76aacc4435d9a8c97359a3f807"
   },
   "frontend/public/marketing/screenshots/reservas-mobile.webp": {
-    "mtime": 1789070454453.9346,
+    "mtime": 1789087448521.2742,
     "hash": "ae4e0ea44b9af3a63d5ec6b4f257c71e"
   },
   "frontend/public/marketing/screenshots/reservas.webp": {
-    "mtime": 1789070444864.7427,
+    "mtime": 1789087448521.588,
     "hash": "f93040112aafd4e4df7a17e268666506"
   },
   "frontend/public/marketing/screenshots/tarifas-mobile.webp": {
-    "mtime": 1789070457085.3044,
+    "mtime": 1789087448521.7695,
     "hash": "23e9567c1f851d90b3cdbe1f3fb8f7b5"
   },
   "frontend/public/marketing/screenshots/tarifas.webp": {
-    "mtime": 1789070447788.0535,
+    "mtime": 1789087448522.032,
     "hash": "533c61b1f95e99cb1ca812b3ba68c03f"
   },
   "frontend/marketing-html.mjs": {
-    "mtime": 1789087050003.6611,
+    "mtime": 1789087448517.452,
     "hash": "931bfc4954684d8dcc04465685c81ddd"
   },
   "frontend/marketing-html.test.mjs": {
-    "mtime": 1789087077057.65,
+    "mtime": 1789087448517.5674,
     "hash": "08297342bc7bdbcfcfa9b3fd41200773"
   },
   "frontend/src/components/marketing/sections/FounderSection.tsx": {
-    "mtime": 1789086944738.4026,
+    "mtime": 1789087448523.6426,
     "hash": "90dcacc53ca3e81aa105f499e6756c1b"
   },
   "frontend/src/components/marketing/sections/StackSection.tsx": {
-    "mtime": 1789086944734.378,
+    "mtime": 1789087448524.4014,
     "hash": "a2d432b5e49bd95824ac5948eb27222c"
   },
   "frontend/src/master_admin/pages/PricingPage.tsx": {
-    "mtime": 1789072349871.2324,
-    "hash": "b4a9458ff58e4bb7cbaa6cca331c13cf"
+    "mtime": 1789091880030.932,
+    "hash": "e4b0aeb34e5139697def2ea9dd12a1e0"
   },
-  "frontend/undefined/sec-origen.png": {
-    "mtime": 1789086994458.5593,
-    "hash": "a899dc77e16f5c6e55e9fdc7fdbe296e"
+  "frontend/csv-cell.test.mjs": {
+    "mtime": 1789091447969.455,
+    "hash": "c80a6f5a3af779b7542bdbc4eeb90a3f"
   },
-  "frontend/undefined/sec-precios.png": {
-    "mtime": 1789086994578.0132,
-    "hash": "623d0b5bc8a6ca1cb5d9bdc4e8136f59"
+  "frontend/src/master_admin/pages/LeadsPage.tsx": {
+    "mtime": 1789092011374.3655,
+    "hash": "a223fe8c6bf27ba193cc364245957b44"
   },
-  "frontend/undefined/sec-reemplaza.png": {
-    "mtime": 1789086994358.1953,
-    "hash": "c81923e6d510ecad35adc8669e124232"
+  "frontend/src/utils/csvCell.ts": {
+    "mtime": 1789091447926.7466,
+    "hash": "af7765d8da8f4e9b65a8c291a4f878c5"
+  },
+  "tests/test_cors_first_party.py": {
+    "mtime": 1789087938314.7917,
+    "hash": "9638c257e66a23a4bbe8df7184fb88ff"
   }
 }
