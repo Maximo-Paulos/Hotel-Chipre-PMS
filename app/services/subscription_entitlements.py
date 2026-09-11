@@ -25,6 +25,15 @@ PLAN_CATALOG: Dict[str, Dict[str, Any]] = {
     "ultra": {"name": "Ultra", "room_limit": 80, "staff_limit": 20, "price_month": 99},
 }
 
+# Feature-level entitlements stay alongside the canonical plan catalog so
+# gated modules do not duplicate plan logic.  Keep identifiers stable for API
+# and audit consumers.
+PLAN_FEATURES: Dict[str, frozenset[str]] = {
+    "starter": frozenset(),
+    "pro": frozenset({"whatsapp.crm"}),
+    "ultra": frozenset({"whatsapp.crm"}),
+}
+
 WRITE_OK_STATUSES = {"active", "trialing", "demo", "comped"}
 GRACE_STATUSES = {"past_due"}
 TRIAL_DURATION_DAYS = 14
@@ -52,6 +61,12 @@ def plan_catalog() -> list[Dict[str, Any]]:
         {"code": code, **data}
         for code, data in PLAN_CATALOG.items()
     ]
+
+
+def plan_has_feature(snapshot: Dict[str, Any], feature: str) -> bool:
+    """Return whether a normalized subscription snapshot grants ``feature``."""
+    plan = str(snapshot.get("plan") or "starter").lower()
+    return feature in PLAN_FEATURES.get(plan, frozenset())
 
 
 def _is_enforcement_enabled() -> bool:
@@ -481,6 +496,7 @@ def get_subscription_snapshot(db: Session, hotel_id: int) -> Dict[str, Any]:
             "enforcement_enabled": enforcement_enabled,
             "dirty": False,
             "subscription": None,
+            "features": sorted(PLAN_FEATURES.get("starter", frozenset())),
         }
 
     defaults = _plan_defaults(sub.plan)
@@ -512,6 +528,7 @@ def get_subscription_snapshot(db: Session, hotel_id: int) -> Dict[str, Any]:
         "enforcement_enabled": enforcement_enabled,
         "dirty": dirty,
         "subscription": sub,
+        "features": sorted(PLAN_FEATURES.get(sub.plan, frozenset())),
     }
 
 

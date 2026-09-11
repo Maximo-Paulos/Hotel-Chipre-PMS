@@ -29,6 +29,7 @@ class IntegrationConnection(Base):
     __tablename__ = "integration_connections"
     __table_args__ = (
         UniqueConstraint("hotel_id", "integration_id", name="uq_connection_hotel_integration"),
+        UniqueConstraint("hotel_id", "id", name="uq_integration_connections_hotel_id"),
     )
 
     id = Column(Integer, primary_key=True, autoincrement=True)

@@ -46,6 +46,7 @@ PUBLIC_ALLOWLIST = (
     PublicRoute("/api/webhooks/booking", "Deprecated OTA webhook always returns 410 Gone."),
     PublicRoute("/api/webhooks/expedia", "Deprecated OTA webhook always returns 410 Gone."),
     PublicRoute("/api/webhooks/despegar", "Deprecated OTA webhook always returns 410 Gone."),
+    PublicRoute("/api/webhooks/meta/whatsapp", "Meta machine webhook verifies subscription token and HMAC signature."),
     PublicRoute("/api/payment-link-tests/mercadopago/webhook", "MercadoPago machine webhook verifies x-signature."),
     PublicRoute("/api/payment-links/mercadopago/webhook", "MercadoPago machine webhook verifies x-signature."),
     PublicRoute("/payment-links/mercadopago/webhook", "MercadoPago machine webhook verifies x-signature."),

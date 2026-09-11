@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-09-11T02:02:17.133Z",
-  "graphPath": ".graphify/graph.json",
+  "generatedAt": "2026-09-11T21:11:53.222Z",
+  "graphPath": "/Users/maximopaulos/.codex/worktrees/9a70/Hotel-Chipre-PMS/.graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
   "warnings": [],
@@ -3637,6 +3637,28 @@
       "warnings": []
     },
     {
+      "id": "flow:api_whatsapp_meta_webhook_verify_webhook",
+      "name": "verify_webhook",
+      "entryPoint": "api_whatsapp_meta_webhook_verify_webhook",
+      "entryPointId": "api_whatsapp_meta_webhook_verify_webhook",
+      "path": [
+        "api_whatsapp_meta_webhook_verify_webhook",
+        "api_whatsapp_meta_webhook_verify_token"
+      ],
+      "qualifiedPath": [
+        "api_whatsapp_meta_webhook_verify_webhook",
+        "api_whatsapp_meta_webhook_verify_token"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/whatsapp_meta_webhook.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
       "id": "flow:services_payment_link_service_resolve_signed_external_reference",
       "name": "resolve_signed_external_reference",
       "entryPoint": "services_payment_link_service_resolve_signed_external_reference",
@@ -4383,6 +4405,28 @@
       "warnings": []
     },
     {
+      "id": "flow:services_whatsapp_crm_service_complete_embedded_signup",
+      "name": "complete_embedded_signup",
+      "entryPoint": "services_whatsapp_crm_service_complete_embedded_signup",
+      "entryPointId": "services_whatsapp_crm_service_complete_embedded_signup",
+      "path": [
+        "services_whatsapp_crm_service_complete_embedded_signup",
+        "services_whatsapp_crm_service_whatsappcrmerror"
+      ],
+      "qualifiedPath": [
+        "services_whatsapp_crm_service_complete_embedded_signup",
+        "services_whatsapp_crm_service_whatsappcrmerror"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/services/whatsapp_crm_service.py"
+      ],
+      "criticality": 0.285,
+      "warnings": []
+    },
+    {
       "id": "flow:api_public_marketing_create_lead",
       "name": "create_lead",
       "entryPoint": "api_public_marketing_create_lead",
@@ -4941,6 +4985,28 @@
       "warnings": []
     },
     {
+      "id": "flow:api_whatsapp_meta_webhook_receive_webhook",
+      "name": "receive_webhook",
+      "entryPoint": "api_whatsapp_meta_webhook_receive_webhook",
+      "entryPointId": "api_whatsapp_meta_webhook_receive_webhook",
+      "path": [
+        "api_whatsapp_meta_webhook_receive_webhook",
+        "api_whatsapp_meta_webhook_app_secret"
+      ],
+      "qualifiedPath": [
+        "api_whatsapp_meta_webhook_receive_webhook",
+        "api_whatsapp_meta_webhook_app_secret"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/whatsapp_meta_webhook.py"
+      ],
+      "criticality": 0.285,
+      "warnings": []
+    },
+    {
       "id": "flow:services_analytics_warehouse_reconcile_derived_fact",
       "name": "reconcile_derived_fact",
       "entryPoint": "services_analytics_warehouse_reconcile_derived_fact",
@@ -5102,6 +5168,28 @@
       "fileCount": 1,
       "files": [
         "app/services/company_document_service.py"
+      ],
+      "criticality": 0.285,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_whatsapp_crm_update_assignment",
+      "name": "update_assignment",
+      "entryPoint": "api_whatsapp_crm_update_assignment",
+      "entryPointId": "api_whatsapp_crm_update_assignment",
+      "path": [
+        "api_whatsapp_crm_update_assignment",
+        "api_whatsapp_crm_require_plan"
+      ],
+      "qualifiedPath": [
+        "api_whatsapp_crm_update_assignment",
+        "api_whatsapp_crm_require_plan"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/whatsapp_crm.py"
       ],
       "criticality": 0.285,
       "warnings": []
@@ -7966,6 +8054,32 @@
       "fileCount": 1,
       "files": [
         "frontend/src/views/protected/analytics/AnalyticsPages.tsx"
+      ],
+      "criticality": 0.2225,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_whatsapp_crm_service_assign_conversation",
+      "name": "assign_conversation",
+      "entryPoint": "services_whatsapp_crm_service_assign_conversation",
+      "entryPointId": "services_whatsapp_crm_service_assign_conversation",
+      "path": [
+        "services_whatsapp_crm_service_assign_conversation",
+        "services_whatsapp_crm_service_conversation",
+        "services_whatsapp_crm_service_event",
+        "services_whatsapp_crm_service_whatsappcrmerror"
+      ],
+      "qualifiedPath": [
+        "services_whatsapp_crm_service_assign_conversation",
+        "services_whatsapp_crm_service_conversation",
+        "services_whatsapp_crm_service_event",
+        "services_whatsapp_crm_service_whatsappcrmerror"
+      ],
+      "depth": 1,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/services/whatsapp_crm_service.py"
       ],
       "criticality": 0.2225,
       "warnings": []
@@ -16677,6 +16791,32 @@
       "warnings": []
     },
     {
+      "id": "flow:services_whatsapp_crm_service_add_internal_note",
+      "name": "add_internal_note",
+      "entryPoint": "services_whatsapp_crm_service_add_internal_note",
+      "entryPointId": "services_whatsapp_crm_service_add_internal_note",
+      "path": [
+        "services_whatsapp_crm_service_add_internal_note",
+        "services_whatsapp_crm_service_conversation",
+        "services_whatsapp_crm_service_event",
+        "services_whatsapp_crm_service_whatsappcrmerror"
+      ],
+      "qualifiedPath": [
+        "services_whatsapp_crm_service_add_internal_note",
+        "services_whatsapp_crm_service_conversation",
+        "services_whatsapp_crm_service_event",
+        "services_whatsapp_crm_service_whatsappcrmerror"
+      ],
+      "depth": 1,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/services/whatsapp_crm_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:services_laundry_service_add_item",
       "name": "add_item",
       "entryPoint": "services_laundry_service_add_item",
@@ -16694,6 +16834,32 @@
       "fileCount": 1,
       "files": [
         "app/services/laundry_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_whatsapp_crm_service_add_outbound_message",
+      "name": "add_outbound_message",
+      "entryPoint": "services_whatsapp_crm_service_add_outbound_message",
+      "entryPointId": "services_whatsapp_crm_service_add_outbound_message",
+      "path": [
+        "services_whatsapp_crm_service_add_outbound_message",
+        "services_whatsapp_crm_service_conversation",
+        "services_whatsapp_crm_service_event",
+        "services_whatsapp_crm_service_whatsappcrmerror"
+      ],
+      "qualifiedPath": [
+        "services_whatsapp_crm_service_add_outbound_message",
+        "services_whatsapp_crm_service_conversation",
+        "services_whatsapp_crm_service_event",
+        "services_whatsapp_crm_service_whatsappcrmerror"
+      ],
+      "depth": 1,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/services/whatsapp_crm_service.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -17561,6 +17727,28 @@
       "warnings": []
     },
     {
+      "id": "flow:api_whatsapp_crm_channel_status",
+      "name": "channel_status",
+      "entryPoint": "api_whatsapp_crm_channel_status",
+      "entryPointId": "api_whatsapp_crm_channel_status",
+      "path": [
+        "api_whatsapp_crm_channel_status",
+        "api_whatsapp_crm_require_plan"
+      ],
+      "qualifiedPath": [
+        "api_whatsapp_crm_channel_status",
+        "api_whatsapp_crm_require_plan"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/whatsapp_crm.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:scripts_mock_gemma_runtime_chat_completions",
       "name": "chat_completions",
       "entryPoint": "scripts_mock_gemma_runtime_chat_completions",
@@ -17704,6 +17892,28 @@
       "fileCount": 1,
       "files": [
         "app/services/analytics_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_whatsapp_crm_complete_channel",
+      "name": "complete_channel",
+      "entryPoint": "api_whatsapp_crm_complete_channel",
+      "entryPointId": "api_whatsapp_crm_complete_channel",
+      "path": [
+        "api_whatsapp_crm_complete_channel",
+        "api_whatsapp_crm_require_plan"
+      ],
+      "qualifiedPath": [
+        "api_whatsapp_crm_complete_channel",
+        "api_whatsapp_crm_require_plan"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/whatsapp_crm.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -18030,6 +18240,28 @@
       "fileCount": 1,
       "files": [
         "app/services/payment_link_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_whatsapp_crm_create_note",
+      "name": "create_note",
+      "entryPoint": "api_whatsapp_crm_create_note",
+      "entryPointId": "api_whatsapp_crm_create_note",
+      "path": [
+        "api_whatsapp_crm_create_note",
+        "api_whatsapp_crm_require_plan"
+      ],
+      "qualifiedPath": [
+        "api_whatsapp_crm_create_note",
+        "api_whatsapp_crm_require_plan"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/whatsapp_crm.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -18864,6 +19096,28 @@
       "fileCount": 1,
       "files": [
         "alembic/versions/20260910_reservation_email_deliveries.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:versions_20260911_whatsapp_crm_downgrade",
+      "name": "downgrade",
+      "entryPoint": "versions_20260911_whatsapp_crm_downgrade",
+      "entryPointId": "versions_20260911_whatsapp_crm_downgrade",
+      "path": [
+        "versions_20260911_whatsapp_crm_downgrade",
+        "versions_20260911_whatsapp_crm_remove_rls"
+      ],
+      "qualifiedPath": [
+        "versions_20260911_whatsapp_crm_downgrade",
+        "versions_20260911_whatsapp_crm_remove_rls"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20260911_whatsapp_crm.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -20130,6 +20384,60 @@
       "fileCount": 1,
       "files": [
         "app/services/whatsapp_booking_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_whatsapp_crm_inbox",
+      "name": "inbox",
+      "entryPoint": "api_whatsapp_crm_inbox",
+      "entryPointId": "api_whatsapp_crm_inbox",
+      "path": [
+        "api_whatsapp_crm_inbox",
+        "api_whatsapp_crm_require_plan"
+      ],
+      "qualifiedPath": [
+        "api_whatsapp_crm_inbox",
+        "api_whatsapp_crm_require_plan"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/whatsapp_crm.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_whatsapp_crm_service_ingest_inbound_message",
+      "name": "ingest_inbound_message",
+      "entryPoint": "services_whatsapp_crm_service_ingest_inbound_message",
+      "entryPointId": "services_whatsapp_crm_service_ingest_inbound_message",
+      "path": [
+        "services_whatsapp_crm_service_ingest_inbound_message",
+        "services_whatsapp_crm_service_channel",
+        "services_whatsapp_crm_service_conversation",
+        "services_whatsapp_crm_service_event",
+        "services_whatsapp_crm_service_inboundmessageresult",
+        "services_whatsapp_crm_service_normalize_phone",
+        "services_whatsapp_crm_service_whatsappcrmerror"
+      ],
+      "qualifiedPath": [
+        "services_whatsapp_crm_service_ingest_inbound_message",
+        "services_whatsapp_crm_service_channel",
+        "services_whatsapp_crm_service_conversation",
+        "services_whatsapp_crm_service_event",
+        "services_whatsapp_crm_service_inboundmessageresult",
+        "services_whatsapp_crm_service_normalize_phone",
+        "services_whatsapp_crm_service_whatsappcrmerror"
+      ],
+      "depth": 1,
+      "nodeCount": 7,
+      "fileCount": 1,
+      "files": [
+        "app/services/whatsapp_crm_service.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -22367,6 +22675,28 @@
       "warnings": []
     },
     {
+      "id": "flow:api_whatsapp_crm_send_message",
+      "name": "send_message",
+      "entryPoint": "api_whatsapp_crm_send_message",
+      "entryPointId": "api_whatsapp_crm_send_message",
+      "path": [
+        "api_whatsapp_crm_send_message",
+        "api_whatsapp_crm_require_plan"
+      ],
+      "qualifiedPath": [
+        "api_whatsapp_crm_send_message",
+        "api_whatsapp_crm_require_plan"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/whatsapp_crm.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:api_email_send_reset",
       "name": "send_reset",
       "entryPoint": "api_email_send_reset",
@@ -22898,6 +23228,28 @@
       "fileCount": 1,
       "files": [
         "app/api/rooms.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_whatsapp_crm_update_status",
+      "name": "update_status",
+      "entryPoint": "api_whatsapp_crm_update_status",
+      "entryPointId": "api_whatsapp_crm_update_status",
+      "path": [
+        "api_whatsapp_crm_update_status",
+        "api_whatsapp_crm_require_plan"
+      ],
+      "qualifiedPath": [
+        "api_whatsapp_crm_update_status",
+        "api_whatsapp_crm_require_plan"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/whatsapp_crm.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -23456,6 +23808,30 @@
       "fileCount": 1,
       "files": [
         "alembic/versions/20260910_reservation_email_deliveries.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:versions_20260911_whatsapp_crm_upgrade",
+      "name": "upgrade",
+      "entryPoint": "versions_20260911_whatsapp_crm_upgrade",
+      "entryPointId": "versions_20260911_whatsapp_crm_upgrade",
+      "path": [
+        "versions_20260911_whatsapp_crm_upgrade",
+        "versions_20260911_whatsapp_crm_enum",
+        "versions_20260911_whatsapp_crm_install_rls"
+      ],
+      "qualifiedPath": [
+        "versions_20260911_whatsapp_crm_upgrade",
+        "versions_20260911_whatsapp_crm_enum",
+        "versions_20260911_whatsapp_crm_install_rls"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20260911_whatsapp_crm.py"
       ],
       "criticality": 0.16,
       "warnings": []

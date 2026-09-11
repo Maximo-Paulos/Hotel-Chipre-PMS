@@ -90,6 +90,20 @@ from app.models.payment_proof import PaymentProof, PaymentProofBlob, PaymentProo
 from app.models.security_token import SecurityToken
 from app.models.rate_limit_event import RateLimitEvent
 from app.models.ai_assistant import AIAssistantSession, AIAssistantMessage, AIAssistantActionRun, AIAssistantInsight
+from app.models.whatsapp_crm import (
+    WhatsAppChannel,
+    WhatsAppChannelStatusEnum,
+    WhatsAppProviderRoute,
+    WhatsAppContact,
+    WhatsAppConversation,
+    WhatsAppConversationEvent,
+    WhatsAppOutboundOutbox,
+    WhatsAppConversationNote,
+    WhatsAppConversationStatusEnum,
+    WhatsAppMessage,
+    WhatsAppMessageDirectionEnum,
+    WhatsAppMessageStatusEnum,
+)
 from app.models.audit_log import AuditLog, AuditActionEnum
 from app.models.security_audit_log import SecurityAuditLog
 from app.models.permission import (

@@ -82,6 +82,10 @@ ADDITIVE_RLS_TABLE_CONTRACT = (
         "20260910_reservation_email_deliveries.py",
         ("reservation_email_deliveries",),
     ),
+    (
+        "20260911_whatsapp_crm.py",
+        ("whatsapp_channels", "whatsapp_contacts", "whatsapp_conversations", "whatsapp_messages", "whatsapp_conversation_notes", "whatsapp_conversation_events", "whatsapp_outbound_outbox"),
+    ),
 )
 
 
@@ -255,6 +259,15 @@ def test_rls_migration_covers_every_hotel_scoped_model_table():
         "shift_handoffs",
         "shift_handoff_tasks",
         "reservation_email_deliveries",
+        "whatsapp_channels",
+        "whatsapp_contacts",
+        "whatsapp_conversations",
+        "whatsapp_messages",
+        "whatsapp_conversation_notes",
+        "whatsapp_conversation_events",
+        "whatsapp_outbound_outbox",
+        # Metadata-only provider routing is resolved before tenant context.
+        "whatsapp_provider_routes",
     }
     assert set(migration.TENANT_TABLES) == expected
     assert "hotel_memberships" not in migration.TENANT_TABLES

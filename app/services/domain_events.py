@@ -78,6 +78,7 @@ SAFE_PAYLOAD_KEYS = frozenset(
         "close_report_id",
         "company_id",
         "connection_id",
+        "conversation_id",
         "document_id",
         "event_id",
         "export_id",
