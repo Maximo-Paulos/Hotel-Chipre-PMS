@@ -1264,8 +1264,8 @@
     "hash": "8d7a53eaf007909a8ad5e36f482fe86d"
   },
   "frontend/src/content/marketing.ts": {
-    "mtime": 1789070548511.2424,
-    "hash": "140253e1c0308e0fac99a5eedfa6dee5"
+    "mtime": 1789086928759.84,
+    "hash": "f61626e62e68593c07059a6bc3ae73c7"
   },
   "frontend/src/data/mock.ts": {
     "mtime": 1783103274906.8835,
@@ -1356,8 +1356,8 @@
     "hash": "8b54dc49ccc876736644eace76b959dd"
   },
   "frontend/src/master_admin/layout.tsx": {
-    "mtime": 1789069725589.0642,
-    "hash": "7aa5af795acfab253cee3fe1a1e057eb"
+    "mtime": 1789072349908.5315,
+    "hash": "8e677144d72653cc987e022fa8c08734"
   },
   "frontend/src/master_admin/pages/AuditPage.tsx": {
     "mtime": 1783103274908.6887,
@@ -1388,8 +1388,8 @@
     "hash": "5850ae0d93dcaa99a607e48fd8274b74"
   },
   "frontend/src/router.tsx": {
-    "mtime": 1789061001926.8467,
-    "hash": "6ce20607712fa98567742d95d623906e"
+    "mtime": 1789072367434.577,
+    "hash": "1081c0dcb59481e62e0fc66baaf67db2"
   },
   "frontend/src/state/session.tsx": {
     "mtime": 1787360063378.94,
@@ -1520,8 +1520,8 @@
     "hash": "41715fc7cd3877b3fe8c85144e7cb63f"
   },
   "frontend/src/views/public/MarketingHomePage.tsx": {
-    "mtime": 1789070568528.9988,
-    "hash": "0842deafa69972d06aab11eb4c991803"
+    "mtime": 1789086958642.9832,
+    "hash": "a7d4126aa6eb3e79a58eed6dbc0560d3"
   },
   "frontend/src/views/public/PmsHoteleroPage.tsx": {
     "mtime": 1789069718697.6082,
@@ -1544,8 +1544,8 @@
     "hash": "71c2262f251ce508484b41cbb26abe80"
   },
   "frontend/vite.config.mjs": {
-    "mtime": 1787360058520.8452,
-    "hash": "80d0c2206a12e56a90a589c6f52024dc"
+    "mtime": 1789087050042.0083,
+    "hash": "93c381bc4a18574c5c6c606994c240d7"
   },
   "reset.py": {
     "mtime": 1783103275000.7024,
@@ -2544,8 +2544,8 @@
     "hash": "98856cef822cb5995ee6f69b85e683f3"
   },
   "frontend/index.html": {
-    "mtime": 1789071168561.8,
-    "hash": "f59f3b5f60785673d7a91f7ba854286a"
+    "mtime": 1789087063586.4998,
+    "hash": "0b2c81196a65f85a476a41ac16c6958b"
   },
   "frontend/public/robots.txt": {
     "mtime": 1784398283672.0923,
@@ -5424,8 +5424,8 @@
     "hash": "3551654e431c8586fe3e411cddb62f39"
   },
   "frontend/src/components/marketing/sections/PricingSection.tsx": {
-    "mtime": 1789064821121.8718,
-    "hash": "a3c14fa55bb333e166b022497bcfb501"
+    "mtime": 1789086958642.7913,
+    "hash": "41740e1ef85340e8ee27e0a8958d3517"
   },
   "frontend/src/components/marketing/sections/ProblemSection.tsx": {
     "mtime": 1789065060257.2783,
@@ -5506,5 +5506,37 @@
   "frontend/public/marketing/screenshots/tarifas.webp": {
     "mtime": 1789070447788.0535,
     "hash": "533c61b1f95e99cb1ca812b3ba68c03f"
+  },
+  "frontend/marketing-html.mjs": {
+    "mtime": 1789087050003.6611,
+    "hash": "931bfc4954684d8dcc04465685c81ddd"
+  },
+  "frontend/marketing-html.test.mjs": {
+    "mtime": 1789087077057.65,
+    "hash": "08297342bc7bdbcfcfa9b3fd41200773"
+  },
+  "frontend/src/components/marketing/sections/FounderSection.tsx": {
+    "mtime": 1789086944738.4026,
+    "hash": "90dcacc53ca3e81aa105f499e6756c1b"
+  },
+  "frontend/src/components/marketing/sections/StackSection.tsx": {
+    "mtime": 1789086944734.378,
+    "hash": "a2d432b5e49bd95824ac5948eb27222c"
+  },
+  "frontend/src/master_admin/pages/PricingPage.tsx": {
+    "mtime": 1789072349871.2324,
+    "hash": "b4a9458ff58e4bb7cbaa6cca331c13cf"
+  },
+  "frontend/undefined/sec-origen.png": {
+    "mtime": 1789086994458.5593,
+    "hash": "a899dc77e16f5c6e55e9fdc7fdbe296e"
+  },
+  "frontend/undefined/sec-precios.png": {
+    "mtime": 1789086994578.0132,
+    "hash": "623d0b5bc8a6ca1cb5d9bdc4e8136f59"
+  },
+  "frontend/undefined/sec-reemplaza.png": {
+    "mtime": 1789086994358.1953,
+    "hash": "c81923e6d510ecad35adc8669e124232"
   }
 }

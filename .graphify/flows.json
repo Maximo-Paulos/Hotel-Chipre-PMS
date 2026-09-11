@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-09-10T20:30:40.970Z",
+  "generatedAt": "2026-09-11T00:43:53.145Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -21598,6 +21598,28 @@
       "fileCount": 1,
       "files": [
         "frontend/src/components/RateCalendarGrid.tsx"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:frontend_marketing_html_renderroutehtml",
+      "name": "renderRouteHtml",
+      "entryPoint": "frontend_marketing_html_renderroutehtml",
+      "entryPointId": "frontend_marketing_html_renderroutehtml",
+      "path": [
+        "frontend_marketing_html_renderroutehtml",
+        "frontend_marketing_html_replacetag"
+      ],
+      "qualifiedPath": [
+        "frontend_marketing_html_renderroutehtml",
+        "frontend_marketing_html_replacetag"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/marketing-html.mjs"
       ],
       "criticality": 0.16,
       "warnings": []
