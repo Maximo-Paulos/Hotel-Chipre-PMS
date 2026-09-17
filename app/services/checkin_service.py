@@ -28,7 +28,6 @@ from app.services.reservation_service import (
 )
 from app.services.jurisdiction_profile import compute_missing_guest_fields
 from app.models.room import Room, RoomStatusEnum
-from app.services.guest_profile import get_guest_profile, validate_primary_guest_record
 from app.models.security_audit_log import SecurityAuditLog
 from app.services.financial_ledger import paid_amount_with_legacy_fallback
 from app.schemas.guest_restriction import GuestRestrictionOverrideRequest

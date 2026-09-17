@@ -6,7 +6,7 @@
 - 2. Activar: `source .venv/bin/activate` (macOS/Linux) · `.\.venv\Scripts\activate` (Windows)
 - 3. `pip install -r requirements.txt`
 - 4. `cd frontend && npm install`
-- 5. Build UI: `npm run build` (served from `frontend/dist`). If `spawn EPERM` aparece en OneDrive, corré el build en WSL/fuera de OneDrive o permití `esbuild.exe`.
+- 5. Build UI: `npm run build` (served from `frontend/dist`).
 - 6. Volvé al root y levantá Redis antes de iniciar el backend o la UI de desarrollo, para habilitar la colaboración y sincronización en tiempo real: `docker compose up -d redis` (o `redis-server` si lo tenés instalado localmente).
 - 7. Levantá todo con `npx nodemon` (lee `nodemon.json` -> uvicorn con reload). UI + API en `http://127.0.0.1:8040`. Para la UI en modo desarrollo, ejecutá `npm run dev` dentro de `frontend` con Redis ya levantado.
 

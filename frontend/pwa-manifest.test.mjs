@@ -16,8 +16,10 @@ function readPngDimensions(filePath) {
 test("PWA manifest declares installable metadata and real icon files", () => {
   const manifest = JSON.parse(fs.readFileSync(path.join(publicRoot, "manifest.webmanifest"), "utf8"));
 
-  assert.equal(manifest.name, "Hotel Chipre PMS");
-  assert.equal(manifest.short_name, "Chipre PMS");
+  // The product is Hotels-PMS; "Hotel Chipre" is the first hotel, not the
+  // product. The manifest was renamed and this expectation was left behind.
+  assert.equal(manifest.name, "Hotels-PMS");
+  assert.equal(manifest.short_name, "Hotels-PMS");
   assert.equal(manifest.lang, "es");
   assert.equal(manifest.display, "standalone");
   assert.equal(manifest.start_url, "/");

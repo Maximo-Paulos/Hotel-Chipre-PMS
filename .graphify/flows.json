@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-09-11T21:11:53.222Z",
-  "graphPath": "/Users/maximopaulos/.codex/worktrees/9a70/Hotel-Chipre-PMS/.graphify/graph.json",
+  "generatedAt": "2026-09-17T19:38:47.624Z",
+  "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
   "warnings": [],
@@ -4985,28 +4985,6 @@
       "warnings": []
     },
     {
-      "id": "flow:api_whatsapp_meta_webhook_receive_webhook",
-      "name": "receive_webhook",
-      "entryPoint": "api_whatsapp_meta_webhook_receive_webhook",
-      "entryPointId": "api_whatsapp_meta_webhook_receive_webhook",
-      "path": [
-        "api_whatsapp_meta_webhook_receive_webhook",
-        "api_whatsapp_meta_webhook_app_secret"
-      ],
-      "qualifiedPath": [
-        "api_whatsapp_meta_webhook_receive_webhook",
-        "api_whatsapp_meta_webhook_app_secret"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "app/api/whatsapp_meta_webhook.py"
-      ],
-      "criticality": 0.285,
-      "warnings": []
-    },
-    {
       "id": "flow:services_analytics_warehouse_reconcile_derived_fact",
       "name": "reconcile_derived_fact",
       "entryPoint": "services_analytics_warehouse_reconcile_derived_fact",
@@ -7006,6 +6984,30 @@
       "fileCount": 1,
       "files": [
         "app/services/graph_projection.py"
+      ],
+      "criticality": 0.2433,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_whatsapp_meta_webhook_receive_webhook",
+      "name": "receive_webhook",
+      "entryPoint": "api_whatsapp_meta_webhook_receive_webhook",
+      "entryPointId": "api_whatsapp_meta_webhook_receive_webhook",
+      "path": [
+        "api_whatsapp_meta_webhook_receive_webhook",
+        "api_whatsapp_meta_webhook_app_secret",
+        "api_whatsapp_meta_webhook_nested"
+      ],
+      "qualifiedPath": [
+        "api_whatsapp_meta_webhook_receive_webhook",
+        "api_whatsapp_meta_webhook_app_secret",
+        "api_whatsapp_meta_webhook_nested"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/api/whatsapp_meta_webhook.py"
       ],
       "criticality": 0.2433,
       "warnings": []

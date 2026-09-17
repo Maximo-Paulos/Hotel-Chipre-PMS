@@ -4,7 +4,7 @@
       "command": "/Users/maximopaulos/.local/node/bin/npx",
       "args": [
         "-y",
-        "@supabase/mcp-server-supabase@latest",
+        "@supabase/mcp-server-supabase@0.13.0",
         "--read-only",
         "--project-ref=${SUPABASE_PROJECT_REF}"
       ],
@@ -16,9 +16,11 @@
       "command": "/Users/maximopaulos/.local/node/bin/npx",
       "args": [
         "-y",
-        "@stripe/mcp",
-        "--api-key=${STRIPE_SECRET_KEY}"
-      ]
+        "@stripe/mcp@0.3.3"
+      ],
+      "env": {
+        "STRIPE_SECRET_KEY": "${STRIPE_SECRET_KEY}"
+      }
     },
     "render": {
       "type": "http",

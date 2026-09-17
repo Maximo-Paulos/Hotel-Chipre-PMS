@@ -10,7 +10,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies.auth import AuthContext, require_permission, require_roles
+from app.dependencies.auth import AuthContext, require_permission
 from app.models.fx_rate_snapshot import FxRateSnapshot
 from app.services.fx_service import RATE_TYPES, fetch_all_rates, fetch_rate, get_all_rates_snapshot
 from app.services.permission_service import PERMISSION_REPORTS_FINANCIAL_VIEW

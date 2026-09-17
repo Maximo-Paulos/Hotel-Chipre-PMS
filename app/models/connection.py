@@ -3,7 +3,6 @@ Connection model for external provider integrations.
 Stores credentials/settings as JSON to preserve structure.
 """
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
 
 from sqlalchemy import Column, Integer, String, DateTime, JSON, UniqueConstraint
 

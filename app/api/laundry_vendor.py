@@ -23,7 +23,6 @@ from app.services.laundry_vendor_service import (
     LaundryVendorError,
     create_remito,
     create_vendor,
-    get_vendor,
     list_remitos,
     list_vendor_prices,
     list_vendors,

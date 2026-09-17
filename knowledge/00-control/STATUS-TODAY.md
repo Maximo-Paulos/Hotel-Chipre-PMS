@@ -1,5 +1,43 @@
 # Estado exhaustivo del sistema — Hotel Chipre PMS
 
+## -2. Campaña de auditoría y corrección con ECC — 2026-09-17
+
+`confirmed` para todo lo listado abajo: cada hallazgo se reprodujo y cada corrección se verificó con la suite completa, tipos/lint del frontend, dry-run de migraciones y navegador real (desktop 1280 y móvil 375). No re-verifica las secciones cloud/QA de más abajo.
+
+Punto de partida: `main` en `7c5f229`, árbol limpio. `pytest -q` de base: **2001 passed, 1 failed**. Cierre: **2007 passed, 0 failed** (5 tests nuevos del webhook de Meta).
+
+### Defectos reales encontrados y corregidos
+
+- **`PATCH /api/bookings/{id}` lanzaba `NameError` (500)** en el camino de edición sólo-metadatos: `update_reservation_fields` se usaba sin importarse (`app/api/bookings.py`). Detectado por `ruff --select=F821`; ningún test cubría ese camino.
+- **Un mensaje inservible descartaba toda la entrega de Meta.** `POST /api/webhooks/meta/whatsapp` convertía cualquier `WhatsAppCRMError` (un teléfono impar, un id ausente) en 400: el `db.commit()` nunca corría, los mensajes buenos del mismo lote se perdían y Meta reintentaba el mismo lote para siempre. Ahora se registra y se saltea el mensaje (`skipped` en la respuesta) y el resto persiste.
+- **`text`/`profile` no-dict en el payload de Meta daban 500** (`AttributeError` sobre `.get`). El resto del handler ya validaba con `isinstance`; faltaba en esos dos puntos.
+- **Test bomba de tiempo**: `test_pending_actions_list_is_hotel_scoped_and_sorted_by_priority` usaba fechas literales de 2026-09 y empezó a fallar solo cuando la fecha real pasó la ventana activa (`_ACTIVE_WINDOW_DAYS = 1`). Las fechas quedaron ancladas a `date.today()`.
+- **El test del manifest PWA llevaba meses roto**: esperaba `"Hotel Chipre PMS"` / `"Chipre PMS"` cuando el manifest ya dice `Hotels-PMS`. El manifest es el correcto; el test estaba viejo. **Nadie lo veía porque `npm test` no estaba ni en `validate-all` ni en CI** — ahora sí, junto con `npm run typecheck`.
+- **401 garantizado en la consola de owner**: `SessionProvider` (inquilino) envuelve toda la app y disparaba `POST /api/auth/session/refresh` al montar también en `/adminpmsmaster`, que se autentica con `MasterAdminSessionProvider` y nunca tiene cookie de inquilino. Verificado en navegador: 2 cargas de la consola = 0 refreshes; `/login` sigue haciendo 1.
+- **La consola heredaba el `<title>` del login de inquilino** ("Acceso al sistema"). Ahora declara el suyo, manteniendo `noindex`.
+- **Bandeja de WhatsApp**: el cuadro de texto se vaciaba antes de saber si el envío había salido (se perdía lo escrito ante un fallo); un id de responsable no numérico llegaba como `NaN`, que serializa a `null` y **desasignaba la conversación en silencio**; los tres campos no tenían nombre accesible y ningún error de mutación era visible.
+
+### Seguridad
+
+- **Las 13 vulnerabilidades de dependencia cerradas** — `pip-audit -r requirements.txt` termina en `No known vulnerabilities found`: `cryptography` 46.0.7 → 50.0.1 (escape de restricción de nombres en verificación de certificados, blowup exponencial en cadenas, oráculo de descifrado PKCS#7, OpenSSL estático), `protobuf` 5.26.1 → 5.29.6 (dos DoS por recursión) y `pytest` 8.3.3 → 9.0.3 (`/tmp/pytest-of-{user}` en UNIX). Arrastraron `ortools` 9.11.4210 → 9.12.4544 (es quien acotaba protobuf), `pyOpenSSL` 26.4.0, `pytest-asyncio` 0.24.0 → 1.4.0 y `pytest-cov` 5.0.0 → 7.1.0. El salto mayor de `pytest-asyncio` resultó barato: sólo 2 archivos de test usan async y no hay configuración `asyncio_mode` en el repo. `protobuf` y `pyOpenSSL` quedaron pinneados explícitamente para que una resolución nueva no vuelva a una versión vulnerable.
+- **La clave de Stripe viajaba en `argv`** (`--api-key=...` en `.mcp.json`), donde cualquier proceso local la lee con `ps`. Movida a `env`; `@stripe/mcp` ya la toma de `STRIPE_SECRET_KEY` (`dist/cli.js`).
+- **Servidores MCP sin versión fija** (`@supabase/mcp-server-supabase@latest`, `@stripe/mcp`): una publicación comprometida se ejecutaba sola. Ambos pinneados.
+- **Riesgo de escritura cruzada entre hoteles en el ORM**: `Reservation.category/sellable_product/rate_plan/tax_policy` tenían FK compuestas con `hotel_id` sin `viewonly`, así que SQLAlchemy las trataba como escritoras de `reservations.hotel_id` (17 `SAWarning` por test). Nada las asigna; ahora son `viewonly=True`, lo que además impide que una asignación futura reescriba el `hotel_id` de la reserva en silencio.
+
+### Verificado y sin hallazgos
+
+Aislamiento multi-tenant en rutas (sólo auth y demo consultan sin `hotel_id`, correcto), firma y replay de webhooks de pago, rate limiting en auth, headers de seguridad, guardas de `JWT_SECRET` en producción, ausencia de `eval`/`exec`/SQL por concatenación en `app/`, `npm audit --omit=dev` limpio, un solo head de Alembic.
+
+### Higiene
+
+BOM de Windows en `app/api/daily_rates.py` (resto de la migración desde `C:\PROJECTO`), 68 imports muertos, y `.graphify` regenerado (13496 nodos, 77155 aristas, 911 flujos, `portable-check` OK).
+
+### Deuda conocida que queda
+
+10 `SAWarning` de relaciones `back_populates` en stock/linen/WhatsApp (el arreglo correcto ahí es `overlaps=`, invasivo y sin bug demostrado); `.claude/settings.json` sin bloque `permissions` (decisión de política, no la tomé por el usuario); vulnerabilidades de `esbuild`/`vite` sólo de desarrollo (`npm audit fix --force` instalaría vite 8, breaking); 98 archivos de test siguen con fechas literales — sólo se ancló el que ya fallaba, no hay red que detecte la próxima bomba de tiempo antes de que explote.
+
+---
+
 ## -1. Infraestructura cloud (no código) — 2026-08-23
 
 `confirmed` por verificación directa (DNS-over-HTTPS, consolas de Google/Render, bundle desplegado). Detalle completo: `docs/audits/infra-2026-08-23.md`.

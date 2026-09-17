@@ -102,12 +102,12 @@ Soportar correctamente reservas OTA nuevas, modificadas, canceladas y deliveries
 
 #### Archivos base
 
-- `C:/Users/macap/OneDrive/Escritorio/Hotel-Chipre-Reservas/Hotel-Chipre-PMS/app/services/ota_service.py`
-- `C:/Users/macap/OneDrive/Escritorio/Hotel-Chipre-Reservas/Hotel-Chipre-PMS/app/services/ota/contracts.py`
-- `C:/Users/macap/OneDrive/Escritorio/Hotel-Chipre-Reservas/Hotel-Chipre-PMS/app/services/ota/adapters/booking.py`
-- `C:/Users/macap/OneDrive/Escritorio/Hotel-Chipre-Reservas/Hotel-Chipre-PMS/app/services/ota/adapters/expedia.py`
-- `C:/Users/macap/OneDrive/Escritorio/Hotel-Chipre-Reservas/Hotel-Chipre-PMS/app/services/ota/adapters/despegar.py`
-- `C:/Users/macap/OneDrive/Escritorio/Hotel-Chipre-Reservas/Hotel-Chipre-PMS/app/models/ota_core.py`
+- `app/services/ota_service.py`
+- `app/services/ota/contracts.py`
+- `app/services/ota/adapters/booking.py`
+- `app/services/ota/adapters/expedia.py`
+- `app/services/ota/adapters/despegar.py`
+- `app/models/ota_core.py`
 - tests OTA existentes o nuevos en `tests/`
 
 #### Decisiones obligatorias
@@ -168,10 +168,10 @@ Convertir el solver actual en uno compatible con el requisito central: minimizar
 
 #### Archivos base
 
-- `C:/Users/macap/OneDrive/Escritorio/Hotel-Chipre-Reservas/Hotel-Chipre-PMS/app/services/allocation_engine.py`
-- `C:/Users/macap/OneDrive/Escritorio/Hotel-Chipre-Reservas/Hotel-Chipre-PMS/app/services/allocation_runtime_service.py`
-- `C:/Users/macap/OneDrive/Escritorio/Hotel-Chipre-Reservas/Hotel-Chipre-PMS/app/services/allocation_policy_service.py`
-- `C:/Users/macap/OneDrive/Escritorio/Hotel-Chipre-Reservas/Hotel-Chipre-PMS/app/models/allocation.py`
+- `app/services/allocation_engine.py`
+- `app/services/allocation_runtime_service.py`
+- `app/services/allocation_policy_service.py`
+- `app/models/allocation.py`
 
 #### Decisiones obligatorias
 
@@ -219,10 +219,10 @@ Que el dueño/front desk pueda operar sin ir a API manual ni a base de datos.
 
 #### Archivos base
 
-- `C:/Users/macap/OneDrive/Escritorio/Hotel-Chipre-Reservas/Hotel-Chipre-PMS/frontend/src/views/protected/ReservationsPage.tsx`
-- `C:/Users/macap/OneDrive/Escritorio/Hotel-Chipre-Reservas/Hotel-Chipre-PMS/frontend/src/api/reservations.ts`
-- `C:/Users/macap/OneDrive/Escritorio/Hotel-Chipre-Reservas/Hotel-Chipre-PMS/frontend/src/hooks/useReservations.ts`
-- `C:/Users/macap/OneDrive/Escritorio/Hotel-Chipre-Reservas/Hotel-Chipre-PMS/frontend/src/views/protected/RoomsPage.tsx`
+- `frontend/src/views/protected/ReservationsPage.tsx`
+- `frontend/src/api/reservations.ts`
+- `frontend/src/hooks/useReservations.ts`
+- `frontend/src/views/protected/RoomsPage.tsx`
 
 #### Decisiones obligatorias
 
@@ -275,10 +275,10 @@ Hacer que la base de pasajeros sea util y visible.
 
 #### Archivos base
 
-- `C:/Users/macap/OneDrive/Escritorio/Hotel-Chipre-Reservas/Hotel-Chipre-PMS/app/api/guests.py`
-- `C:/Users/macap/OneDrive/Escritorio/Hotel-Chipre-Reservas/Hotel-Chipre-PMS/app/models/guest.py`
-- `C:/Users/macap/OneDrive/Escritorio/Hotel-Chipre-Reservas/Hotel-Chipre-PMS/frontend/src/api/guests.ts`
-- `C:/Users/macap/OneDrive/Escritorio/Hotel-Chipre-Reservas/Hotel-Chipre-PMS/frontend/src/hooks/useGuests.ts`
+- `app/api/guests.py`
+- `app/models/guest.py`
+- `frontend/src/api/guests.ts`
+- `frontend/src/hooks/useGuests.ts`
 - nueva vista sugerida: `frontend/src/views/protected/GuestsPage.tsx`
 - `frontend/src/router.tsx`
 
@@ -328,9 +328,9 @@ Aprovechar mejor los datos OTA y dejar claro que lo faltante se completa manualm
 
 #### Archivos base
 
-- `C:/Users/macap/OneDrive/Escritorio/Hotel-Chipre-Reservas/Hotel-Chipre-PMS/app/services/ota/contracts.py`
-- `C:/Users/macap/OneDrive/Escritorio/Hotel-Chipre-Reservas/Hotel-Chipre-PMS/app/services/ota/adapters/*.py`
-- `C:/Users/macap/OneDrive/Escritorio/Hotel-Chipre-Reservas/Hotel-Chipre-PMS/app/services/ota_service.py`
+- `app/services/ota/contracts.py`
+- `app/services/ota/adapters/*.py`
+- `app/services/ota_service.py`
 
 #### Tareas
 
@@ -361,10 +361,10 @@ Que Gemma ayude operativamente y aprenda del negocio sin salirse de control.
 
 #### Archivos base
 
-- `C:/Users/macap/OneDrive/Escritorio/Hotel-Chipre-Reservas/Hotel-Chipre-PMS/app/services/gemma_orchestrator.py`
-- `C:/Users/macap/OneDrive/Escritorio/Hotel-Chipre-Reservas/Hotel-Chipre-PMS/app/services/gemma_context_service.py`
-- `C:/Users/macap/OneDrive/Escritorio/Hotel-Chipre-Reservas/Hotel-Chipre-PMS/app/services/allocation_learning_service.py`
-- `C:/Users/macap/OneDrive/Escritorio/Hotel-Chipre-Reservas/Hotel-Chipre-PMS/frontend/src/views/protected/SettingsAssistantPage.tsx`
+- `app/services/gemma_orchestrator.py`
+- `app/services/gemma_context_service.py`
+- `app/services/allocation_learning_service.py`
+- `frontend/src/views/protected/SettingsAssistantPage.tsx`
 
 #### Decisiones obligatorias
 
@@ -399,9 +399,9 @@ Pasar del fallback al runtime local en la maquina de prueba.
 
 #### Archivos base
 
-- `C:/Users/macap/OneDrive/Escritorio/Hotel-Chipre-Reservas/Hotel-Chipre-PMS/app/services/gemma_orchestrator.py`
-- `C:/Users/macap/OneDrive/Escritorio/Hotel-Chipre-Reservas/Hotel-Chipre-PMS/app/scripts/mock_gemma_runtime.py`
-- `C:/Users/macap/OneDrive/Escritorio/Hotel-Chipre-Reservas/Hotel-Chipre-PMS/docs/gemma4/local-runtime-testing.md`
+- `app/services/gemma_orchestrator.py`
+- `app/scripts/mock_gemma_runtime.py`
+- `docs/gemma4/local-runtime-testing.md`
 
 #### Tareas
 

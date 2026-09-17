@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import logging
 from threading import RLock
-from typing import Any
 
 import redis
 import redis.asyncio as redis_async

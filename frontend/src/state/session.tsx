@@ -112,6 +112,18 @@ const clearLegacyStoredSession = () => {
   }
 };
 
+// The owner console (/adminpmsmaster) authenticates through
+// MasterAdminSessionProvider and never holds a tenant session cookie, so the
+// tenant session restore below would always answer 401 there. Skip it instead
+// of firing a request that cannot succeed.
+const MASTER_ADMIN_PATH_PREFIX = "/adminpmsmaster";
+
+const isMasterAdminPath = (): boolean => {
+  if (typeof window === "undefined") return false;
+  const path = window.location.pathname;
+  return path === MASTER_ADMIN_PATH_PREFIX || path.startsWith(`${MASTER_ADMIN_PATH_PREFIX}/`);
+};
+
 const initialSession = (): SessionState => ({
   ...EMPTY_SESSION,
   csrfToken: readStoredCsrfToken()
@@ -138,7 +150,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     clearLegacyStoredSession();
     return initialSession();
   });
-  const [isInitializing, setIsInitializing] = useState(() => isAppHostname());
+  const [isInitializing, setIsInitializing] = useState(() => isAppHostname() && !isMasterAdminPath());
   const [restoredSession, setRestoredSession] = useState(false);
 
   const login = useCallback((partial: Partial<SessionState>) => {

@@ -10,7 +10,6 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, status
-from sqlalchemy import and_, func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -37,10 +36,8 @@ from app.schemas.analytics_api import (
     AnalyticsAlertSnoozeCreate,
     AnalyticsAlertSnoozeRead,
     CompanyCreate,
-    CompanyRead,
     CompanyUpdate,
     RoomStateEventCreate,
-    RoomStateEventRead,
 )
 from app.services.analytics_ai_providers import build_analytics_ai_config, get_analytics_ai_provider
 from app.services.analytics_contracts import build_analytics_window, calculate_physical_room_nights_for_hotel, calculate_pickup_30d_count

@@ -8,15 +8,17 @@ description: Start the local development environment for Hotel Chipre PMS on mac
 Este entorno se montó sin brew/Docker: Python 3.12 en `.venv/`, Node 20 en `~/.local/node`,
 Redis compilado en `~/.local/bin`. Rutas y puertos importan.
 
-## Backend (FastAPI, puerto 8000)
+## Backend (FastAPI, puerto 8040)
 ```sh
 cd "$(git rev-parse --show-toplevel)"
 # migraciones (usa DATABASE_URL de .env; por defecto SQLite local)
 .venv/bin/python -m alembic upgrade head
 # servidor con reload
-.venv/bin/python -m uvicorn app.main:app --reload --port 8000
+.venv/bin/python -m uvicorn app.main:app --reload --port 8040
 ```
-Health: `GET http://127.0.0.1:8000/health`. Mutaciones necesitan header `X-Hotel-Id`.
+Health: `GET http://127.0.0.1:8040/health`. Mutaciones necesitan header `X-Hotel-Id`.
+El puerto es 8040, no 8000: es lo que esperan el proxy de `vite.config.mjs`, `frontend/.env.local`
+y `nodemon.json`. Con el backend en 8000 el frontend se levanta pero no llega a la API.
 
 ## Frontend (Vite, puerto 5173)
 ```sh

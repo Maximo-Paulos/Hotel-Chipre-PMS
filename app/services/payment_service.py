@@ -22,7 +22,7 @@ from app.models.transaction import (
 )
 from app.models.hotel_config import HotelConfiguration
 from app.schemas.transaction import PaymentRequest, PaymentGatewayResponse
-from app.services.reservation_service import transition_reservation_status, ReservationError
+from app.services.reservation_service import transition_reservation_status
 from app.services.financial_ledger import (
     completed_paid_amount,
     operational_balance_due,

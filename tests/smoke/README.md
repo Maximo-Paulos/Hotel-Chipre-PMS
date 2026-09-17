@@ -3,8 +3,8 @@
 Suite mínima contra `app.main.app` con BD SQLite efímera.
 
 ## Comando único
-```powershell
-.\.venv\Scripts\python.exe tests\smoke\run_smoke.py
+```sh
+.venv/bin/python tests/smoke/run_smoke.py
 ```
 
 ## Cobertura

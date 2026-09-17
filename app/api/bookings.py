@@ -24,6 +24,7 @@ from app.services.reservation_service import (
     find_available_rooms,
     transition_reservation_status,
     compute_reservation_pricing,
+    update_reservation_fields,
 )
 from app.services.reservation_quote_service import build_reservation_quote
 from app.services.checkin_service import perform_checkin, perform_checkout, CheckInError

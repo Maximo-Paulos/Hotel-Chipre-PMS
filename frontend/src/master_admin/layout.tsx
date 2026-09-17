@@ -1,6 +1,8 @@
 import { Suspense, useEffect } from "react";
 import { Link, Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 
+import { Seo } from "../components/Seo";
+
 import { MasterAdminSessionProvider, useMasterAdminSession } from "./session";
 
 const navItems = [
@@ -16,6 +18,14 @@ const navItems = [
 export function MasterAdminRoot() {
   return (
     <MasterAdminSessionProvider>
+      {/* Without this the console inherits index.html's pre-hydration
+          "Acceso al sistema" title, which names the tenant login instead. */}
+      <Seo
+        title="Owner Master Panel | Hotels-PMS"
+        description="Consola interna de operación de la plataforma Hotels-PMS."
+        canonicalPath="/adminpmsmaster"
+        noindex
+      />
       <Outlet />
     </MasterAdminSessionProvider>
   );

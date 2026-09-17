@@ -30,15 +30,18 @@ fi
 ```
 Esperado: 0 failed. Si algo falla, diagnosticá antes de seguir.
 
-## 2. Frontend — lint + typecheck + build
+## 2. Frontend — lint + typecheck + tests + build
 ```sh
 export PATH="$HOME/.local/node/bin:$PATH"
 cd "$(git rev-parse --show-toplevel)/frontend"
 npm run lint          # eslint --max-warnings=0
 npx tsc --noEmit      # typecheck
+npm test              # node --test *.test.mjs (manifest PWA, i18n, CSV, marketing HTML, build meta)
 npm run build         # vite build
 ```
-Los tres deben pasar sin errores (el warning de chunk >500 kB es deuda conocida, no bloquea).
+Los cuatro deben pasar sin errores (el warning de chunk >500 kB es deuda conocida, no bloquea).
+`npm test` estuvo fuera de esta puerta y de CI hasta 2026-09-17: el test del manifest PWA
+quedó desactualizado meses sin que nadie lo viera. No lo saques de la lista.
 
 ## 3. Migraciones — dry-run sobre SQLite virgen (nunca la DB de dev)
 ```sh

@@ -6,7 +6,6 @@ from typing import Literal
 from pydantic import AliasChoices, BaseModel, Field, field_validator
 
 from app.models.analytics import RoomStateEventReasonCodeEnum, RoomStateEventTypeEnum
-from app.models.reservation import ReservationChannelCodeEnum
 
 
 class CompanyBase(BaseModel):

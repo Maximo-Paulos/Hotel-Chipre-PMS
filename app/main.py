@@ -13,7 +13,6 @@ from decimal import Decimal
 from pathlib import Path
 
 from fastapi import FastAPI, Depends, HTTPException, Request
-from fastapi.encoders import jsonable_encoder
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -29,7 +28,7 @@ class _DecimalAwareEncoder(json.JSONEncoder):
             return float(obj)
         return super().default(obj)
 
-from app.database import init_db, get_db, Base
+from app.database import init_db, get_db
 from app.config import get_settings, is_demo_mode, is_production_mode, validate_runtime_security
 from app.api import (
     rooms,

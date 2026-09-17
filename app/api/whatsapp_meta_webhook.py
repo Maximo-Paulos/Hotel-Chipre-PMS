@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import PlainTextResponse
@@ -22,7 +23,22 @@ from app.services.tenant_context import set_tenant_hotel_context
 from app.services.whatsapp_crm_service import WhatsAppCRMError, ingest_inbound_message
 
 
+LOGGER = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/api/webhooks/meta", tags=["WhatsApp Meta Webhook"])
+
+
+def _nested(value: object, *keys: str) -> object | None:
+    """Walk a chain of dict keys, tolerating non-dict values at any level.
+
+    Meta's payload shape is only a convention; a string where a dict is
+    expected must not take the whole delivery down with an AttributeError.
+    """
+    for key in keys:
+        if not isinstance(value, dict):
+            return None
+        value = value.get(key)
+    return value
 
 
 def _verify_token() -> str:
@@ -64,6 +80,7 @@ async def receive_webhook(request: Request, db: Session = Depends(get_db)):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Payload de webhook inválido") from exc
 
     processed = 0
+    skipped = 0
     for entry in payload.get("entry", []) if isinstance(payload, dict) else []:
         for change in entry.get("changes", []) if isinstance(entry, dict) else []:
             value = change.get("value", {}) if isinstance(change, dict) else {}
@@ -80,7 +97,9 @@ async def receive_webhook(request: Request, db: Session = Depends(get_db)):
                 if not isinstance(message, dict) or not message.get("id"):
                     continue
                 sender = str(message.get("from") or "")
-                text_value = (message.get("text") or {}).get("body") if message.get("type") == "text" else None
+                raw_text = _nested(message, "text", "body") if message.get("type") == "text" else None
+                text_value = raw_text if isinstance(raw_text, str) else None
+                display_name = _nested(contacts.get(sender), "profile", "name")
                 try:
                     result = ingest_inbound_message(
                         db,
@@ -90,10 +109,21 @@ async def receive_webhook(request: Request, db: Session = Depends(get_db)):
                         provider_message_id=str(message["id"]),
                         text=text_value,
                         message_type=str(message.get("type") or "unknown"),
-                        display_name=((contacts.get(sender) or {}).get("profile") or {}).get("name"),
+                        display_name=display_name if isinstance(display_name, str) else None,
                     )
                 except WhatsAppCRMError as exc:
-                    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+                    # One unusable message (an unparseable phone, a missing id)
+                    # must not discard the rest of the delivery: rejecting the
+                    # batch rolls back the messages already ingested in this
+                    # request, and Meta replays the same batch forever.
+                    LOGGER.warning(
+                        "whatsapp.inbound_message_skipped hotel_id=%s provider_message_id=%s reason=%s",
+                        route.hotel_id,
+                        message.get("id"),
+                        exc,
+                    )
+                    skipped += 1
+                    continue
                 processed += int(result.created)
     db.commit()
-    return {"received": True, "processed": processed}
+    return {"received": True, "processed": processed, "skipped": skipped}

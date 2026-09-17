@@ -1002,7 +1002,8 @@
       "tests/test_waitlist_service.py",
       "tests/test_whatsapp_booking_service.py",
       "tests/test_whatsapp_crm.py",
-      "tests/test_whatsapp_hooks_api.py"
+      "tests/test_whatsapp_hooks_api.py",
+      "tests/test_whatsapp_meta_webhook.py"
     ],
     "document": [
       "AGENTS.md",
@@ -1262,10 +1263,10 @@
     ],
     "video": []
   },
-  "total_files": 1253,
-  "total_words": 1822509,
+  "total_files": 1254,
+  "total_words": 1823552,
   "needs_graph": true,
-  "warning": "Large corpus: 1253 files · ~1,822,509 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
+  "warning": "Large corpus: 1254 files · ~1,823,552 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
   "skipped_sensitive": [
     "alembic/versions/20260408_security_tokens.py",
     "alembic/versions/20260725_user_token_version.py",
@@ -1283,7 +1284,7 @@
   "graphifyignore_patterns": 67,
   "git": {
     "source_owner": "git",
-    "source_hash": "2de600471427850c2b20fa9eee30547b492a4139",
+    "source_hash": "7c5f229c81047235ecb8558b4961b05fdd50025d",
     "branches": [
       "audit/tech-0000-baseline",
       "chore/revert-rls-bypass-diagnostic",
@@ -1292,7 +1293,6 @@
       "codex/debt-jwt-cookie-consolidation",
       "codex/debt-rbac-permission-consolidation",
       "codex/debt-subscription-model-consolidation",
-      "codex/fix/full-functional-qa",
       "codex/production-render-qa",
       "codex/public-site-inquiries",
       "codex/realtime-postgres-sse-fallback",
@@ -1368,8 +1368,7 @@
       "fix/security-token-atomic-consumption",
       "fix/verify-email-validation",
       "hotfix/i18n-main-entrypoint",
-      "main",
-      "qa-verify/manager-reservations-fix"
+      "main"
     ],
     "max_commits": 200,
     "active_within_days": 30
@@ -1380,9 +1379,9 @@
     "source": "cli",
     "root": ".",
     "git_root": ".",
-    "head": "2de600471427850c2b20fa9eee30547b492a4139",
+    "head": "7c5f229c81047235ecb8558b4961b05fdd50025d",
     "candidate_count": null,
-    "included_count": 1253,
+    "included_count": 1254,
     "excluded_untracked_count": 0,
     "excluded_ignored_count": 0,
     "excluded_sensitive_count": 12,

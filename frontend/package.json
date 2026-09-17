@@ -7,6 +7,7 @@
     "dev": "vite --host 0.0.0.0 --port 5173",
     "build": "vite build",
     "typecheck": "tsc --noEmit",
+    "test": "node --test *.test.mjs",
     "test:pwa": "node --test pwa-manifest.test.mjs",
     "test:build-meta": "node --test build-meta.test.mjs",
     "test:i18n": "node --test i18n-auth-literals.test.mjs",

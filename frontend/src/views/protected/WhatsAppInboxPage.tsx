@@ -10,6 +10,11 @@ export function WhatsAppInboxPage() {
   const [assignee, setAssignee] = useState("");
   const items = useMemo(() => conversations.data?.items ?? [], [conversations.data?.items]);
   const selected = useMemo(() => items.find((item) => item.id === selectedId) ?? items[0], [items, selectedId]);
+  // An empty box means "unassign"; anything else has to be a real user id.
+  const assigneeUserId = assignee.trim() ? Number(assignee.trim()) : null;
+  const assigneeIsValid = assigneeUserId === null || Number.isInteger(assigneeUserId);
+  const failed = send.error ?? note.error ?? assign.error;
+  const sendError = failed instanceof Error ? failed.message : failed ? "No se pudo completar la acción." : null;
 
   if (channel.isLoading || conversations.isLoading) return <p>Cargando bandeja de WhatsApp...</p>;
   if (channel.isError || conversations.isError) return <p role="alert">No se pudo cargar WhatsApp. Verifica el plan y vuelve a intentar.</p>;
@@ -36,7 +41,25 @@ export function WhatsAppInboxPage() {
           {!selected ? <p className="text-sm text-slate-500">Selecciona una conversación.</p> : <>
             <div className="border-b border-slate-100 pb-3"><h2 className="font-semibold">{selected.contact.display_name || selected.contact.normalized_phone}</h2><p className="text-xs text-slate-500">Estado: {selected.status} · ventana: {selected.service_window_expires_at || "no informada"}</p></div>
             <div className="flex-1 space-y-2 overflow-auto py-4">{selected.messages.map((message) => <div key={message.id} className={`max-w-[80%] rounded-lg px-3 py-2 text-sm ${message.direction === "outbound" ? "ml-auto bg-brand-50" : "bg-slate-100"}`}><p>{message.text || `[${message.message_type}]`}</p><p className="mt-1 text-[10px] text-slate-500">{message.status}</p></div>)}</div>
-            <div className="space-y-2 border-t border-slate-100 pt-3"><div className="flex gap-2"><input className="min-w-0 flex-1 rounded border px-3 py-2 text-sm" value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Responder al huésped" /><button type="button" disabled={!draft.trim() || send.isPending} onClick={() => { send.mutate({ id: selected.id, text: draft.trim() }); setDraft(""); }} className="rounded bg-brand-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">Enviar</button></div><div className="flex gap-2"><input className="min-w-0 flex-1 rounded border px-3 py-2 text-sm" value={noteDraft} onChange={(event) => setNoteDraft(event.target.value)} placeholder="Nota interna" /><button type="button" disabled={!noteDraft.trim() || note.isPending} onClick={() => { note.mutate({ id: selected.id, body: noteDraft.trim() }); setNoteDraft(""); }} className="rounded border px-3 py-2 text-sm font-semibold">Guardar nota</button></div><div className="flex gap-2"><input className="w-40 rounded border px-3 py-2 text-sm" value={assignee} onChange={(event) => setAssignee(event.target.value)} placeholder="ID responsable" /><button type="button" onClick={() => assign.mutate({ id: selected.id, userId: assignee.trim() ? Number(assignee) : null })} className="rounded border px-3 py-2 text-sm font-semibold">Asignar</button></div></div>
+            <div className="space-y-2 border-t border-slate-100 pt-3">
+              <div className="flex gap-2">
+                <input aria-label="Responder al huésped" className="min-w-0 flex-1 rounded border px-3 py-2 text-sm" value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Responder al huésped" />
+                {/* Clear the box only once the send lands: a failed request used
+                    to wipe what the operator had typed. */}
+                <button type="button" disabled={!draft.trim() || send.isPending} onClick={() => send.mutate({ id: selected.id, text: draft.trim() }, { onSuccess: () => setDraft("") })} className="rounded bg-brand-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">Enviar</button>
+              </div>
+              <div className="flex gap-2">
+                <input aria-label="Nota interna" className="min-w-0 flex-1 rounded border px-3 py-2 text-sm" value={noteDraft} onChange={(event) => setNoteDraft(event.target.value)} placeholder="Nota interna" />
+                <button type="button" disabled={!noteDraft.trim() || note.isPending} onClick={() => note.mutate({ id: selected.id, body: noteDraft.trim() }, { onSuccess: () => setNoteDraft("") })} className="rounded border px-3 py-2 text-sm font-semibold">Guardar nota</button>
+              </div>
+              <div className="flex gap-2">
+                <input aria-label="ID del responsable" inputMode="numeric" className="w-40 rounded border px-3 py-2 text-sm" value={assignee} onChange={(event) => setAssignee(event.target.value)} placeholder="ID responsable" />
+                {/* A non-numeric id used to reach the API as NaN, which serializes
+                    to null and silently unassigned the conversation instead. */}
+                <button type="button" disabled={!assigneeIsValid || assign.isPending} onClick={() => assign.mutate({ id: selected.id, userId: assigneeUserId }, { onSuccess: () => setAssignee("") })} className="rounded border px-3 py-2 text-sm font-semibold disabled:opacity-50">{assignee.trim() ? "Asignar" : "Quitar asignación"}</button>
+              </div>
+              {sendError ? <p role="alert" className="text-xs text-red-600">{sendError}</p> : null}
+            </div>
           </>}
         </section>
       </div>

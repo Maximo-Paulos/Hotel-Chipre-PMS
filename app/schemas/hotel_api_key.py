@@ -12,7 +12,6 @@ from app.models.reservation import ReservationSourceEnum
 from app.schemas.payment_link import PaymentLinkCreate, PaymentLinkRead
 from app.schemas.reservation import (
     GuestSummary,
-    ReservationRead,
     _normalize_arrival_time_hint,
     _normalize_reservation_comment,
 )

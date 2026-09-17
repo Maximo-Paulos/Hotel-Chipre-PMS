@@ -28,7 +28,6 @@ from app.services.payment_link_service import PaymentLinkError, create_link
 from app.services.reservation_service import (
     ReservationError,
     active_reservations,
-    compute_reservation_pricing,
     create_reservation,
     find_available_rooms,
 )

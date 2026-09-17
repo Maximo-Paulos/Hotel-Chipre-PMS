@@ -3,7 +3,6 @@ Celery tasks for OTA synchronization.
 Sends inventory/availability updates to Booking.com and Expedia
 whenever internal state changes (new reservation, allocation move, etc.).
 """
-import json
 import logging
 from datetime import date, timedelta
 from typing import Optional
@@ -55,7 +54,7 @@ def push_availability_update(
             "reason": "OTA outbound effects disabled by EXTERNAL_EFFECTS_ENABLED",
         }
     try:
-        from app.database import get_engine, Base
+        from app.database import get_engine
         from sqlalchemy.orm import sessionmaker
         from app.services.ota_service import OTAIntegrationService
         from app.models.hotel_config import HotelConfiguration

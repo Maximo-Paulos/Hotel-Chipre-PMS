@@ -24,6 +24,20 @@ from app.services.reservation_action_service import (
 from app.services.reservation_operations_service import rebook_ota_reservation_as_direct
 
 
+# Reservation dates are anchored to "today" instead of literal calendar dates:
+# list_pending_reservation_actions() only considers stays whose check-out is
+# within _ACTIVE_WINDOW_DAYS of the hotel's today, so fixed dates silently stop
+# matching once the real date moves past them. The +/-2 day span absorbs any
+# one-day drift between date.today() and the hotel timezone's today.
+_IN_WINDOW_CHECK_IN = date.today()
+_IN_WINDOW_CHECK_OUT = date.today() + timedelta(days=2)
+
+# Deliberately outside the active window: the regression for pruning stale
+# active reservations.
+_STALE_CHECK_IN = date.today() - timedelta(days=400)
+_STALE_CHECK_OUT = date.today() - timedelta(days=398)
+
+
 def test_operations_summary_tracks_ota_rebook_and_direct_collection(
     db,
     hotel_config,
@@ -49,8 +63,8 @@ def test_operations_summary_tracks_ota_rebook_and_direct_collection(
         room_id=sample_rooms[0].id,
         category_id=sample_categories[0].id,
         sellable_product_id=product.id,
-        check_in_date=date(2026, 9, 1),
-        check_out_date=date(2026, 9, 3),
+        check_in_date=_IN_WINDOW_CHECK_IN,
+        check_out_date=_IN_WINDOW_CHECK_OUT,
         total_amount=200.0,
         subtotal_amount=200.0,
         net_amount=200.0,
@@ -125,8 +139,8 @@ def test_pending_actions_list_is_hotel_scoped_and_sorted_by_priority(
         guest_id=sample_guest.id,
         room_id=None,
         category_id=sample_categories[0].id,
-        check_in_date=date(2026, 9, 10),
-        check_out_date=date(2026, 9, 12),
+        check_in_date=_IN_WINDOW_CHECK_IN,
+        check_out_date=_IN_WINDOW_CHECK_OUT,
         total_amount=200.0,
         subtotal_amount=200.0,
         net_amount=200.0,
@@ -152,8 +166,8 @@ def test_pending_actions_list_is_hotel_scoped_and_sorted_by_priority(
             guest_id=guest_h2.id,
             room_id=sample_rooms_hotel2[0].id,
             category_id=sample_categories_hotel2[0].id,
-            check_in_date=date(2026, 9, 10),
-            check_out_date=date(2026, 9, 12),
+            check_in_date=_IN_WINDOW_CHECK_IN,
+            check_out_date=_IN_WINDOW_CHECK_OUT,
             total_amount=150.0,
             subtotal_amount=150.0,
             net_amount=150.0,
@@ -202,8 +216,8 @@ def test_resolve_external_channel_follow_up_closes_adjustments_and_ota_link(
         room_id=sample_rooms[0].id,
         category_id=sample_categories[0].id,
         sellable_product_id=product.id,
-        check_in_date=date(2026, 9, 20),
-        check_out_date=date(2026, 9, 22),
+        check_in_date=_IN_WINDOW_CHECK_IN,
+        check_out_date=_IN_WINDOW_CHECK_OUT,
         total_amount=200.0,
         subtotal_amount=200.0,
         net_amount=200.0,
@@ -274,8 +288,8 @@ def test_clear_manual_review_resets_flag_and_keeps_unassigned_if_needed(
         guest_id=sample_guest.id,
         room_id=None,
         category_id=sample_categories[0].id,
-        check_in_date=date(2026, 9, 25),
-        check_out_date=date(2026, 9, 27),
+        check_in_date=_IN_WINDOW_CHECK_IN,
+        check_out_date=_IN_WINDOW_CHECK_OUT,
         total_amount=200.0,
         subtotal_amount=200.0,
         net_amount=200.0,
@@ -451,7 +465,7 @@ def test_pending_actions_prefilter_matches_unfiltered_scan_for_every_trigger_typ
     out_of_window_manual_review = _mk_reservation(
         db, code="TRIG-OUT-OF-WINDOW", guest_id=sample_guest.id, category_id=category_id,
         status=ReservationStatusEnum.PENDING, requires_manual_review=True,
-        check_in_date=date(2026, 1, 1), check_out_date=date(2026, 1, 3),
+        check_in_date=_STALE_CHECK_IN, check_out_date=_STALE_CHECK_OUT,
     )
     for i in range(20):
         _mk_reservation(db, code=f"CLEAN-{i}", guest_id=sample_guest.id, category_id=category_id)

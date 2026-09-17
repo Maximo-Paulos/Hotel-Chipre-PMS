@@ -8,12 +8,10 @@ import hashlib
 import hmac
 import json
 import secrets
-import uuid
 from datetime import date, datetime, timezone
 from typing import Optional
 
 from sqlalchemy.orm import Session
-from sqlalchemy import and_
 
 from app.models.commercial import ProductRoomCompatibility, RatePlan, SellableProduct
 from app.models.audit_log import AuditActionEnum
@@ -36,7 +34,6 @@ from app.services.external_effects_policy import require_inbound_provider_events
 from app.services.reservation_service import (
     create_reservation,
     find_available_rooms,
-    generate_confirmation_code,
     ReservationError,
     transition_reservation_status,
     update_reservation_fields,

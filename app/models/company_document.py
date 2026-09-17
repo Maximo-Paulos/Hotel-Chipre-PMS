@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import (
     Boolean, Column, DateTime, ForeignKey, ForeignKeyConstraint, Index, Integer, String, Text,
-    Enum, UniqueConstraint,
+    Enum,
 )
 from sqlalchemy.orm import relationship
 

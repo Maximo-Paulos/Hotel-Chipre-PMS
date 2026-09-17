@@ -6,15 +6,13 @@ from datetime import date, datetime, timezone, timedelta
 from decimal import Decimal
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import func
 
 from app.database import get_db
 from app.services.timezones import hotel_today
 from app.dependencies.auth import AuthContext, require_permission
 from app.models.reservation import Reservation, ReservationStatusEnum
-from app.models.transaction import Transaction, TransactionStatusEnum, PaymentMethodEnum
-from app.models.room import Room, RoomCategory
-from app.models.guest import Guest
+from app.models.transaction import Transaction, TransactionStatusEnum
+from app.models.room import Room
 from app.schemas.reports import (
     DailyOperationalReportRead,
     NightlyOperationalSummaryRead,

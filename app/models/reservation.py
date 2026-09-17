@@ -9,7 +9,7 @@ from sqlalchemy import (
     Column, Integer, Float, Numeric, String, ForeignKey, Enum, Text, DateTime, Date, Boolean,
     CheckConstraint, ForeignKeyConstraint, UniqueConstraint, Index, Table
 )
-from sqlalchemy.orm import relationship, validates
+from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 
 from app.database import Base
@@ -351,10 +351,16 @@ class Reservation(Base):
     guest = relationship("Guest", back_populates="reservations", lazy="joined")
     additional_guests = relationship("Guest", secondary=reservation_additional_guests, lazy="selectin")
     room = relationship("Room", back_populates="reservations", lazy="joined")
-    category = relationship("RoomCategory", lazy="joined")
-    sellable_product = relationship("SellableProduct", lazy="joined")
-    rate_plan = relationship("RatePlan", lazy="joined")
-    tax_policy = relationship("TaxPolicy", lazy="joined")
+    # Read-only navigations. Their composite foreign keys include hotel_id, so
+    # without viewonly SQLAlchemy treats them as writers of reservations.hotel_id
+    # and warns that several relationships fight over that column. Nothing
+    # assigns these attributes -- the services set the *_id columns -- and
+    # viewonly also stops a future `reservation.rate_plan = <other hotel's plan>`
+    # from silently rewriting the reservation's hotel_id.
+    category = relationship("RoomCategory", lazy="joined", viewonly=True)
+    sellable_product = relationship("SellableProduct", lazy="joined", viewonly=True)
+    rate_plan = relationship("RatePlan", lazy="joined", viewonly=True)
+    tax_policy = relationship("TaxPolicy", lazy="joined", viewonly=True)
     transactions = relationship("Transaction", back_populates="reservation", lazy="selectin", cascade="all, delete-orphan")
 
     __table_args__ = (

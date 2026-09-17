@@ -7,6 +7,12 @@
       "runtimeArgs": ["run", "dev"],
       "cwd": "frontend",
       "port": 5173
+    },
+    {
+      "name": "backend-dev",
+      "runtimeExecutable": ".venv/bin/python",
+      "runtimeArgs": ["-m", "uvicorn", "app.main:app", "--reload", "--port", "8040"],
+      "port": 8040
     }
   ]
 }

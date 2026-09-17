@@ -1,4 +1,4 @@
-﻿"""
+"""
 V72 §8.5 — Daily rate management API.
 
   GET  /api/rates/category/{category_id}

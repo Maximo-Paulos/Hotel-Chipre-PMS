@@ -1,12 +1,11 @@
 """
 FastAPI routes for Hotel Configuration (Admin Panel).
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies.auth import AuthContext, require_permission
-from app.models.hotel_config import HotelConfiguration
 from app.schemas.hotel_config import HotelConfigRead, HotelConfigUpdate
 from app.services.email_service import mailer
 from app.services.payment_service import get_hotel_config

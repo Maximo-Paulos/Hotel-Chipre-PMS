@@ -39,8 +39,6 @@ from app.services.room_state_service import change_room_status
 from app.services.distributed_lock import DistributedLockBusy, DistributedLockUnavailable
 from app.services.permission_service import (
     PERMISSION_HOTEL_SETTINGS_UPDATE,
-    PERMISSION_RATES_READ,
-    PERMISSION_RATES_UPDATE,
     PERMISSION_RESERVATION_MOVE,
     PERMISSION_ROOM_READ,
     PERMISSION_ROOM_STATUS_UPDATE,

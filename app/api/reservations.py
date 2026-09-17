@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.audit_log import AuditActionEnum
 from app.models.reservation import Reservation, ReservationStatusEnum
-from app.models.room import Room, RoomCategory
+from app.models.room import RoomCategory
 from app.models.hotel_config import HotelConfiguration
 from app.schemas.reservation import (
     ReservationCreate,
@@ -46,7 +46,6 @@ from app.schemas.reservation_operations import (
 from app.services.reservation_service import (
     create_reservation,
     transition_reservation_status,
-    find_available_rooms,
     ReservationError,
     list_reservations as list_reservations_service,
     get_occupancy_grid,

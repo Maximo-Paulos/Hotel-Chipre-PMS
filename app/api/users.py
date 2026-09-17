@@ -1,20 +1,19 @@
 """
 User management per hotel (owners/co-owners).
 """
-import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies.auth import AuthContext, get_auth_context, require_permission, require_roles, require_roles_and_permission
+from app.dependencies.auth import AuthContext, require_permission, require_roles, require_roles_and_permission
 from app.models.audit_log import AuditActionEnum
 from app.models.user import User
 from app.models.hotel_membership import HotelMembership
 from app.models.invitation import StaffInvitation
 from app.schemas.auth import UserInfo
-from app.services.security import hash_password, create_signed_token, verify_password
+from app.services.security import verify_password
 from app.services import mfa_service
 from app.services.permission_service import PERMISSION_HOTEL_PROPERTY_MANAGE, PERMISSION_SETTINGS_USERS_VIEW
 from app.services.invitation_service import (
@@ -35,7 +34,6 @@ from app.master_admin.email_provider import MasterEmailConnectionError
 from app.services.email_service import mailer
 from app.models.hotel_config import HotelConfiguration
 from app.services import audit_log_service
-from app.services.subscription_service import ensure_staff_within_limit
 from app.services.staff_invitation_service import provision_staff_invitation
 
 router = APIRouter(prefix="/api/users", tags=["Users"])

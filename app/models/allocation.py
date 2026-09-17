@@ -12,7 +12,6 @@ import enum
 
 from sqlalchemy import (
     Boolean,
-    CheckConstraint,
     Column,
     DateTime,
     Enum,

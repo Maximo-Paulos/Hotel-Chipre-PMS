@@ -10,7 +10,6 @@ from decimal import Decimal
 from app.models.reservation import ReservationChannelCodeEnum, ReservationStatusEnum, ReservationSourceEnum
 from app.schemas.payment_link import PaymentLinkCreate, PaymentLinkRead
 from app.schemas.transaction import PaymentRequest, TransactionRead
-from app.schemas.guest import GuestRead
 from app.schemas.guest_restriction import GuestRestrictionOverrideRequest
 
 

@@ -2,8 +2,7 @@
 Developer reset helper: drops dev.db and recreates tables.
 Usage: python -m app.scripts.dev_reset
 """
-from pathlib import Path
-from app.database import init_db, get_session_factory, Base
+from app.database import init_db, Base
 import app.models  # noqa: F401
 
 

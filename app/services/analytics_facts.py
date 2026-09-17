@@ -6,12 +6,10 @@ from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, noload
 
 from app.models.analytics import (
-    AnalyticsExportJob,
     FactReservationDaily,
     FactReservationRowKindEnum,
     FactRoomOccupancyDaily,
@@ -23,9 +21,6 @@ from app.models.hotel_config import HotelConfiguration
 from app.models.hotel_membership import HotelMembership
 from app.models.reservation import (
     Reservation,
-    ReservationChannelCodeEnum,
-    ReservationGuestSegmentEnum,
-    ReservationGuestSegmentSourceEnum,
     ReservationNoShowPolicyAppliedEnum,
     ReservationOutcomeEnum,
     ReservationStatusEnum,
@@ -683,7 +678,7 @@ def _room_state_events_map(
     date_from: date,
     date_to: date,
 ) -> dict[tuple[int, date], FactRoomOccupancyStatusAtNightEnum]:
-    from app.models.analytics import RoomStateEvent, RoomStateEventTypeEnum
+    from app.models.analytics import RoomStateEvent
 
     events = (
         db.query(RoomStateEvent)

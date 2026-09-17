@@ -20,7 +20,6 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.models.payment import Payment, PaymentLink
 from app.models.reservation import Reservation
-from app.models.transaction import Transaction, TransactionStatusEnum, TransactionTypeEnum
 from app.schemas.payment_link import PaymentLinkCreate
 from app.services.external_effects_policy import (
     ExternalEffectsDisabled,

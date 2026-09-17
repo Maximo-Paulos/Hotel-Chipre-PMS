@@ -1,7 +1,7 @@
 """
 Pydantic schemas for Guest and companions.
 """
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import date, datetime
 
