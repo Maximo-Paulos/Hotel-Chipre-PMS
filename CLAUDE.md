@@ -36,6 +36,7 @@ Rules:
 - Before answering architecture or codebase questions, read `.graphify/GRAPH_REPORT.md` for god nodes and community structure
 - If `.graphify/wiki/index.md` exists, navigate it instead of reading raw files
 - After modifying code files in this session, run `graphify update . --scope all --no-description --no-label`, `graphify flows build`, `.venv/bin/python scripts/agent_ops/normalize_graphify_portability.py`, then `graphify portable-check` and `graphify check-update`. El binario está en `~/.local/node/bin/graphify`.
+- `.graphify/graph.json` **no está versionado** (desde 2026-09-17): pesaba 53 MB y crecía ~20 MB/mes, rumbo al límite duro de 100 MB por archivo de GitHub. Se regenera local con el mismo `graphify update` de arriba; en un clon nuevo corrélo antes de cualquier comando `graphify`. El historial conserva las 189 revisiones anteriores (no se reescribió nada) y siguen versionados `GRAPH_REPORT.md`, `flows.json`, `manifest.json` y `knowledge/_generated/graphify-summary.md`, que es lo que estas reglas mandan leer. No lo pases a Git LFS: LFS guarda cada versión entera (~9.5 GB para el historial actual) contra los 26 MB que ocupa hoy en el packfile.
 
 ## Navegación de contexto (3 capas)
 1. **Primero:** consultar `knowledge/00-control/TASK_ROUTER.md` y el context pack asignado para decidir el mínimo contexto.

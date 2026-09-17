@@ -244,3 +244,42 @@ def test_qa_evidence_rejects_malformed_result_without_traceback(tmp_path: Path) 
     assert result.returncode == 1
     assert "result 0" in result.stdout
     assert "Traceback" not in result.stderr
+
+
+# GitHub hard-blocks any file over 100 MB and warns past 50 MB. .graphify/graph.json
+# was 31 MB in 2026-08 and 53 MB a month later, so it was untracked on 2026-09-17;
+# it is regenerated locally and every past revision is still reachable in history.
+# Keep the tracked Graphify artifacts small enough that a push can never fail on
+# size, and keep the raw graph out of the index.
+_MAX_TRACKED_GRAPHIFY_ARTIFACT_BYTES = 20 * 1024 * 1024
+
+
+def _tracked_files(*paths: str) -> list[str]:
+    result = subprocess.run(
+        [*("git", "ls-files", "-z"), *paths],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    return [entry for entry in result.stdout.split("\0") if entry]
+
+
+def test_raw_graphify_graph_is_not_tracked() -> None:
+    assert ".graphify/graph.json" not in _tracked_files(".graphify"), (
+        "graph.json is back in the index. It grows past GitHub's 100 MB limit; "
+        "regenerate it locally with "
+        "`graphify update . --scope all --no-description --no-label` instead."
+    )
+
+
+def test_tracked_graphify_artifacts_stay_small() -> None:
+    oversized = {
+        tracked: size
+        for tracked in _tracked_files(".graphify", "knowledge/_generated")
+        if (size := (ROOT / tracked).stat().st_size) > _MAX_TRACKED_GRAPHIFY_ARTIFACT_BYTES
+    }
+    assert not oversized, (
+        f"Tracked Graphify artifacts over {_MAX_TRACKED_GRAPHIFY_ARTIFACT_BYTES // 1024 // 1024} MB: "
+        f"{oversized}. A push fails outright at 100 MB per file."
+    )

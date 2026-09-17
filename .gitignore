@@ -101,3 +101,13 @@ _verify*.db
 # Demo database for marketing screenshots (regenerate with scripts/seed_marketing_demo.py)
 demo-marketing.db
 demo-marketing.db-*
+
+# Graphify raw graph: 53 MB and growing ~20 MB/month (31 MB in 2026-08), so it
+# was heading for GitHub's hard 100 MB per-file limit. Every version stays in
+# history (nothing was rewritten) and the file is regenerated locally with
+# `graphify update . --scope all --no-description --no-label`. The artifacts the
+# documented workflow actually reads -- GRAPH_REPORT.md, flows.json,
+# manifest.json and knowledge/_generated/graphify-summary.md -- remain tracked
+# and together weigh 1.4 MB. Git LFS was measured and rejected: LFS stores every
+# version whole, so 189 revisions would cost ~9.5 GB against the packfile's 26 MB.
+.graphify/graph.json

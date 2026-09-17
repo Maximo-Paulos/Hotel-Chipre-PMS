@@ -8,6 +8,8 @@ description: Lee el grafo técnico sin modificarlo.
 Usa esta skill para preguntas de arquitectura, dependencias, hotspots o impacto de código.
 
 1. Lee `.graphify/GRAPH_REPORT.md` y ejecuta `graphify check-update`.
+   Si `.graphify/graph.json` no existe, es esperado: no está versionado. Regeneralo con
+   `graphify update . --scope all --no-description --no-label` antes de consultar el grafo.
 2. Si el grafo está fresco, usa sólo la consulta mínima: `summary`, `query`, `minimal-context` o `affected-flows`.
 3. Marca toda conclusión con la frescura del grafo y distingue evidencia de inferencia.
 

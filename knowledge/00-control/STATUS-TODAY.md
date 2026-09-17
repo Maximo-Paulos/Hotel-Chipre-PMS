@@ -32,6 +32,23 @@ Aislamiento multi-tenant en rutas (sólo auth y demo consultan sin `hotel_id`, c
 
 BOM de Windows en `app/api/daily_rates.py` (resto de la migración desde `C:\PROJECTO`), 68 imports muertos, y `.graphify` regenerado (13496 nodos, 77155 aristas, 911 flujos, `portable-check` OK).
 
+### Tamaño del repositorio — `.graphify/graph.json` (2026-09-17)
+
+El push del commit de auditoría disparó `File .graphify/graph.json is 50.49 MB; larger than GitHub's recommended maximum`. Medido antes de tocar nada:
+
+- `.git` pesaba 543 MB, de los cuales 462 MB eran objetos sueltos sin empaquetar. `git gc` lo bajó a **81 MB** sin perder nada.
+- Las 189 revisiones de `graph.json` ocupan **26 MB** en el packfile: git deltea ese JSON indentado extraordinariamente bien.
+- El archivo crudo pasó de **31 MB (2026-08-20) a 52.9 MB (2026-09-17)**, con los archivos incluidos subiendo sólo 1069 → 1254. El crecimiento es superlineal (aristas, no archivos) y el corte **duro** de GitHub son 100 MB por archivo: faltaban semanas, no años.
+
+Se descartaron con medición, no por intuición:
+
+- **Git LFS**: guarda cada versión entera y sin delta. El historial actual costaría ~9.5 GB de LFS contra los 26 MB del packfile, y el tier gratis son 1 GB.
+- **Minificar el JSON**: 52.9 → 45.4 MB. No alcanza y genera diff de archivo completo en cada commit.
+- **Comprometerlo comprimido**: un `.gz` no deltea, así que el pack saltaría de 26 MB a ~800 MB.
+- **Podar campos redundantes**: `link._src`/`_tgt` duplican `source`/`target` byte a byte en las 77155 aristas (9 MB) y `topology_signature` es una cadena de 10.3 MB derivable de nodos+aristas. Probado: sin `_src`/`_tgt`, `graphify flows build` empieza a reportar `Skipped N CALLS edge(s) without preserved direction` — en un grafo `directed: false` esos campos preservan la dirección. Y `topology_signature` lo lee `readSnapshotMeta()` para decidir si el push a Neo4j/Postgres está al día. Ambos se quedan.
+
+**Solución aplicada**: `graph.json` sale del índice (`git rm --cached` + `.gitignore`). No se reescribió historial, así que las 189 revisiones siguen accesibles con `git show <sha>:.graphify/graph.json`. Se regenera local con el `graphify update` que ya prescribe CLAUDE.md. Siguen versionados `GRAPH_REPORT.md`, `flows.json`, `manifest.json` y `knowledge/_generated/graphify-summary.md` — 1.4 MB en total, y es lo que las reglas de navegación mandan leer. Dos tests en `tests/test_agent_ops_setup.py` fallan si el grafo crudo vuelve al índice o si algún artefacto versionado pasa de 20 MB.
+
 ### Deuda conocida que queda
 
 10 `SAWarning` de relaciones `back_populates` en stock/linen/WhatsApp (el arreglo correcto ahí es `overlaps=`, invasivo y sin bug demostrado); `.claude/settings.json` sin bloque `permissions` (decisión de política, no la tomé por el usuario); vulnerabilidades de `esbuild`/`vite` sólo de desarrollo (`npm audit fix --force` instalaría vite 8, breaking); 98 archivos de test siguen con fechas literales — sólo se ancló el que ya fallaba, no hay red que detecte la próxima bomba de tiempo antes de que explote.
