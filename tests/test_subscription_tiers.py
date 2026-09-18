@@ -408,3 +408,27 @@ def test_room_limit_override_updates_v2_and_legacy_projection(client):
         assert legacy.room_limit_override == 15
     finally:
         db.close()
+
+
+def test_ensure_subscription_rebuilds_a_missing_legacy_projection(db, hotel_config):
+    """A hotel can carry the canonical v2 row without its legacy projection.
+
+    ensure_subscription_seed() used to return early whenever the v2 row existed,
+    so the projection was never rebuilt and ensure_subscription() raised
+    "No se pudo inicializar la suscripción del hotel" on every call. That call
+    sits under room creation, so POST /api/rooms/ answered 500 for such a hotel
+    (seen in the e2e business journey).
+    """
+    db.query(HotelSubscription).filter(HotelSubscription.hotel_id == hotel_config.id).delete()
+    db.query(Subscription).filter(Subscription.hotel_id == hotel_config.id).delete()
+    db.add(Subscription(hotel_id=hotel_config.id, plan="pro", status="active", room_limit=40, staff_limit=10, can_write_cache=True))
+    db.flush()
+    assert db.query(HotelSubscription).filter(HotelSubscription.hotel_id == hotel_config.id).count() == 0
+
+    legacy = ensure_subscription(db, hotel_config.id)
+
+    assert legacy.hotel_id == hotel_config.id
+    assert legacy.room_limit_override == 40
+    assert legacy.status == "active"
+    # Rebuilt from the v2 row, not reset to the starter default.
+    assert legacy.plan.code == "pro"

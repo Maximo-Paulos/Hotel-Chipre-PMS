@@ -199,7 +199,7 @@ export function RoomsPage() {
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-xs uppercase tracking-wide text-slate-500">{t("header.eyebrow")}</p>
-          <h1 className="text-2xl font-semibold text-slate-900">{t("header.title")}</h1>
+          <h1 className="text-balance text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">{t("header.title")}</h1>
           <p className="text-sm text-slate-600">{t("header.description")}</p>
         </div>
         {roomsQuery.isFetching && <p className="text-xs text-slate-500">{t("header.updating")}</p>}

@@ -476,7 +476,7 @@ export default function ManualOtaReservationModal({ open, onClose }: ManualOtaRe
               <button
                 type="submit"
                 disabled={createManualOtaMutation.isPending || guestMutation.isPending}
-                className="rounded-lg border border-violet-200 bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-60"
+                className="rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
               >
                 {createManualOtaMutation.isPending ? "Guardando..." : "Guardar reserva de OTA"}
               </button>

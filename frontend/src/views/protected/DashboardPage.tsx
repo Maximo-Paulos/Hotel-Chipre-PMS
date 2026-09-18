@@ -118,20 +118,20 @@ export function DashboardPage() {
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-xs uppercase tracking-wide text-slate-500">{t("eyebrow")}</p>
-          <h1 className="text-2xl font-semibold text-slate-900">{t("title")}</h1>
+          <h1 className="text-balance text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">{t("title")}</h1>
           <p className="text-sm text-slate-600">{t("subtitle")}</p>
           <span className="sr-only" data-testid="dashboard-today-date">{today}</span>
         </div>
         <div className="flex flex-wrap gap-2">
           <Link
             to="/reservas?crear=1"
-            className="rounded-lg border border-brand-200 bg-brand-50 px-4 py-2 text-sm font-semibold text-brand-700 hover:border-brand-300 hover:bg-brand-100"
+            className="rounded-control bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-raise hover:bg-brand-700 active:scale-[0.98]"
           >
             {t("actions.newReservation")}
           </Link>
           <Link
             to="/habitaciones"
-            className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:border-slate-300"
+            className="rounded-control bg-white px-4 py-2 text-sm font-semibold text-slate-700 ring-1 ring-slate-900/10 hover:bg-slate-50 active:scale-[0.98]"
           >
             {t("actions.assignRoom")}
           </Link>
@@ -140,16 +140,16 @@ export function DashboardPage() {
 
       <div className="grid gap-4 md:grid-cols-4">
         {cards.map((card) => (
-          <div key={card.label} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div key={card.label} className="rounded-panel bg-white p-5 shadow-raise ring-1 ring-slate-900/5">
             <p className="text-sm text-slate-500">{card.label}</p>
-            <div className="mt-2 text-3xl font-semibold text-slate-900">{card.value}</div>
+            <div className="numeric mt-2 text-3xl font-semibold tracking-tight text-slate-900">{card.value}</div>
             <p className="text-xs text-slate-500">{card.helper}</p>
           </div>
         ))}
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm lg:col-span-2">
+        <div className="min-w-0 rounded-panel bg-white p-5 shadow-raise ring-1 ring-slate-900/5 lg:col-span-2">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs uppercase tracking-wide text-slate-500">{t("pipeline.eyebrow")}</p>
@@ -248,7 +248,7 @@ export function DashboardPage() {
           </div>
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="rounded-panel bg-white p-5 shadow-raise ring-1 ring-slate-900/5">
           <p className="text-xs uppercase tracking-wide text-slate-500">{t("activity.eyebrow")}</p>
           <h2 className="text-lg font-semibold text-slate-900">{t("activity.title")}</h2>
           <div className="mt-3 space-y-3">
@@ -268,7 +268,7 @@ export function DashboardPage() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="rounded-panel bg-white p-5 shadow-raise ring-1 ring-slate-900/5">
         <div className="flex items-center justify-between gap-3">
           <div>
             <p className="text-xs uppercase tracking-wide text-slate-500">{t("operations.eyebrow")}</p>
@@ -298,7 +298,7 @@ export function DashboardPage() {
             </div>
           ) : (
             pendingActions.map((action) => (
-              <div key={action.action_key} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+              <div key={`${action.reservation_id}:${action.action_key}`} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div>
                     <div className="flex flex-wrap items-center gap-2">

@@ -30,12 +30,12 @@ test.describe("Responsive mobile smoke", () => {
 
     await openMobileMenu(page);
     await expect(page.locator('nav[aria-label="Navegación móvil"] a[href="/reservas"]')).toBeVisible();
-    await expect(
-      page.getByRole("option", {
-        name: "Hotel Chipre E2E con un nombre operacionalmente largo (ID 1)",
-        exact: true
-      })
-    ).toBeAttached();
+    // The long hotel name has to render inside the menu for the overflow check
+    // below to mean anything. A single-hotel account has no selector (a
+    // one-option picker is not a choice); the panel header names the hotel.
+    await expect(page.getByTestId("mobile-active-hotel-name")).toHaveText(
+      "Hotel Chipre E2E con un nombre operacionalmente largo"
+    );
 
     for (const [width, height] of [[375, 812], [390, 844], [430, 932]]) {
       await test.step(`viewport ${width}x${height}`, async () => {
@@ -78,14 +78,14 @@ test.describe("Responsive mobile smoke", () => {
     await page.locator('nav[aria-label="Navegación móvil"] a[href="/huespedes"]').click();
     await expect(page).toHaveURL(/\/huespedes$/);
 
-    // Tap 2: an item from the "Analitica" group.
+    // Tap 2: an item from the "Analítica" group.
     await openMobileMenu(page);
-    await page.locator('nav[aria-label="Analitica"] a[href="/analytics"]').click();
+    await page.locator('nav[aria-label="Analítica"] a[href="/analytics"]').click();
     await expect(page).toHaveURL(/\/analytics$/);
 
-    // Tap 3: an item from the "Configuracion" group.
+    // Tap 3: an item from the "Configuración" group.
     await openMobileMenu(page);
-    await page.locator('nav[aria-label="Configuracion"] a[href="/settings/hotel"]').click();
+    await page.locator('nav[aria-label="Configuración"] a[href="/settings/hotel"]').click();
     await expect(page).toHaveURL(/\/settings\/hotel$/);
 
     // The panel exposes every daily link plus every grouped section, not
@@ -94,7 +94,7 @@ test.describe("Responsive mobile smoke", () => {
     for (const href of ["/operacion/planilla", "/reservas", "/huespedes", "/habitaciones", "/caja"]) {
       await expect(page.locator(`nav[aria-label="Navegación móvil"] a[href="${href}"]`)).toBeVisible();
     }
-    for (const group of ["Analitica", "Mas operacion", "Configuracion"]) {
+    for (const group of ["Analítica", "Más operación", "Configuración"]) {
       await expect(page.locator(`nav[aria-label="${group}"]`)).toBeVisible();
     }
 

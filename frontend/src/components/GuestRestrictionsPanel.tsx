@@ -100,7 +100,7 @@ export function GuestRestrictionsPanel({ guestId }: Props) {
                         type="button"
                         onClick={() => handleResolve(restriction.id)}
                         disabled={resolveMutation.isPending}
-                        className="min-h-11 rounded-lg border border-emerald-200 bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+                        className="min-h-11 rounded-lg border border-brand-600 bg-brand-600 px-3 py-2 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
                       >
                         Confirmar resolución
                       </button>

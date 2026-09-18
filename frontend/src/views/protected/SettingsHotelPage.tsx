@@ -380,7 +380,7 @@ export function SettingsHotelPage() {
     <div className="space-y-5">
       <header>
         <p className="text-xs uppercase tracking-wide text-slate-500">Configuración</p>
-        <h1 className="text-2xl font-semibold text-slate-900">Hotel</h1>
+        <h1 className="text-balance text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Hotel</h1>
         <p className="text-sm text-slate-600">Hotel ID {session.hotelId}</p>
       </header>
       {error && <p className="rounded-md bg-rose-50 p-2 text-sm text-rose-700">{error}</p>}

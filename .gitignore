@@ -111,3 +111,8 @@ demo-marketing.db-*
 # and together weigh 1.4 MB. Git LFS was measured and rejected: LFS stores every
 # version whole, so 189 revisions would cost ~9.5 GB against the packfile's 26 MB.
 .graphify/graph.json
+
+# Local runtime storage (OBJECT_STORAGE_LOCAL_DIR, ANALYTICS_EXPORTS_DIR default
+# to ./var/...). It holds uploaded payment proofs -- guest data -- so it must
+# never be committable.
+var/

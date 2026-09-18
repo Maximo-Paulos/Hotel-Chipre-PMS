@@ -1562,7 +1562,7 @@ export function ReservationsPage() {
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-xs uppercase tracking-wide text-slate-500">{t("page.header.eyebrow")}</p>
-          <h1 className="text-2xl font-semibold text-slate-900">{t("page.header.title")}</h1>
+          <h1 className="text-balance text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">{t("page.header.title")}</h1>
           <p className="text-sm text-slate-600">{t("page.header.subtitle")}</p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -1575,7 +1575,7 @@ export function ReservationsPage() {
             {t("page.header.createButton")}
           </button>
           <button
-            className="rounded-lg border border-violet-200 bg-violet-50 px-4 py-2 text-sm font-semibold text-violet-700 hover:border-violet-300 hover:bg-violet-100 disabled:opacity-60"
+            className="rounded-lg border border-brand-200 bg-brand-50 px-4 py-2 text-sm font-semibold text-brand-700 hover:border-brand-300 hover:bg-brand-100 disabled:opacity-60"
             onClick={() => {
               if (subscriptionBlocked) {
                 setToast({ type: "error", message: subscriptionBlockReason || t("page.errors.blockedBySubscription") });
@@ -1653,7 +1653,7 @@ export function ReservationsPage() {
               const isManualReview = action.code === "manual_review_required";
 
               return (
-                <div key={action.action_key} className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <div key={`${action.reservation_id}:${action.action_key}`} className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="space-y-2">
                       <div className="flex flex-wrap items-center gap-2">
@@ -2497,7 +2497,7 @@ export function ReservationsPage() {
               </div>
 
               {!editing && (
-                <div className="rounded-lg border border-blue-100 bg-blue-50 p-3">
+                <div className="rounded-lg border border-brand-100 bg-brand-50 p-3">
                   <div className="grid gap-3 sm:grid-cols-2">
                     <label className="text-xs font-semibold text-slate-600">
                       {t("page.form.pricingMethod")}
@@ -2528,8 +2528,8 @@ export function ReservationsPage() {
                   </div>
 
                   {canSetManualRate && (
-                    <div className="mt-3 rounded-lg border border-violet-200 bg-violet-50/60 p-3">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-violet-700">{t("page.form.manualRateTitle")}</p>
+                    <div className="mt-3 rounded-lg border border-brand-200 bg-brand-50/60 p-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-brand-700">{t("page.form.manualRateTitle")}</p>
                       <p className="mt-1 text-xs text-slate-600">
                         {t("page.form.manualRateHint")}
                       </p>
@@ -2563,17 +2563,17 @@ export function ReservationsPage() {
                   )}
 
                   {manualTotalAmountInput.trim() !== "" ? (
-                    <div className="mt-3 rounded-lg border border-violet-100 bg-white/80 px-3 py-2 text-sm text-slate-800">
+                    <div className="mt-3 rounded-lg border border-brand-100 bg-white/80 px-3 py-2 text-sm text-slate-800">
                       {t("page.form.manualTotalPreview", { amount: formatMoney(Number(manualTotalAmountInput) || 0, manualTargetCurrency) })}
                     </div>
                   ) : (
                     <>
                       <div className="mt-3 grid gap-2 sm:grid-cols-4">
-                        <div className="rounded-lg border border-blue-100 bg-white/80 px-3 py-2 text-sm text-slate-800">
+                        <div className="rounded-lg border border-brand-100 bg-white/80 px-3 py-2 text-sm text-slate-800">
                           <p className="text-xs text-slate-500">{t("page.form.quoteNights")}</p>
                           <p className="font-semibold">{reservationQuote?.nights ?? quoteNights}</p>
                         </div>
-                        <div className="rounded-lg border border-blue-100 bg-white/80 px-3 py-2 text-sm text-slate-800">
+                        <div className="rounded-lg border border-brand-100 bg-white/80 px-3 py-2 text-sm text-slate-800">
                           <p className="text-xs text-slate-500">{t("page.form.quoteTotalFinal")}</p>
                           <p className="font-semibold">
                             {quoteQuery.isFetching
@@ -2583,7 +2583,7 @@ export function ReservationsPage() {
                               : formatMoney(reservationQuote?.total ?? 0, reservationQuote?.currencyCode ?? "ARS")}
                           </p>
                         </div>
-                        <div className="rounded-lg border border-blue-100 bg-white/80 px-3 py-2 text-sm text-slate-800">
+                        <div className="rounded-lg border border-brand-100 bg-white/80 px-3 py-2 text-sm text-slate-800">
                           <p className="text-xs text-slate-500">{t("page.form.quoteDeposit")}</p>
                           <p className="font-semibold">
                             {quoteQuery.isError
@@ -2593,7 +2593,7 @@ export function ReservationsPage() {
                               : t("page.form.quoteDepositPending")}
                           </p>
                         </div>
-                        <div className="rounded-lg border border-blue-100 bg-white/80 px-3 py-2 text-sm text-slate-800">
+                        <div className="rounded-lg border border-brand-100 bg-white/80 px-3 py-2 text-sm text-slate-800">
                           <p className="text-xs text-slate-500">{t("page.form.quoteBalance")}</p>
                           <p className="font-semibold">
                             {quoteBalancePreview !== null
@@ -2664,7 +2664,7 @@ export function ReservationsPage() {
                           </button>
                         </div>
                       ) : reservationQuote?.rows.length ? (
-                        <div className="mt-3 overflow-x-auto rounded-lg border border-blue-100 bg-white/70">
+                        <div className="mt-3 overflow-x-auto rounded-lg border border-brand-100 bg-white/70">
                           <table className="min-w-full text-left text-xs">
                             <thead className="bg-white text-slate-500">
                               <tr>
@@ -2681,7 +2681,7 @@ export function ReservationsPage() {
                             </thead>
                             <tbody>
                               {reservationQuote.rows.slice(0, 6).map((row) => (
-                                <tr key={row.date} className="border-t border-blue-100">
+                                <tr key={row.date} className="border-t border-brand-100">
                                   <td className="px-3 py-2 text-slate-700">{row.date}</td>
                                   <td className="px-3 py-2 text-slate-500">{row.source}</td>
                                   {reservationQuote.promotionsApplied.length > 0 ? (
@@ -2704,7 +2704,7 @@ export function ReservationsPage() {
                             </tbody>
                           </table>
                           {reservationQuote.rows.length > 6 ? (
-                            <p className="border-t border-blue-100 px-3 py-2 text-xs text-slate-500">
+                            <p className="border-t border-brand-100 px-3 py-2 text-xs text-slate-500">
                               {t("page.form.quoteMoreRows", { count: reservationQuote.rows.length - 6 })}
                             </p>
                           ) : null}
@@ -2939,7 +2939,7 @@ export function ReservationsPage() {
                       type="button"
                       onClick={handleRefund}
                       disabled={paymentMutation.isPending || paymentSummaryQuery.isLoading || paymentMethod !== "cash"}
-                      className="rounded-lg border border-violet-200 bg-violet-100 px-3 py-2 text-sm font-semibold text-violet-800 hover:border-violet-300 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="rounded-lg border border-brand-200 bg-brand-100 px-3 py-2 text-sm font-semibold text-brand-800 hover:border-brand-300 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {t("page.form.registerRefund")}
                     </button>
@@ -3480,7 +3480,7 @@ export function ReservationsPage() {
                       const isManualReview = action.code === "manual_review_required";
 
                       return (
-                        <div key={action.action_key} className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                        <div key={`${action.reservation_id}:${action.action_key}`} className="rounded-lg border border-slate-200 bg-white px-3 py-2">
                           <div className="flex items-start justify-between gap-2">
                             <div>
                               <div className="flex items-center gap-2">
@@ -3686,7 +3686,7 @@ export function ReservationsPage() {
                     type="button"
                     onClick={handleNoShow}
                     disabled={!canNoShow(detailsReservation.status) || noShowMutation.isPending}
-                    className="w-full rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-sm font-semibold text-violet-800 hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="w-full rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-sm font-semibold text-brand-800 hover:bg-brand-100 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {noShowMutation.isPending ? t("page.details.registeringNoShow") : t("page.details.markNoShow")}
                   </button>

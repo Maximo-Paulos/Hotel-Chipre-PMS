@@ -213,9 +213,9 @@ export function CashRegisterPage() {
     <div className="space-y-6">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-xs uppercase tracking-wide text-slate-500">Operacion</p>
-          <h1 className="text-2xl font-semibold text-slate-900">Caja</h1>
-          <p className="text-sm text-slate-600">Apertura, movimientos, cierre de arqueo y aprobacion de diferencias.</p>
+          <p className="text-xs uppercase tracking-wide text-slate-500">Operación</p>
+          <h1 className="text-balance text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Caja</h1>
+          <p className="text-sm text-slate-600">Apertura, movimientos, cierre de arqueo y aprobación de diferencias.</p>
         </div>
         {sessionsQuery.isFetching && <p className="text-xs text-slate-500">Actualizando caja...</p>}
       </header>
@@ -478,7 +478,7 @@ export function CashRegisterPage() {
                   {selectedSession ? `Caja #${selectedSession.id}` : "Sin caja seleccionada"}
                 </h2>
                 <p className="text-xs text-slate-500">
-                  {selectedSession ? cashSessionStatusLabel[selectedSession.status] || selectedSession.status : "Selecciona una sesion"}
+                  {selectedSession ? cashSessionStatusLabel[selectedSession.status] || selectedSession.status : "Selecciona una sesión"}
                 </p>
               </div>
               <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">
@@ -565,7 +565,7 @@ export function CashRegisterPage() {
                 />
               </label>
               <label className="space-y-1 text-sm md:col-span-2">
-                <span className="text-slate-600">Descripcion</span>
+                <span className="text-slate-600">Descripción</span>
                 <input
                   value={movementForm.description ?? ""}
                   onChange={(event) => setMovementForm((current) => ({ ...current, description: event.target.value }))}
@@ -595,7 +595,7 @@ export function CashRegisterPage() {
                       <div>
                         <p className="font-semibold text-slate-900">{cashMovementTypeLabel[movement.movement_type]}</p>
                         <p className="text-xs text-slate-500">
-                          {movement.description || "Sin descripcion"} - {new Date(movement.recorded_at).toLocaleString("es-AR")}
+                          {movement.description || "Sin descripción"} - {new Date(movement.recorded_at).toLocaleString("es-AR")}
                         </p>
                       </div>
                       <p className="font-semibold text-slate-900">{money(movement.amount, currency)}</p>
@@ -667,7 +667,7 @@ export function CashRegisterPage() {
               </div>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-sm text-slate-600">
-                  Estado: {Number(closeReport.difference) === 0 ? "sin diferencia" : closeReport.difference_approved ? "diferencia aprobada" : "pendiente de aprobacion"}
+                  Estado: {Number(closeReport.difference) === 0 ? "sin diferencia" : closeReport.difference_approved ? "diferencia aprobada" : "pendiente de aprobación"}
                 </p>
                 {canApproveDifference && !closeReport.difference_approved && Number(closeReport.difference) !== 0 ? (
                   <button

@@ -52,7 +52,7 @@ test("housekeeping sends a laundry remito on a vendor set up by the owner", asyn
   const linenLocationForm = page.locator("form").filter({ hasText: "Nueva ubicación" });
   await linenLocationForm.getByLabel("Nombre").fill(locationName);
   await linenLocationForm.getByRole("button", { name: "Crear ubicación", exact: true }).click();
-  await expect(page.getByText("Ubicacion de lavanderia creada.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Ubicación de lavandería creada.", { exact: true })).toBeVisible();
 
   const movementForm = page.locator("form").filter({ hasText: "Registrar movimiento" });
   await movementForm.getByLabel("Ítem").selectOption({ label: itemName });
@@ -71,11 +71,11 @@ test("housekeeping sends a laundry remito on a vendor set up by the owner", asyn
   await logout(page);
 
   await login(page, housekeeping, "/habitaciones");
-  await expect(page.getByTestId("session-role")).toHaveText("Housekeeping");
+  await expect(page.getByTestId("session-role")).toHaveText("Limpieza");
   await page.goto("/operacion/lavanderia");
 
   const main = page.locator("main");
-  await expect(main.getByRole("heading", { name: "Lavanderia", exact: true })).toBeVisible();
+  await expect(main.getByRole("heading", { name: "Lavandería", exact: true })).toBeVisible();
   // housekeeping never sees the vendor/pricing admin panel at all -- it's
   // gated by laundry:manage_vendors, not just the "Crear lavadero" button.
   await expect(main.getByRole("button", { name: "Crear lavadero" })).toHaveCount(0);

@@ -1,5 +1,60 @@
 # Estado exhaustivo del sistema — Hotel Chipre PMS
 
+## -4. Sistema visual homogéneo en todas las páginas — 2026-09-18
+
+`confirmed`: tipos, lint, 17 tests de nodo, build, suite backend y la suite e2e completa de Playwright sobre el árbol final (ver el commit). La pasada anterior (-3) cubrió el marco; esta cubre las ~80 pantallas restantes.
+
+- **Radios y sombras desde la config, no página por página.** Las páginas usaban la escala estándar de Tailwind y repartían dos funciones en seis radios (`rounded-lg` ×703, `-xl` ×145, `-2xl` ×90, `-3xl` ×19, `-md` ×18, `rounded` ×45) y sombras negras genéricas (`shadow-sm` ×196). `tailwind.config.cjs` remapea esa escala sobre los tres radios del sistema (chip/control/panel) y las tres elevaciones (raise/float/deep, teñidas con el tono `ink`). Cada clase existente, incluida la del marketing, cae en un valor del sistema, y también el código futuro.
+- **Un solo acento.** El azul funcionaba como segundo acento (celda "hoy", selección de la grilla de tarifas, paneles de cotización) y los botones rellenos `emerald-600` eran un verde casi idéntico al teal de marca; ambos pasan a `brand`. Los segmentos seleccionados usaban azul y `slate-900` *en la misma página*; ahora todos son `brand-600`. `sky`/`amber`/`rose`/`emerald` claros siguen como semántica de estado (info/atención/error/éxito).
+- **Títulos**: 30 `h1` con 8 variantes pasan a un único estilo de título de página. Analítica abría con el único bloque oscuro de la app (gradiente `slate-950 → emerald-950`) y el Asistente con un gradiente ámbar, un orbe `blur-3xl` y pastillas que repetían el id interno del hotel; los dos usan ahora la cabecera estándar.
+- **Números y titulares**: todas las tablas con cifras tabulares y los `h1–h3` con `text-wrap: balance`, como regla base.
+- **Violeta, el tercer acento**: botones ("Cargar reserva de OTA", el primario del modal de OTA), paneles de tarifa manual y chips decorativos pasan a `brand`. Queda sólo el chip de estado "reembolsado" de Pruebas, que es parte de una paleta semántica de estados.
+- **Analítica en español y con tarjetas legibles**: filtros, título y eyebrow estaban en inglés ("Date from", "Currency", "Compare YoY"). Las tarjetas titulaban con el código interno (`HOME_REVENUE_GROSS`) y **todas salían en rosa de alerta por un bug**: la API manda `value_pct: null` en las tarjetas de dinero, `Number(null)` es 0 y 0 < 50. Ahora se titulan con el nombre, `null` no cuenta como número y sólo un porcentaje real bajo 50 se marca.
+- **Grillas**: las filas de grupo de Planilla y del calendario de tarifas eran bandas `slate-900`; pasan a encabezado de sección claro (con `InfoTip` en su variante para fondo claro).
+- **Excepción deliberada**: el eyebrow "Settings" de Usuarios queda en inglés porque esa página la reescribe la rama de Codex; cambiarlo acá sólo le generaría un conflicto de merge.
+- **Ortografía**: más de 100 cadenas visibles sin tilde corregidas con un diccionario de palabras sin ambigüedad (las que dependen de la oración —más/mas, está/esta, pagó/pago, validá/valida— quedaron fuera a propósito; un "se válida" que el reemplazo automático introdujo se revirtió a mano). Las aserciones e2e que buscaban el texto viejo se actualizaron sólo donde la app cambió, verificándolo contra el elemento exacto.
+
+### Incidente: dos sesiones en el mismo directorio
+
+A las 23:38 del 17-sep otra sesión (Codex) creó `feature/google-onboarding-staff-aliases` **en este mismo working tree** y a las 01:26 commiteó ahí `f45e8eb`: su feature (onboarding con Google, alias de staff, migración `20260918_member_alias_auth`) **mezclado con todo el trabajo sin commitear de esta pasada y la anterior**. Por pedido del dueño se desplegó sólo este trabajo: se armó en un worktree aislado desde `main`, excluyendo los 52 archivos del feature, reaplicando a mano los dos archivos mixtos (`SettingsUsersPage`, `SettingsSecurityPage`: sólo la línea del título) y verificando que el diff no contiene ningún rastro del feature. Cuando esa rama se mergee, sus hunks de UI son idénticos a los de `main` y no deberían conflictuar. **Regla**: una sesión por working tree; los agentes paralelos trabajan en `git worktree` propios.
+
+---
+
+## -3. Pasada de UI "estilo Apple" sobre el shell + e2e rescatados — 2026-09-17
+
+`confirmed`: tipos, lint, 17 tests de nodo, build, suite backend (2012 passed, 0 failed) y **41 tests e2e de Playwright** (32 de journeys en Chromium + 24 del smoke responsive en 4 perfiles de iPhone, sin desborde horizontal), más verificación visual en navegador a 1440 y 375.
+
+### Diagnóstico de partida
+
+El producto tiene un design system deliberado en `tailwind.config.cjs` (radios `chip/control/panel`, elevación `raise/float/deep`, curva `ease-rack`, `brass` reservado a dinero, tipografía display) y **la app no lo usaba**: 0 usos de `rounded-panel/control/chip`, `shadow-raise/float`, `ease-rack` o `font-display` en `views/protected` + `ui`, contra 2199 `slate-`, 604 `rounded-lg`, 167 `shadow-sm`. Ya había existido un pedido del dueño de "sensación Apple HIG" (comentarios en `tailwind.css`), aplicado sólo al marketing.
+
+### Qué cambió (el marco de todas las pantallas)
+
+- Fuera la barra negra de identidad (repetía marca, hotel y email que el shell ya mostraba) y el banner verde permanente "Conectado: cambios en tiempo real activos". El estado sano es un punto en el header; los estados que requieren atención (conectando, reconectando, degradado, offline) siguen siendo banner. ~78px recuperados en cada pantalla, casi el 10% de un iPhone.
+- `UserBadge` en una sola fila tipo cápsula. Antes, para el dueño, apilaba un select y un párrafo de ayuda dentro de un `rounded-full`: una "pastilla" deforme que dejaba el header en ~180px. La ayuda pasa a descripción accesible + tooltip; todos los controles siguen visibles (los e2e los usan directo). Bajo `md` se convierte en tarjeta dentro del panel móvil.
+- `HotelSelector` no se renderiza con un solo hotel (un selector de una opción no es una elección) y perdió el "ID N" redundante. El hotel activo pasa a encabezar la sidebar y el panel móvil.
+- Sidebar: grupos en minúscula con chevron que rota (antes MAYÚSCULAS + triángulo nativo), radios del sistema.
+- Dashboard: título con presencia, cifras KPI con números tabulares, acción primaria rellena y secundaria discreta, paneles con `rounded-panel` + `shadow-raise` + anillo fino.
+- Ortografía del menú y banners: Huéspedes, Analítica, Más operación, Configuración, Lavandería, Suscripción, Límite; "Room events" traducido. El banner de suscripción mostraba literalmente `(can_write=false)` al personal del hotel.
+- Keys duplicadas de React en las 4 listas de acciones pendientes (`action_key` es el *tipo* de acción y se repite entre reservas; React avisa que puede duplicar u omitir filas al reconciliar). Ahora `reservation_id:action_key`.
+
+### Bugs reales que destaparon los e2e
+
+- **`POST /api/rooms/` → 500** para un hotel con la suscripción v2 pero sin la proyección legacy: `ensure_subscription_seed()` salía temprano sin reconstruirla y `ensure_subscription()` lanzaba "No se pudo inicializar la suscripción del hotel". Ahora la reconstruye desde v2, sólo si falta. Test de regresión en `test_subscription_tiers.py`.
+- **Cerrar la caja fallaba en toda base SQLite migrada** (dev local y e2e): `20260725_repair_cash_handoff_schema` hace `return` fuera de PostgreSQL, así que `UNIQUE (hotel_id, id)` en `cash_close_reports` nunca existía, pero `shift_handoffs` (10-sep) crea en todos los dialectos una FK compuesta hacia esas columnas → `foreign key mismatch` en cualquier escritura. Nueva migración `20260917_sqlite_cash_close_parent_key`: en SQLite crea un `UNIQUE INDEX` (suficiente como clave padre, sin reconstruir la tabla; en Postgres es no-op). Un escaneo de **todas** las FKs de una base migrada encontró que era el único caso. `tests/test_sqlite_foreign_key_parent_keys.py` protege toda la clase de bug.
+
+### e2e: de 13 rojos a 0
+
+La línea base de `main` (mis cambios en stash) daba **13 failed / 16 passed** en los mismos specs. Los e2e no corren en CI, así que se pudrieron igual que el test del PWA: roles traducidos (Manager→Gerencia, Housekeeping→Limpieza), tildes ya corregidas en la UI ("Código", "Verificar código"), el motivo de cambio de habitación ahora es un `<select>` de códigos, la tabla de reservas ganó la columna "hora de llegada", y housekeeping ve "Pendientes" a propósito desde el feature de tareas. Todos actualizados sin debilitar la intención de cada assertion.
+
+### Pendiente / fuera de alcance
+
+- La deriva de tokens sigue en el resto de las páginas (2199 `slate-`): esta pasada cubrió el shell y el dashboard, que enmarcan todo. Seguir página por página.
+- **Agregar Playwright a CI** (`pr-validation.yml`): es la causa de los 13 rojos.
+- `.env.local` fija `VITE_API_URL=http://127.0.0.1:8040/api` mientras se navega en `localhost:5173`: son hosts distintos para cookies, así que en local recargar la página pierde la sesión. Con `VITE_API_URL` sin definir el proxy de Vite resuelve same-origin.
+
+---
+
 ## -2. Campaña de auditoría y corrección con ECC — 2026-09-17
 
 `confirmed` para todo lo listado abajo: cada hallazgo se reprodujo y cada corrección se verificó con la suite completa, tipos/lint del frontend, dry-run de migraciones y navegador real (desktop 1280 y móvil 375). No re-verifica las secciones cloud/QA de más abajo.

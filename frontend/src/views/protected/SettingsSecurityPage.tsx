@@ -51,7 +51,7 @@ export function SettingsSecurityPage() {
     <div className="space-y-6">
       <header>
         <p className="text-xs uppercase tracking-wide text-slate-500">Configuración</p>
-        <h1 className="text-2xl font-semibold text-slate-900">Seguridad</h1>
+        <h1 className="text-balance text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Seguridad</h1>
         <p className="text-sm text-slate-600">Resumen de acceso, eventos recientes y control de tus sesiones.</p>
       </header>
 

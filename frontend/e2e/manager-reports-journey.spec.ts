@@ -27,7 +27,7 @@ async function login(page: Page) {
   await page.locator('input[type="password"]').fill(manager.password);
   await page.getByTestId("login-submit").click();
   await page.waitForURL("**/dashboard", { timeout: 20_000 });
-  await expect(page.getByTestId("session-role")).toHaveText("Manager");
+  await expect(page.getByTestId("session-role")).toHaveText("Gerencia");
 }
 
 test("manager reads the operational arrival without receiving the reservation's financial balance", async ({
@@ -90,12 +90,13 @@ test("manager reads the operational arrival without receiving the reservation's 
   await expect(reservationRow).toHaveCount(1);
   const confirmationCode = (await reservationRow.locator("td").first().innerText()).trim();
   expect(confirmationCode).toMatch(/^RES-/);
-  await expect(reservationRow.locator("td").nth(6)).toContainText("$ 100");
-  await expect(reservationRow.locator("td").nth(5)).toContainText("Pendiente");
+  // Columns: code, guest, room/cat, check-in, arrival time, check-out, status, amount.
+  await expect(reservationRow.locator("td").nth(7)).toContainText("$ 100");
+  await expect(reservationRow.locator("td").nth(6)).toContainText("Pendiente");
 
   await page.goto("/reportes");
   await expect(page.getByRole("heading", { name: "Reportes", exact: true })).toBeVisible();
-  await expect(page.getByText("Llegadas del dia", { exact: true })).toBeVisible();
+  await expect(page.getByText("Llegadas del día", { exact: true })).toBeVisible();
   await expect(page.getByTestId("financial-report")).toHaveCount(0);
   await expect(page.getByText(/Pagos pendientes/)).toHaveCount(0);
 
@@ -104,7 +105,7 @@ test("manager reads the operational arrival without receiving the reservation's 
   // mention this same reservation code in a pending-payment warning).
   // Anchor on the exact heading and walk up to its own <section> instead.
   const arrivalsSection = page
-    .getByRole("heading", { name: "Llegadas del dia", exact: true })
+    .getByRole("heading", { name: "Llegadas del día", exact: true })
     .locator("xpath=ancestor::section[1]");
   const arrivalRow = arrivalsSection.locator("div").filter({ hasText: confirmationCode }).last();
   await expect(arrivalRow).toBeVisible();

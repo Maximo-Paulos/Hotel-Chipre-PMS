@@ -92,14 +92,14 @@ test("owner runs the full inventory journey: item/location, movements, adjustmen
   await page.goto("/operacion/stock");
   await expect(page.getByRole("heading", { name: "Stock", exact: true })).toBeVisible();
 
-  const locationForm = page.locator("form").filter({ hasText: "Nueva ubicacion" });
+  const locationForm = page.locator("form").filter({ hasText: "Nueva ubicación" });
   await locationForm.getByLabel("Nombre").fill(locationName);
-  await locationForm.getByRole("button", { name: "Crear ubicacion", exact: true }).click();
-  await expect(page.getByText("Ubicacion creada.", { exact: true })).toBeVisible();
+  await locationForm.getByRole("button", { name: "Crear ubicación", exact: true }).click();
+  await expect(page.getByText("Ubicación creada.", { exact: true })).toBeVisible();
 
   const itemForm = page.locator("form").filter({ hasText: "Alta de stock" });
   await itemForm.getByLabel("Nombre").fill(itemName);
-  await itemForm.getByLabel("Minimo").fill("5");
+  await itemForm.getByLabel("Mínimo").fill("5");
   await itemForm.getByRole("button", { name: "Crear item", exact: true }).click();
   await expect(page.getByRole("heading", { name: itemName, exact: true })).toBeVisible();
 
@@ -112,7 +112,7 @@ test("owner runs the full inventory journey: item/location, movements, adjustmen
   const advancedOptionsToggle = movementForm.getByText("Opciones avanzadas", { exact: true });
   await page.getByRole("button", { name: `Registrar ingreso de ${itemName}`, exact: true }).click();
   await movementForm.getByLabel("Item").selectOption({ label: itemName });
-  await expect(movementForm.getByLabel("Ubicacion")).toBeHidden();
+  await expect(movementForm.getByLabel("Ubicación")).toBeHidden();
   await movementForm.getByLabel("Cantidad").fill("10");
   await movementForm.getByLabel("Motivo").fill("Compra inicial QA");
   await expect(movementForm.getByText("Resultado previsto:", { exact: false })).toContainText("10.00 unidad");

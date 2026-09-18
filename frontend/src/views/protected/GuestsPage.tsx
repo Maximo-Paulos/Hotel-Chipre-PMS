@@ -375,7 +375,7 @@ export function GuestsPage() {
       <header className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-xs uppercase tracking-wide text-slate-500">{t("list.eyebrow")}</p>
-          <h1 className="text-2xl font-semibold text-slate-900">{t("list.title")}</h1>
+          <h1 className="text-balance text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">{t("list.title")}</h1>
           <p className="text-sm text-slate-600">{t("list.description")}</p>
         </div>
         <div className="w-full max-w-sm">

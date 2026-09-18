@@ -32,7 +32,7 @@ async function login(page: Page) {
   await page.locator('input[type="password"]').fill(credentials.password);
   await page.getByTestId("login-submit").click();
   await page.waitForURL("**/dashboard", { timeout: 20_000 });
-  await expect(page.getByText(`Usuario ${credentials.email}`)).toBeVisible();
+  await expect(page.getByTestId("session-email")).toHaveText(credentials.email);
 }
 
 // B6.1: routes not in the daily nav row now sit inside a collapsed <details>
@@ -291,15 +291,15 @@ test("owner completes guided stock movements through the UI", async ({ page }) =
   await navigateFromShell(page, "/operacion/stock");
   await expect(page.getByRole("heading", { name: "Stock", exact: true })).toBeVisible();
 
-  const locationForm = page.locator("form").filter({ hasText: "Nueva ubicacion" });
+  const locationForm = page.locator("form").filter({ hasText: "Nueva ubicación" });
   await locationForm.getByLabel("Nombre").fill(`Lencería ${suffix}`);
-  await locationForm.getByRole("button", { name: "Crear ubicacion", exact: true }).click();
-  await expect(page.getByText("Ubicacion creada.", { exact: true })).toBeVisible();
+  await locationForm.getByRole("button", { name: "Crear ubicación", exact: true }).click();
+  await expect(page.getByText("Ubicación creada.", { exact: true })).toBeVisible();
 
   const itemForm = page.locator("form").filter({ hasText: "Alta de stock" });
   await itemForm.getByLabel("Nombre").fill(itemName);
   await itemForm.getByLabel("SKU").fill(sku);
-  await itemForm.getByLabel("Minimo").fill("2");
+  await itemForm.getByLabel("Mínimo").fill("2");
   await itemForm.getByRole("button", { name: "Crear item", exact: true }).click();
   await expect(page.getByRole("heading", { name: itemName, exact: true })).toBeVisible();
 
@@ -309,7 +309,7 @@ test("owner completes guided stock movements through the UI", async ({ page }) =
   await expect(movementForm.getByRole("heading", { name: "Registrar Ingreso", exact: true })).toBeVisible();
   await movementForm.getByLabel("Item").selectOption({ label: itemName });
   await movementForm.getByText("Opciones avanzadas", { exact: true }).click();
-  await movementForm.getByLabel("Ubicacion").selectOption({ label: `Lencería ${suffix}` });
+  await movementForm.getByLabel("Ubicación").selectOption({ label: `Lencería ${suffix}` });
   await movementForm.getByLabel("Cantidad").fill("10");
   await movementForm.getByLabel("Motivo").fill("Compra inicial");
   await movementForm.getByRole("button", { name: "Registrar Ingreso", exact: true }).click();
@@ -457,7 +457,7 @@ test("owner manages a room move and no-show from the reservation ficha", async (
   const destinationValue = await destinationOption.getAttribute("value");
   expect(destinationValue).toBeTruthy();
   await destinationSelect.selectOption(destinationValue!);
-  await stayOperations.getByLabel("Motivo del cambio").fill("Cambio operativo");
+  await stayOperations.getByLabel("Motivo del cambio").selectOption("operational");
   await stayOperations.getByLabel("Notas del cambio").fill("Mantenimiento preventivo de la habitación origen");
   await stayOperations.getByRole("button", { name: "Mover habitación", exact: true }).click();
   await expect(page.getByText("Habitación cambiada.", { exact: true })).toBeVisible();
@@ -484,8 +484,8 @@ test("owner operates waitlist, housekeeping, laundry and daily reports", async (
   await navigateFromShell(page, "/operacion/lista-espera");
   const waitlistForm = page.locator("form").filter({ hasText: "Agregar espera" });
   await expect(waitlistForm).toBeVisible();
-  const guestSelect = waitlistForm.getByLabel("Huesped");
-  const categorySelect = waitlistForm.getByLabel("Categoria");
+  const guestSelect = waitlistForm.getByLabel("Huésped");
+  const categorySelect = waitlistForm.getByLabel("Categoría");
   await expect(guestSelect.locator("option").filter({ hasText: "Huesped E2E" })).toHaveCount(1);
   await expect(categorySelect.locator("option").filter({ hasText: "Standard E2E" })).toHaveCount(1);
   const guestValue = await guestSelect.locator("option").filter({ hasText: "Huesped E2E" }).getAttribute("value");
@@ -507,9 +507,9 @@ test("owner operates waitlist, housekeeping, laundry and daily reports", async (
   await expect(waitlistCard).toHaveCount(1);
   await waitlistCard.getByRole("button", { name: "Promover", exact: true }).click();
 
-  const promotionForm = page.locator("form").filter({ hasText: "Promocion" });
+  const promotionForm = page.locator("form").filter({ hasText: "Promoción" });
   await expect(promotionForm.getByRole("button", { name: "Promover a reserva", exact: true })).toBeEnabled();
-  const promoteRoom = promotionForm.getByLabel("Habitacion");
+  const promoteRoom = promotionForm.getByLabel("Habitación");
   const roomOption = promoteRoom.locator("option").filter({ hasText: "Hab. 101" });
   await expect(roomOption).toHaveCount(1);
   const roomValue = await roomOption.getAttribute("value");
@@ -534,10 +534,10 @@ test("owner operates waitlist, housekeeping, laundry and daily reports", async (
   await navigateFromShell(page, "/operacion/stock");
   const stockLocationName = `Deposito blancos ${suffix}`;
   const stockItemName = `Sabanas E2E ${suffix}`;
-  const locationForm = page.locator("form").filter({ hasText: "Nueva ubicacion" });
+  const locationForm = page.locator("form").filter({ hasText: "Nueva ubicación" });
   await locationForm.getByLabel("Nombre").fill(stockLocationName);
-  await locationForm.getByRole("button", { name: "Crear ubicacion", exact: true }).click();
-  await expect(page.getByText("Ubicacion creada.", { exact: true })).toBeVisible();
+  await locationForm.getByRole("button", { name: "Crear ubicación", exact: true }).click();
+  await expect(page.getByText("Ubicación creada.", { exact: true })).toBeVisible();
 
   const itemForm = page.locator("form").filter({ hasText: "Alta de stock" });
   await itemForm.getByLabel("Nombre").fill(stockItemName);
@@ -547,7 +547,7 @@ test("owner operates waitlist, housekeeping, laundry and daily reports", async (
   await page.getByRole("button", { name: `Registrar ingreso de ${stockItemName}`, exact: true }).click();
   const movementForm = page.locator("#stock-movement-form");
   await movementForm.getByText("Opciones avanzadas", { exact: true }).click();
-  await movementForm.getByLabel("Ubicacion").selectOption({ label: stockLocationName });
+  await movementForm.getByLabel("Ubicación").selectOption({ label: stockLocationName });
   await movementForm.getByLabel("Cantidad").fill("10");
   await movementForm.getByLabel("Motivo").fill("Stock inicial ropa blanca E2E");
   await movementForm.getByRole("button", { name: "Registrar Ingreso", exact: true }).click();
@@ -568,7 +568,7 @@ test("owner operates waitlist, housekeeping, laundry and daily reports", async (
   const linenLocationForm = page.locator("form").filter({ hasText: "Nueva ubicación" });
   await linenLocationForm.getByLabel("Nombre").fill(linenLocationName);
   await linenLocationForm.getByRole("button", { name: "Crear ubicación", exact: true }).click();
-  await expect(page.getByText("Ubicacion de lavanderia creada.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Ubicación de lavandería creada.", { exact: true })).toBeVisible();
 
   const linenMovementForm = page.locator("form").filter({ hasText: "Registrar movimiento" });
   await linenMovementForm.getByLabel("Ítem").selectOption({ label: linenItemName });
@@ -609,7 +609,7 @@ test("owner operates waitlist, housekeeping, laundry and daily reports", async (
 
   await navigateFromShell(page, "/reportes");
   await expect(page.getByRole("heading", { name: "Reportes", exact: true })).toBeVisible();
-  await expect(page.getByText("Llegadas del dia", { exact: true })).toBeVisible();
+  await expect(page.getByText("Llegadas del día", { exact: true })).toBeVisible();
   const reportDate = page.getByLabel("Fecha");
   const reportResponse = page.waitForResponse(
     (response) => response.url().includes("/api/reports/operational/daily") && response.status() === 200

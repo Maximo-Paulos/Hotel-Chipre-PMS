@@ -245,11 +245,11 @@ export function OccupancyGrid({ data, days, todayIso, onSelectReservation, onDro
           {groups.map((group) => (
             <Fragment key={group.categoryId}>
               <tr>
-                <StickyLabelCell className="bg-slate-900 text-white">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-200">{group.categoryName}</p>
+                <StickyLabelCell className="bg-slate-100 text-slate-700">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">{group.categoryName}</p>
                 </StickyLabelCell>
                 {days.map((day) => (
-                  <td key={`${group.categoryId}-header-${day}`} className="border-b border-r border-slate-200 bg-slate-900" />
+                  <td key={`${group.categoryId}-header-${day}`} className="border-b border-r border-slate-200 bg-slate-100" />
                 ))}
               </tr>
               {group.rooms.map((room) => (

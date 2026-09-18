@@ -125,6 +125,20 @@
       transition: none;
     }
   }
+
+  /* Figures in every table line up in columns (money, counts, dates), the
+     way Numbers and the Apple apps set them. One rule instead of a class on
+     each of the app's tables. */
+  table {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Headings break into even lines instead of leaving one word stranded. */
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
 }
 
 /* Subtle entrance animation for modals/drawers so they feel like they

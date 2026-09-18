@@ -15,7 +15,7 @@ test("owner opens the analytics summary with reconciled freshness metadata", asy
   await login(page);
   await page.goto("/analytics");
 
-  await expect(page.getByRole("heading", { name: "Analytics", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Analítica", exact: true })).toBeVisible();
   await expect(page.getByRole("status", { name: /Datos (PostgreSQL|ClickHouse)/ })).toBeVisible();
   await expect(page.getByText("Cargando analytics...", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("alert")).toHaveCount(0);

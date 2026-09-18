@@ -165,7 +165,7 @@ export function RateEditorGrid({
   };
 
   const colTint = (c: Column) =>
-    c.isToday ? "bg-blue-50/80" : c.isWeekend ? "bg-slate-50/80" : "bg-white";
+    c.isToday ? "bg-brand-50/80" : c.isWeekend ? "bg-slate-50/80" : "bg-white";
 
   return (
     <div
@@ -185,24 +185,24 @@ export function RateEditorGrid({
                 className={cx(
                   "sticky top-0 z-10 h-16 min-w-[96px] border-b border-r border-slate-200 px-2 py-2 text-center align-middle",
                   colTint(c),
-                  c.isToday && "ring-1 ring-inset ring-blue-300"
+                  c.isToday && "ring-1 ring-inset ring-brand-300"
                 )}
               >
                 <div className="flex flex-col items-center gap-0.5 leading-tight">
                   <span
                     className={cx(
                       "text-[11px] font-medium uppercase",
-                      c.isToday ? "text-blue-700" : c.isWeekend ? "text-slate-500" : "text-slate-400"
+                      c.isToday ? "text-brand-700" : c.isWeekend ? "text-slate-500" : "text-slate-400"
                     )}
                   >
                     {c.weekday}
                   </span>
-                  <span className={cx("text-lg font-semibold", c.isToday ? "text-blue-700" : "text-slate-800")}>
+                  <span className={cx("text-lg font-semibold", c.isToday ? "text-brand-700" : "text-slate-800")}>
                     {c.dayNum}
                   </span>
                   <span className="text-[10px] font-medium uppercase text-slate-400">{c.month}</span>
                   {c.isToday ? (
-                    <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700">Hoy</span>
+                    <span className="rounded-full bg-brand-100 px-1.5 py-0.5 text-[10px] font-semibold text-brand-700">Hoy</span>
                   ) : null}
                 </div>
               </th>
@@ -271,10 +271,10 @@ export function RateEditorGrid({
             <tr key={priceRow.field}>
               <RowLabel
                 sub={symbol}
-                className={cx(idx === 0 && "border-t-2 border-t-slate-200", priceRow.required && "bg-blue-50/40")}
+                className={cx(idx === 0 && "border-t-2 border-t-slate-200", priceRow.required && "bg-brand-50/40")}
               >
                 {priceRow.label}
-                {priceRow.required ? <span className="ml-0.5 text-blue-500">*</span> : null}
+                {priceRow.required ? <span className="ml-0.5 text-brand-500">*</span> : null}
               </RowLabel>
               {columns.map((c) => {
                 const row = c.row;
@@ -292,7 +292,7 @@ export function RateEditorGrid({
                       "min-w-[96px] border-b border-r border-slate-200 p-0.5 transition-colors",
                       idx === 0 && "border-t-2 border-t-slate-200",
                       colTint(c),
-                      selected && "bg-blue-100 ring-2 ring-inset ring-blue-400"
+                      selected && "bg-brand-100 ring-2 ring-inset ring-brand-400"
                     )}
                   >
                     <input
@@ -327,8 +327,8 @@ export function RateEditorGrid({
                       }}
                       className={cx(
                         "h-10 w-full rounded-lg px-2 text-right text-sm tabular-nums outline-none transition-shadow",
-                        "bg-white/80 ring-1 ring-inset ring-slate-200/80 hover:ring-blue-300",
-                        "focus:bg-white focus:ring-2 focus:ring-blue-500 disabled:opacity-50",
+                        "bg-white/80 ring-1 ring-inset ring-slate-200/80 hover:ring-brand-300",
+                        "focus:bg-white focus:ring-2 focus:ring-brand-500 disabled:opacity-50",
                         "aria-[invalid=true]:bg-rose-50 aria-[invalid=true]:ring-rose-400",
                         inherited ? "italic text-slate-400" : "font-medium text-slate-900"
                       )}

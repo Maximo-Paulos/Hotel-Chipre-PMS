@@ -557,7 +557,7 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                       type="button"
                       onClick={handlePay}
                       disabled={paymentMutation.isPending}
-                      className="rounded-lg border border-emerald-200 bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="rounded-lg border border-brand-600 bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {paymentMutation.isPending ? t("drawer.payment.submitting") : t("drawer.payment.submit")}
                     </button>
@@ -570,7 +570,7 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                   <p className="text-xs uppercase tracking-wide text-amber-800">{t("drawer.pendingActionsTitle")}</p>
                   <ul className="mt-2 space-y-1">
                     {operations.pending_actions.map((action) => (
-                      <li key={action.action_key} className="text-sm text-amber-900">
+                      <li key={`${action.reservation_id}:${action.action_key}`} className="text-sm text-amber-900">
                         {action.title}
                       </li>
                     ))}

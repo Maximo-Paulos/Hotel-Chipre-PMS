@@ -60,5 +60,5 @@
     "empty": "No hay acciones operativas pendientes.",
     "viewReservation": "Ver reserva"
   },
-  "guestFallback": "Huesped #{{id}}"
+  "guestFallback": "Huésped #{{id}}"
 }

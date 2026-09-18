@@ -84,7 +84,7 @@ export function VerifyEmailPage() {
         });
         clearPendingOwner();
       }
-      setMessage("Codigo correcto. Email verificado.");
+      setMessage("Código correcto. Email verificado.");
       const status = await getOnboardingStatus({
         hotelId: res.hotel_id,
         userId: res.user.email,
@@ -92,7 +92,7 @@ export function VerifyEmailPage() {
       });
       navigate(status.completed ? "/dashboard" : "/onboarding", { replace: true });
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Codigo invalido o expirado");
+      setError(err instanceof ApiError ? err.message : "Código inválido o expirado");
     } finally {
       setLoading(false);
     }

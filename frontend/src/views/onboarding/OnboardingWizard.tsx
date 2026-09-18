@@ -331,7 +331,7 @@ export function OnboardingWizard() {
       <div className="flex items-center justify-between">
         <div>
           <p className="text-xs uppercase tracking-wide text-slate-500">Puesta en marcha</p>
-          <h1 className="text-xl font-semibold text-slate-900">Configurá tu hotel</h1>
+          <h1 className="text-balance text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Configurá tu hotel</h1>
         </div>
         <Link to="/dashboard" className="text-sm text-brand-700 hover:underline">
           Ir al dashboard
@@ -1167,7 +1167,7 @@ function FinishStep({
           </div>
         )}
         <button
-          className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-70"
+          className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-70"
           onClick={onFinish}
           type="button"
           disabled={loading || isFetching || status?.gates?.can_finish === false}

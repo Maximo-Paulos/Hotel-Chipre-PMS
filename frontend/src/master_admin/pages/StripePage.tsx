@@ -24,7 +24,7 @@ export function MasterAdminStripePage() {
   }, []);
 
   useEffect(() => {
-    void reload().catch(() => setMessage("No se pudo cargar la configuracion de Stripe."));
+    void reload().catch(() => setMessage("No se pudo cargar la configuración de Stripe."));
   }, [reload]);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
@@ -76,7 +76,7 @@ export function MasterAdminStripePage() {
     <form onSubmit={submit} className="space-y-6">
       <section className="rounded-[2rem] border border-white/10 bg-white/5 p-6 shadow-2xl shadow-black/10 backdrop-blur">
         <p className="text-xs uppercase tracking-[0.35em] text-amber-300/80">Stripe owner</p>
-        <h2 className="mt-2 text-3xl font-semibold text-white">Conexion segura desde el panel</h2>
+        <h2 className="mt-2 text-3xl font-semibold text-white">Conexión segura desde el panel</h2>
         <p className="mt-2 text-sm text-slate-300">
           El owner carga el secret key y el webhook secret una sola vez. La config queda persistida y el webhook firma contra esa
           configuracion guardada.
@@ -161,7 +161,7 @@ export function MasterAdminStripePage() {
         <p className="font-medium text-white">Webhook endpoint</p>
         <p className="mt-2">`POST /api/master-admin/stripe/webhook`</p>
         <p className="mt-2">
-          La firma se valida contra el secret almacenado en el panel. Si no existe, el webhook falla de forma explicita.
+          La firma se valida contra el secret almacenado en el panel. Si no existe, el webhook falla de forma explícita.
         </p>
       </section>
     </form>

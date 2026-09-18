@@ -310,22 +310,22 @@ export function RateCalendarGrid({
           {channelSummaries.map((summary) => (
             <Fragment key={summary.providerCode}>
               <tr>
-                <StickyLabelCell className="bg-slate-900 text-white">
+                <StickyLabelCell className="bg-slate-100 text-slate-800">
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className="text-sm font-semibold">{summary.providerLabel}</p>
-                      <p className="text-xs text-slate-300">Lectura de tarifas y restricciones</p>
+                      <p className="text-xs text-slate-500">Lectura de tarifas y restricciones</p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="rounded-full bg-white/10 px-2 py-1 text-[11px] font-semibold text-white">
+                      <span className="rounded-full bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 ring-1 ring-slate-900/10">
                         {summary.currencyCode}
                       </span>
-                      <InfoTip content={buildInfoContent(summary)} label={`Info ${summary.providerLabel}`} />
+                      <InfoTip content={buildInfoContent(summary)} label={`Info ${summary.providerLabel}`} tone="light" />
                     </div>
                   </div>
                 </StickyLabelCell>
                 {calendar.days.map((day) => (
-                  <MetricCell key={`${summary.providerCode}-header-${day.date}`} className="bg-slate-900 text-slate-200">
+                  <MetricCell key={`${summary.providerCode}-header-${day.date}`} className="bg-slate-100 text-slate-600">
                     {getChannelForDay(day, summary.providerCode)?.missing_mapping ? "Sin publicar" : "Activo"}
                   </MetricCell>
                 ))}

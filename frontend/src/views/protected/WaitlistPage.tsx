@@ -161,8 +161,8 @@ export function WaitlistPage() {
     <div className="space-y-6">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-xs uppercase tracking-wide text-slate-500">Operacion</p>
-          <h1 className="text-2xl font-semibold text-slate-900">Lista de espera</h1>
+          <p className="text-xs uppercase tracking-wide text-slate-500">Operación</p>
+          <h1 className="text-balance text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Lista de espera</h1>
           <p className="text-sm text-slate-600">Solicitudes pendientes cuando no hay disponibilidad inmediata.</p>
         </div>
         <select
@@ -202,7 +202,7 @@ export function WaitlistPage() {
                     <div>
                       <p className="text-xs uppercase tracking-wide text-slate-500">Prioridad {entry.priority}</p>
                       <h3 className="text-base font-semibold text-slate-900">
-                        {guest ? `${guest.first_name} ${guest.last_name}` : `Huesped #${entry.guest_id}`}
+                        {guest ? `${guest.first_name} ${guest.last_name}` : `Huésped #${entry.guest_id}`}
                       </h3>
                       <p className="text-xs text-slate-500">
                         {category?.name || "Información no disponible"} - {entry.check_in_date} a {entry.check_out_date}
@@ -258,7 +258,7 @@ export function WaitlistPage() {
               <h2 className="text-lg font-semibold text-slate-900">Agregar espera</h2>
             </div>
             <label className="space-y-1 text-sm">
-              <span className="text-slate-600">Huesped</span>
+              <span className="text-slate-600">Huésped</span>
               <select
                 value={formValues.guest_id}
                 onChange={(event) => setFormValues((current) => ({ ...current, guest_id: event.target.value }))}
@@ -274,7 +274,7 @@ export function WaitlistPage() {
               </select>
             </label>
             <label className="space-y-1 text-sm">
-              <span className="text-slate-600">Categoria</span>
+              <span className="text-slate-600">Categoría</span>
               <select
                 value={formValues.category_id}
                 onChange={(event) => setFormValues((current) => ({ ...current, category_id: event.target.value }))}
@@ -344,7 +344,7 @@ export function WaitlistPage() {
               </label>
             </div>
             <label className="space-y-1 text-sm">
-              <span className="text-slate-600">Telefono</span>
+              <span className="text-slate-600">Teléfono</span>
               <input
                 value={formValues.contact_phone}
                 onChange={(event) => setFormValues((current) => ({ ...current, contact_phone: event.target.value }))}
@@ -371,12 +371,12 @@ export function WaitlistPage() {
 
           <form className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm" onSubmit={handlePromote}>
             <div>
-              <p className="text-xs uppercase tracking-wide text-slate-500">Promocion</p>
+              <p className="text-xs uppercase tracking-wide text-slate-500">Promoción</p>
               <h2 className="text-lg font-semibold text-slate-900">Crear reserva</h2>
               <p className="text-xs text-slate-500">{selectedEntry ? `Entrada #${selectedEntry.id}` : "Selecciona una entrada en espera."}</p>
             </div>
             <label className="space-y-1 text-sm">
-              <span className="text-slate-600">Habitacion</span>
+              <span className="text-slate-600">Habitación</span>
               <select
                 value={promoteRoomId}
                 onChange={(event) => setPromoteRoomId(event.target.value)}

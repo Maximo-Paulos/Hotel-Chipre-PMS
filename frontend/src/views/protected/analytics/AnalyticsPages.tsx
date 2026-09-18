@@ -179,7 +179,7 @@ function AnalyticsFilterBar({
   return (
     <div className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:grid-cols-2 xl:grid-cols-5">
       <label className="grid gap-1 text-sm">
-        <span className="text-slate-600">Date from</span>
+        <span className="text-slate-600">Desde</span>
         <input
           type="date"
           value={filters.date_from}
@@ -188,7 +188,7 @@ function AnalyticsFilterBar({
         />
       </label>
       <label className="grid gap-1 text-sm">
-        <span className="text-slate-600">Date to</span>
+        <span className="text-slate-600">Hasta</span>
         <input
           type="date"
           value={filters.date_to}
@@ -198,7 +198,7 @@ function AnalyticsFilterBar({
       </label>
       {includeCurrency ? (
         <label className="grid gap-1 text-sm">
-          <span className="text-slate-600">Currency</span>
+          <span className="text-slate-600">Moneda</span>
           <select
             value={filters.currency_display}
             onChange={(event) =>
@@ -211,7 +211,7 @@ function AnalyticsFilterBar({
           >
             <option value="ARS">ARS</option>
             <option value="USD">USD</option>
-            <option value="BOTH">BOTH</option>
+            <option value="BOTH">Ambas</option>
           </select>
         </label>
       ) : null}
@@ -224,7 +224,7 @@ function AnalyticsFilterBar({
               onChange={(event) => onChange({ ...filters, compare_previous: event.target.checked })}
               className="rounded border-slate-300"
             />
-            Compare previous
+            Comparar con el período anterior
           </label>
           <label className="flex items-center gap-2 self-end rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700">
             <input
@@ -233,7 +233,7 @@ function AnalyticsFilterBar({
               onChange={(event) => onChange({ ...filters, compare_yoy: event.target.checked })}
               className="rounded border-slate-300"
             />
-            Compare YoY
+            Comparar interanual
           </label>
         </>
       ) : null}
@@ -297,15 +297,16 @@ function PageShell({
 }) {
   return (
     <div className="space-y-6">
-      <div className="rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950 p-6 text-white shadow-xl">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-3xl">
-            <p className="text-xs uppercase tracking-[0.24em] text-emerald-300">{eyebrow}</p>
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight">{title}</h1>
-            <p className="mt-3 max-w-2xl text-sm text-slate-200">{subtitle}</p>
-          </div>
-          {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
+      {/* Same header as every other page. Analytics used to open on a dark
+          slate-to-emerald gradient card -- the only dark block in a light app,
+          which read as a different product rather than a section of this one. */}
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div className="max-w-3xl">
+          <p className="text-xs uppercase tracking-wide text-slate-500">{eyebrow}</p>
+          <h1 className="text-balance text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">{title}</h1>
+          <p className="mt-1 max-w-2xl text-sm text-slate-600">{subtitle}</p>
         </div>
+        {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
       </div>
       {children}
     </div>
@@ -314,24 +315,24 @@ function PageShell({
 
 function MetricGrid({ cards }: { cards: Array<Record<string, unknown>> }) {
   const mapped = cards.map((card) => ({
-    label: String(card.card_code || card.label || "Métrica"),
+    key: String(card.card_code || card.label || "metric"),
+    label: String(card.label || card.card_code || "Métrica"),
     value:
-      card.value_ars !== undefined
-        ? formatMoney(Number(card.value_ars || 0), "ARS")
-        : card.value_usd !== undefined
-          ? formatMoney(Number(card.value_usd || 0), "USD")
-          : card.value_pct !== undefined
+      card.value_ars != null
+        ? formatMoney(Number(card.value_ars), "ARS")
+        : card.value_usd != null
+          ? formatMoney(Number(card.value_usd), "USD")
+          : card.value_pct != null
             ? `${card.value_pct}%`
-            : card.value_count !== undefined
+            : card.value_count != null
               ? String(card.value_count)
               : tableValue(card.value ?? card.summary ?? "—"),
-    helper: String(card.label || card.card_code || ""),
-    tone: card.value_pct !== undefined && Number(card.value_pct) < 50 ? ("danger" as const) : ("default" as const)
+    tone: typeof card.value_pct === "number" && card.value_pct < 50 ? ("danger" as const) : ("default" as const)
   }));
   return (
     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
       {mapped.map((card) => (
-        <StatCard key={card.label} label={card.label} value={card.value} helper={card.helper} tone={card.tone} />
+        <StatCard key={card.key} label={card.label} value={card.value} tone={card.tone} />
       ))}
     </div>
   );
@@ -483,15 +484,15 @@ function ReportScreen({
   const errorMessage = analyticsErrorMessage(query.error);
   return (
     <PageShell
-      eyebrow="Analytics"
+      eyebrow="Analítica"
       title={title}
       subtitle={subtitle}
       actions={
         <>
-          <Link to="/analytics" className="rounded-full border border-white/20 px-4 py-2 text-sm font-semibold text-white hover:bg-white/10">
+          <Link to="/analytics" className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-700 ring-1 ring-slate-900/10 hover:bg-slate-50">
             Volver
           </Link>
-          <Link to="/analytics/operations" className="rounded-full border border-emerald-400/30 bg-emerald-400/15 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-400/25">
+          <Link to="/analytics/operations" className="rounded-full bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
             Operación
           </Link>
         </>
@@ -556,7 +557,7 @@ function StarterLandingScreen() {
   return (
     <PageShell
       eyebrow="Starter"
-      title="Analytics Starter"
+      title="Analítica Starter"
       subtitle="Vista resumida para hoteles Starter. El módulo completo queda disponible en Pro y Ultra."
       actions={
         <Link to="/settings/subscription" className="rounded-full bg-amber-400 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-amber-300">
@@ -596,7 +597,7 @@ function StarterLandingScreen() {
 function FullAnalyticsLanding() {
   return (
     <ReportScreen
-      title="Analytics"
+      title="Analítica"
       subtitle="Resumen ejecutivo del hotel activo con comparadores, canales, segmentos y operación."
       path="/api/analytics/home"
       routeName="home"
@@ -758,7 +759,7 @@ export function AnalyticsAIChatPage() {
         title="Asistente IA del hotel"
         subtitle="Consultas acotadas al contexto de Analytics del hotel activo."
         actions={
-          <Link to="/analytics" className="rounded-full border border-white/20 px-4 py-2 text-sm font-semibold text-white hover:bg-white/10">
+          <Link to="/analytics" className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-700 ring-1 ring-slate-900/10 hover:bg-slate-50">
             Dashboard
           </Link>
         }
@@ -945,7 +946,7 @@ export function CompaniesSettingsPage() {
       eyebrow="Settings"
       title="Companies"
       subtitle="CRUD completo de compañías para el hotel activo."
-      actions={<Link to="/analytics" className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800">Analytics</Link>}
+      actions={<Link to="/analytics" className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-700 ring-1 ring-slate-900/10 hover:bg-slate-50">Analytics</Link>}
     >
       <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -1120,10 +1121,10 @@ export function RoomStateEventsPage() {
 
   return (
     <PageShell
-      eyebrow="Operacion"
+      eyebrow="Operación"
       title="Eventos de estado de habitaciones"
       subtitle="Eventos operativos de bloqueo y cierre por habitación."
-      actions={<Link to="/analytics" className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800">Analítica</Link>}
+      actions={<Link to="/analytics" className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-700 ring-1 ring-slate-900/10 hover:bg-slate-50">Analítica</Link>}
     >
       <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">

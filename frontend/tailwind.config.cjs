@@ -80,14 +80,35 @@ module.exports = {
         // controls and panels. Anything else is a drift.
         chip: "0.375rem",
         control: "0.625rem",
-        panel: "1rem"
+        panel: "1rem",
+        // The pages were written against Tailwind's stock scale and spread
+        // two jobs across six radii (rounded-lg x703, -xl x145, -2xl x90,
+        // -3xl x19 ...). The stock names are remapped onto the three system
+        // radii so every existing class lands on one of them: small bits are
+        // chips, `lg` is a control, anything larger is a panel.
+        sm: "0.375rem",
+        DEFAULT: "0.375rem",
+        md: "0.375rem",
+        lg: "0.625rem",
+        xl: "1rem",
+        "2xl": "1rem",
+        "3xl": "1rem"
       },
       boxShadow: {
         // One elevation scale. The old page had a different arbitrary
         // rgba shadow inline on almost every card.
         raise: "0 1px 2px rgba(7,26,34,0.06), 0 2px 8px rgba(7,26,34,0.04)",
         float: "0 12px 32px -12px rgba(7,26,34,0.22), 0 2px 6px rgba(7,26,34,0.06)",
-        deep: "0 32px 64px -24px rgba(4,18,26,0.55)"
+        deep: "0 32px 64px -24px rgba(4,18,26,0.55)",
+        // Same remap as the radii: resting surfaces raise, popovers and
+        // drawers float, modals sit deep. Stock shadows are neutral black;
+        // these are tinted with the ink hue so depth reads as one light.
+        sm: "0 1px 2px rgba(7,26,34,0.06), 0 2px 8px rgba(7,26,34,0.04)",
+        DEFAULT: "0 1px 2px rgba(7,26,34,0.06), 0 2px 8px rgba(7,26,34,0.04)",
+        md: "0 12px 32px -12px rgba(7,26,34,0.22), 0 2px 6px rgba(7,26,34,0.06)",
+        lg: "0 12px 32px -12px rgba(7,26,34,0.22), 0 2px 6px rgba(7,26,34,0.06)",
+        xl: "0 12px 32px -12px rgba(7,26,34,0.22), 0 2px 6px rgba(7,26,34,0.06)",
+        "2xl": "0 32px 64px -24px rgba(4,18,26,0.55)"
       },
       transitionTimingFunction: {
         // A single curve for the whole site. Slightly overshoot-free so

@@ -3,11 +3,6 @@
     "title": "Hotels-PMS | App",
     "description": "Acceso al sistema operativo de Hotels-PMS."
   },
-  "topbar": {
-    "hotelId": "Hotel ID {{id}}",
-    "user": "Usuario {{user}}",
-    "noSession": "Sin sesion"
-  },
   "offline": {
     "title": "Sin conexión.",
     "description": "Los datos visibles pueden estar desactualizados. Las acciones de reservas, check-in/out y cobros requieren conexión y no se guardan para reintentar automáticamente."
@@ -23,18 +18,18 @@
     "reset": "Volver a mi rol"
   },
   "subscription": {
-    "readOnly": "Suscripcion en modo solo lectura (can_write=false).",
-    "inactive": "Suscripcion inactiva.",
+    "readOnly": "Suscripción en modo solo lectura.",
+    "inactive": "Suscripción inactiva.",
     "planSummary": "Plan: {{plan}} · Habitaciones: {{used}}/{{limit}}.",
     "noPlan": "sin plan",
     "reactivate": "Reactivar o cambiar plan",
-    "capReached": "Limite de habitaciones alcanzado ({{used}}/{{limit}}). Ajusta tu plan en Configuracion > Suscripcion."
+    "capReached": "Límite de habitaciones alcanzado ({{used}}/{{limit}}). Ajustá tu plan en Configuración > Suscripción."
   },
   "onboarding": {
     "pending": "Onboarding pendiente: {{steps}}.",
     "pendingFallback": "revisa los pasos",
     "completeNow": "Completar ahora",
-    "error402": "Suscripcion inactiva. Reactiva el plan para seguir usando el sistema.",
+    "error402": "Suscripción inactiva. Reactivá el plan para seguir usando el sistema.",
     "error403": "Debes verificar tu email para continuar.",
     "errorGeneric": "No se pudo conectar con el backend. Los datos visibles pueden estar desactualizados; las acciones de escritura requieren reconexión."
   },
@@ -43,46 +38,43 @@
     "install": "Instalar",
     "dismiss": "Ahora no"
   },
-  "sidebar": {
-    "tagline": "Operación del hotel en un solo lugar"
-  },
   "nav": {
     "daily": {
       "planning": "Planilla",
       "reservations": "Reservas",
-      "guests": "Huespedes",
+      "guests": "Huéspedes",
       "rooms": "Habitaciones",
       "tasks": "Pendientes",
       "cashRegister": "Caja"
     },
     "sections": {
       "analytics": {
-        "title": "Analitica",
+        "title": "Analítica",
         "summary": "Resumen",
         "rooms": "Habitaciones",
         "segments": "Segmentos",
         "channels": "Canales",
         "operations": "Operación",
         "aiChat": "Chat IA",
-        "roomEvents": "Room events"
+        "roomEvents": "Eventos de habitaciones"
       },
       "moreOperations": {
-        "title": "Mas operacion",
+        "title": "Más operación",
         "dashboard": "Dashboard",
         "reports": "Reportes",
         "audit": "Auditoría",
         "waitlist": "Lista de espera",
-        "laundry": "Lavanderia",
+        "laundry": "Lavandería",
         "stock": "Stock",
         "rates": "Tarifas",
         "promotions": "Promociones",
         "onboarding": "Onboarding"
       },
       "settings": {
-        "title": "Configuracion",
+        "title": "Configuración",
         "users": "Usuarios",
         "assistant": "Asistente",
-        "subscription": "Suscripcion",
+        "subscription": "Suscripción",
         "companies": "Empresas",
         "apiKeys": "API Keys",
         "permissions": "Permisos",

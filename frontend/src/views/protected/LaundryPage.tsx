@@ -364,7 +364,7 @@ export function LaundryPage() {
     onSuccess: async () => {
       await invalidateLinenLocations();
       setLinenLocationForm(emptyLinenLocationForm);
-      setMessage("Ubicacion de lavanderia creada.");
+      setMessage("Ubicación de lavandería creada.");
     }
   });
 
@@ -542,7 +542,7 @@ export function LaundryPage() {
     try {
       await createLinenLocationMutation.mutateAsync();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "No se pudo crear la ubicacion.");
+      setMessage(error instanceof Error ? error.message : "No se pudo crear la ubicación.");
     }
   };
 
@@ -605,8 +605,8 @@ export function LaundryPage() {
     <div className="space-y-6">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-xs uppercase tracking-wide text-slate-500">Operacion</p>
-          <h1 className="text-2xl font-semibold text-slate-900">Lavanderia</h1>
+          <p className="text-xs uppercase tracking-wide text-slate-500">Operación</p>
+          <h1 className="text-balance text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Lavandería</h1>
           <p className="text-sm text-slate-600">
             Ropa blanca con lavadero externo: lavaderos, remitos de salida/entrada y balance de qué hay dónde.
           </p>

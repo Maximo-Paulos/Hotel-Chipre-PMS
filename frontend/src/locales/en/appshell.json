@@ -3,11 +3,6 @@
     "title": "Hotels-PMS | App",
     "description": "Access to the Hotels-PMS operating system."
   },
-  "topbar": {
-    "hotelId": "Hotel ID {{id}}",
-    "user": "User {{user}}",
-    "noSession": "No session"
-  },
   "offline": {
     "title": "No connection.",
     "description": "Visible data may be outdated. Reservation actions, check-in/out and payments require a connection and are not saved to retry automatically."
@@ -23,7 +18,7 @@
     "reset": "Back to my role"
   },
   "subscription": {
-    "readOnly": "Subscription in read-only mode (can_write=false).",
+    "readOnly": "Subscription in read-only mode.",
     "inactive": "Inactive subscription.",
     "planSummary": "Plan: {{plan}} · Rooms: {{used}}/{{limit}}.",
     "noPlan": "no plan",
@@ -42,9 +37,6 @@
     "prompt": "Install Hotels-PMS on this device for quick access.",
     "install": "Install",
     "dismiss": "Not now"
-  },
-  "sidebar": {
-    "tagline": "Hotel operations in one place"
   },
   "nav": {
     "daily": {

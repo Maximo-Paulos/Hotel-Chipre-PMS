@@ -435,7 +435,7 @@ test("rate calendar page renders annual editor and integrated channel view", asy
   };
   expect(effectivePermissions.role).toBe("owner");
   expect(effectivePermissions.permissions).toEqual(expect.arrayContaining(["rates:read", "rates:update"]));
-  // B6.1: Tarifas now lives inside the collapsed "Mas operacion" sidebar
+  // B6.1: Tarifas now lives inside the collapsed "Más operación" sidebar
   // group. A closed <details> removes its content from the accessibility
   // tree, so open it via a plain href locator (which still finds hidden DOM
   // nodes) before using the accessible-role locator to click.

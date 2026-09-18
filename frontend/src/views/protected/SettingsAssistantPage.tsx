@@ -2,30 +2,21 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
 import { ApiError } from "../../api/client";
 import { useGemmaChat } from "../../hooks/useGemmaChat";
-import { useSession } from "../../state/session";
 
 const suggestedPrompts = [
   "Quiero reducir noches sueltas y proteger estadias largas.",
   "Explicame por que tengo menos reservas por Booking esta semana.",
-  "Que configuracion me conviene para dejar libres ciertas habitaciones.",
-  "Analiza si una restriccion me esta frenando ventas.",
+  "Que configuración me conviene para dejar libres ciertas habitaciones.",
+  "Analiza si una restricción me está frenando ventas.",
 ];
-
-const roleLabel: Record<string, string> = {
-  owner: "Dueno",
-  co_owner: "Co-dueno",
-  manager: "Manager",
-  housekeeping: "Housekeeping",
-  receptionist: "Recepcionista",
-};
 
 const modeLabel: Record<string, string> = {
   query: "Consulta",
   analysis: "Analisis",
   proposal: "Propuesta",
-  execution: "Ejecucion",
+  execution: "Ejecución",
   learning: "Aprendizaje",
-  clarify: "Aclaracion",
+  clarify: "Aclaración",
   unsupported: "No soportado",
 };
 
@@ -35,7 +26,7 @@ const runtimeLabel: Record<string, string> = {
   unconfigured: "Sin configurar",
   timeout: "Timeout",
   http_error: "Error HTTP",
-  invalid_payload: "Payload invalido",
+  invalid_payload: "Payload inválido",
   unreachable: "Inalcanzable",
   unsupported_provider: "Provider no soportado",
   fallback_only: "Solo fallback",
@@ -44,7 +35,7 @@ const runtimeLabel: Record<string, string> = {
 };
 
 const bubbleStyles: Record<string, string> = {
-  user: "ml-auto border-slate-200 bg-slate-900 text-white",
+  user: "ml-auto border-brand-600 bg-brand-600 text-white",
   assistant: "border-emerald-100 bg-emerald-50 text-emerald-950",
   system: "border-amber-100 bg-amber-50 text-amber-950",
 };
@@ -63,7 +54,6 @@ const formatTimestamp = (value?: string | null) => {
 };
 
 export function SettingsAssistantPage() {
-  const { session } = useSession();
   const [draft, setDraft] = useState("");
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const {
@@ -189,38 +179,28 @@ export function SettingsAssistantPage() {
   };
 
   return (
-    <div className="relative overflow-hidden">
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-64 bg-gradient-to-b from-amber-50 via-white to-transparent" />
-      <div className="pointer-events-none absolute right-0 top-0 h-48 w-48 rounded-full bg-emerald-100/60 blur-3xl" />
-
-      <div className="relative space-y-6">
-        <header className="space-y-3">
-          <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-            <span>Configuracion</span>
-            <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-700">Gemma local</span>
-            <span className="rounded-full bg-emerald-100 px-2 py-1 text-emerald-700">Hotel ID {session.hotelId ?? "-"}</span>
-            {session.role && (
-              <span className="rounded-full bg-amber-100 px-2 py-1 text-amber-700">
-                {roleLabel[session.role] || session.role}
-              </span>
-            )}
-          </div>
-          <div className="max-w-3xl">
-            <h1 className="text-3xl font-semibold tracking-tight text-slate-950">Asistente Gemma</h1>
-            <p className="mt-2 text-sm leading-6 text-slate-600">
-              Consulta, pide cambios y revisa contexto operativo sin salir del PMS. El historial queda separado por hotel y usuario.
-            </p>
-          </div>
+    <div>
+      {/* Same header as every other settings page. This one alone carried an
+          amber gradient, a blurred emerald orb (a blur-3xl layer repainted on
+          scroll) and a row of pills that repeated the hotel's internal id and
+          the operator's role, both already in the shell. */}
+      <div className="space-y-6">
+        <header className="max-w-3xl">
+          <p className="text-xs uppercase tracking-wide text-slate-500">Configuración · Gemma local</p>
+          <h1 className="text-balance text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Asistente Gemma</h1>
+          <p className="mt-1 text-sm leading-6 text-slate-600">
+            Consultá, pedí cambios y revisá contexto operativo sin salir del PMS. El historial queda separado por hotel y usuario.
+          </p>
         </header>
 
         <div className={`rounded-2xl border px-4 py-3 text-sm shadow-sm ${statusTone}`}>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="font-semibold">Estado de la sesion</p>
+              <p className="font-semibold">Estado de la sesión</p>
               <p className="text-xs opacity-80">
                 {chatEnvelope
-                  ? `Sesion ${chatEnvelope.session?.id ?? activeSessionId ?? "activa"} · ${modeLabel[lastMode || "query"] || lastMode || "Consulta"}`
-                  : "Sin sesion activa. Envia el primer mensaje para crear una conversacion."}
+                  ? `Sesión ${chatEnvelope.session?.id ?? activeSessionId ?? "activa"} · ${modeLabel[lastMode || "query"] || lastMode || "Consulta"}`
+                  : "Sin sesión activa. Envía el primer mensaje para crear una conversación."}
               </p>
             </div>
             <div className="flex flex-wrap gap-2 text-xs font-semibold">
@@ -232,7 +212,7 @@ export function SettingsAssistantPage() {
               )}
               {fallbackUsed && <span className="rounded-full bg-white/70 px-2 py-1 text-amber-800">Fallback</span>}
               {chatEnvelope?.requires_confirmation && (
-                <span className="rounded-full bg-white/70 px-2 py-1 text-amber-800">Requiere confirmacion</span>
+                <span className="rounded-full bg-white/70 px-2 py-1 text-amber-800">Requiere confirmación</span>
               )}
             </div>
           </div>
@@ -251,7 +231,7 @@ export function SettingsAssistantPage() {
                 <p className="mt-1 text-sm text-slate-700">{proposalPreview.impact_summary || "Gemma preparo una propuesta sin ejecutar cambios."}</p>
               </div>
               {chatEnvelope?.requires_confirmation && (
-                <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-amber-800">Requiere confirmacion</span>
+                <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-amber-800">Requiere confirmación</span>
               )}
             </div>
 
@@ -351,7 +331,7 @@ export function SettingsAssistantPage() {
                               !["pending_confirmation", "draft"].includes(String(action.status)) ||
                               action.action_type !== "allocation_policy.update_preview"
                             }
-                            className="rounded-xl bg-slate-900 px-3 py-2 text-xs font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                            className="rounded-xl bg-brand-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             {approveActionMutation.isPending ? "Confirmando..." : "Confirmar borrador"}
                           </button>
@@ -387,7 +367,7 @@ export function SettingsAssistantPage() {
                               !action.action_run_id ||
                               !["executed", "reviewed"].includes(String(action.status))
                             }
-                            className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                            className="rounded-xl bg-brand-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             {applyDraftMutation.isPending ? "Aplicando..." : "Aplicar version"}
                           </button>
@@ -406,10 +386,10 @@ export function SettingsAssistantPage() {
             <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Capacidades</h2>
               <ul className="mt-3 space-y-2 text-sm text-slate-700">
-                <li>- Traducir lenguaje natural a configuraciones validas.</li>
+                <li>- Traducir lenguaje natural a configuraciones válidas.</li>
                 <li>- Responder preguntas del hotel con datos reales.</li>
                 <li>- Capturar feedback para aprender de overrides.</li>
-                <li>- Mantener sesion y contexto por hotel y usuario.</li>
+                <li>- Mantener sesión y contexto por hotel y usuario.</li>
               </ul>
             </section>
 
@@ -441,7 +421,7 @@ export function SettingsAssistantPage() {
                   <dd className="font-semibold text-slate-900">{runtime?.max_conversation_messages ?? "-"} mensajes</dd>
                 </div>
                 <div className="flex items-center justify-between gap-4">
-                  <dt className="text-slate-500">Input maximo</dt>
+                  <dt className="text-slate-500">Input máximo</dt>
                   <dd className="font-semibold text-slate-900">{runtime?.max_input_chars ?? "-"} chars</dd>
                 </div>
               </dl>
@@ -452,9 +432,9 @@ export function SettingsAssistantPage() {
             <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Sesion</h2>
+                  <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Sesión</h2>
                   <p className="mt-1 text-sm text-slate-700">
-                    {chatEnvelope?.session?.title || (activeSessionId ? `Conversacion #${activeSessionId}` : "Sin conversacion guardada")}
+                    {chatEnvelope?.session?.title || (activeSessionId ? `Conversación #${activeSessionId}` : "Sin conversación guardada")}
                   </p>
                 </div>
                 <button
@@ -472,7 +452,7 @@ export function SettingsAssistantPage() {
                   disabled={archiveSessionMutation.isPending}
                   className="mt-3 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {archiveSessionMutation.isPending ? "Archivando..." : "Archivar sesion"}
+                  {archiveSessionMutation.isPending ? "Archivando..." : "Archivar sesión"}
                 </button>
               )}
               <dl className="mt-4 space-y-3 text-sm">
@@ -481,7 +461,7 @@ export function SettingsAssistantPage() {
                   <dd className="font-semibold text-slate-900">{modeLabel[lastMode || "query"] || "Consulta"}</dd>
                 </div>
                 <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-2">
-                  <dt className="text-slate-500">Sesion activa</dt>
+                  <dt className="text-slate-500">Sesión activa</dt>
                   <dd className="font-semibold text-slate-900">{activeSessionId ?? "Sin ID"}</dd>
                 </div>
                 <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-2">
@@ -513,7 +493,7 @@ export function SettingsAssistantPage() {
                       >
                         <button type="button" onClick={() => setActiveSessionId(item.id)} className="w-full text-left">
                           <div className="flex items-center justify-between gap-3">
-                            <span className="text-sm font-semibold text-slate-900">{item.title || `Sesion #${item.id}`}</span>
+                            <span className="text-sm font-semibold text-slate-900">{item.title || `Sesión #${item.id}`}</span>
                             <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                               {modeLabel[item.mode || "query"] || item.mode || "Consulta"}
                             </span>
@@ -538,7 +518,7 @@ export function SettingsAssistantPage() {
                     );
                   })
                 ) : (
-                  <p className="text-sm text-slate-500">Todavia no hay sesiones guardadas.</p>
+                  <p className="text-sm text-slate-500">Todavía no hay sesiones guardadas.</p>
                 )}
               </div>
             </section>
@@ -565,7 +545,7 @@ export function SettingsAssistantPage() {
                     </div>
                   ))
                 ) : (
-                  <p className="text-sm text-slate-500">Todavia no hay insights guardados.</p>
+                  <p className="text-sm text-slate-500">Todavía no hay insights guardados.</p>
                 )}
               </div>
             </section>
@@ -591,9 +571,9 @@ export function SettingsAssistantPage() {
             <div className="border-b border-slate-200 px-5 py-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h2 className="text-lg font-semibold text-slate-900">Conversacion</h2>
+                  <h2 className="text-lg font-semibold text-slate-900">Conversación</h2>
                   <p className="text-sm text-slate-600">
-                    El historial queda acotado al hotel activo. Las respuestas nuevas se guardan automaticamente.
+                    El historial queda acotado al hotel activo. Las respuestas nuevas se guardan automáticamente.
                   </p>
                 </div>
                 {isBusy && <span className="text-xs font-semibold text-slate-500">Procesando...</span>}
@@ -619,7 +599,7 @@ export function SettingsAssistantPage() {
                 ))
               ) : (
                 <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-sm text-slate-600">
-                  Todavia no hay mensajes en esta sesion. Escribe una consulta para comenzar.
+                  Todavía no hay mensajes en esta sesión. Escribe una consulta para comenzar.
                 </div>
               )}
               <div ref={scrollRef} />
@@ -638,7 +618,7 @@ export function SettingsAssistantPage() {
 
               <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
                 <p className="text-xs text-slate-500">
-                  Gemma responde dentro de los limites del PMS. Si falta contexto, te va a pedir aclaracion.
+                  Gemma responde dentro de los límites del PMS. Si falta contexto, te va a pedir aclaración.
                 </p>
                 <div className="flex items-center gap-2">
                   {(approveActionMutation.isError ||
@@ -654,7 +634,7 @@ export function SettingsAssistantPage() {
                             ? reviewDraftMutation.error.message
                             : applyDraftMutation.error instanceof ApiError
                               ? applyDraftMutation.error.message
-                              : "No se pudo completar la accion de Gemma."}
+                              : "No se pudo completar la acción de Gemma."}
                     </span>
                   )}
                   <button
@@ -667,7 +647,7 @@ export function SettingsAssistantPage() {
                   <button
                     type="submit"
                     disabled={sendMessageMutation.isPending || !draft.trim()}
-                    className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {sendMessageMutation.isPending ? "Enviando..." : "Enviar"}
                   </button>

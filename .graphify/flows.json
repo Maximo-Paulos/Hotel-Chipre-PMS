@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-09-17T19:38:47.624Z",
+  "generatedAt": "2026-09-18T11:23:25.264Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -13,32 +13,32 @@
       "entryPointId": "api_auth_login",
       "path": [
         "api_auth_login",
-        "api_auth_build_auth_response",
         "api_auth_build_login_response",
-        "api_auth_pick_default_hotel_id",
         "api_auth_issue_auth_response",
         "api_auth_attach_user_session_cookies",
         "api_auth_audit_security_event",
-        "api_auth_run_notification_cycle_best_effort"
+        "api_auth_build_auth_response",
+        "api_auth_run_notification_cycle_best_effort",
+        "api_auth_pick_default_hotel_id"
       ],
       "qualifiedPath": [
         "api_auth_login",
-        "api_auth_build_auth_response",
         "api_auth_build_login_response",
-        "api_auth_pick_default_hotel_id",
         "api_auth_issue_auth_response",
         "api_auth_attach_user_session_cookies",
         "api_auth_audit_security_event",
-        "api_auth_run_notification_cycle_best_effort"
+        "api_auth_build_auth_response",
+        "api_auth_run_notification_cycle_best_effort",
+        "api_auth_pick_default_hotel_id"
       ],
-      "depth": 3,
+      "depth": 4,
       "nodeCount": 8,
       "fileCount": 2,
       "files": [
         "app/api/auth.py",
         "frontend/src/api/auth.ts"
       ],
-      "criticality": 0.505,
+      "criticality": 0.515,
       "warnings": []
     },
     {
@@ -48,26 +48,20 @@
       "entryPointId": "api_auth_register",
       "path": [
         "api_auth_register",
-        "api_auth_attach_user_session_cookies",
-        "api_auth_build_auth_response",
         "api_auth_burn_auth_timing_work",
         "api_auth_issue_email_token",
         "api_auth_request_source",
-        "api_auth_pick_default_hotel_id",
         "api_auth_generate_code"
       ],
       "qualifiedPath": [
         "api_auth_register",
-        "api_auth_attach_user_session_cookies",
-        "api_auth_build_auth_response",
         "api_auth_burn_auth_timing_work",
         "api_auth_issue_email_token",
         "api_auth_request_source",
-        "api_auth_pick_default_hotel_id",
         "api_auth_generate_code"
       ],
       "depth": 2,
-      "nodeCount": 8,
+      "nodeCount": 5,
       "fileCount": 2,
       "files": [
         "app/api/auth.py",
@@ -157,6 +151,74 @@
       "warnings": []
     },
     {
+      "id": "flow:services_permission_service_get_effective_permissions",
+      "name": "get_effective_permissions",
+      "entryPoint": "services_permission_service_get_effective_permissions",
+      "entryPointId": "services_permission_service_get_effective_permissions",
+      "path": [
+        "services_permission_service_get_effective_permissions",
+        "services_permission_service_get_effective_permission_details",
+        "services_permission_service_ensure_permission_matrix_seeded",
+        "services_permission_service_immutable_permission_decision",
+        "services_permission_service_engine_key",
+        "services_permission_service_seed_default_permissions",
+        "services_permission_service_canonical_permission_code",
+        "services_permission_service_insert_if_missing"
+      ],
+      "qualifiedPath": [
+        "services_permission_service_get_effective_permissions",
+        "services_permission_service_get_effective_permission_details",
+        "services_permission_service_ensure_permission_matrix_seeded",
+        "services_permission_service_immutable_permission_decision",
+        "services_permission_service_engine_key",
+        "services_permission_service_seed_default_permissions",
+        "services_permission_service_canonical_permission_code",
+        "services_permission_service_insert_if_missing"
+      ],
+      "depth": 4,
+      "nodeCount": 8,
+      "fileCount": 1,
+      "files": [
+        "app/services/permission_service.py"
+      ],
+      "criticality": 0.44,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_permission_service_get_matrix",
+      "name": "get_matrix",
+      "entryPoint": "services_permission_service_get_matrix",
+      "entryPointId": "services_permission_service_get_matrix",
+      "path": [
+        "services_permission_service_get_matrix",
+        "services_permission_service_canonical_permission_code",
+        "services_permission_service_get_effective_permission_details",
+        "services_permission_service_ensure_permission_matrix_seeded",
+        "services_permission_service_immutable_permission_decision",
+        "services_permission_service_engine_key",
+        "services_permission_service_seed_default_permissions",
+        "services_permission_service_insert_if_missing"
+      ],
+      "qualifiedPath": [
+        "services_permission_service_get_matrix",
+        "services_permission_service_canonical_permission_code",
+        "services_permission_service_get_effective_permission_details",
+        "services_permission_service_ensure_permission_matrix_seeded",
+        "services_permission_service_immutable_permission_decision",
+        "services_permission_service_engine_key",
+        "services_permission_service_seed_default_permissions",
+        "services_permission_service_insert_if_missing"
+      ],
+      "depth": 4,
+      "nodeCount": 8,
+      "fileCount": 1,
+      "files": [
+        "app/services/permission_service.py"
+      ],
+      "criticality": 0.44,
+      "warnings": []
+    },
+    {
       "id": "flow:services_permission_service_get_role_profiles",
       "name": "get_role_profiles",
       "entryPoint": "services_permission_service_get_role_profiles",
@@ -164,30 +226,68 @@
       "path": [
         "services_permission_service_get_role_profiles",
         "services_permission_service_get_effective_permission_details",
-        "services_permission_service_can_role_hold_permission",
         "services_permission_service_ensure_permission_matrix_seeded",
         "services_permission_service_immutable_permission_decision",
-        "services_permission_service_canonical_permission_code",
         "services_permission_service_engine_key",
         "services_permission_service_seed_default_permissions",
+        "services_permission_service_canonical_permission_code",
         "services_permission_service_insert_if_missing"
       ],
       "qualifiedPath": [
         "services_permission_service_get_role_profiles",
         "services_permission_service_get_effective_permission_details",
-        "services_permission_service_can_role_hold_permission",
         "services_permission_service_ensure_permission_matrix_seeded",
         "services_permission_service_immutable_permission_decision",
-        "services_permission_service_canonical_permission_code",
         "services_permission_service_engine_key",
         "services_permission_service_seed_default_permissions",
+        "services_permission_service_canonical_permission_code",
         "services_permission_service_insert_if_missing"
       ],
       "depth": 4,
-      "nodeCount": 9,
+      "nodeCount": 8,
       "fileCount": 1,
       "files": [
         "app/services/permission_service.py"
+      ],
+      "criticality": 0.44,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_auth_google_login",
+      "name": "google_login",
+      "entryPoint": "api_auth_google_login",
+      "entryPointId": "api_auth_google_login",
+      "path": [
+        "api_auth_google_login",
+        "api_auth_audit_security_event",
+        "api_auth_build_login_response",
+        "api_auth_google_self_signup_enabled",
+        "api_auth_verify_google_claims",
+        "api_auth_issue_auth_response",
+        "api_auth_google_allowed_domains",
+        "api_auth_attach_user_session_cookies",
+        "api_auth_build_auth_response",
+        "api_auth_run_notification_cycle_best_effort",
+        "api_auth_pick_default_hotel_id"
+      ],
+      "qualifiedPath": [
+        "api_auth_google_login",
+        "api_auth_audit_security_event",
+        "api_auth_build_login_response",
+        "api_auth_google_self_signup_enabled",
+        "api_auth_verify_google_claims",
+        "api_auth_issue_auth_response",
+        "api_auth_google_allowed_domains",
+        "api_auth_attach_user_session_cookies",
+        "api_auth_build_auth_response",
+        "api_auth_run_notification_cycle_best_effort",
+        "api_auth_pick_default_hotel_id"
+      ],
+      "depth": 4,
+      "nodeCount": 11,
+      "fileCount": 1,
+      "files": [
+        "app/api/auth.py"
       ],
       "criticality": 0.44,
       "warnings": []
@@ -207,7 +307,6 @@
         "agent_ops_verify_preview_providers_canonical_hostname",
         "agent_ops_verify_preview_providers_connection_fingerprint",
         "agent_ops_verify_preview_providers_iso_utc",
-        "agent_ops_verify_preview_providers_opaque_fingerprint",
         "agent_ops_verify_preview_providers_public_origin",
         "agent_ops_verify_preview_providers_select_render_preview",
         "agent_ops_verify_preview_providers_select_supabase_preview",
@@ -243,7 +342,6 @@
         "agent_ops_verify_preview_providers_canonical_hostname",
         "agent_ops_verify_preview_providers_connection_fingerprint",
         "agent_ops_verify_preview_providers_iso_utc",
-        "agent_ops_verify_preview_providers_opaque_fingerprint",
         "agent_ops_verify_preview_providers_public_origin",
         "agent_ops_verify_preview_providers_select_render_preview",
         "agent_ops_verify_preview_providers_select_supabase_preview",
@@ -270,10 +368,78 @@
         "agent_ops_verify_preview_providers_database_password"
       ],
       "depth": 4,
-      "nodeCount": 34,
+      "nodeCount": 33,
       "fileCount": 1,
       "files": [
         "scripts/agent_ops/verify_preview_providers.py"
+      ],
+      "criticality": 0.44,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_auth_reset_password",
+      "name": "reset_password",
+      "entryPoint": "api_auth_reset_password",
+      "entryPointId": "api_auth_reset_password",
+      "path": [
+        "api_auth_reset_password",
+        "api_auth_build_login_response",
+        "api_auth_issue_auth_response",
+        "api_auth_attach_user_session_cookies",
+        "api_auth_audit_security_event",
+        "api_auth_build_auth_response",
+        "api_auth_run_notification_cycle_best_effort",
+        "api_auth_pick_default_hotel_id"
+      ],
+      "qualifiedPath": [
+        "api_auth_reset_password",
+        "api_auth_build_login_response",
+        "api_auth_issue_auth_response",
+        "api_auth_attach_user_session_cookies",
+        "api_auth_audit_security_event",
+        "api_auth_build_auth_response",
+        "api_auth_run_notification_cycle_best_effort",
+        "api_auth_pick_default_hotel_id"
+      ],
+      "depth": 4,
+      "nodeCount": 8,
+      "fileCount": 1,
+      "files": [
+        "app/api/auth.py"
+      ],
+      "criticality": 0.44,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_permission_service_resolve",
+      "name": "resolve",
+      "entryPoint": "services_permission_service_resolve",
+      "entryPointId": "services_permission_service_resolve",
+      "path": [
+        "services_permission_service_resolve",
+        "services_permission_service_canonical_permission_code",
+        "services_permission_service_get_effective_permission_details",
+        "services_permission_service_ensure_permission_matrix_seeded",
+        "services_permission_service_immutable_permission_decision",
+        "services_permission_service_engine_key",
+        "services_permission_service_seed_default_permissions",
+        "services_permission_service_insert_if_missing"
+      ],
+      "qualifiedPath": [
+        "services_permission_service_resolve",
+        "services_permission_service_canonical_permission_code",
+        "services_permission_service_get_effective_permission_details",
+        "services_permission_service_ensure_permission_matrix_seeded",
+        "services_permission_service_immutable_permission_decision",
+        "services_permission_service_engine_key",
+        "services_permission_service_seed_default_permissions",
+        "services_permission_service_insert_if_missing"
+      ],
+      "depth": 4,
+      "nodeCount": 8,
+      "fileCount": 1,
+      "files": [
+        "app/services/permission_service.py"
       ],
       "criticality": 0.44,
       "warnings": []
@@ -343,46 +509,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_permission_service_get_effective_permissions",
-      "name": "get_effective_permissions",
-      "entryPoint": "services_permission_service_get_effective_permissions",
-      "entryPointId": "services_permission_service_get_effective_permissions",
-      "path": [
-        "services_permission_service_get_effective_permissions",
-        "services_permission_service_get_effective_permission_details",
-        "services_permission_service_get_matrix",
-        "services_permission_service_can_role_hold_permission",
-        "services_permission_service_ensure_permission_matrix_seeded",
-        "services_permission_service_immutable_permission_decision",
-        "services_permission_service_canonical_permission_code",
-        "services_permission_service_permission_help_es",
-        "services_permission_service_seed_default_permissions",
-        "services_permission_service_engine_key",
-        "services_permission_service_insert_if_missing"
-      ],
-      "qualifiedPath": [
-        "services_permission_service_get_effective_permissions",
-        "services_permission_service_get_effective_permission_details",
-        "services_permission_service_get_matrix",
-        "services_permission_service_can_role_hold_permission",
-        "services_permission_service_ensure_permission_matrix_seeded",
-        "services_permission_service_immutable_permission_decision",
-        "services_permission_service_canonical_permission_code",
-        "services_permission_service_permission_help_es",
-        "services_permission_service_seed_default_permissions",
-        "services_permission_service_engine_key",
-        "services_permission_service_insert_if_missing"
-      ],
-      "depth": 3,
-      "nodeCount": 11,
-      "fileCount": 1,
-      "files": [
-        "app/services/permission_service.py"
-      ],
-      "criticality": 0.43,
-      "warnings": []
-    },
-    {
       "id": "flow:services_permission_service_get_permission_catalog",
       "name": "get_permission_catalog",
       "entryPoint": "services_permission_service_get_permission_catalog",
@@ -441,46 +567,6 @@
       "warnings": []
     },
     {
-      "id": "flow:api_auth_google_login",
-      "name": "google_login",
-      "entryPoint": "api_auth_google_login",
-      "entryPointId": "api_auth_google_login",
-      "path": [
-        "api_auth_google_login",
-        "api_auth_audit_security_event",
-        "api_auth_build_auth_response",
-        "api_auth_build_login_response",
-        "api_auth_google_self_signup_enabled",
-        "api_auth_verify_google_claims",
-        "api_auth_pick_default_hotel_id",
-        "api_auth_issue_auth_response",
-        "api_auth_google_allowed_domains",
-        "api_auth_attach_user_session_cookies",
-        "api_auth_run_notification_cycle_best_effort"
-      ],
-      "qualifiedPath": [
-        "api_auth_google_login",
-        "api_auth_audit_security_event",
-        "api_auth_build_auth_response",
-        "api_auth_build_login_response",
-        "api_auth_google_self_signup_enabled",
-        "api_auth_verify_google_claims",
-        "api_auth_pick_default_hotel_id",
-        "api_auth_issue_auth_response",
-        "api_auth_google_allowed_domains",
-        "api_auth_attach_user_session_cookies",
-        "api_auth_run_notification_cycle_best_effort"
-      ],
-      "depth": 3,
-      "nodeCount": 11,
-      "fileCount": 1,
-      "files": [
-        "app/api/auth.py"
-      ],
-      "criticality": 0.43,
-      "warnings": []
-    },
-    {
       "id": "flow:agent_ops_validate_preview_manifest_main",
       "name": "main",
       "entryPoint": "agent_ops_validate_preview_manifest_main",
@@ -492,9 +578,7 @@
         "agent_ops_validate_preview_manifest_https_preview_url",
         "agent_ops_validate_preview_manifest_mapping",
         "agent_ops_validate_preview_manifest_non_empty",
-        "agent_ops_validate_preview_manifest_origin",
         "agent_ops_validate_preview_manifest_timestamp",
-        "agent_ops_validate_preview_manifest_valid_timestamp",
         "agent_ops_validate_preview_manifest_validate_baseline_lease_id",
         "agent_ops_validate_preview_manifest_validate_observation_time",
         "agent_ops_validate_preview_manifest_canonical_host"
@@ -506,15 +590,13 @@
         "agent_ops_validate_preview_manifest_https_preview_url",
         "agent_ops_validate_preview_manifest_mapping",
         "agent_ops_validate_preview_manifest_non_empty",
-        "agent_ops_validate_preview_manifest_origin",
         "agent_ops_validate_preview_manifest_timestamp",
-        "agent_ops_validate_preview_manifest_valid_timestamp",
         "agent_ops_validate_preview_manifest_validate_baseline_lease_id",
         "agent_ops_validate_preview_manifest_validate_observation_time",
         "agent_ops_validate_preview_manifest_canonical_host"
       ],
       "depth": 3,
-      "nodeCount": 12,
+      "nodeCount": 10,
       "fileCount": 1,
       "files": [
         "scripts/agent_ops/validate_preview_manifest.py"
@@ -589,37 +671,49 @@
       "warnings": []
     },
     {
-      "id": "flow:api_auth_reset_password",
-      "name": "reset_password",
-      "entryPoint": "api_auth_reset_password",
-      "entryPointId": "api_auth_reset_password",
+      "id": "flow:services_permission_service_set_override",
+      "name": "set_override",
+      "entryPoint": "services_permission_service_set_override",
+      "entryPointId": "services_permission_service_set_override",
       "path": [
-        "api_auth_reset_password",
-        "api_auth_build_auth_response",
-        "api_auth_build_login_response",
-        "api_auth_pick_default_hotel_id",
-        "api_auth_issue_auth_response",
-        "api_auth_attach_user_session_cookies",
-        "api_auth_audit_security_event",
-        "api_auth_run_notification_cycle_best_effort"
+        "services_permission_service_set_override",
+        "services_permission_service_set_role_override",
+        "services_permission_service_audit",
+        "services_permission_service_ensure_permission_matrix_seeded",
+        "services_permission_service_invalidate_effective_permission_cache",
+        "services_permission_service_permissionversionconflict",
+        "services_permission_service_validate_mutable",
+        "services_permission_service_engine_key",
+        "services_permission_service_seed_default_permissions",
+        "services_permission_service_immutable_permission_decision",
+        "services_permission_service_validate_permission_code",
+        "valueerror",
+        "services_permission_service_insert_if_missing",
+        "services_permission_service_canonical_permission_code"
       ],
       "qualifiedPath": [
-        "api_auth_reset_password",
-        "api_auth_build_auth_response",
-        "api_auth_build_login_response",
-        "api_auth_pick_default_hotel_id",
-        "api_auth_issue_auth_response",
-        "api_auth_attach_user_session_cookies",
-        "api_auth_audit_security_event",
-        "api_auth_run_notification_cycle_best_effort"
+        "services_permission_service_set_override",
+        "services_permission_service_set_role_override",
+        "services_permission_service_audit",
+        "services_permission_service_ensure_permission_matrix_seeded",
+        "services_permission_service_invalidate_effective_permission_cache",
+        "services_permission_service_permissionversionconflict",
+        "services_permission_service_validate_mutable",
+        "services_permission_service_engine_key",
+        "services_permission_service_seed_default_permissions",
+        "services_permission_service_immutable_permission_decision",
+        "services_permission_service_validate_permission_code",
+        "valueerror",
+        "services_permission_service_insert_if_missing",
+        "services_permission_service_canonical_permission_code"
       ],
-      "depth": 3,
-      "nodeCount": 8,
+      "depth": 4,
+      "nodeCount": 14,
       "fileCount": 1,
       "files": [
-        "app/api/auth.py"
+        "app/services/permission_service.py"
       ],
-      "criticality": 0.43,
+      "criticality": 0.4221,
       "warnings": []
     },
     {
@@ -742,6 +836,30 @@
       "fileCount": 1,
       "files": [
         "app/master_admin/security.py"
+      ],
+      "criticality": 0.42,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_permission_service_can_role_hold_permission",
+      "name": "can_role_hold_permission",
+      "entryPoint": "services_permission_service_can_role_hold_permission",
+      "entryPointId": "services_permission_service_can_role_hold_permission",
+      "path": [
+        "services_permission_service_can_role_hold_permission",
+        "services_permission_service_immutable_permission_decision",
+        "services_permission_service_canonical_permission_code"
+      ],
+      "qualifiedPath": [
+        "services_permission_service_can_role_hold_permission",
+        "services_permission_service_immutable_permission_decision",
+        "services_permission_service_canonical_permission_code"
+      ],
+      "depth": 2,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/services/permission_service.py"
       ],
       "criticality": 0.42,
       "warnings": []
@@ -1285,42 +1403,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_permission_service_resolve",
-      "name": "resolve",
-      "entryPoint": "services_permission_service_resolve",
-      "entryPointId": "services_permission_service_resolve",
-      "path": [
-        "services_permission_service_resolve",
-        "services_permission_service_can_role_hold_permission",
-        "services_permission_service_canonical_permission_code",
-        "services_permission_service_ensure_permission_matrix_seeded",
-        "services_permission_service_get_effective_permission_details",
-        "services_permission_service_seed_default_permissions",
-        "services_permission_service_immutable_permission_decision",
-        "services_permission_service_engine_key",
-        "services_permission_service_insert_if_missing"
-      ],
-      "qualifiedPath": [
-        "services_permission_service_resolve",
-        "services_permission_service_can_role_hold_permission",
-        "services_permission_service_canonical_permission_code",
-        "services_permission_service_ensure_permission_matrix_seeded",
-        "services_permission_service_get_effective_permission_details",
-        "services_permission_service_seed_default_permissions",
-        "services_permission_service_immutable_permission_decision",
-        "services_permission_service_engine_key",
-        "services_permission_service_insert_if_missing"
-      ],
-      "depth": 2,
-      "nodeCount": 9,
-      "fileCount": 1,
-      "files": [
-        "app/services/permission_service.py"
-      ],
-      "criticality": 0.42,
-      "warnings": []
-    },
-    {
       "id": "flow:master_admin_email_provider_send_system_email",
       "name": "send_system_email",
       "entryPoint": "master_admin_email_provider_send_system_email",
@@ -1488,15 +1570,15 @@
       "path": [
         "agent_ops_verify_preview_bundle_verify",
         "agent_ops_verify_preview_bundle_asset_entries",
-        "agent_ops_verify_preview_bundle_bundleverificationerror",
         "agent_ops_verify_preview_bundle_verify_asset_payloads",
+        "agent_ops_verify_preview_bundle_bundleverificationerror",
         "agent_ops_verify_preview_bundle_origin"
       ],
       "qualifiedPath": [
         "agent_ops_verify_preview_bundle_verify",
         "agent_ops_verify_preview_bundle_asset_entries",
-        "agent_ops_verify_preview_bundle_bundleverificationerror",
         "agent_ops_verify_preview_bundle_verify_asset_payloads",
+        "agent_ops_verify_preview_bundle_bundleverificationerror",
         "agent_ops_verify_preview_bundle_origin"
       ],
       "depth": 2,
@@ -1561,102 +1643,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_permission_service_set_override",
-      "name": "set_override",
-      "entryPoint": "services_permission_service_set_override",
-      "entryPointId": "services_permission_service_set_override",
-      "path": [
-        "services_permission_service_set_override",
-        "services_permission_service_can_role_hold_permission",
-        "services_permission_service_ensure_permission_matrix_seeded",
-        "services_permission_service_seed_default_permissions",
-        "services_permission_service_set_role_override",
-        "services_permission_service_canonical_permission_code",
-        "services_permission_service_immutable_permission_decision",
-        "services_permission_service_engine_key",
-        "services_permission_service_insert_if_missing",
-        "services_permission_service_audit",
-        "services_permission_service_invalidate_effective_permission_cache",
-        "services_permission_service_permissionversionconflict",
-        "services_permission_service_validate_mutable",
-        "services_permission_service_validate_permission_code",
-        "valueerror"
-      ],
-      "qualifiedPath": [
-        "services_permission_service_set_override",
-        "services_permission_service_can_role_hold_permission",
-        "services_permission_service_ensure_permission_matrix_seeded",
-        "services_permission_service_seed_default_permissions",
-        "services_permission_service_set_role_override",
-        "services_permission_service_canonical_permission_code",
-        "services_permission_service_immutable_permission_decision",
-        "services_permission_service_engine_key",
-        "services_permission_service_insert_if_missing",
-        "services_permission_service_audit",
-        "services_permission_service_invalidate_effective_permission_cache",
-        "services_permission_service_permissionversionconflict",
-        "services_permission_service_validate_mutable",
-        "services_permission_service_validate_permission_code",
-        "valueerror"
-      ],
-      "depth": 3,
-      "nodeCount": 15,
-      "fileCount": 1,
-      "files": [
-        "app/services/permission_service.py"
-      ],
-      "criticality": 0.4133,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_permission_service_set_user_override",
-      "name": "set_user_override",
-      "entryPoint": "services_permission_service_set_user_override",
-      "entryPointId": "services_permission_service_set_user_override",
-      "path": [
-        "services_permission_service_set_user_override",
-        "services_permission_service_active_membership",
-        "services_permission_service_audit",
-        "services_permission_service_ensure_permission_matrix_seeded",
-        "services_permission_service_invalidate_effective_permission_cache",
-        "services_permission_service_permissionversionconflict",
-        "services_permission_service_validate_mutable",
-        "services_permission_service_engine_key",
-        "services_permission_service_seed_default_permissions",
-        "services_permission_service_can_role_hold_permission",
-        "services_permission_service_canonical_permission_code",
-        "services_permission_service_immutable_permission_decision",
-        "services_permission_service_validate_permission_code",
-        "valueerror",
-        "services_permission_service_insert_if_missing"
-      ],
-      "qualifiedPath": [
-        "services_permission_service_set_user_override",
-        "services_permission_service_active_membership",
-        "services_permission_service_audit",
-        "services_permission_service_ensure_permission_matrix_seeded",
-        "services_permission_service_invalidate_effective_permission_cache",
-        "services_permission_service_permissionversionconflict",
-        "services_permission_service_validate_mutable",
-        "services_permission_service_engine_key",
-        "services_permission_service_seed_default_permissions",
-        "services_permission_service_can_role_hold_permission",
-        "services_permission_service_canonical_permission_code",
-        "services_permission_service_immutable_permission_decision",
-        "services_permission_service_validate_permission_code",
-        "valueerror",
-        "services_permission_service_insert_if_missing"
-      ],
-      "depth": 3,
-      "nodeCount": 15,
-      "fileCount": 1,
-      "files": [
-        "app/services/permission_service.py"
-      ],
-      "criticality": 0.4133,
-      "warnings": []
-    },
-    {
       "id": "flow:services_permission_service_restore_user_override",
       "name": "restore_user_override",
       "entryPoint": "services_permission_service_restore_user_override",
@@ -1692,6 +1678,52 @@
         "services_permission_service_seed_default_permissions",
         "services_permission_service_canonical_permission_code",
         "services_permission_service_insert_if_missing"
+      ],
+      "depth": 3,
+      "nodeCount": 14,
+      "fileCount": 1,
+      "files": [
+        "app/services/permission_service.py"
+      ],
+      "criticality": 0.4121,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_permission_service_set_user_override",
+      "name": "set_user_override",
+      "entryPoint": "services_permission_service_set_user_override",
+      "entryPointId": "services_permission_service_set_user_override",
+      "path": [
+        "services_permission_service_set_user_override",
+        "services_permission_service_active_membership",
+        "services_permission_service_audit",
+        "services_permission_service_ensure_permission_matrix_seeded",
+        "services_permission_service_invalidate_effective_permission_cache",
+        "services_permission_service_permissionversionconflict",
+        "services_permission_service_validate_mutable",
+        "services_permission_service_engine_key",
+        "services_permission_service_seed_default_permissions",
+        "services_permission_service_immutable_permission_decision",
+        "services_permission_service_validate_permission_code",
+        "valueerror",
+        "services_permission_service_insert_if_missing",
+        "services_permission_service_canonical_permission_code"
+      ],
+      "qualifiedPath": [
+        "services_permission_service_set_user_override",
+        "services_permission_service_active_membership",
+        "services_permission_service_audit",
+        "services_permission_service_ensure_permission_matrix_seeded",
+        "services_permission_service_invalidate_effective_permission_cache",
+        "services_permission_service_permissionversionconflict",
+        "services_permission_service_validate_mutable",
+        "services_permission_service_engine_key",
+        "services_permission_service_seed_default_permissions",
+        "services_permission_service_immutable_permission_decision",
+        "services_permission_service_validate_permission_code",
+        "valueerror",
+        "services_permission_service_insert_if_missing",
+        "services_permission_service_canonical_permission_code"
       ],
       "depth": 3,
       "nodeCount": 14,
@@ -1852,28 +1884,6 @@
       "fileCount": 1,
       "files": [
         "scripts/agent_ops/verify_preview_providers.py"
-      ],
-      "criticality": 0.41,
-      "warnings": []
-    },
-    {
-      "id": "flow:protected_settingspermissionspage_settingspermissionspage",
-      "name": "SettingsPermissionsPage",
-      "entryPoint": "protected_settingspermissionspage_settingspermissionspage",
-      "entryPointId": "protected_settingspermissionspage_settingspermissionspage",
-      "path": [
-        "protected_settingspermissionspage_settingspermissionspage",
-        "protected_settingspermissionspage_getpermissioncodes"
-      ],
-      "qualifiedPath": [
-        "protected_settingspermissionspage_settingspermissionspage",
-        "protected_settingspermissionspage_getpermissioncodes"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "frontend/src/views/protected/SettingsPermissionsPage.tsx"
       ],
       "criticality": 0.41,
       "warnings": []
@@ -2577,30 +2587,6 @@
       "warnings": []
     },
     {
-      "id": "flow:state_session_loadsession",
-      "name": "loadSession",
-      "entryPoint": "state_session_loadsession",
-      "entryPointId": "state_session_loadsession",
-      "path": [
-        "state_session_loadsession",
-        "state_session_normalizerole",
-        "state_session_safehotelid"
-      ],
-      "qualifiedPath": [
-        "state_session_loadsession",
-        "state_session_normalizerole",
-        "state_session_safehotelid"
-      ],
-      "depth": 1,
-      "nodeCount": 3,
-      "fileCount": 1,
-      "files": [
-        "frontend/src/state/session.tsx"
-      ],
-      "criticality": 0.41,
-      "warnings": []
-    },
-    {
       "id": "flow:master_admin_router_login",
       "name": "login",
       "entryPoint": "master_admin_router_login",
@@ -2710,6 +2696,28 @@
       "fileCount": 1,
       "files": [
         "app/master_admin/router.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_permission_service_permission_help_es",
+      "name": "permission_help_es",
+      "entryPoint": "services_permission_service_permission_help_es",
+      "entryPointId": "services_permission_service_permission_help_es",
+      "path": [
+        "services_permission_service_permission_help_es",
+        "services_permission_service_canonical_permission_code"
+      ],
+      "qualifiedPath": [
+        "services_permission_service_permission_help_es",
+        "services_permission_service_canonical_permission_code"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/services/permission_service.py"
       ],
       "criticality": 0.41,
       "warnings": []
@@ -3473,6 +3481,28 @@
       "warnings": []
     },
     {
+      "id": "flow:versions_20260917_sqlite_cash_close_parent_key_sqlite_unique_parent_key_for_shift_upgrade",
+      "name": "upgrade",
+      "entryPoint": "versions_20260917_sqlite_cash_close_parent_key_sqlite_unique_parent_key_for_shift_upgrade",
+      "entryPointId": "versions_20260917_sqlite_cash_close_parent_key_sqlite_unique_parent_key_for_shift_upgrade",
+      "path": [
+        "versions_20260917_sqlite_cash_close_parent_key_sqlite_unique_parent_key_for_shift_upgrade",
+        "versions_20260917_sqlite_cash_close_parent_key_sqlite_unique_parent_key_for_shift_has_unique_hotel_id_id"
+      ],
+      "qualifiedPath": [
+        "versions_20260917_sqlite_cash_close_parent_key_sqlite_unique_parent_key_for_shift_upgrade",
+        "versions_20260917_sqlite_cash_close_parent_key_sqlite_unique_parent_key_for_shift_has_unique_hotel_id_id"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20260917_sqlite_cash_close_parent_key_sqlite_unique_parent_key_for_shift_.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
       "id": "flow:versions_62fddec52b79_repair_sqlite_reservation_status_enum_upgrade",
       "name": "upgrade",
       "entryPoint": "versions_62fddec52b79_repair_sqlite_reservation_status_enum_upgrade",
@@ -3588,28 +3618,6 @@
       "fileCount": 1,
       "files": [
         "app/services/user_session_service.py"
-      ],
-      "criticality": 0.41,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_payment_webhook_service_validate_mercadopago_webhook_signature",
-      "name": "validate_mercadopago_webhook_signature",
-      "entryPoint": "services_payment_webhook_service_validate_mercadopago_webhook_signature",
-      "entryPointId": "services_payment_webhook_service_validate_mercadopago_webhook_signature",
-      "path": [
-        "services_payment_webhook_service_validate_mercadopago_webhook_signature",
-        "services_payment_webhook_service_parse_mercadopago_signature_header"
-      ],
-      "qualifiedPath": [
-        "services_payment_webhook_service_validate_mercadopago_webhook_signature",
-        "services_payment_webhook_service_parse_mercadopago_signature_header"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "app/services/payment_webhook_service.py"
       ],
       "criticality": 0.41,
       "warnings": []
@@ -3797,51 +3805,47 @@
       "entryPointId": "api_client_apifetch",
       "path": [
         "api_client_apifetch",
-        "api_client_apierror",
-        "api_client_buildauthheaders",
-        "api_client_buildurl",
-        "api_client_formaterrordetail",
-        "api_client_handleunauthorized",
         "api_client_requestwithrefresh",
-        "api_client_safejson",
-        "api_client_hasvalidsession",
-        "api_client_normalizehotelid",
+        "api_client_buildurl",
+        "api_client_handleunauthorized",
         "api_client_ispublicauthpath",
         "api_client_makeapierror",
         "api_client_mergesession",
         "api_client_refreshsession",
         "api_client_requestheaders",
+        "api_client_safejson",
         "api_client_setclientsession",
-        "api_client_istokenexpired",
-        "api_client_jwtexpms"
+        "api_client_apierror",
+        "api_client_formaterrordetail",
+        "api_client_buildauthheaders",
+        "api_client_hasvalidsession",
+        "api_client_normalizehotelid"
       ],
       "qualifiedPath": [
         "api_client_apifetch",
-        "api_client_apierror",
-        "api_client_buildauthheaders",
-        "api_client_buildurl",
-        "api_client_formaterrordetail",
-        "api_client_handleunauthorized",
         "api_client_requestwithrefresh",
-        "api_client_safejson",
-        "api_client_hasvalidsession",
-        "api_client_normalizehotelid",
+        "api_client_buildurl",
+        "api_client_handleunauthorized",
         "api_client_ispublicauthpath",
         "api_client_makeapierror",
         "api_client_mergesession",
         "api_client_refreshsession",
         "api_client_requestheaders",
+        "api_client_safejson",
         "api_client_setclientsession",
-        "api_client_istokenexpired",
-        "api_client_jwtexpms"
+        "api_client_apierror",
+        "api_client_formaterrordetail",
+        "api_client_buildauthheaders",
+        "api_client_hasvalidsession",
+        "api_client_normalizehotelid"
       ],
       "depth": 4,
-      "nodeCount": 18,
+      "nodeCount": 16,
       "fileCount": 1,
       "files": [
         "frontend/src/api/client.ts"
       ],
-      "criticality": 0.3289,
+      "criticality": 0.3306,
       "warnings": []
     },
     {
@@ -3864,30 +3868,6 @@
       "fileCount": 1,
       "files": [
         "app/services/mfa_service.py"
-      ],
-      "criticality": 0.3267,
-      "warnings": []
-    },
-    {
-      "id": "flow:hooks_usecashregister_invalidatecashregisterqueries",
-      "name": "invalidateCashRegisterQueries",
-      "entryPoint": "hooks_usecashregister_invalidatecashregisterqueries",
-      "entryPointId": "hooks_usecashregister_invalidatecashregisterqueries",
-      "path": [
-        "hooks_usecashregister_invalidatecashregisterqueries",
-        "hooks_usecashregister_cashsessionskey",
-        "hooks_usecashregister_latestclosereportkey"
-      ],
-      "qualifiedPath": [
-        "hooks_usecashregister_invalidatecashregisterqueries",
-        "hooks_usecashregister_cashsessionskey",
-        "hooks_usecashregister_latestclosereportkey"
-      ],
-      "depth": 1,
-      "nodeCount": 3,
-      "fileCount": 1,
-      "files": [
-        "frontend/src/hooks/useCashRegister.ts"
       ],
       "criticality": 0.3267,
       "warnings": []
@@ -4065,90 +4045,6 @@
       "warnings": []
     },
     {
-      "id": "flow:scripts_bootstrap_cloud_qa_cli",
-      "name": "cli",
-      "entryPoint": "scripts_bootstrap_cloud_qa_cli",
-      "entryPointId": "scripts_bootstrap_cloud_qa_cli",
-      "path": [
-        "scripts_bootstrap_cloud_qa_cli",
-        "scripts_bootstrap_cloud_qa_main",
-        "scripts_bootstrap_cloud_qa_bootstrap_database",
-        "scripts_bootstrap_cloud_qa_load_config",
-        "scripts_bootstrap_cloud_qa_run_migrations",
-        "scripts_bootstrap_cloud_qa_runtime_database_environment",
-        "scripts_bootstrap_cloud_qa_upsert_qa_data",
-        "scripts_bootstrap_cloud_qa_flag",
-        "scripts_bootstrap_cloud_qa_persona",
-        "scripts_bootstrap_cloud_qa_qabootstrapconfig",
-        "scripts_bootstrap_cloud_qa_qabootstraperror",
-        "scripts_bootstrap_cloud_qa_required",
-        "scripts_bootstrap_cloud_qa_validate_database_target",
-        "scripts_bootstrap_cloud_qa_validate_email",
-        "scripts_bootstrap_cloud_qa_validate_password",
-        "scripts_bootstrap_cloud_qa_qa_marker",
-        "scripts_bootstrap_cloud_qa_qabootstrapresult",
-        "scripts_bootstrap_cloud_qa_postgres_identity",
-        "scripts_bootstrap_cloud_qa_required_port",
-        "scripts_bootstrap_cloud_qa_validate_non_production_target",
-        "scripts_bootstrap_cloud_qa_verify_provider_evidence_token",
-        "scripts_bootstrap_cloud_qa_target_identity_text",
-        "scripts_bootstrap_cloud_qa_b64url_decode",
-        "scripts_bootstrap_cloud_qa_database_connection_fingerprint",
-        "scripts_bootstrap_cloud_qa_evidence_signing_key",
-        "scripts_bootstrap_cloud_qa_load_provider_evidence_public_key",
-        "scripts_bootstrap_cloud_qa_providerevidence",
-        "scripts_bootstrap_cloud_qa_validate_isolation_contract",
-        "scripts_bootstrap_cloud_qa_validate_qa_database_role",
-        "scripts_bootstrap_cloud_qa_encode_provider_evidence_segment",
-        "scripts_bootstrap_cloud_qa_canonical_database_host",
-        "scripts_bootstrap_cloud_qa_validate_baseline_lease_id",
-        "scripts_bootstrap_cloud_qa_decode_baseline_lease_entropy"
-      ],
-      "qualifiedPath": [
-        "scripts_bootstrap_cloud_qa_cli",
-        "scripts_bootstrap_cloud_qa_main",
-        "scripts_bootstrap_cloud_qa_bootstrap_database",
-        "scripts_bootstrap_cloud_qa_load_config",
-        "scripts_bootstrap_cloud_qa_run_migrations",
-        "scripts_bootstrap_cloud_qa_runtime_database_environment",
-        "scripts_bootstrap_cloud_qa_upsert_qa_data",
-        "scripts_bootstrap_cloud_qa_flag",
-        "scripts_bootstrap_cloud_qa_persona",
-        "scripts_bootstrap_cloud_qa_qabootstrapconfig",
-        "scripts_bootstrap_cloud_qa_qabootstraperror",
-        "scripts_bootstrap_cloud_qa_required",
-        "scripts_bootstrap_cloud_qa_validate_database_target",
-        "scripts_bootstrap_cloud_qa_validate_email",
-        "scripts_bootstrap_cloud_qa_validate_password",
-        "scripts_bootstrap_cloud_qa_qa_marker",
-        "scripts_bootstrap_cloud_qa_qabootstrapresult",
-        "scripts_bootstrap_cloud_qa_postgres_identity",
-        "scripts_bootstrap_cloud_qa_required_port",
-        "scripts_bootstrap_cloud_qa_validate_non_production_target",
-        "scripts_bootstrap_cloud_qa_verify_provider_evidence_token",
-        "scripts_bootstrap_cloud_qa_target_identity_text",
-        "scripts_bootstrap_cloud_qa_b64url_decode",
-        "scripts_bootstrap_cloud_qa_database_connection_fingerprint",
-        "scripts_bootstrap_cloud_qa_evidence_signing_key",
-        "scripts_bootstrap_cloud_qa_load_provider_evidence_public_key",
-        "scripts_bootstrap_cloud_qa_providerevidence",
-        "scripts_bootstrap_cloud_qa_validate_isolation_contract",
-        "scripts_bootstrap_cloud_qa_validate_qa_database_role",
-        "scripts_bootstrap_cloud_qa_encode_provider_evidence_segment",
-        "scripts_bootstrap_cloud_qa_canonical_database_host",
-        "scripts_bootstrap_cloud_qa_validate_baseline_lease_id",
-        "scripts_bootstrap_cloud_qa_decode_baseline_lease_entropy"
-      ],
-      "depth": 7,
-      "nodeCount": 33,
-      "fileCount": 1,
-      "files": [
-        "scripts/bootstrap_cloud_qa.py"
-      ],
-      "criticality": 0.2958,
-      "warnings": []
-    },
-    {
       "id": "flow:services_integration_service_connection_account_label",
       "name": "connection_account_label",
       "entryPoint": "services_integration_service_connection_account_label",
@@ -4292,6 +4188,88 @@
         "app/services/reservation_operations_service.py"
       ],
       "criticality": 0.295,
+      "warnings": []
+    },
+    {
+      "id": "flow:scripts_bootstrap_cloud_qa_cli",
+      "name": "cli",
+      "entryPoint": "scripts_bootstrap_cloud_qa_cli",
+      "entryPointId": "scripts_bootstrap_cloud_qa_cli",
+      "path": [
+        "scripts_bootstrap_cloud_qa_cli",
+        "scripts_bootstrap_cloud_qa_main",
+        "scripts_bootstrap_cloud_qa_bootstrap_database",
+        "scripts_bootstrap_cloud_qa_load_config",
+        "scripts_bootstrap_cloud_qa_run_migrations",
+        "scripts_bootstrap_cloud_qa_runtime_database_environment",
+        "scripts_bootstrap_cloud_qa_upsert_qa_data",
+        "scripts_bootstrap_cloud_qa_flag",
+        "scripts_bootstrap_cloud_qa_persona",
+        "scripts_bootstrap_cloud_qa_qabootstrapconfig",
+        "scripts_bootstrap_cloud_qa_qabootstraperror",
+        "scripts_bootstrap_cloud_qa_required",
+        "scripts_bootstrap_cloud_qa_validate_database_target",
+        "scripts_bootstrap_cloud_qa_validate_email",
+        "scripts_bootstrap_cloud_qa_validate_password",
+        "scripts_bootstrap_cloud_qa_qa_marker",
+        "scripts_bootstrap_cloud_qa_qabootstrapresult",
+        "scripts_bootstrap_cloud_qa_postgres_identity",
+        "scripts_bootstrap_cloud_qa_required_port",
+        "scripts_bootstrap_cloud_qa_validate_non_production_target",
+        "scripts_bootstrap_cloud_qa_verify_provider_evidence_token",
+        "scripts_bootstrap_cloud_qa_target_identity_text",
+        "scripts_bootstrap_cloud_qa_b64url_decode",
+        "scripts_bootstrap_cloud_qa_database_connection_fingerprint",
+        "scripts_bootstrap_cloud_qa_load_provider_evidence_public_key",
+        "scripts_bootstrap_cloud_qa_providerevidence",
+        "scripts_bootstrap_cloud_qa_validate_isolation_contract",
+        "scripts_bootstrap_cloud_qa_validate_qa_database_role",
+        "scripts_bootstrap_cloud_qa_encode_provider_evidence_segment",
+        "scripts_bootstrap_cloud_qa_canonical_database_host",
+        "scripts_bootstrap_cloud_qa_validate_baseline_lease_id",
+        "scripts_bootstrap_cloud_qa_decode_baseline_lease_entropy"
+      ],
+      "qualifiedPath": [
+        "scripts_bootstrap_cloud_qa_cli",
+        "scripts_bootstrap_cloud_qa_main",
+        "scripts_bootstrap_cloud_qa_bootstrap_database",
+        "scripts_bootstrap_cloud_qa_load_config",
+        "scripts_bootstrap_cloud_qa_run_migrations",
+        "scripts_bootstrap_cloud_qa_runtime_database_environment",
+        "scripts_bootstrap_cloud_qa_upsert_qa_data",
+        "scripts_bootstrap_cloud_qa_flag",
+        "scripts_bootstrap_cloud_qa_persona",
+        "scripts_bootstrap_cloud_qa_qabootstrapconfig",
+        "scripts_bootstrap_cloud_qa_qabootstraperror",
+        "scripts_bootstrap_cloud_qa_required",
+        "scripts_bootstrap_cloud_qa_validate_database_target",
+        "scripts_bootstrap_cloud_qa_validate_email",
+        "scripts_bootstrap_cloud_qa_validate_password",
+        "scripts_bootstrap_cloud_qa_qa_marker",
+        "scripts_bootstrap_cloud_qa_qabootstrapresult",
+        "scripts_bootstrap_cloud_qa_postgres_identity",
+        "scripts_bootstrap_cloud_qa_required_port",
+        "scripts_bootstrap_cloud_qa_validate_non_production_target",
+        "scripts_bootstrap_cloud_qa_verify_provider_evidence_token",
+        "scripts_bootstrap_cloud_qa_target_identity_text",
+        "scripts_bootstrap_cloud_qa_b64url_decode",
+        "scripts_bootstrap_cloud_qa_database_connection_fingerprint",
+        "scripts_bootstrap_cloud_qa_load_provider_evidence_public_key",
+        "scripts_bootstrap_cloud_qa_providerevidence",
+        "scripts_bootstrap_cloud_qa_validate_isolation_contract",
+        "scripts_bootstrap_cloud_qa_validate_qa_database_role",
+        "scripts_bootstrap_cloud_qa_encode_provider_evidence_segment",
+        "scripts_bootstrap_cloud_qa_canonical_database_host",
+        "scripts_bootstrap_cloud_qa_validate_baseline_lease_id",
+        "scripts_bootstrap_cloud_qa_decode_baseline_lease_entropy"
+      ],
+      "depth": 7,
+      "nodeCount": 32,
+      "fileCount": 1,
+      "files": [
+        "scripts/bootstrap_cloud_qa.py"
+      ],
+      "criticality": 0.2903,
       "warnings": []
     },
     {
@@ -4647,6 +4625,28 @@
       "warnings": []
     },
     {
+      "id": "flow:api_client_istokenexpired",
+      "name": "isTokenExpired",
+      "entryPoint": "api_client_istokenexpired",
+      "entryPointId": "api_client_istokenexpired",
+      "path": [
+        "api_client_istokenexpired",
+        "api_client_jwtexpms"
+      ],
+      "qualifiedPath": [
+        "api_client_istokenexpired",
+        "api_client_jwtexpms"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/api/client.ts"
+      ],
+      "criticality": 0.285,
+      "warnings": []
+    },
+    {
       "id": "flow:services_hotel_api_key_service_issue_key",
       "name": "issue_key",
       "entryPoint": "services_hotel_api_key_service_issue_key",
@@ -4734,28 +4734,6 @@
       "fileCount": 1,
       "files": [
         "frontend/src/api/reservations.ts"
-      ],
-      "criticality": 0.285,
-      "warnings": []
-    },
-    {
-      "id": "flow:agent_ops_check_preview_manifest_main",
-      "name": "main",
-      "entryPoint": "agent_ops_check_preview_manifest_main",
-      "entryPointId": "agent_ops_check_preview_manifest_main",
-      "path": [
-        "agent_ops_check_preview_manifest_main",
-        "agent_ops_check_preview_manifest_valid_https"
-      ],
-      "qualifiedPath": [
-        "agent_ops_check_preview_manifest_main",
-        "agent_ops_check_preview_manifest_valid_https"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "scripts/agent_ops/check_preview_manifest.py"
       ],
       "criticality": 0.285,
       "warnings": []
@@ -5254,48 +5232,6 @@
       "fileCount": 1,
       "files": [
         "app/services/integration_service.py"
-      ],
-      "criticality": 0.2842,
-      "warnings": []
-    },
-    {
-      "id": "flow:scripts_bootstrap_cloud_qa_issue_provider_evidence_token",
-      "name": "issue_provider_evidence_token",
-      "entryPoint": "scripts_bootstrap_cloud_qa_issue_provider_evidence_token",
-      "entryPointId": "scripts_bootstrap_cloud_qa_issue_provider_evidence_token",
-      "path": [
-        "scripts_bootstrap_cloud_qa_issue_provider_evidence_token",
-        "scripts_bootstrap_cloud_qa_b64url_encode",
-        "scripts_bootstrap_cloud_qa_canonical_json",
-        "scripts_bootstrap_cloud_qa_evidence_signing_key",
-        "scripts_bootstrap_cloud_qa_manifest_provider_payload",
-        "scripts_bootstrap_cloud_qa_qabootstraperror",
-        "scripts_bootstrap_cloud_qa_database_connection_fingerprint",
-        "scripts_bootstrap_cloud_qa_postgres_identity",
-        "scripts_bootstrap_cloud_qa_validate_non_production_target",
-        "scripts_bootstrap_cloud_qa_validate_qa_database_role",
-        "scripts_bootstrap_cloud_qa_canonical_database_host",
-        "scripts_bootstrap_cloud_qa_target_identity_text"
-      ],
-      "qualifiedPath": [
-        "scripts_bootstrap_cloud_qa_issue_provider_evidence_token",
-        "scripts_bootstrap_cloud_qa_b64url_encode",
-        "scripts_bootstrap_cloud_qa_canonical_json",
-        "scripts_bootstrap_cloud_qa_evidence_signing_key",
-        "scripts_bootstrap_cloud_qa_manifest_provider_payload",
-        "scripts_bootstrap_cloud_qa_qabootstraperror",
-        "scripts_bootstrap_cloud_qa_database_connection_fingerprint",
-        "scripts_bootstrap_cloud_qa_postgres_identity",
-        "scripts_bootstrap_cloud_qa_validate_non_production_target",
-        "scripts_bootstrap_cloud_qa_validate_qa_database_role",
-        "scripts_bootstrap_cloud_qa_canonical_database_host",
-        "scripts_bootstrap_cloud_qa_target_identity_text"
-      ],
-      "depth": 3,
-      "nodeCount": 12,
-      "fileCount": 1,
-      "files": [
-        "scripts/bootstrap_cloud_qa.py"
       ],
       "criticality": 0.2842,
       "warnings": []
@@ -5803,40 +5739,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_cash_register_service_record_cash_payment_movement",
-      "name": "record_cash_payment_movement",
-      "entryPoint": "services_cash_register_service_record_cash_payment_movement",
-      "entryPointId": "services_cash_register_service_record_cash_payment_movement",
-      "path": [
-        "services_cash_register_service_record_cash_payment_movement",
-        "services_cash_register_service_add_movement",
-        "services_cash_register_service_cashregistererror",
-        "services_cash_register_service_get_open_session",
-        "services_cash_register_service_money",
-        "services_cash_register_service_open_session",
-        "services_cash_register_service_require_open_session",
-        "services_cash_register_service_get_latest_close_report"
-      ],
-      "qualifiedPath": [
-        "services_cash_register_service_record_cash_payment_movement",
-        "services_cash_register_service_add_movement",
-        "services_cash_register_service_cashregistererror",
-        "services_cash_register_service_get_open_session",
-        "services_cash_register_service_money",
-        "services_cash_register_service_open_session",
-        "services_cash_register_service_require_open_session",
-        "services_cash_register_service_get_latest_close_report"
-      ],
-      "depth": 2,
-      "nodeCount": 8,
-      "fileCount": 1,
-      "files": [
-        "app/services/cash_register_service.py"
-      ],
-      "criticality": 0.2638,
-      "warnings": []
-    },
-    {
       "id": "flow:scripts_bootstrap_cloud_qa_build_provider_evidence_payload",
       "name": "build_provider_evidence_payload",
       "entryPoint": "scripts_bootstrap_cloud_qa_build_provider_evidence_payload",
@@ -6291,6 +6193,30 @@
       "warnings": []
     },
     {
+      "id": "flow:services_audit_log_service_create_audit_log",
+      "name": "create_audit_log",
+      "entryPoint": "services_audit_log_service_create_audit_log",
+      "entryPointId": "services_audit_log_service_create_audit_log",
+      "path": [
+        "services_audit_log_service_create_audit_log",
+        "services_audit_log_service_payload_json",
+        "services_audit_log_service_sanitize_audit_payload"
+      ],
+      "qualifiedPath": [
+        "services_audit_log_service_create_audit_log",
+        "services_audit_log_service_payload_json",
+        "services_audit_log_service_sanitize_audit_payload"
+      ],
+      "depth": 2,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/services/audit_log_service.py"
+      ],
+      "criticality": 0.2533,
+      "warnings": []
+    },
+    {
       "id": "flow:services_operational_task_service_create_task",
       "name": "create_task",
       "entryPoint": "services_operational_task_service_create_task",
@@ -6381,37 +6307,31 @@
       "warnings": []
     },
     {
-      "id": "flow:scripts_seed_e2e_backend_main",
-      "name": "main",
-      "entryPoint": "scripts_seed_e2e_backend_main",
-      "entryPointId": "scripts_seed_e2e_backend_main",
+      "id": "flow:services_cash_register_service_record_cash_payment_movement",
+      "name": "record_cash_payment_movement",
+      "entryPoint": "services_cash_register_service_record_cash_payment_movement",
+      "entryPointId": "services_cash_register_service_record_cash_payment_movement",
       "path": [
-        "scripts_seed_e2e_backend_main",
-        "scripts_seed_e2e_backend_prepare_e2e_environment",
-        "scripts_seed_e2e_backend_reset_e2e_database",
-        "scripts_seed_e2e_backend_run_migrations",
-        "scripts_seed_e2e_backend_upsert_seed_data",
-        "scripts_seed_e2e_backend_e2esafetyerror",
-        "scripts_seed_e2e_backend_normalize_sqlite_url",
-        "scripts_seed_e2e_backend_credentials",
-        "scripts_seed_e2e_backend_role_credentials"
+        "services_cash_register_service_record_cash_payment_movement",
+        "services_cash_register_service_add_movement",
+        "services_cash_register_service_cashregistererror",
+        "services_cash_register_service_get_open_session",
+        "services_cash_register_service_money",
+        "services_cash_register_service_require_open_session"
       ],
       "qualifiedPath": [
-        "scripts_seed_e2e_backend_main",
-        "scripts_seed_e2e_backend_prepare_e2e_environment",
-        "scripts_seed_e2e_backend_reset_e2e_database",
-        "scripts_seed_e2e_backend_run_migrations",
-        "scripts_seed_e2e_backend_upsert_seed_data",
-        "scripts_seed_e2e_backend_e2esafetyerror",
-        "scripts_seed_e2e_backend_normalize_sqlite_url",
-        "scripts_seed_e2e_backend_credentials",
-        "scripts_seed_e2e_backend_role_credentials"
+        "services_cash_register_service_record_cash_payment_movement",
+        "services_cash_register_service_add_movement",
+        "services_cash_register_service_cashregistererror",
+        "services_cash_register_service_get_open_session",
+        "services_cash_register_service_money",
+        "services_cash_register_service_require_open_session"
       ],
       "depth": 2,
-      "nodeCount": 9,
+      "nodeCount": 6,
       "fileCount": 1,
       "files": [
-        "scripts/seed_e2e_backend.py"
+        "app/services/cash_register_service.py"
       ],
       "criticality": 0.2533,
       "warnings": []
@@ -6965,6 +6885,30 @@
       "warnings": []
     },
     {
+      "id": "flow:services_cash_register_service_open_session",
+      "name": "open_session",
+      "entryPoint": "services_cash_register_service_open_session",
+      "entryPointId": "services_cash_register_service_open_session",
+      "path": [
+        "services_cash_register_service_open_session",
+        "services_cash_register_service_cashregistererror",
+        "services_cash_register_service_money"
+      ],
+      "qualifiedPath": [
+        "services_cash_register_service_open_session",
+        "services_cash_register_service_cashregistererror",
+        "services_cash_register_service_money"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/services/cash_register_service.py"
+      ],
+      "criticality": 0.2433,
+      "warnings": []
+    },
+    {
       "id": "flow:services_graph_projection_project_reservation_assignment",
       "name": "project_reservation_assignment",
       "entryPoint": "services_graph_projection_project_reservation_assignment",
@@ -7109,6 +7053,134 @@
       "warnings": []
     },
     {
+      "id": "flow:services_read_model_cache_invalidate_hotel_analytics_cache",
+      "name": "invalidate_hotel_analytics_cache",
+      "entryPoint": "services_read_model_cache_invalidate_hotel_analytics_cache",
+      "entryPointId": "services_read_model_cache_invalidate_hotel_analytics_cache",
+      "path": [
+        "services_read_model_cache_invalidate_hotel_analytics_cache",
+        "services_read_model_cache_invalidate_hotel_cache_prefixes",
+        "services_read_model_cache_get_redis_client",
+        "services_read_model_cache_mark_redis_available",
+        "services_read_model_cache_mark_redis_unavailable",
+        "services_read_model_cache_cache_enabled",
+        "services_read_model_cache_settings",
+        "services_read_model_cache_redis_failure_cooldown_seconds"
+      ],
+      "qualifiedPath": [
+        "services_read_model_cache_invalidate_hotel_analytics_cache",
+        "services_read_model_cache_invalidate_hotel_cache_prefixes",
+        "services_read_model_cache_get_redis_client",
+        "services_read_model_cache_mark_redis_available",
+        "services_read_model_cache_mark_redis_unavailable",
+        "services_read_model_cache_cache_enabled",
+        "services_read_model_cache_settings",
+        "services_read_model_cache_redis_failure_cooldown_seconds"
+      ],
+      "depth": 3,
+      "nodeCount": 8,
+      "fileCount": 1,
+      "files": [
+        "app/services/read_model_cache.py"
+      ],
+      "criticality": 0.2425,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_read_model_cache_invalidate_hotel_operational_caches",
+      "name": "invalidate_hotel_operational_caches",
+      "entryPoint": "services_read_model_cache_invalidate_hotel_operational_caches",
+      "entryPointId": "services_read_model_cache_invalidate_hotel_operational_caches",
+      "path": [
+        "services_read_model_cache_invalidate_hotel_operational_caches",
+        "services_read_model_cache_invalidate_hotel_cache_prefixes",
+        "services_read_model_cache_get_redis_client",
+        "services_read_model_cache_mark_redis_available",
+        "services_read_model_cache_mark_redis_unavailable",
+        "services_read_model_cache_cache_enabled",
+        "services_read_model_cache_settings",
+        "services_read_model_cache_redis_failure_cooldown_seconds"
+      ],
+      "qualifiedPath": [
+        "services_read_model_cache_invalidate_hotel_operational_caches",
+        "services_read_model_cache_invalidate_hotel_cache_prefixes",
+        "services_read_model_cache_get_redis_client",
+        "services_read_model_cache_mark_redis_available",
+        "services_read_model_cache_mark_redis_unavailable",
+        "services_read_model_cache_cache_enabled",
+        "services_read_model_cache_settings",
+        "services_read_model_cache_redis_failure_cooldown_seconds"
+      ],
+      "depth": 3,
+      "nodeCount": 8,
+      "fileCount": 1,
+      "files": [
+        "app/services/read_model_cache.py"
+      ],
+      "criticality": 0.2425,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_checkin_service_perform_checkin",
+      "name": "perform_checkin",
+      "entryPoint": "services_checkin_service_perform_checkin",
+      "entryPointId": "services_checkin_service_perform_checkin",
+      "path": [
+        "services_checkin_service_perform_checkin",
+        "services_checkin_service_apply_guest_patch_and_validate",
+        "services_checkin_service_checkinerror",
+        "services_checkin_service_guard_prohibido",
+        "services_checkin_service_load_reservation",
+        "services_checkin_service_notify_reservation_event",
+        "services_checkin_service_validate_guest_for_checkin",
+        "services_checkin_service_resolve_jurisdiction_code"
+      ],
+      "qualifiedPath": [
+        "services_checkin_service_perform_checkin",
+        "services_checkin_service_apply_guest_patch_and_validate",
+        "services_checkin_service_checkinerror",
+        "services_checkin_service_guard_prohibido",
+        "services_checkin_service_load_reservation",
+        "services_checkin_service_notify_reservation_event",
+        "services_checkin_service_validate_guest_for_checkin",
+        "services_checkin_service_resolve_jurisdiction_code"
+      ],
+      "depth": 3,
+      "nodeCount": 8,
+      "fileCount": 1,
+      "files": [
+        "app/services/checkin_service.py"
+      ],
+      "criticality": 0.2425,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_audit_log_service_safe_create_audit_log",
+      "name": "safe_create_audit_log",
+      "entryPoint": "services_audit_log_service_safe_create_audit_log",
+      "entryPointId": "services_audit_log_service_safe_create_audit_log",
+      "path": [
+        "services_audit_log_service_safe_create_audit_log",
+        "services_audit_log_service_queue_audit_log",
+        "services_audit_log_service_payload_json",
+        "services_audit_log_service_sanitize_audit_payload"
+      ],
+      "qualifiedPath": [
+        "services_audit_log_service_safe_create_audit_log",
+        "services_audit_log_service_queue_audit_log",
+        "services_audit_log_service_payload_json",
+        "services_audit_log_service_sanitize_audit_payload"
+      ],
+      "depth": 3,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/services/audit_log_service.py"
+      ],
+      "criticality": 0.2425,
+      "warnings": []
+    },
+    {
       "id": "flow:services_gemma_service_gemmaservice_suggest_policy_from_feedback",
       "name": ".suggest_policy_from_feedback",
       "entryPoint": "services_gemma_service_gemmaservice_suggest_policy_from_feedback",
@@ -7186,78 +7258,6 @@
         "app/services/gemma_service.py"
       ],
       "criticality": 0.2403,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_read_model_cache_invalidate_hotel_analytics_cache",
-      "name": "invalidate_hotel_analytics_cache",
-      "entryPoint": "services_read_model_cache_invalidate_hotel_analytics_cache",
-      "entryPointId": "services_read_model_cache_invalidate_hotel_analytics_cache",
-      "path": [
-        "services_read_model_cache_invalidate_hotel_analytics_cache",
-        "services_read_model_cache_invalidate_hotel_cache_prefixes",
-        "services_read_model_cache_publish_cache_event",
-        "services_read_model_cache_get_redis_client",
-        "services_read_model_cache_mark_redis_available",
-        "services_read_model_cache_mark_redis_unavailable",
-        "services_read_model_cache_cache_enabled",
-        "services_read_model_cache_settings",
-        "services_read_model_cache_redis_failure_cooldown_seconds"
-      ],
-      "qualifiedPath": [
-        "services_read_model_cache_invalidate_hotel_analytics_cache",
-        "services_read_model_cache_invalidate_hotel_cache_prefixes",
-        "services_read_model_cache_publish_cache_event",
-        "services_read_model_cache_get_redis_client",
-        "services_read_model_cache_mark_redis_available",
-        "services_read_model_cache_mark_redis_unavailable",
-        "services_read_model_cache_cache_enabled",
-        "services_read_model_cache_settings",
-        "services_read_model_cache_redis_failure_cooldown_seconds"
-      ],
-      "depth": 3,
-      "nodeCount": 9,
-      "fileCount": 1,
-      "files": [
-        "app/services/read_model_cache.py"
-      ],
-      "criticality": 0.2356,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_read_model_cache_invalidate_hotel_operational_caches",
-      "name": "invalidate_hotel_operational_caches",
-      "entryPoint": "services_read_model_cache_invalidate_hotel_operational_caches",
-      "entryPointId": "services_read_model_cache_invalidate_hotel_operational_caches",
-      "path": [
-        "services_read_model_cache_invalidate_hotel_operational_caches",
-        "services_read_model_cache_invalidate_hotel_cache_prefixes",
-        "services_read_model_cache_publish_cache_event",
-        "services_read_model_cache_get_redis_client",
-        "services_read_model_cache_mark_redis_available",
-        "services_read_model_cache_mark_redis_unavailable",
-        "services_read_model_cache_cache_enabled",
-        "services_read_model_cache_settings",
-        "services_read_model_cache_redis_failure_cooldown_seconds"
-      ],
-      "qualifiedPath": [
-        "services_read_model_cache_invalidate_hotel_operational_caches",
-        "services_read_model_cache_invalidate_hotel_cache_prefixes",
-        "services_read_model_cache_publish_cache_event",
-        "services_read_model_cache_get_redis_client",
-        "services_read_model_cache_mark_redis_available",
-        "services_read_model_cache_mark_redis_unavailable",
-        "services_read_model_cache_cache_enabled",
-        "services_read_model_cache_settings",
-        "services_read_model_cache_redis_failure_cooldown_seconds"
-      ],
-      "depth": 3,
-      "nodeCount": 9,
-      "fileCount": 1,
-      "files": [
-        "app/services/read_model_cache.py"
-      ],
-      "criticality": 0.2356,
       "warnings": []
     },
     {
@@ -7469,35 +7469,35 @@
       "warnings": []
     },
     {
-      "id": "flow:services_checkin_service_perform_checkin",
-      "name": "perform_checkin",
-      "entryPoint": "services_checkin_service_perform_checkin",
-      "entryPointId": "services_checkin_service_perform_checkin",
+      "id": "flow:scripts_seed_e2e_backend_main",
+      "name": "main",
+      "entryPoint": "scripts_seed_e2e_backend_main",
+      "entryPointId": "scripts_seed_e2e_backend_main",
       "path": [
-        "services_checkin_service_perform_checkin",
-        "services_checkin_service_apply_guest_patch_and_validate",
-        "services_checkin_service_checkinerror",
-        "services_checkin_service_guard_prohibido",
-        "services_checkin_service_load_reservation",
-        "services_checkin_service_notify_reservation_event",
-        "services_checkin_service_validate_guest_for_checkin",
-        "services_checkin_service_resolve_jurisdiction_code"
+        "scripts_seed_e2e_backend_main",
+        "scripts_seed_e2e_backend_prepare_e2e_environment",
+        "scripts_seed_e2e_backend_reset_e2e_database",
+        "scripts_seed_e2e_backend_run_migrations",
+        "scripts_seed_e2e_backend_upsert_seed_data",
+        "scripts_seed_e2e_backend_e2esafetyerror",
+        "scripts_seed_e2e_backend_credentials",
+        "scripts_seed_e2e_backend_role_credentials"
       ],
       "qualifiedPath": [
-        "services_checkin_service_perform_checkin",
-        "services_checkin_service_apply_guest_patch_and_validate",
-        "services_checkin_service_checkinerror",
-        "services_checkin_service_guard_prohibido",
-        "services_checkin_service_load_reservation",
-        "services_checkin_service_notify_reservation_event",
-        "services_checkin_service_validate_guest_for_checkin",
-        "services_checkin_service_resolve_jurisdiction_code"
+        "scripts_seed_e2e_backend_main",
+        "scripts_seed_e2e_backend_prepare_e2e_environment",
+        "scripts_seed_e2e_backend_reset_e2e_database",
+        "scripts_seed_e2e_backend_run_migrations",
+        "scripts_seed_e2e_backend_upsert_seed_data",
+        "scripts_seed_e2e_backend_e2esafetyerror",
+        "scripts_seed_e2e_backend_credentials",
+        "scripts_seed_e2e_backend_role_credentials"
       ],
       "depth": 2,
       "nodeCount": 8,
       "fileCount": 1,
       "files": [
-        "app/services/checkin_service.py"
+        "scripts/seed_e2e_backend.py"
       ],
       "criticality": 0.2325,
       "warnings": []
@@ -7585,6 +7585,38 @@
       "warnings": []
     },
     {
+      "id": "flow:tests_postgres_test_safety_validate_postgres_test_target",
+      "name": "validate_postgres_test_target",
+      "entryPoint": "tests_postgres_test_safety_validate_postgres_test_target",
+      "entryPointId": "tests_postgres_test_safety_validate_postgres_test_target",
+      "path": [
+        "tests_postgres_test_safety_validate_postgres_test_target",
+        "tests_postgres_test_safety_canonical_identity",
+        "tests_postgres_test_safety_enabled",
+        "tests_postgres_test_safety_identity_contains",
+        "tests_postgres_test_safety_load_local_evidence",
+        "tests_postgres_test_safety_postgrestargetsafetyerror",
+        "tests_postgres_test_safety_verify_remote_provider_evidence"
+      ],
+      "qualifiedPath": [
+        "tests_postgres_test_safety_validate_postgres_test_target",
+        "tests_postgres_test_safety_canonical_identity",
+        "tests_postgres_test_safety_enabled",
+        "tests_postgres_test_safety_identity_contains",
+        "tests_postgres_test_safety_load_local_evidence",
+        "tests_postgres_test_safety_postgrestargetsafetyerror",
+        "tests_postgres_test_safety_verify_remote_provider_evidence"
+      ],
+      "depth": 1,
+      "nodeCount": 7,
+      "fileCount": 1,
+      "files": [
+        "tests/postgres_test_safety.py"
+      ],
+      "criticality": 0.2314,
+      "warnings": []
+    },
+    {
       "id": "flow:services_marketing_service_replace_pricing",
       "name": "replace_pricing",
       "entryPoint": "services_marketing_service_replace_pricing",
@@ -7608,34 +7640,6 @@
       "fileCount": 1,
       "files": [
         "app/services/marketing_service.py"
-      ],
-      "criticality": 0.23,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_audit_log_service_safe_create_audit_log",
-      "name": "safe_create_audit_log",
-      "entryPoint": "services_audit_log_service_safe_create_audit_log",
-      "entryPointId": "services_audit_log_service_safe_create_audit_log",
-      "path": [
-        "services_audit_log_service_safe_create_audit_log",
-        "services_audit_log_service_create_audit_log",
-        "services_audit_log_service_queue_audit_log",
-        "services_audit_log_service_payload_json",
-        "services_audit_log_service_sanitize_audit_payload"
-      ],
-      "qualifiedPath": [
-        "services_audit_log_service_safe_create_audit_log",
-        "services_audit_log_service_create_audit_log",
-        "services_audit_log_service_queue_audit_log",
-        "services_audit_log_service_payload_json",
-        "services_audit_log_service_sanitize_audit_payload"
-      ],
-      "depth": 3,
-      "nodeCount": 5,
-      "fileCount": 1,
-      "files": [
-        "app/services/audit_log_service.py"
       ],
       "criticality": 0.23,
       "warnings": []
@@ -8087,32 +8091,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_payment_link_test_service_cancel_mercadopago_payment_link_test",
-      "name": "cancel_mercadopago_payment_link_test",
-      "entryPoint": "services_payment_link_test_service_cancel_mercadopago_payment_link_test",
-      "entryPointId": "services_payment_link_test_service_cancel_mercadopago_payment_link_test",
-      "path": [
-        "services_payment_link_test_service_cancel_mercadopago_payment_link_test",
-        "services_payment_link_test_service_friendly_mercadopago_error",
-        "services_payment_link_test_service_mercadopago_access_token",
-        "services_payment_link_test_service_paymentlinktesterror"
-      ],
-      "qualifiedPath": [
-        "services_payment_link_test_service_cancel_mercadopago_payment_link_test",
-        "services_payment_link_test_service_friendly_mercadopago_error",
-        "services_payment_link_test_service_mercadopago_access_token",
-        "services_payment_link_test_service_paymentlinktesterror"
-      ],
-      "depth": 1,
-      "nodeCount": 4,
-      "fileCount": 1,
-      "files": [
-        "app/services/payment_link_test_service.py"
-      ],
-      "criticality": 0.2225,
-      "warnings": []
-    },
-    {
       "id": "flow:api_reservations_change_dates",
       "name": "change_dates",
       "entryPoint": "api_reservations_change_dates",
@@ -8316,40 +8294,6 @@
       "fileCount": 1,
       "files": [
         "alembic/versions/20260830_guest_room_avoidance.py"
-      ],
-      "criticality": 0.2225,
-      "warnings": []
-    },
-    {
-      "id": "flow:tests_postgres_test_safety_validate_postgres_test_target",
-      "name": "validate_postgres_test_target",
-      "entryPoint": "tests_postgres_test_safety_validate_postgres_test_target",
-      "entryPointId": "tests_postgres_test_safety_validate_postgres_test_target",
-      "path": [
-        "tests_postgres_test_safety_validate_postgres_test_target",
-        "tests_postgres_test_safety_canonical_identity",
-        "tests_postgres_test_safety_enabled",
-        "tests_postgres_test_safety_identity_contains",
-        "tests_postgres_test_safety_load_local_evidence",
-        "tests_postgres_test_safety_load_provider_evidence",
-        "tests_postgres_test_safety_postgrestargetsafetyerror",
-        "tests_postgres_test_safety_verify_remote_provider_evidence"
-      ],
-      "qualifiedPath": [
-        "tests_postgres_test_safety_validate_postgres_test_target",
-        "tests_postgres_test_safety_canonical_identity",
-        "tests_postgres_test_safety_enabled",
-        "tests_postgres_test_safety_identity_contains",
-        "tests_postgres_test_safety_load_local_evidence",
-        "tests_postgres_test_safety_load_provider_evidence",
-        "tests_postgres_test_safety_postgrestargetsafetyerror",
-        "tests_postgres_test_safety_verify_remote_provider_evidence"
-      ],
-      "depth": 1,
-      "nodeCount": 8,
-      "fileCount": 1,
-      "files": [
-        "tests/postgres_test_safety.py"
       ],
       "criticality": 0.2225,
       "warnings": []
@@ -9279,48 +9223,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_payment_link_test_service_list_payment_link_tests",
-      "name": "list_payment_link_tests",
-      "entryPoint": "services_payment_link_test_service_list_payment_link_tests",
-      "entryPointId": "services_payment_link_test_service_list_payment_link_tests",
-      "path": [
-        "services_payment_link_test_service_list_payment_link_tests",
-        "services_payment_link_test_service_sync_pending_payment_link_tests",
-        "services_payment_link_test_service_ensure_utc",
-        "services_payment_link_test_service_refresh_mercadopago_payment_link_test",
-        "services_payment_link_test_service_apply_terminal_dates",
-        "services_payment_link_test_service_friendly_mercadopago_error",
-        "services_payment_link_test_service_mercadopago_access_token",
-        "services_payment_link_test_service_paymentlinktesterror",
-        "services_payment_link_test_service_status_from_payment_payload",
-        "services_payment_link_test_service_parse_provider_datetime",
-        "services_payment_link_test_service_money",
-        "services_payment_link_test_service_status_from_payment"
-      ],
-      "qualifiedPath": [
-        "services_payment_link_test_service_list_payment_link_tests",
-        "services_payment_link_test_service_sync_pending_payment_link_tests",
-        "services_payment_link_test_service_ensure_utc",
-        "services_payment_link_test_service_refresh_mercadopago_payment_link_test",
-        "services_payment_link_test_service_apply_terminal_dates",
-        "services_payment_link_test_service_friendly_mercadopago_error",
-        "services_payment_link_test_service_mercadopago_access_token",
-        "services_payment_link_test_service_paymentlinktesterror",
-        "services_payment_link_test_service_status_from_payment_payload",
-        "services_payment_link_test_service_parse_provider_datetime",
-        "services_payment_link_test_service_money",
-        "services_payment_link_test_service_status_from_payment"
-      ],
-      "depth": 4,
-      "nodeCount": 12,
-      "fileCount": 1,
-      "files": [
-        "app/services/payment_link_test_service.py"
-      ],
-      "criticality": 0.2108,
-      "warnings": []
-    },
-    {
       "id": "flow:services_operational_task_service_acknowledge_handoff",
       "name": "acknowledge_handoff",
       "entryPoint": "services_operational_task_service_acknowledge_handoff",
@@ -9618,7 +9520,6 @@
         "services_analytics_exports_now",
         "services_analytics_exports_persist_export_file",
         "services_analytics_exports_render_export_xlsx",
-        "services_analytics_exports_export_job_path",
         "services_analytics_exports_export_object_key",
         "services_analytics_exports_build_export_payload",
         "services_analytics_exports_build_xlsx_bytes",
@@ -9634,7 +9535,6 @@
         "services_analytics_exports_now",
         "services_analytics_exports_persist_export_file",
         "services_analytics_exports_render_export_xlsx",
-        "services_analytics_exports_export_job_path",
         "services_analytics_exports_export_object_key",
         "services_analytics_exports_build_export_payload",
         "services_analytics_exports_build_xlsx_bytes",
@@ -9646,12 +9546,12 @@
         "services_analytics_exports_normalize_export_payload"
       ],
       "depth": 4,
-      "nodeCount": 14,
+      "nodeCount": 13,
       "fileCount": 1,
       "files": [
         "app/services/analytics_exports.py"
       ],
-      "criticality": 0.2079,
+      "criticality": 0.2092,
       "warnings": []
     },
     {
@@ -10013,6 +9913,7 @@
         "services_subscription_entitlements_record_event",
         "services_subscription_entitlements_sync_legacy_tables",
         "services_subscription_entitlements_now",
+        "services_subscription_entitlements_legacy_status_for_v2",
         "services_subscription_entitlements_as_utc",
         "services_subscription_entitlements_end_trial",
         "services_subscription_entitlements_actor_payload",
@@ -10030,6 +9931,7 @@
         "services_subscription_entitlements_record_event",
         "services_subscription_entitlements_sync_legacy_tables",
         "services_subscription_entitlements_now",
+        "services_subscription_entitlements_legacy_status_for_v2",
         "services_subscription_entitlements_as_utc",
         "services_subscription_entitlements_end_trial",
         "services_subscription_entitlements_actor_payload",
@@ -10038,7 +9940,7 @@
         "services_subscription_entitlements_apply_plan"
       ],
       "depth": 5,
-      "nodeCount": 15,
+      "nodeCount": 16,
       "fileCount": 1,
       "files": [
         "app/services/subscription_entitlements.py"
@@ -10064,6 +9966,7 @@
         "services_subscription_entitlements_actor_payload",
         "services_subscription_entitlements_record_event",
         "services_subscription_entitlements_suspend_subscription",
+        "services_subscription_entitlements_legacy_status_for_v2",
         "services_subscription_entitlements_sync_legacy_tables",
         "services_subscription_entitlements_upsert_subscription",
         "services_subscription_entitlements_apply_plan"
@@ -10081,12 +9984,13 @@
         "services_subscription_entitlements_actor_payload",
         "services_subscription_entitlements_record_event",
         "services_subscription_entitlements_suspend_subscription",
+        "services_subscription_entitlements_legacy_status_for_v2",
         "services_subscription_entitlements_sync_legacy_tables",
         "services_subscription_entitlements_upsert_subscription",
         "services_subscription_entitlements_apply_plan"
       ],
       "depth": 5,
-      "nodeCount": 15,
+      "nodeCount": 16,
       "fileCount": 1,
       "files": [
         "app/services/subscription_entitlements.py"
@@ -10175,8 +10079,8 @@
       "entryPointId": "agent_ops_check_qa_evidence_main",
       "path": [
         "agent_ops_check_qa_evidence_main",
-        "agent_ops_check_qa_evidence_fail",
         "agent_ops_check_qa_evidence_validate_evidence_bundle",
+        "agent_ops_check_qa_evidence_fail",
         "agent_ops_check_qa_evidence_load_json_object",
         "agent_ops_check_qa_evidence_mapping",
         "agent_ops_check_qa_evidence_nested_value",
@@ -10186,8 +10090,8 @@
       ],
       "qualifiedPath": [
         "agent_ops_check_qa_evidence_main",
-        "agent_ops_check_qa_evidence_fail",
         "agent_ops_check_qa_evidence_validate_evidence_bundle",
+        "agent_ops_check_qa_evidence_fail",
         "agent_ops_check_qa_evidence_load_json_object",
         "agent_ops_check_qa_evidence_mapping",
         "agent_ops_check_qa_evidence_nested_value",
@@ -10238,6 +10142,44 @@
         "app/services/temporary_action_grant_service.py"
       ],
       "criticality": 0.1978,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_allocation_engine_run_allocation",
+      "name": "run_allocation",
+      "entryPoint": "services_allocation_engine_run_allocation",
+      "entryPointId": "services_allocation_engine_run_allocation",
+      "path": [
+        "services_allocation_engine_run_allocation",
+        "services_allocation_engine_allocationresult",
+        "services_allocation_engine_check_overlap",
+        "services_allocation_engine_lowest_available_compatible_floor",
+        "services_allocation_engine_reservationslot_category_priority",
+        "services_allocation_engine_run_allocation_greedy",
+        "services_allocation_engine_lowest_compatible_floor",
+        "services_allocation_engine_adjacency_bonus_for_room",
+        "services_allocation_engine_guest_room_signal_score",
+        "services_allocation_engine_one_night_gap_penalty_for_room"
+      ],
+      "qualifiedPath": [
+        "services_allocation_engine_run_allocation",
+        "services_allocation_engine_allocationresult",
+        "services_allocation_engine_check_overlap",
+        "services_allocation_engine_lowest_available_compatible_floor",
+        "services_allocation_engine_reservationslot_category_priority",
+        "services_allocation_engine_run_allocation_greedy",
+        "services_allocation_engine_lowest_compatible_floor",
+        "services_allocation_engine_adjacency_bonus_for_room",
+        "services_allocation_engine_guest_room_signal_score",
+        "services_allocation_engine_one_night_gap_penalty_for_room"
+      ],
+      "depth": 2,
+      "nodeCount": 10,
+      "fileCount": 1,
+      "files": [
+        "app/services/allocation_engine.py"
+      ],
+      "criticality": 0.195,
       "warnings": []
     },
     {
@@ -10495,86 +10437,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_payment_link_test_service_refresh_mercadopago_payment_link_test_by_reference",
-      "name": "refresh_mercadopago_payment_link_test_by_reference",
-      "entryPoint": "services_payment_link_test_service_refresh_mercadopago_payment_link_test_by_reference",
-      "entryPointId": "services_payment_link_test_service_refresh_mercadopago_payment_link_test_by_reference",
-      "path": [
-        "services_payment_link_test_service_refresh_mercadopago_payment_link_test_by_reference",
-        "services_payment_link_test_service_apply_terminal_dates",
-        "services_payment_link_test_service_money",
-        "services_payment_link_test_service_paymentlinktesterror",
-        "services_payment_link_test_service_refresh_mercadopago_payment_link_test",
-        "services_payment_link_test_service_status_from_payment_payload",
-        "services_payment_link_test_service_parse_provider_datetime",
-        "services_payment_link_test_service_ensure_utc",
-        "services_payment_link_test_service_friendly_mercadopago_error",
-        "services_payment_link_test_service_mercadopago_access_token",
-        "services_payment_link_test_service_status_from_payment"
-      ],
-      "qualifiedPath": [
-        "services_payment_link_test_service_refresh_mercadopago_payment_link_test_by_reference",
-        "services_payment_link_test_service_apply_terminal_dates",
-        "services_payment_link_test_service_money",
-        "services_payment_link_test_service_paymentlinktesterror",
-        "services_payment_link_test_service_refresh_mercadopago_payment_link_test",
-        "services_payment_link_test_service_status_from_payment_payload",
-        "services_payment_link_test_service_parse_provider_datetime",
-        "services_payment_link_test_service_ensure_utc",
-        "services_payment_link_test_service_friendly_mercadopago_error",
-        "services_payment_link_test_service_mercadopago_access_token",
-        "services_payment_link_test_service_status_from_payment"
-      ],
-      "depth": 2,
-      "nodeCount": 11,
-      "fileCount": 1,
-      "files": [
-        "app/services/payment_link_test_service.py"
-      ],
-      "criticality": 0.1927,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_allocation_engine_run_allocation",
-      "name": "run_allocation",
-      "entryPoint": "services_allocation_engine_run_allocation",
-      "entryPointId": "services_allocation_engine_run_allocation",
-      "path": [
-        "services_allocation_engine_run_allocation",
-        "services_allocation_engine_allocationresult",
-        "services_allocation_engine_check_overlap",
-        "services_allocation_engine_lowest_available_compatible_floor",
-        "services_allocation_engine_reservationslot_category_priority",
-        "services_allocation_engine_run_allocation_greedy",
-        "services_allocation_engine_lowest_compatible_floor",
-        "services_allocation_engine_adjacency_bonus_for_room",
-        "services_allocation_engine_guest_room_preference_score",
-        "services_allocation_engine_guest_room_signal_score",
-        "services_allocation_engine_one_night_gap_penalty_for_room"
-      ],
-      "qualifiedPath": [
-        "services_allocation_engine_run_allocation",
-        "services_allocation_engine_allocationresult",
-        "services_allocation_engine_check_overlap",
-        "services_allocation_engine_lowest_available_compatible_floor",
-        "services_allocation_engine_reservationslot_category_priority",
-        "services_allocation_engine_run_allocation_greedy",
-        "services_allocation_engine_lowest_compatible_floor",
-        "services_allocation_engine_adjacency_bonus_for_room",
-        "services_allocation_engine_guest_room_preference_score",
-        "services_allocation_engine_guest_room_signal_score",
-        "services_allocation_engine_one_night_gap_penalty_for_room"
-      ],
-      "depth": 2,
-      "nodeCount": 11,
-      "fileCount": 1,
-      "files": [
-        "app/services/allocation_engine.py"
-      ],
-      "criticality": 0.1927,
-      "warnings": []
-    },
-    {
       "id": "flow:agent_ops_manage_qa_baseline_lease_main",
       "name": "main",
       "entryPoint": "agent_ops_manage_qa_baseline_lease_main",
@@ -10787,38 +10649,6 @@
       ],
       "depth": 4,
       "nodeCount": 9,
-      "fileCount": 1,
-      "files": [
-        "app/services/subscription_service.py"
-      ],
-      "criticality": 0.19,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_subscription_service_set_subscription_plan",
-      "name": "set_subscription_plan",
-      "entryPoint": "services_subscription_service_set_subscription_plan",
-      "entryPointId": "services_subscription_service_set_subscription_plan",
-      "path": [
-        "services_subscription_service_set_subscription_plan",
-        "services_subscription_service_ensure_entitlements_seeded",
-        "services_subscription_service_ensure_subscription",
-        "services_subscription_service_is_enforcement_enabled",
-        "services_subscription_service_upsert_plan_entitlement",
-        "services_subscription_service_serialize_value",
-        "services_subscription_service_infer_type"
-      ],
-      "qualifiedPath": [
-        "services_subscription_service_set_subscription_plan",
-        "services_subscription_service_ensure_entitlements_seeded",
-        "services_subscription_service_ensure_subscription",
-        "services_subscription_service_is_enforcement_enabled",
-        "services_subscription_service_upsert_plan_entitlement",
-        "services_subscription_service_serialize_value",
-        "services_subscription_service_infer_type"
-      ],
-      "depth": 4,
-      "nodeCount": 7,
       "fileCount": 1,
       "files": [
         "app/services/subscription_service.py"
@@ -11327,6 +11157,58 @@
       "warnings": []
     },
     {
+      "id": "flow:services_subscription_entitlements_grant_comped",
+      "name": "grant_comped",
+      "entryPoint": "services_subscription_entitlements_grant_comped",
+      "entryPointId": "services_subscription_entitlements_grant_comped",
+      "path": [
+        "services_subscription_entitlements_grant_comped",
+        "services_subscription_entitlements_actor_payload",
+        "services_subscription_entitlements_as_utc",
+        "services_subscription_entitlements_assert_same_adjustment",
+        "services_subscription_entitlements_default_adjustment_idempotency_key",
+        "services_subscription_entitlements_normalize_adjustment_reason",
+        "services_subscription_entitlements_now",
+        "services_subscription_entitlements_plan_defaults",
+        "services_subscription_entitlements_record_comped_adjustment",
+        "services_subscription_entitlements_record_event",
+        "services_subscription_entitlements_sync_legacy_tables",
+        "services_subscription_entitlements_upsert_subscription",
+        "services_subscription_entitlements_actor_role",
+        "services_subscription_entitlements_actor_user_id",
+        "services_subscription_entitlements_apply_plan",
+        "services_subscription_entitlements_ensure_subscription_seed",
+        "services_subscription_entitlements_legacy_status_for_v2"
+      ],
+      "qualifiedPath": [
+        "services_subscription_entitlements_grant_comped",
+        "services_subscription_entitlements_actor_payload",
+        "services_subscription_entitlements_as_utc",
+        "services_subscription_entitlements_assert_same_adjustment",
+        "services_subscription_entitlements_default_adjustment_idempotency_key",
+        "services_subscription_entitlements_normalize_adjustment_reason",
+        "services_subscription_entitlements_now",
+        "services_subscription_entitlements_plan_defaults",
+        "services_subscription_entitlements_record_comped_adjustment",
+        "services_subscription_entitlements_record_event",
+        "services_subscription_entitlements_sync_legacy_tables",
+        "services_subscription_entitlements_upsert_subscription",
+        "services_subscription_entitlements_actor_role",
+        "services_subscription_entitlements_actor_user_id",
+        "services_subscription_entitlements_apply_plan",
+        "services_subscription_entitlements_ensure_subscription_seed",
+        "services_subscription_entitlements_legacy_status_for_v2"
+      ],
+      "depth": 3,
+      "nodeCount": 17,
+      "fileCount": 1,
+      "files": [
+        "app/services/subscription_entitlements.py"
+      ],
+      "criticality": 0.18,
+      "warnings": []
+    },
+    {
       "id": "flow:api_movement_groups_list_movement_groups",
       "name": "list_movement_groups",
       "entryPoint": "api_movement_groups_list_movement_groups",
@@ -11817,6 +11699,44 @@
       "warnings": []
     },
     {
+      "id": "flow:services_subscription_entitlements_start_trial",
+      "name": "start_trial",
+      "entryPoint": "services_subscription_entitlements_start_trial",
+      "entryPointId": "services_subscription_entitlements_start_trial",
+      "path": [
+        "services_subscription_entitlements_start_trial",
+        "services_subscription_entitlements_actor_payload",
+        "services_subscription_entitlements_now",
+        "services_subscription_entitlements_plan_defaults",
+        "services_subscription_entitlements_record_event",
+        "services_subscription_entitlements_sync_legacy_tables",
+        "services_subscription_entitlements_upsert_subscription",
+        "services_subscription_entitlements_apply_plan",
+        "services_subscription_entitlements_ensure_subscription_seed",
+        "services_subscription_entitlements_legacy_status_for_v2"
+      ],
+      "qualifiedPath": [
+        "services_subscription_entitlements_start_trial",
+        "services_subscription_entitlements_actor_payload",
+        "services_subscription_entitlements_now",
+        "services_subscription_entitlements_plan_defaults",
+        "services_subscription_entitlements_record_event",
+        "services_subscription_entitlements_sync_legacy_tables",
+        "services_subscription_entitlements_upsert_subscription",
+        "services_subscription_entitlements_apply_plan",
+        "services_subscription_entitlements_ensure_subscription_seed",
+        "services_subscription_entitlements_legacy_status_for_v2"
+      ],
+      "depth": 3,
+      "nodeCount": 10,
+      "fileCount": 1,
+      "files": [
+        "app/services/subscription_entitlements.py"
+      ],
+      "criticality": 0.18,
+      "warnings": []
+    },
+    {
       "id": "flow:services_analytics_facts_touch_reservation_fact_window",
       "name": "touch_reservation_fact_window",
       "entryPoint": "services_analytics_facts_touch_reservation_fact_window",
@@ -11975,30 +11895,6 @@
       "warnings": []
     },
     {
-      "id": "flow:hooks_useratecalendar_adddaysiso",
-      "name": "addDaysIso",
-      "entryPoint": "hooks_useratecalendar_adddaysiso",
-      "entryPointId": "hooks_useratecalendar_adddaysiso",
-      "path": [
-        "hooks_useratecalendar_adddaysiso",
-        "hooks_useratecalendar_formatlocalisodate",
-        "hooks_useratecalendar_pad"
-      ],
-      "qualifiedPath": [
-        "hooks_useratecalendar_adddaysiso",
-        "hooks_useratecalendar_formatlocalisodate",
-        "hooks_useratecalendar_pad"
-      ],
-      "depth": 2,
-      "nodeCount": 3,
-      "fileCount": 1,
-      "files": [
-        "frontend/src/hooks/useRateCalendar.ts"
-      ],
-      "criticality": 0.17,
-      "warnings": []
-    },
-    {
       "id": "flow:utils_date_adddaysiso",
       "name": "addDaysIso",
       "entryPoint": "utils_date_adddaysiso",
@@ -12142,17 +12038,15 @@
       "path": [
         "services_payment_link_service_balance_due_from_transactions",
         "services_payment_link_service_get_reservation_for_hotel",
-        "services_payment_link_service_money",
         "services_payment_link_service_paymentlinkerror"
       ],
       "qualifiedPath": [
         "services_payment_link_service_balance_due_from_transactions",
         "services_payment_link_service_get_reservation_for_hotel",
-        "services_payment_link_service_money",
         "services_payment_link_service_paymentlinkerror"
       ],
       "depth": 2,
-      "nodeCount": 4,
+      "nodeCount": 3,
       "fileCount": 1,
       "files": [
         "app/services/payment_link_service.py"
@@ -13228,19 +13122,17 @@
       "path": [
         "services_reservation_service_get_occupancy_grid",
         "services_reservation_service_active_reservations",
-        "services_reservation_service_active_reservations_select",
         "services_reservation_service_visible_reservations",
         "services_reservation_service_hotel_today_and_timezone"
       ],
       "qualifiedPath": [
         "services_reservation_service_get_occupancy_grid",
         "services_reservation_service_active_reservations",
-        "services_reservation_service_active_reservations_select",
         "services_reservation_service_visible_reservations",
         "services_reservation_service_hotel_today_and_timezone"
       ],
       "depth": 2,
-      "nodeCount": 5,
+      "nodeCount": 4,
       "fileCount": 1,
       "files": [
         "app/services/reservation_service.py"
@@ -13508,56 +13400,6 @@
       "fileCount": 1,
       "files": [
         "app/services/stock_service.py"
-      ],
-      "criticality": 0.17,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_subscription_entitlements_grant_comped",
-      "name": "grant_comped",
-      "entryPoint": "services_subscription_entitlements_grant_comped",
-      "entryPointId": "services_subscription_entitlements_grant_comped",
-      "path": [
-        "services_subscription_entitlements_grant_comped",
-        "services_subscription_entitlements_actor_payload",
-        "services_subscription_entitlements_as_utc",
-        "services_subscription_entitlements_assert_same_adjustment",
-        "services_subscription_entitlements_default_adjustment_idempotency_key",
-        "services_subscription_entitlements_normalize_adjustment_reason",
-        "services_subscription_entitlements_now",
-        "services_subscription_entitlements_plan_defaults",
-        "services_subscription_entitlements_record_comped_adjustment",
-        "services_subscription_entitlements_record_event",
-        "services_subscription_entitlements_sync_legacy_tables",
-        "services_subscription_entitlements_upsert_subscription",
-        "services_subscription_entitlements_actor_role",
-        "services_subscription_entitlements_actor_user_id",
-        "services_subscription_entitlements_apply_plan",
-        "services_subscription_entitlements_ensure_subscription_seed"
-      ],
-      "qualifiedPath": [
-        "services_subscription_entitlements_grant_comped",
-        "services_subscription_entitlements_actor_payload",
-        "services_subscription_entitlements_as_utc",
-        "services_subscription_entitlements_assert_same_adjustment",
-        "services_subscription_entitlements_default_adjustment_idempotency_key",
-        "services_subscription_entitlements_normalize_adjustment_reason",
-        "services_subscription_entitlements_now",
-        "services_subscription_entitlements_plan_defaults",
-        "services_subscription_entitlements_record_comped_adjustment",
-        "services_subscription_entitlements_record_event",
-        "services_subscription_entitlements_sync_legacy_tables",
-        "services_subscription_entitlements_upsert_subscription",
-        "services_subscription_entitlements_actor_role",
-        "services_subscription_entitlements_actor_user_id",
-        "services_subscription_entitlements_apply_plan",
-        "services_subscription_entitlements_ensure_subscription_seed"
-      ],
-      "depth": 2,
-      "nodeCount": 16,
-      "fileCount": 1,
-      "files": [
-        "app/services/subscription_entitlements.py"
       ],
       "criticality": 0.17,
       "warnings": []
@@ -13989,6 +13831,38 @@
       "warnings": []
     },
     {
+      "id": "flow:services_payment_link_test_service_refresh_mercadopago_payment_link_test_by_reference",
+      "name": "refresh_mercadopago_payment_link_test_by_reference",
+      "entryPoint": "services_payment_link_test_service_refresh_mercadopago_payment_link_test_by_reference",
+      "entryPointId": "services_payment_link_test_service_refresh_mercadopago_payment_link_test_by_reference",
+      "path": [
+        "services_payment_link_test_service_refresh_mercadopago_payment_link_test_by_reference",
+        "services_payment_link_test_service_apply_terminal_dates",
+        "services_payment_link_test_service_money",
+        "services_payment_link_test_service_paymentlinktesterror",
+        "services_payment_link_test_service_status_from_payment_payload",
+        "services_payment_link_test_service_parse_provider_datetime",
+        "services_payment_link_test_service_status_from_payment"
+      ],
+      "qualifiedPath": [
+        "services_payment_link_test_service_refresh_mercadopago_payment_link_test_by_reference",
+        "services_payment_link_test_service_apply_terminal_dates",
+        "services_payment_link_test_service_money",
+        "services_payment_link_test_service_paymentlinktesterror",
+        "services_payment_link_test_service_status_from_payment_payload",
+        "services_payment_link_test_service_parse_provider_datetime",
+        "services_payment_link_test_service_status_from_payment"
+      ],
+      "depth": 2,
+      "nodeCount": 7,
+      "fileCount": 1,
+      "files": [
+        "app/services/payment_link_test_service.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
       "id": "flow:services_linen_service_register_movement",
       "name": "register_movement",
       "entryPoint": "services_linen_service_register_movement",
@@ -14012,6 +13886,34 @@
       "fileCount": 1,
       "files": [
         "app/services/linen_service.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_stock_service_register_movement",
+      "name": "register_movement",
+      "entryPoint": "services_stock_service_register_movement",
+      "entryPointId": "services_stock_service_register_movement",
+      "path": [
+        "services_stock_service_register_movement",
+        "services_stock_service_current_stock",
+        "services_stock_service_notify_if_low_stock",
+        "services_stock_service_stockerror",
+        "services_stock_service_get_item"
+      ],
+      "qualifiedPath": [
+        "services_stock_service_register_movement",
+        "services_stock_service_current_stock",
+        "services_stock_service_notify_if_low_stock",
+        "services_stock_service_stockerror",
+        "services_stock_service_get_item"
+      ],
+      "depth": 2,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "app/services/stock_service.py"
       ],
       "criticality": 0.17,
       "warnings": []
@@ -14467,7 +14369,6 @@
         "services_onboarding_service_set_hotel_identity",
         "services_onboarding_service_get_or_create_config",
         "services_onboarding_service_get_or_create_state",
-        "services_onboarding_service_merge_extra_policies",
         "services_onboarding_service_resolve_hotel_id",
         "services_onboarding_service_status_from_state",
         "services_onboarding_service_onboardingerror",
@@ -14482,7 +14383,6 @@
         "services_onboarding_service_set_hotel_identity",
         "services_onboarding_service_get_or_create_config",
         "services_onboarding_service_get_or_create_state",
-        "services_onboarding_service_merge_extra_policies",
         "services_onboarding_service_resolve_hotel_id",
         "services_onboarding_service_status_from_state",
         "services_onboarding_service_onboardingerror",
@@ -14494,7 +14394,7 @@
         "services_onboarding_service_summarize_provider_payload"
       ],
       "depth": 2,
-      "nodeCount": 13,
+      "nodeCount": 12,
       "fileCount": 1,
       "files": [
         "app/services/onboarding_service.py"
@@ -14713,66 +14613,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_subscription_entitlements_start_trial",
-      "name": "start_trial",
-      "entryPoint": "services_subscription_entitlements_start_trial",
-      "entryPointId": "services_subscription_entitlements_start_trial",
-      "path": [
-        "services_subscription_entitlements_start_trial",
-        "services_subscription_entitlements_actor_payload",
-        "services_subscription_entitlements_now",
-        "services_subscription_entitlements_plan_defaults",
-        "services_subscription_entitlements_record_event",
-        "services_subscription_entitlements_sync_legacy_tables",
-        "services_subscription_entitlements_upsert_subscription",
-        "services_subscription_entitlements_apply_plan",
-        "services_subscription_entitlements_ensure_subscription_seed"
-      ],
-      "qualifiedPath": [
-        "services_subscription_entitlements_start_trial",
-        "services_subscription_entitlements_actor_payload",
-        "services_subscription_entitlements_now",
-        "services_subscription_entitlements_plan_defaults",
-        "services_subscription_entitlements_record_event",
-        "services_subscription_entitlements_sync_legacy_tables",
-        "services_subscription_entitlements_upsert_subscription",
-        "services_subscription_entitlements_apply_plan",
-        "services_subscription_entitlements_ensure_subscription_seed"
-      ],
-      "depth": 2,
-      "nodeCount": 9,
-      "fileCount": 1,
-      "files": [
-        "app/services/subscription_entitlements.py"
-      ],
-      "criticality": 0.17,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_stock_service_stock_summary",
-      "name": "stock_summary",
-      "entryPoint": "services_stock_service_stock_summary",
-      "entryPointId": "services_stock_service_stock_summary",
-      "path": [
-        "services_stock_service_stock_summary",
-        "services_stock_service_list_stock_items",
-        "services_stock_service_stockerror"
-      ],
-      "qualifiedPath": [
-        "services_stock_service_stock_summary",
-        "services_stock_service_list_stock_items",
-        "services_stock_service_stockerror"
-      ],
-      "depth": 2,
-      "nodeCount": 3,
-      "fileCount": 1,
-      "files": [
-        "app/services/stock_service.py"
-      ],
-      "criticality": 0.17,
-      "warnings": []
-    },
-    {
       "id": "flow:services_onboarding_service_store_staff",
       "name": "store_staff",
       "entryPoint": "services_onboarding_service_store_staff",
@@ -14856,30 +14696,6 @@
       "fileCount": 1,
       "files": [
         "app/services/operational_task_service.py"
-      ],
-      "criticality": 0.17,
-      "warnings": []
-    },
-    {
-      "id": "flow:hooks_useratecalendar_todayiso",
-      "name": "todayIso",
-      "entryPoint": "hooks_useratecalendar_todayiso",
-      "entryPointId": "hooks_useratecalendar_todayiso",
-      "path": [
-        "hooks_useratecalendar_todayiso",
-        "hooks_useratecalendar_formatlocalisodate",
-        "hooks_useratecalendar_pad"
-      ],
-      "qualifiedPath": [
-        "hooks_useratecalendar_todayiso",
-        "hooks_useratecalendar_formatlocalisodate",
-        "hooks_useratecalendar_pad"
-      ],
-      "depth": 2,
-      "nodeCount": 3,
-      "fileCount": 1,
-      "files": [
-        "frontend/src/hooks/useRateCalendar.ts"
       ],
       "criticality": 0.17,
       "warnings": []
@@ -15009,6 +14825,34 @@
       "warnings": []
     },
     {
+      "id": "flow:versions_20260727_linen_split_upgrade",
+      "name": "upgrade",
+      "entryPoint": "versions_20260727_linen_split_upgrade",
+      "entryPointId": "versions_20260727_linen_split_upgrade",
+      "path": [
+        "versions_20260727_linen_split_upgrade",
+        "versions_20260727_linen_split_create_linen_tables",
+        "versions_20260727_linen_split_drop_kind_column",
+        "versions_20260727_linen_split_migrate_linen_data",
+        "versions_20260727_linen_split_finalize_laundry_vendor_columns"
+      ],
+      "qualifiedPath": [
+        "versions_20260727_linen_split_upgrade",
+        "versions_20260727_linen_split_create_linen_tables",
+        "versions_20260727_linen_split_drop_kind_column",
+        "versions_20260727_linen_split_migrate_linen_data",
+        "versions_20260727_linen_split_finalize_laundry_vendor_columns"
+      ],
+      "depth": 2,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20260727_linen_split.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
       "id": "flow:versions_dee1bd0660f6_ota_allocation_foundation_upgrade",
       "name": "upgrade",
       "entryPoint": "versions_dee1bd0660f6_ota_allocation_foundation_upgrade",
@@ -15107,7 +14951,6 @@
         "services_onboarding_service_upsert_ota_channels",
         "services_onboarding_service_get_or_create_config",
         "services_onboarding_service_get_or_create_state",
-        "services_onboarding_service_merge_extra_policies",
         "services_onboarding_service_resolve_hotel_id",
         "services_onboarding_service_status_from_state",
         "services_onboarding_service_onboardingerror",
@@ -15122,7 +14965,6 @@
         "services_onboarding_service_upsert_ota_channels",
         "services_onboarding_service_get_or_create_config",
         "services_onboarding_service_get_or_create_state",
-        "services_onboarding_service_merge_extra_policies",
         "services_onboarding_service_resolve_hotel_id",
         "services_onboarding_service_status_from_state",
         "services_onboarding_service_onboardingerror",
@@ -15134,7 +14976,7 @@
         "services_onboarding_service_summarize_provider_payload"
       ],
       "depth": 2,
-      "nodeCount": 13,
+      "nodeCount": 12,
       "fileCount": 1,
       "files": [
         "app/services/onboarding_service.py"
@@ -15151,7 +14993,6 @@
         "services_onboarding_service_upsert_payment_methods",
         "services_onboarding_service_get_or_create_config",
         "services_onboarding_service_get_or_create_state",
-        "services_onboarding_service_merge_extra_policies",
         "services_onboarding_service_resolve_hotel_id",
         "services_onboarding_service_status_from_state",
         "services_onboarding_service_onboardingerror",
@@ -15166,7 +15007,6 @@
         "services_onboarding_service_upsert_payment_methods",
         "services_onboarding_service_get_or_create_config",
         "services_onboarding_service_get_or_create_state",
-        "services_onboarding_service_merge_extra_policies",
         "services_onboarding_service_resolve_hotel_id",
         "services_onboarding_service_status_from_state",
         "services_onboarding_service_onboardingerror",
@@ -15178,7 +15018,7 @@
         "services_onboarding_service_summarize_provider_payload"
       ],
       "depth": 2,
-      "nodeCount": 13,
+      "nodeCount": 12,
       "fileCount": 1,
       "files": [
         "app/services/onboarding_service.py"
@@ -15889,28 +15729,6 @@
       "warnings": []
     },
     {
-      "id": "flow:adapters_mercadopago_adapter_mercadopagoadapter_process_webhook",
-      "name": ".process_webhook",
-      "entryPoint": "adapters_mercadopago_adapter_mercadopagoadapter_process_webhook",
-      "entryPointId": "adapters_mercadopago_adapter_mercadopagoadapter_process_webhook",
-      "path": [
-        "adapters_mercadopago_adapter_mercadopagoadapter_process_webhook",
-        "adapters_mercadopago_adapter_mercadopagoadapter_get_sdk"
-      ],
-      "qualifiedPath": [
-        "adapters_mercadopago_adapter_mercadopagoadapter_process_webhook",
-        "adapters_mercadopago_adapter_mercadopagoadapter_get_sdk"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "app/adapters/mercadopago_adapter.py"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
       "id": "flow:services_object_storage_gcsobjectstorage_put_bytes",
       "name": ".put_bytes",
       "entryPoint": "services_object_storage_gcsobjectstorage_put_bytes",
@@ -16317,28 +16135,6 @@
       "warnings": []
     },
     {
-      "id": "flow:protected_dashboardpage_dashboardpage",
-      "name": "DashboardPage",
-      "entryPoint": "protected_dashboardpage_dashboardpage",
-      "entryPointId": "protected_dashboardpage_dashboardpage",
-      "path": [
-        "protected_dashboardpage_dashboardpage",
-        "protected_dashboardpage_todayiso"
-      ],
-      "qualifiedPath": [
-        "protected_dashboardpage_dashboardpage",
-        "protected_dashboardpage_todayiso"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "frontend/src/views/protected/DashboardPage.tsx"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
       "id": "flow:components_ratecalendargrid_dayheadercell",
       "name": "DayHeaderCell",
       "entryPoint": "components_ratecalendargrid_dayheadercell",
@@ -16378,30 +16174,6 @@
       "fileCount": 1,
       "files": [
         "frontend/src/components/GuestQuickCreatePanel.tsx"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
-      "id": "flow:protected_laundrypage_laundrypage",
-      "name": "LaundryPage",
-      "entryPoint": "protected_laundrypage_laundrypage",
-      "entryPointId": "protected_laundrypage_laundrypage",
-      "path": [
-        "protected_laundrypage_laundrypage",
-        "protected_laundrypage_canmanagevendors",
-        "protected_laundrypage_canoperateremitos"
-      ],
-      "qualifiedPath": [
-        "protected_laundrypage_laundrypage",
-        "protected_laundrypage_canmanagevendors",
-        "protected_laundrypage_canoperateremitos"
-      ],
-      "depth": 1,
-      "nodeCount": 3,
-      "fileCount": 1,
-      "files": [
-        "frontend/src/views/protected/LaundryPage.tsx"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -16547,18 +16319,16 @@
         "protected_reportspage_reportspage",
         "protected_reportspage_cashstatuslabel",
         "protected_reportspage_money",
-        "protected_reportspage_reportserrormessage",
-        "protected_reportspage_today"
+        "protected_reportspage_reportserrormessage"
       ],
       "qualifiedPath": [
         "protected_reportspage_reportspage",
         "protected_reportspage_cashstatuslabel",
         "protected_reportspage_money",
-        "protected_reportspage_reportserrormessage",
-        "protected_reportspage_today"
+        "protected_reportspage_reportserrormessage"
       ],
       "depth": 1,
-      "nodeCount": 5,
+      "nodeCount": 4,
       "fileCount": 1,
       "files": [
         "frontend/src/views/protected/ReportsPage.tsx"
@@ -16618,17 +16388,15 @@
       "path": [
         "protected_reservationspage_reservationspage",
         "protected_reservationspage_diffnights",
-        "protected_reservationspage_reservationguestlabel",
-        "protected_reservationspage_todayiso"
+        "protected_reservationspage_reservationguestlabel"
       ],
       "qualifiedPath": [
         "protected_reservationspage_reservationspage",
         "protected_reservationspage_diffnights",
-        "protected_reservationspage_reservationguestlabel",
-        "protected_reservationspage_todayiso"
+        "protected_reservationspage_reservationguestlabel"
       ],
       "depth": 1,
-      "nodeCount": 4,
+      "nodeCount": 3,
       "fileCount": 1,
       "files": [
         "frontend/src/views/protected/ReservationsPage.tsx"
@@ -16676,28 +16444,6 @@
       "fileCount": 1,
       "files": [
         "frontend/src/views/protected/SettingsSubscriptionPage.tsx"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
-      "id": "flow:protected_settingswhatsapppage_settingswhatsapppage",
-      "name": "SettingsWhatsAppPage",
-      "entryPoint": "protected_settingswhatsapppage_settingswhatsapppage",
-      "entryPointId": "protected_settingswhatsapppage_settingswhatsapppage",
-      "path": [
-        "protected_settingswhatsapppage_settingswhatsapppage",
-        "protected_settingswhatsapppage_formatdate"
-      ],
-      "qualifiedPath": [
-        "protected_settingswhatsapppage_settingswhatsapppage",
-        "protected_settingswhatsapppage_formatdate"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "frontend/src/views/protected/SettingsWhatsAppPage.tsx"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -17183,20 +16929,16 @@
       "entryPointId": "sync_crosstabsync_broadcastdomainchange",
       "path": [
         "sync_crosstabsync_broadcastdomainchange",
-        "sync_crosstabsync_domainforpath",
         "sync_crosstabsync_domainsforpath",
-        "sync_crosstabsync_getsenderid",
         "sync_crosstabsync_normalizehotelid"
       ],
       "qualifiedPath": [
         "sync_crosstabsync_broadcastdomainchange",
-        "sync_crosstabsync_domainforpath",
         "sync_crosstabsync_domainsforpath",
-        "sync_crosstabsync_getsenderid",
         "sync_crosstabsync_normalizehotelid"
       ],
       "depth": 1,
-      "nodeCount": 5,
+      "nodeCount": 3,
       "fileCount": 1,
       "files": [
         "frontend/src/sync/crossTabSync.ts"
@@ -17628,6 +17370,28 @@
       "fileCount": 1,
       "files": [
         "app/services/payment_link_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_payment_link_test_service_cancel_mercadopago_payment_link_test",
+      "name": "cancel_mercadopago_payment_link_test",
+      "entryPoint": "services_payment_link_test_service_cancel_mercadopago_payment_link_test",
+      "entryPointId": "services_payment_link_test_service_cancel_mercadopago_payment_link_test",
+      "path": [
+        "services_payment_link_test_service_cancel_mercadopago_payment_link_test",
+        "services_payment_link_test_service_paymentlinktesterror"
+      ],
+      "qualifiedPath": [
+        "services_payment_link_test_service_cancel_mercadopago_payment_link_test",
+        "services_payment_link_test_service_paymentlinktesterror"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/services/payment_link_test_service.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -18701,6 +18465,28 @@
       "warnings": []
     },
     {
+      "id": "flow:sync_crosstabsync_domainforpath",
+      "name": "domainForPath",
+      "entryPoint": "sync_crosstabsync_domainforpath",
+      "entryPointId": "sync_crosstabsync_domainforpath",
+      "path": [
+        "sync_crosstabsync_domainforpath",
+        "sync_crosstabsync_domainsforpath"
+      ],
+      "qualifiedPath": [
+        "sync_crosstabsync_domainforpath",
+        "sync_crosstabsync_domainsforpath"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/sync/crossTabSync.ts"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:versions_0f85dca5b98b_add_temporary_action_grants_downgrade",
       "name": "downgrade",
       "entryPoint": "versions_0f85dca5b98b_add_temporary_action_grants_downgrade",
@@ -19257,69 +19043,23 @@
       "warnings": []
     },
     {
-      "id": "flow:protected_roomspage_emptyblockform",
-      "name": "emptyBlockForm",
-      "entryPoint": "protected_roomspage_emptyblockform",
-      "entryPointId": "protected_roomspage_emptyblockform",
-      "path": [
-        "protected_roomspage_emptyblockform",
-        "protected_roomspage_todayiso"
-      ],
-      "qualifiedPath": [
-        "protected_roomspage_emptyblockform",
-        "protected_roomspage_todayiso"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "frontend/src/views/protected/RoomsPage.tsx"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
       "id": "flow:components_manualotareservationmodal_emptyformstate",
       "name": "emptyFormState",
       "entryPoint": "components_manualotareservationmodal_emptyformstate",
       "entryPointId": "components_manualotareservationmodal_emptyformstate",
       "path": [
         "components_manualotareservationmodal_emptyformstate",
-        "components_manualotareservationmodal_todayiso",
         "components_manualotareservationmodal_tomorrowiso"
       ],
       "qualifiedPath": [
         "components_manualotareservationmodal_emptyformstate",
-        "components_manualotareservationmodal_todayiso",
         "components_manualotareservationmodal_tomorrowiso"
-      ],
-      "depth": 1,
-      "nodeCount": 3,
-      "fileCount": 1,
-      "files": [
-        "frontend/src/components/ManualOtaReservationModal.tsx"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
-      "id": "flow:protected_laundrypage_emptyremitoform",
-      "name": "emptyRemitoForm",
-      "entryPoint": "protected_laundrypage_emptyremitoform",
-      "entryPointId": "protected_laundrypage_emptyremitoform",
-      "path": [
-        "protected_laundrypage_emptyremitoform",
-        "protected_laundrypage_todayiso"
-      ],
-      "qualifiedPath": [
-        "protected_laundrypage_emptyremitoform",
-        "protected_laundrypage_todayiso"
       ],
       "depth": 1,
       "nodeCount": 2,
       "fileCount": 1,
       "files": [
-        "frontend/src/views/protected/LaundryPage.tsx"
+        "frontend/src/components/ManualOtaReservationModal.tsx"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -20369,28 +20109,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_whatsapp_booking_service_handle_payment_confirmation",
-      "name": "handle_payment_confirmation",
-      "entryPoint": "services_whatsapp_booking_service_handle_payment_confirmation",
-      "entryPointId": "services_whatsapp_booking_service_handle_payment_confirmation",
-      "path": [
-        "services_whatsapp_booking_service_handle_payment_confirmation",
-        "services_whatsapp_booking_service_whatsappbookingerror"
-      ],
-      "qualifiedPath": [
-        "services_whatsapp_booking_service_handle_payment_confirmation",
-        "services_whatsapp_booking_service_whatsappbookingerror"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "app/services/whatsapp_booking_service.py"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
       "id": "flow:api_whatsapp_crm_inbox",
       "name": "inbox",
       "entryPoint": "api_whatsapp_crm_inbox",
@@ -21029,28 +20747,6 @@
       "warnings": []
     },
     {
-      "id": "flow:api_payments_makepayment",
-      "name": "makePayment",
-      "entryPoint": "api_payments_makepayment",
-      "entryPointId": "api_payments_makepayment",
-      "path": [
-        "api_payments_makepayment",
-        "api_payments_newpaymentidempotencykey"
-      ],
-      "qualifiedPath": [
-        "api_payments_makepayment",
-        "api_payments_newpaymentidempotencykey"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "frontend/src/api/payments.ts"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
       "id": "flow:services_notification_service_mark_all_notifications_read",
       "name": "mark_all_notifications_read",
       "entryPoint": "services_notification_service_mark_all_notifications_read",
@@ -21463,30 +21159,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_payment_proof_service_proof_file_path",
-      "name": "proof_file_path",
-      "entryPoint": "services_payment_proof_service_proof_file_path",
-      "entryPointId": "services_payment_proof_service_proof_file_path",
-      "path": [
-        "services_payment_proof_service_proof_file_path",
-        "services_payment_proof_service_paymentprooferror",
-        "services_payment_proof_service_proof_path"
-      ],
-      "qualifiedPath": [
-        "services_payment_proof_service_proof_file_path",
-        "services_payment_proof_service_paymentprooferror",
-        "services_payment_proof_service_proof_path"
-      ],
-      "depth": 1,
-      "nodeCount": 3,
-      "fileCount": 1,
-      "files": [
-        "app/services/payment_proof_service.py"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
       "id": "flow:services_staff_invitation_service_provision_staff_invitation",
       "name": "provision_staff_invitation",
       "entryPoint": "services_staff_invitation_service_provision_staff_invitation",
@@ -21582,28 +21254,6 @@
       "fileCount": 1,
       "files": [
         "app/api/health.py"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_tenant_context_reapply_tenant_context",
-      "name": "reapply_tenant_context",
-      "entryPoint": "services_tenant_context_reapply_tenant_context",
-      "entryPointId": "services_tenant_context_reapply_tenant_context",
-      "path": [
-        "services_tenant_context_reapply_tenant_context",
-        "services_tenant_context_apply_setting"
-      ],
-      "qualifiedPath": [
-        "services_tenant_context_reapply_tenant_context",
-        "services_tenant_context_apply_setting"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "app/services/tenant_context.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -21723,6 +21373,28 @@
       "warnings": []
     },
     {
+      "id": "flow:services_payment_link_test_service_refresh_mercadopago_payment_link_test",
+      "name": "refresh_mercadopago_payment_link_test",
+      "entryPoint": "services_payment_link_test_service_refresh_mercadopago_payment_link_test",
+      "entryPointId": "services_payment_link_test_service_refresh_mercadopago_payment_link_test",
+      "path": [
+        "services_payment_link_test_service_refresh_mercadopago_payment_link_test",
+        "services_payment_link_test_service_paymentlinktesterror"
+      ],
+      "qualifiedPath": [
+        "services_payment_link_test_service_refresh_mercadopago_payment_link_test",
+        "services_payment_link_test_service_paymentlinktesterror"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/services/payment_link_test_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:services_reservation_service_register_company_settlement",
       "name": "register_company_settlement",
       "entryPoint": "services_reservation_service_register_company_settlement",
@@ -21740,34 +21412,6 @@
       "fileCount": 1,
       "files": [
         "app/services/reservation_service.py"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_stock_service_register_movement",
-      "name": "register_movement",
-      "entryPoint": "services_stock_service_register_movement",
-      "entryPointId": "services_stock_service_register_movement",
-      "path": [
-        "services_stock_service_register_movement",
-        "services_stock_service_current_stock",
-        "services_stock_service_get_item",
-        "services_stock_service_notify_if_low_stock",
-        "services_stock_service_stockerror"
-      ],
-      "qualifiedPath": [
-        "services_stock_service_register_movement",
-        "services_stock_service_current_stock",
-        "services_stock_service_get_item",
-        "services_stock_service_notify_if_low_stock",
-        "services_stock_service_stockerror"
-      ],
-      "depth": 1,
-      "nodeCount": 5,
-      "fileCount": 1,
-      "files": [
-        "app/services/stock_service.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -22875,6 +22519,28 @@
       "warnings": []
     },
     {
+      "id": "flow:services_subscription_service_set_subscription_plan",
+      "name": "set_subscription_plan",
+      "entryPoint": "services_subscription_service_set_subscription_plan",
+      "entryPointId": "services_subscription_service_set_subscription_plan",
+      "path": [
+        "services_subscription_service_set_subscription_plan",
+        "services_subscription_service_is_enforcement_enabled"
+      ],
+      "qualifiedPath": [
+        "services_subscription_service_set_subscription_plan",
+        "services_subscription_service_is_enforcement_enabled"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/services/subscription_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:services_laundry_vendor_service_set_vendor_price",
       "name": "set_vendor_price",
       "entryPoint": "services_laundry_vendor_service_set_vendor_price",
@@ -22925,6 +22591,28 @@
       "warnings": []
     },
     {
+      "id": "flow:services_stock_service_stock_summary",
+      "name": "stock_summary",
+      "entryPoint": "services_stock_service_stock_summary",
+      "entryPointId": "services_stock_service_stock_summary",
+      "path": [
+        "services_stock_service_stock_summary",
+        "services_stock_service_list_stock_items"
+      ],
+      "qualifiedPath": [
+        "services_stock_service_stock_summary",
+        "services_stock_service_list_stock_items"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/services/stock_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:services_payment_proof_service_submit_transfer_proof",
       "name": "submit_transfer_proof",
       "entryPoint": "services_payment_proof_service_submit_transfer_proof",
@@ -22933,7 +22621,6 @@
         "services_payment_proof_service_submit_transfer_proof",
         "services_payment_proof_service_decode_image",
         "services_payment_proof_service_paymentprooferror",
-        "services_payment_proof_service_proof_path",
         "services_payment_proof_service_reservation",
         "services_payment_proof_service_safe_filename"
       ],
@@ -22941,12 +22628,11 @@
         "services_payment_proof_service_submit_transfer_proof",
         "services_payment_proof_service_decode_image",
         "services_payment_proof_service_paymentprooferror",
-        "services_payment_proof_service_proof_path",
         "services_payment_proof_service_reservation",
         "services_payment_proof_service_safe_filename"
       ],
       "depth": 1,
-      "nodeCount": 6,
+      "nodeCount": 5,
       "fileCount": 1,
       "files": [
         "app/services/payment_proof_service.py"
@@ -23217,16 +22903,14 @@
       "entryPointId": "api_rooms_update_room_status",
       "path": [
         "api_rooms_update_room_status",
-        "api_rooms_require_manager_room_lane",
-        "api_rooms_serialize_reallocation_result"
+        "api_rooms_require_manager_room_lane"
       ],
       "qualifiedPath": [
         "api_rooms_update_room_status",
-        "api_rooms_require_manager_room_lane",
-        "api_rooms_serialize_reallocation_result"
+        "api_rooms_require_manager_room_lane"
       ],
       "depth": 1,
-      "nodeCount": 3,
+      "nodeCount": 2,
       "fileCount": 1,
       "files": [
         "app/api/rooms.py"
@@ -23506,34 +23190,6 @@
       "fileCount": 1,
       "files": [
         "alembic/versions/20260725_stock_adjustment_out.py"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
-      "id": "flow:versions_20260727_linen_split_upgrade",
-      "name": "upgrade",
-      "entryPoint": "versions_20260727_linen_split_upgrade",
-      "entryPointId": "versions_20260727_linen_split_upgrade",
-      "path": [
-        "versions_20260727_linen_split_upgrade",
-        "versions_20260727_linen_split_create_linen_tables",
-        "versions_20260727_linen_split_drop_kind_column",
-        "versions_20260727_linen_split_finalize_laundry_vendor_columns",
-        "versions_20260727_linen_split_migrate_linen_data"
-      ],
-      "qualifiedPath": [
-        "versions_20260727_linen_split_upgrade",
-        "versions_20260727_linen_split_create_linen_tables",
-        "versions_20260727_linen_split_drop_kind_column",
-        "versions_20260727_linen_split_finalize_laundry_vendor_columns",
-        "versions_20260727_linen_split_migrate_linen_data"
-      ],
-      "depth": 1,
-      "nodeCount": 5,
-      "fileCount": 1,
-      "files": [
-        "alembic/versions/20260727_linen_split.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -24660,30 +24316,6 @@
       "fileCount": 1,
       "files": [
         "frontend/src/hooks/useRoomBlocks.ts"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
-      "id": "flow:hooks_userooms_userooms",
-      "name": "useRooms",
-      "entryPoint": "hooks_userooms_userooms",
-      "entryPointId": "hooks_userooms_userooms",
-      "path": [
-        "hooks_userooms_userooms",
-        "hooks_userooms_categorieskey",
-        "hooks_userooms_roomskey"
-      ],
-      "qualifiedPath": [
-        "hooks_userooms_userooms",
-        "hooks_userooms_categorieskey",
-        "hooks_userooms_roomskey"
-      ],
-      "depth": 1,
-      "nodeCount": 3,
-      "fileCount": 1,
-      "files": [
-        "frontend/src/hooks/useRooms.ts"
       ],
       "criticality": 0.16,
       "warnings": []

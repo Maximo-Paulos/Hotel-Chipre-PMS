@@ -343,7 +343,7 @@ export function StockPage() {
     onSuccess: async () => {
       await invalidateStock();
       setLocationForm(emptyLocationForm);
-      setMessage("Ubicacion creada.");
+      setMessage("Ubicación creada.");
     }
   });
 
@@ -392,7 +392,7 @@ export function StockPage() {
     try {
       await createLocationMutation.mutateAsync();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "No se pudo crear la ubicacion.");
+      setMessage(error instanceof Error ? error.message : "No se pudo crear la ubicación.");
     }
   };
 
@@ -426,8 +426,8 @@ export function StockPage() {
     <div className="space-y-6">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-xs uppercase tracking-wide text-slate-500">Operacion</p>
-          <h1 className="text-2xl font-semibold text-slate-900">Stock</h1>
+          <p className="text-xs uppercase tracking-wide text-slate-500">Operación</p>
+          <h1 className="text-balance text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Stock</h1>
           <p className="text-sm text-slate-600">Inventario operativo con movimientos y alertas de bajo stock.</p>
         </div>
         {(itemsQuery.isFetching || lowStockQuery.isFetching || stockSummaryQuery.isFetching) && (
@@ -491,7 +491,7 @@ export function StockPage() {
                       <p className="text-xs uppercase tracking-wide text-slate-500">{item.sku || `Item #${item.id}`}</p>
                       <h3 className="break-words text-base font-semibold text-slate-900">{item.name}</h3>
                       <p className="text-xs text-slate-500">
-                        Minimo {item.min_quantity ?? "sin minimo"} {item.unit}
+                        Mínimo {item.min_quantity ?? "sin mínimo"} {item.unit}
                       </p>
                     </div>
                     <span className={`rounded-full px-2 py-1 text-xs font-semibold ${isLow ? "bg-rose-100 text-rose-800" : "bg-emerald-100 text-emerald-800"}`}>
@@ -693,13 +693,13 @@ export function StockPage() {
               <summary className="cursor-pointer text-sm font-medium text-slate-600">Opciones avanzadas</summary>
               <div className="mt-3 space-y-4">
                 <label className="space-y-1 text-sm">
-                  <span className="text-slate-600">Ubicacion</span>
+                  <span className="text-slate-600">Ubicación</span>
                   <select
                     value={movementForm.location_id}
                     onChange={(event) => setMovementForm((current) => ({ ...current, location_id: event.target.value }))}
                     className="w-full rounded-lg border border-slate-300 px-3 py-2"
                   >
-                    <option value="">Sin ubicacion</option>
+                    <option value="">Sin ubicación</option>
                     {locations.map((location) => (
                       <option key={location.id} value={location.id}>
                         {location.name}
@@ -795,7 +795,7 @@ export function StockPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <label className="space-y-1 text-sm">
-                <span className="text-slate-600">Minimo</span>
+                <span className="text-slate-600">Mínimo</span>
                 <input
                   type="number"
                   min="0"
@@ -832,7 +832,7 @@ export function StockPage() {
           >
             <div>
               <p className="text-xs uppercase tracking-wide text-slate-500">Ubicaciones</p>
-              <h2 className="text-lg font-semibold text-slate-900">Nueva ubicacion</h2>
+              <h2 className="text-lg font-semibold text-slate-900">Nueva ubicación</h2>
             </div>
             <label className="space-y-1 text-sm">
               <span className="text-slate-600">Nombre</span>
@@ -848,7 +848,7 @@ export function StockPage() {
               disabled={createLocationMutation.isPending || !isOnline}
               className="w-full rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
             >
-              Crear ubicacion
+              Crear ubicación
             </button>
           </form>
         </aside>
@@ -1074,7 +1074,7 @@ function EditStockItemModal({
             />
           </label>
           <label className="block text-sm">
-            <span className="block text-xs uppercase tracking-wide text-slate-500">Minimo</span>
+            <span className="block text-xs uppercase tracking-wide text-slate-500">Mínimo</span>
             <input
               type="number"
               min="0"
@@ -1138,7 +1138,7 @@ function StockAlertsPanel({
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold text-slate-900">{item.name}</p>
                 <p className="text-xs text-slate-500">
-                  {currentByItemId.get(item.id) ?? "..."} {item.unit} · mínimo {item.min_quantity ?? "sin minimo"}
+                  {currentByItemId.get(item.id) ?? "..."} {item.unit} · mínimo {item.min_quantity ?? "sin mínimo"}
                 </p>
               </div>
               <button
@@ -1338,7 +1338,7 @@ function StockConsumptionReportSection({
               <th className="px-3 py-2">Item</th>
               <th className="px-3 py-2">Este periodo</th>
               <th className="px-3 py-2">Periodo anterior</th>
-              <th className="px-3 py-2">Variacion</th>
+              <th className="px-3 py-2">Variación</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">

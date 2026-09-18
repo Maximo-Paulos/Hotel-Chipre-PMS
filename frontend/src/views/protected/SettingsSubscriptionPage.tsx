@@ -103,7 +103,7 @@ export default function SettingsSubscriptionPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Suscripción</h1>
+          <h1 className="text-balance text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Suscripción</h1>
           <p className="text-sm text-slate-600">Administrá el plan, el estado operativo y los límites del PMS.</p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -118,7 +118,7 @@ export default function SettingsSubscriptionPage() {
             </span>
           )}
           {isComped && (
-            <span className="inline-flex items-center rounded-full bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-700">
+            <span className="inline-flex items-center rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700">
               Comped activo
             </span>
           )}

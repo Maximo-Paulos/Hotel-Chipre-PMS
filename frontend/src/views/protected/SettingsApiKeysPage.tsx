@@ -77,7 +77,7 @@ export function SettingsApiKeysPage() {
   };
 
   if (!hasValidSession(session)) {
-    return <p className="text-sm text-slate-600">Inicia sesion con un hotel activo para administrar API Keys.</p>;
+    return <p className="text-sm text-slate-600">Inicia sesión con un hotel activo para administrar API Keys.</p>;
   }
   if (!canManage) {
     return <p className="text-sm text-slate-600">Solo owner y co-owner pueden administrar API Keys.</p>;
@@ -88,8 +88,8 @@ export function SettingsApiKeysPage() {
   return (
     <div className="space-y-6">
       <header>
-        <p className="text-xs uppercase tracking-wide text-slate-500">Settings</p>
-        <h1 className="text-2xl font-semibold text-slate-900">API Keys</h1>
+        <p className="text-xs uppercase tracking-wide text-slate-500">Configuración</p>
+        <h1 className="text-balance text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">API Keys</h1>
         <p className="text-sm text-slate-600">Crea, identifica por prefijo y revoca claves publicas del hotel.</p>
       </header>
 
@@ -98,7 +98,7 @@ export function SettingsApiKeysPage() {
           <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Clave creada</p>
           <h2 className="mt-1 text-sm font-semibold text-amber-950">Copia este secreto ahora</h2>
           <p className="mt-1 text-xs text-amber-900">
-            Este valor se muestra una sola vez. El PMS solo guardara el hash y no podra volver a mostrarlo.
+            Este valor se muestra una sola vez. El PMS solo guardará el hash y no podrá volver a mostrarlo.
           </p>
           <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
             <code className="break-all rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs text-slate-800">
@@ -184,7 +184,7 @@ export function SettingsApiKeysPage() {
                 <th className="px-3 py-2 text-left font-semibold text-slate-600">Prefijo</th>
                 <th className="px-3 py-2 text-left font-semibold text-slate-600">Uso</th>
                 <th className="px-3 py-2 text-left font-semibold text-slate-600">Estado</th>
-                <th className="px-3 py-2 text-left font-semibold text-slate-600">Ultimo uso</th>
+                <th className="px-3 py-2 text-left font-semibold text-slate-600">Último uso</th>
                 <th className="px-3 py-2 text-left font-semibold text-slate-600">Expira</th>
                 <th className="px-3 py-2 text-right font-semibold text-slate-600">Acciones</th>
               </tr>
