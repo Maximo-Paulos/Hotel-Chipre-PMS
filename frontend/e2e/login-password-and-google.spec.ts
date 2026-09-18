@@ -35,6 +35,23 @@ test("MFA login explains where to get the code and that no email is sent", async
   await expect(page.getByLabel("Código de la app autenticadora o de recuperación")).toBeVisible();
 });
 
+test("password login explains that Google and Hotels-PMS passwords are different", async ({ page }) => {
+  await page.route("**/api/auth/login", (route) => route.fulfill({
+    status: 401,
+    contentType: "application/json",
+    body: JSON.stringify({ detail: "Credenciales invalidas" })
+  }));
+
+  await page.goto("/login");
+  await page.getByLabel("Email", { exact: true }).fill("google-only@example.test");
+  await page.locator('input[type="password"]').fill("synthetic-password");
+  await page.getByTestId("login-submit").click();
+
+  await expect(page.getByRole("alert")).toHaveText("Credenciales invalidas");
+  await expect(page.getByRole("note")).toContainText("La contraseña de Google no sirve");
+  await expect(page.getByRole("link", { name: "Restablecer contraseña de Hotels-PMS" })).toHaveAttribute("href", "/reset-password");
+});
+
 test("Google sign-in button follows the configured E2E client id", async ({ page }) => {
   await page.route("**/api/auth/providers", (route) => route.fulfill({
     status: 200,

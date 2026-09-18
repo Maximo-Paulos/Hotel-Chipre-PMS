@@ -1112,8 +1112,8 @@
     "hash": "f9061ce71735072f2cd7081a151e7a7d"
   },
   "frontend/src/api/auth.ts": {
-    "mtime": 1789742456835.9377,
-    "hash": "d0086b22e4711913dcc480a57ffc4979"
+    "mtime": 1789746220252.9622,
+    "hash": "8b4abc700b20ddb6254c85ac843bb532"
   },
   "frontend/src/api/cashRegister.ts": {
     "mtime": 1789742456836.0486,
@@ -1516,8 +1516,8 @@
     "hash": "3727cd0de85336a21cb8d20258fef56b"
   },
   "frontend/src/views/public/LoginPage.tsx": {
-    "mtime": 1789742456860.7434,
-    "hash": "bd34516c3711de505b7dffdf3a25593f"
+    "mtime": 1789746220251.6213,
+    "hash": "45f59bfcbd6d72c23a0541c9dc9cd953"
   },
   "frontend/src/views/public/MarketingHomePage.tsx": {
     "mtime": 1789742456860.818,
@@ -1684,8 +1684,8 @@
     "hash": "1bc508df359d0d074ffbf2d00be5ca3c"
   },
   "tests/test_auth_security.py": {
-    "mtime": 1789742942455.95,
-    "hash": "4a06806e7df13cb5b5e7cdff4e752864"
+    "mtime": 1789746301801.256,
+    "hash": "9b99a77f6b891b2014fcb709842b1e94"
   },
   "tests/test_business_requirements_db.py": {
     "mtime": 1789742456878.725,
@@ -3236,8 +3236,8 @@
     "hash": "8e2277e0fc399686b86f61f02ef68f93"
   },
   ".graphify/GRAPH_REPORT.md": {
-    "mtime": 1789743635180.9324,
-    "hash": "5d0d7200a71078d8fd702dca214b304a"
+    "mtime": 1789745663015.4294,
+    "hash": "2a0a873ce4424a6077b21468293e9f00"
   },
   "scripts/agent_ops/manage_qa_baseline_lease.py": {
     "mtime": 1789742456871.493,

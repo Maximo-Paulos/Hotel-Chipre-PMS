@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-09-18T11:29:30.419Z",
+  "generatedAt": "2026-09-18T15:51:04.014Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -1915,6 +1915,30 @@
       "warnings": []
     },
     {
+      "id": "flow:public_loginpage_loginpage",
+      "name": "LoginPage",
+      "entryPoint": "public_loginpage_loginpage",
+      "entryPointId": "public_loginpage_loginpage",
+      "path": [
+        "public_loginpage_loginpage",
+        "public_loginpage_safeinvitationhashreturnpath",
+        "public_loginpage_safeinvitationreturnpath"
+      ],
+      "qualifiedPath": [
+        "public_loginpage_loginpage",
+        "public_loginpage_safeinvitationhashreturnpath",
+        "public_loginpage_safeinvitationreturnpath"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/views/public/LoginPage.tsx"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
       "id": "flow:protected_settingspermissionspage_useroverridespanel",
       "name": "UserOverridesPanel",
       "entryPoint": "protected_settingspermissionspage_useroverridespanel",
@@ -3551,6 +3575,28 @@
       "warnings": []
     },
     {
+      "id": "flow:versions_20260918_member_alias_auth_upgrade",
+      "name": "upgrade",
+      "entryPoint": "versions_20260918_member_alias_auth_upgrade",
+      "entryPointId": "versions_20260918_member_alias_auth_upgrade",
+      "path": [
+        "versions_20260918_member_alias_auth_upgrade",
+        "versions_20260918_member_alias_auth_columns"
+      ],
+      "qualifiedPath": [
+        "versions_20260918_member_alias_auth_upgrade",
+        "versions_20260918_member_alias_auth_columns"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20260918_member_alias_auth.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
       "id": "flow:versions_62fddec52b79_repair_sqlite_reservation_status_enum_upgrade",
       "name": "upgrade",
       "entryPoint": "versions_62fddec52b79_repair_sqlite_reservation_status_enum_upgrade",
@@ -4646,6 +4692,35 @@
       "fileCount": 1,
       "files": [
         "app/infrastructure/redis_backend.py"
+      ],
+      "criticality": 0.285,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_users_invite_user",
+      "name": "invite_user",
+      "entryPoint": "api_users_invite_user",
+      "entryPointId": "api_users_invite_user",
+      "path": [
+        "api_users_invite_user",
+        "api_users_assert_assignable_role",
+        "api_users_inviteresponse",
+        "api_users_membership_user_info",
+        "api_users_send_invitation_email"
+      ],
+      "qualifiedPath": [
+        "api_users_invite_user",
+        "api_users_assert_assignable_role",
+        "api_users_inviteresponse",
+        "api_users_membership_user_info",
+        "api_users_send_invitation_email"
+      ],
+      "depth": 1,
+      "nodeCount": 5,
+      "fileCount": 2,
+      "files": [
+        "app/api/users.py",
+        "frontend/src/api/users.ts"
       ],
       "criticality": 0.285,
       "warnings": []
@@ -7306,6 +7381,35 @@
         "app/services/gemma_service.py"
       ],
       "criticality": 0.2403,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_users_resend_invitation",
+      "name": "resend_invitation",
+      "entryPoint": "api_users_resend_invitation",
+      "entryPointId": "api_users_resend_invitation",
+      "path": [
+        "api_users_resend_invitation",
+        "api_users_assert_manageable_membership",
+        "api_users_inviteresponse",
+        "api_users_membership_user_info",
+        "api_users_send_invitation_email"
+      ],
+      "qualifiedPath": [
+        "api_users_resend_invitation",
+        "api_users_assert_manageable_membership",
+        "api_users_inviteresponse",
+        "api_users_membership_user_info",
+        "api_users_send_invitation_email"
+      ],
+      "depth": 1,
+      "nodeCount": 5,
+      "fileCount": 2,
+      "files": [
+        "app/api/users.py",
+        "frontend/src/api/users.ts"
+      ],
+      "criticality": 0.235,
       "warnings": []
     },
     {
@@ -11941,6 +12045,66 @@
       "warnings": []
     },
     {
+      "id": "flow:api_invitations_accept_invitation_legacy_path",
+      "name": "accept_invitation_legacy_path",
+      "entryPoint": "api_invitations_accept_invitation_legacy_path",
+      "entryPointId": "api_invitations_accept_invitation_legacy_path",
+      "path": [
+        "api_invitations_accept_invitation_legacy_path",
+        "api_invitations_accept_invitation",
+        "api_invitations_acceptpayload",
+        "api_invitations_activate_invitation_for_user",
+        "api_invitations_available_invitation",
+        "api_invitations_source_key"
+      ],
+      "qualifiedPath": [
+        "api_invitations_accept_invitation_legacy_path",
+        "api_invitations_accept_invitation",
+        "api_invitations_acceptpayload",
+        "api_invitations_activate_invitation_for_user",
+        "api_invitations_available_invitation",
+        "api_invitations_source_key"
+      ],
+      "depth": 2,
+      "nodeCount": 6,
+      "fileCount": 1,
+      "files": [
+        "app/api/invitations.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_invitations_accept_invitation_with_google_legacy_path",
+      "name": "accept_invitation_with_google_legacy_path",
+      "entryPoint": "api_invitations_accept_invitation_with_google_legacy_path",
+      "entryPointId": "api_invitations_accept_invitation_with_google_legacy_path",
+      "path": [
+        "api_invitations_accept_invitation_with_google_legacy_path",
+        "api_invitations_accept_invitation_with_google",
+        "api_invitations_googleinvitationacceptpayload",
+        "api_invitations_activate_invitation_for_user",
+        "api_invitations_available_invitation",
+        "api_invitations_source_key"
+      ],
+      "qualifiedPath": [
+        "api_invitations_accept_invitation_with_google_legacy_path",
+        "api_invitations_accept_invitation_with_google",
+        "api_invitations_googleinvitationacceptpayload",
+        "api_invitations_activate_invitation_for_user",
+        "api_invitations_available_invitation",
+        "api_invitations_source_key"
+      ],
+      "depth": 2,
+      "nodeCount": 6,
+      "fileCount": 1,
+      "files": [
+        "app/api/invitations.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
       "id": "flow:utils_date_adddaysiso",
       "name": "addDaysIso",
       "entryPoint": "utils_date_adddaysiso",
@@ -13108,32 +13272,6 @@
       "fileCount": 1,
       "files": [
         "app/services/rate_calendar_service.py"
-      ],
-      "criticality": 0.17,
-      "warnings": []
-    },
-    {
-      "id": "flow:api_invitations_get_invitation_legacy",
-      "name": "get_invitation_legacy",
-      "entryPoint": "api_invitations_get_invitation_legacy",
-      "entryPointId": "api_invitations_get_invitation_legacy",
-      "path": [
-        "api_invitations_get_invitation_legacy",
-        "api_invitations_invitation_info",
-        "api_invitations_available_invitation",
-        "api_invitations_source_key"
-      ],
-      "qualifiedPath": [
-        "api_invitations_get_invitation_legacy",
-        "api_invitations_invitation_info",
-        "api_invitations_available_invitation",
-        "api_invitations_source_key"
-      ],
-      "depth": 2,
-      "nodeCount": 4,
-      "fileCount": 1,
-      "files": [
-        "app/api/invitations.py"
       ],
       "criticality": 0.17,
       "warnings": []
@@ -19849,30 +19987,6 @@
       "warnings": []
     },
     {
-      "id": "flow:api_invitations_get_invitation",
-      "name": "get_invitation",
-      "entryPoint": "api_invitations_get_invitation",
-      "entryPointId": "api_invitations_get_invitation",
-      "path": [
-        "api_invitations_get_invitation",
-        "api_invitations_available_invitation",
-        "api_invitations_source_key"
-      ],
-      "qualifiedPath": [
-        "api_invitations_get_invitation",
-        "api_invitations_available_invitation",
-        "api_invitations_source_key"
-      ],
-      "depth": 1,
-      "nodeCount": 3,
-      "fileCount": 1,
-      "files": [
-        "app/api/invitations.py"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
       "id": "flow:services_stock_service_get_location",
       "name": "get_location",
       "entryPoint": "services_stock_service_get_location",
@@ -21289,30 +21403,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_staff_invitation_service_provision_staff_invitation",
-      "name": "provision_staff_invitation",
-      "entryPoint": "services_staff_invitation_service_provision_staff_invitation",
-      "entryPointId": "services_staff_invitation_service_provision_staff_invitation",
-      "path": [
-        "services_staff_invitation_service_provision_staff_invitation",
-        "services_staff_invitation_service_normalize_staff_role",
-        "services_staff_invitation_service_staffinvitationprovision"
-      ],
-      "qualifiedPath": [
-        "services_staff_invitation_service_provision_staff_invitation",
-        "services_staff_invitation_service_normalize_staff_role",
-        "services_staff_invitation_service_staffinvitationprovision"
-      ],
-      "depth": 1,
-      "nodeCount": 3,
-      "fileCount": 1,
-      "files": [
-        "app/services/staff_invitation_service.py"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
       "id": "flow:tasks_ota_tasks_push_availability_update",
       "name": "push_availability_update",
       "entryPoint": "tasks_ota_tasks_push_availability_update",
@@ -22688,6 +22778,28 @@
       "fileCount": 1,
       "files": [
         "app/services/analytics_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_csv_export_safety_spreadsheet_safe_row",
+      "name": "spreadsheet_safe_row",
+      "entryPoint": "services_csv_export_safety_spreadsheet_safe_row",
+      "entryPointId": "services_csv_export_safety_spreadsheet_safe_row",
+      "path": [
+        "services_csv_export_safety_spreadsheet_safe_row",
+        "services_csv_export_safety_spreadsheet_safe_value"
+      ],
+      "qualifiedPath": [
+        "services_csv_export_safety_spreadsheet_safe_row",
+        "services_csv_export_safety_spreadsheet_safe_value"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/services/csv_export_safety.py"
       ],
       "criticality": 0.16,
       "warnings": []

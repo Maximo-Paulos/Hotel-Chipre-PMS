@@ -943,6 +943,12 @@ def test_google_account_can_set_password_only_with_linked_google_proof_and_csrf(
     user = db.query(User).filter_by(email="passwordless@example.com").one()
     assert user.password_login_enabled is True
     assert verify_password("NewStrongPassphrase123!", user.password_hash)
+    password_login = client.post(
+        "/api/auth/login",
+        json={"email": "passwordless@example.com", "password": "NewStrongPassphrase123!"},
+    )
+    assert password_login.status_code == 200, password_login.text
+    assert password_login.json()["user"]["password_login_enabled"] is True
     me = client.get("/api/auth/me", headers={"Authorization": f"Bearer {auth['access_token']}"})
     assert me.status_code == 200, me.text
     assert me.json()["password_login_enabled"] is True
@@ -1390,6 +1396,53 @@ def _enroll_and_confirm_mfa(
     assert audit.hotel_id == auth["hotel_id"]
     assert json.loads(audit.details) == {"factor": "totp"}
     return auth, secret, recovery_codes
+
+
+def test_password_reset_preserves_mfa_and_completes_login_after_code(client_and_db, fixed_code_patch, monkeypatch):
+    client, db, _session_factory = client_and_db
+    _configure_resend(monkeypatch, [])
+    email = "reset-with-mfa@example.com"
+    _register_owner(client, email)
+    verified = client.post("/api/auth/verify-email", json={"email": email, "code": "123456"})
+    assert verified.status_code == 200, verified.text
+    user = db.query(User).filter_by(email=email).one()
+    secret = pyotp.random_base32()
+    db.add(
+        UserMfaSecret(
+            user_id=user.id,
+            encrypted_secret=encrypt_totp_secret(secret),
+            status=MFA_ACTIVE,
+        )
+    )
+    db.commit()
+
+    requested = client.post("/api/auth/request-reset", json={"email": email})
+    assert requested.status_code == 200, requested.text
+    reset = client.post(
+        "/api/auth/reset-password",
+        json={"email": email, "code": "123456", "new_password": "NewResetPassphrase123!"},
+    )
+    assert reset.status_code == 200, reset.text
+    assert reset.json()["requires_mfa"] is True
+    assert "access_token" not in reset.json()
+    db.refresh(user)
+    assert user.password_login_enabled is True
+    assert verify_password("NewResetPassphrase123!", user.password_hash)
+
+    completed = client.post(
+        "/api/auth/login/mfa",
+        json={"mfa_token": reset.json()["mfa_token"], "code": _next_totp_code(secret)},
+    )
+    assert completed.status_code == 200, completed.text
+    assert completed.json()["user"]["email"] == email
+
+    password_login = client.post(
+        "/api/auth/login",
+        json={"email": email, "password": "NewResetPassphrase123!"},
+    )
+    assert password_login.status_code == 200, password_login.text
+    assert password_login.json()["requires_mfa"] is True
+    assert "access_token" not in password_login.json()
 
 
 def test_login_without_mfa_keeps_returning_the_normal_auth_response(client_and_db, fixed_code_patch, monkeypatch):

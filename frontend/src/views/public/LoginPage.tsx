@@ -50,6 +50,7 @@ export function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [slowLogin, setSlowLogin] = useState(false);
+  const [showPasswordHelp, setShowPasswordHelp] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mfaChallenge, setMfaChallenge] = useState<{ mfa_token: string; expires_in: number } | null>(null);
   const [mfaCode, setMfaCode] = useState("");
@@ -140,8 +141,12 @@ export function LoginPage() {
       const res = await loginApi(email, password);
       await handleAuthResult(res);
     } catch (err) {
-      if (err instanceof ApiError) setError(err.message);
-      else setError(t("login.errors.signIn"));
+      if (err instanceof ApiError) {
+        setError(err.message);
+        setShowPasswordHelp(err.status === 401);
+      } else {
+        setError(t("login.errors.signIn"));
+      }
     } finally {
       setLoading(false);
     }
@@ -150,6 +155,7 @@ export function LoginPage() {
   const handleGoogleCredential = async (idToken: string) => {
     setLoading(true);
     setError(null);
+    setShowPasswordHelp(false);
     try {
       const res = await loginWithGoogle(idToken);
       await handleAuthResult(res);
@@ -168,6 +174,7 @@ export function LoginPage() {
   ) => {
     setLoading(true);
     setError(null);
+    setShowPasswordHelp(false);
     try {
       const res = await loginWithApple(idToken, nonce, user);
       await handleAuthResult(res);
@@ -255,7 +262,10 @@ export function LoginPage() {
               className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-900 shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
               placeholder={t("login.emailPlaceholder")}
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                setShowPasswordHelp(false);
+              }}
             />
           </div>
           <div>
@@ -263,13 +273,24 @@ export function LoginPage() {
             <PasswordInput
               id="login-password"
               value={password}
-              onChange={setPassword}
+              onChange={(value) => {
+                setPassword(value);
+                setShowPasswordHelp(false);
+              }}
               placeholder={t("login.passwordPlaceholder")}
               required
               autoComplete="current-password"
             />
           </div>
           {error && <p id="login-error" role="alert" className="rounded-md bg-rose-50 p-2 text-sm text-rose-700">{error}</p>}
+          {showPasswordHelp && (
+            <p className="rounded-md bg-amber-50 p-3 text-sm text-amber-900" role="note">
+              {t("login.passwordHelp")} {" "}
+              <Link to="/reset-password" className="font-semibold underline">
+                {t("login.resetHotelPassword")}
+              </Link>
+            </p>
+          )}
           {loading && slowLogin && (
             <p className="rounded-md bg-amber-50 p-2 text-sm text-amber-800" data-testid="login-slow-hint" role="status">
               {t("login.slowHint")}

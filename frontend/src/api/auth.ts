@@ -109,7 +109,7 @@ export const requestPasswordReset = (email: string) =>
   });
 
 export const resetPassword = (email: string, code: string, newPassword: string) =>
-  apiFetch<AuthResponse>("/api/auth/reset-password", {
+  apiFetch<AuthResult>("/api/auth/reset-password", {
     method: "POST",
     data: { email, code, new_password: newPassword }
   });
