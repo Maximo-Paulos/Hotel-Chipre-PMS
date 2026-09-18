@@ -187,6 +187,7 @@ def _build_auth_response(db: Session, user: User, requested_hotel_id: int | None
             is_verified=user.is_verified,
             is_active=user.is_active,
             password_login_enabled=bool(user.password_login_enabled),
+            google_login_enabled=bool(user.google_sub),
             permissions=effective_permissions,
         ),
         permissions=effective_permissions,
@@ -637,13 +638,11 @@ def complete_mfa_login(
     audit_details: dict[str, object] = {"method": "password+mfa"}
     if pending_google_identity is not None and user.google_sub is None:
         user.google_sub = pending_google_identity["sub"]
-        user.password_hash = hash_password(secrets.token_urlsafe(32))
-        user.password_login_enabled = False
         user.is_verified = True
         user.token_version = (user.token_version or 0) + 1
         revoke_all_sessions(db, user.id)
         audit_action = "google_auth.linked"
-        audit_details = {"account_state": "reclaimed", "provider": "google"}
+        audit_details = {"account_state": "linked_after_mfa", "provider": "google"}
     return _issue_auth_response(
         db,
         user,
@@ -682,9 +681,11 @@ def google_login(
     settings = get_settings()
     claims, email, google_sub = _verify_google_claims(payload.id_token, settings)
 
-    # The Google subject is the identity key. Never let an email-only match
-    # silently select an account: a password registration can exist before
-    # its owner proves control of that email.
+    # The Google subject is the identity key. An email-only match must not
+    # silently take over a local account: a password registration can exist
+    # before its owner proves control of that account. Existing accounts may
+    # link Google only after proving the local account with MFA here or with
+    # password + Google proof through /google/link.
     # A hit is case (a): the provider subject is already bound, so the
     # account is logged in directly without changing its password or link.
     user = db.query(User).filter(User.google_sub == google_sub).first()
@@ -717,21 +718,17 @@ def google_login(
         elif not user.is_active:
             raise HTTPException(status_code=403, detail="Usuario deshabilitado")
         elif user.google_sub is None:
-            # A verified Google email proves ownership of the address. The
-            # local password may have been chosen by someone who registered
-            # the address before its actual owner, so replace it and revoke
-            # every credential issued before this claim.
             if mfa_service.get_active_mfa_secret(db, user.id):
                 pending_google_identity = {"email": email, "sub": google_sub}
-                google_audit_details["account_state"] = "pending_mfa_reclaim"
+                google_audit_details["account_state"] = "pending_mfa_link"
             else:
-                user.password_hash = hash_password(secrets.token_urlsafe(32))
-                user.password_login_enabled = False
-                user.is_verified = True
-                user.google_sub = google_sub
-                user.token_version = (user.token_version or 0) + 1
-                revoke_all_sessions(db, user.id)
-                google_audit_details["account_state"] = "reclaimed"
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        "Esta cuenta ya tiene un acceso propio. Iniciá sesión con tu método habitual "
+                        "y vinculá Google desde Configuración > Seguridad."
+                    ),
+                )
         else:
             # A different Google subject must never overwrite an existing
             # link or fall back to email-only login. Fail closed on this
@@ -755,7 +752,7 @@ def google_login(
             db,
             user=user,
             action="google_auth.mfa_challenge",
-            details={"account_state": "pending_mfa_reclaim", "provider": "google"},
+            details={"account_state": "pending_mfa_link", "provider": "google"},
         )
         db.commit()
         return challenge
@@ -855,7 +852,7 @@ def link_google(
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     if not verify_password(payload.password, user.password_hash):
-        raise HTTPException(status_code=401, detail="Reautenticacion invalida")
+        raise HTTPException(status_code=403, detail="Reautenticacion invalida")
     if user.google_sub:
         raise HTTPException(status_code=409, detail="La cuenta ya tiene un login de Google vinculado")
 
@@ -1510,5 +1507,6 @@ def me(
         is_verified=current_user.is_verified,
         is_active=current_user.is_active,
         password_login_enabled=bool(current_user.password_login_enabled),
+        google_login_enabled=bool(current_user.google_sub),
         permissions=effective_permissions,
     )

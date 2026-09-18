@@ -328,7 +328,6 @@ def _accept_invitation_with_google(
     )
     from app.config import get_settings
     from app.services.external_effects_policy import GoogleLoginDisabled, require_google_login
-    from app.services.user_session_service import revoke_all_sessions
     from app.services import mfa_service
 
     try:
@@ -377,10 +376,18 @@ def _accept_invitation_with_google(
             detail="Iniciá sesión con tu contraseña y MFA antes de aceptar esta invitación.",
         )
     if has_active_mfa and user is not None and user.is_active and user.google_sub is None:
-        # Do not reclaim a password account, revoke its sessions, or consume
-        # invitation state until the account's second factor is verified.
+        # Link only after the invitee proves control of the existing account's
+        # second factor. Completing this challenge preserves its local password.
         pending_google_identity = {"email": email, "sub": google_sub}
-        account_state = "pending_mfa_reclaim"
+        account_state = "pending_mfa_link"
+    elif user is not None and user.is_active and user.google_sub is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Este email ya tiene una cuenta. Iniciá sesión con esa cuenta para aceptar la invitación; "
+                "después podés vincular Google desde Configuración > Seguridad."
+            ),
+        )
 
     if pending_google_identity is not None:
         pass
@@ -412,16 +419,12 @@ def _accept_invitation_with_google(
         user.is_active = True
         account_state = "claimed_invited"
     elif user.google_sub is None:
-        # A verified Google ID token proves the invitation email. Reclaim an
-        # existing local account only after replacing the local secret and
-        # revoking all sessions/JWTs created before this identity proof.
-        user.google_sub = google_sub
-        user.password_hash = hash_password(secrets.token_urlsafe(32))
-        user.password_login_enabled = False
-        user.is_verified = True
-        user.token_version = (user.token_version or 0) + 1
-        revoke_all_sessions(db, user.id)
-        account_state = "reclaimed"
+        # Active accounts without MFA were rejected above; an unclaimed
+        # placeholder was handled in the preceding branch.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Iniciá sesión con la cuenta existente para aceptar esta invitación.",
+        )
     else:
         account_state = "existing"
 

@@ -4,11 +4,18 @@ import { Link, useNavigate } from "react-router-dom";
 import { ApiError } from "../../api/client";
 import { Seo } from "../../components/Seo";
 import { PasswordInput } from "../../components/PasswordInput";
-import { requestPasswordReset, resetPassword } from "../../api/auth";
+import {
+  completeMfaLogin,
+  isMfaChallenge,
+  requestPasswordReset,
+  resetPassword,
+  type AuthResponse,
+  type MfaChallengeResponse
+} from "../../api/auth";
 import { normalizeRole, useSession } from "../../state/session";
 import { BrandMark } from "../../components/brand/BrandMark";
 
-type Step = 1 | 2 | 3;
+type Step = 1 | 2 | 3 | 4;
 const AUTH_EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function ResetPasswordPage() {
@@ -22,6 +29,9 @@ export function ResetPasswordPage() {
   const [confirm, setConfirm] = useState("");
   const [info, setInfo] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [mfaChallenge, setMfaChallenge] = useState<MfaChallengeResponse | null>(null);
+  const [mfaCode, setMfaCode] = useState("");
+  const [mfaError, setMfaError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -56,6 +66,26 @@ export function ResetPasswordPage() {
     setStep(3);
   };
 
+  const finishSignIn = (res: AuthResponse) => {
+    if (!res.hotel_id) {
+      throw new ApiError(500, "La respuesta de autenticación no devolvió un hotel válido.");
+    }
+    login({
+      userId: res.user.email,
+      email: res.user.email,
+      hotelId: res.hotel_id,
+      hotelIds: res.hotel_ids?.length ? res.hotel_ids : [res.hotel_id],
+      role: normalizeRole(res.user.role),
+      baseRole: normalizeRole(res.user.role),
+      permissions: res.permissions ?? res.user.permissions ?? null,
+      accessToken: res.access_token,
+      csrfToken: res.csrf_token,
+      isVerified: res.user.is_verified
+    });
+    setSaved(true);
+    setTimeout(() => navigate("/login"), 1000);
+  };
+
   const handleSave = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
@@ -66,25 +96,33 @@ export function ResetPasswordPage() {
     setLoading(true);
     try {
       const res = await resetPassword(email.trim(), code.trim(), password);
-      if (!res.hotel_id) {
-        throw new ApiError(500, "La respuesta de recuperación no devolvió un hotel válido.");
+      if (isMfaChallenge(res)) {
+        setMfaChallenge(res);
+        setMfaCode("");
+        setMfaError(null);
+        setInfo("La contraseña quedó actualizada. Ahora verificá tu identidad para iniciar sesión.");
+        setStep(4);
+      } else {
+        finishSignIn(res);
       }
-      login({
-        userId: res.user.email,
-        email: res.user.email,
-        hotelId: res.hotel_id,
-        hotelIds: res.hotel_ids?.length ? res.hotel_ids : [res.hotel_id],
-        role: normalizeRole(res.user.role),
-        baseRole: normalizeRole(res.user.role),
-        permissions: res.permissions ?? res.user.permissions ?? null,
-        accessToken: res.access_token,
-        csrfToken: res.csrf_token,
-        isVerified: res.user.is_verified
-      });
-      setSaved(true);
-      setTimeout(() => navigate("/login"), 1000);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Código inválido o expirado");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleMfaSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!mfaChallenge) return;
+    setMfaError(null);
+    setLoading(true);
+    try {
+      const res = await completeMfaLogin(mfaChallenge.mfa_token, mfaCode.trim());
+      setMfaChallenge(null);
+      finishSignIn(res);
+    } catch (err) {
+      setMfaError(err instanceof ApiError ? err.message : "No se pudo verificar el código.");
     } finally {
       setLoading(false);
     }
@@ -188,6 +226,35 @@ export function ResetPasswordPage() {
               disabled={loading}
             >
               {loading ? "Guardando..." : "Guardar nueva contraseña"}
+            </button>
+          </form>
+        )}
+
+        {step === 4 && mfaChallenge && (
+          <form className="space-y-4" onSubmit={handleMfaSubmit}>
+            <p className="rounded-lg border border-brand-100 bg-brand-50 p-3 text-sm text-brand-900" role="status">
+              Esta cuenta tiene activada la verificación en dos pasos. Abrí la app autenticadora que vinculaste e ingresá su código temporal de 6 dígitos. También podés usar un código de recuperación guardado. No te llegará por email.
+            </p>
+            <label htmlFor="reset-mfa-code" className="block text-sm font-medium text-slate-700">
+              Código de la app autenticadora o de recuperación
+              <input
+                id="reset-mfa-code"
+                autoComplete="one-time-code"
+                inputMode="text"
+                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-900 shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                value={mfaCode}
+                onChange={(event) => setMfaCode(event.target.value)}
+                required
+                autoFocus
+              />
+            </label>
+            {mfaError && <p className="rounded-md bg-rose-50 p-2 text-sm text-rose-700" role="alert">{mfaError}</p>}
+            <button
+              type="submit"
+              disabled={loading || !mfaCode.trim()}
+              className="w-full rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-60"
+            >
+              {loading ? "Verificando..." : "Verificar y continuar"}
             </button>
           </form>
         )}

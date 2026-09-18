@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useRef, useState } from "react";
 
 import { hasValidSession } from "../../api/client";
-import { currentUser, setPasswordWithGoogle } from "../../api/auth";
+import { currentUser, linkGoogle, setPasswordWithGoogle } from "../../api/auth";
 import { getSecurityEvents, getSecurityOverview, revokeAllSessions } from "../../api/security";
 import { useSession } from "../../state/session";
 import { useGuardedMutation } from "../../hooks/useGuardedMutation";
@@ -23,12 +23,18 @@ export function SettingsSecurityPage() {
     staleTime: 15 * 1000
   });
   const googleIdTokenRef = useRef<string | null>(null);
+  const googleLinkIdTokenRef = useRef<string | null>(null);
   const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [passwordSuccess, setPasswordSuccess] = useState(false);
   const [passwordSaving, setPasswordSaving] = useState(false);
+  const [showGoogleLinkForm, setShowGoogleLinkForm] = useState(false);
+  const [googleLinkPassword, setGoogleLinkPassword] = useState("");
+  const [googleLinkError, setGoogleLinkError] = useState<string | null>(null);
+  const [googleLinkSuccess, setGoogleLinkSuccess] = useState(false);
+  const [googleLinkSaving, setGoogleLinkSaving] = useState(false);
   const overviewQuery = useQuery({
     queryKey: ["settings-security", "overview", session.hotelId],
     queryFn: () => getSecurityOverview(session),
@@ -68,6 +74,13 @@ export function SettingsSecurityPage() {
     setShowPasswordForm(true);
   };
 
+  const handleGoogleLinkConfirmation = (idToken: string) => {
+    googleLinkIdTokenRef.current = idToken;
+    setGoogleLinkError(null);
+    setGoogleLinkSuccess(false);
+    setShowGoogleLinkForm(true);
+  };
+
   const handleSetPassword = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setPasswordError(null);
@@ -100,6 +113,37 @@ export function SettingsSecurityPage() {
       setPasswordError((err as Error).message || "No se pudo crear la contraseña. Confirmá tu identidad con Google e intentá de nuevo.");
     } finally {
       setPasswordSaving(false);
+    }
+  };
+
+  const handleLinkGoogle = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setGoogleLinkError(null);
+    const idToken = googleLinkIdTokenRef.current;
+    if (!idToken) {
+      setGoogleLinkError("Volvé a confirmar tu identidad con Google.");
+      setShowGoogleLinkForm(false);
+      return;
+    }
+    if (!googleLinkPassword) {
+      setGoogleLinkError("Ingresá tu contraseña actual de Hotels-PMS.");
+      return;
+    }
+    setGoogleLinkSaving(true);
+    try {
+      await linkGoogle(idToken, googleLinkPassword);
+      googleLinkIdTokenRef.current = null;
+      setGoogleLinkPassword("");
+      setGoogleLinkSuccess(true);
+      setShowGoogleLinkForm(false);
+      await userQuery.refetch();
+    } catch (err) {
+      googleLinkIdTokenRef.current = null;
+      setShowGoogleLinkForm(false);
+      setGoogleLinkPassword("");
+      setGoogleLinkError((err as Error).message || "No se pudo vincular Google. Confirmá tus datos e intentá de nuevo.");
+    } finally {
+      setGoogleLinkSaving(false);
     }
   };
 
@@ -172,8 +216,8 @@ export function SettingsSecurityPage() {
             {userQuery.data?.password_login_enabled === false && !passwordSuccess && (
               <div className="mt-4 rounded-lg border border-brand-100 bg-brand-50 p-4">
                 <div>
-                  <h3 className="text-sm font-semibold text-slate-900">Agregá una contraseña (opcional)</h3>
-                  <p className="mt-1 text-sm text-slate-700">Podés seguir usando Google. Crear una contraseña también te permitirá ingresar con email y contraseña.</p>
+                  <h3 className="text-sm font-semibold text-slate-900">Agregá una contraseña de Hotels-PMS</h3>
+                  <p className="mt-1 text-sm text-slate-700">Esta cuenta no tiene habilitado el ingreso con contraseña. Podés seguir usando Google y elegir una contraseña nueva acá; no es la contraseña de Google.</p>
                 </div>
                 {!showPasswordForm ? (
                   <div className="mt-3">
@@ -230,6 +274,69 @@ export function SettingsSecurityPage() {
                 )}
                 {passwordError && <p className="mt-3 text-sm text-rose-700" role="alert">{passwordError}</p>}
               </div>
+            )}
+            {userQuery.data?.password_login_enabled === true && userQuery.data.google_login_enabled === false && (
+              <div className="mt-4 rounded-lg border border-brand-100 bg-brand-50 p-4" data-testid="google-link-card">
+                <h3 className="text-sm font-semibold text-slate-900">Vinculá Google a esta cuenta</h3>
+                <p className="mt-1 text-sm text-slate-700">
+                  Confirmá tu cuenta de Google y tu contraseña actual de Hotels-PMS. La contraseña no se reemplaza: después vas a poder entrar de las dos formas.
+                </p>
+                {!showGoogleLinkForm ? (
+                  <div className="mt-3">
+                    <GoogleSignInButton onCredential={handleGoogleLinkConfirmation} />
+                    <p className="mt-2 text-center text-xs text-slate-500">Usá el mismo email que figura en esta cuenta.</p>
+                    {googleLinkError && <p className="mt-3 text-sm text-rose-700" role="alert">{googleLinkError}</p>}
+                  </div>
+                ) : (
+                  <form className="mt-4 space-y-3" onSubmit={handleLinkGoogle}>
+                    <label htmlFor="google-link-password" className="block text-sm font-medium text-slate-700">
+                      Contraseña actual de Hotels-PMS
+                      <PasswordInput
+                        id="google-link-password"
+                        value={googleLinkPassword}
+                        onChange={setGoogleLinkPassword}
+                        placeholder="Tu contraseña actual"
+                        required
+                        autoComplete="current-password"
+                      />
+                    </label>
+                    {googleLinkError && <p className="text-sm text-rose-700" role="alert">{googleLinkError}</p>}
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="submit"
+                        disabled={googleLinkSaving || !googleLinkPassword}
+                        className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
+                        data-testid="google-link-submit"
+                      >
+                        {googleLinkSaving ? "Vinculando..." : "Vincular Google"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          googleLinkIdTokenRef.current = null;
+                          setShowGoogleLinkForm(false);
+                          setGoogleLinkPassword("");
+                          setGoogleLinkError(null);
+                        }}
+                        disabled={googleLinkSaving}
+                        className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </div>
+            )}
+            {userQuery.data?.password_login_enabled === true && userQuery.data.google_login_enabled === true && (
+              <p className="mt-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800" role="status">
+                Esta cuenta permite ingresar con Google o con tu contraseña de Hotels-PMS.
+              </p>
+            )}
+            {googleLinkSuccess && (
+              <p className="mt-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800" role="status">
+                Google quedó vinculado. Tu contraseña de Hotels-PMS sigue activa.
+              </p>
             )}
             {passwordSuccess && (
               <p className="mt-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800" role="status">

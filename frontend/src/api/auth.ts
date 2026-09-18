@@ -7,6 +7,7 @@ export type AuthUser = {
   is_verified: boolean;
   is_active: boolean;
   password_login_enabled: boolean;
+  google_login_enabled?: boolean;
   permissions?: string[];
 };
 
@@ -109,7 +110,7 @@ export const requestPasswordReset = (email: string) =>
   });
 
 export const resetPassword = (email: string, code: string, newPassword: string) =>
-  apiFetch<AuthResponse>("/api/auth/reset-password", {
+  apiFetch<AuthResult>("/api/auth/reset-password", {
     method: "POST",
     data: { email, code, new_password: newPassword }
   });

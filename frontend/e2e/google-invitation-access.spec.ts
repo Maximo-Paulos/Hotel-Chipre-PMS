@@ -133,15 +133,17 @@ test("Google invitation waits for MFA, then accepts the original invitation with
   await expect(page.getByText("Hotel de prueba")).toBeVisible();
   await expect(page.getByTestId("google-signin-button")).toBeVisible();
   await page.getByRole("button", { name: "Continue with Google" }).click();
-  await expect(page.getByLabel("Código de autenticación o recuperación")).toBeVisible();
-  await expect(page.getByText("La invitación todavía no fue consumida.")).toBeVisible();
+  await expect(page.getByText(/Esta cuenta tiene activada la verificación en dos pasos/)).toBeVisible();
+  await expect(page.getByText(/No te llegará por email/)).toBeVisible();
+  await expect(page.getByLabel("Código de la app autenticadora o de recuperación")).toBeVisible();
+  await expect(page.getByText(/La invitación seguirá pendiente hasta verificarlo/)).toBeVisible();
 
   await test.info().attach("google-invitation-mfa.png", {
     body: await page.screenshot(),
     contentType: "image/png"
   });
 
-  await page.getByLabel("Código de autenticación o recuperación").fill("123456");
+  await page.getByLabel("Código de la app autenticadora o de recuperación").fill("123456");
   await page.getByRole("button", { name: "Verificar y aceptar invitación" }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
 
@@ -171,8 +173,8 @@ test("password login returns to the invitation after MFA and accepts it automati
   await page.getByLabel("Email").fill(invitedEmail);
   await page.locator("#login-password").fill("synthetic-password-value");
   await page.getByTestId("login-submit").click();
-  await expect(page.getByLabel("Código de autenticación o recuperación")).toBeVisible();
-  await page.getByLabel("Código de autenticación o recuperación").fill("654321");
+  await expect(page.getByLabel("Código de la app autenticadora o de recuperación")).toBeVisible();
+  await page.getByLabel("Código de la app autenticadora o de recuperación").fill("654321");
   await page.getByRole("button", { name: "Verificar y continuar" }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
 
