@@ -1286,7 +1286,7 @@
   "graphifyignore_patterns": 69,
   "git": {
     "source_owner": "git",
-    "source_hash": "788d35be190e75c14289180f669d93aed01a59d3",
+    "source_hash": "ed918c67557cd28f31874e6037c151aa38c483ea",
     "branches": [
       "audit/tech-0000-baseline",
       "chore/revert-rls-bypass-diagnostic",
@@ -1372,7 +1372,7 @@
       "fix/verify-email-validation",
       "hotfix/i18n-main-entrypoint",
       "main",
-      "ui/homogeneous-system"
+      "ui/marketing-board-mirror"
     ],
     "max_commits": 200,
     "active_within_days": 30
@@ -1383,7 +1383,7 @@
     "source": "cli",
     "root": ".",
     "git_root": ".",
-    "head": "788d35be190e75c14289180f669d93aed01a59d3",
+    "head": "ed918c67557cd28f31874e6037c151aa38c483ea",
     "candidate_count": null,
     "included_count": 1256,
     "excluded_untracked_count": 0,
