@@ -293,15 +293,19 @@ def _build_login_response(
     audit_action: str | None = None,
     audit_details: dict[str, object] | None = None,
     requested_hotel_id: int | None = None,
+    pending_google_identity: dict[str, str] | None = None,
 ) -> AuthResponse | MfaChallengeResponse:
     """Return a session only after the required account MFA factor succeeds."""
     if mfa_service.get_active_mfa_secret(db, user.id):
+        challenge_payload: dict[str, object] = {
+            "purpose": "mfa_login",
+            "user_id": user.id,
+            "token_version": user.token_version or 0,
+        }
+        if pending_google_identity is not None:
+            challenge_payload["pending_google_identity"] = pending_google_identity
         challenge = create_signed_token(
-            {
-                "purpose": "mfa_login",
-                "user_id": user.id,
-                "token_version": user.token_version or 0,
-            },
+            challenge_payload,
             expires_minutes=MFA_LOGIN_CHALLENGE_MINUTES,
         )
         return MfaChallengeResponse(
@@ -600,6 +604,24 @@ def complete_mfa_login(
     if not mfa_service.get_active_mfa_secret(db, user.id):
         raise HTTPException(status_code=401, detail="MFA no esta activo")
 
+    pending_google_identity = challenge.get("pending_google_identity")
+    if pending_google_identity is not None:
+        if not isinstance(pending_google_identity, dict):
+            raise HTTPException(status_code=401, detail="Desafio MFA invalido")
+        pending_email = pending_google_identity.get("email")
+        pending_sub = pending_google_identity.get("sub")
+        if (
+            not isinstance(pending_email, str)
+            or not isinstance(pending_sub, str)
+            or pending_email.strip().lower() != user.email.strip().lower()
+        ):
+            raise HTTPException(status_code=401, detail="Desafio MFA invalido")
+        if user.google_sub not in (None, pending_sub):
+            raise HTTPException(status_code=409, detail="La cuenta ya está vinculada a otra identidad de Google")
+        owner_of_google_identity = db.query(User.id).filter(User.google_sub == pending_sub).first()
+        if owner_of_google_identity is not None and owner_of_google_identity[0] != user.id:
+            raise HTTPException(status_code=409, detail="La identidad de Google ya está vinculada a otra cuenta")
+
     _allow_mfa_attempt(db, "login", user.id)
     try:
         valid = mfa_service.consume_mfa_code(db, user.id, payload.code)
@@ -611,13 +633,24 @@ def complete_mfa_login(
         raise HTTPException(status_code=401, detail="Codigo MFA invalido o ya utilizado")
 
     _reset_mfa_attempts(db, "login", user.id)
+    audit_action = "auth.login.success"
+    audit_details: dict[str, object] = {"method": "password+mfa"}
+    if pending_google_identity is not None and user.google_sub is None:
+        user.google_sub = pending_google_identity["sub"]
+        user.password_hash = hash_password(secrets.token_urlsafe(32))
+        user.password_login_enabled = False
+        user.is_verified = True
+        user.token_version = (user.token_version or 0) + 1
+        revoke_all_sessions(db, user.id)
+        audit_action = "google_auth.linked"
+        audit_details = {"account_state": "reclaimed", "provider": "google"}
     return _issue_auth_response(
         db,
         user,
         request=request,
         response=response,
-        audit_action="auth.login.success",
-        audit_details={"method": "password+mfa"},
+        audit_action=audit_action,
+        audit_details=audit_details,
     )
 
 
@@ -632,9 +665,10 @@ def google_login(
     "Sign in with Google" via Google Identity Services' ID-token flow: the
     frontend never talks to our backend during the OAuth dance, it just hands
     us the signed JWT Google issued. We verify that signature against
-    GOOGLE_CLIENT_ID (env var, public, same value as frontend's
-    VITE_GOOGLE_CLIENT_ID -- no client secret exists or is needed for this
-    flow). Google Cloud Console: create an OAuth Client ID (type "Web
+    GOOGLE_CLIENT_ID (env var, public; the frontend reads that client ID from
+    /api/auth/providers, so no duplicated Vercel build variable is needed).
+    No client secret exists or is needed for this flow. Google Cloud Console:
+    create an OAuth Client ID (type "Web
     application") with authorized JavaScript origins for the real app
     domains (no redirect URI needed, this flow doesn't use one).
     """
@@ -659,6 +693,7 @@ def google_login(
         "account_state": "existing",
         "provider": "google",
     }
+    pending_google_identity: dict[str, str] | None = None
     if user is None:
         user = db.query(User).filter(User.email.ilike(email)).first()
         if user is None:
@@ -686,13 +721,17 @@ def google_login(
             # local password may have been chosen by someone who registered
             # the address before its actual owner, so replace it and revoke
             # every credential issued before this claim.
-            user.password_hash = hash_password(secrets.token_urlsafe(32))
-            user.password_login_enabled = False
-            user.is_verified = True
-            user.google_sub = google_sub
-            user.token_version = (user.token_version or 0) + 1
-            revoke_all_sessions(db, user.id)
-            google_audit_details["account_state"] = "reclaimed"
+            if mfa_service.get_active_mfa_secret(db, user.id):
+                pending_google_identity = {"email": email, "sub": google_sub}
+                google_audit_details["account_state"] = "pending_mfa_reclaim"
+            else:
+                user.password_hash = hash_password(secrets.token_urlsafe(32))
+                user.password_login_enabled = False
+                user.is_verified = True
+                user.google_sub = google_sub
+                user.token_version = (user.token_version or 0) + 1
+                revoke_all_sessions(db, user.id)
+                google_audit_details["account_state"] = "reclaimed"
         else:
             # A different Google subject must never overwrite an existing
             # link or fall back to email-only login. Fail closed on this
@@ -701,6 +740,25 @@ def google_login(
 
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Usuario deshabilitado")
+
+    if pending_google_identity is not None:
+        challenge = _build_login_response(
+            db,
+            user,
+            request=request,
+            response=response,
+            pending_google_identity=pending_google_identity,
+        )
+        if not isinstance(challenge, MfaChallengeResponse):
+            raise HTTPException(status_code=503, detail="No se pudo iniciar el desafío MFA")
+        _audit_security_event(
+            db,
+            user=user,
+            action="google_auth.mfa_challenge",
+            details={"account_state": "pending_mfa_reclaim", "provider": "google"},
+        )
+        db.commit()
+        return challenge
 
     # Keep one normal Google event per successful provider login, including
     # re-logins with the same subject; it is a confirmed identity-use trace.

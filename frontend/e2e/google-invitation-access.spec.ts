@@ -59,6 +59,17 @@ const installApiMocks = async (page: Page, initialLogin = false) => {
       body: JSON.stringify(data)
     });
 
+    if (method === "GET" && path === "/api/auth/providers") {
+      const clientId = process.env.E2E_GOOGLE_CLIENT_ID || null;
+      return json({
+        google: {
+          enabled: Boolean(clientId),
+          client_id: clientId,
+          self_signup_enabled: Boolean(clientId),
+          allowed_domains: []
+        }
+      });
+    }
     if (method === "POST" && path.endsWith("/api/auth/session/refresh")) {
       return json({ detail: "No active test session" }, 401);
     }

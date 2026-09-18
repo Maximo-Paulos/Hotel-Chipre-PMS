@@ -1,11 +1,11 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+
+import { getAuthProviders } from "../api/auth";
 
 // Google Identity Services (GIS) ID-token flow: no backend redirect, Google
 // hands the frontend a signed JWT directly and we forward it to
-// POST /api/auth/google. Needs VITE_GOOGLE_CLIENT_ID (public, not secret) --
-// see .env.example for the matching backend GOOGLE_CLIENT_ID and the
-// authorized JavaScript origins to register in Google Cloud Console.
-const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
+// POST /api/auth/google. The public client ID comes from the backend's
+// provider-capabilities endpoint so Vercel and Render cannot drift apart.
 const GSI_SCRIPT_SRC = "https://accounts.google.com/gsi/client";
 let initializedClientId: string | null = null;
 let activeCredentialCallback: ((idToken: string) => void) | null = null;
@@ -45,10 +45,28 @@ function loadGsiScript(): Promise<void> {
 export function GoogleSignInButton({ onCredential }: { onCredential: (idToken: string) => void }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const credentialRef = useRef(onCredential);
+  const [clientId, setClientId] = useState<string | null>(null);
   credentialRef.current = onCredential;
 
   useEffect(() => {
-    if (!CLIENT_ID || !containerRef.current) return;
+    let cancelled = false;
+    getAuthProviders()
+      .then((providers) => {
+        if (!cancelled && providers.google.enabled && providers.google.client_id) {
+          setClientId(providers.google.client_id);
+        }
+      })
+      .catch(() => {
+        // Keep password login available if the provider-capabilities endpoint
+        // is temporarily unavailable.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!clientId || !containerRef.current) return;
     let cancelled = false;
     const callback = (idToken: string) => credentialRef.current(idToken);
     activeCredentialCallback = callback;
@@ -56,12 +74,12 @@ export function GoogleSignInButton({ onCredential }: { onCredential: (idToken: s
     loadGsiScript()
       .then(() => {
         if (cancelled || !containerRef.current || !window.google) return;
-        if (initializedClientId !== CLIENT_ID) {
+        if (initializedClientId !== clientId) {
           window.google.accounts.id.initialize({
-            client_id: CLIENT_ID,
+            client_id: clientId,
             callback: (resp) => activeCredentialCallback?.(resp.credential)
           });
-          initializedClientId = CLIENT_ID;
+          initializedClientId = clientId;
         }
         if (containerRef.current.childElementCount === 0) {
           window.google.accounts.id.renderButton(containerRef.current, {
@@ -82,9 +100,9 @@ export function GoogleSignInButton({ onCredential }: { onCredential: (idToken: s
       cancelled = true;
       if (activeCredentialCallback === callback) activeCredentialCallback = null;
     };
-  }, []);
+  }, [clientId]);
 
-  if (!CLIENT_ID) return null;
+  if (!clientId) return null;
 
   return <div ref={containerRef} data-testid="google-signin-button" className="flex justify-center" />;
 }

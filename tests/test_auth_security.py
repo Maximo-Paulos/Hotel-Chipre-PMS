@@ -36,6 +36,7 @@ from app.schemas.onboarding import (
 from app.schemas.room import RoomCategoryCreate
 from app.services import onboarding_service
 from app.services.security import create_access_token, hash_password, needs_rehash, verify_password
+from app.services.mfa_service import MFA_ACTIVE, encrypt_totp_secret
 from app.services.user_session_service import create_session
 
 
@@ -834,6 +835,84 @@ def test_google_login_safely_reclaims_existing_email_and_revokes_old_sessions(
 
     users_with_email = db.query(User).filter(User.email == "existinguser@example.com").all()
     assert len(users_with_email) == 1
+
+
+def test_google_account_reclamation_waits_for_mfa_before_revoking_credentials(
+    client_and_db, fixed_code_patch, monkeypatch
+):
+    client, db, _session_factory = client_and_db
+    _configure_resend(monkeypatch, [])
+    _register_owner(client, "mfa-google-reclaim@example.com")
+    verified = client.post(
+        "/api/auth/verify-email",
+        json={"email": "mfa-google-reclaim@example.com", "code": "123456"},
+    )
+    assert verified.status_code == 200, verified.text
+    stored_user = db.query(User).filter_by(email="mfa-google-reclaim@example.com").one()
+    original_hash = stored_user.password_hash
+    original_version = stored_user.token_version
+    old_access_token = create_access_token(
+        stored_user.id,
+        extra={"email": stored_user.email, "verified": True},
+    )
+    old_session, _session_token, _csrf_token = create_session(db, stored_user)
+    secret = pyotp.random_base32()
+    db.add(
+        UserMfaSecret(
+            user_id=stored_user.id,
+            encrypted_secret=encrypt_totp_secret(secret),
+            status=MFA_ACTIVE,
+        )
+    )
+    db.commit()
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "test-client-id.apps.googleusercontent.com")
+    get_settings.cache_clear()
+    claims = _fake_google_claims("mfa-google-reclaim@example.com", sub="mfa-google-sub")
+
+    with patch("app.api.auth.google_id_token.verify_oauth2_token", return_value=claims):
+        challenge = client.post("/api/auth/google", json={"id_token": "verified-google-jwt"})
+
+    assert challenge.status_code == 200, challenge.text
+    assert challenge.json()["requires_mfa"] is True
+    assert "access_token" not in challenge.json()
+    db.refresh(stored_user)
+    db.refresh(old_session)
+    assert stored_user.google_sub is None
+    assert stored_user.password_hash == original_hash
+    assert stored_user.password_login_enabled is True
+    assert stored_user.token_version == original_version
+    assert old_session.revoked_at is None
+    assert client.get("/api/auth/me", headers={"Authorization": f"Bearer {old_access_token}"}).status_code == 200
+
+    wrong_code = client.post(
+        "/api/auth/login/mfa",
+        json={"mfa_token": challenge.json()["mfa_token"], "code": "000000"},
+    )
+    assert wrong_code.status_code == 401, wrong_code.text
+    db.refresh(stored_user)
+    db.refresh(old_session)
+    assert stored_user.google_sub is None
+    assert stored_user.password_hash == original_hash
+    assert stored_user.token_version == original_version
+    assert old_session.revoked_at is None
+
+    valid_code = pyotp.TOTP(secret).now()
+    completed = client.post(
+        "/api/auth/login/mfa",
+        json={"mfa_token": challenge.json()["mfa_token"], "code": valid_code},
+    )
+    assert completed.status_code == 200, completed.text
+    db.refresh(stored_user)
+    db.refresh(old_session)
+    assert stored_user.google_sub == "mfa-google-sub"
+    assert stored_user.password_hash != original_hash
+    assert stored_user.password_login_enabled is False
+    assert stored_user.token_version == original_version + 1
+    assert old_session.revoked_at is not None
+    assert client.get(
+        "/api/auth/me",
+        headers={"Authorization": f"Bearer {old_access_token}"},
+    ).status_code == 401
 
 
 def test_google_account_can_set_password_only_with_linked_google_proof_and_csrf(

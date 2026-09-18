@@ -201,7 +201,6 @@ export default defineConfig({
         VITE_PREVIEW_APP_HOST_SUFFIXES: ".localhost",
         VITE_API_URL: `${backendURL}/api`,
         VITE_BACKEND_URL: backendURL,
-        VITE_GOOGLE_CLIENT_ID: process.env.E2E_GOOGLE_CLIENT_ID || "",
         VITE_REALTIME_EVENTS_ENABLED: realtimeE2EEnabled ? "true" : "false"
       }
     }

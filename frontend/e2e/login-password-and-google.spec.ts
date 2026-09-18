@@ -18,11 +18,23 @@ test("password visibility toggle switches the input type", async ({ page }) => {
 });
 
 test("Google sign-in button follows the configured E2E client id", async ({ page }) => {
+  await page.route("**/api/auth/providers", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({
+      google: {
+        enabled: Boolean(process.env.E2E_GOOGLE_CLIENT_ID),
+        client_id: process.env.E2E_GOOGLE_CLIENT_ID || null,
+        self_signup_enabled: Boolean(process.env.E2E_GOOGLE_CLIENT_ID),
+        allowed_domains: []
+      }
+    })
+  }));
   if (process.env.E2E_GOOGLE_CLIENT_ID) {
     await page.route("https://accounts.google.com/gsi/client", (route) => route.fulfill({
       status: 200,
       contentType: "application/javascript",
-      body: "window.google={accounts:{id:{initialize:function(){},renderButton:function(parent){parent.appendChild(document.createElement('button'));}}}};"
+      body: "window.google={accounts:{id:{initialize:function(){},renderButton:function(parent){var button=document.createElement('button');button.textContent='Continue with Google';parent.appendChild(button);}}}};"
     }));
   }
   await page.goto("/login");

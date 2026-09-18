@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 import pytest
+import pyotp
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -29,6 +30,8 @@ from app.services.security import (
 from app.services.invitation_service import hash_invitation_token, issue_invitation
 from app.services.user_session_service import create_session
 from app.models.user_session import UserSession
+from app.models.user_mfa import UserMfaSecret
+from app.services.mfa_service import MFA_ACTIVE, encrypt_totp_secret
 from app.dependencies.auth import AuthContext, _authenticate_user
 from app.services.permission_service import (
     PERMISSION_REPORTS_FINANCIAL_VIEW,
@@ -519,7 +522,6 @@ def test_google_invitation_waits_for_mfa_before_consuming_token(owner_ctx, monke
     user = User(
         email=email,
         password_hash=hash_password("ExistingStrongPassword!"),
-        google_sub="existing-google-sub",
         role="manager",
         is_active=True,
         is_verified=True,
@@ -540,6 +542,16 @@ def test_google_invitation_waits_for_mfa_before_consuming_token(owner_ctx, monke
         role="manager",
         status="active",
     ))
+    old_session, _old_session_token, _old_csrf_token = create_session(db, user)
+    original_hash = user.password_hash
+    mfa_secret = pyotp.random_base32()
+    db.add(
+        UserMfaSecret(
+            user_id=user.id,
+            encrypted_secret=encrypt_totp_secret(mfa_secret),
+            status=MFA_ACTIVE,
+        )
+    )
     db.commit()
     token = _invitation_token(db, ctx, email, role="manager")
     _enable_test_google(monkeypatch)
@@ -547,9 +559,8 @@ def test_google_invitation_waits_for_mfa_before_consuming_token(owner_ctx, monke
     with (
         patch(
             "app.api.auth.google_id_token.verify_oauth2_token",
-            return_value=_google_claims(email, sub="existing-google-sub"),
+            return_value=_google_claims(email, sub="claimed-mfa-google-sub"),
         ),
-        patch("app.api.auth.mfa_service.get_active_mfa_secret", return_value=object()),
     ):
         response = client.post(
             "/api/invitations/accept/google",
@@ -561,20 +572,30 @@ def test_google_invitation_waits_for_mfa_before_consuming_token(owner_ctx, monke
     invitation = db.query(StaffInvitation).filter_by(token_hash=hash_invitation_token(token)).one()
     assert invitation.status == "pending"
     assert invitation.consumed_at is None
+    db.refresh(user)
+    db.refresh(old_session)
+    assert user.google_sub is None
+    assert user.password_hash == original_hash
+    assert user.token_version == 0
+    assert old_session.revoked_at is None
     target_membership = db.query(HotelMembership).filter_by(
         hotel_id=ctx["hotel_id"], user_id=user.id
     ).first()
     assert target_membership is None or target_membership.status != "active"
 
-    with (
-        patch("app.api.auth.mfa_service.get_active_mfa_secret", return_value=object()),
-        patch("app.api.auth.mfa_service.consume_mfa_code", return_value=True),
-    ):
+    with patch("app.api.auth.mfa_service.consume_mfa_code", return_value=True):
         completed_mfa = client.post(
             "/api/auth/login/mfa",
             json={"mfa_token": response.json()["mfa_token"], "code": "123456"},
         )
     assert completed_mfa.status_code == 200, completed_mfa.text
+    db.refresh(user)
+    db.refresh(old_session)
+    assert user.google_sub == "claimed-mfa-google-sub"
+    assert user.password_hash != original_hash
+    assert user.password_login_enabled is False
+    assert user.token_version == 1
+    assert old_session.revoked_at is not None
     accepted = client.post(
         "/api/invitations/accept",
         headers={"Authorization": f"Bearer {completed_mfa.json()['access_token']}"},

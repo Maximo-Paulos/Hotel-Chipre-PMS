@@ -369,8 +369,22 @@ def _accept_invitation_with_google(
         and membership is not None
         and membership.status == "invited"
     )
+    pending_google_identity = None
+    has_active_mfa = user is not None and mfa_service.get_active_mfa_secret(db, user.id) is not None
+    if has_active_mfa and is_unclaimed_invitation:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Iniciá sesión con tu contraseña y MFA antes de aceptar esta invitación.",
+        )
+    if has_active_mfa and user is not None and user.is_active and user.google_sub is None:
+        # Do not reclaim a password account, revoke its sessions, or consume
+        # invitation state until the account's second factor is verified.
+        pending_google_identity = {"email": email, "sub": google_sub}
+        account_state = "pending_mfa_reclaim"
 
-    if user is None:
+    if pending_google_identity is not None:
+        pass
+    elif user is None:
         user = User(
             email=email,
             password_hash=hash_password(secrets.token_urlsafe(32)),
@@ -426,7 +440,13 @@ def _accept_invitation_with_google(
         )
         db.commit()
         db.refresh(user)
-        challenge = _build_login_response(db, user, request=request, response=response)
+        challenge = _build_login_response(
+            db,
+            user,
+            request=request,
+            response=response,
+            pending_google_identity=pending_google_identity,
+        )
         if not isinstance(challenge, MfaChallengeResponse):
             raise HTTPException(status_code=503, detail="No se pudo iniciar el desafío MFA")
         return challenge
