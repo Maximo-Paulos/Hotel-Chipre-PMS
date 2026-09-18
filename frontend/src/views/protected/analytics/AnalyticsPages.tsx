@@ -251,17 +251,114 @@ const buildQuery = (params: Record<string, string | number | boolean | null | un
   return query ? `?${query}` : "";
 };
 
-const tableValue = (value: unknown): string => {
+// The analytics payloads are rendered generically, so their keys and codes
+// need Spanish names here. An unmapped key or code still renders (humanized
+// or as-is), so a new backend field never disappears from the table.
+const FIELD_LABELS: Record<string, string> = {
+  top_channels: "Canales principales",
+  channels: "Canales",
+  segments: "Segmentos",
+  rooms: "Habitaciones",
+  room: "Habitación",
+  room_events: "Eventos de habitación",
+  events: "Eventos",
+  reservations: "Reservas",
+  facts: "Detalle por noche",
+  company: "Empresa",
+  category: "Categoría",
+  comparison: "Comparación",
+  id: "ID",
+  hotel_id: "Hotel",
+  reservation_id: "Reserva",
+  room_id: "Habitación",
+  category_id: "Categoría",
+  company_id: "Empresa",
+  channel_code: "Canal",
+  guest_segment: "Segmento",
+  reservations_count: "Reservas",
+  nights_count: "Noches",
+  occupied_nights: "Noches ocupadas",
+  revenue_gross_ars: "Revenue bruto",
+  revenue_net_ars: "Revenue neto",
+  revenue_net_usd: "Revenue neto (USD)",
+  margin_operating_ars: "Margen operativo",
+  margin_operating_usd: "Margen operativo (USD)",
+  room_number: "Habitación",
+  category_name: "Categoría",
+  floor: "Piso",
+  stay_date: "Noche",
+  status_at_night: "Estado",
+  is_occupied: "Ocupada",
+  is_sellable_night: "Vendible",
+  is_active: "Activa",
+  confirmation_code: "Código",
+  check_in_date: "Check-in",
+  check_out_date: "Check-out",
+  outcome: "Resultado",
+  event_type: "Tipo de evento",
+  started_at: "Inicio",
+  ended_at: "Fin",
+  reason_code: "Motivo",
+  reason_note: "Nota",
+  status: "Estado",
+  name: "Nombre",
+  display_name: "Nombre",
+  legal_name: "Razón social",
+  tax_id: "CUIT",
+  email: "Email",
+  phone: "Teléfono",
+  contact_name: "Contacto",
+  notes: "Notas",
+  code: "Código",
+  description: "Descripción",
+  alert_code: "Alerta",
+  country_code: "País",
+  base_price: "Precio base",
+  base_price_per_night: "Precio base por noche",
+  max_occupancy: "Capacidad",
+  variable_cost_per_night: "Costo variable por noche",
+  created_at: "Creado",
+  updated_at: "Actualizado"
+};
+
+const VALUE_LABELS: Record<string, Record<string, string>> = {
+  channel_code: {
+    website_direct: "Web directa",
+    whatsapp: "WhatsApp",
+    phone: "Teléfono",
+    walk_in: "Mostrador",
+    booking: "Booking.com",
+    expedia: "Expedia",
+    despegar: "Despegar",
+    company: "Empresa",
+    other_ota: "Otra OTA",
+    other_direct: "Otro directo"
+  },
+  guest_segment: { leisure: "Ocio", business: "Negocios" },
+  outcome: {
+    pending: "Pendiente",
+    checked_in: "Check-in",
+    completed: "Completada",
+    cancelled: "Cancelada",
+    no_show: "No-show"
+  }
+};
+
+const tableValue = (value: unknown, key = ""): string => {
   if (value === null || value === undefined) return "—";
   if (typeof value === "boolean") return value ? "Sí" : "No";
+  // Money arrives as "678000.00" under *_ars / *_usd keys.
+  const currency = /_(ars|usd)$/.exec(key)?.[1];
+  if (currency && value !== "" && Number.isFinite(Number(value))) return formatMoney(Number(value), currency.toUpperCase());
   if (typeof value === "number") return String(value);
-  if (typeof value === "string") return value;
+  if (typeof value === "string") return VALUE_LABELS[key]?.[value] ?? value;
   if (Array.isArray(value)) return `${value.length} items`;
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
 };
 
 const sectionLabel = (key: string) =>
+  FIELD_LABELS[key] ??
   key
     .replace(/_/g, " ")
     .replace(/\b\w/g, (match) => match.toUpperCase())
@@ -323,7 +420,7 @@ function MetricGrid({ cards }: { cards: Array<Record<string, unknown>> }) {
         : card.value_usd != null
           ? formatMoney(Number(card.value_usd), "USD")
           : card.value_pct != null
-            ? `${card.value_pct}%`
+            ? `${Number(card.value_pct).toLocaleString("es-AR", { maximumFractionDigits: 2 })}%`
             : card.value_count != null
               ? String(card.value_count)
               : tableValue(card.value ?? card.summary ?? "—"),
@@ -398,7 +495,7 @@ function SectionTables({ data }: { data: Record<string, unknown> }) {
             <div key={key} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className="flex items-center justify-between">
                 <h2 className="text-sm font-semibold text-slate-900">{sectionLabel(key)}</h2>
-                <span className="text-xs text-slate-500">{rows.length} filas</span>
+                <span className="text-xs text-slate-500">{rows.length === 1 ? "1 fila" : `${rows.length} filas`}</span>
               </div>
               <div className="mt-3 overflow-auto">
                 <table className="min-w-full divide-y divide-slate-200 text-xs">
@@ -416,7 +513,7 @@ function SectionTables({ data }: { data: Record<string, unknown> }) {
                       <tr key={`${key}-${index}`}>
                         {headers.map((header) => (
                           <td key={header} className="px-3 py-2 text-slate-700">
-                            {tableValue(row[header])}
+                            {tableValue(row[header], header)}
                           </td>
                         ))}
                       </tr>
@@ -436,7 +533,7 @@ function SectionTables({ data }: { data: Record<string, unknown> }) {
                 {rows.map(([field, item]) => (
                   <div key={field} className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 text-xs">
                     <span className="font-medium text-slate-600">{sectionLabel(field)}</span>
-                    <span className="text-slate-900">{tableValue(item)}</span>
+                    <span className="text-slate-900">{tableValue(item, field)}</span>
                   </div>
                 ))}
               </div>
@@ -446,7 +543,7 @@ function SectionTables({ data }: { data: Record<string, unknown> }) {
         return (
           <div key={key} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <h2 className="text-sm font-semibold text-slate-900">{sectionLabel(key)}</h2>
-            <p className="mt-2 text-sm text-slate-700">{tableValue(value)}</p>
+            <p className="mt-2 text-sm text-slate-700">{tableValue(value, key)}</p>
           </div>
         );
       })}

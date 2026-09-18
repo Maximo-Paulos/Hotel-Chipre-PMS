@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { revealCollapsedNavLink } from "./support/sidebar";
+
 const ownerCredentials = {
   email: process.env.E2E_OWNER_EMAIL || "owner@e2e.com",
   password: process.env.E2E_OWNER_PASSWORD || "E2ePass1234!"
@@ -439,12 +441,7 @@ test("rate calendar page renders annual editor and integrated channel view", asy
   // group. A closed <details> removes its content from the accessibility
   // tree, so open it via a plain href locator (which still finds hidden DOM
   // nodes) before using the accessible-role locator to click.
-  const tarifasHrefLink = page.locator('aside nav a[href="/operacion/tarifas"]');
-  await expect(tarifasHrefLink).toHaveCount(1);
-  const tarifasGroup = tarifasHrefLink.locator("xpath=ancestor::details[1]");
-  if ((await tarifasGroup.count()) > 0 && !(await tarifasGroup.evaluate((el) => (el as HTMLDetailsElement).open))) {
-    await tarifasGroup.locator("summary").first().click();
-  }
+  await revealCollapsedNavLink(page.locator('aside nav a[href="/operacion/tarifas"]'));
   await page.getByRole("link", { name: "Tarifas" }).click();
   await page.waitForURL("**/operacion/tarifas");
 

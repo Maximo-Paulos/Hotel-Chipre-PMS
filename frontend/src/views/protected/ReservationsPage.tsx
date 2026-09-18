@@ -215,6 +215,11 @@ const readFileAsDataUrl = (file: File, errorMessage: string) =>
 
 export function ReservationsPage() {
   const { t } = useTranslation("reservations");
+  // Backend codes (hotel_collect, not_applicable...) never reach the screen
+  // raw; an unmapped value falls back to the code rather than a blank.
+  const enumLabel = (group: "collection" | "settlement" | "nextAction", value: string) =>
+    t(`page.enums.${group}.${value}`, { defaultValue: value });
+  const sourceLabel = (value: string) => t(`page.form.sourceOptions.${value}`, { defaultValue: value });
   const { session } = useSession();
   const { hasPermission } = useEffectivePermissions();
   const queryClient = useQueryClient();
@@ -681,17 +686,7 @@ export function ReservationsPage() {
   };
 
   const closeForm = () => {
-    if (
-      collaborativeReservation.isSaving ||
-      paymentMutation.isPending ||
-      paymentProofMutations.submitMutation.isPending ||
-      paymentProofMutations.approveMutation.isPending ||
-      paymentProofMutations.rejectMutation.isPending ||
-      paymentLinkCreate.isPending ||
-      paymentLinkCancel.isPending
-    ) {
-      return;
-    }
+    if (formBusy) return;
     setFormOpen(false);
     setEditing(null);
     setFormError(null);
@@ -1090,6 +1085,16 @@ export function ReservationsPage() {
   const paymentLinkCancel = usePaymentLinkCancel(editing?.id || undefined);
   const paymentProofsQuery = usePaymentProofs(editing?.id || undefined);
   const paymentProofMutations = usePaymentProofMutations(editing?.id || undefined);
+  // Closing mid-save would drop the in-flight payment/link result, so the
+  // close controls are disabled (not silently ignored) until it settles.
+  const formBusy =
+    collaborativeReservation.isSaving ||
+    paymentMutation.isPending ||
+    paymentProofMutations.submitMutation.isPending ||
+    paymentProofMutations.approveMutation.isPending ||
+    paymentProofMutations.rejectMutation.isPending ||
+    paymentLinkCreate.isPending ||
+    paymentLinkCancel.isPending;
   const detailsSummary = detailsSummaryQuery.data;
   const detailsOperations = detailsOperationsQuery.data;
   const detailsFinancialsLoading = detailsSummaryQuery.isLoading;
@@ -1670,13 +1675,17 @@ export function ReservationsPage() {
                         <p className="text-sm text-slate-600">{action.detail}</p>
                       </div>
                       <div className="flex flex-wrap gap-3 text-xs text-slate-500">
-                        <span>{t("page.pendingActions.statusPrefix", { status: action.reservation_status })}</span>
-                        <span>{t("page.pendingActions.sourcePrefix", { source: action.source_provider_code || action.source })}</span>
+                        <span>
+                          {t("page.pendingActions.statusPrefix", {
+                            status: statusConfig[action.reservation_status as ReservationStatus]?.label ?? action.reservation_status
+                          })}
+                        </span>
+                        <span>{t("page.pendingActions.sourcePrefix", { source: sourceLabel(action.source_provider_code || action.source) })}</span>
                         {action.payment_collection_model ? (
-                          <span>{t("page.pendingActions.collectionPrefix", { model: action.payment_collection_model })}</span>
+                          <span>{t("page.pendingActions.collectionPrefix", { model: enumLabel("collection", action.payment_collection_model) })}</span>
                         ) : null}
                         {action.settlement_status ? (
-                          <span>{t("page.pendingActions.settlementPrefix", { status: action.settlement_status })}</span>
+                          <span>{t("page.pendingActions.settlementPrefix", { status: enumLabel("settlement", action.settlement_status) })}</span>
                         ) : null}
                       </div>
                     </div>
@@ -2319,7 +2328,12 @@ export function ReservationsPage() {
                 <h3 className="text-lg font-semibold text-slate-900">{t("page.form.title")}</h3>
                 <p className="text-xs text-slate-500">{t("page.form.subtitle")}</p>
               </div>
-              <button onClick={closeForm} type="button" className="text-sm text-slate-500 hover:text-slate-800">
+              <button
+                onClick={closeForm}
+                type="button"
+                disabled={formBusy}
+                className="text-sm text-slate-500 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+              >
                 {t("page.common.close")}
               </button>
             </div>
@@ -2747,7 +2761,8 @@ export function ReservationsPage() {
                   <button
                     type="button"
                     onClick={closeForm}
-                    className="mt-2 rounded-lg border border-emerald-300 bg-white px-3 py-2 text-xs font-semibold text-emerald-800 hover:bg-emerald-100"
+                    disabled={formBusy}
+                    className="mt-2 rounded-lg border border-emerald-300 bg-white px-3 py-2 text-xs font-semibold text-emerald-800 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {t("page.common.close")}
                   </button>
@@ -3184,7 +3199,8 @@ export function ReservationsPage() {
                 <button
                   type="button"
                   onClick={closeForm}
-                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:border-slate-300"
+                  disabled={formBusy}
+                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {t("page.form.cancel")}
                 </button>
@@ -3416,16 +3432,16 @@ export function ReservationsPage() {
                       </div>
                       <div>
                         <p className="text-slate-500">{t("page.details.financeCollection")}</p>
-                        <p className="font-semibold">{detailsOperations.payment_collection_model}</p>
+                        <p className="font-semibold">{enumLabel("collection", detailsOperations.payment_collection_model)}</p>
                       </div>
                       <div>
                         <p className="text-slate-500">{t("page.details.financeSettlement")}</p>
-                        <p className="font-semibold">{detailsOperations.settlement_status}</p>
+                        <p className="font-semibold">{enumLabel("settlement", detailsOperations.settlement_status)}</p>
                       </div>
                     </div>
                     {detailsOperations.financial_summary.recommended_next_action ? (
                       <p className="mt-2 text-xs text-amber-700">
-                        {t("page.details.financeNextAction", { action: detailsOperations.financial_summary.recommended_next_action })}
+                        {t("page.details.financeNextAction", { action: enumLabel("nextAction", detailsOperations.financial_summary.recommended_next_action) })}
                       </p>
                     ) : null}
                   </div>

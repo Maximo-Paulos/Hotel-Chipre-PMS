@@ -1,5 +1,43 @@
 # Estado exhaustivo del sistema — Hotel Chipre PMS
 
+## -5. Pendientes cerrados: e2e en CI, specs rescatados y tres bugs reales — 2026-09-18
+
+`confirmed`: verificado sobre el árbol final, rebaseado encima del merge del feature de Codex (`9af1f73`):
+- tipos, lint, 17 tests de nodo y build;
+- suite backend: 2055 passed, 0 failed;
+- **e2e completo: 99 passed, 0 failed**, con 2 skipped que dependen de variables de entorno (`REALTIME_E2E` y `E2E_GOOGLE_CLIENT_ID`), en Chromium, Chromium móvil y ruteo de previews;
+- capturas y pantallas tocadas revisadas a 1440 y 390 px, sin desborde horizontal.
+
+- **Playwright en CI.** Nuevo job `e2e` en `pr-validation.yml`: journeys en Chromium, smoke responsive en Chromium móvil y ruteo de previews, con el reporte como artefacto si falla. Corre en PRs y en pushes a ramas que no son `main`, igual que el resto de `pr-validation`. Un push directo a `main` no lo dispara: `main` sigue sin protección, que es la brecha de fondo.
+- **Seis specs rotos, arreglados sin debilitar lo que verifican:**
+  - `guest-pagination` y `role-journey` hacían el login por API con `page.request`, que comparte cookies con el navegador. Ese login pisaba la sesión de la UI, y el siguiente `goto` fallaba el refresh por CSRF. Ahora usan el fixture `request`, que está aislado. En `role-journey` el cambio de usuario cierra antes la sesión del dueño; el test sólo pasaba porque esa sesión estaba rota.
+  - `reservation-drawer-global` creaba la reserva con fecha de hace unos 14 años, pero el dashboard muestra llegadas reales: desde hoy, las cinco más próximas. Ahora la llegada es mañana, con habitación auto-asignada, y el test la cancela al final.
+  - `master_admin`: el panel exige TOTP (TECH-0023) y el test nunca lo contemplaba. El seed E2E enrola al master con un secreto de prueba fijo, sólo sobre `_e2e.db`, y el test calcula el código RFC 6238 (verificado contra `pyotp`) respetando el anti-replay. El enrolamiento en sí lo cubre `tests/test_master_admin_panel.py`.
+  - `promotions-builder` mockea todo el backend pero no mockeaba `/api/auth/session/refresh`. El token vive en memoria, así que el `goto` volvía al login.
+  - `integrations-status` y `reception-checkin-checkout` destaparon bugs reales (1 y 2).
+- **Bugs reales:**
+  1. **Conexiones.** Con las conexiones deshabilitadas en el entorno, la página decía "Verifica la sesión" (la sesión nunca era la causa), borraba el título y reintentaba el 403 tres veces (unos 7 s de "Cargando"). Ahora el título se muestra siempre, hay un aviso claro "deshabilitadas en este entorno", "Reintentar" para errores reales y no se reintentan los 4xx. El mensaje de Gmail ya no muestra nombres de variables de entorno al personal.
+  2. **Check-in.** Después del check-in parcial, el drawer seguía pidiendo los datos del huésped que se acababan de guardar. Las mutaciones de check-in y de acompañantes no invalidaban el dominio `guests`, donde vive `guest-checkin-validation`. Se corrige con `refreshReservationGuestState`.
+  3. **Formulario de reserva.** "Cancelar" y "Cerrar" no hacían nada, sin ningún aviso, mientras había un cobro, un comprobante o una solicitud de pago en curso. Ahora se deshabilitan durante la operación. El e2e sólo lo veía con la base cargada, cuando el refresco tardaba más.
+- **Carreras de test.** El helper que abre los grupos colapsados del sidebar decidía antes de que cargaran los permisos; estaba duplicado en cinco specs. Queda uno solo en `e2e/support/sidebar.ts`, que primero espera el link. En `role-journey` además evita que "no ve rutas prohibidas" pase sobre un menú todavía vacío.
+- Usuarios: el eyebrow "Settings" pasa a "Configuración". Resuelve la excepción de la sección -4 y puede dar un conflicto de una línea al mergear la rama de Codex.
+- Capturas de la landing regeneradas sobre el demo de Bariloche, con fechas de hoy. `marketing-shots.mjs` tenía por defecto un usuario que el seed demo no crea.
+- **Lo que las capturas mostraban y no iba a la landing así:**
+  - Reservas y la ficha mostraban códigos internos al personal: "Estado: checked_out · Origen: direct · Cobro: hotel_collect · Settlement: not_applicable", además de "Próxima acción sugerida: collect_from_guest". Ahora dicen "Estado: Check-out · Origen: Directo · Cobro: Cobra el hotel · Liquidación: No aplica". Hay mapas en `page.enums` (es/en) con todos los valores que emite el backend, y un valor nuevo cae en el código en vez de quedar vacío.
+  - El dashboard mostraba "critical" y "direct" crudos.
+  - En "Próximas reservas", los códigos se partían ("CHP-" / "2602"), igual que las fechas y la pastilla "Pago completo".
+  - Faltaban plurales: decía "1 salidas hoy", "1 llegadas" y "1 críticas".
+  - Usuarios tenía su propio mapa de roles en inglés ("Manager", "Housekeeping", "Co-owner"). Ahora reutiliza el del header ("Gerencia", "Limpieza", "Copropietario").
+  - Analítica renderiza los payloads de forma genérica y mostraba las claves tal cual:
+    - columnas en inglés ("CHANNEL CODE", "RESERVATIONS COUNT");
+    - códigos ("walk_in", "website_direct", "leisure");
+    - montos sin formato ("678000.00");
+    - "5.56%" y "1 filas".
+    Ahora hay un diccionario de claves y de códigos de canal, segmento y resultado; las claves `*_ars`/`*_usd` se formatean como moneda y los porcentajes en es-AR. Lo que no está mapeado se sigue mostrando humanizado. En el backend, dos etiquetas de tarjeta estaban en inglés: "Physical room nights" pasa a "Noches-habitación disponibles" y "Pickup 30d" a "Pickup 30 días".
+- Código muerto detectado y no tocado: `CompaniesSettingsPage` en `AnalyticsPages.tsx` no se importa en ningún lado; la ruta usa `CompaniesPage`.
+
+---
+
 ## -4. Sistema visual homogéneo en todas las páginas — 2026-09-18
 
 `confirmed`: tipos, lint, 17 tests de nodo, build, suite backend y la suite e2e completa de Playwright sobre el árbol final (ver el commit). La pasada anterior (-3) cubrió el marco; esta cubre las ~80 pantallas restantes.

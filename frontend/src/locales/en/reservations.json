@@ -260,6 +260,35 @@
       "closeReview": "Close review",
       "markResolved": "Mark resolved"
     },
+    "enums": {
+      "collection": {
+        "hotel_collect": "Hotel collects",
+        "ota_prepaid": "OTA prepaid",
+        "ota_virtual_card": "OTA virtual card",
+        "ota_partial": "OTA partial payment",
+        "unknown": "Not reported"
+      },
+      "settlement": {
+        "not_applicable": "Not applicable",
+        "pending": "Pending",
+        "partial": "Partial",
+        "settled": "Settled",
+        "deferred": "Deferred",
+        "pending_hotel_collection": "Pending hotel collection",
+        "manual_resolution_required": "Manual resolution required",
+        "internal_release_no_guarantee": "Released without guarantee",
+        "review_cancellation": "Review cancellation",
+        "resolved": "Resolved",
+        "unknown": "Not reported"
+      },
+      "nextAction": {
+        "collect_from_guest": "collect from the guest",
+        "await_channel_settlement": "wait for the channel settlement",
+        "resolve_external_channel": "resolve with the external channel",
+        "review_cancellation_settlement": "review the cancellation settlement",
+        "manual_review_required": "manual review"
+      }
+    },
     "priority": {
       "critical": "Critical",
       "high": "High",
@@ -398,6 +427,7 @@
         "direct": "Direct",
         "booking": "Booking.com",
         "expedia": "Expedia",
+        "despegar": "Despegar",
         "other_ota": "Other OTA"
       },
       "checkIn": "Check-in",

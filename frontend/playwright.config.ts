@@ -60,6 +60,11 @@ const businessWebKitTestMatch = [
   "**/stock-inventory-journey.spec.ts"
 ];
 process.env.E2E_EMAIL_OUTBOX_PATH = emailOutboxPath;
+// Base32 test-only TOTP secret. The seed enrolls the master admin with it
+// (the panel refuses to operate without MFA) and master_admin.spec.ts derives
+// codes from the same value.
+const masterAdminTotpSecret = process.env.E2E_MASTER_ADMIN_TOTP_SECRET || "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP";
+process.env.E2E_MASTER_ADMIN_TOTP_SECRET = masterAdminTotpSecret;
 
 export default defineConfig({
   testDir: "./e2e",
@@ -182,6 +187,7 @@ export default defineConfig({
         MASTER_ADMIN_PASSWORD: "E2eMasterPass1234!",
         MASTER_ADMIN_PIN: "123456",
         MASTER_ADMIN_SESSION_SECRET: "e2e-master-session-secret-change-me-32chars",
+        E2E_MASTER_ADMIN_TOTP_SECRET: masterAdminTotpSecret,
         E2E_MANAGER_EMAIL: process.env.E2E_MANAGER_EMAIL || "manager@e2e.com",
         E2E_MANAGER_PASSWORD: process.env.E2E_MANAGER_PASSWORD || "E2eManager1234!",
         E2E_RECEPTIONIST_EMAIL: process.env.E2E_RECEPTIONIST_EMAIL || "receptionist@e2e.com",

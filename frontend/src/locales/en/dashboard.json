@@ -9,7 +9,8 @@
   "cards": {
     "occupancyToday": {
       "label": "Occupancy today",
-      "helper": "{{count}} arrivals"
+      "helper_one": "{{count}} arrival",
+      "helper_other": "{{count}} arrivals"
     },
     "adr": {
       "label": "ADR",
@@ -18,12 +19,14 @@
     },
     "revenue": {
       "label": "Revenue this month",
-      "helperSingle": "{{count}} departures today",
+      "helperSingle_one": "{{count}} departure today",
+      "helperSingle_other": "{{count}} departures today",
       "helperMulti": "Review detail by reservation"
     },
     "pendingActions": {
       "label": "Pending actions",
-      "helperCritical": "{{count}} critical",
+      "helperCritical_one": "{{count}} critical",
+      "helperCritical_other": "{{count}} critical",
       "helperNone": "No critical actions",
       "helperError": "The operations inbox could not be loaded"
     },

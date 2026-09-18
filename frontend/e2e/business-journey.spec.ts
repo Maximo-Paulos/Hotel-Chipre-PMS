@@ -1,4 +1,6 @@
-import { expect, test, type Locator, type Page, type TestInfo } from "@playwright/test";
+import { expect, test, type Page, type TestInfo } from "@playwright/test";
+
+import { revealCollapsedNavLink } from "./support/sidebar";
 
 const credentials = {
   email: process.env.E2E_OWNER_EMAIL || "owner@e2e.com",
@@ -33,16 +35,6 @@ async function login(page: Page) {
   await page.getByTestId("login-submit").click();
   await page.waitForURL("**/dashboard", { timeout: 20_000 });
   await expect(page.getByTestId("session-email")).toHaveText(credentials.email);
-}
-
-// B6.1: routes not in the daily nav row now sit inside a collapsed <details>
-// group in the sidebar. Open its <summary> first -- closed <details> content
-// isn't visible, so a plain click on the link would fail actionability.
-async function revealCollapsedNavLink(link: Locator) {
-  const group = link.locator("xpath=ancestor::details[1]");
-  if ((await group.count()) > 0 && !(await group.evaluate((el) => (el as HTMLDetailsElement).open))) {
-    await group.locator("summary").first().click();
-  }
 }
 
 async function navigateFromShell(page: Page, path: string) {

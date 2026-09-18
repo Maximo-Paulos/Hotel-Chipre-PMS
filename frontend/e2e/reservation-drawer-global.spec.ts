@@ -21,24 +21,22 @@ async function login(page: Page) {
 test("owner opens the reservation drawer from the dashboard, global search, and a deep link", async ({ page }) => {
   const suffix = Date.now().toString();
   const guestLastName = `DrawerQA-${suffix}`;
-  // Post-A2: dashboard's "Próximas reservas" widget is fed by the 10 most
-  // recently CREATED reservations (order=recent, limit=10), then sorted by
-  // check_in_date for display. A reservation created by this test is by
-  // definition the most recently created one, so it lands in that top-10
-  // window regardless of check_in_date -- the far-past date below no longer
-  // drives dashboard placement, it's just a value that's easy to keep out of
-  // the way of other specs' fixture dates.
-  // Salted per run (not a fixed date) so re-running this spec doesn't
-  // collide with room 101 already booked by a previous run's leftovers.
-  const salt = Number(suffix.slice(-4));
-  const pastIsoDate = (daysAgo: number) => {
+  // The dashboard lists real upcoming arrivals: check-in from today on, not
+  // yet checked in, soonest first, five at most (upcomingOnly on
+  // GET /api/reservations). So this reservation has to be a near arrival.
+  // Tomorrow rather than today: earlier specs in the same run fill today's
+  // two "Standard E2E" rooms, and it still sorts ahead of every later
+  // fixture date. The room is left to auto-assignment, and the test cancels
+  // the reservation at the end so reruns against a reused server
+  // (E2E_REUSE_SERVER) don't pile up arrivals on that date.
+  const localIsoDate = (offsetDays: number) => {
     const value = new Date();
-    value.setDate(value.getDate() - daysAgo);
+    value.setDate(value.getDate() + offsetDays);
     const pad = (part: number) => String(part).padStart(2, "0");
     return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
   };
-  const checkIn = pastIsoDate(5000 + salt);
-  const checkOut = pastIsoDate(5000 + salt - 2);
+  const checkIn = localIsoDate(1);
+  const checkOut = localIsoDate(3);
 
   await login(page);
 
@@ -83,11 +81,6 @@ test("owner opens the reservation drawer from the dashboard, global search, and 
   const categoryValue = await categoryOption.getAttribute("value");
   await categorySelect.selectOption(categoryValue!);
 
-  const roomSelect = form.locator("label").filter({ hasText: "Habitación (opcional)" }).locator("select");
-  const roomOption = roomSelect.locator("option").filter({ hasText: "101" });
-  await expect(roomOption).toHaveCount(1);
-  const roomValue = await roomOption.getAttribute("value");
-  await roomSelect.selectOption(roomValue!);
   await form.locator("label").filter({ hasText: "Check-in" }).locator('input[type="date"]').fill(checkIn);
   await form.locator("label").filter({ hasText: "Check-out" }).locator('input[type="date"]').fill(checkOut);
   await expect(form.getByRole("button", { name: "Crear", exact: true })).toBeEnabled();
@@ -155,6 +148,10 @@ test("owner opens the reservation drawer from the dashboard, global search, and 
   await expect(drawer).toBeVisible();
   await expect(drawer).toContainText(confirmationCode);
   await expect(drawer.getByText("Seña", { exact: true })).toBeVisible();
+
+  // Cleanup: free tomorrow's room and dashboard slot for the next run.
+  await drawer.getByRole("button", { name: "Cancelar", exact: true }).click();
+  await expect(drawer.getByText("Reserva cancelada.", { exact: true })).toBeVisible();
 });
 
 test("an authenticated second context sees a committed payment through realtime events", async ({ page, browser }) => {

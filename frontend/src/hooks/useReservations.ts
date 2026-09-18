@@ -37,7 +37,7 @@ import {
 import { validateGuestForCheckin, type GuestCheckinValidation } from "../api/guests";
 import type { SessionState } from "../state/session";
 import { ApiError, hasValidSession } from "../api/client";
-import { refreshReservationState } from "../api/queryInvalidation";
+import { refreshReservationGuestState, refreshReservationState } from "../api/queryInvalidation";
 import { useSession } from "../state/session";
 
 import { useGuardedMutation } from "./useGuardedMutation";
@@ -157,9 +157,13 @@ export function useReservationMutations(filters?: ReservationFilters) {
   const invalidate = () => refreshReservationState(queryClient, session.hotelId);
 
   // Check-in/check-out/companion changes are read by the drawer's own
-  // single-reservation query, not just the list -- refresh both so the
-  // status/guest data the receptionist just saved shows up immediately.
-  const invalidateReservationDetail = (reservationId: number) => refreshReservationState(queryClient, session.hotelId, reservationId);
+  // single-reservation query, not just the list, and they write guest data
+  // too -- refresh both domains so the status/guest data the receptionist
+  // just saved shows up immediately.
+  const invalidateReservationDetail = (reservationId: number) => {
+    void reservationId;
+    return refreshReservationGuestState(queryClient, session.hotelId);
+  };
 
   // Double-click / double-tap on "confirm" fires two submits in the same JS
   // turn, before React re-renders the button as disabled. Without a real
