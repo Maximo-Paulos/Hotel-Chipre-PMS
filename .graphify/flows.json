@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-09-18T17:08:34.466Z",
+  "generatedAt": "2026-09-18T17:46:14.876Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -21188,6 +21188,28 @@
       "fileCount": 1,
       "files": [
         "app/infrastructure/redis_backend.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:support_sidebar_navigatefromshell",
+      "name": "navigateFromShell",
+      "entryPoint": "support_sidebar_navigatefromshell",
+      "entryPointId": "support_sidebar_navigatefromshell",
+      "path": [
+        "support_sidebar_navigatefromshell",
+        "support_sidebar_revealcollapsednavlink"
+      ],
+      "qualifiedPath": [
+        "support_sidebar_navigatefromshell",
+        "support_sidebar_revealcollapsednavlink"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/e2e/support/sidebar.ts"
       ],
       "criticality": 0.16,
       "warnings": []

@@ -152,6 +152,10 @@ test("owner pays deposit in cash, blocks an overpayment, settles the rest by app
   // 4) Aprobación del comprobante -> ahora sí se aplica al saldo, con el método
   // distinto al de la seña (transferencia vs. la seña en efectivo).
   await editForm.getByRole("button", { name: "Aprobar", exact: true }).click();
+  // The stats refresh before the approval's other refetches settle; wait for
+  // its confirmation like an operator would, or its late toast overwrites
+  // the refund's below on a slow machine.
+  await expect(page.getByText("Comprobante aprobado", { exact: true })).toBeVisible();
   await expect.poll(() => readStat(editForm, "Pagado")).toBe(300);
   await expect.poll(() => readStat(editForm, "Saldo")).toBe(0);
   await expect(editForm.getByText(/approved/)).toBeVisible();

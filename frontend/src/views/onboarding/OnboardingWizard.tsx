@@ -308,7 +308,14 @@ export function OnboardingWizard() {
       return runWithFeedback(() => finishOnboarding(session), "Onboarding finalizado.", ["onboarding", "settings"]);
     },
     onSuccess: () => {
-      navigate("/dashboard", { replace: true });
+      // Fallback only: the status effect below usually navigates first, as
+      // soon as the refreshed status says completed. This runs after every
+      // other refresh settles, and a router navigate still fires from an
+      // unmounted wizard, so without the guard a user who already moved on
+      // (even logged out) got yanked to /dashboard and bounced to /login.
+      if (window.location.pathname.startsWith("/onboarding")) {
+        navigate("/dashboard", { replace: true });
+      }
     }
   });
 

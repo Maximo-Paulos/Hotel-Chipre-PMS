@@ -1124,8 +1124,8 @@
     "hash": "295cb406ea26fb1ee80d8ffac736b24c"
   },
   "frontend/src/api/client.ts": {
-    "mtime": 1789742047368.1558,
-    "hash": "be00f6960de9e7103954f4a50c48cbfc"
+    "mtime": 1789753131258.5222,
+    "hash": "36d6ff0d28e00812a6524f671f7c8693"
   },
   "frontend/src/api/companies.ts": {
     "mtime": 1789742047368.2834,
@@ -1412,8 +1412,8 @@
     "hash": "aa4ff3906df63302c958ba06bf1f7c7d"
   },
   "frontend/src/views/onboarding/OnboardingWizard.tsx": {
-    "mtime": 1789742047382.5916,
-    "hash": "ff1a225be6c6b4605571777561f84845"
+    "mtime": 1789753221972.863,
+    "hash": "de8240f2eef51244af89b44d0ecc1c4e"
   },
   "frontend/src/views/protected/CashRegisterPage.tsx": {
     "mtime": 1789742047382.7754,
@@ -2644,8 +2644,8 @@
     "hash": "e82b4c0f2eeafde1697b43150bd2c836"
   },
   "knowledge/00-control/STATUS-TODAY.md": {
-    "mtime": 1789750614048.3718,
-    "hash": "9c511aeffd38b9151cb63a65a3d2ba3f"
+    "mtime": 1789753265207.8591,
+    "hash": "700b0563db8e187d1c00f0e61ce4c129"
   },
   "knowledge/00-control/TASK_ROUTER.md": {
     "mtime": 1789742047388.8215,
@@ -3336,8 +3336,8 @@
     "hash": "6c6ac15ede5f33ded16c944491cd73d7"
   },
   "frontend/e2e/business-journey.spec.ts": {
-    "mtime": 1789749264519.0479,
-    "hash": "0704dd5db043cbb38c5e55359cfd0da6"
+    "mtime": 1789752848070.4817,
+    "hash": "1478fa8844e6cba0b51d637358f5c170"
   },
   "alembic/versions/20260724_allocation_enum_values.py": {
     "mtime": 1789742047219.4546,
@@ -3484,8 +3484,8 @@
     "hash": "ac21c5bcb79a30a04d7805d2f35b0d7b"
   },
   "frontend/e2e/auth-onboarding-journey.spec.ts": {
-    "mtime": 1789742047312.5735,
-    "hash": "4a35bdf1333476f1d83b658d7f6cf10c"
+    "mtime": 1789752946920.9402,
+    "hash": "db66398ed31636083055529f59239d2c"
   },
   "frontend/src/state/pendingOwner.ts": {
     "mtime": 1789742047381.099,
@@ -3524,8 +3524,8 @@
     "hash": "8a98a018b26bd37f00ede059b31b84bd"
   },
   "frontend/e2e/reservation-charge-journey.spec.ts": {
-    "mtime": 1789742047314.5447,
-    "hash": "cd518194f5b94e15bfd07107116a7038"
+    "mtime": 1789752848070.8638,
+    "hash": "0c88c5011f94442726fe21cb8c2b4fd0"
   },
   "tests/test_reservation_charges.py": {
     "mtime": 1789742047414.8828,
@@ -3604,8 +3604,8 @@
     "hash": "e2d0560e6f954b5f3f2b69bb1edd7bf6"
   },
   "frontend/e2e/payment-journey-full-matrix.spec.ts": {
-    "mtime": 1789742047314.0508,
-    "hash": "43d81a58f984cee57de0f3da6cfda34a"
+    "mtime": 1789752817721.6973,
+    "hash": "6f13007ddf54ff4358385edf0371bba4"
   },
   "tests/test_mercadopago_webhook_endpoint.py": {
     "mtime": 1789742047409.151,
@@ -5640,7 +5640,7 @@
     "hash": "ffee3143af431ecc2603b2e2fb8e3608"
   },
   "frontend/e2e/support/sidebar.ts": {
-    "mtime": 1789749264520.0786,
-    "hash": "30dc0519260c9e50f1effcb715ea5bc7"
+    "mtime": 1789752834550.6445,
+    "hash": "cd9d4662057ff2dc32fbbb134aee67ca"
   }
 }

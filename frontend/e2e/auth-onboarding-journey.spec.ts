@@ -78,6 +78,22 @@ test("owner can register, verify, recover access and complete onboarding through
   await page.getByLabel("Email", { exact: true }).fill(`reception-${suffix}@example.test`);
   await saveAndExpectPath(page, "/onboarding/finish");
 
+  // Regression: finishing onboarding navigates to the dashboard as soon as
+  // the status says completed, but the mutation's fallback navigate used to
+  // run again once its slower refetches settled -- from the unmounted wizard
+  // -- and yank a user who had already moved on (here: logged out, on the
+  // password reset) back to /dashboard and on to /login. Holding one of
+  // those refetches makes that race happen on every run, not only on a slow
+  // CI machine.
+  const isConfigRequest = (url: URL) => url.pathname === "/api/config/";
+  await page.route(isConfigRequest, async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 3_000));
+    await route.continue().catch(() => undefined);
+  });
+  const heldConfigAnswered = page.waitForResponse((response) => isConfigRequest(new URL(response.url())), {
+    timeout: 20_000
+  });
+
   await expect(page.getByRole("button", { name: "Marcar onboarding como completo", exact: true })).toBeEnabled();
   await page.getByRole("button", { name: "Marcar onboarding como completo", exact: true }).click();
   await page.waitForURL("**/dashboard", { timeout: 15_000 });
@@ -91,6 +107,11 @@ test("owner can register, verify, recover access and complete onboarding through
   await page.getByRole("button", { name: "Enviar código", exact: true }).click();
 
   const resetCode = await waitForCode(email, /Recupera tu acceso/i);
+  // The held refetch lands now; nothing may take the user off this page.
+  await heldConfigAnswered;
+  await page.unroute(isConfigRequest);
+  await page.waitForTimeout(1_000);
+  await expect(page).toHaveURL(/\/reset-password$/);
   await page.getByLabel("Código recibido", { exact: true }).fill(resetCode);
   await page.getByRole("button", { name: "Continuar", exact: true }).click();
   await page.getByLabel("Nueva contraseña", { exact: true }).fill(recoveredPassword);

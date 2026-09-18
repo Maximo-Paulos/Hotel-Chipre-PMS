@@ -132,6 +132,10 @@ export const setUnauthorizedHandler = (handler: (() => void) | null) => {
 // concurrent 401s only triggers one navigation.
 const handleUnauthorized = () => {
   if (unauthorizedHandled || typeof window === "undefined") return;
+  // A 401 for a request sent before a deliberate logout is not an expired
+  // session: there is none left, and redirecting would yank the user off
+  // whatever page they moved to with a "sesión expirada" notice.
+  if (!clientSession?.accessToken) return;
   unauthorizedHandled = true;
   clientSession = null;
   unauthorizedHandler?.();
@@ -263,10 +267,14 @@ async function requestWithRefresh<T>(path: string, options: RequestOptions, allo
 
   if (!response.ok) {
     const error = makeApiError(response, payload);
+    // Only refresh while that session is still the current one: after a
+    // logout (still best-effort in flight) a successful refresh would sign
+    // the user straight back in.
     const canRefresh =
       allowRefresh &&
       response.status === 401 &&
       Boolean(requestSession?.accessToken) &&
+      Boolean(clientSession?.accessToken) &&
       !isPublicAuthPath(path);
 
     if (canRefresh) {
