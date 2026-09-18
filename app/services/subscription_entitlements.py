@@ -291,6 +291,20 @@ def ensure_subscription_seed(db: Session, hotel_id: int, plan_code: str = "start
     """
     sub = db.query(Subscription).filter(Subscription.hotel_id == hotel_id).first()
     if sub:
+        # The canonical v2 row can exist without its legacy projection (a path
+        # that wrote only v2). Returning here used to leave it that way for
+        # good: ensure_subscription() then raised on every call, and room
+        # creation answered 500. Rebuild the projection from v2 -- only when
+        # it is missing, so a healthy hotel's legacy row is never rewritten.
+        legacy = db.query(HotelSubscription).filter(HotelSubscription.hotel_id == hotel_id).first()
+        if legacy is None:
+            _sync_legacy_tables(
+                db,
+                hotel_id,
+                sub.plan,
+                sub.room_limit or _plan_defaults(sub.plan)["room_limit"],
+                status_value=_legacy_status_for_v2(sub.status),
+            )
         return sub, False
     defaults = _plan_defaults(plan_code)
     sub = Subscription(

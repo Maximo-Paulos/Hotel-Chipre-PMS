@@ -3671,6 +3671,16 @@
             }
           },
           {
+            "name": "upcoming_only",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Upcoming Only"
+            }
+          },
+          {
             "name": "x-hotel-id",
             "in": "header",
             "required": false,
@@ -4376,7 +4386,7 @@
           "Reservations"
         ],
         "summary": "Modify Reservation",
-        "description": "Modify a reservation (dates, notes, room). Only allowed for pre-check-in states.",
+        "description": "Modify a reservation, including arrival metadata in any non-deleted state.",
         "operationId": "modify_reservation_api_reservations__reservation_id__patch",
         "parameters": [
           {
@@ -9340,6 +9350,156 @@
         }
       }
     },
+    "/api/users/aliases": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "List Staff Aliases",
+        "description": "Expose only the current hotel's roster fields needed to edit aliases.",
+        "operationId": "list_staff_aliases_api_users_aliases_get",
+        "parameters": [
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffAliasRosterResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/{user_id}/alias": {
+      "patch": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Update Staff Alias",
+        "operationId": "update_staff_alias_api_users__user_id__alias_patch",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "User Id"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateStaffAliasPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffAliasItem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/users/{user_id}/primary-owner": {
       "post": {
         "tags": [
@@ -9416,6 +9576,28 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/providers": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Auth Providers",
+        "description": "Expose public auth capabilities without returning secrets.",
+        "operationId": "auth_providers_api_auth_providers_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthProvidersResponse"
                 }
               }
             }
@@ -9627,6 +9809,124 @@
                   ],
                   "title": "Response Google Login Api Auth Google Post"
                 }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/password/set": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Set Password With Google",
+        "description": "Enable a local password for a Google-only account after fresh proof.",
+        "operationId": "set_password_with_google_api_auth_password_set_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GooglePasswordSetRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordLoginEnabledResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/google/link": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Link Google",
+        "description": "Link Google only after both local-password and Google proof.",
+        "operationId": "link_google_api_auth_google_link_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GoogleLinkRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
               }
             }
           },
@@ -10471,24 +10771,23 @@
         }
       }
     },
-    "/api/invitations/{token}": {
-      "get": {
+    "/api/invitations/preview": {
+      "post": {
         "tags": [
           "Invitations"
         ],
-        "summary": "Get Invitation",
-        "operationId": "get_invitation_api_invitations__token__get",
-        "parameters": [
-          {
-            "name": "token",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Token"
+        "summary": "Get Invitation Preview",
+        "operationId": "get_invitation_preview_api_invitations_preview_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvitationTokenPayload"
+              }
             }
-          }
-        ],
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -10511,23 +10810,14 @@
         }
       }
     },
-    "/api/invitations/{token}/accept": {
+    "/api/invitations/accept": {
       "post": {
         "tags": [
           "Invitations"
         ],
         "summary": "Accept Invitation",
-        "operationId": "accept_invitation_api_invitations__token__accept_post",
+        "operationId": "accept_invitation_api_invitations_accept_post",
         "parameters": [
-          {
-            "name": "token",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Token"
-            }
-          },
           {
             "name": "authorization",
             "in": "header",
@@ -10562,6 +10852,185 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AuthResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/invitations/{token}/accept": {
+      "post": {
+        "tags": [
+          "Invitations"
+        ],
+        "summary": "Accept Invitation Legacy Path",
+        "description": "Compatibility endpoint; first-party clients should use the static body-token route.",
+        "operationId": "accept_invitation_legacy_path_api_invitations__token__accept_post",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Token"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PathAcceptPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/invitations/accept/google": {
+      "post": {
+        "tags": [
+          "Invitations"
+        ],
+        "summary": "Accept Invitation With Google",
+        "operationId": "accept_invitation_with_google_api_invitations_accept_google_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GoogleInvitationAcceptPayload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/AuthResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/MfaChallengeResponse"
+                    }
+                  ],
+                  "title": "Response Accept Invitation With Google Api Invitations Accept Google Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/invitations/{token}/accept/google": {
+      "post": {
+        "tags": [
+          "Invitations"
+        ],
+        "summary": "Accept Invitation With Google Legacy Path",
+        "description": "Compatibility endpoint; first-party clients should use the static body-token route.",
+        "operationId": "accept_invitation_with_google_legacy_path_api_invitations__token__accept_google_post",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GoogleAuthRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/AuthResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/MfaChallengeResponse"
+                    }
+                  ],
+                  "title": "Response Accept Invitation With Google Legacy Path Api Invitations  Token  Accept Google Post"
                 }
               }
             }
@@ -14295,6 +14764,68 @@
         }
       }
     },
+    "/api/public/pricing": {
+      "get": {
+        "tags": [
+          "Public Marketing"
+        ],
+        "summary": "Public Pricing",
+        "operationId": "public_pricing_api_public_pricing_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicPricingResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/public/leads": {
+      "post": {
+        "tags": [
+          "Public Marketing"
+        ],
+        "summary": "Create Lead",
+        "operationId": "create_lead_api_public_leads_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LeadCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LeadCreateResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/public/whatsapp/availability": {
       "get": {
         "tags": [
@@ -14858,6 +15389,701 @@
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/whatsapp/channel": {
+      "get": {
+        "tags": [
+          "WhatsApp CRM"
+        ],
+        "summary": "Channel Status",
+        "operationId": "channel_status_api_whatsapp_channel_get",
+        "parameters": [
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/whatsapp/channel/complete": {
+      "post": {
+        "tags": [
+          "WhatsApp CRM"
+        ],
+        "summary": "Complete Channel",
+        "description": "Store metadata after the backend completes Embedded Signup.\n\nNo bearer token or provider secret is accepted here; those remain in the\nserver-side Meta adapter and encrypted integration connection.",
+        "operationId": "complete_channel_api_whatsapp_channel_complete_post",
+        "parameters": [
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WhatsAppChannelComplete"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/whatsapp/conversations": {
+      "get": {
+        "tags": [
+          "WhatsApp CRM"
+        ],
+        "summary": "Inbox",
+        "operationId": "inbox_api_whatsapp_conversations_get",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/WhatsAppConversationStatusEnum"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "assigned_to_user_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Assigned To User Id"
+            }
+          },
+          {
+            "name": "all",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "All"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WhatsAppConversationListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/whatsapp/conversations/{conversation_id}/messages": {
+      "post": {
+        "tags": [
+          "WhatsApp CRM"
+        ],
+        "summary": "Send Message",
+        "operationId": "send_message_api_whatsapp_conversations__conversation_id__messages_post",
+        "parameters": [
+          {
+            "name": "conversation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Conversation Id"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WhatsAppMessageCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WhatsAppMessageRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/whatsapp/conversations/{conversation_id}/notes": {
+      "post": {
+        "tags": [
+          "WhatsApp CRM"
+        ],
+        "summary": "Create Note",
+        "operationId": "create_note_api_whatsapp_conversations__conversation_id__notes_post",
+        "parameters": [
+          {
+            "name": "conversation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Conversation Id"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WhatsAppNoteCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/whatsapp/conversations/{conversation_id}/assignment": {
+      "post": {
+        "tags": [
+          "WhatsApp CRM"
+        ],
+        "summary": "Update Assignment",
+        "operationId": "update_assignment_api_whatsapp_conversations__conversation_id__assignment_post",
+        "parameters": [
+          {
+            "name": "conversation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Conversation Id"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WhatsAppAssignmentUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/whatsapp/conversations/{conversation_id}/status": {
+      "post": {
+        "tags": [
+          "WhatsApp CRM"
+        ],
+        "summary": "Update Status",
+        "operationId": "update_status_api_whatsapp_conversations__conversation_id__status_post",
+        "parameters": [
+          {
+            "name": "conversation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Conversation Id"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WhatsAppConversationStatusUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WhatsAppConversationRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/webhooks/meta/whatsapp": {
+      "get": {
+        "tags": [
+          "WhatsApp Meta Webhook"
+        ],
+        "summary": "Verify Webhook",
+        "operationId": "verify_webhook_api_webhooks_meta_whatsapp_get",
+        "parameters": [
+          {
+            "name": "hub.mode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Hub.Mode"
+            }
+          },
+          {
+            "name": "hub.verify_token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Hub.Verify Token"
+            }
+          },
+          {
+            "name": "hub.challenge",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Hub.Challenge"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "WhatsApp Meta Webhook"
+        ],
+        "summary": "Receive Webhook",
+        "operationId": "receive_webhook_api_webhooks_meta_whatsapp_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
               }
             }
           }
@@ -27481,6 +28707,454 @@
         }
       }
     },
+    "/cash-register/daily-summary": {
+      "get": {
+        "tags": [
+          "Cash Register"
+        ],
+        "summary": "Cash Daily Summary",
+        "operationId": "cash_daily_summary_cash_register_daily_summary_get",
+        "parameters": [
+          {
+            "name": "date",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Date"
+            }
+          },
+          {
+            "name": "currency",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 3,
+                  "maxLength": 3
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Currency"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CashDailySummaryRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cash-register/daily-summary": {
+      "get": {
+        "tags": [
+          "Cash Register"
+        ],
+        "summary": "Cash Daily Summary",
+        "operationId": "cash_daily_summary_api_cash_register_daily_summary_get",
+        "parameters": [
+          {
+            "name": "date",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Date"
+            }
+          },
+          {
+            "name": "currency",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 3,
+                  "maxLength": 3
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Currency"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CashDailySummaryRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cash-register/export.csv": {
+      "get": {
+        "tags": [
+          "Cash Register"
+        ],
+        "summary": "Export Cash Ledger Csv",
+        "description": "Export the existing transaction/cash ledger without creating a second balance.",
+        "operationId": "export_cash_ledger_csv_cash_register_export_csv_get",
+        "parameters": [
+          {
+            "name": "date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Día único YYYY-MM-DD",
+              "title": "Date"
+            },
+            "description": "Día único YYYY-MM-DD"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          },
+          {
+            "name": "currency",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 3,
+                  "maxLength": 3
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Currency"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cash-register/export.csv": {
+      "get": {
+        "tags": [
+          "Cash Register"
+        ],
+        "summary": "Export Cash Ledger Csv",
+        "description": "Export the existing transaction/cash ledger without creating a second balance.",
+        "operationId": "export_cash_ledger_csv_api_cash_register_export_csv_get",
+        "parameters": [
+          {
+            "name": "date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Día único YYYY-MM-DD",
+              "title": "Date"
+            },
+            "description": "Día único YYYY-MM-DD"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          },
+          {
+            "name": "currency",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 3,
+                  "maxLength": 3
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Currency"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/cash-register/sessions": {
       "post": {
         "tags": [
@@ -29713,6 +31387,110 @@
         }
       }
     },
+    "/api/master-admin/pricing/plans": {
+      "get": {
+        "tags": [
+          "Master Admin"
+        ],
+        "summary": "Get Pricing Plans",
+        "operationId": "get_pricing_plans_api_master_admin_pricing_plans_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MasterPricingPlanListPayload-Output"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Master Admin"
+        ],
+        "summary": "Put Pricing Plans",
+        "description": "Replace the public pricing table.\n\nThe landing page renders exactly what this writes; leaving price_amount\nnull is what makes a plan show \"Consultar\" instead of a number.",
+        "operationId": "put_pricing_plans_api_master_admin_pricing_plans_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MasterPricingPlanListPayload-Input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MasterPricingPlanListPayload-Output"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/master-admin/leads": {
+      "get": {
+        "tags": [
+          "Master Admin"
+        ],
+        "summary": "Get Leads",
+        "operationId": "get_leads_api_master_admin_leads_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 200,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MasterLeadListPayload"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/master-admin/email/providers": {
       "get": {
         "tags": [
@@ -29972,6 +31750,49 @@
         }
       }
     },
+    "/health/live": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Live Healthcheck",
+        "description": "Process liveness only; never depends on PostgreSQL or Redis.",
+        "operationId": "live_healthcheck_health_live_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Live Healthcheck Health Live Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Ready Healthcheck",
+        "description": "Report whether the API can safely accept critical writes.",
+        "operationId": "ready_healthcheck_health_ready_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
     "/health/datastores": {
       "get": {
         "tags": [
@@ -30088,6 +31909,25 @@
         "description": "Stream tenant-scoped invalidation signals; clients refetch from Postgres-backed APIs.",
         "operationId": "stream_domain_events_api_events_stream_get",
         "parameters": [
+          {
+            "name": "after_cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Último cursor de outbox procesado para iniciar el transporte.",
+              "title": "After Cursor"
+            },
+            "description": "Último cursor de outbox procesado para iniciar el transporte."
+          },
           {
             "name": "x-hotel-id",
             "in": "header",
@@ -30721,6 +32561,426 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/RevokeAllSessionsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/operations/audit": {
+      "get": {
+        "tags": [
+          "Operations Audit"
+        ],
+        "summary": "Operations Audit",
+        "operationId": "operations_audit_operations_audit_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100000,
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          },
+          {
+            "name": "actor_user_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Actor User Id"
+            }
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 60
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Category"
+            }
+          },
+          {
+            "name": "reservation_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Reservation Id"
+            }
+          },
+          {
+            "name": "room_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Room Id"
+            }
+          },
+          {
+            "name": "action",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Action"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationalAuditRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/operations/audit": {
+      "get": {
+        "tags": [
+          "Operations Audit"
+        ],
+        "summary": "Operations Audit",
+        "operationId": "operations_audit_api_operations_audit_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100000,
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          },
+          {
+            "name": "actor_user_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Actor User Id"
+            }
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 60
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Category"
+            }
+          },
+          {
+            "name": "reservation_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Reservation Id"
+            }
+          },
+          {
+            "name": "room_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Room Id"
+            }
+          },
+          {
+            "name": "action",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Action"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationalAuditRead"
                 }
               }
             }
@@ -31411,6 +33671,853 @@
         }
       }
     },
+    "/api/operational-tasks": {
+      "get": {
+        "tags": [
+          "Operational tasks"
+        ],
+        "summary": "Get Operational Tasks",
+        "operationId": "get_operational_tasks_api_operational_tasks_get",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/OperationalTaskStatusEnum"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "task_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/OperationalTaskTypeEnum"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Task Type"
+            }
+          },
+          {
+            "name": "room_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Room Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/OperationalTaskRead"
+                  },
+                  "title": "Response Get Operational Tasks Api Operational Tasks Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Operational tasks"
+        ],
+        "summary": "Create Operational Task",
+        "operationId": "create_operational_task_api_operational_tasks_post",
+        "parameters": [
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperationalTaskCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationalTaskRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/operational-tasks/{task_id}": {
+      "patch": {
+        "tags": [
+          "Operational tasks"
+        ],
+        "summary": "Patch Operational Task",
+        "operationId": "patch_operational_task_api_operational_tasks__task_id__patch",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Task Id"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperationalTaskUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationalTaskRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/operational-tasks/{task_id}/resolve": {
+      "post": {
+        "tags": [
+          "Operational tasks"
+        ],
+        "summary": "Resolve Operational Task",
+        "operationId": "resolve_operational_task_api_operational_tasks__task_id__resolve_post",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Task Id"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperationalTaskUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationalTaskRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/operational-tasks/{task_id}/history": {
+      "get": {
+        "tags": [
+          "Operational tasks"
+        ],
+        "summary": "Get Operational Task History",
+        "operationId": "get_operational_task_history_api_operational_tasks__task_id__history_get",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Task Id"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/OperationalTaskEventRead"
+                  },
+                  "title": "Response Get Operational Task History Api Operational Tasks  Task Id  History Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/operational-tasks/handoffs": {
+      "post": {
+        "tags": [
+          "Operational tasks"
+        ],
+        "summary": "Create Shift Handoff",
+        "operationId": "create_shift_handoff_api_operational_tasks_handoffs_post",
+        "parameters": [
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShiftHandoffCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftHandoffRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Operational tasks"
+        ],
+        "summary": "Get Shift Handoffs",
+        "operationId": "get_shift_handoffs_api_operational_tasks_handoffs_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ShiftHandoffRead"
+                  },
+                  "title": "Response Get Shift Handoffs Api Operational Tasks Handoffs Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/operational-tasks/handoffs/{handoff_id}/acknowledge": {
+      "post": {
+        "tags": [
+          "Operational tasks"
+        ],
+        "summary": "Acknowledge Shift Handoff",
+        "operationId": "acknowledge_shift_handoff_api_operational_tasks_handoffs__handoff_id__acknowledge_post",
+        "parameters": [
+          {
+            "name": "handoff_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Handoff Id"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShiftHandoffAcknowledge"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftHandoffRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/reservations/{reservation_id}/communications": {
+      "get": {
+        "tags": [
+          "Reservation communications"
+        ],
+        "summary": "List Reservation Communications",
+        "operationId": "list_reservation_communications_api_reservations__reservation_id__communications_get",
+        "parameters": [
+          {
+            "name": "reservation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Reservation Id"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ReservationEmailDeliveryRead"
+                  },
+                  "title": "Response List Reservation Communications Api Reservations  Reservation Id  Communications Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Reservation communications"
+        ],
+        "summary": "Send Reservation Communication",
+        "operationId": "send_reservation_communication_api_reservations__reservation_id__communications_post",
+        "parameters": [
+          {
+            "name": "reservation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Reservation Id"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReservationEmailSendRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReservationEmailSendResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "summary": "Health Check",
@@ -31513,11 +34620,18 @@
               }
             ],
             "title": "Password"
+          },
+          "token": {
+            "type": "string",
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Token"
           }
         },
         "type": "object",
         "required": [
-          "email"
+          "email",
+          "token"
         ],
         "title": "AcceptPayload"
       },
@@ -33554,6 +36668,11 @@
             ],
             "title": "Actor User Id"
           },
+          "actor_name": {
+            "type": "string",
+            "title": "Actor Name",
+            "default": "Sistema"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -33616,6 +36735,18 @@
           "has_more"
         ],
         "title": "AuditTimelineRead"
+      },
+      "AuthProvidersResponse": {
+        "properties": {
+          "google": {
+            "$ref": "#/components/schemas/GoogleProviderCapabilities"
+          }
+        },
+        "type": "object",
+        "required": [
+          "google"
+        ],
+        "title": "AuthProvidersResponse"
       },
       "AuthResponse": {
         "properties": {
@@ -33929,6 +37060,29 @@
             ],
             "title": "Notes"
           },
+          "arrival_time_hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Arrival Time Hint"
+          },
+          "reservation_comment": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reservation Comment"
+          },
           "source": {
             "$ref": "#/components/schemas/ReservationSourceEnum",
             "default": "direct"
@@ -34155,6 +37309,28 @@
             ],
             "title": "Notes"
           },
+          "arrival_time_hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Arrival Time Hint"
+          },
+          "reservation_comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reservation Comment"
+          },
           "created_at": {
             "anyOf": [
               {
@@ -34328,6 +37504,40 @@
               }
             ],
             "title": "Notes"
+          },
+          "arrival_time_hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Arrival Time Hint"
+          },
+          "reservation_comment": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reservation Comment"
+          },
+          "client_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Version"
           },
           "status": {
             "anyOf": [
@@ -34694,6 +37904,492 @@
           "confirmed"
         ],
         "title": "CashCustodyStatusEnum"
+      },
+      "CashDailyCollectorRead": {
+        "properties": {
+          "collector_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collector User Id"
+          },
+          "collector_name": {
+            "type": "string",
+            "title": "Collector Name"
+          },
+          "gross_collected": {
+            "type": "string",
+            "title": "Gross Collected"
+          },
+          "refunds": {
+            "type": "string",
+            "title": "Refunds"
+          },
+          "net_collected": {
+            "type": "string",
+            "title": "Net Collected"
+          },
+          "transaction_count": {
+            "type": "integer",
+            "title": "Transaction Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "collector_name",
+          "gross_collected",
+          "refunds",
+          "net_collected",
+          "transaction_count"
+        ],
+        "title": "CashDailyCollectorRead"
+      },
+      "CashDailyEntryRead": {
+        "properties": {
+          "entry_type": {
+            "type": "string",
+            "enum": [
+              "payment",
+              "manual_movement"
+            ],
+            "title": "Entry Type"
+          },
+          "actor_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor User Id"
+          },
+          "actor_name": {
+            "type": "string",
+            "title": "Actor Name"
+          },
+          "transaction_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transaction Id"
+          },
+          "cash_movement_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cash Movement Id"
+          },
+          "reservation_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reservation Id"
+          },
+          "amount": {
+            "type": "string",
+            "title": "Amount"
+          },
+          "signed_amount": {
+            "type": "string",
+            "title": "Signed Amount"
+          },
+          "currency_code": {
+            "type": "string",
+            "title": "Currency Code"
+          },
+          "payment_method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payment Method"
+          },
+          "transaction_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transaction Type"
+          },
+          "transaction_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transaction Status"
+          },
+          "movement_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Movement Type"
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Occurred At"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "provider_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "entry_type",
+          "actor_name",
+          "amount",
+          "signed_amount",
+          "currency_code",
+          "occurred_at"
+        ],
+        "title": "CashDailyEntryRead"
+      },
+      "CashDailyPaymentMethodRead": {
+        "properties": {
+          "payment_method": {
+            "type": "string",
+            "title": "Payment Method"
+          },
+          "gross_collected": {
+            "type": "string",
+            "title": "Gross Collected"
+          },
+          "refunds": {
+            "type": "string",
+            "title": "Refunds"
+          },
+          "net_collected": {
+            "type": "string",
+            "title": "Net Collected"
+          },
+          "transaction_count": {
+            "type": "integer",
+            "title": "Transaction Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "payment_method",
+          "gross_collected",
+          "refunds",
+          "net_collected",
+          "transaction_count"
+        ],
+        "title": "CashDailyPaymentMethodRead"
+      },
+      "CashDailyPhysicalRead": {
+        "properties": {
+          "opening_balance": {
+            "type": "string",
+            "title": "Opening Balance"
+          },
+          "income_total": {
+            "type": "string",
+            "title": "Income Total"
+          },
+          "expense_total": {
+            "type": "string",
+            "title": "Expense Total"
+          },
+          "adjustment_total": {
+            "type": "string",
+            "title": "Adjustment Total"
+          },
+          "expected_balance": {
+            "type": "string",
+            "title": "Expected Balance"
+          },
+          "declared_balance": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Declared Balance"
+          },
+          "difference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Difference"
+          },
+          "manual_income_total": {
+            "type": "string",
+            "title": "Manual Income Total"
+          },
+          "manual_expense_total": {
+            "type": "string",
+            "title": "Manual Expense Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "opening_balance",
+          "income_total",
+          "expense_total",
+          "adjustment_total",
+          "expected_balance",
+          "manual_income_total",
+          "manual_expense_total"
+        ],
+        "title": "CashDailyPhysicalRead"
+      },
+      "CashDailySessionRead": {
+        "properties": {
+          "session_id": {
+            "type": "integer",
+            "title": "Session Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "currency_code": {
+            "type": "string",
+            "title": "Currency Code"
+          },
+          "opened_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Opened At"
+          },
+          "closed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed At"
+          },
+          "opened_by_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opened By User Id"
+          },
+          "closed_by_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed By User Id"
+          },
+          "opening_balance": {
+            "type": "string",
+            "title": "Opening Balance"
+          },
+          "expected_balance": {
+            "type": "string",
+            "title": "Expected Balance"
+          },
+          "declared_balance": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Declared Balance"
+          },
+          "difference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Difference"
+          }
+        },
+        "type": "object",
+        "required": [
+          "session_id",
+          "status",
+          "currency_code",
+          "opened_at",
+          "opening_balance",
+          "expected_balance"
+        ],
+        "title": "CashDailySessionRead"
+      },
+      "CashDailySummaryRead": {
+        "properties": {
+          "hotel_id": {
+            "type": "integer",
+            "title": "Hotel Id"
+          },
+          "report_date": {
+            "type": "string",
+            "title": "Report Date"
+          },
+          "timezone": {
+            "type": "string",
+            "title": "Timezone"
+          },
+          "currency_code": {
+            "type": "string",
+            "title": "Currency Code"
+          },
+          "gross_collected": {
+            "type": "string",
+            "title": "Gross Collected"
+          },
+          "refunds": {
+            "type": "string",
+            "title": "Refunds"
+          },
+          "net_collected": {
+            "type": "string",
+            "title": "Net Collected"
+          },
+          "physical_cash_net_collected": {
+            "type": "string",
+            "title": "Physical Cash Net Collected"
+          },
+          "digital_net_collected": {
+            "type": "string",
+            "title": "Digital Net Collected"
+          },
+          "by_payment_method": {
+            "items": {
+              "$ref": "#/components/schemas/CashDailyPaymentMethodRead"
+            },
+            "type": "array",
+            "title": "By Payment Method"
+          },
+          "by_collector": {
+            "items": {
+              "$ref": "#/components/schemas/CashDailyCollectorRead"
+            },
+            "type": "array",
+            "title": "By Collector"
+          },
+          "physical_cash": {
+            "$ref": "#/components/schemas/CashDailyPhysicalRead"
+          },
+          "sessions": {
+            "items": {
+              "$ref": "#/components/schemas/CashDailySessionRead"
+            },
+            "type": "array",
+            "title": "Sessions"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/CashDailyEntryRead"
+            },
+            "type": "array",
+            "title": "Entries"
+          },
+          "entries_truncated": {
+            "type": "boolean",
+            "title": "Entries Truncated",
+            "default": false
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Generated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "hotel_id",
+          "report_date",
+          "timezone",
+          "currency_code",
+          "gross_collected",
+          "refunds",
+          "net_collected",
+          "physical_cash_net_collected",
+          "digital_net_collected",
+          "physical_cash",
+          "generated_at"
+        ],
+        "title": "CashDailySummaryRead"
       },
       "CashMovementCreate": {
         "properties": {
@@ -35430,6 +39126,18 @@
             ],
             "title": "File Url"
           },
+          "stored_object_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 36
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stored Object Id"
+          },
           "requires_signature": {
             "type": "boolean",
             "title": "Requires Signature",
@@ -35505,6 +39213,17 @@
               }
             ],
             "title": "File Url"
+          },
+          "stored_object_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stored Object Id"
           },
           "requires_signature": {
             "type": "boolean",
@@ -37750,6 +41469,104 @@
           "id_token"
         ],
         "title": "GoogleAuthRequest"
+      },
+      "GoogleInvitationAcceptPayload": {
+        "properties": {
+          "id_token": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Id Token"
+          },
+          "token": {
+            "type": "string",
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id_token",
+          "token"
+        ],
+        "title": "GoogleInvitationAcceptPayload"
+      },
+      "GoogleLinkRequest": {
+        "properties": {
+          "id_token": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Id Token"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id_token",
+          "password"
+        ],
+        "title": "GoogleLinkRequest"
+      },
+      "GooglePasswordSetRequest": {
+        "properties": {
+          "id_token": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Id Token"
+          },
+          "new_password": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 12,
+            "title": "New Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id_token",
+          "new_password"
+        ],
+        "title": "GooglePasswordSetRequest"
+      },
+      "GoogleProviderCapabilities": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "client_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Id"
+          },
+          "self_signup_enabled": {
+            "type": "boolean",
+            "title": "Self Signup Enabled",
+            "default": false
+          },
+          "allowed_domains": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Allowed Domains"
+          }
+        },
+        "type": "object",
+        "required": [
+          "enabled"
+        ],
+        "title": "GoogleProviderCapabilities"
       },
       "GoogleUnlinkRequest": {
         "properties": {
@@ -40238,6 +44055,21 @@
         ],
         "title": "IntegrationStatusResponse"
       },
+      "InvitationTokenPayload": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "token"
+        ],
+        "title": "InvitationTokenPayload"
+      },
       "InvitePayload": {
         "properties": {
           "email": {
@@ -40258,6 +44090,18 @@
               }
             ],
             "title": "Password"
+          },
+          "alias": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alias"
           }
         },
         "type": "object",
@@ -40283,6 +44127,15 @@
           "accept_url": {
             "type": "string",
             "title": "Accept Url"
+          },
+          "email_delivery": {
+            "type": "string",
+            "enum": [
+              "sent",
+              "failed",
+              "not_configured"
+            ],
+            "title": "Email Delivery"
           }
         },
         "type": "object",
@@ -40290,7 +44143,8 @@
           "user",
           "invitation_id",
           "invite_token",
-          "accept_url"
+          "accept_url",
+          "email_delivery"
         ],
         "title": "InviteResponse"
       },
@@ -40483,6 +44337,121 @@
           "status"
         ],
         "title": "LaundryStatusUpdate"
+      },
+      "LeadCreateRequest": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "hotel_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hotel Name"
+          },
+          "rooms_estimate": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 100000.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rooms Estimate"
+          },
+          "city": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "City"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
+          "source": {
+            "type": "string",
+            "maxLength": 60,
+            "title": "Source",
+            "default": "landing"
+          },
+          "utm": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Utm"
+          },
+          "company_website": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Website"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email"
+        ],
+        "title": "LeadCreateRequest"
+      },
+      "LeadCreateResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "default": "ok"
+          }
+        },
+        "type": "object",
+        "title": "LeadCreateResponse"
       },
       "LinenItemCreate": {
         "properties": {
@@ -40871,6 +44840,29 @@
             ],
             "title": "Notes"
           },
+          "arrival_time_hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Arrival Time Hint"
+          },
+          "reservation_comment": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reservation Comment"
+          },
           "pricing_channel_code": {
             "anyOf": [
               {
@@ -40979,6 +44971,18 @@
               }
             ],
             "title": "Settlement Status"
+          },
+          "client_version": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Version"
           }
         },
         "type": "object",
@@ -41304,6 +45308,418 @@
           "provider"
         ],
         "title": "MasterEmailStatusPayload"
+      },
+      "MasterLeadListPayload": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MasterLeadPayload"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "MasterLeadListPayload"
+      },
+      "MasterLeadPayload": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "hotel_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hotel Name"
+          },
+          "rooms_estimate": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rooms Estimate"
+          },
+          "city": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "City"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "email",
+          "source",
+          "created_at"
+        ],
+        "title": "MasterLeadPayload"
+      },
+      "MasterPricingPlanListPayload-Input": {
+        "properties": {
+          "plans": {
+            "items": {
+              "$ref": "#/components/schemas/MasterPricingPlanPayload-Input"
+            },
+            "type": "array",
+            "title": "Plans"
+          }
+        },
+        "type": "object",
+        "required": [
+          "plans"
+        ],
+        "title": "MasterPricingPlanListPayload"
+      },
+      "MasterPricingPlanListPayload-Output": {
+        "properties": {
+          "plans": {
+            "items": {
+              "$ref": "#/components/schemas/MasterPricingPlanPayload-Output"
+            },
+            "type": "array",
+            "title": "Plans"
+          }
+        },
+        "type": "object",
+        "required": [
+          "plans"
+        ],
+        "title": "MasterPricingPlanListPayload"
+      },
+      "MasterPricingPlanPayload-Input": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "maxLength": 40,
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 80,
+            "title": "Name"
+          },
+          "is_public": {
+            "type": "boolean",
+            "title": "Is Public",
+            "default": true
+          },
+          "sort_order": {
+            "type": "integer",
+            "title": "Sort Order",
+            "default": 0
+          },
+          "price_amount": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Amount"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 3
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "billing_period": {
+            "type": "string",
+            "maxLength": 20,
+            "title": "Billing Period",
+            "default": "month"
+          },
+          "headline": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Headline"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "features": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Features"
+          },
+          "room_limit": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Room Limit"
+          },
+          "staff_limit": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Staff Limit"
+          },
+          "cta_label": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 60
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cta Label"
+          },
+          "cta_kind": {
+            "type": "string",
+            "maxLength": 20,
+            "title": "Cta Kind",
+            "default": "early_access"
+          },
+          "highlight": {
+            "type": "boolean",
+            "title": "Highlight",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "name"
+        ],
+        "title": "MasterPricingPlanPayload"
+      },
+      "MasterPricingPlanPayload-Output": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "maxLength": 40,
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 80,
+            "title": "Name"
+          },
+          "is_public": {
+            "type": "boolean",
+            "title": "Is Public",
+            "default": true
+          },
+          "sort_order": {
+            "type": "integer",
+            "title": "Sort Order",
+            "default": 0
+          },
+          "price_amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Amount"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 3
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "billing_period": {
+            "type": "string",
+            "maxLength": 20,
+            "title": "Billing Period",
+            "default": "month"
+          },
+          "headline": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Headline"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "features": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Features"
+          },
+          "room_limit": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Room Limit"
+          },
+          "staff_limit": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Staff Limit"
+          },
+          "cta_label": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 60
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cta Label"
+          },
+          "cta_kind": {
+            "type": "string",
+            "maxLength": 20,
+            "title": "Cta Kind",
+            "default": "early_access"
+          },
+          "highlight": {
+            "type": "boolean",
+            "title": "Highlight",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "name"
+        ],
+        "title": "MasterPricingPlanPayload"
       },
       "MasterStripeConfigPayload": {
         "properties": {
@@ -42719,6 +47135,18 @@
             },
             "type": "array",
             "title": "Staff"
+          },
+          "readiness_checklist": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Readiness Checklist"
+          },
+          "readiness_complete": {
+            "type": "boolean",
+            "title": "Readiness Complete",
+            "default": false
           }
         },
         "type": "object",
@@ -42797,6 +47225,270 @@
           "message"
         ],
         "title": "OperationalAlertRead"
+      },
+      "OperationalAuditItemRead": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "source_id": {
+            "type": "integer",
+            "title": "Source Id"
+          },
+          "area": {
+            "type": "string",
+            "title": "Area"
+          },
+          "action": {
+            "type": "string",
+            "title": "Action"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "actor_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor User Id"
+          },
+          "actor_name": {
+            "type": "string",
+            "title": "Actor Name"
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Occurred At"
+          },
+          "reservation_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reservation Id"
+          },
+          "room_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Room Id"
+          },
+          "from_room_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Room Id"
+          },
+          "to_room_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Room Id"
+          },
+          "reason_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason Code"
+          },
+          "reason_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason Note"
+          },
+          "origin_room_disposition": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin Room Disposition"
+          },
+          "origin_room_status_before": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin Room Status Before"
+          },
+          "origin_room_status_after": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin Room Status After"
+          },
+          "payment_method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payment Method"
+          },
+          "transaction_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transaction Type"
+          },
+          "transaction_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transaction Status"
+          },
+          "movement_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Movement Type"
+          },
+          "amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount"
+          },
+          "currency_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency Code"
+          },
+          "details": {
+            "type": "object",
+            "title": "Details"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source",
+          "source_id",
+          "area",
+          "action",
+          "summary",
+          "actor_name",
+          "occurred_at"
+        ],
+        "title": "OperationalAuditItemRead"
+      },
+      "OperationalAuditRead": {
+        "properties": {
+          "hotel_id": {
+            "type": "integer",
+            "title": "Hotel Id"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/OperationalAuditItemRead"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          },
+          "has_more": {
+            "type": "boolean",
+            "title": "Has More"
+          }
+        },
+        "type": "object",
+        "required": [
+          "hotel_id",
+          "total",
+          "limit",
+          "offset",
+          "has_more"
+        ],
+        "title": "OperationalAuditRead"
       },
       "OperationalReportDeliveryRead": {
         "properties": {
@@ -42977,6 +47669,467 @@
         ],
         "title": "OperationalReservationSummary"
       },
+      "OperationalTaskCreate": {
+        "properties": {
+          "task_type": {
+            "$ref": "#/components/schemas/OperationalTaskTypeEnum",
+            "default": "general"
+          },
+          "priority": {
+            "$ref": "#/components/schemas/OperationalTaskPriorityEnum",
+            "default": "medium"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 5000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "room_id": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Room Id"
+          },
+          "reservation_id": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reservation Id"
+          },
+          "room_block_id": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Room Block Id"
+          },
+          "assigned_to_user_id": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assigned To User Id"
+          },
+          "due_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "title": "OperationalTaskCreate"
+      },
+      "OperationalTaskEventRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "from_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Status"
+          },
+          "to_status": {
+            "type": "string",
+            "title": "To Status"
+          },
+          "actor_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor User Id"
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "to_status",
+          "created_at"
+        ],
+        "title": "OperationalTaskEventRead"
+      },
+      "OperationalTaskPriorityEnum": {
+        "type": "string",
+        "enum": [
+          "low",
+          "medium",
+          "high",
+          "critical"
+        ],
+        "title": "OperationalTaskPriorityEnum"
+      },
+      "OperationalTaskRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "hotel_id": {
+            "type": "integer",
+            "title": "Hotel Id"
+          },
+          "task_type": {
+            "$ref": "#/components/schemas/OperationalTaskTypeEnum"
+          },
+          "status": {
+            "$ref": "#/components/schemas/OperationalTaskStatusEnum"
+          },
+          "priority": {
+            "$ref": "#/components/schemas/OperationalTaskPriorityEnum"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "room_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Room Id"
+          },
+          "room_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Room Number"
+          },
+          "reservation_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reservation Id"
+          },
+          "confirmation_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmation Code"
+          },
+          "room_block_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Room Block Id"
+          },
+          "assigned_to_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assigned To User Id"
+          },
+          "due_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due At"
+          },
+          "created_by_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By User Id"
+          },
+          "resolved_by_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved By User Id"
+          },
+          "resolved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved At"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "hotel_id",
+          "task_type",
+          "status",
+          "priority",
+          "title",
+          "created_at",
+          "updated_at",
+          "version"
+        ],
+        "title": "OperationalTaskRead"
+      },
+      "OperationalTaskStatusEnum": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "in_progress",
+          "pending_review",
+          "resolved"
+        ],
+        "title": "OperationalTaskStatusEnum"
+      },
+      "OperationalTaskTypeEnum": {
+        "type": "string",
+        "enum": [
+          "general",
+          "reception",
+          "housekeeping",
+          "maintenance"
+        ],
+        "title": "OperationalTaskTypeEnum"
+      },
+      "OperationalTaskUpdate": {
+        "properties": {
+          "client_version": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Client Version"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OperationalTaskStatusEnum"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "priority": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OperationalTaskPriorityEnum"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 5000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "assigned_to_user_id": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assigned To User Id"
+          },
+          "due_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due At"
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          }
+        },
+        "type": "object",
+        "required": [
+          "client_version"
+        ],
+        "title": "OperationalTaskUpdate"
+      },
+      "OriginRoomDispositionEnum": {
+        "type": "string",
+        "enum": [
+          "cleaning",
+          "available",
+          "maintenance"
+        ],
+        "title": "OriginRoomDispositionEnum"
+      },
       "OwnerPayload": {
         "properties": {
           "name": {
@@ -43022,6 +48175,45 @@
           "email"
         ],
         "title": "OwnerPayload"
+      },
+      "PasswordLoginEnabledResponse": {
+        "properties": {
+          "password_login_enabled": {
+            "type": "boolean",
+            "title": "Password Login Enabled"
+          }
+        },
+        "type": "object",
+        "required": [
+          "password_login_enabled"
+        ],
+        "title": "PasswordLoginEnabledResponse"
+      },
+      "PathAcceptPayload": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "password": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 12
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email"
+        ],
+        "title": "PathAcceptPayload",
+        "description": "Request body retained for clients that historically put the token in the path."
       },
       "PaymentLinkCancel": {
         "properties": {
@@ -45642,6 +50834,144 @@
         ],
         "title": "PublicPaymentLinkRead"
       },
+      "PublicPricingPlan": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "price_amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Amount"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "billing_period": {
+            "type": "string",
+            "title": "Billing Period",
+            "default": "month"
+          },
+          "headline": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Headline"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "features": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Features"
+          },
+          "room_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Room Limit"
+          },
+          "staff_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Staff Limit"
+          },
+          "cta_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cta Label"
+          },
+          "cta_kind": {
+            "type": "string",
+            "title": "Cta Kind",
+            "default": "early_access"
+          },
+          "highlight": {
+            "type": "boolean",
+            "title": "Highlight",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "name"
+        ],
+        "title": "PublicPricingPlan"
+      },
+      "PublicPricingResponse": {
+        "properties": {
+          "plans": {
+            "items": {
+              "$ref": "#/components/schemas/PublicPricingPlan"
+            },
+            "type": "array",
+            "title": "Plans"
+          },
+          "trial_days": {
+            "type": "integer",
+            "title": "Trial Days"
+          }
+        },
+        "type": "object",
+        "required": [
+          "plans",
+          "trial_days"
+        ],
+        "title": "PublicPricingResponse"
+      },
       "PublicRateQuote": {
         "properties": {
           "status": {
@@ -45773,6 +51103,29 @@
               }
             ],
             "title": "Notes"
+          },
+          "arrival_time_hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Arrival Time Hint"
+          },
+          "reservation_comment": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reservation Comment"
           },
           "external_id": {
             "anyOf": [
@@ -46005,7 +51358,8 @@
             "title": "Quoted Amount Usd"
           },
           "status": {
-            "$ref": "#/components/schemas/ReservationStatusEnum"
+            "type": "string",
+            "title": "Status"
           },
           "source": {
             "$ref": "#/components/schemas/ReservationSourceEnum"
@@ -46072,6 +51426,17 @@
             ],
             "title": "Notes"
           },
+          "arrival_time_hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Arrival Time Hint"
+          },
           "created_at": {
             "anyOf": [
               {
@@ -46111,8 +51476,7 @@
               "$ref": "#/components/schemas/GuestSummary"
             },
             "type": "array",
-            "title": "Additional Guests",
-            "default": []
+            "title": "Additional Guests"
           },
           "allocation_status": {
             "type": "string",
@@ -46174,7 +51538,8 @@
           "created_at",
           "updated_at"
         ],
-        "title": "PublicReservationRead"
+        "title": "PublicReservationRead",
+        "description": "Explicit public allowlist; internal reservation fields stay private."
       },
       "PublicReservationStatusRead": {
         "properties": {
@@ -46199,6 +51564,17 @@
             "type": "string",
             "format": "date",
             "title": "Check Out Date"
+          },
+          "arrival_time_hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Arrival Time Hint"
           },
           "total_amount": {
             "type": "string",
@@ -47851,6 +53227,29 @@
             ],
             "title": "Notes"
           },
+          "arrival_time_hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Arrival Time Hint"
+          },
+          "reservation_comment": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reservation Comment"
+          },
           "source": {
             "$ref": "#/components/schemas/ReservationSourceEnum",
             "default": "direct"
@@ -48083,6 +53482,172 @@
           "recreated"
         ],
         "title": "ReservationDateChangeResponse"
+      },
+      "ReservationEmailDeliveryRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "reservation_id": {
+            "type": "integer",
+            "title": "Reservation Id"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ReservationEmailKind"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ReservationEmailStatus"
+          },
+          "recipient_email": {
+            "type": "string",
+            "format": "email",
+            "title": "Recipient Email"
+          },
+          "subject": {
+            "type": "string",
+            "title": "Subject"
+          },
+          "provider_message_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Message Id"
+          },
+          "attempt_count": {
+            "type": "integer",
+            "title": "Attempt Count"
+          },
+          "is_resend": {
+            "type": "boolean",
+            "title": "Is Resend"
+          },
+          "requested_by_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requested By User Id"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "accepted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accepted At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "reservation_id",
+          "kind",
+          "status",
+          "recipient_email",
+          "subject",
+          "attempt_count",
+          "is_resend",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ReservationEmailDeliveryRead"
+      },
+      "ReservationEmailKind": {
+        "type": "string",
+        "enum": [
+          "confirmation",
+          "voucher"
+        ],
+        "title": "ReservationEmailKind"
+      },
+      "ReservationEmailSendRequest": {
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/ReservationEmailKind",
+            "default": "confirmation"
+          },
+          "recipient_email": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "email"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recipient Email"
+          },
+          "resend": {
+            "type": "boolean",
+            "title": "Resend",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "ReservationEmailSendRequest"
+      },
+      "ReservationEmailSendResponse": {
+        "properties": {
+          "delivery": {
+            "$ref": "#/components/schemas/ReservationEmailDeliveryRead"
+          },
+          "deduplicated": {
+            "type": "boolean",
+            "title": "Deduplicated",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "delivery"
+        ],
+        "title": "ReservationEmailSendResponse"
+      },
+      "ReservationEmailStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "accepted",
+          "failed",
+          "unknown"
+        ],
+        "title": "ReservationEmailStatus"
       },
       "ReservationExtensionRequest": {
         "properties": {
@@ -48728,9 +54293,31 @@
             ],
             "title": "Room Id"
           },
+          "room_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Room Number"
+          },
           "category_id": {
             "type": "integer",
             "title": "Category Id"
+          },
+          "category_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Name"
           },
           "company_id": {
             "anyOf": [
@@ -48952,6 +54539,28 @@
               }
             ],
             "title": "Notes"
+          },
+          "arrival_time_hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Arrival Time Hint"
+          },
+          "reservation_comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reservation Comment"
           },
           "created_at": {
             "anyOf": [
@@ -49289,6 +54898,29 @@
             ],
             "title": "Notes"
           },
+          "arrival_time_hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Arrival Time Hint"
+          },
+          "reservation_comment": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reservation Comment"
+          },
           "mobility_restriction": {
             "anyOf": [
               {
@@ -49346,6 +54978,8 @@
           },
           "code": {
             "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
             "title": "Code"
           },
           "new_password": {
@@ -50207,6 +55841,28 @@
             ],
             "title": "Price Action",
             "default": "keep"
+          },
+          "origin_room_disposition": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OriginRoomDispositionEnum"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "origin_room_disposition_note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin Room Disposition Note"
           }
         },
         "type": "object",
@@ -50248,6 +55904,49 @@
           "currency_code": {
             "type": "string",
             "title": "Currency Code"
+          },
+          "origin_room_disposition": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OriginRoomDispositionEnum"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "origin_room_disposition_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin Room Disposition Note"
+          },
+          "origin_room_status_before": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin Room Status Before"
+          },
+          "origin_room_status_after": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin Room Status After"
           }
         },
         "type": "object",
@@ -50851,6 +56550,11 @@
               }
             ],
             "title": "Actor User Id"
+          },
+          "actor_name": {
+            "type": "string",
+            "title": "Actor Name",
+            "default": "Sistema"
           },
           "resource_type": {
             "anyOf": [
@@ -51462,6 +57166,172 @@
         ],
         "title": "SettlementQuarterRead"
       },
+      "ShiftHandoffAcknowledge": {
+        "properties": {
+          "client_version": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Client Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "client_version"
+        ],
+        "title": "ShiftHandoffAcknowledge"
+      },
+      "ShiftHandoffCreate": {
+        "properties": {
+          "task_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Task Ids"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 5000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "cash_close_report_id": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cash Close Report Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "task_ids"
+        ],
+        "title": "ShiftHandoffCreate"
+      },
+      "ShiftHandoffRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "hotel_id": {
+            "type": "integer",
+            "title": "Hotel Id"
+          },
+          "delivered_by_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delivered By User Id"
+          },
+          "received_by_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Received By User Id"
+          },
+          "cash_close_report_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cash Close Report Id"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ShiftHandoffStatusEnum"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "delivered_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Delivered At"
+          },
+          "acknowledged_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acknowledged At"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "task_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Task Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "hotel_id",
+          "status",
+          "delivered_at",
+          "created_at",
+          "version"
+        ],
+        "title": "ShiftHandoffRead"
+      },
+      "ShiftHandoffStatusEnum": {
+        "type": "string",
+        "enum": [
+          "pending_acknowledgement",
+          "acknowledged"
+        ],
+        "title": "ShiftHandoffStatusEnum"
+      },
       "SolverMetricRead": {
         "properties": {
           "metric_key": {
@@ -51479,6 +57349,65 @@
           "metric_value"
         ],
         "title": "SolverMetricRead"
+      },
+      "StaffAliasItem": {
+        "properties": {
+          "user_id": {
+            "type": "integer",
+            "title": "User Id"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "invited"
+            ],
+            "title": "Status"
+          },
+          "alias": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alias"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id",
+          "email",
+          "role",
+          "status"
+        ],
+        "title": "StaffAliasItem"
+      },
+      "StaffAliasRosterResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/StaffAliasItem"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "StaffAliasRosterResponse"
       },
       "StaffMember": {
         "properties": {
@@ -52764,6 +58693,27 @@
         ],
         "title": "UpdateRolePayload"
       },
+      "UpdateStaffAliasPayload": {
+        "properties": {
+          "alias": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alias"
+          }
+        },
+        "type": "object",
+        "required": [
+          "alias"
+        ],
+        "title": "UpdateStaffAliasPayload"
+      },
       "UserInfo": {
         "properties": {
           "id": {
@@ -52785,6 +58735,17 @@
           "is_active": {
             "type": "boolean",
             "title": "Is Active"
+          },
+          "password_login_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Password Login Enabled"
           },
           "permissions": {
             "items": {
@@ -53217,6 +59178,8 @@
           },
           "code": {
             "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
             "title": "Code"
           }
         },
@@ -53643,6 +59606,23 @@
         ],
         "title": "WaitlistStatusEnum"
       },
+      "WhatsAppAssignmentUpdate": {
+        "properties": {
+          "assigned_to_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assigned To User Id"
+          }
+        },
+        "type": "object",
+        "title": "WhatsAppAssignmentUpdate"
+      },
       "WhatsAppAvailabilityResponse": {
         "properties": {
           "status": {
@@ -53684,6 +59664,371 @@
           "count"
         ],
         "title": "WhatsAppAvailabilityResponse"
+      },
+      "WhatsAppChannelComplete": {
+        "properties": {
+          "waba_id": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Waba Id"
+          },
+          "phone_number_id": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Phone Number Id"
+          },
+          "display_phone_number": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Phone Number"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "integration_connection_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Integration Connection Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "waba_id",
+          "phone_number_id"
+        ],
+        "title": "WhatsAppChannelComplete",
+        "description": "Metadata returned by the server-side Embedded Signup exchange."
+      },
+      "WhatsAppContactRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "normalized_phone": {
+            "type": "string",
+            "title": "Normalized Phone"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "guest_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Guest Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "normalized_phone"
+        ],
+        "title": "WhatsAppContactRead"
+      },
+      "WhatsAppConversationListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/WhatsAppConversationRead"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "WhatsAppConversationListResponse"
+      },
+      "WhatsAppConversationRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "hotel_id": {
+            "type": "integer",
+            "title": "Hotel Id"
+          },
+          "status": {
+            "$ref": "#/components/schemas/WhatsAppConversationStatusEnum"
+          },
+          "priority": {
+            "type": "string",
+            "title": "Priority"
+          },
+          "assigned_to_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assigned To User Id"
+          },
+          "department": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Department"
+          },
+          "shift_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shift Key"
+          },
+          "human_active": {
+            "type": "boolean",
+            "title": "Human Active"
+          },
+          "service_window_expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Service Window Expires At"
+          },
+          "last_inbound_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Inbound At"
+          },
+          "last_message_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Message At"
+          },
+          "contact": {
+            "$ref": "#/components/schemas/WhatsAppContactRead"
+          },
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/WhatsAppMessageRead"
+            },
+            "type": "array",
+            "title": "Messages"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "hotel_id",
+          "status",
+          "priority",
+          "human_active",
+          "contact"
+        ],
+        "title": "WhatsAppConversationRead"
+      },
+      "WhatsAppConversationStatusEnum": {
+        "type": "string",
+        "enum": [
+          "new",
+          "open",
+          "assigned",
+          "pending",
+          "closed"
+        ],
+        "title": "WhatsAppConversationStatusEnum"
+      },
+      "WhatsAppConversationStatusUpdate": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/WhatsAppConversationStatusEnum"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "WhatsAppConversationStatusUpdate"
+      },
+      "WhatsAppMessageCreate": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Text"
+          },
+          "message_type": {
+            "type": "string",
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Message Type",
+            "default": "text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "title": "WhatsAppMessageCreate"
+      },
+      "WhatsAppMessageRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "direction": {
+            "type": "string",
+            "title": "Direction"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "message_type": {
+            "type": "string",
+            "title": "Message Type"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "actor_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor User Id"
+          },
+          "provider_message_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Message Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "occurred_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occurred At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "direction",
+          "status",
+          "message_type",
+          "created_at"
+        ],
+        "title": "WhatsAppMessageRead"
+      },
+      "WhatsAppNoteCreate": {
+        "properties": {
+          "body": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Body"
+          }
+        },
+        "type": "object",
+        "required": [
+          "body"
+        ],
+        "title": "WhatsAppNoteCreate"
       },
       "WhatsAppOption": {
         "properties": {
@@ -54219,6 +60564,29 @@
             ],
             "title": "Notes"
           },
+          "arrival_time_hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Arrival Time Hint"
+          },
+          "reservation_comment": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reservation Comment"
+          },
           "external_id": {
             "anyOf": [
               {
@@ -54446,7 +60814,8 @@
             "title": "Quoted Amount Usd"
           },
           "status": {
-            "$ref": "#/components/schemas/ReservationStatusEnum"
+            "type": "string",
+            "title": "Status"
           },
           "source": {
             "$ref": "#/components/schemas/ReservationSourceEnum"
@@ -54513,6 +60882,17 @@
             ],
             "title": "Notes"
           },
+          "arrival_time_hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Arrival Time Hint"
+          },
           "created_at": {
             "anyOf": [
               {
@@ -54552,8 +60932,7 @@
               "$ref": "#/components/schemas/GuestSummary"
             },
             "type": "array",
-            "title": "Additional Guests",
-            "default": []
+            "title": "Additional Guests"
           },
           "allocation_status": {
             "type": "string",

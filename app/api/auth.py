@@ -37,6 +37,7 @@ from app.schemas.auth import (
     AppleUserPayload,
     GoogleAuthRequest,
     GoogleLinkRequest,
+    GooglePasswordSetRequest,
     GoogleProviderCapabilities,
     GoogleUnlinkRequest,
     LoginRequest,
@@ -46,6 +47,7 @@ from app.schemas.auth import (
     MfaEnrollmentResponse,
     MfaLoginRequest,
     MfaRecoveryCodesResponse,
+    PasswordLoginEnabledResponse,
     RegisterRequest,
     RegistrationResponse,
     RequestCode,
@@ -184,6 +186,7 @@ def _build_auth_response(db: Session, user: User, requested_hotel_id: int | None
             role=active_membership.role,
             is_verified=user.is_verified,
             is_active=user.is_active,
+            password_login_enabled=bool(user.password_login_enabled),
             permissions=effective_permissions,
         ),
         permissions=effective_permissions,
@@ -261,6 +264,7 @@ def _issue_auth_response(
     *,
     audit_action: str | None = None,
     audit_details: dict[str, object] | None = None,
+    requested_hotel_id: int | None = None,
 ) -> AuthResponse:
     user.last_login = datetime.now(timezone.utc)
     db.add(user)
@@ -273,7 +277,7 @@ def _issue_auth_response(
         )
     db.commit()
     db.refresh(user)
-    auth_response = _build_auth_response(db, user)
+    auth_response = _build_auth_response(db, user, requested_hotel_id=requested_hotel_id)
     if request is not None and response is not None:
         auth_response.csrf_token = _attach_user_session_cookies(db, user, request, response)
     _run_notification_cycle_best_effort()
@@ -288,6 +292,7 @@ def _build_login_response(
     *,
     audit_action: str | None = None,
     audit_details: dict[str, object] | None = None,
+    requested_hotel_id: int | None = None,
 ) -> AuthResponse | MfaChallengeResponse:
     """Return a session only after the required account MFA factor succeeds."""
     if mfa_service.get_active_mfa_secret(db, user.id):
@@ -311,6 +316,7 @@ def _build_login_response(
         response=response,
         audit_action=audit_action,
         audit_details=audit_details,
+        requested_hotel_id=requested_hotel_id,
     )
 
 
@@ -543,7 +549,11 @@ def login(
     db.commit()
 
     user = db.query(User).filter(User.email.ilike(payload.email)).first()
-    if not user or not verify_password(payload.password, user.password_hash):
+    if (
+        not user
+        or not verify_password(payload.password, user.password_hash)
+        or not user.password_login_enabled
+    ):
         raise HTTPException(status_code=401, detail="Credenciales invalidas")
 
     if not user.is_active:
@@ -661,6 +671,7 @@ def google_login(
                 email=email,
                 password_hash=hash_password(secrets.token_urlsafe(32)),
                 google_sub=google_sub,
+                password_login_enabled=False,
                 role="owner",
                 is_verified=True,  # Google already verified this email
             )
@@ -671,13 +682,17 @@ def google_login(
         elif not user.is_active:
             raise HTTPException(status_code=403, detail="Usuario deshabilitado")
         elif user.google_sub is None:
-            raise HTTPException(
-                status_code=409,
-                detail={
-                    "code": "google_link_required",
-                    "message": "La cuenta existente requiere una vinculacion explicita con Google",
-                },
-            )
+            # A verified Google email proves ownership of the address. The
+            # local password may have been chosen by someone who registered
+            # the address before its actual owner, so replace it and revoke
+            # every credential issued before this claim.
+            user.password_hash = hash_password(secrets.token_urlsafe(32))
+            user.password_login_enabled = False
+            user.is_verified = True
+            user.google_sub = google_sub
+            user.token_version = (user.token_version or 0) + 1
+            revoke_all_sessions(db, user.id)
+            google_audit_details["account_state"] = "reclaimed"
         else:
             # A different Google subject must never overwrite an existing
             # link or fall back to email-only login. Fail closed on this
@@ -699,6 +714,74 @@ def google_login(
     db.commit()
     db.refresh(user)
     return _build_login_response(db, user, request=request, response=response)
+
+
+@router.post("/password/set", response_model=PasswordLoginEnabledResponse)
+def set_password_with_google(
+    payload: GooglePasswordSetRequest,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> PasswordLoginEnabledResponse:
+    """Enable a local password for a Google-only account after fresh proof."""
+    if user.password_login_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="La cuenta ya tiene habilitado el acceso con contraseña",
+        )
+
+    session_token = request.cookies.get(USER_SESSION_COOKIE_NAME)
+    csrf_cookie = request.cookies.get(USER_CSRF_COOKIE_NAME)
+    csrf_header = request.headers.get("X-CSRF-Token")
+    if not session_token or not csrf_cookie:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sesion invalida o expirada")
+    if not csrf_double_submit_matches(csrf_header, csrf_cookie):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="CSRF invalido")
+
+    # Match this browser cookie to the Bearer-authenticated user before
+    # rotating it. This avoids invalidating someone else's cookie on a
+    # cross-user request.
+    browser_session = next(
+        (session for session in user.sessions if session_matches_token(session, session_token)),
+        None,
+    )
+    if browser_session is None or browser_session.revoked_at is not None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sesion invalida o expirada")
+
+    settings = get_settings()
+    try:
+        require_google_login()
+    except GoogleLoginDisabled as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    _claims, _email, google_sub = _verify_google_claims(payload.id_token, settings)
+    if not user.google_sub or google_sub != user.google_sub:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="La identidad de Google no coincide")
+
+    validated_session = validate_and_touch_session(
+        db,
+        session_token,
+        csrf_header,
+        csrf_cookie,
+    )
+    if validated_session is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sesion invalida o expirada")
+    session, rotated_session_token = validated_session
+    if session.user_id != user.id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sesion invalida o expirada")
+
+    user.password_hash = hash_password(payload.new_password)
+    user.password_login_enabled = True
+    db.add(user)
+    _audit_security_event(
+        db,
+        user=user,
+        action="auth.password.enabled",
+        details={"method": "google_reauthentication"},
+    )
+    set_user_session_cookies(response, rotated_session_token, csrf_cookie)
+    db.commit()
+    return PasswordLoginEnabledResponse(password_login_enabled=True)
 
 
 @router.post("/google/link")
@@ -1117,6 +1200,7 @@ def reset_password(
         raise HTTPException(status_code=400, detail="Codigo invalido o expirado")
     code_guess_limiter.reset(f"password_reset:{key}", db=db)
     user.password_hash = hash_password(payload.new_password)
+    user.password_login_enabled = True
     user.is_verified = True
     user.last_login = datetime.now(timezone.utc)
     # Revoke every token issued before this reset (see users.token_version).
@@ -1367,5 +1451,6 @@ def me(
         role=context.user_role or "unknown",
         is_verified=current_user.is_verified,
         is_active=current_user.is_active,
+        password_login_enabled=bool(current_user.password_login_enabled),
         permissions=effective_permissions,
     )

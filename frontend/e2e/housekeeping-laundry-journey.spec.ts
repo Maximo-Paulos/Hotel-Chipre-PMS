@@ -71,7 +71,7 @@ test("housekeeping sends a laundry remito on a vendor set up by the owner", asyn
   await logout(page);
 
   await login(page, housekeeping, "/habitaciones");
-  await expect(page.getByTestId("session-role")).toHaveText("Housekeeping");
+  await expect(page.getByTestId("session-role")).toHaveText("Limpieza");
   await page.goto("/operacion/lavanderia");
 
   const main = page.locator("main");

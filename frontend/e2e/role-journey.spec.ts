@@ -48,12 +48,12 @@ async function login(page: Page, persona: Persona) {
   await page.locator('input[type="password"]').fill(persona.password);
   await page.getByTestId("login-submit").click();
   await page.waitForURL(`**${persona.landingPath}`, { timeout: 20_000 });
-  await expect(page.getByText(`Usuario ${persona.email}`)).toBeVisible();
+  await expect(page.getByTestId("session-email")).toHaveText(persona.email);
   const roleLabel: Record<string, string> = {
     owner: "Dueño",
-    manager: "Manager",
+    manager: "Gerencia",
     receptionist: "Recepción",
-    housekeeping: "Housekeeping"
+    housekeeping: "Limpieza"
   };
   await expect(page.getByTestId("session-role")).toHaveText(roleLabel[persona.label]);
 }
@@ -191,7 +191,7 @@ test("housekeeping stays inside rooms and laundry without loading restricted dat
   const navPaths = await navigation.locator("a[href]").evaluateAll((links) =>
     links.map((link) => link.getAttribute("href")).filter((href): href is string => Boolean(href))
   );
-  expect(navPaths.sort()).toEqual(["/habitaciones", "/operacion/lavanderia"].sort());
+  expect(navPaths.sort()).toEqual(["/habitaciones", "/operacion/lavanderia", "/operacion/tareas"].sort());
 
   for (const forbiddenPath of ["/dashboard", "/huespedes", "/caja", "/reportes", "/operacion/stock", "/settings/security"]) {
     await page.goto(forbiddenPath);

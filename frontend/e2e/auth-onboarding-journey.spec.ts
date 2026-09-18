@@ -34,8 +34,8 @@ test("owner can register, verify, recover access and complete onboarding through
   await page.waitForURL("**/verify-email", { timeout: 15_000 });
 
   const verificationCode = await waitForCode(email, /Verifica tu cuenta/i);
-  await page.getByLabel("Codigo", { exact: true }).fill(verificationCode);
-  await page.getByRole("button", { name: "Verificar codigo", exact: true }).click();
+  await page.getByLabel("Código", { exact: true }).fill(verificationCode);
+  await page.getByRole("button", { name: "Verificar código", exact: true }).click();
   await page.waitForURL("**/onboarding", { timeout: 15_000 });
 
   await saveAndExpectPath(page, "/onboarding/identity");
@@ -81,7 +81,7 @@ test("owner can register, verify, recover access and complete onboarding through
   await expect(page.getByRole("button", { name: "Marcar onboarding como completo", exact: true })).toBeEnabled();
   await page.getByRole("button", { name: "Marcar onboarding como completo", exact: true }).click();
   await page.waitForURL("**/dashboard", { timeout: 15_000 });
-  await expect(page.getByText(`Usuario ${email}`, { exact: true })).toBeVisible();
+  await expect(page.getByTestId("session-email")).toHaveText(email);
 
   await page.getByTestId("logout-btn").click();
   await page.waitForURL("**/login", { timeout: 15_000 });
@@ -103,5 +103,5 @@ test("owner can register, verify, recover access and complete onboarding through
   await page.locator('input[type="password"]').fill(recoveredPassword);
   await page.getByTestId("login-submit").click();
   await page.waitForURL("**/dashboard", { timeout: 15_000 });
-  await expect(page.getByText(`Usuario ${email}`, { exact: true })).toBeVisible();
+  await expect(page.getByTestId("session-email")).toHaveText(email);
 });

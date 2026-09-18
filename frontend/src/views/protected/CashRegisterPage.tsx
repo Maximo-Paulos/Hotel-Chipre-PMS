@@ -214,7 +214,7 @@ export function CashRegisterPage() {
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-xs uppercase tracking-wide text-slate-500">Operacion</p>
-          <h1 className="text-2xl font-semibold text-slate-900">Caja</h1>
+          <h1 className="text-balance text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Caja</h1>
           <p className="text-sm text-slate-600">Apertura, movimientos, cierre de arqueo y aprobacion de diferencias.</p>
         </div>
         {sessionsQuery.isFetching && <p className="text-xs text-slate-500">Actualizando caja...</p>}

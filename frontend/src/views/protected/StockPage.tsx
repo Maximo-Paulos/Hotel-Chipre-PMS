@@ -427,7 +427,7 @@ export function StockPage() {
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-xs uppercase tracking-wide text-slate-500">Operacion</p>
-          <h1 className="text-2xl font-semibold text-slate-900">Stock</h1>
+          <h1 className="text-balance text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Stock</h1>
           <p className="text-sm text-slate-600">Inventario operativo con movimientos y alertas de bajo stock.</p>
         </div>
         {(itemsQuery.isFetching || lowStockQuery.isFetching || stockSummaryQuery.isFetching) && (

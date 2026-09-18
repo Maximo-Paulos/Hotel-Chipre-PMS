@@ -36,7 +36,7 @@ export function SettingsWhatsAppPage() {
 
   return (
     <div className="max-w-2xl space-y-4">
-      <div><p className="text-xs uppercase tracking-wide text-slate-500">Integraciones</p><h1 className="text-2xl font-semibold text-slate-900">WhatsApp Business</h1><p className="text-sm text-slate-600">El hotel es dueño de su WABA y el PMS guarda solo metadatos operativos.</p></div>
+      <div><p className="text-xs uppercase tracking-wide text-slate-500">Integraciones</p><h1 className="text-balance text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">WhatsApp Business</h1><p className="text-sm text-slate-600">El hotel es dueño de su WABA y el PMS guarda solo metadatos operativos.</p></div>
       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <p className="text-sm font-semibold">Estado: {channel.isLoading ? "cargando" : current?.status || channel.data?.status || "no conectado"}</p>
         <p className="mt-1 text-xs text-slate-600">Embedded Signup y los secretos se resuelven del lado servidor. Nunca pegues un access token aquí.</p>

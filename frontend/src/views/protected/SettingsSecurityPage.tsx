@@ -1,10 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
+import { useRef, useState } from "react";
 
 import { hasValidSession } from "../../api/client";
+import { currentUser, setPasswordWithGoogle } from "../../api/auth";
 import { getSecurityEvents, getSecurityOverview, revokeAllSessions } from "../../api/security";
 import { useSession } from "../../state/session";
 import { useGuardedMutation } from "../../hooks/useGuardedMutation";
+import { GoogleSignInButton } from "../../components/GoogleSignInButton";
+import { PasswordInput } from "../../components/PasswordInput";
 
 const formatEventAction = (action: string) => action.replace(/_/g, " ").replace(/:/g, " · ");
 
@@ -12,6 +16,19 @@ export function SettingsSecurityPage() {
   const navigate = useNavigate();
   const { session, logout } = useSession();
   const enabled = hasValidSession(session);
+  const userQuery = useQuery({
+    queryKey: ["auth-user", session.hotelId, session.userId],
+    queryFn: () => currentUser(session),
+    enabled,
+    staleTime: 15 * 1000
+  });
+  const googleIdTokenRef = useRef<string | null>(null);
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
+  const [password, setPassword] = useState("");
+  const [passwordConfirm, setPasswordConfirm] = useState("");
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState(false);
+  const [passwordSaving, setPasswordSaving] = useState(false);
   const overviewQuery = useQuery({
     queryKey: ["settings-security", "overview", session.hotelId],
     queryFn: () => getSecurityOverview(session),
@@ -44,6 +61,48 @@ export function SettingsSecurityPage() {
     }
   };
 
+  const handleGoogleConfirmation = (idToken: string) => {
+    googleIdTokenRef.current = idToken;
+    setPasswordError(null);
+    setPasswordSuccess(false);
+    setShowPasswordForm(true);
+  };
+
+  const handleSetPassword = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setPasswordError(null);
+    if (password.length < 12) {
+      setPasswordError("La contraseña debe tener al menos 12 caracteres.");
+      return;
+    }
+    if (password !== passwordConfirm) {
+      setPasswordError("Las contraseñas no coinciden.");
+      return;
+    }
+    const idToken = googleIdTokenRef.current;
+    if (!idToken) {
+      setPasswordError("Volvé a confirmar tu identidad con Google.");
+      setShowPasswordForm(false);
+      return;
+    }
+    setPasswordSaving(true);
+    try {
+      await setPasswordWithGoogle(idToken, password);
+      googleIdTokenRef.current = null;
+      setPassword("");
+      setPasswordConfirm("");
+      setPasswordSuccess(true);
+      setShowPasswordForm(false);
+      await userQuery.refetch();
+    } catch (err) {
+      googleIdTokenRef.current = null;
+      setShowPasswordForm(false);
+      setPasswordError((err as Error).message || "No se pudo crear la contraseña. Confirmá tu identidad con Google e intentá de nuevo.");
+    } finally {
+      setPasswordSaving(false);
+    }
+  };
+
   const overview = overviewQuery.data;
   const events = eventsQuery.data?.events ?? [];
 
@@ -51,7 +110,7 @@ export function SettingsSecurityPage() {
     <div className="space-y-6">
       <header>
         <p className="text-xs uppercase tracking-wide text-slate-500">Configuración</p>
-        <h1 className="text-2xl font-semibold text-slate-900">Seguridad</h1>
+        <h1 className="text-balance text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Seguridad</h1>
         <p className="text-sm text-slate-600">Resumen de acceso, eventos recientes y control de tus sesiones.</p>
       </header>
 
@@ -107,6 +166,76 @@ export function SettingsSecurityPage() {
                 {revokeMutation.isPending ? "Cerrando sesiones..." : "Cerrar todas mis sesiones"}
               </button>
             </div>
+            {userQuery.isError && (
+              <p role="alert" className="mt-3 text-sm text-rose-700">No se pudo verificar si tu cuenta tiene una contraseña configurada.</p>
+            )}
+            {userQuery.data?.password_login_enabled === false && !passwordSuccess && (
+              <div className="mt-4 rounded-lg border border-brand-100 bg-brand-50 p-4">
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900">Agregá una contraseña (opcional)</h3>
+                  <p className="mt-1 text-sm text-slate-700">Podés seguir usando Google. Crear una contraseña también te permitirá ingresar con email y contraseña.</p>
+                </div>
+                {!showPasswordForm ? (
+                  <div className="mt-3">
+                    <GoogleSignInButton onCredential={handleGoogleConfirmation} />
+                    <p className="mt-2 text-center text-xs text-slate-500">Confirmá con la misma cuenta de Google vinculada a este usuario.</p>
+                  </div>
+                ) : (
+                  <form className="mt-4 space-y-3" onSubmit={handleSetPassword}>
+                    <PasswordInput
+                      id="security-new-password"
+                      value={password}
+                      onChange={setPassword}
+                      placeholder="Mínimo 12 caracteres"
+                      required
+                      autoComplete="new-password"
+                    />
+                    <label htmlFor="security-new-password-confirm" className="block text-sm font-medium text-slate-700">
+                      Confirmar contraseña
+                      <input
+                        id="security-new-password-confirm"
+                        type="password"
+                        autoComplete="new-password"
+                        minLength={12}
+                        required
+                        value={passwordConfirm}
+                        onChange={(event) => setPasswordConfirm(event.target.value)}
+                        className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                        placeholder="Repetí tu contraseña"
+                      />
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="submit"
+                        disabled={passwordSaving || password.length < 12 || password !== passwordConfirm}
+                        className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
+                      >
+                        {passwordSaving ? "Guardando..." : "Crear contraseña"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          googleIdTokenRef.current = null;
+                          setShowPasswordForm(false);
+                          setPassword("");
+                          setPasswordConfirm("");
+                        }}
+                        disabled={passwordSaving}
+                        className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </form>
+                )}
+                {passwordError && <p className="mt-3 text-sm text-rose-700" role="alert">{passwordError}</p>}
+              </div>
+            )}
+            {passwordSuccess && (
+              <p className="mt-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800" role="status">
+                Contraseña creada. Ya podés ingresar con Google o con email y contraseña.
+              </p>
+            )}
             {revokeMutation.isError && (
               <p role="alert" className="mt-3 text-sm text-rose-700">No se pudieron cerrar las sesiones. Reintentá.</p>
             )}

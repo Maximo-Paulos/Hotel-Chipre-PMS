@@ -51,17 +51,23 @@ export function HotelSelector() {
 
   if (!hasValidSession(session)) {
     return (
-      <div className="rounded-lg border border-dashed border-slate-200 bg-white px-3 py-2 text-sm text-slate-500 shadow-sm">
+      <div className="rounded-control border border-dashed border-slate-200 bg-white px-3 py-2 text-sm text-slate-500 shadow-sm">
         Iniciá sesión para elegir un hotel activo.
       </div>
     );
   }
 
+  // A picker with one option is not a choice. Most accounts run a single
+  // hotel, and for them this control used to spend a select, an "Aplicar"
+  // link and an "ID 1" label on every screen to show a value that can never
+  // change. The active hotel's name is in the sidebar header instead.
+  if (options.length <= 1) return null;
+
   return (
-    <div className="flex w-full min-w-0 max-w-full items-center gap-2 overflow-hidden rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 shadow-sm sm:w-auto">
+    <div className="flex w-full min-w-0 max-w-full items-center gap-1 overflow-hidden rounded-control border border-slate-200 bg-white py-1 pl-1 pr-2 text-sm text-slate-700 shadow-sm sm:w-auto">
       <select
         aria-label="Hotel activo"
-        className="h-11 min-w-0 max-w-full flex-1 rounded-md border border-slate-200 px-2 py-1 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 sm:flex-none"
+        className="h-11 min-w-0 max-w-full flex-1 rounded-md border-0 bg-transparent px-2 py-1 text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500 sm:flex-none md:h-9"
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onBlur={apply}
@@ -78,13 +84,12 @@ export function HotelSelector() {
       </select>
       <button
         type="button"
-        className="inline-flex min-h-11 items-center px-2 text-brand-700 underline decoration-dotted decoration-2 underline-offset-2"
+        className="inline-flex min-h-11 items-center rounded-md px-2 text-sm font-medium text-brand-700 hover:bg-brand-50 active:scale-[0.98] disabled:opacity-50 md:min-h-9"
         onClick={apply}
         disabled={isLoading}
       >
         Aplicar
       </button>
-      <span className="text-xs text-emerald-700">ID {safeHotelId(value) ?? "—"}</span>
     </div>
   );
 }

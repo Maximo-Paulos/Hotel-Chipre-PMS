@@ -32,7 +32,7 @@ async function login(page: Page) {
   await page.locator('input[type="password"]').fill(credentials.password);
   await page.getByTestId("login-submit").click();
   await page.waitForURL("**/dashboard", { timeout: 20_000 });
-  await expect(page.getByText(`Usuario ${credentials.email}`)).toBeVisible();
+  await expect(page.getByTestId("session-email")).toHaveText(credentials.email);
 }
 
 // B6.1: routes not in the daily nav row now sit inside a collapsed <details>
@@ -457,7 +457,7 @@ test("owner manages a room move and no-show from the reservation ficha", async (
   const destinationValue = await destinationOption.getAttribute("value");
   expect(destinationValue).toBeTruthy();
   await destinationSelect.selectOption(destinationValue!);
-  await stayOperations.getByLabel("Motivo del cambio").fill("Cambio operativo");
+  await stayOperations.getByLabel("Motivo del cambio").selectOption("operational");
   await stayOperations.getByLabel("Notas del cambio").fill("Mantenimiento preventivo de la habitación origen");
   await stayOperations.getByRole("button", { name: "Mover habitación", exact: true }).click();
   await expect(page.getByText("Habitación cambiada.", { exact: true })).toBeVisible();

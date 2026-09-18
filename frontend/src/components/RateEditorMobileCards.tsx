@@ -110,7 +110,7 @@ function RateDayCard({
         {PRICE_FIELDS.map(({ field, label, required }) => (
           <label key={field} className="text-xs font-semibold text-slate-600">
             {label}
-            {required ? <span className="ml-0.5 text-blue-500">*</span> : null}
+            {required ? <span className="ml-0.5 text-brand-500">*</span> : null}
             <input
               type="number"
               min={0}
@@ -124,7 +124,7 @@ function RateDayCard({
               }}
               aria-label={`${label} ${row.date}`}
               placeholder={required ? "0" : "—"}
-              className="mt-1 h-11 w-full rounded-lg border border-slate-200 px-2 text-right text-sm tabular-nums outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100 disabled:opacity-50"
+              className="mt-1 h-11 w-full rounded-lg border border-slate-200 px-2 text-right text-sm tabular-nums outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-100 disabled:opacity-50"
             />
           </label>
         ))}
@@ -137,7 +137,7 @@ function RateDayCard({
         type="button"
         onClick={handleSave}
         disabled={disabled}
-        className="mt-3 min-h-11 w-full rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-70"
+        className="mt-3 min-h-11 w-full rounded-xl bg-brand-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-70"
       >
         Guardar {DAY_LABEL.format(date)} ({currencyCode})
       </button>

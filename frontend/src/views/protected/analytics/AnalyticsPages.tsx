@@ -297,15 +297,16 @@ function PageShell({
 }) {
   return (
     <div className="space-y-6">
-      <div className="rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950 p-6 text-white shadow-xl">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-3xl">
-            <p className="text-xs uppercase tracking-[0.24em] text-emerald-300">{eyebrow}</p>
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight">{title}</h1>
-            <p className="mt-3 max-w-2xl text-sm text-slate-200">{subtitle}</p>
-          </div>
-          {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
+      {/* Same header as every other page. Analytics used to open on a dark
+          slate-to-emerald gradient card -- the only dark block in a light app,
+          which read as a different product rather than a section of this one. */}
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div className="max-w-3xl">
+          <p className="text-xs uppercase tracking-wide text-slate-500">{eyebrow}</p>
+          <h1 className="text-balance text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">{title}</h1>
+          <p className="mt-1 max-w-2xl text-sm text-slate-600">{subtitle}</p>
         </div>
+        {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
       </div>
       {children}
     </div>
@@ -488,10 +489,10 @@ function ReportScreen({
       subtitle={subtitle}
       actions={
         <>
-          <Link to="/analytics" className="rounded-full border border-white/20 px-4 py-2 text-sm font-semibold text-white hover:bg-white/10">
+          <Link to="/analytics" className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-700 ring-1 ring-slate-900/10 hover:bg-slate-50">
             Volver
           </Link>
-          <Link to="/analytics/operations" className="rounded-full border border-emerald-400/30 bg-emerald-400/15 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-400/25">
+          <Link to="/analytics/operations" className="rounded-full bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
             Operación
           </Link>
         </>
@@ -758,7 +759,7 @@ export function AnalyticsAIChatPage() {
         title="Asistente IA del hotel"
         subtitle="Consultas acotadas al contexto de Analytics del hotel activo."
         actions={
-          <Link to="/analytics" className="rounded-full border border-white/20 px-4 py-2 text-sm font-semibold text-white hover:bg-white/10">
+          <Link to="/analytics" className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-700 ring-1 ring-slate-900/10 hover:bg-slate-50">
             Dashboard
           </Link>
         }
@@ -945,7 +946,7 @@ export function CompaniesSettingsPage() {
       eyebrow="Settings"
       title="Companies"
       subtitle="CRUD completo de compañías para el hotel activo."
-      actions={<Link to="/analytics" className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800">Analytics</Link>}
+      actions={<Link to="/analytics" className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-700 ring-1 ring-slate-900/10 hover:bg-slate-50">Analytics</Link>}
     >
       <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -1123,7 +1124,7 @@ export function RoomStateEventsPage() {
       eyebrow="Operacion"
       title="Eventos de estado de habitaciones"
       subtitle="Eventos operativos de bloqueo y cierre por habitación."
-      actions={<Link to="/analytics" className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800">Analítica</Link>}
+      actions={<Link to="/analytics" className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-700 ring-1 ring-slate-900/10 hover:bg-slate-50">Analítica</Link>}
     >
       <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">

@@ -71,14 +71,14 @@ test("the hotel selector preserves the authorized list across a two-hotel round 
 
   await selector.selectOption("2");
   await page.getByRole("button", { name: "Aplicar", exact: true }).click();
-  await expect(page.getByText("Hotel ID 2", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("active-hotel-name")).toHaveText("Hotel Dos E2E");
   await expect(selector).toHaveValue("2");
   await expect(selector.locator('option[value="1"]')).toBeAttached();
   await expect(selector.locator('option[value="2"]')).toBeAttached();
 
   await selector.selectOption("1");
   await page.getByRole("button", { name: "Aplicar", exact: true }).click();
-  await expect(page.getByText("Hotel ID 1", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("active-hotel-name")).toContainText("Hotel Chipre E2E");
   await expect(selector).toHaveValue("1");
   await expect(selector.locator('option[value="1"]')).toBeAttached();
   await expect(selector.locator('option[value="2"]')).toBeAttached();

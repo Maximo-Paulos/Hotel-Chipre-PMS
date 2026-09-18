@@ -222,7 +222,7 @@ export function SettingsConnectionsPage() {
       <div className="flex items-center justify-between">
         <div>
           <p className="text-xs uppercase tracking-wide text-slate-500">Integraciones</p>
-          <h1 className="text-2xl font-semibold text-slate-900">Conexiones</h1>
+          <h1 className="text-balance text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Conexiones</h1>
           <p className="text-sm text-slate-600">Cada conexion se guarda cifrada y vinculada solo al hotel activo.</p>
         </div>
       </div>

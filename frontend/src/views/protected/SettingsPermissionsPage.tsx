@@ -247,7 +247,7 @@ function PermissionTable({
                     <tbody>
                       {moduleReads.length > 0 ? (
                         <tr>
-                          <th colSpan={roleOrder.length + 1} className="border-b border-slate-200 bg-blue-50 px-3 py-2 text-left text-[11px] font-bold uppercase tracking-wide text-blue-700">
+                          <th colSpan={roleOrder.length + 1} className="border-b border-slate-200 bg-brand-50 px-3 py-2 text-left text-[11px] font-bold uppercase tracking-wide text-brand-700">
                             Lectura y visibilidad
                           </th>
                         </tr>
@@ -579,7 +579,7 @@ export function SettingsPermissionsPage() {
     <div className="space-y-6">
       <header>
         <p className="text-xs uppercase tracking-wide text-slate-500">Configuración</p>
-        <h1 className="text-2xl font-semibold text-slate-900">Permisos</h1>
+        <h1 className="text-balance text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Permisos</h1>
         <p className="text-sm text-slate-600">
           Administrá qué puede ver y qué puede modificar cada rol. Los cambios quedan registrados como overrides auditables.
         </p>

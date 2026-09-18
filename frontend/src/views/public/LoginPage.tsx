@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
 import { ApiError } from "../../api/client";
@@ -7,20 +7,54 @@ import { Seo } from "../../components/Seo";
 import { GoogleSignInButton } from "../../components/GoogleSignInButton";
 import { AppleSignInButton } from "../../components/AppleSignInButton";
 import { PasswordInput } from "../../components/PasswordInput";
-import { login as loginApi, loginWithApple, loginWithGoogle, type AuthResponse } from "../../api/auth";
+import {
+  completeMfaLogin,
+  isMfaChallenge,
+  login as loginApi,
+  loginWithApple,
+  loginWithGoogle,
+  type AuthResponse,
+  type AuthResult
+} from "../../api/auth";
 import { getOnboardingStatus } from "../../api/onboarding";
 import { defaultPathForRole, normalizeRole, useSession, type SessionState } from "../../state/session";
 import { BrandMark } from "../../components/brand/BrandMark";
 
+const safeInvitationReturnPath = (candidate: string | null): string | null => {
+  if (!candidate) return null;
+  try {
+    const url = new URL(candidate, window.location.origin);
+    const token = url.searchParams.get("token");
+    if (url.origin !== window.location.origin || url.pathname !== "/invitations/accept" || !token) return null;
+    return `/invitations/accept#token=${encodeURIComponent(token)}`;
+  } catch {
+    return null;
+  }
+};
+
+const safeInvitationHashReturnPath = (hash: string): string | null => {
+  const token = new URLSearchParams(hash.replace(/^#/, "")).get("invitation");
+  if (!token || token.length > 512) return null;
+  return `/invitations/accept#token=${encodeURIComponent(token)}`;
+};
+
 export function LoginPage() {
   const { t } = useTranslation("auth");
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const invitationReturnPath = safeInvitationReturnPath(searchParams.get("returnTo"))
+    || safeInvitationHashReturnPath(location.hash);
   const { login, session, isInitializing, restoredSession } = useSession();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [slowLogin, setSlowLogin] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [mfaChallenge, setMfaChallenge] = useState<{ mfa_token: string; expires_in: number } | null>(null);
+  const [mfaCode, setMfaCode] = useState("");
+  const [mfaError, setMfaError] = useState<string | null>(null);
+  const [mfaLoading, setMfaLoading] = useState(false);
 
   useEffect(() => {
     if (!loading) {
@@ -38,8 +72,12 @@ export function LoginPage() {
       navigate("/verify-email", { replace: true });
       return;
     }
+    if (invitationReturnPath) {
+      navigate(invitationReturnPath, { replace: true });
+      return;
+    }
     navigate(defaultPathForRole(session.baseRole ?? session.role), { replace: true });
-  }, [isInitializing, navigate, restoredSession, session.accessToken, session.baseRole, session.isVerified, session.role]);
+  }, [invitationReturnPath, isInitializing, navigate, restoredSession, session.accessToken, session.baseRole, session.isVerified, session.role]);
 
   const completeAuth = async (res: AuthResponse) => {
     if (!res.hotel_id) {
@@ -65,6 +103,11 @@ export function LoginPage() {
       return;
     }
 
+    if (invitationReturnPath) {
+      navigate(invitationReturnPath, { replace: true });
+      return;
+    }
+
     if (authenticatedRole === "owner" || authenticatedRole === "co_owner") {
       const status = await getOnboardingStatus(nextSession);
       navigate(status.completed ? defaultPathForRole(authenticatedRole) : "/onboarding", { replace: true });
@@ -76,6 +119,18 @@ export function LoginPage() {
     navigate(defaultPathForRole(authenticatedRole), { replace: true });
   };
 
+  const handleAuthResult = async (result: AuthResult) => {
+    if (isMfaChallenge(result)) {
+      setMfaChallenge({ mfa_token: result.mfa_token, expires_in: result.expires_in });
+      setMfaCode("");
+      setMfaError(null);
+      setError(null);
+      return;
+    }
+    setMfaChallenge(null);
+    await completeAuth(result);
+  };
+
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setLoading(true);
@@ -83,7 +138,7 @@ export function LoginPage() {
 
     try {
       const res = await loginApi(email, password);
-      await completeAuth(res);
+      await handleAuthResult(res);
     } catch (err) {
       if (err instanceof ApiError) setError(err.message);
       else setError(t("login.errors.signIn"));
@@ -97,7 +152,7 @@ export function LoginPage() {
     setError(null);
     try {
       const res = await loginWithGoogle(idToken);
-      await completeAuth(res);
+      await handleAuthResult(res);
     } catch (err) {
       if (err instanceof ApiError) setError(err.message);
       else setError(t("login.errors.signInGoogle"));
@@ -115,12 +170,28 @@ export function LoginPage() {
     setError(null);
     try {
       const res = await loginWithApple(idToken, nonce, user);
-      await completeAuth(res);
+      await handleAuthResult(res);
     } catch (err) {
       if (err instanceof ApiError) setError(err.message);
       else setError(t("login.errors.signInApple"));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleMfaSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!mfaChallenge) return;
+    setMfaLoading(true);
+    setMfaError(null);
+    try {
+      const res = await completeMfaLogin(mfaChallenge.mfa_token, mfaCode.trim());
+      setMfaChallenge(null);
+      await completeAuth(res);
+    } catch (err) {
+      setMfaError(err instanceof ApiError ? err.message : t("login.errors.mfa"));
+    } finally {
+      setMfaLoading(false);
     }
   };
 
@@ -133,6 +204,46 @@ export function LoginPage() {
           <h1 className="text-2xl font-semibold text-slate-900">{t("login.title")}</h1>
           <p className="text-sm text-slate-600">{t("login.description")}</p>
         </div>
+        {mfaChallenge ? (
+          <form className="space-y-4" onSubmit={handleMfaSubmit}>
+            <div className="rounded-lg border border-brand-100 bg-brand-50 p-3 text-sm text-brand-900" role="status">
+              {t("login.mfaDescription", { seconds: mfaChallenge.expires_in })}
+            </div>
+            <label htmlFor="login-mfa-code" className="block text-sm font-medium text-slate-700">
+              {t("login.mfaCodeLabel")}
+              <input
+                id="login-mfa-code"
+                autoComplete="one-time-code"
+                inputMode="numeric"
+                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-900 shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                value={mfaCode}
+                onChange={(event) => setMfaCode(event.target.value)}
+                required
+                autoFocus
+              />
+            </label>
+            {mfaError && <p role="alert" className="rounded-md bg-rose-50 p-2 text-sm text-rose-700">{mfaError}</p>}
+            <button
+              type="submit"
+              disabled={mfaLoading || !mfaCode.trim()}
+              className="w-full rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-70"
+            >
+              {mfaLoading ? t("login.mfaVerifying") : t("login.mfaSubmit")}
+            </button>
+            <button
+              type="button"
+              className="w-full rounded-lg px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
+              onClick={() => {
+                setMfaChallenge(null);
+                setMfaCode("");
+                setMfaError(null);
+              }}
+            >
+              {t("login.mfaCancel")}
+            </button>
+          </form>
+        ) : (
+        <div>
         <form className="space-y-4" onSubmit={handleSubmit}>
           <div>
             <label htmlFor="login-email" className="text-sm font-medium text-slate-700">{t("login.emailLabel")}</label>
@@ -184,6 +295,8 @@ export function LoginPage() {
             <AppleSignInButton disabled={loading} onCredential={handleAppleCredential} />
           </div>
         </div>
+        </div>
+        )}
         <div className="mt-4 flex items-center justify-between text-sm">
           <Link to="/forgot-password" className="text-brand-700 hover:underline">
             {t("login.forgotPassword")}

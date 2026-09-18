@@ -1,8 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 // Owner request: show/hide password toggle on the login page, and the
-// Google sign-in button must stay hidden until VITE_GOOGLE_CLIENT_ID is
-// configured for the build (not set in this local E2E build).
+// Google sign-in button follows the explicitly configured E2E client id.
 test("password visibility toggle switches the input type", async ({ page }) => {
   await page.goto("/login");
   const passwordInput = page.locator('input[type="password"]');
@@ -18,7 +17,16 @@ test("password visibility toggle switches the input type", async ({ page }) => {
   await expect(page.locator('input[type="password"]')).toHaveValue("some-secret-value");
 });
 
-test("Google sign-in button does not render without VITE_GOOGLE_CLIENT_ID", async ({ page }) => {
+test("Google sign-in button follows the configured E2E client id", async ({ page }) => {
+  if (process.env.E2E_GOOGLE_CLIENT_ID) {
+    await page.route("https://accounts.google.com/gsi/client", (route) => route.fulfill({
+      status: 200,
+      contentType: "application/javascript",
+      body: "window.google={accounts:{id:{initialize:function(){},renderButton:function(parent){parent.appendChild(document.createElement('button'));}}}};"
+    }));
+  }
   await page.goto("/login");
-  await expect(page.getByTestId("google-signin-button")).toHaveCount(0);
+  const button = page.getByTestId("google-signin-button");
+  if (process.env.E2E_GOOGLE_CLIENT_ID) await expect(button).toBeVisible();
+  else await expect(button).toHaveCount(0);
 });

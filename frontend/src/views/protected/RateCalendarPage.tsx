@@ -78,7 +78,7 @@ const yearEnd = (year: number) => `${year}-12-31`;
 function Pill({ children, tone = "default" }: { children: React.ReactNode; tone?: "default" | "blue" | "green" | "amber" | "violet" }) {
   const styles = {
     default: "border-slate-200 bg-slate-100 text-slate-700",
-    blue: "border-blue-200 bg-blue-50 text-blue-700",
+    blue: "border-brand-200 bg-brand-50 text-brand-700",
     green: "border-emerald-200 bg-emerald-50 text-emerald-700",
     amber: "border-amber-200 bg-amber-50 text-amber-700",
     violet: "border-violet-200 bg-violet-50 text-violet-700"
@@ -300,7 +300,7 @@ export function RateCalendarPage() {
   };
 
   const inputClass =
-    "h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100";
+    "h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-100";
   const labelClass = "flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500";
   const currencyCode = calendarQuery.data?.meta.hotel_currency_code ?? "ARS";
   const totalRooms = calendarQuery.data?.meta.total_rooms ?? null;
@@ -310,7 +310,7 @@ export function RateCalendarPage() {
       <header className="rounded-3xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
         <div className="grid gap-4 2xl:grid-cols-[1fr_auto] 2xl:items-end">
           <div className="min-w-0">
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900">Calendario de tarifas y disponibilidad</h1>
+            <h1 className="text-balance text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Calendario de tarifas y disponibilidad</h1>
             <div className="mt-2 flex flex-wrap gap-2">
               <Pill tone="blue">Moneda principal: {currencyCode}</Pill>
               <Pill tone="violet">Vista anual: {selectedYear}</Pill>
@@ -497,7 +497,7 @@ export function RateCalendarPage() {
                     onClick={() => setBulkMode("range")}
                     className={`rounded-xl px-3 py-2 text-sm font-semibold ${
                       bulkMode === "range"
-                        ? "bg-blue-600 text-white"
+                        ? "bg-brand-600 text-white"
                         : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-100"
                     }`}
                   >
@@ -508,7 +508,7 @@ export function RateCalendarPage() {
                     onClick={() => setBulkMode("weekdays")}
                     className={`rounded-xl px-3 py-2 text-sm font-semibold ${
                       bulkMode === "weekdays"
-                        ? "bg-blue-600 text-white"
+                        ? "bg-brand-600 text-white"
                         : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-100"
                     }`}
                   >
@@ -528,7 +528,7 @@ export function RateCalendarPage() {
                           onClick={() => toggleWeekday(day.value)}
                           className={`h-9 min-w-10 rounded-xl px-3 text-sm font-semibold ${
                             active
-                              ? "bg-slate-900 text-white"
+                              ? "bg-brand-600 text-white"
                               : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-100"
                           }`}
                         >
@@ -689,7 +689,7 @@ export function RateCalendarPage() {
                   type="submit"
                   disabled={bulkSave.isPending || bulkFieldSave.isPending}
                   data-testid="rate-editor-save"
-                  className="rounded-2xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-70"
+                  className="rounded-2xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-70"
                 >
                   {bulkSave.isPending || bulkFieldSave.isPending ? "Guardando..." : "Aplicar al calendario"}
                 </button>
@@ -726,7 +726,7 @@ export function RateCalendarPage() {
               <label className={labelClass}>Hasta<input required type="date" className={`${inputClass} normal-case tracking-normal text-slate-900`} value={periodForm.end_date} onChange={(event) => setPeriodForm((current) => ({ ...current, end_date: event.target.value }))} disabled={!canEditRates} /></label>
               <label className={labelClass}>Precio por noche<input required min={0} step="0.01" type="number" className={`${inputClass} normal-case tracking-normal text-slate-900`} value={periodForm.price_per_night} onChange={(event) => setPeriodForm((current) => ({ ...current, price_per_night: Number(event.target.value) }))} disabled={!canEditRates} /></label>
               <label className={labelClass}>Prioridad<input min={0} type="number" className={`${inputClass} normal-case tracking-normal text-slate-900`} value={periodForm.priority} onChange={(event) => setPeriodForm((current) => ({ ...current, priority: Number(event.target.value) }))} disabled={!canEditRates} /></label>
-              <button type="submit" className="self-end rounded-2xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" disabled={!canEditRates || periodMutations.create.isPending || !categoryId}>{periodMutations.create.isPending ? "Guardando..." : "Agregar temporada"}</button>
+              <button type="submit" className="self-end rounded-2xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" disabled={!canEditRates || periodMutations.create.isPending || !categoryId}>{periodMutations.create.isPending ? "Guardando..." : "Agregar temporada"}</button>
             </form>
             {periodMutations.create.isError || periodMutations.remove.isError ? <p className="mt-2 text-sm text-rose-700">No se pudo actualizar la temporada.</p> : null}
           </section>

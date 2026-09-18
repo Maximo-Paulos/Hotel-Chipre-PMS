@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import secrets
+import unicodedata
 from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
@@ -45,12 +46,58 @@ class StaffInvitationProvision:
     invitation_before: dict | None
 
 
+class StaffAliasConflict(ValueError):
+    """The requested hotel alias is already in use by another membership."""
+
+
 def normalize_staff_role(role: str | None) -> str:
     key = " ".join((role or "receptionist").strip().lower().replace("_", " ").split())
     normalized = ROLE_ALIASES.get(key, key)
     if normalized not in VALID_STAFF_ROLES:
         raise ValueError("Rol de staff inválido")
     return normalized
+
+
+def normalize_staff_alias(alias: str | None) -> tuple[str | None, str | None]:
+    """Return the trimmed display alias and a case-insensitive uniqueness key."""
+
+    if alias is None:
+        return None, None
+    normalized = unicodedata.normalize("NFKC", " ".join(alias.split()))
+    if not normalized:
+        return None, None
+    if len(normalized) > 80:
+        raise ValueError("El alias no puede superar los 80 caracteres")
+    key = normalized.casefold()
+    if len(key) > 240:
+        raise ValueError("El alias no puede superar los 80 caracteres")
+    return normalized, key
+
+
+def set_membership_alias(
+    db: Session,
+    *,
+    hotel_id: int,
+    membership: HotelMembership,
+    alias: str | None,
+) -> None:
+    """Set one hotel's alias after checking that its normalized key is unique."""
+
+    normalized, key = normalize_staff_alias(alias)
+    if key is not None:
+        duplicate = (
+            db.query(HotelMembership.id)
+            .filter(
+                HotelMembership.hotel_id == hotel_id,
+                HotelMembership.alias_key == key,
+                HotelMembership.user_id != membership.user_id,
+            )
+            .first()
+        )
+        if duplicate is not None:
+            raise StaffAliasConflict("Ese alias ya está en uso en este hotel")
+    membership.alias = normalized
+    membership.alias_key = key
 
 
 def provision_staff_invitation(
@@ -61,6 +108,8 @@ def provision_staff_invitation(
     role: str,
     inviter_user_id: int | None,
     inviter_email: str,
+    alias: str | None = None,
+    alias_provided: bool = False,
 ) -> StaffInvitationProvision:
     """Create/update the user, hotel membership, and pending invitation.
 
@@ -123,6 +172,14 @@ def provision_staff_invitation(
             status="invited",
         )
         db.add(membership)
+
+    if alias_provided:
+        set_membership_alias(
+            db,
+            hotel_id=hotel_id,
+            membership=membership,
+            alias=alias,
+        )
 
     db.flush()
     existing = (

@@ -72,6 +72,15 @@ class GoogleAuthRequest(BaseModel):
     id_token: str = Field(min_length=1)
 
 
+class GooglePasswordSetRequest(BaseModel):
+    id_token: str = Field(min_length=1)
+    new_password: str = Field(min_length=12, max_length=256)
+
+
+class PasswordLoginEnabledResponse(BaseModel):
+    password_login_enabled: bool
+
+
 class GoogleLinkRequest(BaseModel):
     id_token: str = Field(min_length=1)
     password: str = Field(min_length=1)
@@ -154,6 +163,7 @@ class UserInfo(BaseModel):
     role: str
     is_verified: bool
     is_active: bool
+    password_login_enabled: bool | None = None
     permissions: list[str] = Field(default_factory=list)
 
     class Config:

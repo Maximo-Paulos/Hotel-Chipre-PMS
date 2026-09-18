@@ -195,6 +195,47 @@ _CSP = (
 )
 
 
+class _InvitationAccessLogFilter(logging.Filter):
+    """Keep invitation capabilities out of Uvicorn's request-target logs."""
+
+    _STATIC_ROUTES = {
+        ("POST", "/api/invitations/preview"),
+        ("POST", "/api/invitations/accept"),
+        ("POST", "/api/invitations/accept/google"),
+    }
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        args = record.args
+        if not isinstance(args, tuple) or len(args) != 5:
+            return True
+
+        method, request_target = args[1], args[2]
+        if not isinstance(method, str) or not isinstance(request_target, str):
+            return True
+
+        path = request_target.partition("?")[0]
+        if path != "/api/invitations" and not path.startswith("/api/invitations/"):
+            return True
+
+        safe_target = path if (method, path) in self._STATIC_ROUTES else "/api/invitations/[REDACTED]"
+        record.args = (*args[:2], safe_target, *args[3:])
+        return True
+
+
+_uvicorn_access_logger = logging.getLogger("uvicorn.access")
+if not any(isinstance(item, _InvitationAccessLogFilter) for item in _uvicorn_access_logger.filters):
+    _uvicorn_access_logger.addFilter(_InvitationAccessLogFilter())
+
+
+def _safe_request_path_for_logging(path: str) -> str:
+    """Hide invitation capabilities from application logs for legacy/malformed paths."""
+    segments = path.split("/")
+    if len(segments) >= 4 and segments[1:3] == ["api", "invitations"]:
+        segments[3] = "[REDACTED]"
+        return "/".join(segments)
+    return path
+
+
 @app.middleware("http")
 async def security_headers(request: Request, call_next):
     # The try/except also turns an unhandled exception into a real 500 response
@@ -204,7 +245,7 @@ async def security_headers(request: Request, call_next):
     try:
         response = await call_next(request)
     except Exception:
-        LOGGER.exception("Unhandled error on %s %s", request.method, request.url.path)
+        LOGGER.exception("Unhandled error on %s %s", request.method, _safe_request_path_for_logging(request.url.path))
         response = JSONResponse(status_code=500, content={"detail": "Error interno del servidor"})
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
@@ -226,7 +267,7 @@ async def request_telemetry(request: Request, call_next):
     duration_ms = (time.perf_counter() - started) * 1000.0
     LOGGER.info(
         "http.request route=%s method=%s status=%s duration_ms=%.2f request_id=%s",
-        request.url.path,
+        _safe_request_path_for_logging(request.url.path),
         request.method,
         response.status_code,
         duration_ms,

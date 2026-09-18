@@ -17,6 +17,7 @@ from app.models.cash_register import (
     CashSessionStatusEnum,
 )
 from app.models.hotel_config import HotelConfiguration
+from app.models.hotel_membership import HotelMembership
 from app.models.operations import RoomMoveEvent, RoomMoveTypeEnum
 from app.models.reservation import Reservation, ReservationSourceEnum, ReservationStatusEnum
 from app.models.security_audit_log import SecurityAuditLog
@@ -105,6 +106,16 @@ def test_daily_summary_uses_hotel_local_day_and_separates_physical_cash(
 ):
     hotel_config.hotel_timezone = "America/Argentina/Buenos_Aires"
     collector = _user(db, 9101, "Recepción de prueba")
+    db.add(
+        HotelMembership(
+            hotel_id=hotel_config.id,
+            user_id=collector.id,
+            role="receptionist",
+            status="active",
+            alias="Turno de caja",
+            alias_key="turno de caja",
+        )
+    )
     reservation = _reservation(db, hotel_config, sample_guest, sample_categories)
     local_day_start = datetime(2026, 9, 4, 3, 0, tzinfo=timezone.utc)
 
@@ -235,7 +246,12 @@ def test_daily_summary_uses_hotel_local_day_and_separates_physical_cash(
     assert previous_local_day.id not in {entry.get("transaction_id") for entry in summary["entries"]}
     assert all(entry.get("transaction_id") is not None for entry in summary["entries"] if entry["entry_type"] == "payment")
     assert any(entry["entry_type"] == "manual_movement" for entry in summary["entries"])
-    assert summary["by_collector"][0]["collector_name"] == "Recepción de prueba"
+    assert next(
+        collector_row
+        for collector_row in summary["by_collector"]
+        if collector_row["collector_user_id"] == collector.id
+    )["collector_name"] == "Turno de caja"
+    assert next(entry for entry in summary["entries"] if entry["entry_type"] == "payment")["actor_name"] == "Turno de caja"
 
 
 def test_daily_summary_requires_explicit_currency_when_turns_use_multiple_currencies(

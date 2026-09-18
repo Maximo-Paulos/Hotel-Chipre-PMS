@@ -120,6 +120,30 @@ const planRank: Record<"starter" | "pro" | "ultra", number> = {
 
 const ACTIVE_SUBSCRIPTION_STATUSES = ["active", "trialing", "demo", "comped"];
 
+/**
+ * The healthy realtime state, as a dot instead of a full-width banner.
+ *
+ * Nothing to act on means nothing to read: the label stays in the
+ * accessibility tree and in the tooltip, so a screen reader and a hover both
+ * still answer "is this live?", but the operator's screen is not spending a
+ * strip of chrome to say everything is fine. The unhealthy states still take
+ * the banner above.
+ */
+function RealtimeDot({ label }: { label: string }) {
+  return (
+    <span
+      className="hidden items-center lg:inline-flex"
+      data-testid="realtime-dot"
+      role="status"
+      aria-live="polite"
+      title={label}
+    >
+      <span aria-hidden="true" className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.15)]" />
+      <span className="sr-only">{label}</span>
+    </span>
+  );
+}
+
 export function AppShell() {
   const { t } = useTranslation("appshell");
   const location = useLocation();
@@ -159,7 +183,7 @@ export function AppShell() {
   // Mounted once here (not just on ReservationsPage, its only prior caller)
   // so a hotel's interface_language takes effect on every protected route,
   // including the Settings page where it's actually changed.
-  useHotelConfig();
+  const { data: hotelConfig } = useHotelConfig();
 
   const { data: onboarding, isFetching, error } = useOnboardingStatus({
     enabled: isLoggedIn && isVerified && ["owner", "co_owner"].includes(realRole ?? "")
@@ -262,16 +286,10 @@ export function AppShell() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <Seo title={t("seo.title")} description={t("seo.description")} noindex />
-      <div
-        data-testid="app-topbar"
-        className="flex flex-wrap gap-x-3 gap-y-1 border-b bg-slate-900 px-4 py-2 text-xs text-white sm:px-6"
-      >
-        <span className="font-semibold">Hotels-PMS</span>
-        <span className="text-slate-200">{t("topbar.hotelId", { id: session.hotelId ?? "-" })}</span>
-        <span className="min-w-0 break-all text-slate-200">
-          {t("topbar.user", { user: session.email || session.userId || t("topbar.noSession") })}
-        </span>
-      </div>
+      {/* The dark identity strip that used to sit here repeated three facts the
+          shell already shows -- the brand mark in the sidebar, the hotel in
+          HotelSelector, the address in UserBadge -- and cost ~34px of every
+          screen to do it. A bar is for something the operator has to act on. */}
 
       {!isOnline && (
         <div
@@ -284,25 +302,24 @@ export function AppShell() {
         </div>
       )}
 
-      {realtimeStatus !== "disabled" && (
+      {/* Realtime only takes a banner when it is NOT fine. A permanent green
+          strip announcing that the connection works is chrome the operator
+          reads past, and it cost another ~44px on every screen; the healthy
+          state is a dot in the header instead (RealtimeDot below). The
+          exception states keep the fixed min-height so the reconnect loop
+          never shifts the layout under the operator's click. */}
+      {realtimeStatus !== "disabled" && realtimeStatus !== "connected" && (
         <div
           className={cx(
-            // Fixed min-height reserves room for the longest status message
-            // (degraded, which wraps to 2 lines on narrow viewports) in every
-            // state, so switching between short and long messages during the
-            // reconnect loop never shifts the layout under the user's click.
             "flex min-h-[2.75rem] items-center border-b px-4 py-1.5 text-xs sm:px-6",
-            realtimeStatus === "connected"
-              ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-              : realtimeStatus === "degraded"
-                ? "border-amber-300 bg-amber-100 text-amber-950"
-                : "border-sky-200 bg-sky-50 text-sky-900"
+            realtimeStatus === "degraded"
+              ? "border-amber-300 bg-amber-100 text-amber-950"
+              : "border-sky-200 bg-sky-50 text-sky-900"
           )}
           data-testid="realtime-status"
           role="status"
           aria-live="polite"
         >
-          {realtimeStatus === "connected" && t("realtime.connected")}
           {realtimeStatus === "connecting" && t("realtime.connecting")}
           {realtimeStatus === "reconnecting" && t("realtime.reconnecting")}
           {realtimeStatus === "degraded" && t("realtime.degraded")}
@@ -374,7 +391,7 @@ export function AppShell() {
             <button
               type="button"
               onClick={installPrompt.promptInstall}
-              className="min-h-11 rounded-lg border border-emerald-300 bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700"
+              className="min-h-11 rounded-lg border border-brand-600 bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700"
             >
               {t("install.install")}
             </button>
@@ -395,7 +412,19 @@ export function AppShell() {
             <Link to={homePath} className="block">
               <BrandMark />
             </Link>
-            <p className="mt-2 text-xs text-slate-500">{t("sidebar.tagline")}</p>
+            {/* Where am I: the active hotel, the way a Mac sidebar heads its
+                list with the account it belongs to. It replaces a marketing
+                tagline, and it is the one place the shell still names the
+                hotel now that the single-hotel selector is gone. */}
+            {hotelConfig?.hotel_name && (
+              <p
+                data-testid="active-hotel-name"
+                className="mt-3 truncate text-sm font-semibold text-slate-800"
+                title={hotelConfig.hotel_name}
+              >
+                {hotelConfig.hotel_name}
+              </p>
+            )}
           </div>
           <nav className="flex-1 space-y-4 px-3 pb-6">
             <div className="flex flex-col gap-1">
@@ -405,7 +434,7 @@ export function AppShell() {
                   to={item.to}
                   className={({ isActive }) =>
                     cx(
-                      "flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium",
+                      "flex items-center justify-between rounded-control px-3 py-2 text-sm font-medium",
                       isActive ? "bg-brand-50 text-brand-700" : "text-slate-700 hover:bg-slate-100",
                     )
                   }
@@ -421,8 +450,20 @@ export function AppShell() {
                 disappearing. */}
             {visibleNavSections.map((section) => (
               <details key={section.title} className="group">
-                <summary className="cursor-pointer select-none rounded-lg px-2 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500 hover:bg-slate-100">
+                <summary className="flex cursor-pointer select-none list-none items-center justify-between rounded-control px-3 py-1.5 text-[13px] font-semibold text-slate-500 hover:bg-slate-100 hover:text-slate-700 [&::-webkit-details-marker]:hidden">
                   {t(section.title)}
+                  <svg
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.75"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="h-3.5 w-3.5 transition-transform duration-200 ease-rack group-open:rotate-90"
+                    aria-hidden="true"
+                  >
+                    <path d="M6 4l4 4-4 4" />
+                  </svg>
                 </summary>
                 <div className="mt-1 flex flex-col gap-1">
                   {section.items.map((item) => (
@@ -431,7 +472,7 @@ export function AppShell() {
                       to={item.to}
                       className={({ isActive }) =>
                         cx(
-                          "flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium",
+                          "flex items-center justify-between rounded-control px-3 py-2 text-sm font-medium",
                           isActive ? "bg-brand-50 text-brand-700" : "text-slate-700 hover:bg-slate-100",
                         )
                       }
@@ -494,13 +535,19 @@ export function AppShell() {
               </div>
             </div>
 
-            <div className="hidden px-4 py-3 md:flex md:items-center md:justify-end md:gap-3">
-              {hasAnyPermission(["reservation:create", "checkin:perform"]) && <ReservationGlobalSearch />}
+            {/* Search is the tool, so it leads the row; status and identity sit
+                on the trailing edge. `justify-between` instead of the old
+                `justify-end` stops the search box from drifting into the
+                controls as the viewport narrows. */}
+            <div className="hidden px-4 py-3 md:flex md:items-center md:justify-between md:gap-3">
+              {hasAnyPermission(["reservation:create", "checkin:perform"]) ? <ReservationGlobalSearch /> : <span />}
+              <div className="flex items-center gap-3">
+              {realtimeStatus === "connected" && <RealtimeDot label={t("realtime.connected")} />}
               <button
                 type="button"
                 onClick={() => setAlertsOpen(true)}
                 aria-label={unreadNotifications > 0 ? t("alerts.viewUnread", { count: unreadNotifications }) : t("alerts.view")}
-                className="relative inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100"
+                className="relative inline-flex min-h-11 min-w-11 items-center justify-center rounded-control border border-slate-200 text-slate-700 transition hover:bg-slate-100 active:scale-[0.98]"
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5" aria-hidden="true">
                   <path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
@@ -512,6 +559,7 @@ export function AppShell() {
               </button>
               <HotelSelector />
               <UserBadge />
+              </div>
             </div>
           </header>
 
@@ -530,7 +578,18 @@ export function AppShell() {
                 className="flex h-full w-full max-w-xs animate-slide-in-right flex-col overflow-y-auto border-l border-slate-200 bg-white shadow-xl outline-none"
               >
                 <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
-                  <span className="text-sm font-semibold text-slate-900">{t("mobileMenu.title")}</span>
+                  {/* Same "where am I" as the desktop sidebar header: without
+                      it a single-hotel operator on a phone saw the hotel's name
+                      nowhere once the one-option selector stopped rendering.
+                      Long names wrap instead of pushing the panel wider. */}
+                  <div className="min-w-0">
+                    <span className="block text-sm font-semibold text-slate-900">{t("mobileMenu.title")}</span>
+                    {hotelConfig?.hotel_name && (
+                      <span data-testid="mobile-active-hotel-name" className="block break-words text-xs text-slate-500">
+                        {hotelConfig.hotel_name}
+                      </span>
+                    )}
+                  </div>
                   <button
                     type="button"
                     onClick={() => setMobileMenuOpen(false)}
@@ -560,7 +619,7 @@ export function AppShell() {
 
                 {visibleNavSections.map((section) => (
                   <nav key={section.title} aria-label={t(section.title)} className="flex flex-col gap-1 border-t border-slate-100 px-3 py-3">
-                    <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">{t(section.title)}</p>
+                    <p className="px-3 pb-1 text-[13px] font-semibold text-slate-500">{t(section.title)}</p>
                     {section.items.map((item) => (
                       <NavLink
                         key={item.to}

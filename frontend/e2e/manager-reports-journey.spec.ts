@@ -27,7 +27,7 @@ async function login(page: Page) {
   await page.locator('input[type="password"]').fill(manager.password);
   await page.getByTestId("login-submit").click();
   await page.waitForURL("**/dashboard", { timeout: 20_000 });
-  await expect(page.getByTestId("session-role")).toHaveText("Manager");
+  await expect(page.getByTestId("session-role")).toHaveText("Gerencia");
 }
 
 test("manager reads the operational arrival without receiving the reservation's financial balance", async ({
@@ -90,8 +90,9 @@ test("manager reads the operational arrival without receiving the reservation's 
   await expect(reservationRow).toHaveCount(1);
   const confirmationCode = (await reservationRow.locator("td").first().innerText()).trim();
   expect(confirmationCode).toMatch(/^RES-/);
-  await expect(reservationRow.locator("td").nth(6)).toContainText("$ 100");
-  await expect(reservationRow.locator("td").nth(5)).toContainText("Pendiente");
+  // Columns: code, guest, room/cat, check-in, arrival time, check-out, status, amount.
+  await expect(reservationRow.locator("td").nth(7)).toContainText("$ 100");
+  await expect(reservationRow.locator("td").nth(6)).toContainText("Pendiente");
 
   await page.goto("/reportes");
   await expect(page.getByRole("heading", { name: "Reportes", exact: true })).toBeVisible();

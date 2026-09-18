@@ -148,6 +148,67 @@ def test_manager_cannot_read_security_settings(security_client):
     assert response.status_code == 403
 
 
+def test_security_actor_labels_use_the_current_tenant_alias_in_events_timeline_and_csv(security_client):
+    client, db, owner, _manager, token_for = security_client
+    membership = db.query(HotelMembership).filter_by(hotel_id=1, user_id=owner.id).one()
+    membership.alias = "Security Lead"
+    membership.alias_key = "security lead"
+    db.add(
+        SecurityAuditLog(
+            hotel_id=1,
+            user_id=owner.id,
+            action="security.alias_projection.test",
+            resource_type="permission",
+            resource_id="settings:users:manage",
+        )
+    )
+    db.commit()
+    headers = _headers(token_for(owner, "owner"))
+
+    events = client.get("/api/settings/security/events", headers=headers)
+    assert events.status_code == 200, events.text
+    event = next(item for item in events.json()["events"] if item["action"] == "security.alias_projection.test")
+    assert event["actor_name"] == "Security Lead"
+
+    timeline = client.get("/api/settings/security/audit-timeline", headers=headers)
+    assert timeline.status_code == 200, timeline.text
+    item = next(item for item in timeline.json()["items"] if item["action"] == "security.alias_projection.test")
+    assert item["actor_name"] == "Security Lead"
+    assert item["actor_user_id"] == owner.id
+
+    exported = client.get("/api/settings/security/audit-timeline/export", headers=headers)
+    assert exported.status_code == 200, exported.text
+    assert "actor_name" in exported.text.splitlines()[0]
+    assert "Security Lead" in exported.text
+
+
+def test_security_csv_treats_formula_prefixed_actor_alias_as_text(security_client):
+    client, db, owner, _manager, token_for = security_client
+    membership = db.query(HotelMembership).filter_by(hotel_id=1, user_id=owner.id).one()
+    membership.alias = "=HYPERLINK(\"https://example.test\")"
+    membership.alias_key = membership.alias.casefold()
+    db.add(
+        SecurityAuditLog(
+            hotel_id=1,
+            user_id=owner.id,
+            action="security.csv_formula.test",
+            resource_type="permission",
+            resource_id="settings:users:manage",
+        )
+    )
+    db.commit()
+
+    response = client.get(
+        "/api/settings/security/audit-timeline/export",
+        headers=_headers(token_for(owner, "owner")),
+    )
+
+    assert response.status_code == 200, response.text
+    rows = list(csv.DictReader(StringIO(response.text)))
+    item = next(row for row in rows if row["action"] == "security.csv_formula.test")
+    assert item["actor_name"].startswith("'=HYPERLINK(")
+
+
 @pytest.mark.parametrize("method", ["PUT", "PATCH", "DELETE"])
 @pytest.mark.parametrize(
     "path",
@@ -387,6 +448,7 @@ def test_unified_audit_timeline_csv_export_filters_and_redacts(security_client):
         "source",
         "action",
         "actor_user_id",
+        "actor_name",
         "created_at",
         "summary",
         "details",

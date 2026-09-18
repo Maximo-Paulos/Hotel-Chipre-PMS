@@ -255,15 +255,27 @@ def test_invitation_preview_and_acceptance_are_rate_limited(client_with_db):
     db.commit()
 
     try:
-        preview_one = client.get("/api/invitations/not-a-valid-token")
-        preview_two = client.get("/api/invitations/not-a-valid-token")
+        preview_one = client.post(
+            "/api/invitations/preview", json={"token": "not-a-valid-token"}
+        )
+        preview_two = client.post(
+            "/api/invitations/preview", json={"token": "not-a-valid-token"}
+        )
         accept_one = client.post(
-            "/api/invitations/not-a-valid-token/accept",
-            json={"email": "invite@test.com", "password": "NewPassword123!"},
+            "/api/invitations/accept",
+            json={
+                "token": "not-a-valid-token",
+                "email": "invite@test.com",
+                "password": "NewPassword123!",
+            },
         )
         accept_two = client.post(
-            "/api/invitations/not-a-valid-token/accept",
-            json={"email": "invite@test.com", "password": "NewPassword123!"},
+            "/api/invitations/accept",
+            json={
+                "token": "not-a-valid-token",
+                "email": "invite@test.com",
+                "password": "NewPassword123!",
+            },
         )
     finally:
         invitation_preview_limiter.reset("testclient", db=db)

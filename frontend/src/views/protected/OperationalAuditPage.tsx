@@ -34,7 +34,7 @@ export function OperationalAuditPage() {
     <div className="space-y-6" data-testid="operational-audit-page">
       <header>
         <p className="text-xs uppercase tracking-wide text-slate-500">Operación</p>
-        <h1 className="text-2xl font-semibold text-slate-900">Auditoría integral</h1>
+        <h1 className="text-balance text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Auditoría integral</h1>
         <p className="text-sm text-slate-600">Actividad material del hotel, con actor, contexto y cambios relevantes.</p>
       </header>
 

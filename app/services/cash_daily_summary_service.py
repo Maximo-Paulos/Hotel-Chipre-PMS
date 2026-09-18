@@ -22,7 +22,7 @@ from app.models.cash_register import (
 )
 from app.models.hotel_config import HotelConfiguration
 from app.models.transaction import PaymentMethodEnum, Transaction, TransactionStatusEnum, TransactionTypeEnum
-from app.models.user import User
+from app.services.actor_label_service import resolve_hotel_actor_labels
 from app.services.timezones import normalize_timezone
 
 
@@ -66,9 +66,14 @@ def _db_utc_bounds(report_date: date, timezone_name: str) -> tuple[datetime, dat
     return start.replace(tzinfo=None), end.replace(tzinfo=None)
 
 
-def _actor_name(user: User | None, *, provider_code: str | None = None) -> str:
-    if user is not None:
-        return user.display_name or user.email
+def _actor_name(
+    user_id: int | None,
+    actor_labels: dict[int, str],
+    *,
+    provider_code: str | None = None,
+) -> str:
+    if user_id is not None:
+        return actor_labels.get(user_id, "Usuario")
     return "Sistema/Proveedor" if provider_code else "Sistema"
 
 
@@ -214,10 +219,11 @@ def get_daily_summary(
         for user_id in (session.opened_by_user_id, session.closed_by_user_id)
         if user_id is not None
     )
-    users = {
-        user.id: user
-        for user in db.query(User).filter(User.id.in_(actor_ids)).all()
-    } if actor_ids else {}
+    actor_labels = resolve_hotel_actor_labels(
+        db,
+        hotel_id=hotel_id,
+        user_ids=actor_ids,
+    )
 
     methods: dict[str, dict[str, Decimal | int]] = defaultdict(
         lambda: {"gross_collected": ZERO, "refunds": ZERO, "net_collected": ZERO, "transaction_count": 0}
@@ -244,8 +250,11 @@ def get_daily_summary(
         signed_amount = -positive_amount if is_refund else positive_amount
         method_row = methods[method]
         collector_key = transaction.created_by_user_id
-        collector = users.get(collector_key)
-        collector_name = _actor_name(collector, provider_code=transaction.provider_code)
+        collector_name = _actor_name(
+            collector_key,
+            actor_labels,
+            provider_code=transaction.provider_code,
+        )
         collector_row = collectors[(collector_key, collector_name)]
         if is_refund:
             refunds_total += positive_amount
@@ -322,12 +331,11 @@ def get_daily_summary(
             if movement.transaction_id is None:
                 manual_income += signed_amount
         if movement.transaction_id is None:
-            actor = users.get(movement.recorded_by_user_id)
             entries.append(
                 {
                     "entry_type": "manual_movement",
                     "actor_user_id": movement.recorded_by_user_id,
-                    "actor_name": _actor_name(actor),
+                    "actor_name": _actor_name(movement.recorded_by_user_id, actor_labels),
                     "cash_movement_id": movement.id,
                     "reservation_id": movement.reservation_id,
                     "amount": _decimal(movement.amount),

@@ -42,8 +42,8 @@ test("owner can log out mid-onboarding, resume without losing progress, and conf
   await page.waitForURL("**/verify-email", { timeout: 15_000 });
 
   const verificationCode = await waitForCode(email, /Verifica tu cuenta/i);
-  await page.getByLabel("Codigo", { exact: true }).fill(verificationCode);
-  await page.getByRole("button", { name: "Verificar codigo", exact: true }).click();
+  await page.getByLabel("Código", { exact: true }).fill(verificationCode);
+  await page.getByRole("button", { name: "Verificar código", exact: true }).click();
   await page.waitForURL("**/onboarding", { timeout: 15_000 });
 
   // Owner step: name/email were auto-persisted from registration, so the

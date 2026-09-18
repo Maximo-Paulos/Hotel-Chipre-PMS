@@ -24,6 +24,7 @@ from app.models.security_audit_log import SecurityAuditLog
 from app.models.transaction import Transaction, TransactionTypeEnum
 from app.models.user import User
 from app.services.audit_timeline_service import _parse_redacted_json, _redact_text, _safe_resource_id
+from app.services.actor_label_service import resolve_hotel_actor_labels
 from app.services.timezones import normalize_timezone
 
 
@@ -117,9 +118,11 @@ def _date_filter(model: Any, start: datetime | None, end: datetime | None, field
     return filters
 
 
-def _actor_name(user: User | None, *, provider_code: str | None = None) -> str:
-    if user is not None:
-        return user.display_name or user.email
+def _actor_name(user: User | str | None, *, provider_code: str | None = None) -> str:
+    if isinstance(user, User):
+        return user.email
+    if isinstance(user, str):
+        return user
     return "Sistema/Proveedor" if provider_code else "Sistema"
 
 
@@ -186,14 +189,11 @@ def list_operational_audit(
     timezone_name = normalize_timezone((hotel.hotel_timezone if hotel else None) or "UTC")
     start, end = _bounds(from_date, to_date, timezone_name)
     rows: list[dict[str, Any]] = []
-    user_cache: dict[int, User | None] = {}
 
-    def _user(user_id: int | None, fallback: User | None = None) -> User | None:
-        if user_id is None:
-            return fallback
-        if user_id not in user_cache:
-            user_cache[user_id] = db.get(User, user_id)
-        return user_cache[user_id] or fallback
+    def _user(user_id: int | None, fallback: User | str | None = None) -> User | str | None:
+        # Actor display names are resolved once, in a tenant-scoped batch, after
+        # source rows have been assembled. Keep only a safe placeholder here.
+        return "Usuario" if user_id is not None else fallback
 
     audit_query = db.query(AuditLog).filter(AuditLog.hotel_id == hotel_id)
     if _SPECIALIZED_TABLES:
@@ -451,6 +451,16 @@ def list_operational_audit(
                     details=details,
                 )
             )
+
+    actor_labels = resolve_hotel_actor_labels(
+        db,
+        hotel_id=hotel_id,
+        user_ids=(item["actor_user_id"] for item in rows),
+    )
+    for item in rows:
+        actor_id = item["actor_user_id"]
+        if actor_id is not None:
+            item["actor_name"] = actor_labels.get(actor_id, "Usuario")
 
     filtered = [
         item

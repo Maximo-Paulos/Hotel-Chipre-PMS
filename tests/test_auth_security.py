@@ -22,6 +22,7 @@ from app.models.hotel_membership import HotelMembership
 from app.models.security_audit_log import SecurityAuditLog
 from app.models.user import User
 from app.models.user_mfa import UserMfaRecoveryCode, UserMfaSecret
+from app.models.user_session import UserSession
 from app.schemas.onboarding import (
     DepositPolicyPayload,
     HotelIdentityPayload,
@@ -34,7 +35,8 @@ from app.schemas.onboarding import (
 )
 from app.schemas.room import RoomCategoryCreate
 from app.services import onboarding_service
-from app.services.security import hash_password, needs_rehash, verify_password
+from app.services.security import create_access_token, hash_password, needs_rehash, verify_password
+from app.services.user_session_service import create_session
 
 
 LEGACY_PASSWORD = "LegacyPassphrase!"
@@ -591,6 +593,9 @@ def test_reset_password_revokes_previously_issued_tokens(client_and_db, fixed_co
     )
     assert verify.status_code == 200, verify.text
     old_token = verify.json()["access_token"]
+    stored_user = db.query(User).filter_by(email="leaked@example.com").one()
+    stored_user.password_login_enabled = False
+    db.commit()
 
     me_before = client.get("/api/auth/me", headers={"Authorization": f"Bearer {old_token}"})
     assert me_before.status_code == 200, me_before.text
@@ -603,6 +608,9 @@ def test_reset_password_revokes_previously_issued_tokens(client_and_db, fixed_co
         json={"email": "leaked@example.com", "code": "123456", "new_password": "Demo1234!pass"},
     )
     assert reset.status_code == 200, reset.text
+    assert reset.json()["user"]["password_login_enabled"] is True
+    db.refresh(stored_user)
+    assert stored_user.password_login_enabled is True
 
     me_after = client.get("/api/auth/me", headers={"Authorization": f"Bearer {old_token}"})
     assert me_after.status_code == 401, me_after.text
@@ -707,6 +715,8 @@ def test_google_login_creates_new_user_when_email_unknown(client_and_db, monkeyp
     assert stored_user.role == "owner"
     assert stored_user.is_verified is True
     assert stored_user.google_sub == "google-sub-123"
+    assert stored_user.password_login_enabled is False
+    assert body["user"]["password_login_enabled"] is False
     # Random unguessable password_hash was set, never handed to the client.
     assert stored_user.password_hash
     assert not verify_password("", stored_user.password_hash)
@@ -746,7 +756,31 @@ def test_google_login_relogin_with_same_sub_preserves_password(client_and_db, mo
     assert [json.loads(audit.details)["account_state"] for audit in audits] == ["created", "existing"]
 
 
-def test_google_login_requires_explicit_link_for_existing_email(
+def test_google_login_does_not_replace_another_linked_subject(client_and_db, monkeypatch):
+    client, db, _session_factory = client_and_db
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "test-client-id.apps.googleusercontent.com")
+    get_settings.cache_clear()
+    original_claims = _fake_google_claims("bound-google@example.com", sub="original-google-sub")
+    with patch("app.api.auth.google_id_token.verify_oauth2_token", return_value=original_claims):
+        first = client.post("/api/auth/google", json={"id_token": "original-google-jwt"})
+    assert first.status_code == 200, first.text
+    user = db.query(User).filter_by(email="bound-google@example.com").one()
+    password_hash = user.password_hash
+    token_version = user.token_version
+
+    conflicting_claims = _fake_google_claims("bound-google@example.com", sub="different-google-sub")
+    with patch("app.api.auth.google_id_token.verify_oauth2_token", return_value=conflicting_claims):
+        conflict = client.post("/api/auth/google", json={"id_token": "conflicting-google-jwt"})
+
+    assert conflict.status_code == 409, conflict.text
+    db.refresh(user)
+    assert user.google_sub == "original-google-sub"
+    assert user.password_hash == password_hash
+    assert user.password_login_enabled is False
+    assert user.token_version == token_version
+
+
+def test_google_login_safely_reclaims_existing_email_and_revokes_old_sessions(
     client_and_db, fixed_code_patch, monkeypatch
 ):
     client, db, _session_factory = client_and_db
@@ -760,6 +794,15 @@ def test_google_login_requires_explicit_link_for_existing_email(
         json={"email": "existinguser@example.com", "code": "123456"},
     )
     assert verify.status_code == 200, verify.text
+    legacy_token = create_access_token(
+        stored_user.id,
+        extra={"email": stored_user.email, "verified": True},
+    )
+    legacy_headers = {"Authorization": f"Bearer {legacy_token}"}
+    assert client.get("/api/auth/me", headers=legacy_headers).status_code == 200
+    old_session, _old_session_token, _old_csrf_token = create_session(db, stored_user)
+    db.commit()
+    old_password_hash = stored_user.password_hash
     monkeypatch.setenv("GOOGLE_CLIENT_ID", "test-client-id.apps.googleusercontent.com")
     get_settings.cache_clear()
 
@@ -769,17 +812,118 @@ def test_google_login_requires_explicit_link_for_existing_email(
     ):
         response = client.post("/api/auth/google", json={"id_token": "fake-jwt-from-google"})
 
-    assert response.status_code == 409, response.text
-    assert response.json()["detail"]["code"] == "google_link_required"
+    assert response.status_code == 200, response.text
+    assert response.json()["user"]["password_login_enabled"] is False
 
     db.refresh(stored_user)
-    assert stored_user.google_sub is None
-    assert stored_user.password_hash == old_password_hash
-    assert stored_user.token_version == 0
-    assert db.query(SecurityAuditLog).filter(SecurityAuditLog.action.like("google_auth.%")).count() == 0
+    assert stored_user.google_sub == "google-victim-sub"
+    assert stored_user.password_hash != old_password_hash
+    assert not verify_password("Demo123!pass", stored_user.password_hash)
+    assert stored_user.password_login_enabled is False
+    assert stored_user.token_version == 1
+    assert client.get("/api/auth/me", headers=legacy_headers).status_code == 401
+    db.refresh(old_session)
+    assert old_session.revoked_at is not None
+    assert db.query(UserSession).filter(
+        UserSession.user_id == stored_user.id,
+        UserSession.revoked_at.is_(None),
+    ).count() == 1
+
+    audit = db.query(SecurityAuditLog).filter_by(action="google_auth.linked").one()
+    assert json.loads(audit.details) == {"account_state": "reclaimed", "provider": "google"}
 
     users_with_email = db.query(User).filter(User.email == "existinguser@example.com").all()
     assert len(users_with_email) == 1
+
+
+def test_google_account_can_set_password_only_with_linked_google_proof_and_csrf(
+    client_and_db, monkeypatch
+):
+    client, db, _session_factory = client_and_db
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "test-client-id.apps.googleusercontent.com")
+    get_settings.cache_clear()
+    claims = _fake_google_claims("passwordless@example.com", sub="passwordless-sub")
+    with patch("app.api.auth.google_id_token.verify_oauth2_token", return_value=claims):
+        login = client.post("/api/auth/google", json={"id_token": "first-google-jwt"})
+    assert login.status_code == 200, login.text
+    auth = login.json()
+    assert auth["user"]["password_login_enabled"] is False
+
+    with patch("app.api.auth.google_id_token.verify_oauth2_token", return_value=claims):
+        response = client.post(
+            "/api/auth/password/set",
+            headers={
+                "Authorization": f"Bearer {auth['access_token']}",
+                "X-CSRF-Token": auth["csrf_token"],
+            },
+            json={"id_token": "google-reauth-jwt", "new_password": "NewStrongPassphrase123!"},
+        )
+
+    assert response.status_code == 200, response.text
+    assert response.json() == {"password_login_enabled": True}
+    user = db.query(User).filter_by(email="passwordless@example.com").one()
+    assert user.password_login_enabled is True
+    assert verify_password("NewStrongPassphrase123!", user.password_hash)
+    me = client.get("/api/auth/me", headers={"Authorization": f"Bearer {auth['access_token']}"})
+    assert me.status_code == 200, me.text
+    assert me.json()["password_login_enabled"] is True
+
+
+def test_password_login_rejects_even_a_valid_hash_when_password_login_is_disabled(
+    client_and_db, monkeypatch
+):
+    client, db, _session_factory = client_and_db
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "test-client-id.apps.googleusercontent.com")
+    get_settings.cache_clear()
+    claims = _fake_google_claims("password-disabled@example.com", sub="password-disabled-sub")
+    with patch("app.api.auth.google_id_token.verify_oauth2_token", return_value=claims):
+        google_login = client.post("/api/auth/google", json={"id_token": "google-login-jwt"})
+    assert google_login.status_code == 200, google_login.text
+    user = db.query(User).filter_by(email="password-disabled@example.com").one()
+    user.password_hash = hash_password("KnownPassword123!")
+    user.password_login_enabled = False
+    db.commit()
+
+    password_login = client.post(
+        "/api/auth/login",
+        json={"email": user.email, "password": "KnownPassword123!"},
+    )
+
+    assert password_login.status_code == 401, password_login.text
+    assert password_login.json()["detail"] == "Credenciales invalidas"
+
+
+def test_google_password_setup_rejects_missing_csrf_or_unlinked_google_identity(
+    client_and_db, monkeypatch
+):
+    client, db, _session_factory = client_and_db
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "test-client-id.apps.googleusercontent.com")
+    get_settings.cache_clear()
+    claims = _fake_google_claims("passwordless-guard@example.com", sub="passwordless-guard-sub")
+    with patch("app.api.auth.google_id_token.verify_oauth2_token", return_value=claims):
+        login = client.post("/api/auth/google", json={"id_token": "first-google-jwt"})
+    assert login.status_code == 200, login.text
+    auth = login.json()
+    headers = {"Authorization": f"Bearer {auth['access_token']}"}
+
+    with patch("app.api.auth.google_id_token.verify_oauth2_token", return_value=claims):
+        no_csrf = client.post(
+            "/api/auth/password/set",
+            headers=headers,
+            json={"id_token": "google-reauth-jwt", "new_password": "NewStrongPassphrase123!"},
+        )
+    assert no_csrf.status_code == 403, no_csrf.text
+
+    mismatched_claims = _fake_google_claims("passwordless-guard@example.com", sub="different-sub")
+    with patch("app.api.auth.google_id_token.verify_oauth2_token", return_value=mismatched_claims):
+        mismatched = client.post(
+            "/api/auth/password/set",
+            headers={**headers, "X-CSRF-Token": auth["csrf_token"]},
+            json={"id_token": "other-google-reauth-jwt", "new_password": "NewStrongPassphrase123!"},
+        )
+    assert mismatched.status_code == 409, mismatched.text
+    user = db.query(User).filter_by(email="passwordless-guard@example.com").one()
+    assert user.password_login_enabled is False
 
 
 def test_google_self_signup_can_be_disabled(client_and_db, monkeypatch):

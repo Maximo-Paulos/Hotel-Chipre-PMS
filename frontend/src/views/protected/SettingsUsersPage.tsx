@@ -1,18 +1,23 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
-import { inviteUser, listUsers, revokeUser, updateUserRole, type InvitePayload } from "../../api/users";
+import {
+  inviteUser,
+  listUserAliases,
+  listUsers,
+  resendInvitation,
+  revokeUser,
+  updateUserAlias,
+  updateUserRole,
+  type InvitePayload,
+  type InviteResponse
+} from "../../api/users";
 import { type AuthUser } from "../../api/auth";
 import { hasValidSession } from "../../api/client";
 import { useSession } from "../../state/session";
 import { refreshUserState } from "../../api/queryInvalidation";
 import { useGuardedMutation } from "../../hooks/useGuardedMutation";
-
-type InviteResponse = {
-  user: AuthUser;
-  invite_token: string;
-  accept_url: string;
-};
+import { useEffectivePermissions } from "../../hooks/usePermissions";
 
 const roleLabels: Record<string, string> = {
   owner: "Owner",
@@ -25,14 +30,30 @@ const roleLabels: Record<string, string> = {
 export function SettingsUsersPage() {
   const { session } = useSession();
   const qc = useQueryClient();
+  const { hasPermission } = useEffectivePermissions();
+  const canManage = ["owner", "co_owner"].includes(session.baseRole ?? session.role ?? "")
+    && hasPermission("settings:users:manage");
   const usersQuery = useQuery<AuthUser[]>({
     queryKey: ["users", session.hotelId],
     enabled: hasValidSession(session),
     queryFn: () => listUsers(session)
   });
+  const aliasesQuery = useQuery({
+    queryKey: ["users", "aliases", session.hotelId],
+    enabled: hasValidSession(session) && canManage,
+    queryFn: () => listUserAliases(session)
+  });
   const inviteMutation = useGuardedMutation({
     mutationFn: (payload: InvitePayload) => inviteUser(payload, session),
-    onSuccess: async () => refreshUserState(qc, session.hotelId)
+    onSuccess: async () => {
+      await Promise.all([
+        refreshUserState(qc, session.hotelId),
+        qc.invalidateQueries({ queryKey: ["users", "aliases", session.hotelId] })
+      ]);
+    }
+  });
+  const resendMutation = useGuardedMutation({
+    mutationFn: (invitationId: number) => resendInvitation(invitationId, session)
   });
   const revokeMutation = useGuardedMutation({
     mutationFn: (userId: number) => revokeUser(userId, session),
@@ -43,20 +64,41 @@ export function SettingsUsersPage() {
       updateUserRole(payload.userId, payload.role, session),
     onSuccess: async () => refreshUserState(qc, session.hotelId)
   });
+  const updateAliasMutation = useGuardedMutation({
+    mutationFn: (payload: { userId: number; alias: string | null }) =>
+      updateUserAlias(payload.userId, payload.alias, session),
+    onSuccess: async () => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["users", "aliases", session.hotelId] }),
+        qc.invalidateQueries({ queryKey: ["users", session.hotelId] })
+      ]);
+    }
+  });
 
-  const [inviteForm, setInviteForm] = useState<InvitePayload>({ email: "", role: "manager" });
-  const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [inviteForm, setInviteForm] = useState<InvitePayload>({ email: "", role: "manager", alias: "" });
+  const [inviteResult, setInviteResult] = useState<InviteResponse | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
+  const [copyError, setCopyError] = useState(false);
+  const [editingAliasUserId, setEditingAliasUserId] = useState<number | null>(null);
+  const [aliasDraft, setAliasDraft] = useState("");
+  const [aliasError, setAliasError] = useState<string | null>(null);
 
-  // C4: reads baseRole -- gates inviting/revoking hotel users and changing
-  // their roles, i.e. who can access this hotel account at all. Must
-  // reflect the real user, not the "Cambiar vista" preview role.
-  const canManage = ["owner", "co_owner"].includes(session.baseRole ?? "");
+  const aliasesByUserId = useMemo(
+    () => new Map((aliasesQuery.data?.items ?? []).map((entry) => [entry.user_id, entry])),
+    [aliasesQuery.data?.items]
+  );
 
   const handleInvite = async () => {
     try {
-      const response = await inviteMutation.mutateAsync(inviteForm) as InviteResponse;
-      setInviteLink(response.accept_url || response.invite_token || null);
-      setInviteForm({ email: "", role: "manager" });
+      const response = await inviteMutation.mutateAsync({
+        ...inviteForm,
+        email: inviteForm.email.trim(),
+        alias: inviteForm.alias?.trim() || null
+      }) as InviteResponse;
+      setInviteResult(response);
+      setLinkCopied(false);
+      setCopyError(false);
+      setInviteForm({ email: "", role: "manager", alias: "" });
     } catch {
       // The mutation state renders the safe backend error below.
     }
@@ -78,6 +120,45 @@ export function SettingsUsersPage() {
     }
   };
 
+  const handleResend = async () => {
+    if (!inviteResult) return;
+    try {
+      const response = await resendMutation.mutateAsync(inviteResult.invitation_id);
+      setInviteResult((current) => current ? { ...current, ...response } : response);
+    } catch {
+      // The mutation state renders the safe backend error below.
+    }
+  };
+
+  const copyInvitationLink = async () => {
+    if (!inviteResult?.accept_url) return;
+    try {
+      await navigator.clipboard.writeText(inviteResult.accept_url);
+      setLinkCopied(true);
+      setCopyError(false);
+    } catch {
+      setLinkCopied(false);
+      setCopyError(true);
+    }
+  };
+
+  const startAliasEdit = (userId: number, currentAlias: string | null) => {
+    setEditingAliasUserId(userId);
+    setAliasDraft(currentAlias ?? "");
+    setAliasError(null);
+  };
+
+  const saveAlias = async (userId: number) => {
+    setAliasError(null);
+    try {
+      await updateAliasMutation.mutateAsync({ userId, alias: aliasDraft.trim() || null });
+      setEditingAliasUserId(null);
+      setAliasDraft("");
+    } catch (err) {
+      setAliasError((err as Error).message || "No se pudo guardar el alias.");
+    }
+  };
+
   if (!hasValidSession(session)) {
     return <p className="text-sm text-slate-600">Iniciá sesión con un hotel activo para administrar usuarios.</p>;
   }
@@ -86,20 +167,31 @@ export function SettingsUsersPage() {
     <div className="space-y-6">
       <header>
         <p className="text-xs uppercase tracking-wide text-slate-500">Settings</p>
-        <h1 className="text-2xl font-semibold text-slate-900">Usuarios y roles</h1>
-        <p className="text-sm text-slate-600">Invitá usuarios a este hotel y asignales un rol.</p>
+        <h1 className="text-balance text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Usuarios y roles</h1>
+        <p className="text-sm text-slate-600">Invitá personas con su email y asignales un rol y un alias visible en la actividad del hotel.</p>
       </header>
 
       {canManage && (
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <h2 className="text-sm font-semibold text-slate-800">Invitar usuario</h2>
-          <div className="mt-3 grid gap-3 sm:grid-cols-3">
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <input
               className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
               aria-label="Email de invitación"
               placeholder="email@hotel.com"
               value={inviteForm.email}
               onChange={(e) => setInviteForm((p) => ({ ...p, email: e.target.value }))}
+              type="email"
+              autoComplete="email"
+              required
+            />
+            <input
+              className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+              aria-label="Alias del usuario (opcional)"
+              placeholder="Alias (opcional)"
+              value={inviteForm.alias ?? ""}
+              maxLength={80}
+              onChange={(e) => setInviteForm((p) => ({ ...p, alias: e.target.value }))}
             />
             <select
               className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
@@ -115,25 +207,52 @@ export function SettingsUsersPage() {
             <button
               type="button"
               onClick={() => void handleInvite()}
-              disabled={inviteMutation.isPending || !inviteForm.email}
+              disabled={inviteMutation.isPending || !inviteForm.email.trim()}
               className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-60"
             >
-              {inviteMutation.isPending ? "Enviando..." : "Invitar"}
+              {inviteMutation.isPending ? "Creando invitación..." : "Invitar"}
             </button>
           </div>
-          {inviteLink && (
-            <div className="mt-2 flex flex-wrap items-center gap-2 rounded-md bg-slate-50 p-3 text-xs text-slate-700">
-              <span>Invitación creada.</span>
-              <a className="text-brand-700 hover:underline" href={inviteLink} target="_blank" rel="noreferrer">
-                Abrir
-              </a>
-              <button
-                type="button"
-                className="rounded border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-700 hover:border-slate-300"
-                onClick={() => navigator.clipboard?.writeText(inviteLink)}
-              >
-                Copiar link
-              </button>
+          {inviteResult && (
+            <div className={inviteResult.email_delivery === "sent"
+              ? "mt-3 space-y-2 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900"
+              : "mt-3 space-y-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950"
+            } role={inviteResult.email_delivery === "sent" ? "status" : "alert"}>
+              <p>
+                {inviteResult.email_delivery === "sent"
+                  ? "Invitación creada y enviada por email."
+                  : inviteResult.email_delivery === "failed"
+                    ? "La invitación quedó creada, pero no se pudo enviar el email. Compartí el enlace o reintentá el envío."
+                    : "La invitación quedó creada, pero el envío de email no está configurado. Compartí el enlace cuando el correo no esté disponible."
+                }
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                {inviteResult.accept_url && (
+                  <a className="font-semibold text-brand-700 hover:underline" href={inviteResult.accept_url} target="_blank" rel="noreferrer">
+                    Abrir invitación
+                  </a>
+                )}
+                <button
+                  type="button"
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  onClick={() => void copyInvitationLink()}
+                  disabled={!inviteResult.accept_url}
+                >
+                  {linkCopied ? "Enlace copiado" : "Copiar enlace"}
+                </button>
+                {inviteResult.email_delivery !== "sent" && (
+                  <button
+                    type="button"
+                    onClick={() => void handleResend()}
+                    disabled={resendMutation.isPending}
+                    className="rounded-lg bg-brand-600 px-3 py-2 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
+                  >
+                    {resendMutation.isPending ? "Reintentando..." : "Reintentar envío"}
+                  </button>
+                )}
+              </div>
+              {copyError && <p className="text-xs">No se pudo copiar automáticamente. Abrí el enlace y copiá la dirección desde el navegador.</p>}
+              {resendMutation.isError && <p role="alert" className="text-xs text-rose-700">{(resendMutation.error as Error).message || "No se pudo reintentar el envío."}</p>}
             </div>
           )}
           {inviteMutation.isError && (
@@ -154,6 +273,7 @@ export function SettingsUsersPage() {
             <thead className="bg-slate-50">
               <tr>
                 <th className="px-3 py-2 text-left font-semibold text-slate-600">Email</th>
+                {canManage && <th className="px-3 py-2 text-left font-semibold text-slate-600">Alias</th>}
                 <th className="px-3 py-2 text-left font-semibold text-slate-600">Rol</th>
                 <th className="px-3 py-2 text-left font-semibold text-slate-600">Estado</th>
                 <th className="px-3 py-2 text-right font-semibold text-slate-600">Acciones</th>
@@ -163,6 +283,59 @@ export function SettingsUsersPage() {
               {(usersQuery.data || []).map((u) => (
                 <tr key={u.id}>
                   <td className="px-3 py-2">{u.email}</td>
+                  {canManage && (
+                    <td className="min-w-48 px-3 py-2">
+                      {(() => {
+                        const membership = aliasesByUserId.get(u.id);
+                        if (!membership) return <span className="text-slate-400">—</span>;
+                        if (editingAliasUserId !== u.id) {
+                          return (
+                            <div className="flex items-center gap-2">
+                              <span className="min-w-0 truncate text-slate-700">{membership.alias || <span className="text-slate-400">Sin alias</span>}</span>
+                              <button
+                                type="button"
+                                onClick={() => startAliasEdit(u.id, membership.alias)}
+                                className="shrink-0 rounded border border-slate-200 px-2 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-50"
+                                aria-label={`Editar alias de ${u.email}`}
+                              >
+                                Editar
+                              </button>
+                            </div>
+                          );
+                        }
+                        return (
+                          <div className="flex min-w-56 flex-col gap-2">
+                            <input
+                              aria-label={`Alias de ${u.email}`}
+                              className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+                              value={aliasDraft}
+                              maxLength={80}
+                              onChange={(event) => setAliasDraft(event.target.value)}
+                            />
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={() => void saveAlias(u.id)}
+                                disabled={updateAliasMutation.isPending}
+                                className="rounded bg-brand-600 px-2 py-1 text-xs font-semibold text-white disabled:opacity-60"
+                              >
+                                Guardar
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditingAliasUserId(null)}
+                                disabled={updateAliasMutation.isPending}
+                                className="rounded border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-700"
+                              >
+                                Cancelar
+                              </button>
+                            </div>
+                            {aliasError && <span role="alert" className="text-xs text-rose-700">{aliasError}</span>}
+                          </div>
+                        );
+                      })()}
+                    </td>
+                  )}
                   <td className="px-3 py-2">
                     {canManage && session.userId !== u.email ? (
                       <select
@@ -203,6 +376,8 @@ export function SettingsUsersPage() {
             </tbody>
           </table>
           {usersQuery.isError && <p className="mt-2 text-sm text-rose-600">No se pudieron cargar los usuarios.</p>}
+          {aliasesQuery.isError && canManage && <p role="alert" className="mt-2 text-sm text-rose-600">No se pudieron cargar los aliases del equipo.</p>}
+          {aliasesQuery.isLoading && canManage && <p role="status" className="mt-2 text-sm text-slate-500">Cargando aliases...</p>}
           {updateRoleMutation.isError && (
             <p className="mt-2 text-sm text-rose-600">
               {(updateRoleMutation.error as Error).message || "No se pudo actualizar el rol"}

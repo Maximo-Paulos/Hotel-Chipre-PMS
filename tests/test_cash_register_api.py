@@ -169,6 +169,21 @@ def test_manager_can_read_daily_cash_summary_without_cash_mutation_permission(cl
     assert client.post("/api/cash-register/sessions", json={"opening_balance": "10.00"}).status_code == 403
 
 
+def test_cash_csv_treats_formula_prefixed_actor_alias_as_text(client_with_db, monkeypatch):
+    client, _db, _ctx = client_with_db
+    report = {
+        "report_date": "2026-09-04",
+        "hotel_id": 1,
+        "entries": [{"currency_code": "ARS", "actor_name": "@SUM(1+1)", "actor_user_id": 50}],
+    }
+    monkeypatch.setattr("app.api.cash_register.get_daily_summary", lambda *args, **kwargs: report)
+
+    response = client.get("/api/cash-register/export.csv?date=2026-09-04")
+
+    assert response.status_code == 200, response.text
+    assert "'@SUM(1+1)" in response.text
+
+
 def test_cash_custody_receipt_is_owner_only(client_with_db):
     client, _db, ctx = client_with_db
 

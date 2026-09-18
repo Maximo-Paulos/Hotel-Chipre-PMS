@@ -17,6 +17,10 @@ class HotelMembership(Base):
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     role = Column(String(20), nullable=False, default="owner")  # owner, co_owner, manager, receptionist, housekeeping
     status = Column(String(20), nullable=False, default="active")  # active, invited, revoked
+    # A hotel-scoped operator-facing name. alias_key stores the normalized
+    # uniqueness key; both remain null for historical memberships without an alias.
+    alias = Column(String(80), nullable=True)
+    alias_key = Column(String(240), nullable=True)
     # The billing/property owner is a membership-level concept. It is not a
     # global User role and is unique among active memberships per hotel.
     is_primary_owner = Column(Boolean, nullable=False, default=False, server_default="0")
@@ -26,6 +30,7 @@ class HotelMembership(Base):
 
     __table_args__ = (
         UniqueConstraint("hotel_id", "user_id", name="uq_membership_user_hotel"),
+        Index("uq_membership_hotel_alias_key", "hotel_id", "alias_key", unique=True),
         Index(
             "uq_membership_primary_owner_active",
             "hotel_id",

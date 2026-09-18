@@ -91,11 +91,13 @@ def _authenticate_user(db: Session, authorization: Optional[str]) -> tuple[User,
     user = db.get(User, user_id)
     if not user or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuario no valido")
-    token_version = payload.get("token_version")
-    # Tokens issued before this field existed carry no claim at all; only
-    # reject tokens that explicitly disagree with the current version so a
-    # password reset (which bumps it) actually revokes them.
-    if token_version is not None and int(token_version) != (user.token_version or 0):
+    # Legacy tokens without a claim are version 0. They remain valid until
+    # the user's version is bumped, then fail closed like all prior sessions.
+    try:
+        token_version = int(payload.get("token_version", 0))
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token invalido") from exc
+    if token_version != (user.token_version or 0):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sesion revocada, inicia sesion de nuevo")
     if not user.is_verified:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Verifica tu email para usar el sistema")

@@ -36,9 +36,9 @@ test("owner previewing as Manager sees the honesty banner and keeps owner-only a
   await page.getByTestId("role-switcher").selectOption("manager");
   await page.waitForURL("**/dashboard");
 
-  await expect(page.getByTestId("viewing-as-banner")).toContainText("Vista previa como Manager");
+  await expect(page.getByTestId("viewing-as-banner")).toContainText("Vista previa como Gerencia");
   await expect(page.getByTestId("viewing-as-banner")).toContainText("no cambia permisos ni identidad");
-  await expect(page.getByTestId("session-role")).toHaveText("Manager");
+  await expect(page.getByTestId("session-role")).toHaveText("Gerencia");
 
   // StockPage's "Ajuste" option is gated on baseRole (owner), not the
   // previewed role: the real owner keeps it even while previewing as
@@ -46,7 +46,7 @@ test("owner previewing as Manager sees the honesty banner and keeps owner-only a
   // Use the in-app navigation so the local preview role remains in React
   // state; a full page reload intentionally starts from the cookie-backed
   // authenticated role.
-  await page.getByText("Mas operacion", { exact: true }).click();
+  await page.getByText("Más operación", { exact: true }).click();
   await page.getByRole("link", { name: "Stock", exact: true }).click();
   await expect(page).toHaveURL(/\/operacion\/stock$/);
   const movementGroup = page.getByRole("group", { name: "Acción de inventario" });

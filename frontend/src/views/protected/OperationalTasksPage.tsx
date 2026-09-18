@@ -204,7 +204,7 @@ export function OperationalTasksPage() {
     <div className="space-y-6">
       <header>
         <p className="text-xs uppercase tracking-wide text-slate-500">Operación</p>
-        <h1 className="text-2xl font-semibold text-slate-900">Tareas y pase de turno</h1>
+        <h1 className="text-balance text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Tareas y pase de turno</h1>
         <p className="text-sm text-slate-600">Un mismo pendiente acompaña al hotel hasta que alguien lo revisa y resuelve.</p>
       </header>
 
@@ -347,7 +347,7 @@ export function OperationalTasksPage() {
                       <button type="button" onClick={() => void run(() => statusMutation.mutateAsync({ id: task.id, version: task.version, status: "pending_review" }), "Tarea enviada a revisión.")} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700">Enviar a revisión</button>
                     )}
                     {canManage && task.status !== "resolved" && (
-                      <button type="button" onClick={() => void run(() => resolveMutation.mutateAsync({ id: task.id, version: task.version }), "Tarea resuelta.")} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white">Resolver</button>
+                      <button type="button" onClick={() => void run(() => resolveMutation.mutateAsync({ id: task.id, version: task.version }), "Tarea resuelta.")} className="rounded-lg bg-brand-600 px-3 py-2 text-xs font-semibold text-white">Resolver</button>
                     )}
                     <button
                       type="button"

@@ -606,7 +606,7 @@ export function LaundryPage() {
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-xs uppercase tracking-wide text-slate-500">Operacion</p>
-          <h1 className="text-2xl font-semibold text-slate-900">Lavanderia</h1>
+          <h1 className="text-balance text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Lavanderia</h1>
           <p className="text-sm text-slate-600">
             Ropa blanca con lavadero externo: lavaderos, remitos de salida/entrada y balance de qué hay dónde.
           </p>

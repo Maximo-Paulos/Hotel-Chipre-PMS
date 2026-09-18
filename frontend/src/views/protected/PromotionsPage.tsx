@@ -155,7 +155,7 @@ const buildConditions = (form: PromotionFormState): PromotionConditions => ({
 });
 
 const inputClass =
-  "mt-1 w-full min-h-11 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100";
+  "mt-1 w-full min-h-11 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-100";
 const labelClass = "text-xs font-semibold text-slate-600";
 const buttonPrimary =
   "min-h-11 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60";
@@ -316,7 +316,7 @@ export function PromotionsPage() {
     <div className="space-y-5" data-testid="promotions-page">
       <header>
         <p className="text-xs uppercase tracking-wide text-slate-500">Tarifas</p>
-        <h1 className="text-2xl font-semibold text-slate-900">Promociones</h1>
+        <h1 className="text-balance text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Promociones</h1>
         <p className="text-sm text-slate-600">
           Reglas de descuento sin código: condiciones tipadas, beneficio fijo o porcentual y simulador de precio antes
           de publicar.
@@ -622,7 +622,7 @@ export function PromotionsPage() {
                         aria-pressed={active}
                         onClick={() => toggleWeekday(day.value)}
                         className={`min-h-11 min-w-11 rounded-lg px-3 text-sm font-semibold ${
-                          active ? "bg-slate-900 text-white" : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-100"
+                          active ? "bg-brand-600 text-white" : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-100"
                         }`}
                       >
                         {day.label}
@@ -793,19 +793,19 @@ function PromotionSimulator() {
           </div>
 
           <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
-            <div className="rounded-lg border border-blue-100 bg-blue-50/50 px-3 py-2 text-sm">
+            <div className="rounded-lg border border-brand-100 bg-brand-50/50 px-3 py-2 text-sm">
               <p className="text-xs text-slate-500">Subtotal</p>
               <p className="font-semibold text-slate-900">{formatMoney(Number(result.subtotal_amount), result.base_currency)}</p>
             </div>
-            <div className="rounded-lg border border-blue-100 bg-blue-50/50 px-3 py-2 text-sm">
+            <div className="rounded-lg border border-brand-100 bg-brand-50/50 px-3 py-2 text-sm">
               <p className="text-xs text-slate-500">Impuestos</p>
               <p className="font-semibold text-slate-900">{formatMoney(Number(result.tax_amount), result.base_currency)}</p>
             </div>
-            <div className="rounded-lg border border-blue-100 bg-blue-50/50 px-3 py-2 text-sm">
+            <div className="rounded-lg border border-brand-100 bg-brand-50/50 px-3 py-2 text-sm">
               <p className="text-xs text-slate-500">Cargos</p>
               <p className="font-semibold text-slate-900">{formatMoney(Number(result.fee_amount), result.base_currency)}</p>
             </div>
-            <div className="rounded-lg border border-blue-100 bg-blue-50/50 px-3 py-2 text-sm">
+            <div className="rounded-lg border border-brand-100 bg-brand-50/50 px-3 py-2 text-sm">
               <p className="text-xs text-slate-500">Tipo de cambio</p>
               <p className="font-semibold text-slate-900">{result.fx_rate_snapshot ? `${result.fx_rate_snapshot} (${result.base_currency}→${result.output_currency})` : "No aplica"}</p>
             </div>

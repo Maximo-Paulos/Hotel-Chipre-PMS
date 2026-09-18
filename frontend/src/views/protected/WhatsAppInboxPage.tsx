@@ -24,7 +24,7 @@ export function WhatsAppInboxPage() {
     <div className="space-y-4">
       <div>
         <p className="text-xs uppercase tracking-wide text-slate-500">CRM humano</p>
-        <h1 className="text-2xl font-semibold text-slate-900">Bandeja de WhatsApp</h1>
+        <h1 className="text-balance text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Bandeja de WhatsApp</h1>
         <p className="text-sm text-slate-600">Los mensajes se encolan en el PMS y quedan auditados por hotel.</p>
       </div>
       <div className="grid min-h-[520px] gap-4 lg:grid-cols-[280px_1fr]">
