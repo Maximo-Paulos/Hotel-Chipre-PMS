@@ -17,7 +17,7 @@ const getErrorMessage = (error: unknown) => {
   if (typeof error === "object" && error !== null && "message" in error) {
     return String((error as ApiError).message);
   }
-  return "No se pudo completar la accion.";
+  return "No se pudo completar la acción.";
 };
 
 const getProviderErrorMessage = (provider: string, error: unknown) => {
@@ -29,9 +29,9 @@ const getProviderErrorMessage = (provider: string, error: unknown) => {
 };
 
 const connectedSummary: Record<string, string> = {
-  mercadopago: "Mercado Pago ya esta conectado a este hotel. Si quieres cambiar de cuenta, primero revoca la conexion.",
-  paypal: "PayPal ya esta conectado a este hotel. Puedes refrescar el estado o revocar la conexion.",
-  gmail: "Gmail ya esta conectado a este hotel. Este email sera el remitente del hotel para links de pago, recibos y mensajes a huespedes.",
+  mercadopago: "Mercado Pago ya esta conectado a este hotel. Si quieres cambiar de cuenta, primero revoca la conexión.",
+  paypal: "PayPal ya esta conectado a este hotel. Puedes refrescar el estado o revocar la conexión.",
+  gmail: "Gmail ya esta conectado a este hotel. Este email será el remitente del hotel para links de pago, recibos y mensajes a huéspedes.",
   booking: "Booking.com ya esta conectado a este hotel.",
   expedia: "Expedia ya esta conectada a este hotel.",
   whatsapp: "WhatsApp Business ya esta conectado a este hotel.",
@@ -82,7 +82,7 @@ export function SettingsConnectionsPage() {
       setNoticeFor(
         payload.integrationId,
         payload.status === "connected" ? "success" : "error",
-        payload.message || (payload.status === "connected" ? "Conexion completada." : "No se pudo completar la conexion."),
+        payload.message || (payload.status === "connected" ? "Conexión completada." : "No se pudo completar la conexión."),
       );
       await refetch();
     };
@@ -134,7 +134,7 @@ export function SettingsConnectionsPage() {
       if (authType === "oauth_code" && payload.code?.trim()) {
         await connect.mutateAsync({ id, payload });
         clearCodeField(id);
-        setNoticeFor(id, "success", "Conexion guardada de forma segura para este hotel.");
+        setNoticeFor(id, "success", "Conexión guardada de forma segura para este hotel.");
         await refetch();
         return;
       }
@@ -145,10 +145,10 @@ export function SettingsConnectionsPage() {
         setNoticeFor(
           id,
           "info",
-          "Autorizacion iniciada. Si el proveedor no vuelve solo al PMS, puedes usar el ingreso manual con codigo como respaldo.",
+          "Autorización iniciada. Si el proveedor no vuelve solo al PMS, puedes usar el ingreso manual con código como respaldo.",
         );
       } else {
-        setNoticeFor(id, "success", "Conexion guardada de forma segura para este hotel.");
+        setNoticeFor(id, "success", "Conexión guardada de forma segura para este hotel.");
       }
       await refetch();
     } catch (error) {
@@ -162,7 +162,7 @@ export function SettingsConnectionsPage() {
       setNoticeFor(
         id,
         "info",
-        "Ya cargaste credenciales manuales. En este caso no uses 'Abrir autorizacion': toca 'Guardar credenciales'.",
+        "Ya cargaste credenciales manuales. En este caso no uses 'Abrir autorización': toca 'Guardar credenciales'.",
       );
       return;
     }
@@ -174,11 +174,11 @@ export function SettingsConnectionsPage() {
           id,
           "info",
           provider === "gmail"
-            ? "Autorizacion iniciada. Cuando termines en Google, la conexion deberia completarse sola en esta pantalla. Si Google no redirige bien, usa el campo de codigo como respaldo."
-            : "Autorizacion iniciada. Cuando el proveedor te entregue el codigo, pegalo en el campo 'Codigo de autorizacion' y luego toca 'Guardar codigo'.",
+            ? "Autorización iniciada. Cuando termines en Google, la conexión debería completarse sola en esta pantalla. Si Google no redirige bien, usa el campo de código como respaldo."
+            : "Autorización iniciada. Cuando el proveedor te entregue el código, pégalo en el campo 'Código de autorización' y luego toca 'Guardar código'.",
         );
       } else {
-        setNoticeFor(id, "error", "El proveedor no devolvio una URL de autorizacion.");
+        setNoticeFor(id, "error", "El proveedor no devolvio una URL de autorización.");
       }
       await refetch();
     } catch (error) {
@@ -190,7 +190,7 @@ export function SettingsConnectionsPage() {
     try {
       await revoke.mutateAsync(id);
       setForm((prev) => ({ ...prev, [id]: {} }));
-      setNoticeFor(id, "info", "Conexion revocada para este hotel.");
+      setNoticeFor(id, "info", "Conexión revocada para este hotel.");
       await refetch();
     } catch (error) {
       setNoticeFor(id, "error", getErrorMessage(error));
@@ -208,7 +208,7 @@ export function SettingsConnectionsPage() {
   };
 
   if (isLoading) return <p>Cargando integraciones...</p>;
-  if (!data) return <p>Error al cargar integraciones. Verifica la sesion o reintenta.</p>;
+  if (!data) return <p>Error al cargar integraciones. Verifica la sesión o reintenta.</p>;
 
   const orderedCatalog = [...data.catalog].sort((a, b) => {
     const left = providerPriority[a.provider] ?? 99;
@@ -223,7 +223,7 @@ export function SettingsConnectionsPage() {
         <div>
           <p className="text-xs uppercase tracking-wide text-slate-500">Integraciones</p>
           <h1 className="text-balance text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Conexiones</h1>
-          <p className="text-sm text-slate-600">Cada conexion se guarda cifrada y vinculada solo al hotel activo.</p>
+          <p className="text-sm text-slate-600">Cada conexión se guarda cifrada y vinculada solo al hotel activo.</p>
         </div>
       </div>
 
@@ -274,15 +274,15 @@ export function SettingsConnectionsPage() {
                   target="_blank"
                   rel="noreferrer"
                 >
-                  Ver documentacion
+                  Ver documentación
                 </a>
               )}
 
               {isConnected && (
                 <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-                  <p className="font-semibold">Conexion activa</p>
+                  <p className="font-semibold">Conexión activa</p>
                   <p className="mt-1 text-xs text-emerald-700">
-                    {connectedSummary[cat.provider] || "Esta integracion ya esta conectada a este hotel."}
+                    {connectedSummary[cat.provider] || "Esta integración ya esta conectada a este hotel."}
                   </p>
                   {conn?.account_label && (
                     <p className="mt-2 text-xs font-medium text-emerald-800">Cuenta validada: {conn.account_label}</p>
@@ -291,10 +291,10 @@ export function SettingsConnectionsPage() {
               )}
 
               {!isConnected && cat.provider === "whatsapp" && (
-                <div className="mt-3 rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-900">
+                <div className="mt-3 rounded-xl border border-brand-200 bg-brand-50 px-4 py-3 text-sm text-brand-900">
                   <p className="font-semibold">Conexión administrada por Meta</p>
                   <p className="mt-1 text-xs">WhatsApp no acepta tokens ni IDs pegados manualmente. Completa Embedded Signup desde la pantalla de WhatsApp.</p>
-                  <a className="mt-2 inline-block text-xs font-semibold text-violet-700 hover:underline" href="/settings/whatsapp">Abrir configuración de WhatsApp</a>
+                  <a className="mt-2 inline-block text-xs font-semibold text-brand-700 hover:underline" href="/settings/whatsapp">Abrir configuración de WhatsApp</a>
                 </div>
               )}
 
@@ -323,9 +323,9 @@ export function SettingsConnectionsPage() {
                   {isGmail ? (
                     <div className="flex items-center justify-between rounded-lg border border-sky-200 bg-white px-3 py-2">
                       <div>
-                        <p className="text-xs font-semibold text-slate-900">Conexion simple por Google</p>
+                        <p className="text-xs font-semibold text-slate-900">Conexión simple por Google</p>
                         <p className="text-[11px] text-slate-600">
-                          La opcion principal abre Google y vuelve sola al PMS.
+                          La opción principal abre Google y vuelve sola al PMS.
                         </p>
                       </div>
                       <button
@@ -340,42 +340,42 @@ export function SettingsConnectionsPage() {
                     </div>
                   ) : (
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-sky-700">Conexion guiada</p>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-sky-700">Conexión guiada</p>
                       <p className="mt-1 text-xs text-slate-700">
-                        1. Toca Abrir autorizacion. 2. Copia el codigo que te muestre el proveedor. 3. Pegalo abajo en Codigo de autorizacion. 4. Toca Guardar codigo.
+                        1. Toca Abrir autorización. 2. Copia el código que te muestre el proveedor. 3. Pégalo abajo en Código de autorización. 4. Toca Guardar código.
                       </p>
                     </div>
                   )}
 
                   {(!isGmail || manualCodeVisible) && (
                     <div className="space-y-1">
-                      <label className="block text-xs font-semibold text-slate-700">Codigo de autorizacion</label>
+                      <label className="block text-xs font-semibold text-slate-700">Código de autorización</label>
                       <input
                         className="w-full rounded border border-slate-200 bg-white px-3 py-2 text-sm"
                         placeholder={
                           isGmail
-                            ? "Pega aqui el codigo de Google solo si la ventana no vuelve sola al PMS"
-                            : "Pega aqui el codigo de autorizacion que te devolvio el proveedor"
+                            ? "Pega aquí el código de Google solo si la ventana no vuelve sola al PMS"
+                            : "Pega aquí el código de autorización que te devolvio el proveedor"
                         }
                         value={form[cat.id]?.code || ""}
                         onChange={(e) => setField(cat.id, "code", e.target.value)}
                       />
                       <p className="text-[11px] text-slate-500">
                         {isGmail
-                          ? "Este campo es solo un respaldo por si Google no completa la vuelta automatica."
-                          : "Si acabas de autorizar la app, este es el campo donde tienes que pegar el codigo."}
+                          ? "Este campo es solo un respaldo por si Google no completa la vuelta automática."
+                          : "Si acabas de autorizar la app, este es el campo donde tienes que pegar el código."}
                       </p>
                     </div>
                   )}
 
                   {cat.provider === "mercadopago" && (
                     <div className="space-y-2 rounded-lg border border-slate-200 bg-white p-3">
-                      <p className="text-xs font-semibold text-slate-700">Opcion alternativa: guardar credenciales manuales</p>
+                      <p className="text-xs font-semibold text-slate-700">Opción alternativa: guardar credenciales manuales</p>
                       <p className="text-[11px] text-slate-500">
-                        Si OAuth aun no esta habilitado para este PMS, usa este camino. Guarda el access token del hotel sin tocar codigo.
+                        Si OAuth aún no está habilitado para este PMS, usa este camino. Guarda el access token del hotel sin tocar código.
                       </p>
                       <p className="text-xs text-slate-600">
-                        Si ya tenes credenciales de Mercado Pago, tambien podes guardarlas directo para este hotel.
+                        Si ya tenés credenciales de Mercado Pago, también podés guardarlas directo para este hotel.
                       </p>
                       <input
                         className="w-full rounded border border-slate-200 px-3 py-2 text-sm"
@@ -396,7 +396,7 @@ export function SettingsConnectionsPage() {
                         onChange={(e) => setField(cat.id, "user_id", e.target.value)}
                       />
                       <p className="text-[11px] font-medium text-emerald-700">
-                        Despues de completar estos campos, toca <strong>Guardar credenciales</strong>. No hace falta abrir autorizacion.
+                        Después de completar estos campos, toca <strong>Guardar credenciales</strong>. No hace falta abrir autorización.
                       </p>
                     </div>
                   )}
@@ -419,7 +419,7 @@ export function SettingsConnectionsPage() {
 
               {!isConnected && cat.provider === "mercadopago" && !hasManualMercadoPagoToken && !hasCode && (
                 <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                  Si al tocar <strong>Abrir autorizacion</strong> ves un error del proveedor, usa <strong>access_token</strong> en la opcion alternativa.
+                  Si al tocar <strong>Abrir autorización</strong> ves un error del proveedor, usa <strong>access_token</strong> en la opcion alternativa.
                   Ese dato se guarda cifrado y queda asociado solo a este hotel.
                 </div>
               )}
@@ -440,7 +440,7 @@ export function SettingsConnectionsPage() {
                         disabled={connect.isPending}
                         type="button"
                       >
-                        {isGmail ? "Conectar Gmail" : "Abrir autorizacion"}
+                        {isGmail ? "Conectar Gmail" : "Abrir autorización"}
                       </button>
                     )}
                     {isGmail ? (
@@ -458,7 +458,7 @@ export function SettingsConnectionsPage() {
                             onClick={() => toggleManualCode(cat.id)}
                             type="button"
                           >
-                            Tengo un codigo manual
+                            Tengo un código manual
                           </button>
                         ) : (
                           <>
@@ -468,14 +468,14 @@ export function SettingsConnectionsPage() {
                               disabled={connect.isPending || !canSaveOauth}
                               type="button"
                             >
-                              Conectar con codigo
+                              Conectar con código
                             </button>
                             <button
                               className="rounded-lg px-2 py-2 text-xs font-medium text-slate-500 hover:text-slate-700"
                               onClick={() => toggleManualCode(cat.id)}
                               type="button"
                             >
-                              Ocultar codigo manual
+                              Ocultar código manual
                             </button>
                           </>
                         )}
@@ -495,7 +495,7 @@ export function SettingsConnectionsPage() {
                           disabled={connect.isPending || !canSaveOauth}
                           type="button"
                         >
-                          {hasManualMercadoPagoToken ? "Guardar credenciales" : "Guardar codigo"}
+                          {hasManualMercadoPagoToken ? "Guardar credenciales" : "Guardar código"}
                         </button>
                       </>
                     )}
@@ -542,7 +542,7 @@ export function SettingsConnectionsPage() {
                     <li>Vuelve al PMS y verifica que quede como conectado.</li>
                   </ol>
                   <p className="mt-2 text-[11px] text-sky-800">
-                    Si la ventana de Google no vuelve sola al PMS, usa <strong>Tengo un codigo manual</strong> como respaldo.
+                    Si la ventana de Google no vuelve sola al PMS, usa <strong>Tengo un código manual</strong> como respaldo.
                   </p>
                 </div>
               )}
@@ -552,7 +552,7 @@ export function SettingsConnectionsPage() {
               )}
               {conn?.last_checked_at && (
                 <p className="text-xs text-slate-500">
-                  Ultima verificacion: {new Date(conn.last_checked_at).toLocaleString()}
+                  Última verificación: {new Date(conn.last_checked_at).toLocaleString()}
                 </p>
               )}
               {conn?.last_error && <p className="mt-2 text-xs text-rose-700">Error: {conn.last_error}</p>}

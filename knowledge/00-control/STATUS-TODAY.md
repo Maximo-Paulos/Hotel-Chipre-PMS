@@ -1,5 +1,25 @@
 # Estado exhaustivo del sistema — Hotel Chipre PMS
 
+## -4. Sistema visual homogéneo en todas las páginas — 2026-09-18
+
+`confirmed`: tipos, lint, 17 tests de nodo, build, suite backend y la suite e2e completa de Playwright sobre el árbol final (ver el commit). La pasada anterior (-3) cubrió el marco; esta cubre las ~80 pantallas restantes.
+
+- **Radios y sombras desde la config, no página por página.** Las páginas usaban la escala estándar de Tailwind y repartían dos funciones en seis radios (`rounded-lg` ×703, `-xl` ×145, `-2xl` ×90, `-3xl` ×19, `-md` ×18, `rounded` ×45) y sombras negras genéricas (`shadow-sm` ×196). `tailwind.config.cjs` remapea esa escala sobre los tres radios del sistema (chip/control/panel) y las tres elevaciones (raise/float/deep, teñidas con el tono `ink`). Cada clase existente, incluida la del marketing, cae en un valor del sistema, y también el código futuro.
+- **Un solo acento.** El azul funcionaba como segundo acento (celda "hoy", selección de la grilla de tarifas, paneles de cotización) y los botones rellenos `emerald-600` eran un verde casi idéntico al teal de marca; ambos pasan a `brand`. Los segmentos seleccionados usaban azul y `slate-900` *en la misma página*; ahora todos son `brand-600`. `sky`/`amber`/`rose`/`emerald` claros siguen como semántica de estado (info/atención/error/éxito).
+- **Títulos**: 30 `h1` con 8 variantes pasan a un único estilo de título de página. Analítica abría con el único bloque oscuro de la app (gradiente `slate-950 → emerald-950`) y el Asistente con un gradiente ámbar, un orbe `blur-3xl` y pastillas que repetían el id interno del hotel; los dos usan ahora la cabecera estándar.
+- **Números y titulares**: todas las tablas con cifras tabulares y los `h1–h3` con `text-wrap: balance`, como regla base.
+- **Violeta, el tercer acento**: botones ("Cargar reserva de OTA", el primario del modal de OTA), paneles de tarifa manual y chips decorativos pasan a `brand`. Queda sólo el chip de estado "reembolsado" de Pruebas, que es parte de una paleta semántica de estados.
+- **Analítica en español y con tarjetas legibles**: filtros, título y eyebrow estaban en inglés ("Date from", "Currency", "Compare YoY"). Las tarjetas titulaban con el código interno (`HOME_REVENUE_GROSS`) y **todas salían en rosa de alerta por un bug**: la API manda `value_pct: null` en las tarjetas de dinero, `Number(null)` es 0 y 0 < 50. Ahora se titulan con el nombre, `null` no cuenta como número y sólo un porcentaje real bajo 50 se marca.
+- **Grillas**: las filas de grupo de Planilla y del calendario de tarifas eran bandas `slate-900`; pasan a encabezado de sección claro (con `InfoTip` en su variante para fondo claro).
+- **Excepción deliberada**: el eyebrow "Settings" de Usuarios queda en inglés porque esa página la reescribe la rama de Codex; cambiarlo acá sólo le generaría un conflicto de merge.
+- **Ortografía**: más de 100 cadenas visibles sin tilde corregidas con un diccionario de palabras sin ambigüedad (las que dependen de la oración —más/mas, está/esta, pagó/pago, validá/valida— quedaron fuera a propósito; un "se válida" que el reemplazo automático introdujo se revirtió a mano). Las aserciones e2e que buscaban el texto viejo se actualizaron sólo donde la app cambió, verificándolo contra el elemento exacto.
+
+### Incidente: dos sesiones en el mismo directorio
+
+A las 23:38 del 17-sep otra sesión (Codex) creó `feature/google-onboarding-staff-aliases` **en este mismo working tree** y a las 01:26 commiteó ahí `f45e8eb`: su feature (onboarding con Google, alias de staff, migración `20260918_member_alias_auth`) **mezclado con todo el trabajo sin commitear de esta pasada y la anterior**. Por pedido del dueño se desplegó sólo este trabajo: se armó en un worktree aislado desde `main`, excluyendo los 52 archivos del feature, reaplicando a mano los dos archivos mixtos (`SettingsUsersPage`, `SettingsSecurityPage`: sólo la línea del título) y verificando que el diff no contiene ningún rastro del feature. Cuando esa rama se mergee, sus hunks de UI son idénticos a los de `main` y no deberían conflictuar. **Regla**: una sesión por working tree; los agentes paralelos trabajan en `git worktree` propios.
+
+---
+
 ## -3. Pasada de UI "estilo Apple" sobre el shell + e2e rescatados — 2026-09-17
 
 `confirmed`: tipos, lint, 17 tests de nodo, build, suite backend (2012 passed, 0 failed) y **41 tests e2e de Playwright** (32 de journeys en Chromium + 24 del smoke responsive en 4 perfiles de iPhone, sin desborde horizontal), más verificación visual en navegador a 1440 y 375.

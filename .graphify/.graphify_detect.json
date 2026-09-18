@@ -92,7 +92,6 @@
       "alembic/versions/20260910_reservation_email_deliveries.py",
       "alembic/versions/20260911_whatsapp_crm.py",
       "alembic/versions/20260917_sqlite_cash_close_parent_key_sqlite_unique_parent_key_for_shift_.py",
-      "alembic/versions/20260918_member_alias_auth.py",
       "alembic/versions/3bc5882f756d_add_role_visibility_windows.py",
       "alembic/versions/3eaf48a79290_sync_model_drift_missing_columns.py",
       "alembic/versions/513720cf2551_merge_stock_kind_fix_and_laundry_vendor_.py",
@@ -1275,10 +1274,10 @@
     ],
     "video": []
   },
-  "total_files": 1266,
-  "total_words": 1836235,
+  "total_files": 1256,
+  "total_words": 1827714,
   "needs_graph": true,
-  "warning": "Large corpus: 1266 files · ~1,836,235 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
+  "warning": "Large corpus: 1256 files · ~1,827,714 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
   "skipped_sensitive": [
     "alembic/versions/20260408_security_tokens.py",
     "alembic/versions/20260725_user_token_version.py",
@@ -1296,7 +1295,7 @@
   "graphifyignore_patterns": 69,
   "git": {
     "source_owner": "git",
-    "source_hash": "788d35be190e75c14289180f669d93aed01a59d3",
+    "source_hash": "ed918c67557cd28f31874e6037c151aa38c483ea",
     "branches": [
       "audit/tech-0000-baseline",
       "chore/revert-rls-bypass-diagnostic",
@@ -1381,7 +1380,8 @@
       "fix/security-token-atomic-consumption",
       "fix/verify-email-validation",
       "hotfix/i18n-main-entrypoint",
-      "main"
+      "main",
+      "ui/marketing-board-mirror"
     ],
     "max_commits": 200,
     "active_within_days": 30
@@ -1392,9 +1392,9 @@
     "source": "cli",
     "root": ".",
     "git_root": ".",
-    "head": "788d35be190e75c14289180f669d93aed01a59d3",
+    "head": "ed918c67557cd28f31874e6037c151aa38c483ea",
     "candidate_count": null,
-    "included_count": 1266,
+    "included_count": 1256,
     "excluded_untracked_count": 0,
     "excluded_ignored_count": 0,
     "excluded_sensitive_count": 12,

@@ -70,8 +70,8 @@ export function SettingsTestsPage() {
       setError(null);
       setToast(
         created.email_sent_at
-          ? "Prueba creada. Se envio el mail y el estado se va a acreditar automaticamente."
-          : "Prueba creada. Copia el link manualmente si el mail no llega. El estado igual se revisa automaticamente.",
+          ? "Prueba creada. Se envio el mail y el estado se va a acreditar automáticamente."
+          : "Prueba creada. Copia el link manualmente si el mail no llega. El estado igual se revisa automáticamente.",
       );
       setForm({
         recipient_email: "",
@@ -96,7 +96,7 @@ export function SettingsTestsPage() {
       setToast(
         test.status === "approved"
           ? "Pago confirmado por Mercado Pago."
-          : "Estado actualizado. Si la persona ya pago, el sistema lo seguira verificando automaticamente.",
+          : "Estado actualizado. Si la persona ya pago, el sistema lo seguirá verificando automáticamente.",
       );
     },
     onError: (err) => {
@@ -111,7 +111,7 @@ export function SettingsTestsPage() {
     onSuccess: async () => {
       await refreshSettingsState(queryClient, session.hotelId);
       setError(null);
-      setToast("Link cancelado. Mercado Pago ya no deberia permitir nuevos pagos sobre esa preferencia.");
+      setToast("Link cancelado. Mercado Pago ya no debería permitir nuevos pagos sobre esa preferencia.");
     },
     onError: (err) => {
       const message = err instanceof ApiError ? err.message : "No se pudo cancelar el link.";
@@ -149,7 +149,7 @@ export function SettingsTestsPage() {
   return (
     <div className="space-y-6">
       <header>
-        <p className="text-xs uppercase tracking-wide text-slate-500">Configuracion</p>
+        <p className="text-xs uppercase tracking-wide text-slate-500">Configuración</p>
         <h1 className="text-balance text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Pruebas</h1>
         <p className="text-sm text-slate-600">
           Envia un link de pago de Mercado Pago usando el Gmail conectado del hotel y deja que el sistema verifique solo cuando quede abonado.
@@ -234,11 +234,11 @@ export function SettingsTestsPage() {
             {createMutation.isPending ? "Creando prueba..." : "Probar"}
           </button>
           <p className="text-xs text-slate-500">
-            El link se manda con el Gmail del hotel y tambien queda visible abajo por si quieres copiarlo manualmente una vez creada la prueba. No hace falta tocar actualizar para acreditar el pago.
+            El link se manda con el Gmail del hotel y también queda visible abajo por si quieres copiarlo manualmente una vez creada la prueba. No hace falta tocar actualizar para acreditar el pago.
           </p>
         </div>
         <p className="mt-2 text-[11px] text-slate-500">
-          En entorno local el sistema verifica el pago automaticamente por consulta directa. Cuando tengamos un dominio publico HTTPS,
+          En entorno local el sistema verifica el pago automáticamente por consulta directa. Cuando tengamos un dominio público HTTPS,
           tambien va a recibir el webhook de Mercado Pago.
         </p>
 
@@ -258,7 +258,7 @@ export function SettingsTestsPage() {
               <article key={test.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-sm font-semibold text-slate-900">Email del huesped</p>
+                    <p className="text-sm font-semibold text-slate-900">Email del huésped</p>
                     <p className="text-sm text-slate-700">{test.recipient_email}</p>
                   </div>
                   <div className="text-right">

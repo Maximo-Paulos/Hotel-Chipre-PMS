@@ -37,7 +37,7 @@ const personas: Persona[] = [
     password: process.env.E2E_HOUSEKEEPING_PASSWORD || "E2eHousekeeping1234!",
     landingPath: "/habitaciones",
     allowedPath: "/operacion/lavanderia",
-    allowedHeading: /^Lavanderia$/,
+    allowedHeading: /^Lavandería$/,
     forbiddenNavPaths: ["/caja", "/reportes", "/operacion/stock", "/settings/hotel"]
   }
 ];
@@ -218,7 +218,7 @@ test("manager receives operational reports without requesting or rendering finan
 
   await login(page, manager);
   await page.goto("/reportes");
-  await expect(page.getByText("Llegadas del dia", { exact: true })).toBeVisible();
+  await expect(page.getByText("Llegadas del día", { exact: true })).toBeVisible();
   await expect(page.getByTestId("financial-report")).toHaveCount(0);
   await expect(page.getByText(/Pagos pendientes/)).toHaveCount(0);
   expect(revenueRequests).toHaveLength(0);
@@ -327,7 +327,7 @@ test("housekeeping can create remitos but not manage laundry vendors", async ({ 
   await page.goto("/operacion/lavanderia");
 
   const main = page.locator("main");
-  await expect(main.getByRole("heading", { name: "Lavanderia", exact: true })).toBeVisible();
+  await expect(main.getByRole("heading", { name: "Lavandería", exact: true })).toBeVisible();
   await expect(main.getByRole("button", { name: "Crear lavadero" })).toHaveCount(0);
   await expect(main.getByRole("button", { name: "Guardar remito" })).toBeVisible();
 });
@@ -338,7 +338,7 @@ test("manager keeps laundry vendor management", async ({ page }) => {
   await page.goto("/operacion/lavanderia");
 
   const main = page.locator("main");
-  await expect(main.getByRole("heading", { name: "Lavanderia", exact: true })).toBeVisible();
+  await expect(main.getByRole("heading", { name: "Lavandería", exact: true })).toBeVisible();
   await expect(main.getByRole("button", { name: "Crear lavadero" })).toBeVisible();
 });
 

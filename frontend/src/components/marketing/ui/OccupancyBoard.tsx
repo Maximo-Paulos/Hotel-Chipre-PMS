@@ -121,16 +121,16 @@ export function OccupancyBoard() {
                 <tr>
                   <th
                     scope="row"
-                    className="sticky left-0 z-20 border-b border-r border-slate-200 bg-slate-900 px-3 py-2 text-left"
+                    className="sticky left-0 z-20 border-b border-r border-slate-200 bg-slate-100 px-3 py-2 text-left"
                   >
-                    <span className="text-xs font-semibold uppercase leading-tight tracking-wide text-slate-200">
+                    <span className="text-xs font-semibold uppercase leading-tight tracking-wide text-slate-600">
                       {group.category}
                     </span>
                   </th>
                   {DAYS.map((day) => (
                     <td
                       key={`${group.category}-${day}`}
-                      className="border-b border-r border-slate-200 bg-slate-900"
+                      className="border-b border-r border-slate-200 bg-slate-100"
                     />
                   ))}
                 </tr>

@@ -179,7 +179,7 @@ export function CompaniesPage() {
     <div className="space-y-6">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-xs uppercase tracking-wide text-slate-500">Configuracion</p>
+          <p className="text-xs uppercase tracking-wide text-slate-500">Configuración</p>
           <h1 className="text-balance text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Empresas</h1>
           <p className="text-sm text-slate-600">Gestion de cuentas corporativas, vouchers y documentos con firma.</p>
         </div>
@@ -282,7 +282,7 @@ export function CompaniesPage() {
                 />
               </label>
               <label className="space-y-1 text-sm">
-                <span className="text-slate-600">Pais</span>
+                <span className="text-slate-600">País</span>
                 <input
                   value={companyForm.country_code ?? ""}
                   maxLength={2}

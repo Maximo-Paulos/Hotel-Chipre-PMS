@@ -53,13 +53,13 @@ test("owner controls manual cash movements, approves an arqueo difference and co
   await expect(movementForm.getByText("Transaccion ID", { exact: true })).not.toBeVisible();
   await movementForm.getByText("Tipo", { exact: true }).locator("..").locator("select").selectOption("income");
   await movementForm.getByText("Importe", { exact: true }).locator("..").locator("input").fill("500");
-  await movementForm.getByText("Descripcion", { exact: true }).locator("..").locator("input").fill("Venta de minibar");
+  await movementForm.getByText("Descripción", { exact: true }).locator("..").locator("input").fill("Venta de minibar");
   await movementForm.getByRole("button", { name: "Registrar movimiento", exact: true }).click();
   await expect(page.getByText("Movimiento registrado.", { exact: true })).toBeVisible();
 
   await movementForm.getByText("Tipo", { exact: true }).locator("..").locator("select").selectOption("expense");
   await movementForm.getByText("Importe", { exact: true }).locator("..").locator("input").fill("200");
-  await movementForm.getByText("Descripcion", { exact: true }).locator("..").locator("input").fill("Compra de insumos");
+  await movementForm.getByText("Descripción", { exact: true }).locator("..").locator("input").fill("Compra de insumos");
   await movementForm.getByRole("button", { name: "Registrar movimiento", exact: true }).click();
   await expect(page.getByText("Movimiento registrado.", { exact: true })).toBeVisible();
 
@@ -71,7 +71,7 @@ test("owner controls manual cash movements, approves an arqueo difference and co
   await closeForm.getByText("Saldo contado", { exact: true }).locator("..").locator("input").fill(String(countedBalance));
   await closeForm.getByRole("button", { name: "Cerrar caja", exact: true }).click();
   await expect(page.getByText("Caja cerrada.", { exact: true })).toBeVisible();
-  await expect(page.getByText(/Estado: pendiente de aprobacion/, { exact: true })).toBeVisible();
+  await expect(page.getByText(/Estado: pendiente de aprobación/, { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "Aprobar diferencia", exact: true }).last().click();
   await expect(page.getByText("Diferencia aprobada.", { exact: true })).toBeVisible();
@@ -96,7 +96,7 @@ test("receptionist can close cash with a difference but cannot approve it", asyn
   const movementForm = page.locator("form").filter({ hasText: "Registrar movimiento" });
   await movementForm.getByText("Tipo", { exact: true }).locator("..").locator("select").selectOption("income");
   await movementForm.getByText("Importe", { exact: true }).locator("..").locator("input").fill("300");
-  await movementForm.getByText("Descripcion", { exact: true }).locator("..").locator("input").fill("Venta de minibar QA");
+  await movementForm.getByText("Descripción", { exact: true }).locator("..").locator("input").fill("Venta de minibar QA");
   await movementForm.getByRole("button", { name: "Registrar movimiento", exact: true }).click();
   await expect(page.getByText("Movimiento registrado.", { exact: true })).toBeVisible();
 
@@ -104,7 +104,7 @@ test("receptionist can close cash with a difference but cannot approve it", asyn
   await closeForm.getByText("Saldo contado", { exact: true }).locator("..").locator("input").fill("0");
   await closeForm.getByRole("button", { name: "Cerrar caja", exact: true }).click();
   await expect(page.getByText("Caja cerrada.", { exact: true })).toBeVisible();
-  await expect(page.getByText(/Estado: pendiente de aprobacion/, { exact: true })).toBeVisible();
+  await expect(page.getByText(/Estado: pendiente de aprobación/, { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Aprobar diferencia", exact: true })).toHaveCount(0);
   // No cleanup needed: close_session() always opens a new successor session
   // regardless of whether this difference gets approved (see

@@ -168,7 +168,7 @@ export function SettingsUsersPage() {
       <header>
         <p className="text-xs uppercase tracking-wide text-slate-500">Settings</p>
         <h1 className="text-balance text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Usuarios y roles</h1>
-        <p className="text-sm text-slate-600">Invitá personas con su email y asignales un rol y un alias visible en la actividad del hotel.</p>
+        <p className="text-sm text-slate-600">Invitá usuarios a este hotel y asignales un rol.</p>
       </header>
 
       {canManage && (

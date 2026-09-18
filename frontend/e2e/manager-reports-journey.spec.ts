@@ -96,7 +96,7 @@ test("manager reads the operational arrival without receiving the reservation's 
 
   await page.goto("/reportes");
   await expect(page.getByRole("heading", { name: "Reportes", exact: true })).toBeVisible();
-  await expect(page.getByText("Llegadas del dia", { exact: true })).toBeVisible();
+  await expect(page.getByText("Llegadas del día", { exact: true })).toBeVisible();
   await expect(page.getByTestId("financial-report")).toHaveCount(0);
   await expect(page.getByText(/Pagos pendientes/)).toHaveCount(0);
 
@@ -105,7 +105,7 @@ test("manager reads the operational arrival without receiving the reservation's 
   // mention this same reservation code in a pending-payment warning).
   // Anchor on the exact heading and walk up to its own <section> instead.
   const arrivalsSection = page
-    .getByRole("heading", { name: "Llegadas del dia", exact: true })
+    .getByRole("heading", { name: "Llegadas del día", exact: true })
     .locator("xpath=ancestor::section[1]");
   const arrivalRow = arrivalsSection.locator("div").filter({ hasText: confirmationCode }).last();
   await expect(arrivalRow).toBeVisible();

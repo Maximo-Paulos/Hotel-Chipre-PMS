@@ -31,7 +31,7 @@ test("owner sees clear not-connected status and a human error, not a raw technic
   await expect(mercadopagoCard).toBeVisible();
   await expect(mercadopagoCard.getByText("No conectado", { exact: true })).toBeVisible();
 
-  await mercadopagoCard.getByRole("button", { name: "Abrir autorizacion", exact: true }).click();
+  await mercadopagoCard.getByRole("button", { name: "Abrir autorización", exact: true }).click();
   const mercadopagoNotice = mercadopagoCard.locator("div.mt-3.rounded-lg.border").first();
   await expect(mercadopagoNotice).toContainText("OAuth de Mercado Pago no esta configurado en este entorno");
   // A raw technical error would look like a stack trace / JSON blob / HTTP

@@ -48,7 +48,7 @@ test("owner runs the full vendor/remito cycle: pricing, outbound, partial inboun
   const linenLocationForm = page.locator("form").filter({ hasText: "Nueva ubicación" });
   await linenLocationForm.getByLabel("Nombre").fill(locationName);
   await linenLocationForm.getByRole("button", { name: "Crear ubicación", exact: true }).click();
-  await expect(page.getByText("Ubicacion de lavanderia creada.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Ubicación de lavandería creada.", { exact: true })).toBeVisible();
 
   const linenMovementForm = page.locator("form").filter({ hasText: "Registrar movimiento" });
   for (const itemName of [sheetsName, towelsName]) {

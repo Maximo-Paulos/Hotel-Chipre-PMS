@@ -813,11 +813,11 @@ function PromotionSimulator() {
               <p className="text-xs text-slate-500">Total reserva</p>
               <p className="font-semibold text-emerald-800">{formatMoney(Number(result.booking_total), currency)}</p>
             </div>
-            <div className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-sm">
+            <div className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-sm">
               <p className="text-xs text-slate-500">
                 Total con ajuste de pago{result.payment_adjustment ? ` (${result.payment_adjustment.payment_method})` : ""}
               </p>
-              <p className="font-semibold text-violet-800">{formatMoney(Number(result.final_total_with_payment_adjustment), currency)}</p>
+              <p className="font-semibold text-brand-800">{formatMoney(Number(result.final_total_with_payment_adjustment), currency)}</p>
             </div>
           </div>
 

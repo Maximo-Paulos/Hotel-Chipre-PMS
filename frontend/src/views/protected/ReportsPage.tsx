@@ -32,7 +32,7 @@ export function ReportsPage() {
     <div className="space-y-6">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-xs uppercase tracking-wide text-slate-500">Operacion</p>
+          <p className="text-xs uppercase tracking-wide text-slate-500">Operación</p>
           <h1 className="text-balance text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Reportes</h1>
           <p className="text-sm text-slate-600">Operación diaria y ocupación; los importes financieros sólo están disponibles para owner y co-owner.</p>
         </div>
@@ -101,8 +101,8 @@ export function ReportsPage() {
 
           <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
             <div className="space-y-4">
-              <ReservationGroup title="Llegadas del dia" group={report.arrivals} emptyText="No hay llegadas para esta fecha." />
-              <ReservationGroup title="Salidas del dia" group={report.departures} emptyText="No hay salidas para esta fecha." />
+              <ReservationGroup title="Llegadas del día" group={report.arrivals} emptyText="No hay llegadas para esta fecha." />
+              <ReservationGroup title="Salidas del día" group={report.departures} emptyText="No hay salidas para esta fecha." />
               {canViewFinancial && (
                 <ReservationGroup
                   title={`Pagos pendientes · ${money(pendingTotal)}`}
@@ -122,7 +122,7 @@ export function ReportsPage() {
                 <div className="mt-4 rounded-lg bg-slate-50 p-3 text-sm text-slate-700">
                   <p className="font-semibold text-slate-900">{cashStatusLabel(report.cash_session.status)}</p>
                   <p className="text-xs text-slate-500">
-                    {report.cash_session.session_id ? `Caja #${report.cash_session.session_id}` : "Sin sesion abierta"}
+                    {report.cash_session.session_id ? `Caja #${report.cash_session.session_id}` : "Sin sesión abierta"}
                   </p>
                   {report.cash_session.opened_at ? (
                     <p className="text-xs text-slate-500">Abierta {new Date(report.cash_session.opened_at).toLocaleString("es-AR")}</p>
@@ -239,7 +239,7 @@ function ReservationRow({ reservation, showBalance }: { reservation: Operational
     <div className="grid gap-2 px-4 py-3 text-sm md:grid-cols-[1fr_auto]">
       <div>
         <p className="font-semibold text-slate-900">
-          {reservation.guest_name || `Huesped #${reservation.guest_id}`} - {reservation.confirmation_code}
+          {reservation.guest_name || `Huésped #${reservation.guest_id}`} - {reservation.confirmation_code}
         </p>
         <p className="text-xs text-slate-500">
           Hab. {reservation.room_number || "Información no disponible"} - {reservation.status} - {reservation.check_in_date} a {reservation.check_out_date}

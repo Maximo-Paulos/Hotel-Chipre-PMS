@@ -306,13 +306,13 @@
       "noMatches": "sin coincidencias"
     },
     "allocation": {
-      "eyebrow": "Asignacion",
+      "eyebrow": "Asignación",
       "title": "Recalculo y movimientos",
-      "description": "Ejecuta una corrida de asignacion y permite revertir grupos recientes de movimientos de habitacion.",
+      "description": "Ejecuta una corrida de asignación y permite revertir grupos recientes de movimientos de habitación.",
       "recalculating": "Recalculando...",
       "updatingGroups": "Actualizando grupos...",
       "applyChanges": "Aplicar cambios",
-      "run": "Recalcular asignacion",
+      "run": "Recalcular asignación",
       "run_id": "Run",
       "status": "Estado",
       "assigned": "Asignadas",
@@ -506,7 +506,7 @@
       "cash": "Efectivo",
       "transfer": "Transferencia",
       "mercadopago": "Mercado Pago",
-      "credit_card": "Tarjeta de credito",
+      "credit_card": "Tarjeta de crédito",
       "paypal": "PayPal"
     },
     "paymentMethods": {
@@ -631,10 +631,10 @@
       "view": "Ver"
     },
     "guestLabel": {
-      "fallback": "Huesped #{{id}}"
+      "fallback": "Huésped #{{id}}"
     },
     "confirm": {
-      "revertGroup": "Revertir el grupo #{{id}}? Se intentaran deshacer {{count}} {{moveWord}} de habitacion.",
+      "revertGroup": "Revertir el grupo #{{id}}? Se intentaran deshacer {{count}} {{moveWord}} de habitación.",
       "refund": "¿Confirmar devolución en efectivo de {{amount}}?",
       "noShow": "¿Marcar esta reserva como no-show? No genera un cargo automático."
     },
@@ -650,7 +650,7 @@
       "balancePendingCheckOut": "Saldo pendiente de {{balance}}. Cobralo con \"Pago total\" (queda en la caja) y luego hacé el check-out.",
       "checkOutDone": "Check-out registrado",
       "availableCount": "Disponibles: {{count}} habitaciones",
-      "allocationRecalculated": "Asignacion recalculada: {{created}} asignadas, {{moved}} movimientos.",
+      "allocationRecalculated": "Asignación recalculada: {{created}} asignadas, {{moved}} movimientos.",
       "groupReverted": "Grupo #{{id}} revertido",
       "bankTransferHint": "Para transferencia cargá el comprobante y esperá la aprobación.",
       "otherMethodHint": "Para este medio generá un link o confirmá el pago desde su integración.",
@@ -684,7 +684,7 @@
     },
     "errors": {
       "blockedBySubscription": "Acción bloqueada por suscripción.",
-      "blockedBySubscriptionAllocation": "Accion bloqueada por suscripcion.",
+      "blockedBySubscriptionAllocation": "Acción bloqueada por suscripción.",
       "guestRequired": "Ingresá el ID del huésped o completá los datos para crearlo automáticamente.",
       "guestCreateFailed": "No se pudo crear el huésped",
       "categoryRequired": "Seleccioná una categoría.",
@@ -703,7 +703,7 @@
       "availabilityFieldsRequired": "Completá Categoría y fechas para consultar disponibilidad.",
       "availabilityFailed": "No se pudo consultar disponibilidad",
       "horizonInvalid": "El horizonte hasta no puede ser anterior al desde.",
-      "allocationFailed": "No se pudo recalcular la asignacion",
+      "allocationFailed": "No se pudo recalcular la asignación",
       "revertGroupFailed": "No se pudo revertir el grupo",
       "paymentFailed": "No se pudo registrar el pago",
       "invalidPartialAmount": "Ingresá un importe positivo que no supere el saldo pendiente.",

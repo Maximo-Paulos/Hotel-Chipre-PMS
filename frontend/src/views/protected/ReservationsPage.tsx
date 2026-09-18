@@ -1575,7 +1575,7 @@ export function ReservationsPage() {
             {t("page.header.createButton")}
           </button>
           <button
-            className="rounded-lg border border-violet-200 bg-violet-50 px-4 py-2 text-sm font-semibold text-violet-700 hover:border-violet-300 hover:bg-violet-100 disabled:opacity-60"
+            className="rounded-lg border border-brand-200 bg-brand-50 px-4 py-2 text-sm font-semibold text-brand-700 hover:border-brand-300 hover:bg-brand-100 disabled:opacity-60"
             onClick={() => {
               if (subscriptionBlocked) {
                 setToast({ type: "error", message: subscriptionBlockReason || t("page.errors.blockedBySubscription") });
@@ -2528,8 +2528,8 @@ export function ReservationsPage() {
                   </div>
 
                   {canSetManualRate && (
-                    <div className="mt-3 rounded-lg border border-violet-200 bg-violet-50/60 p-3">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-violet-700">{t("page.form.manualRateTitle")}</p>
+                    <div className="mt-3 rounded-lg border border-brand-200 bg-brand-50/60 p-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-brand-700">{t("page.form.manualRateTitle")}</p>
                       <p className="mt-1 text-xs text-slate-600">
                         {t("page.form.manualRateHint")}
                       </p>
@@ -2563,7 +2563,7 @@ export function ReservationsPage() {
                   )}
 
                   {manualTotalAmountInput.trim() !== "" ? (
-                    <div className="mt-3 rounded-lg border border-violet-100 bg-white/80 px-3 py-2 text-sm text-slate-800">
+                    <div className="mt-3 rounded-lg border border-brand-100 bg-white/80 px-3 py-2 text-sm text-slate-800">
                       {t("page.form.manualTotalPreview", { amount: formatMoney(Number(manualTotalAmountInput) || 0, manualTargetCurrency) })}
                     </div>
                   ) : (
@@ -2939,7 +2939,7 @@ export function ReservationsPage() {
                       type="button"
                       onClick={handleRefund}
                       disabled={paymentMutation.isPending || paymentSummaryQuery.isLoading || paymentMethod !== "cash"}
-                      className="rounded-lg border border-violet-200 bg-violet-100 px-3 py-2 text-sm font-semibold text-violet-800 hover:border-violet-300 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="rounded-lg border border-brand-200 bg-brand-100 px-3 py-2 text-sm font-semibold text-brand-800 hover:border-brand-300 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {t("page.form.registerRefund")}
                     </button>
@@ -3686,7 +3686,7 @@ export function ReservationsPage() {
                     type="button"
                     onClick={handleNoShow}
                     disabled={!canNoShow(detailsReservation.status) || noShowMutation.isPending}
-                    className="w-full rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-sm font-semibold text-violet-800 hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="w-full rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-sm font-semibold text-brand-800 hover:bg-brand-100 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {noShowMutation.isPending ? t("page.details.registeringNoShow") : t("page.details.markNoShow")}
                   </button>
