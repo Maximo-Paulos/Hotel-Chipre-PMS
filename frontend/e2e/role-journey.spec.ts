@@ -1,4 +1,6 @@
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { expect, test, type APIRequestContext, type Locator, type Page } from "@playwright/test";
+
+import { revealCollapsedNavLink } from "./support/sidebar";
 
 const backendURL = (process.env.E2E_BACKEND_URL || "http://127.0.0.1:8040").replace(/\/$/, "");
 
@@ -65,10 +67,15 @@ type ApiSession = {
   csrfToken?: string;
 };
 
-async function readApiSession(page: Page, credentials: { email: string; password: string }): Promise<ApiSession> {
+async function readApiSession(
+  request: APIRequestContext,
+  credentials: { email: string; password: string }
+): Promise<ApiSession> {
   // Use a fresh API login only for owner-authorized setup/cleanup. The browser
   // session remains the user journey under test, and no secrets are logged.
-  const response = await page.request.post(`${backendURL}/api/auth/login`, { data: credentials });
+  // The isolated `request` fixture keeps this login out of the browser's
+  // cookie jar; page.request would overwrite the UI session cookies.
+  const response = await request.post(`${backendURL}/api/auth/login`, { data: credentials });
   expect(response.ok()).toBeTruthy();
   const payload = (await response.json()) as {
     hotel_id: number;
@@ -104,17 +111,15 @@ for (const persona of personas) {
     await login(page, persona);
     const navigation = await operationalNavigation(page);
 
+    // Revealing the allowed link waits for the permissions to load, so the
+    // forbidden checks below can't pass on a nav that simply isn't built yet.
+    const allowedLink = navigation.locator(`a[href="${persona.allowedPath}"]`);
+    await revealCollapsedNavLink(allowedLink);
+
     for (const path of persona.forbiddenNavPaths) {
       await expect(navigation.locator(`a[href="${path}"]`)).toHaveCount(0);
     }
 
-    const allowedLink = navigation.locator(`a[href="${persona.allowedPath}"]`);
-    // B6.1: routes outside the daily nav row sit inside a collapsed sidebar
-    // <details> group -- open its <summary> first.
-    const allowedGroup = allowedLink.locator("xpath=ancestor::details[1]");
-    if ((await allowedGroup.count()) > 0 && !(await allowedGroup.evaluate((el) => (el as HTMLDetailsElement).open))) {
-      await allowedGroup.locator("summary").first().click();
-    }
     await expect(allowedLink).toBeVisible();
     await allowedLink.click();
     await expect(page).toHaveURL(new RegExp(`${persona.allowedPath.replaceAll("/", "\\/")}$`));
@@ -239,7 +244,7 @@ test("owner receives the financial report", async ({ page }) => {
   await expect(page.getByTestId("financial-report")).toBeVisible();
 });
 
-test("owner can grant receptionist rates read without granting rate edits", async ({ page }) => {
+test("owner can grant receptionist rates read without granting rate edits", async ({ page, request }) => {
   const owner: Persona = {
     label: "owner",
     email: process.env.E2E_OWNER_EMAIL || "owner@e2e.com",
@@ -252,7 +257,7 @@ test("owner can grant receptionist rates read without granting rate edits", asyn
   const receptionist = personas.find((persona) => persona.label === "receptionist")!;
 
   await login(page, owner);
-  const ownerSession = await readApiSession(page, owner);
+  const ownerSession = await readApiSession(request, owner);
   const headers = {
     "X-Hotel-Id": String(ownerSession.hotelId),
     "X-User-Id": ownerSession.userId,
@@ -260,7 +265,7 @@ test("owner can grant receptionist rates read without granting rate edits", asyn
     "X-CSRF-Token": String(ownerSession.csrfToken || ""),
     "Content-Type": "application/json"
   };
-  const grantResponse = await page.request.put(`${backendURL}/api/permissions/override`, {
+  const grantResponse = await request.put(`${backendURL}/api/permissions/override`, {
     headers,
     data: { role: "receptionist", permission_code: "rates:read", allowed: true }
   });
@@ -268,6 +273,10 @@ test("owner can grant receptionist rates read without granting rate edits", asyn
   const grant = (await grantResponse.json()) as { version: number };
 
   try {
+    // Hand the browser over the way a shared front-desk computer does: the
+    // owner's session ends first, otherwise /login just returns to the owner's
+    // dashboard.
+    await page.context().clearCookies();
     await login(page, receptionist);
     await page.goto("/operacion/tarifas");
     await expect(page).toHaveURL(/\/operacion\/tarifas$/);
@@ -276,7 +285,7 @@ test("owner can grant receptionist rates read without granting rate edits", asyn
     await expect(page.getByTestId("rate-editor-save")).toBeDisabled();
     await expect(page.getByTestId("rate-editor-grid").locator("input").first()).toBeDisabled();
   } finally {
-    const restoreResponse = await page.request.delete(
+    const restoreResponse = await request.delete(
       `${backendURL}/api/permissions/role-overrides/receptionist/${encodeURIComponent("rates:read")}?expected_version=${grant.version}`,
       { headers }
     );

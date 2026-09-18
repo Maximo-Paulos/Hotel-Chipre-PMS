@@ -83,6 +83,7 @@ const simulateResult = {
 
 test("owner creates a promotion and simulates its price breakdown", async ({ page }) => {
   let promotionsCreated = false;
+  let loggedIn = false;
 
   await page.route("https://fonts.googleapis.com/**", async (route) => {
     await route.fulfill({ status: 200, contentType: "text/css", body: "" });
@@ -95,7 +96,15 @@ test("owner creates a promotion and simulates its price breakdown", async ({ pag
     const request = route.request();
     const url = new URL(request.url());
 
-    if (url.pathname.endsWith("/api/auth/login")) {
+    // The access token lives only in memory, so the page.goto() after login
+    // restores the session through /api/auth/session/refresh. Like the real
+    // backend, it only succeeds once a login set the session cookie.
+    if (url.pathname.endsWith("/api/auth/session/refresh") && !loggedIn) {
+      await route.fulfill({ status: 401, contentType: "application/json", body: JSON.stringify({ detail: "No session" }) });
+      return;
+    }
+    if (url.pathname.endsWith("/api/auth/login") || url.pathname.endsWith("/api/auth/session/refresh")) {
+      loggedIn = true;
       await route.fulfill({
         status: 200,
         contentType: "application/json",

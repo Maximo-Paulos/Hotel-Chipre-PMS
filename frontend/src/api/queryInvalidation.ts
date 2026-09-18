@@ -43,6 +43,15 @@ export const refreshReservationState = (
   return refreshAfterMutation(queryClient, hotelId, ["reservations", "payments", "cash", "analytics", "rooms"]);
 };
 
+/**
+ * Check-in (full or partial) also saves the guest data captured in the drawer,
+ * and companions are guest records, so the guests domain changes with the
+ * stay. Without it the drawer's guest-checkin-validation stays stale and keeps
+ * asking for data that was just saved.
+ */
+export const refreshReservationGuestState = (queryClient: QueryClient, hotelId: number | null | undefined) =>
+  refreshAfterMutation(queryClient, hotelId, ["reservations", "payments", "cash", "analytics", "rooms", "guests"]);
+
 export const refreshPaymentState = (
   queryClient: QueryClient,
   hotelId: number | null | undefined,

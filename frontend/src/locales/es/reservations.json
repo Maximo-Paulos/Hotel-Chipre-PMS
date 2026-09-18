@@ -255,10 +255,39 @@
       "statusPrefix": "Estado: {{status}}",
       "sourcePrefix": "Origen: {{source}}",
       "collectionPrefix": "Cobro: {{model}}",
-      "settlementPrefix": "Settlement: {{status}}",
+      "settlementPrefix": "Liquidación: {{status}}",
       "viewButton": "Ver ficha",
       "closeReview": "Cerrar revisión",
       "markResolved": "Marcar resuelto"
+    },
+    "enums": {
+      "collection": {
+        "hotel_collect": "Cobra el hotel",
+        "ota_prepaid": "Prepago de la OTA",
+        "ota_virtual_card": "Tarjeta virtual de la OTA",
+        "ota_partial": "Pago parcial de la OTA",
+        "unknown": "Sin informar"
+      },
+      "settlement": {
+        "not_applicable": "No aplica",
+        "pending": "Pendiente",
+        "partial": "Parcial",
+        "settled": "Liquidada",
+        "deferred": "Diferida",
+        "pending_hotel_collection": "Pendiente de cobro del hotel",
+        "manual_resolution_required": "Requiere resolución manual",
+        "internal_release_no_guarantee": "Liberada sin garantía",
+        "review_cancellation": "Revisar cancelación",
+        "resolved": "Resuelta",
+        "unknown": "Sin informar"
+      },
+      "nextAction": {
+        "collect_from_guest": "cobrar al huésped",
+        "await_channel_settlement": "esperar la liquidación del canal",
+        "resolve_external_channel": "resolver con el canal externo",
+        "review_cancellation_settlement": "revisar la liquidación de la cancelación",
+        "manual_review_required": "revisión manual"
+      }
     },
     "priority": {
       "critical": "Crítica",
@@ -398,6 +427,7 @@
         "direct": "Directo",
         "booking": "Booking.com",
         "expedia": "Expedia",
+        "despegar": "Despegar",
         "other_ota": "Otra OTA"
       },
       "checkIn": "Check-in",
@@ -557,7 +587,7 @@
       "financeOperationalTotal": "Total operativo",
       "financeOperationalBalance": "Saldo operativo",
       "financeCollection": "Cobro",
-      "financeSettlement": "Settlement",
+      "financeSettlement": "Liquidación",
       "financeNextAction": "Próxima acción sugerida: {{action}}",
       "operationEyebrow": "Operación",
       "operationUpdating": "Actualizando...",

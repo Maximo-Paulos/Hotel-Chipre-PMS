@@ -1009,8 +1009,8 @@ def build_home_payload(
             "No-shows",
             value_count=len([fact for fact in facts if getattr(fact.outcome, "value", fact.outcome) == "no_show"]),
         ).model_dump(),
-        metric_card("home_pickup_30d", "Pickup 30d", value_count=pickup_30d).model_dump(),
-        metric_card("home_physical_room_nights", "Physical room nights", value_count=physical_room_nights).model_dump(),
+        metric_card("home_pickup_30d", "Pickup 30 días", value_count=pickup_30d).model_dump(),
+        metric_card("home_physical_room_nights", "Noches-habitación disponibles", value_count=physical_room_nights).model_dump(),
     ]
     return {
         "hotel_id": hotel_id,
@@ -1353,8 +1353,8 @@ def build_operations_payload(
             "cards": [
                 metric_card("operations_open_room_events", "Eventos de habitación abiertos", value_count=len(open_events)).model_dump(),
                 metric_card("operations_no_shows", "No-shows del período", value_count=len(no_shows)).model_dump(),
-                metric_card("operations_pickup_30d", "Pickup 30d", value_count=calculate_pickup_30d_count(db, hotel_id=hotel_id, date_from=window.date_from, date_to=window.date_to)).model_dump(),
-                metric_card("operations_physical_room_nights", "Physical room nights", value_count=calculate_physical_room_nights_for_hotel(db, hotel_id=hotel_id, date_from=window.date_from, date_to=window.date_to)).model_dump(),
+                metric_card("operations_pickup_30d", "Pickup 30 días", value_count=calculate_pickup_30d_count(db, hotel_id=hotel_id, date_from=window.date_from, date_to=window.date_to)).model_dump(),
+                metric_card("operations_physical_room_nights", "Noches-habitación disponibles", value_count=calculate_physical_room_nights_for_hotel(db, hotel_id=hotel_id, date_from=window.date_from, date_to=window.date_to)).model_dump(),
             ],
             "room_events_open": [_serialize_room_state_event(event) for event in open_events],
             "room_events": [_serialize_room_state_event(event) for event in room_events],

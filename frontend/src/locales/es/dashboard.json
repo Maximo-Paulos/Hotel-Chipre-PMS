@@ -9,7 +9,8 @@
   "cards": {
     "occupancyToday": {
       "label": "Ocupación hoy",
-      "helper": "{{count}} llegadas"
+      "helper_one": "{{count}} llegada",
+      "helper_other": "{{count}} llegadas"
     },
     "adr": {
       "label": "ADR",
@@ -18,12 +19,14 @@
     },
     "revenue": {
       "label": "Revenue mes",
-      "helperSingle": "{{count}} salidas hoy",
+      "helperSingle_one": "{{count}} salida hoy",
+      "helperSingle_other": "{{count}} salidas hoy",
       "helperMulti": "Revisar detalle por reserva"
     },
     "pendingActions": {
       "label": "Acciones pendientes",
-      "helperCritical": "{{count}} críticas",
+      "helperCritical_one": "{{count}} crítica",
+      "helperCritical_other": "{{count}} críticas",
       "helperNone": "Sin críticas",
       "helperError": "No se pudo consultar la bandeja"
     },

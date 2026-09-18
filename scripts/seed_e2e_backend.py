@@ -132,7 +132,9 @@ def upsert_seed_data() -> None:
         StockLocation,
         Subscription,
         User,
+        UserMfaSecret,
     )
+    from app.services.mfa_service import MFA_ACTIVE, encrypt_totp_secret
     from app.services.security import hash_password
 
     init_db(database_url)
@@ -308,6 +310,31 @@ def upsert_seed_data() -> None:
             integration = db.query(IntegrationCatalog).filter(IntegrationCatalog.provider == provider).first()
             if integration is None:
                 db.add(IntegrationCatalog(provider=provider, display_name=display_name, auth_type=auth_type))
+
+        # The master panel refuses to operate without TOTP (TECH-0023). Enroll
+        # the bootstrap master admin with a fixed test secret so Playwright can
+        # compute codes; the enrollment flow itself is covered by
+        # tests/test_master_admin_panel.py.
+        master_email = os.environ.get("MASTER_ADMIN_EMAIL", "").strip().lower()
+        master_password = os.environ.get("MASTER_ADMIN_PASSWORD", "")
+        master_totp_secret = os.environ.get("E2E_MASTER_ADMIN_TOTP_SECRET", "")
+        if master_email and master_password and master_totp_secret:
+            master = db.query(User).filter(User.email.ilike(master_email)).first()
+            if master is None:
+                master = User(email=master_email)
+                db.add(master)
+            master.password_hash = hash_password(master_password)
+            master.is_active = True
+            master.is_verified = True
+            master.role = "platform_admin"
+            db.flush()
+            master_mfa = db.query(UserMfaSecret).filter(UserMfaSecret.user_id == master.id).first()
+            if master_mfa is None:
+                master_mfa = UserMfaSecret(user_id=master.id, encrypted_secret="")
+                db.add(master_mfa)
+            master_mfa.encrypted_secret = encrypt_totp_secret(master_totp_secret)
+            master_mfa.status = MFA_ACTIVE
+            master_mfa.confirmed_at = master_mfa.confirmed_at or now
 
         db.commit()
 

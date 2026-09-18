@@ -173,7 +173,7 @@ export function DashboardPage() {
               <tbody className="divide-y divide-slate-200 bg-white">
                 {arrivals.map((reservation) => (
                   <tr key={reservation.id} className="hover:bg-slate-50/60">
-                    <td className="px-4 py-2 font-medium text-slate-900">
+                    <td className="whitespace-nowrap px-4 py-2 font-medium text-slate-900">
                       <button
                         type="button"
                         onClick={() => openReservation(reservation.id)}
@@ -183,17 +183,17 @@ export function DashboardPage() {
                       </button>
                     </td>
                     <td className="px-4 py-2 text-slate-600">{reservationGuestLabel(reservation, t)}</td>
-                    <td className="px-4 py-2 text-slate-600">
+                    <td className="whitespace-nowrap px-4 py-2 text-slate-600">
                       {reservation.check_in_date} - {reservation.check_out_date}
                     </td>
-                    <td className="px-4 py-2">
+                    <td className="whitespace-nowrap px-4 py-2">
                       <span
                         className={`rounded-full px-2 py-1 text-xs font-semibold ${reservationStatusConfig[reservation.status]?.className ?? "bg-slate-100 text-slate-800"}`}
                       >
                         {reservationStatusConfig[reservation.status]?.label ?? reservation.status}
                       </span>
                     </td>
-                    <td className="px-4 py-2 text-right font-semibold text-slate-900">
+                    <td className="whitespace-nowrap px-4 py-2 text-right font-semibold text-slate-900">
                       {formatMoney(reservation.total_amount ?? 0, reservation.currency_code)}
                     </td>
                   </tr>
@@ -313,7 +313,7 @@ export function DashboardPage() {
                                 : "bg-slate-100 text-slate-700"
                         }`}
                       >
-                        {action.priority}
+                        {t(`page.priority.${action.priority}`, { ns: "reservations" })}
                       </span>
                       <span className="text-xs font-semibold text-slate-700">{action.confirmation_code}</span>
                       {action.guest_name && (
@@ -327,7 +327,12 @@ export function DashboardPage() {
                     <p>
                       {action.check_in_date} → {action.check_out_date}
                     </p>
-                    <p>{action.source_provider_code || action.source}</p>
+                    <p>
+                      {t(`page.form.sourceOptions.${action.source_provider_code || action.source}`, {
+                        ns: "reservations",
+                        defaultValue: action.source_provider_code || action.source
+                      })}
+                    </p>
                   </div>
                 </div>
                 <div className="mt-2 flex justify-end">

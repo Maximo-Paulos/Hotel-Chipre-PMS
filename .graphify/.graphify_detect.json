@@ -499,6 +499,7 @@
       "frontend/e2e/smoke.spec.ts",
       "frontend/e2e/stock-inventory-journey.spec.ts",
       "frontend/e2e/support/email-outbox.ts",
+      "frontend/e2e/support/sidebar.ts",
       "frontend/e2e/v72-pages.spec.ts",
       "frontend/e2e/zz-cash-control-journey.spec.ts",
       "frontend/i18n-auth-literals.test.mjs",
@@ -1276,10 +1277,10 @@
     ],
     "video": []
   },
-  "total_files": 1267,
-  "total_words": 1839144,
+  "total_files": 1268,
+  "total_words": 1841157,
   "needs_graph": true,
-  "warning": "Large corpus: 1267 files · ~1,839,144 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
+  "warning": "Large corpus: 1268 files · ~1,841,157 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
   "skipped_sensitive": [
     "alembic/versions/20260408_security_tokens.py",
     "alembic/versions/20260725_user_token_version.py",
@@ -1298,7 +1299,7 @@
   "graphifyignore_patterns": 69,
   "git": {
     "source_owner": "git",
-    "source_hash": "1763603498fdbf51c7239cc8542b3086d711c168",
+    "source_hash": "3ff6f17f6e611d30b86a75c73c4eb309bcc81c31",
     "branches": [
       "chore/revert-rls-bypass-diagnostic",
       "chore/temp-rls-bypass-diagnostic",
@@ -1394,9 +1395,9 @@
     "source": "cli",
     "root": ".",
     "git_root": ".",
-    "head": "1763603498fdbf51c7239cc8542b3086d711c168",
+    "head": "3ff6f17f6e611d30b86a75c73c4eb309bcc81c31",
     "candidate_count": null,
-    "included_count": 1267,
+    "included_count": 1268,
     "excluded_untracked_count": 0,
     "excluded_ignored_count": 0,
     "excluded_sensitive_count": 13,

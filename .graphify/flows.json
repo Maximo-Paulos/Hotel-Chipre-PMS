@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-09-18T17:09:28.658Z",
+  "generatedAt": "2026-09-18T17:19:00.527Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -2915,6 +2915,28 @@
       ],
       "qualifiedPath": [
         "api_queryinvalidation_refreshgueststate",
+        "api_queryinvalidation_refreshaftermutation"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/api/queryInvalidation.ts"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_queryinvalidation_refreshreservationgueststate",
+      "name": "refreshReservationGuestState",
+      "entryPoint": "api_queryinvalidation_refreshreservationgueststate",
+      "entryPointId": "api_queryinvalidation_refreshreservationgueststate",
+      "path": [
+        "api_queryinvalidation_refreshreservationgueststate",
+        "api_queryinvalidation_refreshaftermutation"
+      ],
+      "qualifiedPath": [
+        "api_queryinvalidation_refreshreservationgueststate",
         "api_queryinvalidation_refreshaftermutation"
       ],
       "depth": 1,

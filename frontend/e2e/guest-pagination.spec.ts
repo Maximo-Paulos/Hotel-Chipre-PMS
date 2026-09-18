@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 
 // A5: the backend has always paginated GET /api/guests/ (app/api/guests.py)
 // but the frontend never sent skip/limit, so a hotel with >50 guests only
@@ -23,11 +23,14 @@ async function login(page: Page) {
 
 type StoredSession = { hotelId?: number; userId?: string; accessToken?: string; csrfToken?: string };
 
-async function readSession(page: Page): Promise<StoredSession> {
+async function readSession(request: APIRequestContext): Promise<StoredSession> {
   // Access tokens are intentionally memory-only in the browser. Use a
   // separate test-only login response for this direct seeding helper instead
-  // of reaching into application storage.
-  const response = await page.request.post(`${backendURL}/api/auth/login`, { data: credentials });
+  // of reaching into application storage. It has to be the isolated `request`
+  // fixture, not page.request: that one shares the browser's cookie jar, so a
+  // second login there replaces the UI's session cookies and the next full
+  // page load fails its session refresh on a CSRF mismatch.
+  const response = await request.post(`${backendURL}/api/auth/login`, { data: credentials });
   expect(response.ok()).toBeTruthy();
   const payload = (await response.json()) as {
     hotel_id: number;
@@ -43,13 +46,13 @@ async function readSession(page: Page): Promise<StoredSession> {
   };
 }
 
-test("owner pages through >50 synthetic guests instead of only seeing the first 50", async ({ page }) => {
+test("owner pages through >50 synthetic guests instead of only seeing the first 50", async ({ page, request }) => {
   const suffix = Date.now().toString();
   const prefix = "A5Page" + suffix;
   const TOTAL_SYNTHETIC_GUESTS = 55;
 
   await login(page);
-  const session = await readSession(page);
+  const session = await readSession(request);
   const headers = {
     "X-Hotel-Id": String(session.hotelId),
     "X-User-Id": String(session.userId),
@@ -62,7 +65,7 @@ test("owner pages through >50 synthetic guests instead of only seeing the first 
   // via the UI form would make this spec unreasonably slow for no extra
   // coverage; the pagination contract only cares that the rows exist.
   for (let i = 0; i < TOTAL_SYNTHETIC_GUESTS; i += 1) {
-    const response = await page.request.post(`${backendURL}/api/guests/`, {
+    const response = await request.post(`${backendURL}/api/guests/`, {
       headers,
       data: {
         first_name: prefix,

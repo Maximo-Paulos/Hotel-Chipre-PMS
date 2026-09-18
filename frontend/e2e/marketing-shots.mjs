@@ -20,7 +20,7 @@ import { chromium } from "@playwright/test";
 import { mkdir, writeFile } from "node:fs/promises";
 
 const BASE_URL = process.env.SHOTS_BASE_URL || "http://localhost:5174";
-const EMAIL = process.env.SHOTS_EMAIL || "recepcion@hotelchipre.demo";
+const EMAIL = process.env.SHOTS_EMAIL || "ana@hotelchipre.com.ar";
 const PASSWORD = process.env.SHOTS_PASSWORD || "DemoChipre1234!";
 const OUT_DIR = new URL("../public/marketing/screenshots/", import.meta.url).pathname;
 

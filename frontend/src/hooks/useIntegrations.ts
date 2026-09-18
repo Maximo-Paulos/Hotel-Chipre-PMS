@@ -8,7 +8,7 @@ import {
   finalizeIntegrationOAuth,
   type IntegrationStatus
 } from "../api/integrations";
-import { hasValidSession } from "../api/client";
+import { ApiError, hasValidSession } from "../api/client";
 import { useSession } from "../state/session";
 import { queryKeys } from "../api/queryKeys";
 import { refreshSettingsState } from "../api/queryInvalidation";
@@ -20,7 +20,10 @@ export const useIntegrations = () => {
   return useQuery<IntegrationStatus>({
     queryKey: [...queryKeys.integrations(session.hotelId), session.userId],
     queryFn: () => fetchIntegrations(session),
-    enabled: hasValidSession(session)
+    enabled: hasValidSession(session),
+    // A 4xx is a decision (connections disabled here, forbidden), not a blip.
+    // Retrying it with backoff held the page on "Cargando…" for ~7s first.
+    retry: (failureCount, error) => !(error instanceof ApiError && error.status < 500) && failureCount < 3
   });
 };
 

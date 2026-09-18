@@ -18,14 +18,11 @@ import { useSession } from "../../state/session";
 import { refreshUserState } from "../../api/queryInvalidation";
 import { useGuardedMutation } from "../../hooks/useGuardedMutation";
 import { useEffectivePermissions } from "../../hooks/usePermissions";
+import { roleLabels } from "../../ui/UserBadge";
 
-const roleLabels: Record<string, string> = {
-  owner: "Owner",
-  co_owner: "Co-owner",
-  manager: "Manager",
-  receptionist: "Recepción",
-  housekeeping: "Housekeeping"
-};
+// Same names the header badge shows (Gerencia, Limpieza...), not a second
+// English-flavoured set.
+const invitableRoles = ["co_owner", "manager", "receptionist", "housekeeping"] as const;
 
 export function SettingsUsersPage() {
   const { session } = useSession();
@@ -166,7 +163,7 @@ export function SettingsUsersPage() {
   return (
     <div className="space-y-6">
       <header>
-        <p className="text-xs uppercase tracking-wide text-slate-500">Settings</p>
+        <p className="text-xs uppercase tracking-wide text-slate-500">Configuración</p>
         <h1 className="text-balance text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Usuarios y roles</h1>
         <p className="text-sm text-slate-600">Invitá usuarios a este hotel y asignales un rol.</p>
       </header>
@@ -199,10 +196,11 @@ export function SettingsUsersPage() {
               value={inviteForm.role}
               onChange={(e) => setInviteForm((p) => ({ ...p, role: e.target.value as InvitePayload["role"] }))}
             >
-              <option value="co_owner">Co-owner</option>
-              <option value="manager">Manager</option>
-              <option value="receptionist">Recepción</option>
-              <option value="housekeeping">Housekeeping</option>
+              {invitableRoles.map((role) => (
+                <option key={role} value={role}>
+                  {roleLabels[role]}
+                </option>
+              ))}
             </select>
             <button
               type="button"
@@ -344,13 +342,14 @@ export function SettingsUsersPage() {
                         value={u.role}
                         onChange={(e) => void handleRoleChange(u.id, e.target.value as InvitePayload["role"])}
                       >
-                        <option value="co_owner">Co-owner</option>
-                        <option value="manager">Manager</option>
-                        <option value="receptionist">Recepción</option>
-                        <option value="housekeeping">Housekeeping</option>
+                        {invitableRoles.map((role) => (
+                          <option key={role} value={role}>
+                            {roleLabels[role]}
+                          </option>
+                        ))}
                       </select>
                     ) : (
-                      roleLabels[u.role] || u.role
+                      roleLabels[u.role as keyof typeof roleLabels] ?? u.role
                     )}
                   </td>
                   <td className="px-3 py-2">

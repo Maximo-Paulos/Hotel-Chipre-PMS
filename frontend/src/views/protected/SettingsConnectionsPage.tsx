@@ -7,7 +7,7 @@ import {
   useRevokeIntegration,
 } from "../../hooks/useIntegrations";
 import { IntegrationHelpDrawer } from "../../components/IntegrationHelpDrawer";
-import type { ApiError } from "../../api/client";
+import { ApiError } from "../../api/client";
 
 type FormState = Record<number, Record<string, string>>;
 type NoticeState = Record<number, { tone: "success" | "error" | "info"; message: string }>;
@@ -23,7 +23,7 @@ const getErrorMessage = (error: unknown) => {
 const getProviderErrorMessage = (provider: string, error: unknown) => {
   const message = getErrorMessage(error);
   if (provider === "gmail" && message.includes("OAuth de Gmail no esta configurado")) {
-    return "Todavia falta configurar la app OAuth de Google del lado de PMS Paulus para este entorno de testing. Cuando carguemos GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET y GMAIL_REDIRECT_URI, este boton abrira Google directamente para el hotel.";
+    return "Todavía falta configurar la app de Google de Hotels-PMS en este entorno. Cuando esté lista, este botón va a abrir Google directamente para conectar el correo del hotel.";
   }
   return message;
 };
@@ -56,7 +56,7 @@ const connectionDescription: Record<string, string> = {
 };
 
 export function SettingsConnectionsPage() {
-  const { data, isLoading, refetch } = useIntegrations();
+  const { data, error, isLoading, refetch } = useIntegrations();
   const connect = useConnectIntegration();
   const revoke = useRevokeIntegration();
   const refresh = useRefreshIntegration();
@@ -207,8 +207,54 @@ export function SettingsConnectionsPage() {
     }
   };
 
-  if (isLoading) return <p>Cargando integraciones...</p>;
-  if (!data) return <p>Error al cargar integraciones. Verifica la sesión o reintenta.</p>;
+  // The header renders in every state: loading and failure used to replace
+  // the whole page with a bare line of text, title included.
+  const header = (
+    <div className="flex items-center justify-between">
+      <div>
+        <p className="text-xs uppercase tracking-wide text-slate-500">Integraciones</p>
+        <h1 className="text-balance text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Conexiones</h1>
+        <p className="text-sm text-slate-600">Cada conexión se guarda cifrada y vinculada solo al hotel activo.</p>
+      </div>
+    </div>
+  );
+
+  if (isLoading) {
+    return (
+      <div className="space-y-4">
+        {header}
+        <p className="text-sm text-slate-500">Cargando integraciones…</p>
+      </div>
+    );
+  }
+  if (!data) {
+    // 403 is CONNECTIONS_ENABLED switched off and 503 is external effects
+    // switched off: both are decisions about this environment. The old text
+    // told the operator to "check the session", which could never help.
+    const disabledHere = error instanceof ApiError && (error.status === 403 || error.status === 503);
+    return (
+      <div className="space-y-4">
+        {header}
+        {disabledHere ? (
+          <div data-testid="integrations-disabled" className="rounded-panel border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+            <p className="font-semibold">Las conexiones con proveedores externos están deshabilitadas en este entorno.</p>
+            <p className="mt-1">Cuando se habiliten, desde acá vas a poder conectar Gmail, Mercado Pago, PayPal y las OTAs del hotel.</p>
+          </div>
+        ) : (
+          <div role="alert" className="rounded-panel border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">
+            <p className="font-semibold">No se pudieron cargar las integraciones.</p>
+            <button
+              type="button"
+              onClick={() => void refetch()}
+              className="mt-2 rounded-control bg-white px-3 py-1.5 text-sm font-semibold text-rose-800 ring-1 ring-rose-200 hover:bg-rose-100"
+            >
+              Reintentar
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   const orderedCatalog = [...data.catalog].sort((a, b) => {
     const left = providerPriority[a.provider] ?? 99;
@@ -219,13 +265,7 @@ export function SettingsConnectionsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-xs uppercase tracking-wide text-slate-500">Integraciones</p>
-          <h1 className="text-balance text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Conexiones</h1>
-          <p className="text-sm text-slate-600">Cada conexión se guarda cifrada y vinculada solo al hotel activo.</p>
-        </div>
-      </div>
+      {header}
 
       <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Paso recomendado</p>
