@@ -1435,6 +1435,32 @@
       "warnings": []
     },
     {
+      "id": "flow:api_auth_set_password_with_google",
+      "name": "set_password_with_google",
+      "entryPoint": "api_auth_set_password_with_google",
+      "entryPointId": "api_auth_set_password_with_google",
+      "path": [
+        "api_auth_set_password_with_google",
+        "api_auth_audit_security_event",
+        "api_auth_verify_google_claims",
+        "api_auth_google_allowed_domains"
+      ],
+      "qualifiedPath": [
+        "api_auth_set_password_with_google",
+        "api_auth_audit_security_event",
+        "api_auth_verify_google_claims",
+        "api_auth_google_allowed_domains"
+      ],
+      "depth": 2,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/api/auth.py"
+      ],
+      "criticality": 0.42,
+      "warnings": []
+    },
+    {
       "id": "flow:master_admin_stripe_stripe_secret_configured",
       "name": "stripe_secret_configured",
       "entryPoint": "master_admin_stripe_stripe_secret_configured",
@@ -2965,6 +2991,28 @@
       "warnings": []
     },
     {
+      "id": "flow:app_main_request_telemetry",
+      "name": "request_telemetry",
+      "entryPoint": "app_main_request_telemetry",
+      "entryPointId": "app_main_request_telemetry",
+      "path": [
+        "app_main_request_telemetry",
+        "app_main_safe_request_path_for_logging"
+      ],
+      "qualifiedPath": [
+        "app_main_request_telemetry",
+        "app_main_safe_request_path_for_logging"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/main.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
       "id": "flow:dependencies_auth_require_roles_and_permission",
       "name": "require_roles_and_permission",
       "entryPoint": "dependencies_auth_require_roles_and_permission",
@@ -4317,28 +4365,6 @@
       "warnings": []
     },
     {
-      "id": "flow:api_settings_security_audit_timeline",
-      "name": "audit_timeline",
-      "entryPoint": "api_settings_security_audit_timeline",
-      "entryPointId": "api_settings_security_audit_timeline",
-      "path": [
-        "api_settings_security_audit_timeline",
-        "api_settings_security_validate_audit_timeline_range"
-      ],
-      "qualifiedPath": [
-        "api_settings_security_audit_timeline",
-        "api_settings_security_validate_audit_timeline_range"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "app/api/settings_security.py"
-      ],
-      "criticality": 0.285,
-      "warnings": []
-    },
-    {
       "id": "flow:api_checkin_checkin",
       "name": "checkin",
       "entryPoint": "api_checkin_checkin",
@@ -5102,6 +5128,28 @@
       "fileCount": 1,
       "files": [
         "app/services/allocation_runtime_service.py"
+      ],
+      "criticality": 0.285,
+      "warnings": []
+    },
+    {
+      "id": "flow:app_main_security_headers",
+      "name": "security_headers",
+      "entryPoint": "app_main_security_headers",
+      "entryPointId": "app_main_security_headers",
+      "path": [
+        "app_main_security_headers",
+        "app_main_safe_request_path_for_logging"
+      ],
+      "qualifiedPath": [
+        "app_main_security_headers",
+        "app_main_safe_request_path_for_logging"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/main.py"
       ],
       "criticality": 0.285,
       "warnings": []
@@ -6813,6 +6861,30 @@
       "warnings": []
     },
     {
+      "id": "flow:api_settings_security_audit_timeline",
+      "name": "audit_timeline",
+      "entryPoint": "api_settings_security_audit_timeline",
+      "entryPointId": "api_settings_security_audit_timeline",
+      "path": [
+        "api_settings_security_audit_timeline",
+        "api_settings_security_attach_actor_names",
+        "api_settings_security_validate_audit_timeline_range"
+      ],
+      "qualifiedPath": [
+        "api_settings_security_audit_timeline",
+        "api_settings_security_attach_actor_names",
+        "api_settings_security_validate_audit_timeline_range"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/api/settings_security.py"
+      ],
+      "criticality": 0.2433,
+      "warnings": []
+    },
+    {
       "id": "flow:services_operational_task_service_create_handoff",
       "name": "create_handoff",
       "entryPoint": "services_operational_task_service_create_handoff",
@@ -6832,30 +6904,6 @@
       "fileCount": 1,
       "files": [
         "app/services/operational_task_service.py"
-      ],
-      "criticality": 0.2433,
-      "warnings": []
-    },
-    {
-      "id": "flow:api_settings_security_export_audit_timeline",
-      "name": "export_audit_timeline",
-      "entryPoint": "api_settings_security_export_audit_timeline",
-      "entryPointId": "api_settings_security_export_audit_timeline",
-      "path": [
-        "api_settings_security_export_audit_timeline",
-        "api_settings_security_build_audit_timeline_csv",
-        "api_settings_security_validate_audit_timeline_range"
-      ],
-      "qualifiedPath": [
-        "api_settings_security_export_audit_timeline",
-        "api_settings_security_build_audit_timeline_csv",
-        "api_settings_security_validate_audit_timeline_range"
-      ],
-      "depth": 1,
-      "nodeCount": 3,
-      "fileCount": 1,
-      "files": [
-        "app/api/settings_security.py"
       ],
       "criticality": 0.2433,
       "warnings": []
@@ -8195,6 +8243,32 @@
       "warnings": []
     },
     {
+      "id": "flow:api_settings_security_export_audit_timeline",
+      "name": "export_audit_timeline",
+      "entryPoint": "api_settings_security_export_audit_timeline",
+      "entryPointId": "api_settings_security_export_audit_timeline",
+      "path": [
+        "api_settings_security_export_audit_timeline",
+        "api_settings_security_attach_actor_names",
+        "api_settings_security_build_audit_timeline_csv",
+        "api_settings_security_validate_audit_timeline_range"
+      ],
+      "qualifiedPath": [
+        "api_settings_security_export_audit_timeline",
+        "api_settings_security_attach_actor_names",
+        "api_settings_security_build_audit_timeline_csv",
+        "api_settings_security_validate_audit_timeline_range"
+      ],
+      "depth": 1,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/api/settings_security.py"
+      ],
+      "criticality": 0.2225,
+      "warnings": []
+    },
+    {
       "id": "flow:services_invitation_service_issue_invitation",
       "name": "issue_invitation",
       "entryPoint": "services_invitation_service_issue_invitation",
@@ -9422,34 +9496,6 @@
       "fileCount": 1,
       "files": [
         "app/services/subscription_service.py"
-      ],
-      "criticality": 0.21,
-      "warnings": []
-    },
-    {
-      "id": "flow:api_users_invite_user",
-      "name": "invite_user",
-      "entryPoint": "api_users_invite_user",
-      "entryPointId": "api_users_invite_user",
-      "path": [
-        "api_users_invite_user",
-        "api_users_assert_assignable_role",
-        "api_users_inviteresponse",
-        "api_users_membership_user_info",
-        "api_users_send_invitation_email"
-      ],
-      "qualifiedPath": [
-        "api_users_invite_user",
-        "api_users_assert_assignable_role",
-        "api_users_inviteresponse",
-        "api_users_membership_user_info",
-        "api_users_send_invitation_email"
-      ],
-      "depth": 1,
-      "nodeCount": 5,
-      "fileCount": 1,
-      "files": [
-        "app/api/users.py"
       ],
       "criticality": 0.21,
       "warnings": []
@@ -13067,6 +13113,58 @@
       "warnings": []
     },
     {
+      "id": "flow:api_invitations_get_invitation_legacy",
+      "name": "get_invitation_legacy",
+      "entryPoint": "api_invitations_get_invitation_legacy",
+      "entryPointId": "api_invitations_get_invitation_legacy",
+      "path": [
+        "api_invitations_get_invitation_legacy",
+        "api_invitations_invitation_info",
+        "api_invitations_available_invitation",
+        "api_invitations_source_key"
+      ],
+      "qualifiedPath": [
+        "api_invitations_get_invitation_legacy",
+        "api_invitations_invitation_info",
+        "api_invitations_available_invitation",
+        "api_invitations_source_key"
+      ],
+      "depth": 2,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/api/invitations.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_invitations_get_invitation_preview",
+      "name": "get_invitation_preview",
+      "entryPoint": "api_invitations_get_invitation_preview",
+      "entryPointId": "api_invitations_get_invitation_preview",
+      "path": [
+        "api_invitations_get_invitation_preview",
+        "api_invitations_invitation_info",
+        "api_invitations_available_invitation",
+        "api_invitations_source_key"
+      ],
+      "qualifiedPath": [
+        "api_invitations_get_invitation_preview",
+        "api_invitations_invitation_info",
+        "api_invitations_available_invitation",
+        "api_invitations_source_key"
+      ],
+      "depth": 2,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/api/invitations.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
       "id": "flow:services_allocation_runtime_service_get_latest_allocation_run_details",
       "name": "get_latest_allocation_run_details",
       "entryPoint": "services_allocation_runtime_service_get_latest_allocation_run_details",
@@ -13636,6 +13734,38 @@
       "fileCount": 1,
       "files": [
         "app/tasks/analytics_tasks.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_staff_invitation_service_provision_staff_invitation",
+      "name": "provision_staff_invitation",
+      "entryPoint": "services_staff_invitation_service_provision_staff_invitation",
+      "entryPointId": "services_staff_invitation_service_provision_staff_invitation",
+      "path": [
+        "services_staff_invitation_service_provision_staff_invitation",
+        "services_staff_invitation_service_normalize_staff_role",
+        "services_staff_invitation_service_set_membership_alias",
+        "services_staff_invitation_service_staffinvitationprovision",
+        "valueerror",
+        "services_staff_invitation_service_normalize_staff_alias",
+        "services_staff_invitation_service_staffaliasconflict"
+      ],
+      "qualifiedPath": [
+        "services_staff_invitation_service_provision_staff_invitation",
+        "services_staff_invitation_service_normalize_staff_role",
+        "services_staff_invitation_service_set_membership_alias",
+        "services_staff_invitation_service_staffinvitationprovision",
+        "valueerror",
+        "services_staff_invitation_service_normalize_staff_alias",
+        "services_staff_invitation_service_staffaliasconflict"
+      ],
+      "depth": 2,
+      "nodeCount": 7,
+      "fileCount": 1,
+      "files": [
+        "app/services/staff_invitation_service.py"
       ],
       "criticality": 0.17,
       "warnings": []
@@ -16488,30 +16618,6 @@
       "fileCount": 1,
       "files": [
         "frontend/src/views/protected/analytics/AnalyticsPages.tsx"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
-      "id": "flow:api_invitations_accept_invitation",
-      "name": "accept_invitation",
-      "entryPoint": "api_invitations_accept_invitation",
-      "entryPointId": "api_invitations_accept_invitation",
-      "path": [
-        "api_invitations_accept_invitation",
-        "api_invitations_available_invitation",
-        "api_invitations_source_key"
-      ],
-      "qualifiedPath": [
-        "api_invitations_accept_invitation",
-        "api_invitations_available_invitation",
-        "api_invitations_source_key"
-      ],
-      "depth": 1,
-      "nodeCount": 3,
-      "fileCount": 1,
-      "files": [
-        "app/api/invitations.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -20511,6 +20617,30 @@
       "warnings": []
     },
     {
+      "id": "flow:api_users_list_staff_aliases",
+      "name": "list_staff_aliases",
+      "entryPoint": "api_users_list_staff_aliases",
+      "entryPointId": "api_users_list_staff_aliases",
+      "path": [
+        "api_users_list_staff_aliases",
+        "api_users_staffaliasitem",
+        "api_users_staffaliasrosterresponse"
+      ],
+      "qualifiedPath": [
+        "api_users_list_staff_aliases",
+        "api_users_staffaliasitem",
+        "api_users_staffaliasrosterresponse"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/api/users.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:services_stock_service_list_stock_movements",
       "name": "list_stock_movements",
       "entryPoint": "services_stock_service_list_stock_movements",
@@ -21668,34 +21798,6 @@
       "fileCount": 1,
       "files": [
         "app/services/external_effects_policy.py"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
-      "id": "flow:api_users_resend_invitation",
-      "name": "resend_invitation",
-      "entryPoint": "api_users_resend_invitation",
-      "entryPointId": "api_users_resend_invitation",
-      "path": [
-        "api_users_resend_invitation",
-        "api_users_assert_manageable_membership",
-        "api_users_inviteresponse",
-        "api_users_membership_user_info",
-        "api_users_send_invitation_email"
-      ],
-      "qualifiedPath": [
-        "api_users_resend_invitation",
-        "api_users_assert_manageable_membership",
-        "api_users_inviteresponse",
-        "api_users_membership_user_info",
-        "api_users_send_invitation_email"
-      ],
-      "depth": 1,
-      "nodeCount": 5,
-      "fileCount": 1,
-      "files": [
-        "app/api/users.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -22914,6 +23016,28 @@
       "fileCount": 1,
       "files": [
         "app/api/rooms.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_users_update_staff_alias",
+      "name": "update_staff_alias",
+      "entryPoint": "api_users_update_staff_alias",
+      "entryPointId": "api_users_update_staff_alias",
+      "path": [
+        "api_users_update_staff_alias",
+        "api_users_staffaliasitem"
+      ],
+      "qualifiedPath": [
+        "api_users_update_staff_alias",
+        "api_users_staffaliasitem"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/users.py"
       ],
       "criticality": 0.16,
       "warnings": []

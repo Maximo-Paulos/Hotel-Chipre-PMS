@@ -297,15 +297,17 @@ Nunca aceptar un TOTP aislado como autorización universal. Exigir que el aproba
 
 ## 10. Invitaciones y ciclo de vida del staff
 
-Flujo objetivo:
+Flujo implementado:
 
-1. usuario autorizado elige hotel, email, rol(es) y vencimiento;
-2. backend valida entitlement de staff, rol asignable y que no exista conflicto;
-3. se crea invitación con token hasheado, single-use y hotel-scoped;
-4. destinatario inicia sesión/crea cuenta con password, Google o Apple;
-5. se muestra explícitamente qué hotel invita y qué rol recibirá;
-6. aceptación crea/reactiva membership de forma idempotente;
-7. se auditan invitación, reenvío, revocación, aceptación y cambios de rol.
+1. El primer ingreso con Google verificado puede crear una cuenta `owner` y su hotel; el usuario continúa por el onboarding. El alta propia requiere `GOOGLE_LOGIN_ENABLED`, `EXTERNAL_EFFECTS_ENABLED` y `GOOGLE_SELF_SIGNUP_ENABLED` habilitados. El flag de alta debe habilitarse explícitamente en producción.
+2. Un usuario autorizado elige hotel, email y rol asignable. El backend valida el entitlement de staff y crea una invitación single-use, hotel-scoped, con token hasheado.
+3. El destinatario puede aceptar con Google (email verificado idéntico al invitado) o crear su propia contraseña. Una cuenta preexistente debe autenticarse como ella misma; una cuenta Google-only no puede entrar con contraseña hasta que configure una mediante una nueva prueba Google.
+4. Si una cuenta local sin Google vinculado coincide con un email Google verificado, la vinculación reemplaza el hash de contraseña anterior, invalida las sesiones/JWT previos y queda auditada. Un `google_sub` ya vinculado a otra cuenta se rechaza.
+5. Si la cuenta tiene MFA, la invitación permanece pendiente hasta que el usuario complete el desafío. Aceptarla activa solo la membership y el rol indicados; no crea otro hotel.
+6. El dueño o copropietario con permiso efectivo `settings:users:manage` puede asignar y editar un alias opcional, único dentro del hotel. El alias no reemplaza el `user_id`; las vistas de actividad lo resuelven dentro del tenant actual y caen al email cuando no hay alias.
+7. La interfaz informa si el correo de invitación se envió, falló o no está configurado; en cualquier caso conserva el enlace de aceptación para copiar o reintentar.
+8. Los enlaces nuevos llevan el token en el fragmento (`#token=...`), que no viaja en la petición inicial. Preview y aceptación lo envían en el cuerpo JSON a rutas estáticas; las rutas anteriores se conservan temporalmente por compatibilidad, fuera del OpenAPI y con redacción en logs de aplicación.
+9. Los valores de texto en exportaciones CSV de auditoría y caja se neutralizan si parecen fórmulas de planilla. Los JWT legacy sin `token_version` equivalen a versión 0 y dejan de servir cuando la cuenta incrementa su versión.
 
 Debe poder revocarse una membership, invalidar sus sesiones/contexto de hotel y conservar el actor histórico en auditoría. Reenviar no debe crear memberships duplicadas. Evitar revelar si un email ya pertenece a otro hotel.
 

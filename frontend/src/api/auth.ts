@@ -6,13 +6,26 @@ export type AuthUser = {
   role: string;
   is_verified: boolean;
   is_active: boolean;
+  password_login_enabled: boolean;
   permissions?: string[];
 };
 
-export type AuthResponse = AuthResponsePayload & {
+export type AuthResponse = Omit<AuthResponsePayload, "user"> & {
+  user: AuthUser;
   token_type: string;
   code?: string;
 };
+
+export type MfaChallengeResponse = {
+  requires_mfa: true;
+  mfa_token: string;
+  expires_in: number;
+};
+
+export type AuthResult = AuthResponse | MfaChallengeResponse;
+
+export const isMfaChallenge = (result: AuthResult): result is MfaChallengeResponse =>
+  "requires_mfa" in result && result.requires_mfa === true;
 
 export type RegistrationResponse = {
   accepted: true;
@@ -38,15 +51,27 @@ export const register = (email: string, password: string, role: string = "owner"
   });
 
 export const login = (email: string, password: string) =>
-  apiFetch<AuthResponse>("/api/auth/login", {
+  apiFetch<AuthResult>("/api/auth/login", {
     method: "POST",
     data: { email, password }
   });
 
 export const loginWithGoogle = (idToken: string) =>
-  apiFetch<AuthResponse>("/api/auth/google", {
+  apiFetch<AuthResult>("/api/auth/google", {
     method: "POST",
     data: { id_token: idToken }
+  });
+
+export const completeMfaLogin = (mfaToken: string, code: string) =>
+  apiFetch<AuthResponse>("/api/auth/login/mfa", {
+    method: "POST",
+    data: { mfa_token: mfaToken, code }
+  });
+
+export const setPasswordWithGoogle = (idToken: string, newPassword: string) =>
+  apiFetch<{ password_login_enabled: true }>("/api/auth/password/set", {
+    method: "POST",
+    data: { id_token: idToken, new_password: newPassword }
   });
 
 export const linkGoogle = (idToken: string, password: string) =>
@@ -60,7 +85,7 @@ export const loginWithApple = (
   nonce?: string,
   user?: { name?: { firstName?: string; lastName?: string } }
 ) =>
-  apiFetch<AuthResponse>("/api/auth/apple", {
+  apiFetch<AuthResult>("/api/auth/apple", {
     method: "POST",
     data: { id_token: idToken, nonce, user }
   });
@@ -89,16 +114,24 @@ export const resetPassword = (email: string, code: string, newPassword: string) 
     data: { email, code, new_password: newPassword }
   });
 
-// Invitaciones (backend esperado: /api/invitations/info y /api/invitations/accept)
+// Invitation bearer tokens stay in JSON bodies so HTTP access logs only see static paths.
 export const getInvitationInfo = (token: string) =>
-  apiFetch<{ email: string; hotel_name?: string; inviter_email?: string }>("/api/invitations/" + token, {
-    method: "GET"
+  apiFetch<{ email: string; hotel_name?: string; inviter_email?: string }>("/api/invitations/preview", {
+    method: "POST",
+    data: { token }
   });
 
-export const acceptInvitation = (token: string, email: string, password: string) =>
-  apiFetch<AuthResponse>("/api/invitations/" + token + "/accept", {
+export const acceptInvitation = (token: string, email: string, password?: string, session?: SessionLike) =>
+  apiFetch<AuthResponse>("/api/invitations/accept", {
     method: "POST",
-    data: { email, password }
+    data: password ? { token, email, password } : { token, email },
+    session
+  });
+
+export const acceptInvitationWithGoogle = (token: string, idToken: string) =>
+  apiFetch<AuthResult>("/api/invitations/accept/google", {
+    method: "POST",
+    data: { token, id_token: idToken }
   });
 
 export const currentUser = (session?: SessionLike) =>

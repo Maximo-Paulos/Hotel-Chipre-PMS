@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const baseURL = process.env.E2E_BASE_URL || "http://127.0.0.1:5173";
+const frontendPort = new URL(baseURL).port || "5173";
 const backendURL = process.env.E2E_BACKEND_URL || "http://127.0.0.1:8040";
 const reuseExistingServer = process.env.E2E_REUSE_SERVER === "true";
 const realtimeE2EEnabled = process.env.REALTIME_E2E === "true";
@@ -190,7 +191,7 @@ export default defineConfig({
       }
     },
     {
-      command: "npm run dev -- --host 127.0.0.1",
+      command: `npm run dev -- --host 127.0.0.1 --port ${frontendPort}`,
       url: baseURL,
       reuseExistingServer,
       timeout: 120_000,

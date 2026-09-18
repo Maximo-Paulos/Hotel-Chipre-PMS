@@ -28,6 +28,7 @@ class SecurityEventRead(BaseModel):
     id: int
     action: str
     actor_user_id: int | None = None
+    actor_name: str = "Sistema"
     resource_type: str | None = None
     resource_id: str | None = None
     created_at: datetime
@@ -42,6 +43,7 @@ class AuditTimelineItemRead(BaseModel):
     source: Literal["row_mutation", "business_event", "security_event"]
     action: str
     actor_user_id: int | None = None
+    actor_name: str = "Sistema"
     created_at: datetime
     summary: str
     details: dict[str, Any] = Field(default_factory=dict)

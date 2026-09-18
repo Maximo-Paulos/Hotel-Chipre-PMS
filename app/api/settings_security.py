@@ -25,6 +25,8 @@ from app.schemas.settings_security import (
 )
 from app.services.user_session_service import revoke_all_sessions
 from app.services.audit_timeline_service import list_audit_timeline
+from app.services.actor_label_service import resolve_hotel_actor_labels
+from app.services.csv_export_safety import spreadsheet_safe_row
 from app.services.permission_service import PERMISSION_SETTINGS_SECURITY_VIEW
 
 
@@ -35,6 +37,7 @@ _AUDIT_TIMELINE_CSV_FIELDS = (
     "source",
     "action",
     "actor_user_id",
+    "actor_name",
     "created_at",
     "summary",
     "details",
@@ -73,18 +76,31 @@ def _build_audit_timeline_csv(items: list[dict]) -> str:
     writer.writeheader()
     for item in items:
         writer.writerow(
-            {
+            spreadsheet_safe_row({
                 "source": item["source"],
                 "action": item["action"],
                 "actor_user_id": item["actor_user_id"],
+                "actor_name": item["actor_name"],
                 "created_at": item["created_at"].isoformat(),
                 "summary": item["summary"],
                 # ``list_audit_timeline`` has already applied the shared
                 # redaction policy before this serializer sees the details.
                 "details": json.dumps(item["details"], ensure_ascii=False, sort_keys=True),
-            }
+            })
         )
     return output.getvalue()
+
+
+def _attach_actor_names(db: Session, hotel_id: int, items: list[dict]) -> list[dict]:
+    labels = resolve_hotel_actor_labels(
+        db,
+        hotel_id=hotel_id,
+        user_ids=(item.get("actor_user_id") for item in items),
+    )
+    for item in items:
+        actor_id = item.get("actor_user_id")
+        item["actor_name"] = labels.get(actor_id, "Usuario" if actor_id is not None else "Sistema")
+    return items
 
 
 @router.get("/overview", response_model=SecurityOverviewRead)
@@ -134,6 +150,11 @@ def recent_security_events(
         .limit(limit)
         .all()
     )
+    actor_labels = resolve_hotel_actor_labels(
+        db,
+        hotel_id=context.hotel_id,
+        user_ids=(row.user_id for row in rows),
+    )
     return SecurityEventsRead(
         hotel_id=context.hotel_id,
         events=[
@@ -141,6 +162,11 @@ def recent_security_events(
                 id=row.id,
                 action=row.action,
                 actor_user_id=row.user_id,
+                actor_name=(
+                    actor_labels.get(row.user_id, "Usuario")
+                    if row.user_id is not None
+                    else "Sistema"
+                ),
                 resource_type=row.resource_type,
                 resource_id=_safe_resource_id(row),
                 created_at=row.created_at,
@@ -169,6 +195,7 @@ def audit_timeline(
         from_date=from_date,
         to_date=to_date,
     )
+    items = _attach_actor_names(db, context.hotel_id, items)
     return AuditTimelineRead(
         hotel_id=context.hotel_id,
         items=items,
@@ -201,6 +228,7 @@ def export_audit_timeline(
         from_date=from_date,
         to_date=to_date,
     )
+    items = _attach_actor_names(db, context.hotel_id, items)
     return Response(
         content=_build_audit_timeline_csv(items),
         media_type="text/csv",

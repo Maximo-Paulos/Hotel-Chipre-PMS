@@ -37,6 +37,7 @@ from app.services.permission_service import (
 )
 from app.services.distributed_lock import DistributedLockBusy, DistributedLockUnavailable
 from app.services.cash_daily_summary_service import get_daily_summary
+from app.services.csv_export_safety import spreadsheet_safe_row
 
 
 router = APIRouter(tags=["Cash Register"])
@@ -134,7 +135,7 @@ def export_cash_ledger_csv(
             if selected_currency and entry_currency != selected_currency:
                 continue
             writer.writerow(
-                {
+                spreadsheet_safe_row({
                     "report_date": report["report_date"],
                     "hotel_id": report["hotel_id"],
                     "currency_code": entry_currency,
@@ -152,7 +153,7 @@ def export_cash_ledger_csv(
                     "movement_type": entry.get("movement_type"),
                     "provider_code": entry.get("provider_code"),
                     "description": entry.get("description"),
-                }
+                })
             )
     filename = f"caja-{start.isoformat()}-{end.isoformat()}.csv"
     return StreamingResponse(

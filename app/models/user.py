@@ -25,6 +25,9 @@ class User(Base):
     apple_sub = Column(String(255), nullable=True, unique=True, index=True)
     # Apple sends the user's name only during the first authorization.
     display_name = Column(String(255), nullable=True)
+    # Existing accounts keep password access by default. Accounts created with
+    # Google can remain passwordless until the user explicitly sets one.
+    password_login_enabled = Column(Boolean, nullable=False, default=True, server_default="true")
     is_active = Column(Boolean, nullable=False, default=True)
     is_verified = Column(Boolean, nullable=False, default=False)
     # Platform-plane role only (currently used for platform_admin). Hotel
