@@ -18,6 +18,8 @@ export type AuthResponsePayload = {
     role: string;
     is_verified: boolean;
     is_active: boolean;
+    password_login_enabled?: boolean;
+    google_login_enabled?: boolean;
     permissions?: string[];
   };
   permissions?: string[];
@@ -186,6 +188,7 @@ const requestHeaders = (method: string, session: SessionLike | null, headers?: H
 const isPublicAuthPath = (path: string) =>
   [
     "/api/auth/login",
+    "/api/auth/login/mfa",
     "/api/auth/register",
     "/api/auth/google",
     "/api/auth/providers",

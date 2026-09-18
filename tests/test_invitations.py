@@ -418,7 +418,7 @@ def test_google_invitation_claim_activates_the_provisioned_placeholder(owner_ctx
     assert stored_invitation.status == "accepted"
 
 
-def test_google_invitation_reclaims_existing_email_and_revokes_prior_sessions(owner_ctx, monkeypatch):
+def test_google_invitation_preserves_existing_password_account_without_mfa(owner_ctx, monkeypatch):
     client, db, ctx = owner_ctx
     email = "local-invitee@test.com"
     user = User(
@@ -430,6 +430,20 @@ def test_google_invitation_reclaims_existing_email_and_revokes_prior_sessions(ow
     )
     db.add(user)
     db.flush()
+    existing_hotel = HotelConfiguration(
+        id=2,
+        owner_email=email,
+        hotel_name="Existing hotel",
+        subscription_active=True,
+    )
+    db.add(existing_hotel)
+    db.flush()
+    db.add(HotelMembership(
+        hotel_id=existing_hotel.id,
+        user_id=user.id,
+        role="manager",
+        status="active",
+    ))
     old_session, _old_token, _old_csrf = create_session(db, user)
     db.commit()
     legacy_token = create_access_token(user.id, extra={"email": user.email, "verified": True})
@@ -447,26 +461,29 @@ def test_google_invitation_reclaims_existing_email_and_revokes_prior_sessions(ow
             json={"token": invitation_token, "id_token": "verified-google-id-token"},
         )
 
-    assert response.status_code == 200, response.text
-    assert response.json()["user"]["password_login_enabled"] is False
-    assert response.cookies.get("user_session")
+    assert response.status_code == 409, response.text
+    assert "Iniciá sesión con esa cuenta" in response.json()["detail"]
     db.refresh(user)
     db.refresh(old_session)
-    assert user.google_sub == "claimed-invitee-sub"
-    assert user.password_hash != original_hash
-    assert not verify_password("OldLocalPassword123!", user.password_hash)
-    assert user.password_login_enabled is False
-    assert user.token_version == 1
-    with pytest.raises(HTTPException) as legacy_rejected:
-        _authenticate_user(db, f"Bearer {legacy_token}")
-    assert legacy_rejected.value.status_code == 401
-    assert old_session.revoked_at is not None
+    assert user.google_sub is None
+    assert user.password_hash == original_hash
+    assert verify_password("OldLocalPassword123!", user.password_hash)
+    assert user.password_login_enabled is True
+    assert user.token_version == 0
+    assert _authenticate_user(db, f"Bearer {legacy_token}")[0].id == user.id
+    assert old_session.revoked_at is None
     invitation = db.query(StaffInvitation).filter_by(
         token_hash=hash_invitation_token(invitation_token)
     ).one()
-    assert invitation.status == "accepted"
-    audit = db.query(SecurityAuditLog).filter_by(action="google_auth.linked").one()
-    assert json.loads(audit.details) == {"account_state": "reclaimed", "provider": "google"}
+    assert invitation.status == "pending"
+    assert invitation.consumed_at is None
+    assert db.query(SecurityAuditLog).filter_by(action="google_auth.linked").count() == 0
+
+    password_login = client.post(
+        "/api/auth/login",
+        json={"email": email, "password": "OldLocalPassword123!"},
+    )
+    assert password_login.status_code == 200, password_login.text
 
 
 def test_google_invitation_requires_the_exact_verified_recipient_email(owner_ctx, monkeypatch):
@@ -592,8 +609,9 @@ def test_google_invitation_waits_for_mfa_before_consuming_token(owner_ctx, monke
     db.refresh(user)
     db.refresh(old_session)
     assert user.google_sub == "claimed-mfa-google-sub"
-    assert user.password_hash != original_hash
-    assert user.password_login_enabled is False
+    assert user.password_hash == original_hash
+    assert verify_password("ExistingStrongPassword!", user.password_hash)
+    assert user.password_login_enabled is True
     assert user.token_version == 1
     assert old_session.revoked_at is not None
     accepted = client.post(
@@ -609,6 +627,8 @@ def test_google_invitation_waits_for_mfa_before_consuming_token(owner_ctx, monke
         hotel_id=ctx["hotel_id"], user_id=user.id
     ).one()
     assert accepted_membership.status == "active"
+    audit = db.query(SecurityAuditLog).filter_by(action="google_auth.linked").one()
+    assert json.loads(audit.details) == {"account_state": "linked_after_mfa", "provider": "google"}
 
 
 def test_invitation_accept_rejects_password_under_twelve_characters(owner_ctx):

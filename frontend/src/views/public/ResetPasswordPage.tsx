@@ -240,7 +240,7 @@ export function ResetPasswordPage() {
               <input
                 id="reset-mfa-code"
                 autoComplete="one-time-code"
-                inputMode="numeric"
+                inputMode="text"
                 className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-900 shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                 value={mfaCode}
                 onChange={(event) => setMfaCode(event.target.value)}

@@ -77,3 +77,35 @@ test("Google sign-in button follows the configured E2E client id", async ({ page
   if (process.env.E2E_GOOGLE_CLIENT_ID) await expect(button).toBeVisible();
   else await expect(button).toHaveCount(0);
 });
+
+test("Google login explains how to preserve an existing password account", async ({ page }) => {
+  const detail = "Esta cuenta ya tiene un acceso propio. Iniciá sesión con tu método habitual y vinculá Google desde Configuración > Seguridad.";
+  await page.route("**/api/auth/providers", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({
+      google: {
+        enabled: true,
+        client_id: "e2e.apps.googleusercontent.com",
+        self_signup_enabled: true,
+        allowed_domains: []
+      }
+    })
+  }));
+  await page.route("https://accounts.google.com/gsi/client", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/javascript",
+    body: `window.google={accounts:{id:{initialize:function(config){window.__qaGoogleCallback=config.callback;},renderButton:function(parent){var button=document.createElement('button');button.textContent='Continue with Google';button.addEventListener('click',function(){window.__qaGoogleCallback({credential:'synthetic-google-id-token'});});parent.appendChild(button);}}}};`
+  }));
+  await page.route("**/api/auth/google", (route) => route.fulfill({
+    status: 409,
+    contentType: "application/json",
+    body: JSON.stringify({ detail })
+  }));
+
+  await page.goto("/login");
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+
+  await expect(page.getByRole("alert")).toHaveText(detail);
+  await expect(page.getByTestId("login-submit")).toBeVisible();
+});

@@ -164,6 +164,7 @@ class UserInfo(BaseModel):
     is_verified: bool
     is_active: bool
     password_login_enabled: bool | None = None
+    google_login_enabled: bool | None = None
     permissions: list[str] = Field(default_factory=list)
 
     class Config:

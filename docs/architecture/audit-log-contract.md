@@ -66,7 +66,8 @@ check-in, huéspedes, restricciones, documentos, OTA y movimientos de
 habitaciones. Las acciones concretas observadas son:
 
 - identidad/MFA/sesiones: `auth.login.success`,
-  `google_auth.linked`, `google_auth.account_reclaimed`,
+  `google_auth.linked`, `google_auth.mfa_challenge`, el evento histórico
+  `google_auth.account_reclaimed`,
   `google_auth.unlinked`, `apple_auth.linked`,
   `apple_auth.account_reclaimed`, `apple_auth.unlinked`, `mfa.enrolled`,
   `mfa.disabled`, `mfa.recovery_codes_regenerated` y

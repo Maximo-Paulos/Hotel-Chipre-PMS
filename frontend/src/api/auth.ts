@@ -7,6 +7,7 @@ export type AuthUser = {
   is_verified: boolean;
   is_active: boolean;
   password_login_enabled: boolean;
+  google_login_enabled?: boolean;
   permissions?: string[];
 };
 
