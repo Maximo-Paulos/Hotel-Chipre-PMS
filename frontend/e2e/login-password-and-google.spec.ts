@@ -17,6 +17,24 @@ test("password visibility toggle switches the input type", async ({ page }) => {
   await expect(page.locator('input[type="password"]')).toHaveValue("some-secret-value");
 });
 
+test("MFA login explains where to get the code and that no email is sent", async ({ page }) => {
+  await page.route("**/api/auth/login", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({ requires_mfa: true, mfa_token: "synthetic-mfa", expires_in: 300 })
+  }));
+
+  await page.goto("/login");
+  await page.locator('input[type="email"]').fill("mfa-user@example.com");
+  await page.locator('input[type="password"]').fill("test-password");
+  await page.getByTestId("login-submit").click();
+
+  await expect(page.getByText(/Esta cuenta tiene activada la verificación en dos pasos/)).toBeVisible();
+  await expect(page.getByText(/app autenticadora que vinculaste/)).toBeVisible();
+  await expect(page.getByText(/No te llegará por email/)).toBeVisible();
+  await expect(page.getByLabel("Código de la app autenticadora o de recuperación")).toBeVisible();
+});
+
 test("Google sign-in button follows the configured E2E client id", async ({ page }) => {
   await page.route("**/api/auth/providers", (route) => route.fulfill({
     status: 200,

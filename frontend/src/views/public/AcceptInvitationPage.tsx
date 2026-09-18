@@ -262,10 +262,10 @@ export function AcceptInvitationPage() {
             {mfaToken ? (
               <form className="mt-5 space-y-4" onSubmit={handleMfaSubmit}>
                 <p className="rounded-lg border border-brand-100 bg-brand-50 p-3 text-sm text-brand-900" role="status">
-                  Confirmá tu identidad. La invitación todavía no fue consumida.
+                  Esta cuenta tiene activada la verificación en dos pasos. Ingresá el código temporal de 6 dígitos de la app autenticadora que vinculaste, o un código de recuperación guardado. No te llegará por email. La invitación seguirá pendiente hasta verificarlo.
                 </p>
                 <label className="block text-sm font-medium text-slate-700" htmlFor="invitation-mfa-code">
-                  Código de autenticación o recuperación
+                  Código de la app autenticadora o de recuperación
                   <input
                     id="invitation-mfa-code"
                     autoComplete="one-time-code"

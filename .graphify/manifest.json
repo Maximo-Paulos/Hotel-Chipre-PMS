@@ -1504,8 +1504,8 @@
     "hash": "738693fb246e2d8693fc45ca2ee76246"
   },
   "frontend/src/views/public/AcceptInvitationPage.tsx": {
-    "mtime": 1789742456860.262,
-    "hash": "d87121f6e214eb57bb7c9d5d20ab4497"
+    "mtime": 1789745465768.8518,
+    "hash": "84a31753bf8721d4920744ed64b32d93"
   },
   "frontend/src/views/public/FaqPage.tsx": {
     "mtime": 1789742456860.3457,
@@ -3236,8 +3236,8 @@
     "hash": "8e2277e0fc399686b86f61f02ef68f93"
   },
   ".graphify/GRAPH_REPORT.md": {
-    "mtime": 1789742491730.2302,
-    "hash": "43a8a3b6713823c38bbc56a8ee5ab4b0"
+    "mtime": 1789743635180.9324,
+    "hash": "5d0d7200a71078d8fd702dca214b304a"
   },
   "scripts/agent_ops/manage_qa_baseline_lease.py": {
     "mtime": 1789742456871.493,
@@ -5612,8 +5612,8 @@
     "hash": "98df637ae76b4a091909f618b707c5d8"
   },
   "frontend/e2e/google-invitation-access.spec.ts": {
-    "mtime": 1789743387152.8127,
-    "hash": "dc7aa66194f0c74e41c9f5c83f87c38d"
+    "mtime": 1789745556214.5898,
+    "hash": "b2fb987ae039e572300a370d62f09b17"
   },
   "tests/test_actor_alias_projection.py": {
     "mtime": 1789742456875.6902,
