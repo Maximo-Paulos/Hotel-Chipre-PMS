@@ -1,6 +1,8 @@
 import { apiFetch, type SessionLike } from "./client";
 
-export type PermissionRole = "owner" | "co_owner" | "manager" | "receptionist" | "housekeeping";
+export type BuiltinPermissionRole = "owner" | "co_owner" | "manager" | "receptionist" | "housekeeping";
+/** A role code is a built-in code or a per-hotel custom code returned by the API. */
+export type PermissionRole = string;
 
 export type PermissionCatalogItem = {
   code: string;
@@ -20,6 +22,7 @@ export type PermissionDetail = {
   source: "invariant" | "user_override" | "role_override" | "role_default" | "deny" | string;
   locked: boolean;
   lock_reason: string | null;
+  version?: number | null;
 };
 
 export type PermissionCell = {
@@ -30,11 +33,12 @@ export type PermissionCell = {
   help_es: string;
   locked?: boolean;
   lock_reason?: string | null;
+  version?: number | null;
 };
 
-export type PermissionMatrix = Record<PermissionRole, Record<string, PermissionCell>>;
+export type PermissionMatrix = Record<string, Record<string, PermissionCell>>;
 
-export type PermissionProfileMatrix = Record<PermissionRole, Record<string, PermissionDetail & {
+export type PermissionProfileMatrix = Record<string, Record<string, PermissionDetail & {
   description: string;
   module: string;
   help_es: string;
@@ -56,6 +60,7 @@ export type RolePermissionProfilesResponse = {
 };
 
 export type PermissionOverridePayload = {
+  // Current API schema names this field `role`; its value is the dynamic role code.
   role: PermissionRole;
   permission_code: string;
   allowed: boolean;

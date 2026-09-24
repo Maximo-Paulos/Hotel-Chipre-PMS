@@ -50,6 +50,7 @@ def _context(user_id: int = 9101, *, role: str = "owner") -> AuthContext:
         user_id=user_id,
         user_email=f"audit-coverage-{user_id}@example.com",
         user_role=role,
+        is_verified=True,
     )
 
 

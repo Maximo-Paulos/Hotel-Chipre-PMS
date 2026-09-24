@@ -5,17 +5,21 @@ import json
 import logging
 import threading
 from datetime import datetime, timezone
+import unicodedata
+from uuid import uuid4
 from weakref import WeakSet
 
+from sqlalchemy import func
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
 from app.models.hotel_membership import HotelMembership
+from app.models.hotel_role import HotelRole
+from app.models.invitation import StaffInvitation
 from app.models.hotel_role_visibility_window import (
     HotelRoleVisibilityWindow,
     VISIBILITY_WINDOW_HOURS,
-    VISIBILITY_WINDOW_ROLES,
 )
 from app.models.permission import (
     HotelPermissionOverride,
@@ -39,6 +43,31 @@ ROLE_MANAGER = "manager"
 ROLE_RECEPTIONIST = "receptionist"
 ROLE_HOUSEKEEPING = "housekeeping"
 ROLE_CODES = (ROLE_OWNER, ROLE_CO_OWNER, ROLE_MANAGER, ROLE_RECEPTIONIST, ROLE_HOUSEKEEPING)
+CUSTOM_ROLE_BASE_CODES = (ROLE_MANAGER, ROLE_RECEPTIONIST, ROLE_HOUSEKEEPING)
+CUSTOM_ROLE_CODE_PREFIX = "cr_"
+BUILTIN_ROLE_NAMES = {
+    ROLE_OWNER: "Propietario",
+    ROLE_CO_OWNER: "Copropietario",
+    ROLE_MANAGER: "Gerente",
+    ROLE_RECEPTIONIST: "Recepcionista",
+    ROLE_HOUSEKEEPING: "Limpieza",
+}
+
+
+class HotelRoleNotFound(LookupError):
+    """A requested custom role is absent, inactive, or belongs to another hotel."""
+
+
+class HotelRoleVersionConflict(ValueError):
+    """A role was changed after the caller last read it."""
+
+
+class HotelRoleNameConflict(ValueError):
+    """A hotel already has a role with the requested normalized name."""
+
+
+class HotelRoleInUse(ValueError):
+    """A custom role still has active members or pending invitations."""
 
 # Canonical v2 permissions. Names intentionally describe reads, writes, and
 # higher-risk actions independently so UI visibility never implies mutation.
@@ -633,6 +662,90 @@ def can_role_hold_permission(role: str | None, permission_code: str) -> bool:
     return True if invariant is None else invariant[0]
 
 
+def get_custom_role(
+    db: Session,
+    hotel_id: int,
+    role_code: str | None,
+    *,
+    include_inactive: bool = False,
+    lock: bool = False,
+) -> HotelRole | None:
+    """Resolve one tenant-owned custom role; built-in and malformed codes miss."""
+    if (
+        not isinstance(role_code, str)
+        or role_code in ROLE_CODES
+        or len(role_code) > 20
+        or not role_code.startswith(CUSTOM_ROLE_CODE_PREFIX)
+    ):
+        return None
+    query = db.query(HotelRole).filter(
+        HotelRole.hotel_id == hotel_id,
+        HotelRole.code == role_code,
+    )
+    if not include_inactive:
+        query = query.filter(HotelRole.is_active.is_(True))
+    if lock:
+        query = query.with_for_update()
+    return query.one_or_none()
+
+
+def require_active_hotel_role(
+    db: Session,
+    hotel_id: int,
+    role_code: str | None,
+    *,
+    lock: bool = False,
+) -> HotelRole | None:
+    """Validate a built-in or active tenant role, optionally locking custom rows.
+
+    Built-in roles return ``None``. Unknown, archived, and cross-hotel custom
+    role codes fail closed with the same not-found error.
+    """
+    if role_code in ROLE_CODES:
+        return None
+    custom = get_custom_role(db, hotel_id, role_code, lock=lock)
+    if custom is None:
+        raise HotelRoleNotFound("Rol inválido o no disponible en este hotel")
+    return custom
+
+
+def effective_role_code(db: Session, hotel_id: int, role_code: str | None) -> str | None:
+    """Resolve the built-in behavior family for a tenant role.
+
+    Permission checks must continue using the assigned role code. This helper
+    is only for legacy/product behavior that intentionally depends on an
+    operational family (for example housekeeping-safe data projections).
+    Unknown or archived custom roles fail closed instead of silently taking a
+    broader built-in projection.
+    """
+    if role_code in ROLE_CODES:
+        return role_code
+    if isinstance(role_code, str) and role_code.startswith(CUSTOM_ROLE_CODE_PREFIX):
+        custom = require_active_hotel_role(db, hotel_id, role_code)
+        assert custom is not None
+        return custom.base_role
+    return role_code
+
+
+def _normalized_role_name(name: str) -> tuple[str, str]:
+    normalized = unicodedata.normalize("NFKC", " ".join((name or "").split()))
+    if not normalized:
+        raise ValueError("El nombre del rol es obligatorio")
+    if len(normalized) > 80:
+        raise ValueError("El nombre del rol no puede superar los 80 caracteres")
+    key = normalized.casefold()
+    if len(key) > 240:
+        raise ValueError("El nombre del rol es demasiado largo")
+    if key in ROLE_CODES:
+        raise ValueError("El nombre coincide con un rol reservado")
+    return normalized, key
+
+
+def _role_default_code(db: Session, hotel_id: int, role: str) -> str:
+    custom = require_active_hotel_role(db, hotel_id, role)
+    return custom.base_role if custom is not None else role
+
+
 def _insert_if_missing(db: Session, table, values, conflict_columns: list[str]) -> None:
     dialect = db.get_bind().dialect.name
     if dialect == "sqlite":
@@ -740,23 +853,30 @@ def get_effective_permission_details(
     *,
     user_id: int | None = None,
 ) -> dict[str, dict[str, object]]:
+    custom_role = None
     if role not in ROLE_CODES:
-        return {}
+        custom_role = get_custom_role(db, hotel_id, role)
+        if custom_role is None:
+            return {}
+        default_role = custom_role.base_role
+    else:
+        default_role = role
     ensure_permission_matrix_seeded(db)
     defaults = {
         row.permission_code: bool(row.allowed)
-        for row in db.query(RolePermissionDefault).filter(RolePermissionDefault.role == role).all()
+        for row in db.query(RolePermissionDefault).filter(RolePermissionDefault.role == default_role).all()
     }
-    role_overrides = {
-        row.permission_code: bool(row.allowed)
-        for row in db.query(HotelPermissionOverride).filter_by(hotel_id=hotel_id, role=role).all()
-    }
+    role_override_rows = db.query(HotelPermissionOverride).filter_by(hotel_id=hotel_id, role=role).all()
+    role_overrides = {row.permission_code: bool(row.allowed) for row in role_override_rows}
+    role_override_versions = {row.permission_code: int(row.version) for row in role_override_rows}
     user_overrides = {}
+    user_override_versions = {}
     if user_id is not None:
-        user_overrides = {
-            row.permission_code: bool(row.allowed)
-            for row in db.query(UserPermissionOverride).filter_by(hotel_id=hotel_id, user_id=user_id).all()
-        }
+        user_override_rows = db.query(UserPermissionOverride).filter_by(
+            hotel_id=hotel_id, user_id=user_id
+        ).all()
+        user_overrides = {row.permission_code: bool(row.allowed) for row in user_override_rows}
+        user_override_versions = {row.permission_code: int(row.version) for row in user_override_rows}
 
     details: dict[str, dict[str, object]] = {}
     for code in _CANONICAL_DEFINITIONS:
@@ -765,11 +885,28 @@ def get_effective_permission_details(
             allowed, reason = invariant
             details[code] = {"allowed": allowed, "source": "invariant", "locked": True, "lock_reason": reason}
         elif code in user_overrides:
-            details[code] = {"allowed": user_overrides[code], "source": "user_override", "locked": False, "lock_reason": None}
+            details[code] = {
+                "allowed": user_overrides[code],
+                "source": "user_override",
+                "locked": False,
+                "lock_reason": None,
+                "version": user_override_versions[code],
+            }
         elif code in role_overrides:
-            details[code] = {"allowed": role_overrides[code], "source": "role_override", "locked": False, "lock_reason": None}
+            details[code] = {
+                "allowed": role_overrides[code],
+                "source": "role_override",
+                "locked": False,
+                "lock_reason": None,
+                "version": role_override_versions[code],
+            }
         elif code in defaults:
-            details[code] = {"allowed": defaults[code], "source": "role_default", "locked": False, "lock_reason": None}
+            details[code] = {
+                "allowed": defaults[code],
+                "source": "base_role_default" if custom_role is not None else "role_default",
+                "locked": False,
+                "lock_reason": None,
+            }
         else:
             details[code] = {"allowed": False, "source": "deny", "locked": False, "lock_reason": None}
 
@@ -801,24 +938,293 @@ def _audit(db: Session, *, hotel_id: int, actor_user_id: int | None, action: str
     )
 
 
+def list_hotel_roles(db: Session, hotel_id: int) -> list[dict[str, object]]:
+    """Return built-ins and this hotel's custom roles in the frontend contract."""
+    result: list[dict[str, object]] = []
+    pending_invitation_counts = {
+        role: int(count)
+        for role, count in (
+            db.query(StaffInvitation.role, func.count(StaffInvitation.id))
+            .filter(
+                StaffInvitation.hotel_id == hotel_id,
+                StaffInvitation.status == "pending",
+            )
+            .group_by(StaffInvitation.role)
+            .all()
+        )
+    }
+    for code in ROLE_CODES:
+        details = get_effective_permission_details(db, hotel_id, code)
+        assigned_count = (
+            db.query(func.count(HotelMembership.id))
+            .filter(
+                HotelMembership.hotel_id == hotel_id,
+                HotelMembership.role == code,
+                HotelMembership.status == "active",
+            )
+            .scalar()
+            or 0
+        )
+        result.append(
+            {
+                "code": code,
+                "name": BUILTIN_ROLE_NAMES[code],
+                "kind": "builtin",
+                "base_role": None,
+                "is_active": True,
+                "assigned_count": int(assigned_count),
+                "pending_invitation_count": pending_invitation_counts.get(code, 0),
+                "permission_count": sum(bool(item["allowed"]) for item in details.values()),
+                "version": 1,
+            }
+        )
+
+    custom_roles = (
+        db.query(HotelRole)
+        .filter(HotelRole.hotel_id == hotel_id)
+        .order_by(HotelRole.name_key, HotelRole.code)
+        .all()
+    )
+    for custom in custom_roles:
+        details = (
+            get_effective_permission_details(db, hotel_id, custom.code)
+            if custom.is_active
+            else {}
+        )
+        assigned_count = (
+            db.query(func.count(HotelMembership.id))
+            .filter(
+                HotelMembership.hotel_id == hotel_id,
+                HotelMembership.role == custom.code,
+                HotelMembership.status == "active",
+            )
+            .scalar()
+            or 0
+        )
+        result.append(
+            {
+                "code": custom.code,
+                "name": custom.name,
+                "kind": "custom",
+                "base_role": custom.base_role,
+                "is_active": bool(custom.is_active),
+                "assigned_count": int(assigned_count),
+                "pending_invitation_count": pending_invitation_counts.get(custom.code, 0),
+                "permission_count": sum(bool(item["allowed"]) for item in details.values()),
+                "version": custom.version,
+            }
+        )
+    return result
+
+
+def create_custom_role(
+    db: Session,
+    hotel_id: int,
+    *,
+    name: str,
+    base_role: str,
+    actor_user_id: int | None,
+) -> HotelRole:
+    if base_role not in CUSTOM_ROLE_BASE_CODES:
+        raise ValueError("El rol base debe ser manager, receptionist o housekeeping")
+    normalized_name, name_key = _normalized_role_name(name)
+    duplicate = db.query(HotelRole.id).filter_by(hotel_id=hotel_id, name_key=name_key).first()
+    if duplicate is not None:
+        raise HotelRoleNameConflict("Ya existe un rol con ese nombre en este hotel")
+
+    row = HotelRole(
+        hotel_id=hotel_id,
+        code=f"{CUSTOM_ROLE_CODE_PREFIX}{uuid4().hex[:16]}",
+        name=normalized_name,
+        name_key=name_key,
+        base_role=base_role,
+        is_active=True,
+        version=1,
+        created_by_user_id=actor_user_id,
+        updated_by_user_id=actor_user_id,
+    )
+    db.add(row)
+    db.flush()
+    _audit(
+        db,
+        hotel_id=hotel_id,
+        actor_user_id=actor_user_id,
+        action="permission.custom_role.created",
+        resource_type="hotel_role",
+        resource_id=row.code,
+        before=None,
+        after={"code": row.code, "name": row.name, "base_role": row.base_role, "version": row.version},
+    )
+    invalidate_effective_permission_cache(db, hotel_id)
+    return row
+
+
+def update_custom_role_name(
+    db: Session,
+    hotel_id: int,
+    role_code: str,
+    *,
+    name: str,
+    expected_version: int,
+    actor_user_id: int | None,
+) -> HotelRole:
+    row = get_custom_role(db, hotel_id, role_code, include_inactive=True, lock=True)
+    if row is None or not row.is_active:
+        raise HotelRoleNotFound("Rol no encontrado")
+    if row.version != expected_version:
+        raise HotelRoleVersionConflict("El rol fue modificado por otra solicitud")
+    normalized_name, name_key = _normalized_role_name(name)
+    duplicate = (
+        db.query(HotelRole.id)
+        .filter(
+            HotelRole.hotel_id == hotel_id,
+            HotelRole.name_key == name_key,
+            HotelRole.code != role_code,
+        )
+        .first()
+    )
+    if duplicate is not None:
+        raise HotelRoleNameConflict("Ya existe un rol con ese nombre en este hotel")
+
+    before = {"name": row.name, "version": row.version}
+    row.name = normalized_name
+    row.name_key = name_key
+    row.updated_by_user_id = actor_user_id
+    row.updated_at = datetime.now(timezone.utc)
+    db.flush()
+    _audit(
+        db,
+        hotel_id=hotel_id,
+        actor_user_id=actor_user_id,
+        action="permission.custom_role.renamed",
+        resource_type="hotel_role",
+        resource_id=row.code,
+        before=before,
+        after={"name": row.name, "version": row.version},
+    )
+    invalidate_effective_permission_cache(db, hotel_id)
+    return row
+
+
+def archive_custom_role(
+    db: Session,
+    hotel_id: int,
+    role_code: str,
+    *,
+    expected_version: int,
+    actor_user_id: int | None,
+) -> HotelRole:
+    row = get_custom_role(db, hotel_id, role_code, include_inactive=True, lock=True)
+    if row is None:
+        raise HotelRoleNotFound("Rol no encontrado")
+    if row.version != expected_version:
+        raise HotelRoleVersionConflict("El rol fue modificado por otra solicitud")
+    if not row.is_active:
+        return row
+
+    active_members = (
+        db.query(func.count(HotelMembership.id))
+        .filter(
+            HotelMembership.hotel_id == hotel_id,
+            HotelMembership.role == role_code,
+            HotelMembership.status == "active",
+        )
+        .scalar()
+        or 0
+    )
+    pending_invitations = (
+        db.query(func.count(StaffInvitation.id))
+        .filter(
+            StaffInvitation.hotel_id == hotel_id,
+            StaffInvitation.role == role_code,
+            StaffInvitation.status == "pending",
+        )
+        .scalar()
+        or 0
+    )
+    if active_members or pending_invitations:
+        raise HotelRoleInUse("No se puede archivar: el rol tiene miembros activos o invitaciones pendientes")
+
+    before = {"is_active": True, "version": row.version}
+    row.is_active = False
+    row.updated_by_user_id = actor_user_id
+    row.updated_at = datetime.now(timezone.utc)
+    db.flush()
+    _audit(
+        db,
+        hotel_id=hotel_id,
+        actor_user_id=actor_user_id,
+        action="permission.custom_role.archived",
+        resource_type="hotel_role",
+        resource_id=row.code,
+        before=before,
+        after={"is_active": False, "version": row.version},
+    )
+    invalidate_effective_permission_cache(db, hotel_id)
+    return row
+
+
 def get_visibility_window(
     db: Session, hotel_id: int, role: str
 ) -> HotelRoleVisibilityWindow | None:
-    """Return one tenant-scoped role window, or ``None`` for no limit."""
-    return (
+    """Return a role window; custom roles inherit their base's limit.
+
+    Unknown or archived roles get a zero-hour sentinel so consumers fail
+    closed instead of treating a missing row as unlimited visibility.
+    """
+    if role in ROLE_CODES:
+        return (
+            db.query(HotelRoleVisibilityWindow)
+            .filter_by(hotel_id=hotel_id, role=role)
+            .one_or_none()
+        )
+    custom = get_custom_role(db, hotel_id, role)
+    if custom is None:
+        return HotelRoleVisibilityWindow(
+            hotel_id=hotel_id,
+            role=str(role),
+            past_hours=0,
+            future_hours=0,
+        )
+    row = (
         db.query(HotelRoleVisibilityWindow)
         .filter_by(hotel_id=hotel_id, role=role)
         .one_or_none()
+    )
+    if row is not None:
+        return row
+    base_window = (
+        db.query(HotelRoleVisibilityWindow)
+        .filter_by(hotel_id=hotel_id, role=custom.base_role)
+        .one_or_none()
+    )
+    if base_window is None:
+        return None
+    return HotelRoleVisibilityWindow(
+        hotel_id=hotel_id,
+        role=role,
+        past_hours=base_window.past_hours,
+        future_hours=base_window.future_hours,
+        updated_by_user_id=base_window.updated_by_user_id,
+        updated_at=base_window.updated_at,
     )
 
 
 def list_visibility_windows(db: Session, hotel_id: int) -> list[HotelRoleVisibilityWindow]:
     """Return configured windows for one hotel only."""
+    valid_roles = set(ROLE_CODES)
+    valid_roles.update(
+        row.code
+        for row in db.query(HotelRole.code).filter(
+            HotelRole.hotel_id == hotel_id,
+            HotelRole.is_active.is_(True),
+        )
+    )
     return (
         db.query(HotelRoleVisibilityWindow)
         .filter(
             HotelRoleVisibilityWindow.hotel_id == hotel_id,
-            HotelRoleVisibilityWindow.role.in_(VISIBILITY_WINDOW_ROLES),
+            HotelRoleVisibilityWindow.role.in_(valid_roles),
         )
         .all()
     )
@@ -833,13 +1239,21 @@ def set_visibility_window(
     actor_user_id: int | None,
 ) -> HotelRoleVisibilityWindow:
     """Upsert one role window and record the security-sensitive change."""
-    if role not in VISIBILITY_WINDOW_ROLES:
-        raise ValueError("Rol invalido")
+    try:
+        require_active_hotel_role(db, hotel_id, role, lock=True)
+    except HotelRoleNotFound as exc:
+        raise ValueError("Rol invalido") from exc
     for value in (past_hours, future_hours):
         if value is not None and value not in VISIBILITY_WINDOW_HOURS:
             raise ValueError("La ventana debe ser 12, 24, 48, 72, 168 horas o Siempre")
 
-    row = get_visibility_window(db, hotel_id, role)
+    # Read only the role's persisted row here; get_visibility_window may
+    # return an inherited base-role window for custom roles.
+    row = (
+        db.query(HotelRoleVisibilityWindow)
+        .filter_by(hotel_id=hotel_id, role=role)
+        .one_or_none()
+    )
     before = None if row is None else {
         "past_hours": row.past_hours,
         "future_hours": row.future_hours,
@@ -877,8 +1291,9 @@ def _validate_permission_code(code: str) -> str:
     return canonical
 
 
-def _validate_mutable(role: str, code: str, allowed: bool) -> str:
+def _validate_mutable(db: Session, hotel_id: int, role: str, code: str) -> str:
     canonical = _validate_permission_code(code)
+    _role_default_code(db, hotel_id, role)
     invariant = immutable_permission_decision(role, canonical)
     if invariant is not None:
         raise ValueError("El permiso esta bloqueado por una regla de seguridad")
@@ -889,7 +1304,7 @@ def set_role_override(
     db: Session, hotel_id: int, role: str, code: str, allowed: bool, actor_user_id: int | None,
     expected_version: int | None = None,
 ) -> HotelPermissionOverride:
-    canonical = _validate_mutable(role, code, allowed)
+    canonical = _validate_mutable(db, hotel_id, role, code)
     ensure_permission_matrix_seeded(db)
     row = db.query(HotelPermissionOverride).filter_by(hotel_id=hotel_id, role=role, permission_code=canonical).one_or_none()
     if expected_version is not None:
@@ -945,7 +1360,7 @@ def set_user_override(
     membership = _active_membership(db, hotel_id, target_user_id)
     if membership is None or (target_role is not None and membership.role != target_role):
         raise LookupError("Usuario no encontrado")
-    canonical = _validate_mutable(membership.role, code, allowed)
+    canonical = _validate_mutable(db, hotel_id, membership.role, code)
     ensure_permission_matrix_seeded(db)
     row = db.query(UserPermissionOverride).filter_by(
         hotel_id=hotel_id, user_id=target_user_id, permission_code=canonical
@@ -982,9 +1397,12 @@ def set_user_override(
     return row
 
 
-def _role_default_allowed(db: Session, role: str, permission_code: str) -> bool:
+def _role_default_allowed(
+    db: Session, hotel_id: int, role: str, permission_code: str
+) -> bool:
+    default_role = _role_default_code(db, hotel_id, role)
     default = db.query(RolePermissionDefault).filter_by(
-        role=role,
+        role=default_role,
         permission_code=permission_code,
     ).one_or_none()
     if default is None:
@@ -1011,8 +1429,7 @@ def restore_role_override(
     expected_version: int,
 ) -> dict[str, object]:
     """Delete one hotel-role override so resolution falls back to its default."""
-    if role not in ROLE_CODES:
-        raise ValueError("Rol invalido")
+    default_role = _role_default_code(db, hotel_id, role)
     canonical = _validate_permission_code(code)
     ensure_permission_matrix_seeded(db)
     row = db.query(HotelPermissionOverride).filter_by(
@@ -1025,7 +1442,7 @@ def restore_role_override(
     if row.version != expected_version:
         raise PermissionVersionConflict("El permiso fue modificado por otra solicitud")
 
-    default_allowed = _role_default_allowed(db, role, canonical)
+    default_allowed = _role_default_allowed(db, hotel_id, role, canonical)
     _assert_owner_management_restore(role, canonical, default_allowed)
     before = {
         "role": row.role,
@@ -1037,7 +1454,7 @@ def restore_role_override(
         "role": role,
         "permission_code": canonical,
         "allowed": default_allowed,
-        "source": "role_default",
+        "source": "base_role_default" if default_role != role else "role_default",
     }
     db.delete(row)
     _audit(
@@ -1057,7 +1474,7 @@ def restore_role_override(
         "role": role,
         "permission_code": canonical,
         "allowed": default_allowed,
-        "source": "role_default",
+        "source": "base_role_default" if default_role != role else "role_default",
         "restored": True,
     }
 
@@ -1086,7 +1503,8 @@ def restore_user_override(
     if row.version != expected_version:
         raise PermissionVersionConflict("El permiso fue modificado por otra solicitud")
 
-    default_allowed = _role_default_allowed(db, membership.role, canonical)
+    default_role = _role_default_code(db, hotel_id, membership.role)
+    default_allowed = _role_default_allowed(db, hotel_id, membership.role, canonical)
     _assert_owner_management_restore(membership.role, canonical, default_allowed)
     before = {
         "user_id": row.user_id,
@@ -1099,7 +1517,7 @@ def restore_user_override(
         "role": membership.role,
         "permission_code": canonical,
         "allowed": default_allowed,
-        "source": "role_default",
+        "source": "base_role_default" if default_role != membership.role else "role_default",
     }
     db.delete(row)
     _audit(
@@ -1120,12 +1538,13 @@ def restore_user_override(
         "role": membership.role,
         "permission_code": canonical,
         "allowed": default_allowed,
-        "source": "role_default",
+        "source": "base_role_default" if default_role != membership.role else "role_default",
         "restored": True,
     }
 
 
 def restore_role_defaults(db: Session, hotel_id: int, role: str, actor_user_id: int | None) -> int:
+    _role_default_code(db, hotel_id, role)
     rows = db.query(HotelPermissionOverride).filter_by(hotel_id=hotel_id, role=role).all()
     before = [{"permission_code": row.permission_code, "allowed": bool(row.allowed)} for row in rows]
     for row in rows:
@@ -1141,8 +1560,10 @@ def restore_role_defaults(db: Session, hotel_id: int, role: str, actor_user_id: 
 
 
 def restore_user_defaults(db: Session, hotel_id: int, target_user_id: int, actor_user_id: int | None) -> int:
-    if _active_membership(db, hotel_id, target_user_id) is None:
+    membership = _active_membership(db, hotel_id, target_user_id)
+    if membership is None:
         raise LookupError("Usuario no encontrado")
+    _role_default_code(db, hotel_id, membership.role)
     rows = db.query(UserPermissionOverride).filter_by(hotel_id=hotel_id, user_id=target_user_id).all()
     before = [{"permission_code": row.permission_code, "allowed": bool(row.allowed)} for row in rows]
     for row in rows:
@@ -1187,7 +1608,7 @@ def get_permission_catalog(db: Session | None = None) -> list[dict[str, object]]
 
 def get_matrix(db: Session, hotel_id: int) -> dict[str, dict[str, dict[str, object]]]:
     matrix = {}
-    for role in ROLE_CODES:
+    for role in _active_role_codes(db, hotel_id):
         canonical = get_effective_permission_details(db, hotel_id, role)
         role_result = {}
         for code, (module, description, help_es) in _CANONICAL_DEFINITIONS.items():
@@ -1200,6 +1621,7 @@ def get_matrix(db: Session, hotel_id: int) -> dict[str, dict[str, dict[str, obje
             role_result[code] = {
                 "allowed": detail["allowed"],
                 "source": source,
+                "version": detail.get("version"),
                 "description": description,
                 "module": module,
                 "help_es": help_es,
@@ -1212,7 +1634,7 @@ def get_role_profiles(db: Session, hotel_id: int) -> dict[str, dict[str, dict[st
     """Canonical role profiles with UI-ready source and immutable metadata."""
 
     profiles = {}
-    for role in ROLE_CODES:
+    for role in _active_role_codes(db, hotel_id):
         details = get_effective_permission_details(db, hotel_id, role)
         profiles[role] = {
             code: {
@@ -1224,6 +1646,19 @@ def get_role_profiles(db: Session, hotel_id: int) -> dict[str, dict[str, dict[st
             for code, detail in details.items()
         }
     return profiles
+
+
+def _active_role_codes(db: Session, hotel_id: int) -> tuple[str, ...]:
+    custom_codes = (
+        db.query(HotelRole.code)
+        .filter(
+            HotelRole.hotel_id == hotel_id,
+            HotelRole.is_active.is_(True),
+        )
+        .order_by(HotelRole.name_key, HotelRole.code)
+        .all()
+    )
+    return (*ROLE_CODES, *(row.code for row in custom_codes))
 
 
 def get_effective_permissions(db: Session, hotel_id: int, role: str | None, user_id: int | None = None) -> list[str]:

@@ -67,7 +67,3 @@ class TemporaryActionGrantApproveRequest(BaseModel):
     # with active MFA. The shared MFA helper also accepts one unused recovery
     # code, preserving the account-level recovery contract.
     totp_code: str = Field(min_length=1, max_length=128)
-
-
-class TemporaryActionGrantConsumeRequest(BaseModel):
-    token: str = Field(min_length=1, max_length=512)

@@ -18,6 +18,8 @@ from app.models.integration import IntegrationCatalog, IntegrationConnection
 from app.models.user import User
 from app.services.hotel_outbound_email_service import send_hotel_email
 from app.services.integration_service import build_redirect_url, encrypt_payload, validate_gmail_credentials
+from app.services.action_step_up_service import create_action_step_up_ticket
+from app.services.permission_service import PERMISSION_HOTEL_SECURITY_MANAGE
 from app.dependencies.auth import AuthContext
 from app.services.security import hash_password
 from app.config import get_settings
@@ -196,7 +198,20 @@ def test_gmail_oauth_callback_uses_signed_state(monkeypatch):
 
     monkeypatch.setattr(integrations_api, '_store_oauth_code', fake_store)
 
-    start = client.post('/api/integrations/1/connect', json={'payload': {}})
+    connect_path = '/api/integrations/1/connect'
+    ticket = create_action_step_up_ticket(
+        user_id=owner.id,
+        hotel_id=1,
+        token_version=0,
+        permission_code=PERMISSION_HOTEL_SECURITY_MANAGE,
+        method='POST',
+        path=connect_path,
+    )
+    start = client.post(
+        connect_path,
+        json={'payload': {}},
+        headers={'X-Action-Step-Up-Ticket': ticket},
+    )
     assert start.status_code == 200
     redirect_url = start.json()['redirect_url']
     state = parse_qs(urlparse(redirect_url).query)['state'][0]

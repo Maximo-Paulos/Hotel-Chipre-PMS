@@ -390,7 +390,7 @@ def list_laundry_vendors(
     context: AuthContext = Depends(require_permission(PERMISSION_LAUNDRY_OPERATE_REMITOS)),
 ):
     vendors = list_vendors(db, hotel_id=context.hotel_id)
-    if context.user_role != "housekeeping":
+    if context.operational_role != "housekeeping":
         return vendors
     # Housekeeping needs the vendor id/name/location to create a remito, not
     # the vendor contact directory. Materialize schemas so ORM attributes are
@@ -479,7 +479,7 @@ def create_laundry_remito(
         for line in remito.lines
         if line.unit_price_snapshot is None
     ]
-    safe_remito = _housekeeping_remito(remito) if context.user_role == "housekeeping" else remito
+    safe_remito = _housekeeping_remito(remito) if context.operational_role == "housekeeping" else remito
     return {"remito": safe_remito, "warnings": warnings}
 
 
@@ -494,7 +494,7 @@ def list_laundry_remitos(
     remitos = list_remitos(
         db, hotel_id=context.hotel_id, vendor_id=vendor_id, date_from=date_from, date_to=date_to
     )
-    if context.user_role == "housekeeping":
+    if context.operational_role == "housekeeping":
         return [_housekeeping_remito(remito) for remito in remitos]
     return remitos
 

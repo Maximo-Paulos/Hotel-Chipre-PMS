@@ -32,8 +32,10 @@ from app.services.user_session_service import create_session
 from app.models.user_session import UserSession
 from app.models.user_mfa import UserMfaSecret
 from app.services.mfa_service import MFA_ACTIVE, encrypt_totp_secret
+from app.services.action_step_up_service import create_action_step_up_ticket
 from app.dependencies.auth import AuthContext, _authenticate_user
 from app.services.permission_service import (
+    PERMISSION_HOTEL_PROPERTY_MANAGE,
     PERMISSION_REPORTS_FINANCIAL_VIEW,
     PERMISSION_REPORTS_OPERATIONAL_VIEW,
 )
@@ -877,6 +879,40 @@ def test_co_owner_cannot_grant_privileged_roles(owner_ctx):
     assert demote_to_manager.status_code == 200
 
 
+def test_co_owner_cannot_demote_peer_through_invitation_email(owner_ctx):
+    client, db, ctx = owner_ctx
+    co_owner = User(email="peer-one@test.com", password_hash=hash_password("pw"), role="co_owner", is_verified=True)
+    peer = User(email="peer-two@test.com", password_hash=hash_password("pw"), role="co_owner", is_verified=True)
+    db.add_all([co_owner, peer])
+    db.flush()
+    db.add_all([
+        HotelMembership(hotel_id=ctx["hotel_id"], user_id=co_owner.id, role="co_owner", status="active"),
+        HotelMembership(hotel_id=ctx["hotel_id"], user_id=peer.id, role="co_owner", status="active"),
+    ])
+    db.commit()
+
+    fastapi_app.dependency_overrides[get_auth_context_target()] = lambda: AuthContext(
+        hotel_id=ctx["hotel_id"],
+        user_id=co_owner.id,
+        user_email=co_owner.email,
+        user_role="co_owner",
+        is_verified=True,
+        permissions=set(),
+    )
+
+    response = client.post(
+        "/api/users/invite",
+        json={"email": peer.email, "role": "manager"},
+    )
+
+    assert response.status_code == 403, response.text
+    peer_membership = db.query(HotelMembership).filter_by(hotel_id=ctx["hotel_id"], user_id=peer.id).one()
+    db.refresh(peer_membership)
+    assert peer_membership.role == "co_owner"
+    assert peer_membership.status == "active"
+    assert db.query(StaffInvitation).filter_by(hotel_id=ctx["hotel_id"], email=peer.email).count() == 0
+
+
 def test_owner_cannot_assign_owner_or_revoke_self(owner_ctx):
     client, db, ctx = owner_ctx
 
@@ -952,6 +988,14 @@ def test_primary_owner_transfer_requires_reauth_and_writes_audit(owner_ctx):
     rejected = client.post(
         f"/api/users/{target.id}/primary-owner",
         json={"password": "wrong-password"},
+        headers={"X-Action-Step-Up-Ticket": create_action_step_up_ticket(
+            user_id=owner.id,
+            hotel_id=ctx["hotel_id"],
+            token_version=0,
+            permission_code=PERMISSION_HOTEL_PROPERTY_MANAGE,
+            method="POST",
+            path=f"/api/users/{target.id}/primary-owner",
+        )},
     )
     assert rejected.status_code == 401
     db.refresh(owner_membership)
@@ -960,6 +1004,14 @@ def test_primary_owner_transfer_requires_reauth_and_writes_audit(owner_ctx):
     transferred = client.post(
         f"/api/users/{target.id}/primary-owner",
         json={"password": "pw"},
+        headers={"X-Action-Step-Up-Ticket": create_action_step_up_ticket(
+            user_id=owner.id,
+            hotel_id=ctx["hotel_id"],
+            token_version=0,
+            permission_code=PERMISSION_HOTEL_PROPERTY_MANAGE,
+            method="POST",
+            path=f"/api/users/{target.id}/primary-owner",
+        )},
     )
     assert transferred.status_code == 200, transferred.text
     assert transferred.json() == {

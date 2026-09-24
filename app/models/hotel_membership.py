@@ -15,7 +15,8 @@ class HotelMembership(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     hotel_id = Column(Integer, ForeignKey("hotel_configuration.id", ondelete="CASCADE"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    role = Column(String(20), nullable=False, default="owner")  # owner, co_owner, manager, receptionist, housekeeping
+    # Built-ins or a stable, hotel-scoped custom role code (cr_<hex>, <= 20).
+    role = Column(String(20), nullable=False, default="owner")
     status = Column(String(20), nullable=False, default="active")  # active, invited, revoked
     # A hotel-scoped operator-facing name. alias_key stores the normalized
     # uniqueness key; both remain null for historical memberships without an alias.

@@ -7,14 +7,15 @@ from app.database import get_db
 from app.dependencies.auth import (
     AuthContext,
     get_auth_context,
+    require_permission,
     require_permission_administrator,
     require_roles,
 )
 from app.models.hotel_membership import HotelMembership
+from app.models.hotel_role import HotelRole
 from app.schemas.permission import (
     RolePermissionOverrideRequest,
     TemporaryActionGrantApproveRequest,
-    TemporaryActionGrantConsumeRequest,
     TemporaryActionGrantRequest,
     UserPermissionOverrideRequest,
     VisibilityWindowRead,
@@ -22,15 +23,17 @@ from app.schemas.permission import (
 )
 from app.services.permission_service import (
     PERMISSION_DEFINITIONS,
+    PERMISSION_PERMISSION_MANAGE,
     ROLE_CODES,
     canonical_permission_code,
     get_effective_permission_details,
     get_effective_permissions,
+    get_visibility_window,
     get_matrix,
     get_permission_catalog,
     get_role_profiles,
-    list_visibility_windows,
     publish_permission_invalidation,
+    HotelRoleNotFound,
     PermissionVersionConflict,
     restore_role_override,
     restore_role_defaults,
@@ -39,6 +42,7 @@ from app.services.permission_service import (
     set_role_override,
     set_user_override,
     set_visibility_window,
+    require_active_hotel_role,
 )
 from app.services.temporary_action_grant_service import (
     TemporaryGrantActor,
@@ -48,7 +52,6 @@ from app.services.temporary_action_grant_service import (
     TemporaryGrantNotFoundError,
     TemporaryGrantStateError,
     approve_grant,
-    consume_grant,
     deny_grant,
     list_pending_grants_for_hotel,
     request_grant,
@@ -93,9 +96,14 @@ def _raise_temporary_grant_http_error(exc: TemporaryGrantError) -> None:
     raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
 
 
-def _validate_role(role: str) -> None:
-    if role not in ROLE_CODES:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Rol invalido")
+def _validate_role(db: Session, hotel_id: int, role_code: str) -> None:
+    try:
+        require_active_hotel_role(db, hotel_id, role_code)
+    except HotelRoleNotFound as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Rol invalido",
+        ) from exc
 
 
 def _validate_code(code: str) -> str:
@@ -116,13 +124,32 @@ def _target_membership_or_404(db: Session, hotel_id: int, user_id: int) -> Hotel
     return membership
 
 
-def _assert_manageable_membership(actor_role: str | None, membership: HotelMembership, *, action: str) -> None:
+def _assert_manageable_membership(
+    db: Session,
+    hotel_id: int,
+    actor_role: str | None,
+    membership: HotelMembership,
+    *,
+    action: str,
+) -> None:
     """Keep permission exceptions aligned with the staff-management boundary."""
     managed_roles = {
         "owner": {"co_owner", "manager", "receptionist", "housekeeping"},
         "co_owner": {"manager", "receptionist", "housekeeping"},
     }
-    if membership.role not in managed_roles.get(actor_role or "", set()):
+    target_role = membership.role
+    if target_role not in ROLE_CODES:
+        try:
+            custom_role = require_active_hotel_role(db, hotel_id, target_role)
+        except HotelRoleNotFound:
+            custom_role = None
+        if custom_role is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"No tenes permisos para {action} este usuario",
+            )
+        target_role = custom_role.base_role
+    if target_role not in managed_roles.get(actor_role or "", set()):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"No tenes permisos para {action} este usuario",
@@ -186,7 +213,7 @@ def _update_role_override(
     db: Session,
     context: AuthContext,
 ):
-    _validate_role(payload.role)
+    _validate_role(db, context.hotel_id, payload.role)
     code = _validate_code(payload.permission_code)
     try:
         override = set_role_override(
@@ -247,12 +274,24 @@ def read_visibility_windows(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission_administrator),
 ):
-    configured = {row.role: row for row in list_visibility_windows(db, context.hotel_id)}
+    custom_role_codes = (
+        db.query(HotelRole.code)
+        .filter(
+            HotelRole.hotel_id == context.hotel_id,
+            HotelRole.is_active.is_(True),
+        )
+        .order_by(HotelRole.name_key, HotelRole.code)
+        .all()
+    )
+    role_codes = (*ROLE_CODES, *(row.code for row in custom_role_codes))
     return {
         "hotel_id": context.hotel_id,
         "windows": [
-            _visibility_window_response(configured.get(role), role)
-            for role in ROLE_CODES
+            _visibility_window_response(
+                get_visibility_window(db, context.hotel_id, role),
+                role,
+            )
+            for role in role_codes
         ],
     }
 
@@ -290,8 +329,9 @@ def restore_role_permission_override(
     ),
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_roles("owner", "co_owner")),
+    _permission_context: AuthContext = Depends(require_permission(PERMISSION_PERMISSION_MANAGE)),
 ):
-    _validate_role(role)
+    _validate_role(db, context.hotel_id, role)
     code = _validate_code(permission_code)
     try:
         restored = restore_role_override(
@@ -328,7 +368,7 @@ def restore_role_permission_defaults(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission_administrator),
 ):
-    _validate_role(role)
+    _validate_role(db, context.hotel_id, role)
     restored = restore_role_defaults(db, context.hotel_id, role, context.user_id)
     db.commit()
     publish_permission_invalidation(context.hotel_id)
@@ -415,6 +455,7 @@ def restore_user_permission_override(
     ),
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_roles("owner", "co_owner")),
+    _permission_context: AuthContext = Depends(require_permission(PERMISSION_PERMISSION_MANAGE)),
 ):
     if user_id == context.user_id:
         raise HTTPException(
@@ -422,7 +463,13 @@ def restore_user_permission_override(
             detail="No puedes modificar tus propios permisos",
         )
     membership = _target_membership_or_404(db, context.hotel_id, user_id)
-    _assert_manageable_membership(context.user_role, membership, action="restaurar permisos de")
+    _assert_manageable_membership(
+        db,
+        context.hotel_id,
+        context.user_role,
+        membership,
+        action="restaurar permisos de",
+    )
     code = _validate_code(permission_code)
     try:
         restored = restore_user_override(
@@ -576,21 +623,12 @@ def deny_temporary_action_grant(
         _raise_temporary_grant_http_error(exc)
 
 
-@router.post("/temporary-grants/consume")
+@router.post("/temporary-grants/consume", status_code=status.HTTP_410_GONE)
 def consume_temporary_action_grant(
-    payload: TemporaryActionGrantConsumeRequest,
-    db: Session = Depends(get_db),
-    context: AuthContext = Depends(get_auth_context),
+    _context: AuthContext = Depends(get_auth_context),
 ):
-    try:
-        consumed = consume_grant(db, payload.token, _temporary_grant_actor(context))
-        db.commit()
-    except TemporaryGrantError as exc:
-        db.rollback()
-        _raise_temporary_grant_http_error(exc)
-    if not consumed:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Grant invalido, expirado o ya consumido",
-        )
-    return {"consumed": True}
+    """Retired: grants are consumed only inside their protected action."""
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="El consumo separado fue retirado; usá la acción protegida correspondiente.",
+    )

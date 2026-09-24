@@ -20,13 +20,14 @@ context from headers alone.
 from dataclasses import dataclass
 from typing import Optional, Set
 
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.hotel_membership import HotelMembership
 from app.models.user import User
 from app.services.hotel_service import get_memberships_for_user
+from app.services.permission_service import HotelRoleNotFound, effective_role_code
 from app.services.security import decode_access_token
 from app.services.tenant_context import set_tenant_hotel_context, set_tenant_user_context
 
@@ -39,8 +40,20 @@ class AuthContext:
     user_id: Optional[int] = None
     user_email: Optional[str] = None
     user_role: Optional[str] = None
+    base_role: Optional[str] = None
     is_verified: bool = False
     permissions: Optional[Set[str]] = None
+    token_version: int = 0
+
+    @property
+    def operational_role(self) -> Optional[str]:
+        """Built-in behavior family for operational scopes and safe projections.
+
+        Keep ``user_role`` as the tenant-specific role identity for permission
+        resolution and audit trails. Custom roles inherit only this operational
+        lane from their declared base role.
+        """
+        return self.base_role or self.user_role
 
 
 def _parse_header_hotel_id(header_value: Optional[str]) -> Optional[int]:
@@ -154,13 +167,143 @@ def get_auth_context(
     )
     set_tenant_hotel_context(db, membership.hotel_id)
 
+    try:
+        base_role = effective_role_code(db, membership.hotel_id, membership.role)
+    except HotelRoleNotFound as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="El rol asignado no está disponible en este hotel",
+        ) from exc
+
     return AuthContext(
         hotel_id=membership.hotel_id,
         user_id=user.id,
         user_email=user.email,
         user_role=membership.role,
+        base_role=base_role if base_role != membership.role else None,
         is_verified=user.is_verified,
         permissions=set(),
+        token_version=user.token_version or 0,
+    )
+
+
+def _action_step_up_tickets(request: Request) -> list[str]:
+    """Read one or more tickets; comma separation supports require-all guards."""
+    values = request.headers.getlist("x-action-step-up-ticket")
+    tickets = [ticket.strip() for value in values for ticket in value.split(",") if ticket.strip()]
+    return tickets if len(tickets) <= 16 else []
+
+
+def _matching_action_step_up_ticket(
+    request: Request,
+    context: AuthContext,
+    permission_code: str,
+) -> str | None:
+    for ticket in _action_step_up_tickets(request):
+        if _matching_specific_step_up_ticket(request, context, permission_code, ticket):
+            return ticket
+    return None
+
+
+def _raise_step_up_required(request: Request, permission_code: str) -> None:
+    from app.services.permission_service import canonical_permission_code
+
+    canonical = canonical_permission_code(permission_code)
+    raise HTTPException(
+        status_code=status.HTTP_428_PRECONDITION_REQUIRED,
+        detail={
+            "code": "STEP_UP_REQUIRED",
+            "permission_code": canonical,
+            "method": request.method.upper(),
+            "path": request.url.path,
+        },
+    )
+
+
+def _step_up_ticket_action(ticket: str, request: Request, context: AuthContext, permission: str):
+    from app.services.action_step_up_service import StepUpTicketAction
+    from app.services.permission_service import canonical_permission_code
+
+    assert context.user_id is not None
+    return StepUpTicketAction(
+        ticket=ticket,
+        user_id=context.user_id,
+        hotel_id=context.hotel_id,
+        token_version=context.token_version,
+        permission_code=canonical_permission_code(permission),
+        method=request.method,
+        path=request.url.path,
+    )
+
+
+def _require_action_step_up(
+    db: Session,
+    request: Request,
+    context: AuthContext,
+    permission_code: str,
+) -> None:
+    from app.services.action_step_up_service import consume_action_step_up_tickets, permission_requires_step_up
+    from app.services.permission_service import canonical_permission_code
+
+    canonical = canonical_permission_code(permission_code)
+    if not permission_requires_step_up(db, canonical):
+        return
+    ticket = _matching_action_step_up_ticket(request, context, canonical)
+    if ticket is None or not consume_action_step_up_tickets(
+        db,
+        [_step_up_ticket_action(ticket, request, context, canonical)],
+    ):
+        _raise_step_up_required(request, canonical)
+
+
+def _require_all_action_step_ups(
+    db: Session,
+    request: Request,
+    context: AuthContext,
+    permissions: tuple[str, ...],
+) -> None:
+    from app.services.action_step_up_service import consume_action_step_up_tickets, permission_requires_step_up
+    from app.services.permission_service import canonical_permission_code
+
+    actions = []
+    used_tickets: set[str] = set()
+    for permission in permissions:
+        canonical = canonical_permission_code(permission)
+        if not permission_requires_step_up(db, canonical):
+            continue
+        ticket = next(
+            (
+                candidate
+                for candidate in _action_step_up_tickets(request)
+                if candidate not in used_tickets
+                and _matching_specific_step_up_ticket(request, context, canonical, candidate)
+            ),
+            None,
+        )
+        if ticket is None:
+            _raise_step_up_required(request, canonical)
+        used_tickets.add(ticket)
+        actions.append(_step_up_ticket_action(ticket, request, context, canonical))
+    if actions and not consume_action_step_up_tickets(db, actions):
+        _raise_step_up_required(request, actions[0].permission_code)
+
+
+def _matching_specific_step_up_ticket(
+    request: Request,
+    context: AuthContext,
+    permission_code: str,
+    ticket: str,
+) -> bool:
+    from app.services.action_step_up_service import action_step_up_ticket_matches
+
+    return context.user_id is not None and action_step_up_ticket_matches(
+        ticket,
+        user_id=context.user_id,
+        hotel_id=context.hotel_id,
+        token_version=context.token_version,
+        permission_code=permission_code,
+        method=request.method,
+        path=request.url.path,
     )
 
 
@@ -172,6 +315,7 @@ def require_permission(permission: str):
     """
 
     def dependency(
+        request: Request,
         db: Session = Depends(get_db),
         context: AuthContext = Depends(get_auth_context),
     ) -> AuthContext:
@@ -198,6 +342,7 @@ def require_permission(permission: str):
                 permission_code=permission,
             )
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tenes permisos para esta accion")
+        _require_action_step_up(db, request, context, permission)
         return context
 
     return dependency
@@ -210,6 +355,7 @@ def require_all_permissions(*permissions: str):
         raise ValueError("At least one permission is required")
 
     def dependency(
+        request: Request,
         db: Session = Depends(get_db),
         context: AuthContext = Depends(get_auth_context),
     ) -> AuthContext:
@@ -237,6 +383,7 @@ def require_all_permissions(*permissions: str):
                 permission_code=permission,
             )
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tenes permisos para esta accion")
+        _require_all_action_step_ups(db, request, context, permissions)
         return context
 
     return dependency
@@ -254,6 +401,7 @@ def require_any_permission(*permissions: str):
     """
 
     def dependency(
+        request: Request,
         db: Session = Depends(get_db),
         context: AuthContext = Depends(get_auth_context),
     ) -> AuthContext:
@@ -264,16 +412,18 @@ def require_any_permission(*permissions: str):
         context.permissions = perms
         if not context.is_verified:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Verifica tu email para usar el sistema")
-        if not any(
-            resolve(
+        granted_permissions = [
+            permission
+            for permission in permissions
+            if resolve(
                 db,
                 context.hotel_id,
                 context.user_role,
                 permission,
                 user_id=context.user_id,
             )
-            for permission in permissions
-        ):
+        ]
+        if not granted_permissions:
             audit_permission_denied(
                 db,
                 hotel_id=context.hotel_id,
@@ -282,12 +432,37 @@ def require_any_permission(*permissions: str):
                 permission_code=permissions[0],
             )
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tenes permisos para esta accion")
+
+        from app.services.action_step_up_service import permission_requires_step_up
+
+        if any(not permission_requires_step_up(db, permission) for permission in granted_permissions):
+            return context
+        matching = None
+        for permission in granted_permissions:
+            if not permission_requires_step_up(db, permission):
+                continue
+            ticket = _matching_action_step_up_ticket(request, context, permission)
+            if ticket is not None:
+                matching = (permission, ticket)
+                break
+        if matching is None:
+            _raise_step_up_required(request, granted_permissions[0])
+        permission, ticket = matching
+        from app.services.action_step_up_service import consume_action_step_up_tickets
+
+        if not consume_action_step_up_tickets(
+            db,
+            [_step_up_ticket_action(ticket, request, context, permission)],
+        ):
+            _raise_step_up_required(request, permission)
         return context
 
     return dependency
 
 
 def require_permission_administrator(
+    request: Request,
+    db: Session = Depends(get_db),
     context: AuthContext = Depends(get_auth_context),
 ) -> AuthContext:
     """Non-delegable invariant: only this hotel's owner administers RBAC."""
@@ -302,6 +477,9 @@ def require_permission_administrator(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="No tenes permisos para esta accion",
         )
+    from app.services.permission_service import PERMISSION_PERMISSION_MANAGE
+
+    _require_action_step_up(db, request, context, PERMISSION_PERMISSION_MANAGE)
     return context
 
 
@@ -329,6 +507,7 @@ def require_roles_and_permission(permission: str, *roles: str):
     permission_dependency = require_permission(permission)
 
     def dependency(
+        request: Request,
         db: Session = Depends(get_db),
         context: AuthContext = Depends(get_auth_context),
     ) -> AuthContext:
@@ -336,7 +515,7 @@ def require_roles_and_permission(permission: str, *roles: str):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Verifica tu email para usar el sistema")
         if context.user_role not in allowed:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tenes permisos para esta accion")
-        return permission_dependency(db=db, context=context)
+        return permission_dependency(request=request, db=db, context=context)
 
     return dependency
 

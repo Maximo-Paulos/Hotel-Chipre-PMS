@@ -1,5 +1,7 @@
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 
+import { navigateFromShell } from "./support/sidebar";
+
 const credentials = {
   email: process.env.E2E_OWNER_EMAIL || "owner@e2e.com",
   password: process.env.E2E_OWNER_PASSWORD || "E2ePass1234!"
@@ -32,26 +34,6 @@ async function login(page: Page) {
   await page.locator('input[type="password"]').fill(credentials.password);
   await page.getByTestId("login-submit").click();
   await page.waitForURL("**/dashboard", { timeout: 20_000 });
-}
-
-async function navigateFromShell(page: Page, path: string) {
-  const desktopLink = page.locator(`aside nav a[href="${path}"]`);
-  if (await desktopLink.isVisible().catch(() => false)) {
-    await expect(desktopLink).toHaveCount(1);
-    await desktopLink.click();
-    await expect(page).toHaveURL(new RegExp(`${path.replaceAll("/", "\\/")}$`));
-    return;
-  }
-  // B7: on mobile the whole nav lives inside a slide-over panel opened via
-  // the hamburger button -- open it before looking for the link.
-  const menuButton = page.getByTestId("mobile-menu-button");
-  if (await menuButton.isVisible().catch(() => false)) {
-    await menuButton.click();
-  }
-  const mobileLink = page.locator(`nav[aria-label="Navegación móvil"] a[href="${path}"]`);
-  await expect(mobileLink).toHaveCount(1);
-  await mobileLink.click();
-  await expect(page).toHaveURL(new RegExp(`${path.replaceAll("/", "\\/")}$`));
 }
 
 test("owner records a reservation consumption from the guest stay file", async ({ page }, testInfo) => {

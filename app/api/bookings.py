@@ -5,12 +5,12 @@ Provides basic CRUD plus a simple availability placeholder.
 from datetime import date, datetime, timedelta, timezone
 import os
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.services.timezones import hotel_today
-from app.dependencies.auth import AuthContext, require_permission, require_roles
+from app.dependencies.auth import AuthContext, get_auth_context, require_permission, require_roles
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.audit_log import AuditActionEnum
 from app.models.room import Room, RoomCategory, RoomStatusEnum
@@ -31,7 +31,21 @@ from app.services.checkin_service import perform_checkin, perform_checkout, Chec
 from app.services.guest_restriction_service import GuestProhibitedError, get_active_guest_restrictions
 from app.services.graph_projection import project_company_link, project_reservation_assignment
 from app.services import audit_log_service
-from app.services.permission_service import PERMISSION_RESERVATION_CREATE, PERMISSION_RESERVATION_UPDATE
+from app.services.permission_service import (
+    PERMISSION_RESERVATION_CANCEL,
+    PERMISSION_RESERVATION_CREATE,
+    PERMISSION_RESERVATION_READ,
+    PERMISSION_RESERVATION_UPDATE,
+    PERMISSION_CHECKIN_PERFORM,
+    PERMISSION_CHECKOUT_PERFORM,
+    audit_permission_denied,
+    resolve,
+)
+from app.services.temporary_action_grant_service import (
+    TemporaryGrantActor,
+    TemporaryGrantError,
+    consume_grant_for_action,
+)
 
 router = APIRouter(prefix="/api/bookings", tags=["Bookings"])
 
@@ -80,7 +94,7 @@ def availability(
     check_in_date: date | None = None,
     check_out_date: date | None = None,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_READ)),
 ):
     """
     Lightweight availability placeholder. When all parameters are provided,
@@ -161,7 +175,7 @@ def price_quote(
 @router.get("/", response_model=list[BookingRead])
 def list_bookings(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_READ)),
 ):
     bookings = (
         db.query(Reservation)
@@ -176,7 +190,7 @@ def list_bookings(
 def create_booking(
     payload: BookingCreate,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_CREATE)),
 ):
     # Reuse the existing ReservationCreate schema to drive business logic
     reservation_payload = ReservationCreate(**payload.model_dump())
@@ -206,7 +220,7 @@ def create_booking(
 def get_booking(
     booking_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_READ)),
 ):
     booking = (
         db.query(Reservation)
@@ -226,8 +240,32 @@ def get_booking(
 def cancel_booking(
     booking_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(get_auth_context),
+    temporary_grant_token: str | None = Header(default=None, alias="X-Temporary-Action-Grant"),
 ):
+    if not context.is_verified:
+        raise HTTPException(status_code=403, detail="Verifica tu email para usar el sistema")
+    if context.user_id is None:
+        raise HTTPException(status_code=401, detail="Autenticacion requerida")
+
+    permission_allowed = resolve(
+        db,
+        context.hotel_id,
+        context.user_role,
+        PERMISSION_RESERVATION_CANCEL,
+        user_id=context.user_id,
+    )
+    if not permission_allowed:
+        audit_permission_denied(
+            db,
+            hotel_id=context.hotel_id,
+            user_id=context.user_id,
+            role=context.user_role,
+            permission_code=PERMISSION_RESERVATION_CANCEL,
+        )
+        if not temporary_grant_token:
+            raise HTTPException(status_code=403, detail="No tenes permisos para esta accion")
+
     booking = (
         db.query(Reservation)
         .filter(
@@ -238,25 +276,60 @@ def cancel_booking(
         .first()
     )
     if not booking:
+        if not permission_allowed:
+            raise HTTPException(status_code=403, detail="No tenes permisos para esta accion")
         raise HTTPException(status_code=404, detail="Booking not found")
     if booking.status in (ReservationStatusEnum.CHECKED_IN, ReservationStatusEnum.CHECKED_OUT):
+        if not permission_allowed:
+            raise HTTPException(status_code=403, detail="No tenes permisos para esta accion")
         raise HTTPException(status_code=400, detail="Cannot cancel a booking that is already checked-in or checked-out")
     if booking.status == ReservationStatusEnum.CANCELLED:
+        if not permission_allowed:
+            raise HTTPException(status_code=403, detail="No tenes permisos para esta accion")
         raise HTTPException(status_code=400, detail="Booking is already cancelled")
+    grant_consumed = False
+    if not permission_allowed and temporary_grant_token:
+        try:
+            grant_consumed = consume_grant_for_action(
+                db,
+                temporary_grant_token,
+                TemporaryGrantActor(user_id=context.user_id, hotel_id=context.hotel_id),
+                permission_code=PERMISSION_RESERVATION_CANCEL,
+                resource_type="reservation",
+                resource_id=booking.id,
+            )
+        except TemporaryGrantError:
+            db.rollback()
+            raise HTTPException(status_code=403, detail="No tenes permisos para esta accion")
+        except Exception:
+            db.rollback()
+            raise
+    if not permission_allowed and not grant_consumed:
+        # A failed action consume can flush expiry changes; persist them while
+        # keeping the protected reservation mutation untouched.
+        db.commit()
+        raise HTTPException(status_code=403, detail="No tenes permisos para esta accion")
+
     try:
+        # Grant consumption and the protected state transition share this
+        # session transaction; a failed mutation rolls both back together.
         transition_reservation_status(db, booking, ReservationStatusEnum.CANCELLED, context.hotel_id)
         db.commit()
         db.refresh(booking)
         return _booking_to_read(booking)
     except ReservationError as e:
+        db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception:
+        db.rollback()
+        raise
 
 
 @router.post("/{booking_id}/checkin", response_model=BookingRead)
 def checkin_booking(
     booking_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_CHECKIN_PERFORM)),
 ):
     try:
         booking = perform_checkin(db, booking_id, hotel_id=context.hotel_id)
@@ -271,7 +344,7 @@ def checkin_booking(
 def checkout_booking(
     booking_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_CHECKOUT_PERFORM)),
 ):
     try:
         booking = perform_checkout(db, booking_id, hotel_id=context.hotel_id)

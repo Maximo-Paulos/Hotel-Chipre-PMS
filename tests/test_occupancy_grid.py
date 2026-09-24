@@ -15,12 +15,17 @@ from sqlalchemy.pool import StaticPool
 from app.database import Base, get_db
 from app.dependencies.auth import AuthContext, get_auth_context
 from app.main import app as fastapi_app
+from app.api.reservations import occupancy_grid
 from app.models.hotel_config import HotelConfiguration
 from app.models.room_block import RoomBlockReasonEnum
 from app.schemas.reservation import ReservationCreate
 from app.services.reservation_operations_service import add_reservation_charge
 from app.services.reservation_service import create_reservation, get_occupancy_grid
 from app.services.room_block_service import create_block
+from app.services.permission_service import (
+    ROLE_HOUSEKEEPING,
+    create_custom_role,
+)
 
 
 def _reserve(db, guest, room, check_in, check_out, hotel_id=1, **extra):
@@ -226,3 +231,43 @@ def test_api_rejects_range_over_92_days_and_inverted_range():
         fastapi_app.dependency_overrides.clear()
         db.close()
         engine.dispose()
+
+
+def test_custom_housekeeping_role_gets_anonymized_occupancy_grid(db, hotel_config, sample_guest, sample_rooms):
+    room = sample_rooms[0]
+    reservation = _reserve(
+        db,
+        sample_guest,
+        room,
+        date(2027, 1, 1),
+        date(2027, 1, 3),
+        confirmation_code="PRIVATE-CUSTOM-HK",
+    )
+    custom = create_custom_role(
+        db,
+        hotel_config.id,
+        name="Limpieza con ocupación",
+        base_role=ROLE_HOUSEKEEPING,
+        actor_user_id=None,
+    )
+    db.flush()
+    context = AuthContext(
+        hotel_id=hotel_config.id,
+        user_id=9123,
+        user_email="custom-housekeeping@example.test",
+        user_role=custom.code,
+        base_role=ROLE_HOUSEKEEPING,
+        is_verified=True,
+    )
+    result = occupancy_grid(
+        date_from=date(2027, 1, 1),
+        date_to=date(2027, 1, 8),
+        db=db,
+        context=context,
+    )
+    match = next(item for item in result["reservations"] if item["id"] == reservation.id)
+    assert match["guest_name"] == ""
+    assert match["confirmation_code"] == ""
+    assert match["operational_balance_due"] == 0
+    assert result["unassigned"] == []
+    assert "PRIVATE-CUSTOM-HK" not in str(result)

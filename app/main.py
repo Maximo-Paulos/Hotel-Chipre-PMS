@@ -46,6 +46,7 @@ from app.api import (
     reference,
     onboarding,
     users,
+    roles,
     subscription,
     demo,
     auth,
@@ -333,6 +334,7 @@ app.include_router(reports.router)
 app.include_router(subscription.router)
 app.include_router(subscription.admin_router)
 app.include_router(users.router)
+app.include_router(roles.router)
 if is_demo_mode() or not is_production_mode():
     app.include_router(demo.router, include_in_schema=is_demo_mode())
 app.include_router(auth.router)

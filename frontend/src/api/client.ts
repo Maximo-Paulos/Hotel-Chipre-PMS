@@ -7,6 +7,18 @@ export type SessionLike = {
   csrfToken?: string | null;
 };
 
+export type ActionStepUpChallenge = {
+  permissionCode: string;
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+  path: string;
+};
+
+type ActionStepUpHandler = (
+  challenge: ActionStepUpChallenge,
+  session: SessionLike | null,
+  signal?: AbortSignal
+) => Promise<string | null>;
+
 export type AuthResponsePayload = {
   access_token: string;
   token_type?: string;
@@ -108,8 +120,35 @@ const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 let clientSession: SessionLike | null = null;
 let authResponseHandler: ((response: AuthResponsePayload) => void) | null = null;
 let unauthorizedHandler: (() => void) | null = null;
-let refreshInFlight: Promise<AuthResponsePayload> | null = null;
+let refreshInFlight: { session: SessionLike | null; promise: Promise<AuthResponsePayload> } | null = null;
 let unauthorizedHandled = false;
+let actionStepUpHandler: ActionStepUpHandler | null = null;
+let actionStepUpQueue: Promise<void> = Promise.resolve();
+
+const normalizedSessionUserId = (userId?: string | null) => userId?.trim().toLowerCase() ?? "";
+
+const hasSameSessionIdentity = (left?: SessionLike | null, right?: SessionLike | null) => {
+  const leftUserId = normalizedSessionUserId(left?.userId);
+  const rightUserId = normalizedSessionUserId(right?.userId);
+  const leftHotelId = normalizeHotelId(left?.hotelId);
+  const rightHotelId = normalizeHotelId(right?.hotelId);
+  return Boolean(leftUserId && rightUserId && leftHotelId && rightHotelId && leftUserId === rightUserId && leftHotelId === rightHotelId);
+};
+
+const hasSameSession = (left?: SessionLike | null, right?: SessionLike | null) => {
+  const leftToken = left?.accessToken?.trim();
+  const rightToken = right?.accessToken?.trim();
+  return Boolean(leftToken && rightToken && leftToken === rightToken && hasSameSessionIdentity(left, right));
+};
+
+const isCurrentSession = (session?: SessionLike | null) => hasSameSession(session, clientSession);
+
+const isRefreshResponseForSession = (response: AuthResponsePayload, session: SessionLike) =>
+  normalizedSessionUserId(response.user.email) === normalizedSessionUserId(session.userId) &&
+  normalizeHotelId(response.hotel_id) === normalizeHotelId(session.hotelId);
+
+const isSameRefreshContext = (left: SessionLike | null, right: SessionLike | null) =>
+  left === null || right === null ? left === right : hasSameSession(left, right);
 
 export const setClientSession = (session?: SessionLike | null) => {
   clientSession = session ? { ...session } : null;
@@ -130,10 +169,36 @@ export const setUnauthorizedHandler = (handler: (() => void) | null) => {
   };
 };
 
+export const setActionStepUpHandler = (handler: ActionStepUpHandler | null) => {
+  actionStepUpHandler = handler;
+  return () => {
+    if (actionStepUpHandler === handler) actionStepUpHandler = null;
+  };
+};
+
+const requestActionStepUpTicket = (
+  challenge: ActionStepUpChallenge,
+  session: SessionLike | null,
+  signal?: AbortSignal
+): Promise<string | null> => {
+  const queuedRequest = actionStepUpQueue.then(() => {
+    if (signal?.aborted || !isCurrentSession(session)) return null;
+    const handler = actionStepUpHandler;
+    return handler ? handler(challenge, session, signal) : null;
+  });
+  // Keep the queue alive even when a UI handler rejects unexpectedly. The
+  // original protected request will surface its own 428 in that case.
+  actionStepUpQueue = queuedRequest.then(
+    () => undefined,
+    () => undefined
+  );
+  return queuedRequest;
+};
+
 // Clear the in-memory session and redirect to /login. Guarded so a burst of
 // concurrent 401s only triggers one navigation.
-const handleUnauthorized = () => {
-  if (unauthorizedHandled || typeof window === "undefined") return;
+const handleUnauthorized = (expectedSession: SessionLike | null) => {
+  if (unauthorizedHandled || typeof window === "undefined" || !isCurrentSession(expectedSession)) return;
   unauthorizedHandled = true;
   clientSession = null;
   unauthorizedHandler?.();
@@ -200,6 +265,50 @@ const isPublicAuthPath = (path: string) =>
     "/api/auth/logout"
   ].some((publicPath) => path === publicPath || path.startsWith(`${publicPath}?`));
 
+const isActionStepUpPath = (path: string) => {
+  const pathname = path.split(/[?#]/, 1)[0].replace(/\/+$/, "");
+  return pathname === "/api/auth/step-up" || pathname === "/auth/step-up";
+};
+
+const parseActionStepUpChallenge = (payload: unknown): ActionStepUpChallenge | null => {
+  if (!payload || typeof payload !== "object") return null;
+  const detail = (payload as Record<string, unknown>).detail;
+  if (!detail || typeof detail !== "object") return null;
+
+  const value = detail as Record<string, unknown>;
+  const methods = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
+  if (
+    value.code !== "STEP_UP_REQUIRED" ||
+    typeof value.permission_code !== "string" ||
+    !value.permission_code.trim() ||
+    typeof value.method !== "string" ||
+    !methods.includes(value.method as (typeof methods)[number]) ||
+    typeof value.path !== "string" ||
+    !value.path.startsWith("/api/") ||
+    value.path.startsWith("//") ||
+    value.path.includes("?") ||
+    value.path.includes("#") ||
+    value.path.includes("\\") ||
+    Array.from(value.path).some((character) => character.charCodeAt(0) < 32)
+  ) {
+    return null;
+  }
+
+  return {
+    permissionCode: value.permission_code,
+    method: value.method as ActionStepUpChallenge["method"],
+    path: value.path
+  };
+};
+
+const isStepUpTotpRejection = (path: string, payload: unknown) => {
+  if (!isActionStepUpPath(path) || !payload || typeof payload !== "object") return false;
+  const detail = (payload as Record<string, unknown>).detail;
+  // The current backend uses 401 for both invalid TOTP and invalid sessions.
+  // Do not refresh/logout on a rejected TOTP; let the dialog ask for another.
+  return detail === "Codigo MFA invalido o ya utilizado";
+};
+
 const makeApiError = (response: Response, payload: unknown) => {
   const detail =
     typeof payload === "object" && payload !== null && "detail" in (payload as Record<string, unknown>)
@@ -222,9 +331,11 @@ const isAuthResponsePayload = (payload: unknown): payload is AuthResponsePayload
 };
 
 export async function refreshSession(session?: SessionLike): Promise<AuthResponsePayload> {
-  if (refreshInFlight) return refreshInFlight;
-
   const refreshSessionState = mergeSession(session);
+  if (refreshInFlight && isSameRefreshContext(refreshInFlight.session, refreshSessionState)) {
+    return refreshInFlight.promise;
+  }
+
   const promise = (async () => {
     const csrfToken = refreshSessionState?.csrfToken?.trim();
     const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -242,20 +353,32 @@ export async function refreshSession(session?: SessionLike): Promise<AuthRespons
       throw new ApiError(500, "La respuesta de renovación de sesión es inválida", payload);
     }
     return payload;
-  })().finally(() => {
-    refreshInFlight = null;
-  });
+  })();
 
-  refreshInFlight = promise;
-  return promise;
+  const trackedPromise = promise.finally(() => {
+    if (refreshInFlight?.promise === trackedPromise) refreshInFlight = null;
+  });
+  refreshInFlight = {
+    session: refreshSessionState ? { ...refreshSessionState } : null,
+    promise: trackedPromise
+  };
+  return trackedPromise;
 }
 
-async function requestWithRefresh<T>(path: string, options: RequestOptions, allowRefresh: boolean): Promise<T> {
+async function requestWithRefresh<T>(
+  path: string,
+  options: RequestOptions,
+  allowRefresh: boolean,
+  allowActionStepUp = true,
+  actionStepUpTicket?: string
+): Promise<T> {
   const { method = "GET", data, headers, signal, session } = options;
   const requestSession = mergeSession(session);
+  const fetchHeaders = requestHeaders(method, requestSession, headers);
+  if (actionStepUpTicket) fetchHeaders.set("X-Action-Step-Up-Ticket", actionStepUpTicket);
   const response = await fetch(buildUrl(path), {
     method,
-    headers: requestHeaders(method, requestSession, headers),
+    headers: fetchHeaders,
     body: data !== undefined ? JSON.stringify(data) : undefined,
     signal,
     credentials: "include"
@@ -270,29 +393,74 @@ async function requestWithRefresh<T>(path: string, options: RequestOptions, allo
       allowRefresh &&
       response.status === 401 &&
       Boolean(requestSession?.accessToken) &&
-      !isPublicAuthPath(path);
+      isCurrentSession(requestSession) &&
+      !isPublicAuthPath(path) &&
+      !isStepUpTotpRejection(path, payload);
 
     if (canRefresh) {
+      let refreshed: AuthResponsePayload | null = null;
       try {
-        const refreshed = await refreshSession(requestSession ?? undefined);
-        const refreshedSession: SessionLike = {
-          ...(requestSession ?? {}),
-          accessToken: refreshed.access_token,
-          csrfToken: refreshed.csrf_token ?? null
-        };
-        setClientSession(refreshedSession);
-        authResponseHandler?.(refreshed);
-        return requestWithRefresh(path, { ...options, session: refreshedSession }, false);
+        refreshed = await refreshSession(requestSession ?? undefined);
       } catch (refreshError) {
         if (refreshError instanceof ApiError && refreshError.status >= 400 && refreshError.status < 500) {
-          handleUnauthorized();
+          handleUnauthorized(requestSession);
         }
+      }
+
+      if (refreshed && isRefreshResponseForSession(refreshed, requestSession!)) {
+        const activeSession = clientSession;
+        let refreshedSession: SessionLike;
+
+        if (isCurrentSession(requestSession)) {
+          refreshedSession = {
+            ...(requestSession ?? {}),
+            accessToken: refreshed.access_token,
+            csrfToken: refreshed.csrf_token ?? null
+          };
+          setClientSession(refreshedSession);
+          authResponseHandler?.(refreshed);
+        } else if (
+          hasSameSessionIdentity(requestSession, activeSession) &&
+          activeSession?.accessToken?.trim() === refreshed.access_token.trim()
+        ) {
+          // Another request sharing this exact refresh already applied it.
+          refreshedSession = activeSession;
+        } else {
+          // Logout, account switch, or hotel switch won the race. Do not let
+          // the old refresh response restore or overwrite that session.
+          throw error;
+        }
+
+        return requestWithRefresh(path, { ...options, session: refreshedSession }, false, allowActionStepUp);
       }
     }
 
     if (response.status === 401 && requestSession?.accessToken && !allowRefresh) {
-      handleUnauthorized();
+      handleUnauthorized(requestSession);
     }
+
+    const challenge = response.status === 428 ? parseActionStepUpChallenge(payload) : null;
+    if (
+      allowActionStepUp &&
+      challenge &&
+      Boolean(requestSession?.accessToken) &&
+      isCurrentSession(requestSession) &&
+      !isPublicAuthPath(path) &&
+      !isActionStepUpPath(path)
+    ) {
+      let ticket: string | null = null;
+      try {
+        ticket = await requestActionStepUpTicket(challenge, requestSession, signal);
+      } catch {
+        // If the dialog fails or unmounts, preserve the backend's original
+        // precondition response instead of replacing it with a UI error.
+        throw error;
+      }
+      if (!ticket || !isCurrentSession(requestSession)) throw error;
+
+      return requestWithRefresh(path, options, allowRefresh, false, ticket);
+    }
+
     throw error;
   }
 

@@ -19,6 +19,8 @@ from app.models.user import User
 from app.schemas.permission import VisibilityWindowUpdate
 from app.schemas.reservation import ReservationCreate
 from app.services.permission_service import get_visibility_window, set_visibility_window
+from app.services.action_step_up_service import create_action_step_up_ticket
+from app.services.permission_service import PERMISSION_PERMISSION_MANAGE
 from app.services.reservation_service import (
     create_reservation,
     get_occupancy_grid,
@@ -162,7 +164,18 @@ def visibility_api():
 def test_visibility_window_api_lists_all_roles_audits_and_rejects_invalid_value(visibility_api):
     client, db = visibility_api
 
-    initial = client.get("/api/permissions/visibility-windows")
+    read_path = "/api/permissions/visibility-windows"
+    initial = client.get(
+        read_path,
+        headers={"X-Action-Step-Up-Ticket": create_action_step_up_ticket(
+            user_id=7,
+            hotel_id=1,
+            token_version=0,
+            permission_code=PERMISSION_PERMISSION_MANAGE,
+            method="GET",
+            path=read_path,
+        )},
+    )
     assert initial.status_code == 200
     assert [row["role"] for row in initial.json()["windows"]] == [
         "owner",
@@ -173,15 +186,32 @@ def test_visibility_window_api_lists_all_roles_audits_and_rejects_invalid_value(
     ]
     assert all(row["past_hours"] is None for row in initial.json()["windows"])
 
+    update_ticket = create_action_step_up_ticket(
+        user_id=7,
+        hotel_id=1,
+        token_version=0,
+        permission_code=PERMISSION_PERMISSION_MANAGE,
+        method="PUT",
+        path=read_path,
+    )
     invalid = client.put(
-        "/api/permissions/visibility-windows",
+        read_path,
         json={"role": "receptionist", "past_hours": 13, "future_hours": 24},
+        headers={"X-Action-Step-Up-Ticket": update_ticket},
     )
     assert invalid.status_code == 422
 
     updated = client.put(
-        "/api/permissions/visibility-windows",
+        read_path,
         json={"role": "receptionist", "past_hours": 24, "future_hours": None},
+        headers={"X-Action-Step-Up-Ticket": create_action_step_up_ticket(
+            user_id=7,
+            hotel_id=1,
+            token_version=0,
+            permission_code=PERMISSION_PERMISSION_MANAGE,
+            method="PUT",
+            path=read_path,
+        )},
     )
     assert updated.status_code == 200, updated.text
     assert updated.json()["past_hours"] == 24
@@ -194,4 +224,3 @@ def test_visibility_window_api_lists_all_roles_audits_and_rejects_invalid_value(
     assert audit.hotel_id == 1
     assert audit.user_id == 7
     assert audit.resource_id == "receptionist"
-

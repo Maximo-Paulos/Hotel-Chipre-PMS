@@ -64,6 +64,42 @@ class MfaCodeRequest(BaseModel):
     code: str = Field(min_length=1, max_length=64)
 
 
+class ActionStepUpRequest(BaseModel):
+    code: str = Field(min_length=1, max_length=64)
+    permission_code: str = Field(min_length=1, max_length=100)
+    method: Literal["GET", "POST", "PUT", "PATCH", "DELETE"]
+    path: str = Field(min_length=6, max_length=2048)
+
+    @field_validator("permission_code")
+    @classmethod
+    def _validate_permission_code(cls, value: str) -> str:
+        if value.strip() != value:
+            raise ValueError("El permiso debe estar en formato canonico")
+        return value
+
+    @field_validator("path")
+    @classmethod
+    def _validate_action_path(cls, value: str) -> str:
+        if (
+            not value.startswith("/api/")
+            or value.startswith("//")
+            or "?" in value
+            or "#" in value
+            or "\\" in value
+            or value.strip() != value
+            or any(ord(character) < 32 for character in value)
+            or any(segment in {".", ".."} for segment in value.split("/"))
+        ):
+            raise ValueError("La ruta de accion debe ser una ruta API absoluta")
+        return value
+
+
+class ActionStepUpResponse(BaseModel):
+    ticket: str
+    permission_code: str
+    expires_in: int
+
+
 class MfaDisableRequest(MfaCodeRequest):
     password: str = Field(min_length=1)
 

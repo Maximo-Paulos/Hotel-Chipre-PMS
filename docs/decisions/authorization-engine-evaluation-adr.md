@@ -211,3 +211,29 @@ Fuentes internas (confirmadas por código en este SHA):
 ## 9. Revisión de agentes read-only
 
 Este ADR fue revisado por los agentes read-only `engine-evaluator` (comparación independiente de motores/riesgos operativos) y `pilot-threat-reviewer` (revisión de amenazas del piloto). Sus hallazgos consolidados están incorporados en las secciones anteriores; ninguno de los dos tiene permiso de escritura y no modificaron código ni documentación por sí mismos.
+
+---
+
+## 10. Resultado de implementación posterior al SHA auditado
+
+Esta sección registra un cambio posterior al análisis. Las observaciones de las secciones 2–5 siguen describiendo el snapshot `f895899`; no deben leerse como el estado final después del trabajo de implementación.
+
+### Entregado en el checkout local
+
+- **Step-up P0:** el backend exige un ticket MFA corto para capacidades sensibles. El ticket queda ligado a usuario, hotel, versión de sesión, permiso, método y ruta, expira a los 120 segundos y no sustituye la autorización normal. El cliente maneja el `428` solo mientras la misma sesión continúa activa; logout o cambio de cuenta/hotel/token cancela el prompt y evita repetir la acción con un ticket viejo.
+- **Grant de cancelación:** el permiso temporal solo cubre `reservation:cancel` sobre la reserva exacta del mismo hotel. Lo solicita el empleado, lo aprueba owner/co-owner con MFA, dura 15 minutos y se consume de forma atómica en la misma transacción que la cancelación. El antiguo endpoint aislado de consumo se retiró con respuesta `410`.
+- **Roles custom P1:** tabla tenant-scoped, códigos `cr_…`, presets base manager/receptionist/housekeeping, cambios optimistas versionados, y bloqueo de archivado mientras queden memberships activas o invitaciones pendientes. Owner/co-owner y capacidades `owner_only` siguen protegidos. La UI permite administrar permisos y ventanas por hotel y conserva los roles protegidos en solo lectura.
+- **Cobertura de rutas:** se migraron las guardas estáticas de disponibilidad, listado/consulta/creación de reservas y check-in/check-out del router legacy de bookings a permisos canónicos. Esto reduce una inconsistencia real, pero **no significa que todas las guardas por rol del repositorio estén retiradas**; las restantes deben clasificarse como capacidad configurable, límite de negocio o invariante y conservar pruebas acordes.
+- **Tareas operativas:** el acceso se limita por asignación para roles sin permiso de administración; historial y cambios vuelven a verificar el alcance con bloqueo, los datos de reserva se redactan si falta `reservation:read`, y respuestas de tareas inexistentes/fuera de alcance no revelan si el ID existe.
+- **Concurrencia:** las lecturas de matriz/perfiles y overrides por empleado exponen la versión actual de cada override; la UI la envía al mutar y al restaurar. Una lectura obsoleta continúa produciendo `409`, no una sobrescritura silenciosa.
+- **Migraciones adicionales:** `hotel_roles` nace con RLS habilitado/forzado y su política tenant; una migración separada normaliza cinco enums PostgreSQL restantes. El downgrade de roles custom cancela antes de modificar esquema si no puede comprobar que no haya datos que perder.
+
+### Evidencia y límites de verificación
+
+La ejecución local completa terminó con **2.122 passed, 26 skipped, 12 xfailed, 1 xpassed y 37 warnings**, excluyendo deliberadamente `tests/integration/test_postgres_migrations.py`. La prueba focal de tareas operativas terminó con **8 passed**. En frontend, **39 tests**, TypeScript, lint y build pasaron; la build reporta un chunk mayor a 500 kB. El E2E de roles custom enumeró cinco casos, pero no se ejecutó: Playwright fuerza el reset del archivo fijo `_e2e.db` en la raíz del repositorio, que ya existía como estado local no versionado y fue preservado.
+
+No había `pg_ctl`, `initdb` ni un daemon Docker disponible; tampoco se ejecutó una migración real de PostgreSQL ni se tocó una base productiva/preview. Por lo tanto, el SQL PostgreSQL de la nueva RLS y de los enums todavía requiere gate de migración en un entorno aislado antes de release. Las pruebas de navegador con API simulada prueban el cliente/UI, no integración backend desplegada. El análisis encontró además que los roles custom heredan los permisos efectivos del preset base hasta que se agrega un override explícito; un rol basado en manager conserva `reservation:read` salvo que se revoque. El permiso genérico de vista de tareas no tiene todavía una dimensión de tipo de tarea, por lo que un rol report-only manager puede ver tareas no asignadas de distintos tipos. No se amplió el catálogo para resolver esta decisión de producto sin evidencia de negocio.
+
+El escáner automatizado de seguridad no pudo inicializar porque cambió el HEAD después de seleccionar el diff; no se generaron ni inventaron artefactos de escaneo. Hubo revisión independiente read-only de la implementación y los hallazgos encontrados se corrigieron y se cubrieron con pruebas; el último ajuste quedó validado por tests, sin una segunda revisión independiente.
+
+El trabajo se mantuvo en el repositorio local. No se hizo push, deploy ni cambio en proveedores externos. No se agregó dependencia de Casbin, OpenFGA, SpiceDB u OPA; se conserva la recomendación del ADR: no migrar el runtime hasta validar casos ReBAC de producto y completar la evidencia operativa/tenant.

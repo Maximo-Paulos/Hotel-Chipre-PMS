@@ -84,6 +84,20 @@ def set_tenant_hotel_context(db: Session, hotel_id: int | None) -> None:
     _set_context_value(db, "app.hotel_id", hotel_id)
 
 
+def set_invitation_token_hash_context(db: Session, token_hash: str | None) -> None:
+    """Temporarily expose only an invitation row matching this capability hash.
+
+    Unlike tenant identity, this capability is not remembered in
+    ``Session.info`` and therefore is never reapplied after a commit.
+    """
+    if token_hash is not None and (
+        len(token_hash) != 64
+        or any(character not in "0123456789abcdef" for character in token_hash)
+    ):
+        raise ValueError("invitation token hash must be a lowercase SHA-256 digest")
+    _apply_setting(db, "app.invitation_token_hash", token_hash or "")
+
+
 def set_tenant_context(db: Session, *, user_id: int | None, hotel_id: int | None) -> None:
     """Set both principals for a request or a single-hotel worker job."""
 

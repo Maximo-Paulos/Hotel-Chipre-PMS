@@ -78,6 +78,17 @@ test("owner can register, verify, recover access and complete onboarding through
   await page.getByLabel("Email", { exact: true }).fill(`reception-${suffix}@example.test`);
   await saveAndExpectPath(page, "/onboarding/finish");
 
+  // Reproduce a late onboarding refetch after the user has already navigated
+  // away from the wizard; it must not redirect the user back to the dashboard.
+  const isConfigRequest = (url: URL) => url.pathname === "/api/config/";
+  await page.route(isConfigRequest, async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 3_000));
+    await route.continue().catch(() => undefined);
+  });
+  const heldConfigAnswered = page.waitForResponse((response) => isConfigRequest(new URL(response.url())), {
+    timeout: 20_000
+  });
+
   await expect(page.getByRole("button", { name: "Marcar onboarding como completo", exact: true })).toBeEnabled();
   await page.getByRole("button", { name: "Marcar onboarding como completo", exact: true }).click();
   await page.waitForURL("**/dashboard", { timeout: 15_000 });
@@ -91,6 +102,11 @@ test("owner can register, verify, recover access and complete onboarding through
   await page.getByRole("button", { name: "Enviar código", exact: true }).click();
 
   const resetCode = await waitForCode(email, /Recupera tu acceso/i);
+  // The held refetch settles now; the reset flow must remain on this page.
+  await heldConfigAnswered;
+  await page.unroute(isConfigRequest);
+  await page.waitForTimeout(1_000);
+  await expect(page).toHaveURL(/\/reset-password$/);
   await page.getByLabel("Código recibido", { exact: true }).fill(resetCode);
   await page.getByRole("button", { name: "Continuar", exact: true }).click();
   await page.getByLabel("Nueva contraseña", { exact: true }).fill(recoveredPassword);

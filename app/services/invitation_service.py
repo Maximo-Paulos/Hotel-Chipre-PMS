@@ -11,6 +11,10 @@ from sqlalchemy.orm import Session
 
 from app.models.invitation import StaffInvitation
 from app.services.domain_events import queue_domain_change
+from app.services.tenant_context import (
+    set_invitation_token_hash_context,
+    set_tenant_hotel_context,
+)
 
 
 INVITATION_TTL = timedelta(days=7)
@@ -92,11 +96,21 @@ def issue_invitation(
 
 
 def find_by_token(db: Session, raw_token: str) -> StaffInvitation | None:
-    return (
-        db.query(StaffInvitation)
-        .filter(StaffInvitation.token_hash == hash_invitation_token(raw_token))
-        .first()
-    )
+    token_hash = hash_invitation_token(raw_token)
+    set_invitation_token_hash_context(db, token_hash)
+    try:
+        invitation = (
+            db.query(StaffInvitation)
+            .filter(StaffInvitation.token_hash == token_hash)
+            .first()
+        )
+    finally:
+        set_invitation_token_hash_context(db, None)
+    if invitation is not None:
+        # The bearer token is the capability that found this row. From here on
+        # role, membership, and mutation checks run under its tenant RLS scope.
+        set_tenant_hotel_context(db, invitation.hotel_id)
+    return invitation
 
 
 def is_expired(invitation: StaffInvitation, *, now: datetime | None = None) -> bool:

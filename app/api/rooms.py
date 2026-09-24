@@ -55,7 +55,7 @@ def _require_manager_room_lane(context: AuthContext) -> None:
     cleaning permission from authorizing inventory/configuration mutations.
     """
 
-    if context.user_role not in {"owner", "co_owner", "manager"}:
+    if context.operational_role not in {"owner", "co_owner", "manager"}:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tenes permisos para esta accion")
 
 
@@ -162,7 +162,7 @@ def list_categories(
     context: AuthContext = Depends(require_permission(PERMISSION_ROOM_READ)),
 ):
     categories = db.query(RoomCategory).filter(RoomCategory.hotel_id == context.hotel_id).all()
-    if context.user_role == "housekeeping":
+    if context.operational_role == "housekeeping":
         return [RoomCategoryOperationalRead.model_validate(category) for category in categories]
     for category in categories:
         _attach_current_rate(db, context.hotel_id, category)
@@ -182,7 +182,7 @@ def get_category(
     )
     if not category:
         raise HTTPException(status_code=404, detail="Category not found")
-    if context.user_role == "housekeeping":
+    if context.operational_role == "housekeeping":
         return RoomCategoryOperationalRead.model_validate(category)
     return _attach_current_rate(db, context.hotel_id, category)
 
@@ -221,7 +221,7 @@ def list_rooms(
     context: AuthContext = Depends(require_permission(PERMISSION_ROOM_READ)),
 ):
     rooms = db.query(Room).filter(Room.hotel_id == context.hotel_id, Room.deleted_at.is_(None)).all()
-    if context.user_role == "housekeeping":
+    if context.operational_role == "housekeeping":
         return [_housekeeping_room(room) for room in rooms]
     return rooms
 
@@ -279,7 +279,7 @@ def get_room(
     room = db.query(Room).filter(Room.id == room_id, Room.hotel_id == context.hotel_id, Room.deleted_at.is_(None)).first()
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
-    if context.user_role == "housekeeping":
+    if context.operational_role == "housekeeping":
         return _housekeeping_room(room)
     return room
 
@@ -472,7 +472,7 @@ def update_room_cleaning_status(
         datetime.now(timezone.utc),
         {"source": "rooms.cleaning_status.patch", "notes": data.notes},
     )
-    safe_room = _housekeeping_room(room) if context.user_role == "housekeeping" else room
+    safe_room = _housekeeping_room(room) if context.operational_role == "housekeeping" else room
     return {"room": safe_room, "reallocation": None}
 
 
@@ -599,7 +599,7 @@ def housekeeping_summary(
             "category_id": room.category_id,
             "status": status_value,
             "has_guest": is_guest_in,
-            "notes": None if context.user_role == "housekeeping" else room.notes,
+            "notes": None if context.operational_role == "housekeeping" else room.notes,
         })
     return summary
 

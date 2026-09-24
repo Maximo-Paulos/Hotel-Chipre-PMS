@@ -4588,6 +4588,22 @@
             }
           },
           {
+            "name": "X-Temporary-Action-Grant",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Temporary-Action-Grant"
+            }
+          },
+          {
             "name": "x-hotel-id",
             "in": "header",
             "required": false,
@@ -6686,6 +6702,22 @@
             "schema": {
               "type": "integer",
               "title": "Booking Id"
+            }
+          },
+          {
+            "name": "X-Temporary-Action-Grant",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Temporary-Action-Grant"
             }
           },
           {
@@ -9583,6 +9615,334 @@
         }
       }
     },
+    "/api/roles": {
+      "get": {
+        "tags": [
+          "Roles"
+        ],
+        "summary": "Read Roles",
+        "operationId": "read_roles_api_roles_get",
+        "parameters": [
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoleListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Roles"
+        ],
+        "summary": "Create Role",
+        "operationId": "create_role_api_roles_post",
+        "parameters": [
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCustomRoleRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoleResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/roles/{role_code}": {
+      "patch": {
+        "tags": [
+          "Roles"
+        ],
+        "summary": "Rename Role",
+        "operationId": "rename_role_api_roles__role_code__patch",
+        "parameters": [
+          {
+            "name": "role_code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Role Code"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameCustomRoleRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoleResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Roles"
+        ],
+        "summary": "Delete Role",
+        "operationId": "delete_role_api_roles__role_code__delete",
+        "parameters": [
+          {
+            "name": "role_code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Role Code"
+            }
+          },
+          {
+            "name": "expected_version",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Expected Version"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ArchiveCustomRoleRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoleResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/auth/providers": {
       "get": {
         "tags": [
@@ -9598,6 +9958,82 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AuthProvidersResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/step-up": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Create Action Step Up Ticket",
+        "description": "Exchange a fresh enrolled TOTP for a ticket bound to one protected action.",
+        "operationId": "create_action_step_up_ticket_api_auth_step_up_post",
+        "parameters": [
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActionStepUpRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionStepUpResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -9781,7 +10217,7 @@
           "Auth"
         ],
         "summary": "Google Login",
-        "description": "\"Sign in with Google\" via Google Identity Services' ID-token flow: the\nfrontend never talks to our backend during the OAuth dance, it just hands\nus the signed JWT Google issued. We verify that signature against\nGOOGLE_CLIENT_ID (env var, public, same value as frontend's\nVITE_GOOGLE_CLIENT_ID -- no client secret exists or is needed for this\nflow). Google Cloud Console: create an OAuth Client ID (type \"Web\napplication\") with authorized JavaScript origins for the real app\ndomains (no redirect URI needed, this flow doesn't use one).",
+        "description": "\"Sign in with Google\" via Google Identity Services' ID-token flow: the\nfrontend never talks to our backend during the OAuth dance, it just hands\nus the signed JWT Google issued. We verify that signature against\nGOOGLE_CLIENT_ID (env var, public; the frontend reads that client ID from\n/api/auth/providers, so no duplicated Vercel build variable is needed).\nNo client secret exists or is needed for this flow. Google Cloud Console:\ncreate an OAuth Client ID (type \"Web\napplication\") with authorized JavaScript origins for the real app\ndomains (no redirect URI needed, this flow doesn't use one).",
         "operationId": "google_login_api_auth_google_post",
         "requestBody": {
           "content": {
@@ -17660,6 +18096,7 @@
           "Permissions"
         ],
         "summary": "Consume Temporary Action Grant",
+        "description": "Retired: grants are consumed only inside their protected action.",
         "operationId": "consume_temporary_action_grant_api_permissions_temporary_grants_consume_post",
         "parameters": [
           {
@@ -17695,18 +18132,8 @@
             }
           }
         ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/TemporaryActionGrantConsumeRequest"
-              }
-            }
-          }
-        },
         "responses": {
-          "200": {
+          "410": {
             "description": "Successful Response",
             "content": {
               "application/json": {
@@ -34635,6 +35062,70 @@
         ],
         "title": "AcceptPayload"
       },
+      "ActionStepUpRequest": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Code"
+          },
+          "permission_code": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Permission Code"
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "GET",
+              "POST",
+              "PUT",
+              "PATCH",
+              "DELETE"
+            ],
+            "title": "Method"
+          },
+          "path": {
+            "type": "string",
+            "maxLength": 2048,
+            "minLength": 6,
+            "title": "Path"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "permission_code",
+          "method",
+          "path"
+        ],
+        "title": "ActionStepUpRequest"
+      },
+      "ActionStepUpResponse": {
+        "properties": {
+          "ticket": {
+            "type": "string",
+            "title": "Ticket"
+          },
+          "permission_code": {
+            "type": "string",
+            "title": "Permission Code"
+          },
+          "expires_in": {
+            "type": "integer",
+            "title": "Expires In"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ticket",
+          "permission_code",
+          "expires_in"
+        ],
+        "title": "ActionStepUpResponse"
+      },
       "ActiveAllocationPolicyRead": {
         "properties": {
           "profile_id": {
@@ -36641,6 +37132,20 @@
           "applied_dates"
         ],
         "title": "ApplyPeriodOut"
+      },
+      "ArchiveCustomRoleRequest": {
+        "properties": {
+          "expected_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Expected Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "expected_version"
+        ],
+        "title": "ArchiveCustomRoleRequest"
       },
       "AuditTimelineItemRead": {
         "properties": {
@@ -39742,6 +40247,31 @@
           "hotel_id"
         ],
         "title": "CompedOverrideRequest"
+      },
+      "CreateCustomRoleRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "base_role": {
+            "type": "string",
+            "enum": [
+              "manager",
+              "receptionist",
+              "housekeeping"
+            ],
+            "title": "Base Role"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "base_role"
+        ],
+        "title": "CreateCustomRoleRequest"
       },
       "DailyOperationalReportRead": {
         "properties": {
@@ -52881,6 +53411,27 @@
         ],
         "title": "RemitoRead"
       },
+      "RenameCustomRoleRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "expected_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Expected Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "expected_version"
+        ],
+        "title": "RenameCustomRoleRequest"
+      },
       "RequestCode": {
         "properties": {
           "email": {
@@ -55024,6 +55575,86 @@
         ],
         "title": "RevokeAllSessionsResponse"
       },
+      "RoleCatalogItem": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "builtin",
+              "custom"
+            ],
+            "title": "Kind"
+          },
+          "base_role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Role"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          },
+          "assigned_count": {
+            "type": "integer",
+            "title": "Assigned Count"
+          },
+          "pending_invitation_count": {
+            "type": "integer",
+            "title": "Pending Invitation Count"
+          },
+          "permission_count": {
+            "type": "integer",
+            "title": "Permission Count"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "name",
+          "kind",
+          "base_role",
+          "is_active",
+          "assigned_count",
+          "pending_invitation_count",
+          "permission_count",
+          "version"
+        ],
+        "title": "RoleCatalogItem"
+      },
+      "RoleListResponse": {
+        "properties": {
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/RoleCatalogItem"
+            },
+            "type": "array",
+            "title": "Roles"
+          }
+        },
+        "type": "object",
+        "required": [
+          "roles"
+        ],
+        "title": "RoleListResponse"
+      },
       "RolePermissionOverrideRequest": {
         "properties": {
           "role": {
@@ -55062,6 +55693,18 @@
           "allowed"
         ],
         "title": "RolePermissionOverrideRequest"
+      },
+      "RoleResponse": {
+        "properties": {
+          "role": {
+            "$ref": "#/components/schemas/RoleCatalogItem"
+          }
+        },
+        "type": "object",
+        "required": [
+          "role"
+        ],
+        "title": "RoleResponse"
       },
       "RoomBlockCreate": {
         "properties": {
@@ -58461,21 +59104,6 @@
         ],
         "title": "TemporaryActionGrantApproveRequest"
       },
-      "TemporaryActionGrantConsumeRequest": {
-        "properties": {
-          "token": {
-            "type": "string",
-            "maxLength": 512,
-            "minLength": 1,
-            "title": "Token"
-          }
-        },
-        "type": "object",
-        "required": [
-          "token"
-        ],
-        "title": "TemporaryActionGrantConsumeRequest"
-      },
       "TemporaryActionGrantRequest": {
         "properties": {
           "permission_code": {
@@ -58746,6 +59374,17 @@
               }
             ],
             "title": "Password Login Enabled"
+          },
+          "google_login_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Google Login Enabled"
           },
           "permissions": {
             "items": {

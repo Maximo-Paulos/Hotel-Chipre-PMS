@@ -18,7 +18,13 @@ from app.services.permission_service import (
 
 
 ROUTE_CONTRACTS = (
+    ("app/api/bookings.py", "availability", "PERMISSION_RESERVATION_READ", "reservation:read", {"owner", "co_owner", "manager", "receptionist"}),
     ("app/api/bookings.py", "price_quote", "PERMISSION_RESERVATION_CREATE", "reservation:create", {"owner", "co_owner", "manager", "receptionist"}),
+    ("app/api/bookings.py", "list_bookings", "PERMISSION_RESERVATION_READ", "reservation:read", {"owner", "co_owner", "manager", "receptionist"}),
+    ("app/api/bookings.py", "create_booking", "PERMISSION_RESERVATION_CREATE", "reservation:create", {"owner", "co_owner", "manager", "receptionist"}),
+    ("app/api/bookings.py", "get_booking", "PERMISSION_RESERVATION_READ", "reservation:read", {"owner", "co_owner", "manager", "receptionist"}),
+    ("app/api/bookings.py", "checkin_booking", "PERMISSION_CHECKIN_PERFORM", "checkin:perform", {"owner", "co_owner", "manager", "receptionist"}),
+    ("app/api/bookings.py", "checkout_booking", "PERMISSION_CHECKOUT_PERFORM", "checkout:perform", {"owner", "co_owner", "manager", "receptionist"}),
     ("app/api/onboarding.py", "onboarding_status", "PERMISSION_HOTEL_SETTINGS_UPDATE", "hotel_settings:update", {"owner", "co_owner"}),
     ("app/api/onboarding.py", "set_owner", "PERMISSION_HOTEL_SETTINGS_UPDATE", "hotel_settings:update", {"owner", "co_owner"}),
     ("app/api/onboarding.py", "set_identity", "PERMISSION_HOTEL_SETTINGS_UPDATE", "hotel_settings:update", {"owner", "co_owner"}),

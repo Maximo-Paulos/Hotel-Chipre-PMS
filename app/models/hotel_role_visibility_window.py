@@ -51,10 +51,6 @@ class HotelRoleVisibilityWindow(Base):
     __table_args__ = (
         UniqueConstraint("hotel_id", "role", name="uq_hotel_role_visibility_window_hotel_role"),
         CheckConstraint(
-            "role IN ('owner', 'co_owner', 'manager', 'receptionist', 'housekeeping')",
-            name="ck_hotel_role_visibility_window_role",
-        ),
-        CheckConstraint(
             "past_hours IS NULL OR past_hours IN (12, 24, 48, 72, 168)",
             name="ck_hotel_role_visibility_window_past_hours",
         ),

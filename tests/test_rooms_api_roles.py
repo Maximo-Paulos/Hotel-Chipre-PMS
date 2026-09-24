@@ -18,15 +18,17 @@ from app.dependencies.auth import AuthContext, get_auth_context
 import app.models  # noqa: F401
 from app.models.hotel_config import HotelConfiguration
 from app.models.room import Room, RoomCategory
+from app.services.permission_service import ROLE_HOUSEKEEPING, create_custom_role
 
 
-def _override_auth(hotel_id: int, role: str):
+def _override_auth(hotel_id: int, role: str, *, base_role: str | None = None):
     def dependency():
         return AuthContext(
             hotel_id=hotel_id,
             user_id=123,
             user_email=f"{role}@example.com",
             user_role=role,
+            base_role=base_role,
             is_verified=True,
         )
 
@@ -72,11 +74,17 @@ def client(tmp_path):
     )
     session.add(category)
     session.flush()
-    session.add(Room(hotel_id=hotel_id, room_number="QA-101", floor=1, category_id=category.id))
+    session.add(Room(
+        hotel_id=hotel_id,
+        room_number="QA-101",
+        floor=1,
+        category_id=category.id,
+        notes="Guest identity and payment note",
+    ))
     session.commit()
 
     with TestClient(app) as test_client:
-        yield test_client, app, hotel_id, category.id
+        yield test_client, app, hotel_id, category.id, session
     app.dependency_overrides.clear()
     session.rollback()
     session.close()
@@ -85,7 +93,7 @@ def client(tmp_path):
 
 
 def test_receptionist_can_list_rooms(client):
-    test_client, app, hotel_id, _category_id = client
+    test_client, app, hotel_id, _category_id, _db = client
     app.dependency_overrides[get_auth_context] = _override_auth(hotel_id, "receptionist")
 
     response = test_client.get("/api/rooms/")
@@ -95,7 +103,7 @@ def test_receptionist_can_list_rooms(client):
 
 
 def test_receptionist_can_check_room_availability(client):
-    test_client, app, hotel_id, category_id = client
+    test_client, app, hotel_id, category_id, _db = client
     app.dependency_overrides[get_auth_context] = _override_auth(hotel_id, "receptionist")
 
     check_in = date.today() + timedelta(days=1)
@@ -121,10 +129,34 @@ def test_receptionist_can_list_room_categories(client):
     receptionist who cannot list categories cannot create a reservation
     or a waitlist entry, both core front-desk tasks.
     """
-    test_client, app, hotel_id, category_id = client
+    test_client, app, hotel_id, category_id, _db = client
     app.dependency_overrides[get_auth_context] = _override_auth(hotel_id, "receptionist")
 
     response = test_client.get("/api/rooms/categories")
 
     assert response.status_code == 200, response.text
     assert any(cat["id"] == category_id for cat in response.json())
+
+
+def test_custom_housekeeping_role_receives_safe_room_projection(client):
+    test_client, app, hotel_id, _category_id, db = client
+    custom = create_custom_role(
+        db,
+        hotel_id,
+        name="Limpieza turno tarde",
+        base_role=ROLE_HOUSEKEEPING,
+        actor_user_id=None,
+    )
+    db.commit()
+    app.dependency_overrides[get_auth_context] = _override_auth(
+        hotel_id,
+        custom.code,
+        base_role=ROLE_HOUSEKEEPING,
+    )
+
+    response = test_client.get("/api/rooms/")
+
+    assert response.status_code == 200, response.text
+    assert response.json()[0]["room_number"] == "QA-101"
+    assert "notes" not in response.json()[0]
+    assert "Guest identity and payment note" not in response.text

@@ -14,6 +14,7 @@ from app.models.permission import HotelPermissionOverride, UserPermissionOverrid
 from app.models.permission import RolePermissionDefault
 from app.models.security_audit_log import SecurityAuditLog
 from app.models.user import User
+from app.services.action_step_up_service import create_action_step_up_ticket
 from app.services.permission_service import (
     PERMISSION_GUEST_PROHIBITION_MANAGE,
     PERMISSION_GUEST_PROHIBITION_READ,
@@ -30,6 +31,20 @@ from app.services.permission_service import (
     set_user_override,
     seed_default_permissions,
 )
+
+
+def _step_up_headers(path: str, *, method: str):
+    """Issue a synthetic, action-bound ticket for permission-admin tests."""
+    return {
+        "X-Action-Step-Up-Ticket": create_action_step_up_ticket(
+            user_id=10,
+            hotel_id=1,
+            token_version=0,
+            permission_code=PERMISSION_PERMISSION_MANAGE,
+            method=method,
+            path=path,
+        )
+    }
 
 
 def _auth(hotel_id: int, role: str, user_id: int):
@@ -129,7 +144,10 @@ def test_only_owner_can_use_administration_catalog_and_co_owner_is_denied():
     client, db, engine = _client()
     try:
         fastapi_app.dependency_overrides[get_auth_context] = _auth(1, "owner", 10)
-        owner = client.get("/api/permissions/catalog")
+        owner = client.get(
+            "/api/permissions/catalog",
+            headers=_step_up_headers("/api/permissions/catalog", method="GET"),
+        )
         assert owner.status_code == 200
         assert any(row["code"] == PERMISSION_GUEST_READ for row in owner.json()["permissions"])
 
@@ -149,22 +167,31 @@ def test_owner_can_grant_and_revoke_user_override_then_restore_defaults():
         granted = client.put(
             "/api/permissions/user-overrides/20",
             json={"permission_code": PERMISSION_RESERVATION_PROHIBITION_OVERRIDE, "allowed": True},
+            headers=_step_up_headers("/api/permissions/user-overrides/20", method="PUT"),
         )
         assert granted.status_code == 200
         assert granted.json()["source"] == "user_override"
         assert granted.json()["version"] == 1
 
-        preview = client.get("/api/permissions/effective/preview", params={"user_id": 20})
+        preview = client.get(
+            "/api/permissions/effective/preview",
+            params={"user_id": 20},
+            headers=_step_up_headers("/api/permissions/effective/preview", method="GET"),
+        )
         assert preview.status_code == 200
         assert preview.json()["details"][PERMISSION_RESERVATION_PROHIBITION_OVERRIDE]["allowed"] is True
 
         revoked = client.put(
             "/api/permissions/user-overrides/20",
             json={"permission_code": PERMISSION_RESERVATION_PROHIBITION_OVERRIDE, "allowed": False},
+            headers=_step_up_headers("/api/permissions/user-overrides/20", method="PUT"),
         )
         assert revoked.status_code == 200
         assert revoked.json()["version"] == 2
-        restored = client.delete("/api/permissions/user-overrides/20")
+        restored = client.delete(
+            "/api/permissions/user-overrides/20",
+            headers=_step_up_headers("/api/permissions/user-overrides/20", method="DELETE"),
+        )
         assert restored.status_code == 200
         assert db.query(UserPermissionOverride).filter_by(hotel_id=1, user_id=20).count() == 0
 
@@ -190,6 +217,7 @@ def test_owner_can_restore_one_role_override_to_catalog_default_with_audit():
         changed = client.put(
             "/api/permissions/override",
             json={"role": "receptionist", "permission_code": PERMISSION_GUEST_READ, "allowed": False},
+            headers=_step_up_headers("/api/permissions/override", method="PUT"),
         )
         assert changed.status_code == 200
         assert changed.json()["version"] == 1
@@ -197,6 +225,10 @@ def test_owner_can_restore_one_role_override_to_catalog_default_with_audit():
         restored = client.delete(
             f"/api/permissions/overrides/role/receptionist/{PERMISSION_GUEST_READ}",
             params={"expected_version": 1},
+            headers=_step_up_headers(
+                f"/api/permissions/overrides/role/receptionist/{PERMISSION_GUEST_READ}",
+                method="DELETE",
+            ),
         )
         assert restored.status_code == 200
         assert restored.json() == {
@@ -250,6 +282,7 @@ def test_owner_can_restore_one_user_override_to_role_default_with_audit():
         changed = client.put(
             "/api/permissions/user-overrides/20",
             json={"permission_code": PERMISSION_GUEST_READ, "allowed": False},
+            headers=_step_up_headers("/api/permissions/user-overrides/20", method="PUT"),
         )
         assert changed.status_code == 200
         assert changed.json()["version"] == 1
@@ -257,6 +290,10 @@ def test_owner_can_restore_one_user_override_to_role_default_with_audit():
         restored = client.delete(
             f"/api/permissions/overrides/user/20/{PERMISSION_GUEST_READ}",
             params={"expected_version": 1},
+            headers=_step_up_headers(
+                f"/api/permissions/overrides/user/20/{PERMISSION_GUEST_READ}",
+                method="DELETE",
+            ),
         )
         assert restored.status_code == 200
         assert restored.json() == {
@@ -272,7 +309,11 @@ def test_owner_can_restore_one_user_override_to_role_default_with_audit():
             hotel_id=1, user_id=20, permission_code=PERMISSION_GUEST_READ
         ).one_or_none() is None
 
-        preview = client.get("/api/permissions/effective/preview", params={"user_id": 20})
+        preview = client.get(
+            "/api/permissions/effective/preview",
+            params={"user_id": 20},
+            headers=_step_up_headers("/api/permissions/effective/preview", method="GET"),
+        )
         assert preview.status_code == 200
         assert preview.json()["details"][PERMISSION_GUEST_READ]["source"] == "role_default"
         assert preview.json()["details"][PERMISSION_GUEST_READ]["allowed"] is True
@@ -307,6 +348,7 @@ def test_restore_override_rejects_stale_expected_version_with_409():
         created = client.put(
             "/api/permissions/override",
             json={"role": "receptionist", "permission_code": PERMISSION_GUEST_READ, "allowed": False},
+            headers=_step_up_headers("/api/permissions/override", method="PUT"),
         )
         assert created.status_code == 200
 
@@ -318,6 +360,7 @@ def test_restore_override_rejects_stale_expected_version_with_409():
                 "allowed": True,
                 "expected_version": 1,
             },
+            headers=_step_up_headers("/api/permissions/override", method="PUT"),
         )
         assert updated.status_code == 200
         assert updated.json()["version"] == 2
@@ -325,6 +368,10 @@ def test_restore_override_rejects_stale_expected_version_with_409():
         stale_restore = client.delete(
             f"/api/permissions/role-overrides/receptionist/{PERMISSION_GUEST_READ}",
             params={"expected_version": 1},
+            headers=_step_up_headers(
+                f"/api/permissions/role-overrides/receptionist/{PERMISSION_GUEST_READ}",
+                method="DELETE",
+            ),
         )
         assert stale_restore.status_code == 409
         assert db.query(HotelPermissionOverride).filter_by(
@@ -355,6 +402,10 @@ def test_restore_cannot_leave_owner_without_permission_management():
         restored = client.delete(
             f"/api/permissions/overrides/role/owner/{PERMISSION_PERMISSION_MANAGE}",
             params={"expected_version": 1},
+            headers=_step_up_headers(
+                f"/api/permissions/overrides/role/owner/{PERMISSION_PERMISSION_MANAGE}",
+                method="DELETE",
+            ),
         )
         assert restored.status_code == 200
         assert restored.json()["allowed"] is True
@@ -375,16 +426,19 @@ def test_user_override_rejects_self_elevation_and_cross_hotel_id_without_disclos
         self_change = client.put(
             "/api/permissions/user-overrides/10",
             json={"permission_code": PERMISSION_GUEST_READ, "allowed": False},
+            headers=_step_up_headers("/api/permissions/user-overrides/10", method="PUT"),
         )
         assert self_change.status_code == 422
 
         cross_hotel = client.put(
             "/api/permissions/user-overrides/30",
             json={"permission_code": PERMISSION_GUEST_READ, "allowed": True},
+            headers=_step_up_headers("/api/permissions/user-overrides/30", method="PUT"),
         )
         unknown = client.put(
             "/api/permissions/user-overrides/999999",
             json={"permission_code": PERMISSION_GUEST_READ, "allowed": True},
+            headers=_step_up_headers("/api/permissions/user-overrides/999999", method="PUT"),
         )
         assert cross_hotel.status_code == unknown.status_code == 404
         assert cross_hotel.json() == unknown.json()

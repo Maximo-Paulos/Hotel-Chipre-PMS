@@ -47,6 +47,8 @@ const steps = [
   { path: "staff", label: "Staff" }
 ];
 
+const isOnboardingPath = (pathname: string) => pathname === "/onboarding" || pathname.startsWith("/onboarding/");
+
 const defaultIdentityForm: HotelIdentityPayload = {
   name: "",
   timezone: "America/Argentina/Buenos_Aires",
@@ -308,7 +310,9 @@ export function OnboardingWizard() {
       return runWithFeedback(() => finishOnboarding(session), "Onboarding finalizado.", ["onboarding", "settings"]);
     },
     onSuccess: () => {
-      navigate("/dashboard", { replace: true });
+      if (typeof window !== "undefined" && isOnboardingPath(window.location.pathname)) {
+        navigate("/dashboard", { replace: true });
+      }
     }
   });
 
@@ -318,7 +322,7 @@ export function OnboardingWizard() {
   }, [status]);
 
   useEffect(() => {
-    if (status?.completed) {
+    if (status?.completed && typeof window !== "undefined" && isOnboardingPath(window.location.pathname)) {
       navigate("/dashboard", { replace: true });
     }
   }, [status?.completed, navigate]);

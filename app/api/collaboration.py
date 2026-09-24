@@ -90,7 +90,7 @@ def _require_resource_lane(context: AuthContext, resource_type: str) -> None:
     # ``room:status_update`` is intentionally also available to housekeeping,
     # but the generic room PATCH endpoint only lets owner/co-owner/manager
     # edit room metadata.  Collaboration must not create a broader write path.
-    if normalize_resource_type(resource_type) == "room" and context.user_role not in {"owner", "co_owner", "manager"}:
+    if normalize_resource_type(resource_type) == "room" and context.operational_role not in {"owner", "co_owner", "manager"}:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tenes permisos para editar la habitación")
 
 

@@ -86,6 +86,7 @@ def validate_task_operator_scope(
     task_id: int,
     role: str | None,
     user_id: int,
+    for_update: bool = True,
 ) -> OperationalTask:
     """Keep direct state changes inside the role's operational work queue.
 
@@ -93,14 +94,17 @@ def validate_task_operator_scope(
     call a detail URL directly. This check keeps the same boundary on every
     state-changing path instead of treating the UI filter as authorization.
     """
-    task = _get_task(db, hotel_id, task_id, for_update=True)
+    task = _get_task(db, hotel_id, task_id, for_update=for_update)
     if role == "housekeeping":
         allowed_types = {OperationalTaskTypeEnum.HOUSEKEEPING, OperationalTaskTypeEnum.MAINTENANCE}
     elif role == "receptionist":
         allowed_types = {OperationalTaskTypeEnum.GENERAL, OperationalTaskTypeEnum.RECEPTION}
     else:
-        return task
-    if task.task_type not in allowed_types or task.assigned_to_user_id not in {None, user_id}:
+        allowed_types = None
+    if (
+        (allowed_types is not None and task.task_type not in allowed_types)
+        or task.assigned_to_user_id not in {None, user_id}
+    ):
         raise OperationalTaskError("No tenés acceso operativo a esta tarea")
     return task
 

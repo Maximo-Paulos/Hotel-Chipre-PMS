@@ -30,6 +30,8 @@ from app.database import get_db
 from app.models.security_audit_log import SecurityAuditLog
 from app.models.user import User
 from app.schemas.auth import (
+    ActionStepUpRequest,
+    ActionStepUpResponse,
     AuthProvidersResponse,
     AuthResponse,
     AppleAuthRequest,
@@ -69,6 +71,11 @@ from app.services.hotel_service import get_or_create_hotel_for_owner, get_member
 from app.services.security import create_access_token, hash_password, needs_rehash, verify_password
 from app.services.security import create_signed_token, decode_signed_token
 from app.dependencies.auth import AuthContext, get_auth_context, get_current_user
+from app.services.action_step_up_service import (
+    ACTION_STEP_UP_TICKET_TTL_SECONDS,
+    create_action_step_up_ticket as issue_action_step_up_ticket,
+    permission_requires_step_up,
+)
 from app.config import get_settings, is_production_mode
 from app.services.apple_auth_service import (
     AppleTokenError,
@@ -426,6 +433,94 @@ def _allow_mfa_attempt(db: Session, action: str, user_id: int) -> None:
 
 def _reset_mfa_attempts(db: Session, action: str, user_id: int) -> None:
     mfa_code_guess_limiter.reset(_mfa_attempt_key(action, user_id), db=db)
+
+
+@router.post("/step-up", response_model=ActionStepUpResponse)
+def create_action_step_up_ticket(
+    payload: ActionStepUpRequest,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(get_auth_context),
+) -> ActionStepUpResponse:
+    """Exchange a fresh enrolled TOTP for a ticket bound to one protected action."""
+    if context.user_id is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Autenticacion requerida")
+    if not context.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Verifica tu email para usar el sistema",
+        )
+
+    from app.services.permission_service import (
+        audit_permission_denied,
+        canonical_permission_code,
+        resolve,
+    )
+
+    permission_code = canonical_permission_code(payload.permission_code)
+    if not resolve(
+        db,
+        context.hotel_id,
+        context.user_role,
+        permission_code,
+        user_id=context.user_id,
+    ):
+        audit_permission_denied(
+            db,
+            hotel_id=context.hotel_id,
+            user_id=context.user_id,
+            role=context.user_role,
+            permission_code=permission_code,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tenes permisos para esta accion",
+        )
+    if not permission_requires_step_up(db, permission_code):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "STEP_UP_NOT_REQUIRED"},
+        )
+
+    mfa_secret = mfa_service.get_active_mfa_secret(db, context.user_id)
+    if not mfa_secret:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "MFA_ENROLLMENT_REQUIRED"},
+        )
+
+    _allow_mfa_attempt(db, "step_up", context.user_id)
+    try:
+        # Step-up requires the active TOTP factor, not a recovery-code fallback.
+        # This uses the same atomic last_used_step replay guard as all MFA flows.
+        valid = mfa_service._consume_totp_code(db, mfa_secret, payload.code)
+    except mfa_service.MfaSecretUnavailableError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="MFA no esta disponible temporalmente",
+        ) from exc
+    if not valid:
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Codigo MFA invalido o ya utilizado",
+        )
+
+    ticket = issue_action_step_up_ticket(
+        user_id=context.user_id,
+        hotel_id=context.hotel_id,
+        token_version=context.token_version,
+        permission_code=permission_code,
+        method=payload.method,
+        path=payload.path,
+    )
+    _reset_mfa_attempts(db, "step_up", context.user_id)
+    db.commit()
+    return ActionStepUpResponse(
+        ticket=ticket,
+        permission_code=permission_code,
+        expires_in=ACTION_STEP_UP_TICKET_TTL_SECONDS,
+    )
 
 
 def _issue_email_token(db: Session, email: str, token_type: str) -> str:

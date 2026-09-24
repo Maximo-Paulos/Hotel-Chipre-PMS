@@ -89,6 +89,56 @@ def _seed_session(engine):
 
 
 @skip_if_no_pg
+def test_invitation_token_resolves_its_custom_role_under_forced_rls():
+    from app.models.hotel_config import HotelConfiguration
+    from app.models.hotel_role import HotelRole
+    from app.services.invitation_service import find_by_token, issue_invitation
+    from app.services.permission_service import get_custom_role
+
+    seed_engine = _seed_engine()
+    role_engine = _role_connection()
+    seed = _seed_session(seed_engine)
+    try:
+        hotel_id = 88331
+        seed.add(HotelConfiguration(id=hotel_id, hotel_name="RLS invitation capability", subscription_active=True))
+        seed.flush()
+        custom = HotelRole(
+            hotel_id=hotel_id,
+            code="cr_rls_invitation",
+            name="Turno invitación",
+            name_key="turno invitación",
+            base_role="housekeeping",
+            is_active=True,
+        )
+        seed.add(custom)
+        invitation, raw_token, _reused = issue_invitation(
+            seed,
+            hotel_id=hotel_id,
+            user_id=None,
+            email="rls-invitation@example.test",
+            role=custom.code,
+            inviter_user_id=None,
+            inviter_email="owner@example.test",
+        )
+        seed.commit()
+
+        role_session = _seed_session(role_engine)
+        try:
+            found = find_by_token(role_session, raw_token)
+            assert found is not None
+            assert found.id == invitation.id
+            assert found.hotel_id == hotel_id
+            assert get_custom_role(role_session, hotel_id, custom.code) is not None
+            assert role_session.query(HotelRole).filter(HotelRole.hotel_id != hotel_id).count() == 0
+        finally:
+            role_session.close()
+    finally:
+        seed.close()
+        seed_engine.dispose()
+        role_engine.dispose()
+
+
+@skip_if_no_pg
 def test_tenant_isolation_blocks_cross_hotel_reads():
     """With app.hotel_id set to hotel A, hotel B's rows are invisible -- as the
     unprivileged application role, not as a superuser (which always bypasses RLS)."""

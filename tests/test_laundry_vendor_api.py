@@ -19,15 +19,17 @@ from app.models.hotel_config import HotelConfiguration
 from app.models.permission import HotelPermissionOverride
 from app.services.linen_service import create_linen_item, create_location, register_movement
 from app.services.permission_service import PERMISSION_LAUNDRY_PRICE_MANAGE
+from app.services.permission_service import ROLE_HOUSEKEEPING, create_custom_role
 
 
-def _override_auth(hotel_id: int, role: str, user_id: int = 10):
+def _override_auth(hotel_id: int, role: str, user_id: int = 10, *, base_role: str | None = None):
     def dependency():
         return AuthContext(
             hotel_id=hotel_id,
             user_id=user_id,
             user_email=f"{role}@test.com",
             user_role=role,
+            base_role=base_role,
             is_verified=True,
             permissions=set(),
         )
@@ -207,6 +209,28 @@ def test_housekeeping_can_operate_remitos_but_not_manage_vendors():
         assert vendors_read.json()[0]["contact_phone"] is None
         assert vendors_read.json()[0]["contact_email"] is None
         assert "private@laundry.example" not in vendors_read.text
+
+        custom_housekeeping = create_custom_role(
+            db,
+            1,
+            name="Limpieza turno tarde",
+            base_role=ROLE_HOUSEKEEPING,
+            actor_user_id=None,
+        )
+        db.commit()
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(
+            1,
+            custom_housekeeping.code,
+            user_id=2,
+            base_role=ROLE_HOUSEKEEPING,
+        )
+        custom_vendors_read = client.get("/api/laundry/vendors")
+        assert custom_vendors_read.status_code == 200, custom_vendors_read.text
+        assert custom_vendors_read.json()[0]["contact_phone"] is None
+        assert custom_vendors_read.json()[0]["contact_email"] is None
+        assert "private@laundry.example" not in custom_vendors_read.text
+
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "housekeeping", user_id=2)
 
         # D2 (now D: linen split): housekeeping has to pick a house
         # LinenLocation on the remito form, so GET /api/laundry/locations

@@ -22,6 +22,7 @@ from app.services.invitation_service import (
     normalize_email,
 )
 from app.services.membership_service import MembershipInvariantError, validate_membership_change
+from app.services.permission_service import HotelRoleNotFound, require_active_hotel_role
 from app.services.security import hash_password
 from app.services.subscription_service import ensure_staff_within_limit
 
@@ -39,7 +40,13 @@ def _available_invitation(token: str, db: Session) -> StaffInvitation:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token inválido")
     if is_expired(invitation):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token expirado")
-    if invitation.role not in INVITABLE_ROLES:
+    if invitation.role == "owner":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invitación inválida")
+    try:
+        custom_role = require_active_hotel_role(db, invitation.hotel_id, invitation.role)
+    except HotelRoleNotFound as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invitación inválida") from exc
+    if custom_role is None and invitation.role not in INVITABLE_ROLES:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invitación inválida")
     return invitation
 
@@ -50,6 +57,15 @@ def _activate_invitation_for_user(
     user: User,
 ) -> HotelMembership:
     """Consume a valid invitation and attach its role to an authenticated user."""
+    if invitation.role == "owner":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invitación inválida")
+    try:
+        require_active_hotel_role(db, invitation.hotel_id, invitation.role, lock=True)
+    except HotelRoleNotFound as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="El rol de la invitación ya no está disponible",
+        ) from exc
     membership = (
         db.query(HotelMembership)
         .filter(

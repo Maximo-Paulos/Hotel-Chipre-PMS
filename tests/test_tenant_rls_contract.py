@@ -14,7 +14,11 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Session
 
 from app.database import Base
-from app.services.tenant_context import set_tenant_context, set_tenant_hotel_context
+from app.services.tenant_context import (
+    set_invitation_token_hash_context,
+    set_tenant_context,
+    set_tenant_hotel_context,
+)
 
 
 CORE_COMPOSITE_FK_REQUIREMENTS = (
@@ -86,6 +90,7 @@ ADDITIVE_RLS_TABLE_CONTRACT = (
         "20260911_whatsapp_crm.py",
         ("whatsapp_channels", "whatsapp_contacts", "whatsapp_conversations", "whatsapp_messages", "whatsapp_conversation_notes", "whatsapp_conversation_events", "whatsapp_outbound_outbox"),
     ),
+    ("20260924_custom_hotel_roles.py", ("hotel_roles",)),
 )
 
 
@@ -250,6 +255,8 @@ def test_rls_migration_covers_every_hotel_scoped_model_table():
         "temporary_action_grants",
         "subscription_adjustments",
         "hotel_role_visibility_window",
+            "hotel_roles",
+            "action_step_up_ticket_uses",
         "domain_event_outbox",
         "domain_event_outbox_retention_watermarks",
         "stored_objects",
@@ -340,6 +347,58 @@ def test_tenant_context_is_safe_for_local_sqlite_sessions():
     with Session(engine) as db:
         set_tenant_context(db, user_id=7, hotel_id=42)
         set_tenant_hotel_context(db, None)
+        set_invitation_token_hash_context(db, "a" * 64)
+        set_invitation_token_hash_context(db, None)
+        with pytest.raises(ValueError, match="SHA-256"):
+            set_invitation_token_hash_context(db, "not-a-digest")
+
+
+def test_invitation_token_rls_migration_separates_capability_read_from_tenant_writes(monkeypatch):
+    path = Path(__file__).parents[1] / "alembic" / "versions" / "20260924_invitation_token_rls.py"
+    spec = importlib.util.spec_from_file_location("invitation_token_rls_migration", path)
+    assert spec and spec.loader
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    output = StringIO()
+    dialect = postgresql.dialect()
+    context = MigrationContext.configure(
+        dialect=dialect,
+        opts={"as_sql": True, "output_buffer": output},
+    )
+    monkeypatch.setattr(migration, "op", Operations(context))
+
+    migration.upgrade()
+    ddl = output.getvalue()
+
+    assert 'CREATE POLICY "tenant_isolation_staff_invitations"' in ddl
+    assert 'FOR ALL' in ddl
+    token_policy = ddl.split('CREATE POLICY "invitation_token_staff_invitation_read"', 1)[1].split(';', 1)[0]
+    assert "FOR SELECT" in token_policy
+    assert "current_setting('app.invitation_token_hash', true)" in token_policy
+    assert "WITH CHECK" not in token_policy
+
+
+def test_action_step_up_replay_migration_adds_tenant_scoped_unique_use_ledger(monkeypatch):
+    path = Path(__file__).parents[1] / "alembic" / "versions" / "20260924_action_stepup_single_use.py"
+    spec = importlib.util.spec_from_file_location("action_stepup_single_use_migration", path)
+    assert spec and spec.loader
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    output = StringIO()
+    dialect = postgresql.dialect()
+    context = MigrationContext.configure(
+        dialect=dialect,
+        opts={"as_sql": True, "output_buffer": output},
+    )
+    monkeypatch.setattr(migration, "op", Operations(context))
+
+    migration.upgrade()
+    ddl = output.getvalue()
+
+    assert 'CREATE TABLE action_step_up_ticket_uses' in ddl
+    assert 'CONSTRAINT uq_action_step_up_ticket_use_id UNIQUE (ticket_id)' in ddl
+    assert 'CREATE POLICY "tenant_isolation_action_step_up_ticket_uses"' in ddl
+    assert "current_setting('app.hotel_id', true)" in ddl
 
 
 def _load_master_admin_bypass_migration():

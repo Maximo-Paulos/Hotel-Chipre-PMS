@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.models.hotel_membership import HotelMembership
 from app.models.permission import Permission
+from app.models.reservation import Reservation
 from app.models.security_audit_log import SecurityAuditLog
 from app.models.temporary_action_grant import (
     TemporaryActionGrant,
@@ -20,6 +21,7 @@ from app.models.temporary_action_grant import (
 from app.services.mfa_service import consume_mfa_code
 from app.services.permission_service import (
     PERMISSION_DEFINITIONS,
+    PERMISSION_RESERVATION_CANCEL,
     canonical_permission_code,
     seed_default_permissions,
 )
@@ -98,6 +100,19 @@ def _require_approver(db: Session, actor: TemporaryGrantActor) -> HotelMembershi
     return membership
 
 
+def _canonical_reservation_id(resource_id: str | int | None) -> str:
+    if isinstance(resource_id, bool) or resource_id is None:
+        raise ValueError("La reserva del grant es invalida")
+    value = str(resource_id).strip()
+    try:
+        reservation_id = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("La reserva del grant es invalida") from exc
+    if reservation_id <= 0 or str(reservation_id) != value:
+        raise ValueError("La reserva del grant es invalida")
+    return value
+
+
 def _audit(
     db: Session,
     grant: TemporaryActionGrant,
@@ -144,6 +159,22 @@ def request_grant(
     canonical_code = canonical_permission_code((permission_code or "").strip())
     if canonical_code not in PERMISSION_DEFINITIONS:
         raise ValueError("Permiso invalido")
+    if canonical_code != PERMISSION_RESERVATION_CANCEL:
+        raise ValueError("Los grants temporales solo permiten cancelar una reserva")
+    if resource_type != "reservation":
+        raise ValueError("El recurso del grant debe ser una reserva")
+    canonical_resource_id = _canonical_reservation_id(resource_id)
+    reservation_exists = (
+        db.query(Reservation.id)
+        .filter(
+            Reservation.id == int(canonical_resource_id),
+            Reservation.hotel_id == hotel_id,
+            Reservation.deleted_at.is_(None),
+        )
+        .scalar()
+    )
+    if reservation_exists is None:
+        raise ValueError("La reserva no existe en este hotel")
     normalized_reason = (reason or "").strip()
     if not normalized_reason:
         raise ValueError("El motivo es obligatorio")
@@ -156,8 +187,8 @@ def request_grant(
         hotel_id=hotel_id,
         requester_user_id=requester.user_id,
         permission_code=canonical_code,
-        resource_type=(resource_type or "").strip() or None,
-        resource_id=None if resource_id is None else str(resource_id),
+        resource_type="reservation",
+        resource_id=canonical_resource_id,
         reason=normalized_reason,
         status=TemporaryActionGrantStatusEnum.PENDING,
     )
@@ -298,9 +329,27 @@ def expire_stale_grants(
     return expired_count
 
 
-def consume_grant(db: Session, token: str, requester: TemporaryGrantActor) -> bool:
-    """Atomically consume a matching approved token for its original requester."""
-    if not (token or "").strip():
+def consume_grant_for_action(
+    db: Session,
+    token: str,
+    requester: TemporaryGrantActor,
+    *,
+    permission_code: str,
+    resource_type: str,
+    resource_id: str | int,
+) -> bool:
+    """Consume an approved grant only for its exact reservation-cancel action."""
+    if (
+        permission_code != PERMISSION_RESERVATION_CANCEL
+        or resource_type != "reservation"
+        or not isinstance(token, str)
+        or not token.strip()
+        or len(token) > 512
+    ):
+        return False
+    try:
+        canonical_resource_id = _canonical_reservation_id(resource_id)
+    except ValueError:
         return False
     _active_membership(db, requester)
     now = _utcnow()
@@ -310,6 +359,9 @@ def consume_grant(db: Session, token: str, requester: TemporaryGrantActor) -> bo
         .filter(
             TemporaryActionGrant.hotel_id == requester.hotel_id,
             TemporaryActionGrant.requester_user_id == requester.user_id,
+            TemporaryActionGrant.permission_code == PERMISSION_RESERVATION_CANCEL,
+            TemporaryActionGrant.resource_type == "reservation",
+            TemporaryActionGrant.resource_id == canonical_resource_id,
             TemporaryActionGrant.status == TemporaryActionGrantStatusEnum.APPROVED,
             TemporaryActionGrant.expires_at > now,
         )
@@ -326,6 +378,9 @@ def consume_grant(db: Session, token: str, requester: TemporaryGrantActor) -> bo
                 TemporaryActionGrant.id == grant.id,
                 TemporaryActionGrant.hotel_id == requester.hotel_id,
                 TemporaryActionGrant.requester_user_id == requester.user_id,
+                TemporaryActionGrant.permission_code == PERMISSION_RESERVATION_CANCEL,
+                TemporaryActionGrant.resource_type == "reservation",
+                TemporaryActionGrant.resource_id == canonical_resource_id,
                 TemporaryActionGrant.status == TemporaryActionGrantStatusEnum.APPROVED,
                 TemporaryActionGrant.expires_at > now,
             )

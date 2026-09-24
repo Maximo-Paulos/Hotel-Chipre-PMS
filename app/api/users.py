@@ -19,9 +19,12 @@ from app.schemas.auth import UserInfo
 from app.services.security import verify_password
 from app.services import mfa_service
 from app.services.permission_service import (
+    HotelRoleNotFound,
     PERMISSION_HOTEL_PROPERTY_MANAGE,
     PERMISSION_SETTINGS_USERS_MANAGE,
     PERMISSION_SETTINGS_USERS_VIEW,
+    ROLE_CODES,
+    require_active_hotel_role,
 )
 from app.services.invitation_service import (
     invitation_snapshot,
@@ -50,7 +53,9 @@ router = APIRouter(prefix="/api/users", tags=["Users"])
 _MANAGE_STAFF = require_roles_and_permission(PERMISSION_SETTINGS_USERS_MANAGE, "owner", "co_owner")
 
 
-def _assert_assignable_role(actor_role: str | None, target_role: str) -> None:
+def _assert_assignable_role(
+    actor_role: str | None, target_role: str, *, custom_role: bool = False
+) -> None:
     if target_role == "owner":
         raise HTTPException(
             status_code=400,
@@ -61,7 +66,10 @@ def _assert_assignable_role(actor_role: str | None, target_role: str) -> None:
         "owner": {"co_owner", "manager", "receptionist", "housekeeping"},
         "co_owner": {"manager", "receptionist", "housekeeping"},
     }
-    if target_role not in allowed_by_actor.get(actor_role or "", set()):
+    can_assign = (
+        custom_role and actor_role in {"owner", "co_owner"}
+    ) or target_role in allowed_by_actor.get(actor_role or "", set())
+    if not can_assign:
         raise HTTPException(
             status_code=403,
             detail="No tenes permisos para asignar ese rol",
@@ -69,11 +77,22 @@ def _assert_assignable_role(actor_role: str | None, target_role: str) -> None:
 
 
 def _assert_manageable_membership(actor_role: str | None, membership: HotelMembership, *, action: str) -> None:
+    _assert_manageable_role(actor_role, membership.role, action=action)
+
+
+def _assert_manageable_role(actor_role: str | None, target_role: str, *, action: str) -> None:
+    if target_role.startswith("cr_"):
+        if actor_role in {"owner", "co_owner"}:
+            return
+        raise HTTPException(
+            status_code=403,
+            detail=f"No tenes permisos para {action} este usuario",
+        )
     managed_roles = {
         "owner": {"co_owner", "manager", "receptionist", "housekeeping"},
         "co_owner": {"manager", "receptionist", "housekeeping"},
     }
-    if membership.role not in managed_roles.get(actor_role or "", set()):
+    if target_role not in managed_roles.get(actor_role or "", set()):
         raise HTTPException(
             status_code=403,
             detail=f"No tenes permisos para {action} este usuario",
@@ -194,15 +213,41 @@ def invite_user(
         raise HTTPException(status_code=400, detail="Email requerido")
 
     role = payload.role
-    if role not in {"owner", "co_owner", "manager", "receptionist", "housekeeping"}:
+    try:
+        custom_role = require_active_hotel_role(db, context.hotel_id, role, lock=True)
+    except HotelRoleNotFound as exc:
+        raise HTTPException(status_code=400, detail="Rol inválido") from exc
+    if role not in ROLE_CODES and custom_role is None:
         raise HTTPException(status_code=400, detail="Rol inválido")
-    _assert_assignable_role(context.user_role, role)
+    _assert_assignable_role(context.user_role, role, custom_role=custom_role is not None)
+
+    # The invitation provisioner also updates an existing membership. Apply
+    # the same hierarchy guard as the explicit role-change endpoint before it
+    # can demote/re-invite a peer co-owner through the email path.
+    existing_user = db.query(User).filter(User.email.ilike(email)).first()
+    if existing_user is not None:
+        existing_membership = (
+            db.query(HotelMembership)
+            .filter(
+                HotelMembership.hotel_id == context.hotel_id,
+                HotelMembership.user_id == existing_user.id,
+            )
+            .with_for_update()
+            .first()
+        )
+        if existing_membership is not None:
+            if existing_membership.user_id == context.user_id:
+                raise HTTPException(status_code=400, detail="No puedes invitarte a ti mismo con otro rol")
+            _assert_manageable_membership(context.user_role, existing_membership, action="invitar")
     try:
         provision = provision_staff_invitation(
             db,
             hotel_id=context.hotel_id,
             email=email,
-            role=role,
+            # The legacy provisioner accepts only built-ins. Keep its account,
+            # invitation, membership, alias and subscription flow, then persist
+            # the validated tenant-specific code in the same transaction.
+            role=custom_role.base_role if custom_role is not None else role,
             inviter_user_id=context.user_id,
             inviter_email=context.user_email or "",
             alias=payload.alias,
@@ -221,6 +266,11 @@ def invite_user(
         db.rollback()
         raise HTTPException(status_code=409, detail="No se pudo reservar el alias en este hotel") from exc
 
+    if custom_role is not None:
+        provision.membership.role = role
+        provision.invitation.role = role
+        db.flush()
+
     user = provision.user
     membership = provision.membership
     invitation = provision.invitation
@@ -228,6 +278,18 @@ def invite_user(
     reused = provision.reused
     before = provision.membership_before
     invitation_before = provision.invitation_before
+    if before is not None:
+        if before.get("user_id") == context.user_id:
+            db.rollback()
+            raise HTTPException(status_code=400, detail="No puedes invitarte a ti mismo con otro rol")
+        try:
+            # Recheck the role snapshot returned by the provision path
+            # to close the race where the membership appeared after the
+            # preflight email lookup above.
+            _assert_manageable_role(context.user_role, str(before.get("role") or ""), action="invitar")
+        except HTTPException:
+            db.rollback()
+            raise
     if membership:
         audit_log_service.safe_create_audit_log(
             db,
@@ -297,6 +359,10 @@ def resend_invitation(
         raise HTTPException(status_code=404, detail="Invitación no encontrada")
     if invitation.status != "pending" or invitation.expires_at <= utcnow():
         raise HTTPException(status_code=409, detail="La invitación ya no está pendiente")
+    try:
+        require_active_hotel_role(db, context.hotel_id, invitation.role, lock=True)
+    except HotelRoleNotFound as exc:
+        raise HTTPException(status_code=409, detail="El rol de la invitación ya no está disponible") from exc
 
     membership = (
         db.query(HotelMembership)
@@ -501,9 +567,17 @@ def update_role(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(_MANAGE_STAFF),
 ):
-    if payload.role not in {"owner", "co_owner", "manager", "receptionist", "housekeeping"}:
+    try:
+        custom_role = require_active_hotel_role(db, context.hotel_id, payload.role, lock=True)
+    except HotelRoleNotFound as exc:
+        raise HTTPException(status_code=400, detail="Rol inválido") from exc
+    if payload.role not in ROLE_CODES and custom_role is None:
         raise HTTPException(status_code=400, detail="Rol inválido")
-    _assert_assignable_role(context.user_role, payload.role)
+    _assert_assignable_role(
+        context.user_role,
+        payload.role,
+        custom_role=custom_role is not None,
+    )
     membership = (
         db.query(HotelMembership)
         .filter(HotelMembership.hotel_id == context.hotel_id, HotelMembership.user_id == user_id)

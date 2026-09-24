@@ -1,9 +1,9 @@
 # Alembic head
 
-Generado: 2026-09-18T04:18:49.797337+00:00
-Commit: `788d35be190e75c14289180f669d93aed01a59d3`
+Generado: 2026-09-24T21:40:33.711913+00:00
+Commit: `cd0705c851d98db7852c14e74f7e9ba56acdc9e2`
 
 ```text
-20260918_member_alias_auth (head)
+20260924_action_stepup_single_use (head)
 ```
 Fuente: `alembic.ini` y `alembic/versions/`.

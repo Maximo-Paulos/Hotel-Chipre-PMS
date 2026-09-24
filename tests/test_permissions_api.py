@@ -1,3 +1,4 @@
+import pyotp
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -9,7 +10,12 @@ from app.dependencies.auth import AuthContext, get_auth_context
 from app.main import app as fastapi_app
 from app.models.security_audit_log import SecurityAuditLog
 from app.models.hotel_config import HotelConfiguration
-from app.models.permission import HotelPermissionOverride
+from app.models.hotel_membership import HotelMembership
+from app.models.permission import HotelPermissionOverride, UserPermissionOverride
+from app.models.user import User
+from app.models.user_mfa import UserMfaSecret
+from app.services.action_step_up_service import create_action_step_up_ticket
+from app.services.mfa_service import encrypt_totp_secret
 from app.services.permission_service import (
     _CANONICAL_DEFINITIONS,
     LEGACY_PERMISSION_ALIASES,
@@ -23,6 +29,8 @@ from app.services.permission_service import (
     PERMISSION_PERMISSION_MANAGE,
     PERMISSION_ROOM_STATUS_UPDATE,
     PERMISSION_STOCK_ADJUST,
+    canonical_permission_code,
+    ensure_permission_matrix_seeded,
 )
 
 
@@ -38,6 +46,19 @@ def _override_auth(hotel_id: int, role: str, user_id: int = 10):
         )
 
     return dependency
+
+
+def _step_up_headers(path: str, *, method: str, hotel_id: int = 1, user_id: int = 10):
+    """Create an action-bound test ticket; MFA issuance is covered separately."""
+    ticket = create_action_step_up_ticket(
+        user_id=user_id,
+        hotel_id=hotel_id,
+        token_version=0,
+        permission_code=PERMISSION_PERMISSION_MANAGE,
+        method=method,
+        path=path,
+    )
+    return {"X-Action-Step-Up-Ticket": ticket}
 
 
 def _client_with_db():
@@ -74,7 +95,10 @@ def test_permissions_matrix_available_to_permission_manager_only():
     client, db, engine = _client_with_db()
     fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner")
     try:
-        response = client.get("/api/permissions/matrix")
+        response = client.get(
+            "/api/permissions/matrix",
+            headers=_step_up_headers("/api/permissions/matrix", method="GET"),
+        )
         assert response.status_code == 200
         assert response.json()["matrix"]["manager"][PERMISSION_RESERVATION_CREATE]["allowed"] is True
 
@@ -93,7 +117,10 @@ def test_permissions_matrix_exposes_only_canonical_rows_with_ui_metadata():
     client, db, engine = _client_with_db()
     fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner")
     try:
-        response = client.get("/api/permissions/matrix")
+        response = client.get(
+            "/api/permissions/matrix",
+            headers=_step_up_headers("/api/permissions/matrix", method="GET"),
+        )
 
         assert response.status_code == 200
         matrix = response.json()["matrix"]
@@ -168,7 +195,10 @@ def test_permission_catalog_exposes_owner_only_normal_metadata_and_help_text():
     client, db, engine = _client_with_db()
     fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner")
     try:
-        response = client.get("/api/permissions/catalog")
+        response = client.get(
+            "/api/permissions/catalog",
+            headers=_step_up_headers("/api/permissions/catalog", method="GET"),
+        )
         assert response.status_code == 200
         catalog = {row["code"]: row for row in response.json()["permissions"]}
         assert catalog
@@ -190,11 +220,17 @@ def test_permission_catalog_exposes_owner_only_normal_metadata_and_help_text():
             assert catalog[code]["delegable"] is True
             assert catalog[code]["help_es"]
 
-        matrix = client.get("/api/permissions/matrix")
+        matrix = client.get(
+            "/api/permissions/matrix",
+            headers=_step_up_headers("/api/permissions/matrix", method="GET"),
+        )
         assert matrix.status_code == 200
         assert matrix.json()["matrix"]["manager"][PERMISSION_RESERVATION_CREATE]["help_es"]
 
-        profiles = client.get("/api/permissions/role-overrides")
+        profiles = client.get(
+            "/api/permissions/role-overrides",
+            headers=_step_up_headers("/api/permissions/role-overrides", method="GET"),
+        )
         assert profiles.status_code == 200
         assert profiles.json()["matrix"]["manager"][PERMISSION_RESERVATION_CREATE]["help_es"]
     finally:
@@ -228,6 +264,7 @@ def test_permission_override_can_deny_receptionist_guest_edit():
         response = client.put(
             "/api/permissions/override",
             json={"role": "receptionist", "permission_code": PERMISSION_GUEST_EDIT, "allowed": False},
+            headers=_step_up_headers("/api/permissions/override", method="PUT", user_id=99),
         )
         assert response.status_code == 200
         assert response.json()["allowed"] is False
@@ -243,6 +280,66 @@ def test_permission_override_can_deny_receptionist_guest_edit():
         engine.dispose()
 
 
+def test_permission_override_reads_include_current_versions():
+    client, db, engine = _client_with_db()
+    fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner", user_id=10)
+    db.add(User(id=20, email="employee@test.com", password_hash="synthetic", is_verified=True))
+    db.flush()
+    db.add(HotelMembership(hotel_id=1, user_id=20, role="receptionist", status="active"))
+    db.commit()
+    try:
+        role_path = "/api/permissions/override"
+        for allowed, expected_version in ((False, 0), (True, 1)):
+            updated = client.put(
+                role_path,
+                json={
+                    "role": "receptionist",
+                    "permission_code": PERMISSION_GUEST_EDIT,
+                    "allowed": allowed,
+                    "expected_version": expected_version,
+                },
+                headers=_step_up_headers(role_path, method="PUT"),
+            )
+            assert updated.status_code == 200, updated.text
+
+        role_profiles = client.get(
+            "/api/permissions/role-overrides",
+            headers=_step_up_headers("/api/permissions/role-overrides", method="GET"),
+        )
+        assert role_profiles.status_code == 200, role_profiles.text
+        permission_code = canonical_permission_code(PERMISSION_GUEST_EDIT)
+        role_detail = role_profiles.json()["matrix"]["receptionist"][permission_code]
+        assert role_detail["source"] == "role_override"
+        assert role_detail["version"] == 2
+
+        user_path = "/api/permissions/user-overrides/20"
+        for allowed, expected_version in ((False, 0), (True, 1)):
+            updated = client.put(
+                user_path,
+                json={
+                    "permission_code": PERMISSION_GUEST_EDIT,
+                    "allowed": allowed,
+                    "expected_version": expected_version,
+                },
+                headers=_step_up_headers(user_path, method="PUT"),
+            )
+            assert updated.status_code == 200, updated.text
+
+        read_path = "/api/permissions/user-overrides/20"
+        user_overrides = client.get(
+            read_path,
+            headers=_step_up_headers(read_path, method="GET"),
+        )
+        assert user_overrides.status_code == 200, user_overrides.text
+        user_detail = user_overrides.json()["details"][permission_code]
+        assert user_detail["source"] == "user_override"
+        assert user_detail["version"] == 2
+    finally:
+        fastapi_app.dependency_overrides.clear()
+        db.close()
+        engine.dispose()
+
+
 def test_stale_expected_version_is_rejected_for_role_override():
     client, db, engine = _client_with_db()
     fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner", user_id=99)
@@ -250,6 +347,7 @@ def test_stale_expected_version_is_rejected_for_role_override():
         created = client.put(
             "/api/permissions/override",
             json={"role": "receptionist", "permission_code": PERMISSION_GUEST_EDIT, "allowed": False},
+            headers=_step_up_headers("/api/permissions/override", method="PUT", user_id=99),
         )
         assert created.status_code == 200
         assert created.json()["version"] == 1
@@ -262,6 +360,7 @@ def test_stale_expected_version_is_rejected_for_role_override():
                 "allowed": True,
                 "expected_version": 1,
             },
+            headers=_step_up_headers("/api/permissions/override", method="PUT", user_id=99),
         )
         assert first_update.status_code == 200
         assert first_update.json()["version"] == 2
@@ -274,6 +373,7 @@ def test_stale_expected_version_is_rejected_for_role_override():
                 "allowed": False,
                 "expected_version": 1,
             },
+            headers=_step_up_headers("/api/permissions/override", method="PUT", user_id=99),
         )
         assert stale_update.status_code == 409
     finally:
@@ -318,6 +418,7 @@ def test_permission_override_can_grant_permission_missing_from_role_default():
                 "permission_code": PERMISSION_GUEST_EDIT,
                 "allowed": True,
             },
+            headers=_step_up_headers("/api/permissions/override", method="PUT", user_id=99),
         )
 
         assert response.status_code == 200, response.text
@@ -339,6 +440,7 @@ def test_owner_can_grant_housekeeping_occupancy_planner():
                 "permission_code": PERMISSION_OCCUPANCY_VIEW,
                 "allowed": True,
             },
+            headers=_step_up_headers("/api/permissions/override", method="PUT", user_id=99),
         )
 
         assert grant.status_code == 200, grant.text
@@ -367,6 +469,7 @@ def test_override_in_hotel_a_does_not_affect_hotel_b():
         response = client.put(
             "/api/permissions/override",
             json={"role": "receptionist", "permission_code": PERMISSION_GUEST_EDIT, "allowed": False},
+            headers=_step_up_headers("/api/permissions/override", method="PUT"),
         )
         assert response.status_code == 200
 
@@ -482,6 +585,163 @@ def test_stock_history_api_is_hotel_scoped_and_limited():
 
         fastapi_app.dependency_overrides[get_auth_context] = _override_auth(2, "owner", user_id=12)
         assert client.get(f"/api/stock/movements?item_id={item_id}").json() == []
+    finally:
+        fastapi_app.dependency_overrides.clear()
+        db.close()
+        engine.dispose()
+
+
+def _seed_permission_restore_state(db, restore_kind: str) -> str:
+    ensure_permission_matrix_seeded(db)
+    secret = pyotp.random_base32()
+    permission_code = canonical_permission_code(PERMISSION_GUEST_EDIT)
+    db.add_all(
+        [
+            User(
+                id=10,
+                email="owner@test.com",
+                password_hash="unused-test-hash",
+                is_active=True,
+                is_verified=True,
+                role="owner",
+            ),
+            UserMfaSecret(
+                user_id=10,
+                encrypted_secret=encrypt_totp_secret(secret),
+                status="active",
+            ),
+        ]
+    )
+    if restore_kind == "role":
+        db.add(
+            HotelPermissionOverride(
+                hotel_id=1,
+                role="receptionist",
+                permission_code=permission_code,
+                allowed=False,
+                version=1,
+            )
+        )
+    else:
+        db.add_all(
+            [
+                User(
+                    id=20,
+                    email="employee@test.com",
+                    password_hash="unused-test-hash",
+                    is_active=True,
+                    is_verified=True,
+                    role="owner",
+                ),
+                HotelMembership(
+                    hotel_id=1,
+                    user_id=20,
+                    role="receptionist",
+                    status="active",
+                ),
+                UserPermissionOverride(
+                    hotel_id=1,
+                    user_id=20,
+                    permission_code=permission_code,
+                    allowed=False,
+                    version=1,
+                ),
+            ]
+        )
+    db.commit()
+    return secret
+
+
+def _issue_permission_restore_ticket(client, secret: str, path: str) -> str:
+    response = client.post(
+        "/api/auth/step-up",
+        json={
+            "code": pyotp.TOTP(secret).now(),
+            "permission_code": PERMISSION_PERMISSION_MANAGE,
+            "method": "DELETE",
+            "path": path,
+        },
+    )
+    assert response.status_code == 200, response.text
+    return response.json()["ticket"]
+
+
+@pytest.mark.parametrize(
+    ("restore_kind", "path"),
+    [
+        (
+            "role",
+            "/api/permissions/overrides/role/receptionist/guest:edit",
+        ),
+        (
+            "role",
+            "/api/permissions/role-overrides/receptionist/guest:edit",
+        ),
+        (
+            "user",
+            "/api/permissions/overrides/user/20/guest:edit",
+        ),
+        (
+            "user",
+            "/api/permissions/user-overrides/20/guest:edit",
+        ),
+    ],
+)
+@pytest.mark.parametrize("ticket_mode", ["missing", "invalid", "valid"])
+def test_permission_override_restore_requires_action_bound_step_up(
+    restore_kind, path, ticket_mode
+):
+    client, db, engine = _client_with_db()
+    fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner", user_id=10)
+    try:
+        secret = _seed_permission_restore_state(db, restore_kind)
+        headers = {}
+        if ticket_mode == "invalid":
+            headers["X-Action-Step-Up-Ticket"] = "not-a-valid-signed-ticket"
+        elif ticket_mode == "valid":
+            headers["X-Action-Step-Up-Ticket"] = _issue_permission_restore_ticket(
+                client, secret, path
+            )
+
+        response = client.delete(
+            path,
+            params={"expected_version": 1},
+            headers=headers,
+        )
+
+        if ticket_mode == "valid":
+            assert response.status_code == 200, response.text
+            assert response.json()["restored"] is True
+        else:
+            assert response.status_code == 428, response.text
+            detail = response.json()["detail"]
+            assert detail == {
+                "code": "STEP_UP_REQUIRED",
+                "permission_code": PERMISSION_PERMISSION_MANAGE,
+                "method": "DELETE",
+                "path": path,
+            }
+
+        db.expire_all()
+        if restore_kind == "role":
+            row = db.query(HotelPermissionOverride).filter_by(
+                hotel_id=1,
+                role="receptionist",
+                permission_code=canonical_permission_code(PERMISSION_GUEST_EDIT),
+            ).one_or_none()
+        else:
+            row = db.query(UserPermissionOverride).filter_by(
+                hotel_id=1,
+                user_id=20,
+                permission_code=canonical_permission_code(PERMISSION_GUEST_EDIT),
+            ).one_or_none()
+
+        if ticket_mode == "valid":
+            assert row is None
+        else:
+            assert row is not None
+            assert row.allowed is False
+            assert row.version == 1
     finally:
         fastapi_app.dependency_overrides.clear()
         db.close()

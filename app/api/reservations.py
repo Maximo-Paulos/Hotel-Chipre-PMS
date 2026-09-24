@@ -5,7 +5,7 @@ Complete CRUD + cancel, modify, no-show, extend stay.
 import logging
 from datetime import date
 from typing import Literal
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -80,7 +80,7 @@ from app.services.ota_manual_service import (
 )
 from app.services.payment_service import PaymentError
 from app.services.allocation_runtime_service import run_persisted_allocation
-from app.dependencies.auth import AuthContext, require_all_permissions, require_any_permission, require_permission
+from app.dependencies.auth import AuthContext, get_auth_context, require_all_permissions, require_any_permission, require_permission
 from app.services.permission_service import (
     PERMISSION_COMPANY_MANAGE,
     PERMISSION_GUEST_CREATE,
@@ -100,6 +100,11 @@ from app.services.permission_service import (
     resolve,
 )
 from app.services import audit_log_service
+from app.services.temporary_action_grant_service import (
+    TemporaryGrantActor,
+    TemporaryGrantError,
+    consume_grant_for_action,
+)
 from app.services.graph_projection import (
     project_company_link,
     project_reservation_assignment,
@@ -139,7 +144,7 @@ def _to_read(r: Reservation) -> ReservationRead:
 
 
 def _is_manager_context(context: AuthContext) -> bool:
-    return context.user_role in {"owner", "co_owner", "manager"}
+    return context.operational_role in {"owner", "co_owner", "manager"}
 
 
 def _ensure_manual_rate_permission(db: Session, context: AuthContext) -> None:
@@ -425,7 +430,7 @@ def occupancy_grid(
         hotel_id=context.hotel_id,
         date_from=date_from,
         date_to=date_to,
-        role=context.user_role,
+        role=context.operational_role,
         producer=lambda: get_occupancy_grid(
             db,
             hotel_id=context.hotel_id,
@@ -434,7 +439,7 @@ def occupancy_grid(
             context=context,
         ),
     )
-    if context.user_role != "housekeeping":
+    if context.operational_role != "housekeeping":
         return grid
 
     # Housekeeping needs the room/date occupancy blocks, never guest identity,
@@ -671,29 +676,88 @@ def cancel_reservation(
     reservation_id: int,
     manager_pin: str | None = None,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_CANCEL)),
+    context: AuthContext = Depends(get_auth_context),
+    temporary_grant_token: str | None = Header(default=None, alias="X-Temporary-Action-Grant"),
 ):
     """Cancel a reservation. Post check-in cancellations are not allowed."""
+    if not context.is_verified:
+        raise HTTPException(status_code=403, detail="Verifica tu email para usar el sistema")
+    if context.user_id is None:
+        raise HTTPException(status_code=401, detail="Autenticacion requerida")
+
+    permissions = context.permissions or set()
+    permissions.add(PERMISSION_RESERVATION_CANCEL)
+    context.permissions = permissions
+    permission_allowed = resolve(
+        db,
+        context.hotel_id,
+        context.user_role,
+        PERMISSION_RESERVATION_CANCEL,
+        user_id=context.user_id,
+    )
+    if not permission_allowed:
+        audit_permission_denied(
+            db,
+            hotel_id=context.hotel_id,
+            user_id=context.user_id,
+            role=context.user_role,
+            permission_code=PERMISSION_RESERVATION_CANCEL,
+        )
+        if not temporary_grant_token:
+            raise HTTPException(status_code=403, detail="No tenes permisos para esta accion")
+
     config = db.get(HotelConfiguration, context.hotel_id)
     if config and not config.subscription_active:
+        if not permission_allowed:
+            raise HTTPException(status_code=403, detail="No tenes permisos para esta accion")
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
             detail="Suscripción inactiva. Reactivá el plan para gestionar reservas.",
         )
     r = get_reservation_by_id(db, reservation_id, context.hotel_id)
     if not r:
+        if not permission_allowed:
+            raise HTTPException(status_code=403, detail="No tenes permisos para esta accion")
         raise HTTPException(status_code=404, detail="Reservation not found")
 
     if r.status in (ReservationStatusEnum.CHECKED_IN, ReservationStatusEnum.CHECKED_OUT):
+        if not permission_allowed:
+            raise HTTPException(status_code=403, detail="No tenes permisos para esta accion")
         raise HTTPException(
             status_code=400,
             detail="Cannot cancel a reservation that is already checked-in or checked-out",
         )
 
     if r.status == ReservationStatusEnum.CANCELLED:
+        if not permission_allowed:
+            raise HTTPException(status_code=403, detail="No tenes permisos para esta accion")
         raise HTTPException(status_code=400, detail="Reservation is already cancelled")
-    before = audit_log_service.model_snapshot(r)
+
+    if not permission_allowed:
+        try:
+            grant_consumed = consume_grant_for_action(
+                db,
+                temporary_grant_token,
+                TemporaryGrantActor(user_id=context.user_id, hotel_id=context.hotel_id),
+                permission_code=PERMISSION_RESERVATION_CANCEL,
+                resource_type="reservation",
+                resource_id=r.id,
+            )
+        except TemporaryGrantError:
+            db.rollback()
+            raise HTTPException(status_code=403, detail="No tenes permisos para esta accion")
+        except Exception:
+            db.rollback()
+            raise
+        if not grant_consumed:
+            # The consume path may have flushed expiry transitions. No action
+            # was authorized or mutated, so persist those transitions before
+            # returning the deny response.
+            db.commit()
+            raise HTTPException(status_code=403, detail="No tenes permisos para esta accion")
+
     try:
+        before = audit_log_service.model_snapshot(r)
         transition_reservation_status(
             db,
             r,
@@ -723,7 +787,14 @@ def cancel_reservation(
         )
         return _to_read(r)
     except ReservationError as e:
+        db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
+    except TemporaryGrantError:
+        db.rollback()
+        raise HTTPException(status_code=403, detail="No tenes permisos para esta accion")
+    except Exception:
+        db.rollback()
+        raise
 
 
 @router.post(

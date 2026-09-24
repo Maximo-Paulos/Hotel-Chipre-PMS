@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import {
   inviteUser,
@@ -19,17 +20,37 @@ import { refreshUserState } from "../../api/queryInvalidation";
 import { useGuardedMutation } from "../../hooks/useGuardedMutation";
 import { useEffectivePermissions } from "../../hooks/usePermissions";
 import { roleLabels } from "../../ui/UserBadge";
+import { fetchHotelRoles, hotelRolesQueryKey, type HotelRole } from "../../api/roles";
 
-// Same names the header badge shows (Gerencia, Limpieza...), not a second
-// English-flavoured set.
-const invitableRoles = ["co_owner", "manager", "receptionist", "housekeeping"] as const;
+type InviteFormState = Omit<InvitePayload, "role"> & { role: string };
 
 export function SettingsUsersPage() {
+  const { t } = useTranslation();
   const { session } = useSession();
   const qc = useQueryClient();
   const { hasPermission } = useEffectivePermissions();
   const canManage = ["owner", "co_owner"].includes(session.baseRole ?? session.role ?? "")
     && hasPermission("settings:users:manage");
+  const rolesQuery = useQuery({
+    queryKey: hotelRolesQueryKey(session.hotelId),
+    enabled: hasValidSession(session) && canManage,
+    queryFn: () => fetchHotelRoles(session)
+  });
+  const activeAssignableRoles = useMemo(() => {
+    const actorRole = session.baseRole ?? session.role;
+    return (rolesQuery.data?.roles ?? []).filter((role) =>
+      role.is_active && role.code !== "owner" && !(actorRole === "co_owner" && role.code === "co_owner")
+    );
+  }, [rolesQuery.data?.roles, session.baseRole, session.role]);
+  const defaultAssignableRole = activeAssignableRoles.find((role) => role.code === "manager") ?? activeAssignableRoles[0];
+  const roleDisplayName = (code: string) => {
+    const role = rolesQuery.data?.roles.find((item) => item.code === code);
+    if (role?.kind === "custom") return role.name;
+    if (role) return t(`hotelRoleNames.${role.code}`, { defaultValue: role.name });
+    return roleLabels[code as keyof typeof roleLabels] ?? code;
+  };
+  const roleOptionLabel = (role: HotelRole) =>
+    role.kind === "custom" ? `${role.name} · ${t("hotelRoles.custom")}` : roleDisplayName(role.code);
   const usersQuery = useQuery<AuthUser[]>({
     queryKey: ["users", session.hotelId],
     enabled: hasValidSession(session),
@@ -41,11 +62,18 @@ export function SettingsUsersPage() {
     queryFn: () => listUserAliases(session)
   });
   const inviteMutation = useGuardedMutation({
-    mutationFn: (payload: InvitePayload) => inviteUser(payload, session),
+    // The wire payload carries a string role code. The API helper still narrows
+    // it to the legacy built-in union; backend support for custom codes is a
+    // required companion change and is not implied by this local assertion.
+    mutationFn: (payload: InviteFormState) => inviteUser({
+      ...payload,
+      role: payload.role as InvitePayload["role"]
+    }, session),
     onSuccess: async () => {
       await Promise.all([
         refreshUserState(qc, session.hotelId),
-        qc.invalidateQueries({ queryKey: ["users", "aliases", session.hotelId] })
+        qc.invalidateQueries({ queryKey: ["users", "aliases", session.hotelId] }),
+        qc.invalidateQueries({ queryKey: hotelRolesQueryKey(session.hotelId) })
       ]);
     }
   });
@@ -54,12 +82,22 @@ export function SettingsUsersPage() {
   });
   const revokeMutation = useGuardedMutation({
     mutationFn: (userId: number) => revokeUser(userId, session),
-    onSuccess: async () => refreshUserState(qc, session.hotelId)
+    onSuccess: async () => {
+      await Promise.all([
+        refreshUserState(qc, session.hotelId),
+        qc.invalidateQueries({ queryKey: hotelRolesQueryKey(session.hotelId) })
+      ]);
+    }
   });
   const updateRoleMutation = useGuardedMutation({
-    mutationFn: (payload: { userId: number; role: InvitePayload["role"] }) =>
-      updateUserRole(payload.userId, payload.role, session),
-    onSuccess: async () => refreshUserState(qc, session.hotelId)
+    mutationFn: (payload: { userId: number; role: string }) =>
+      updateUserRole(payload.userId, payload.role as InvitePayload["role"], session),
+    onSuccess: async () => {
+      await Promise.all([
+        refreshUserState(qc, session.hotelId),
+        qc.invalidateQueries({ queryKey: hotelRolesQueryKey(session.hotelId) })
+      ]);
+    }
   });
   const updateAliasMutation = useGuardedMutation({
     mutationFn: (payload: { userId: number; alias: string | null }) =>
@@ -72,7 +110,7 @@ export function SettingsUsersPage() {
     }
   });
 
-  const [inviteForm, setInviteForm] = useState<InvitePayload>({ email: "", role: "manager", alias: "" });
+  const [inviteForm, setInviteForm] = useState<InviteFormState>({ email: "", role: "manager", alias: "" });
   const [inviteResult, setInviteResult] = useState<InviteResponse | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
   const [copyError, setCopyError] = useState(false);
@@ -80,12 +118,18 @@ export function SettingsUsersPage() {
   const [aliasDraft, setAliasDraft] = useState("");
   const [aliasError, setAliasError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (!rolesQuery.data || activeAssignableRoles.some((role) => role.code === inviteForm.role)) return;
+    setInviteForm((current) => ({ ...current, role: defaultAssignableRole?.code ?? "" }));
+  }, [activeAssignableRoles, defaultAssignableRole, inviteForm.role, rolesQuery.data]);
+
   const aliasesByUserId = useMemo(
     () => new Map((aliasesQuery.data?.items ?? []).map((entry) => [entry.user_id, entry])),
     [aliasesQuery.data?.items]
   );
 
   const handleInvite = async () => {
+    if (!activeAssignableRoles.some((role) => role.code === inviteForm.role)) return;
     try {
       const response = await inviteMutation.mutateAsync({
         ...inviteForm,
@@ -95,13 +139,14 @@ export function SettingsUsersPage() {
       setInviteResult(response);
       setLinkCopied(false);
       setCopyError(false);
-      setInviteForm({ email: "", role: "manager", alias: "" });
+      setInviteForm({ email: "", role: defaultAssignableRole?.code ?? "", alias: "" });
     } catch {
       // The mutation state renders the safe backend error below.
     }
   };
 
-  const handleRoleChange = async (userId: number, role: InvitePayload["role"]) => {
+  const handleRoleChange = async (userId: number, role: string) => {
+    if (!activeAssignableRoles.some((item) => item.code === role)) return;
     try {
       await updateRoleMutation.mutateAsync({ userId, role });
     } catch {
@@ -190,27 +235,34 @@ export function SettingsUsersPage() {
               maxLength={80}
               onChange={(e) => setInviteForm((p) => ({ ...p, alias: e.target.value }))}
             />
-            <select
-              className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
-              aria-label="Rol de invitación"
-              value={inviteForm.role}
-              onChange={(e) => setInviteForm((p) => ({ ...p, role: e.target.value as InvitePayload["role"] }))}
-            >
-              {invitableRoles.map((role) => (
-                <option key={role} value={role}>
-                  {roleLabels[role]}
-                </option>
-              ))}
-            </select>
+            <label className="flex flex-col gap-1 text-xs font-semibold text-slate-600" htmlFor="invite-user-role">
+              {t("hotelRoles.inviteRole")}
+              <select
+                id="invite-user-role"
+                className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-normal text-slate-900"
+                value={activeAssignableRoles.some((role) => role.code === inviteForm.role) ? inviteForm.role : ""}
+                disabled={rolesQuery.isLoading || rolesQuery.isError || activeAssignableRoles.length === 0 || inviteMutation.isPending}
+                onChange={(e) => setInviteForm((p) => ({ ...p, role: e.target.value }))}
+              >
+                <option value="" disabled>{t("hotelRoles.selectAssignable")}</option>
+                {activeAssignableRoles.map((role) => (
+                  <option key={role.code} value={role.code}>{roleOptionLabel(role)}</option>
+                ))}
+              </select>
+            </label>
             <button
               type="button"
               onClick={() => void handleInvite()}
-              disabled={inviteMutation.isPending || !inviteForm.email.trim()}
+              disabled={inviteMutation.isPending || !inviteForm.email.trim() || !activeAssignableRoles.some((role) => role.code === inviteForm.role)}
               className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-60"
             >
               {inviteMutation.isPending ? "Creando invitación..." : "Invitar"}
             </button>
           </div>
+          <p className="mt-2 text-xs text-slate-500">{t("hotelRoles.assignmentBoundary")}</p>
+          {rolesQuery.isLoading ? <p className="mt-2 text-sm text-slate-500" role="status">{t("hotelRoles.rolesLoading")}</p> : null}
+          {rolesQuery.isError ? <p className="mt-2 text-sm text-rose-700" role="alert">{t("hotelRoles.rolesError")}</p> : null}
+          {rolesQuery.isSuccess && activeAssignableRoles.length === 0 ? <p className="mt-2 text-sm text-slate-600" role="status">{t("hotelRoles.noAssignable")}</p> : null}
           {inviteResult && (
             <div className={inviteResult.email_delivery === "sent"
               ? "mt-3 space-y-2 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900"
@@ -340,16 +392,18 @@ export function SettingsUsersPage() {
                         className="rounded-lg border border-slate-200 px-2 py-1 text-sm"
                         aria-label={`Rol de ${u.email}`}
                         value={u.role}
-                        onChange={(e) => void handleRoleChange(u.id, e.target.value as InvitePayload["role"])}
+                        disabled={rolesQuery.isLoading || rolesQuery.isError || updateRoleMutation.isPending}
+                        onChange={(e) => void handleRoleChange(u.id, e.target.value)}
                       >
-                        {invitableRoles.map((role) => (
-                          <option key={role} value={role}>
-                            {roleLabels[role]}
-                          </option>
+                        {!activeAssignableRoles.some((role) => role.code === u.role) ? (
+                          <option value={u.role} disabled>{`${roleDisplayName(u.role)} — ${t("hotelRoles.unavailable")}`}</option>
+                        ) : null}
+                        {activeAssignableRoles.map((role) => (
+                          <option key={role.code} value={role.code}>{roleOptionLabel(role)}</option>
                         ))}
                       </select>
                     ) : (
-                      roleLabels[u.role as keyof typeof roleLabels] ?? u.role
+                      roleDisplayName(u.role)
                     )}
                   </td>
                   <td className="px-3 py-2">

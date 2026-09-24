@@ -38,6 +38,8 @@ from app.models.room import Room, RoomCategory
 from app.models.security_audit_log import SecurityAuditLog
 from app.models.stock import StockItem, StockLocation
 from app.models.user import User
+from app.services.action_step_up_service import create_action_step_up_ticket
+from app.services.permission_service import PERMISSION_PERMISSION_MANAGE
 
 HOTEL_A = 9101
 HOTEL_B = 9102
@@ -321,7 +323,16 @@ def test_invitation_path_cannot_select_foreign_hotel(two_hotel_client):
 
 def test_permission_target_path_cannot_select_foreign_membership(two_hotel_client):
     client, _ids = two_hotel_client
-    resp = client.get(f"/api/permissions/user-overrides/{HOTEL_B}")
+    path = f"/api/permissions/user-overrides/{HOTEL_B}"
+    ticket = create_action_step_up_ticket(
+        user_id=HOTEL_A,
+        hotel_id=HOTEL_A,
+        token_version=0,
+        permission_code=PERMISSION_PERMISSION_MANAGE,
+        method="GET",
+        path=path,
+    )
+    resp = client.get(path, headers={"X-Action-Step-Up-Ticket": ticket})
     assert resp.status_code == 404, resp.text
     assert "Hotel B" not in resp.text
 

@@ -3,6 +3,8 @@ from __future__ import annotations
 import pytest
 
 from app.config import get_settings
+from app.services.action_step_up_service import create_action_step_up_ticket
+from app.services.permission_service import PERMISSION_HOTEL_SECURITY_MANAGE
 from tests.smoke.helpers import register_owner
 
 
@@ -24,11 +26,24 @@ def test_connect_channels_upsert_is_idempotent(client):
     status_before = client.get("/api/integrations/", headers=headers)
     assert status_before.status_code == 200, status_before.text
     booking = next(item for item in status_before.json()["catalog"] if item["provider"] == "booking")
+    connect_path = f"/api/integrations/{booking['id']}/connect"
+    def connect_headers():
+        return {
+            **headers,
+            "X-Action-Step-Up-Ticket": create_action_step_up_ticket(
+            user_id=int(headers["X-User-Id"]),
+            hotel_id=int(headers["X-Hotel-Id"]),
+            token_version=0,
+            permission_code=PERMISSION_HOTEL_SECURITY_MANAGE,
+            method="POST",
+            path=connect_path,
+            ),
+        }
 
     first = client.post(
-        f"/api/integrations/{booking['id']}/connect",
+        connect_path,
         json={"payload": {"api_key": "booking-key-1", "property_id": "hotel-001"}},
-        headers=headers,
+        headers=connect_headers(),
     )
     assert first.status_code == 200, first.text
     assert first.json()["status"] == "connected"
@@ -40,9 +55,9 @@ def test_connect_channels_upsert_is_idempotent(client):
     )
 
     second = client.post(
-        f"/api/integrations/{booking['id']}/connect",
+        connect_path,
         json={"payload": {"api_key": "booking-key-2", "property_id": "hotel-002"}},
-        headers=headers,
+        headers=connect_headers(),
     )
     assert second.status_code == 200, second.text
     assert second.json()["status"] == "connected"
