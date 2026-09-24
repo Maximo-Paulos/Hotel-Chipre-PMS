@@ -1,0 +1,54 @@
+{
+  "observations": [
+    {
+      "operational_case_id": "ops-auth-login",
+      "persona": "owner",
+      "device_profile": "desktop-chrome-current",
+      "target_url": "https://app.hotels-pms.com/login",
+      "preconditions": "Production main is deployed at f89589973c3c795d449220ab5ea26511f0629e85; no dedicated synthetic QA credentials are available locally.",
+      "human_actions": "Opened the login page only. Did not enter credentials or use the personal Google identity shown by the browser.",
+      "expected": "Authenticate using a dedicated synthetic owner account.",
+      "observed": "Login form rendered, but the authenticated journey could not be attempted safely without the dedicated QA identity and mailbox.",
+      "status": "BLOCKED",
+      "severity": "NONE",
+      "artifact_ids": ["login-no-credential", "api-smoke"],
+      "code_sha": "f89589973c3c795d449220ab5ea26511f0629e85",
+      "created_record_refs": [],
+      "cleanup_state": "Not applicable; read-only navigation and anonymous GETs only."
+    },
+    {
+      "operational_case_id": "ops-auth-owner-registration-contract",
+      "persona": "anonymous",
+      "device_profile": "desktop-chrome-current",
+      "target_url": "https://app.hotels-pms.com/register-owner",
+      "preconditions": "Anonymous browser session on deployed production main.",
+      "human_actions": "Opened the owner registration form and inspected controls without submitting it.",
+      "expected": "Owner registration form renders without horizontal overflow; do not create an account during this smoke check.",
+      "observed": "Name, surname, corporate email, phone, password, and verification-submit controls rendered; the form fit at 1440px. No account was created.",
+      "status": "PASS",
+      "severity": "NONE",
+      "artifact_ids": ["registration-dom", "registration-responsive", "api-smoke"],
+      "code_sha": "f89589973c3c795d449220ab5ea26511f0629e85",
+      "created_record_refs": [],
+      "cleanup_state": "No writes; registration form was not submitted."
+    },
+    {
+      "operational_case_id": "ops-auth-owner-registration-contract",
+      "persona": "anonymous",
+      "device_profile": "mobile-chrome-emulation-390x844",
+      "target_url": "https://app.hotels-pms.com/register-owner",
+      "preconditions": "Anonymous browser session; viewport set to the catalog's 390x844 mobile profile.",
+      "human_actions": "Inspected the registration form layout at 390x844, 768x1024, and 1440x900; reset the temporary viewport afterward.",
+      "expected": "Form remains within viewport without horizontal overflow.",
+      "observed": "Document/body widths matched all three viewport widths and the form stayed within the viewport. No account was created.",
+      "status": "PASS",
+      "severity": "NONE",
+      "artifact_ids": ["registration-responsive", "registration-dom"],
+      "code_sha": "f89589973c3c795d449220ab5ea26511f0629e85",
+      "created_record_refs": [],
+      "cleanup_state": "No writes; temporary viewport override was reset."
+    }
+  ],
+  "record_type": "operational-observations",
+  "schema_version": 1
+}

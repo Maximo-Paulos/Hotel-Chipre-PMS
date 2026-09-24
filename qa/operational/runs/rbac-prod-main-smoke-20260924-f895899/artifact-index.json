@@ -1,0 +1,30 @@
+{
+  "artifact_root": "artifacts/qa-operational/rbac-prod-main-smoke-20260924-f895899",
+  "artifacts": [
+    {
+      "artifact_id": "api-smoke",
+      "relative_path": "traces/api-smoke.txt",
+      "sha256": "sha256:3ac432f6196078e15897392080ed1254e9a0e6f5ff284e3df3185b65f2aa8d7b",
+      "redaction_state": "verified"
+    },
+    {
+      "artifact_id": "registration-dom",
+      "relative_path": "dom/registration-dom.txt",
+      "sha256": "sha256:989059391b0522589af4ebffda823acaf0dcb29a355b8c4a3bada4ebc6b259db",
+      "redaction_state": "verified"
+    },
+    {
+      "artifact_id": "registration-responsive",
+      "relative_path": "traces/registration-responsive.txt",
+      "sha256": "sha256:9aaa3d9a47967ebe1d5d81bb8397f32815e5a437176e86f1d02b20fe8d44c7f5",
+      "redaction_state": "verified"
+    },
+    {
+      "artifact_id": "login-no-credential",
+      "relative_path": "dom/login-no-credential.txt",
+      "sha256": "sha256:34ebce57d621cfcdf17bf3947fe8cbaddd0e1a26fe272b3c629ccc5a5e802d16",
+      "redaction_state": "verified"
+    }
+  ],
+  "schema_version": 1
+}

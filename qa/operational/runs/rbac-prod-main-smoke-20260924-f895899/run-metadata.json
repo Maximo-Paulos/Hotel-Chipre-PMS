@@ -1,0 +1,22 @@
+{
+  "case_count": 45,
+  "catalog_file": "qa/operational/shared-sandbox-catalog.json",
+  "catalog_sha256": "sha256:0d451e76ce4e7c9482f3294cbc40a0005f160474bce16d520ca1701607813365",
+  "certification": "none",
+  "code_sha": "f89589973c3c795d449220ab5ea26511f0629e85",
+  "completed_at": null,
+  "environment_class": "production-labelled-shared-sandbox",
+  "external_exclusions": [
+    "payment completion",
+    "outgoing email",
+    "provider webhooks",
+    "OTA synchronization",
+    "provider load testing"
+  ],
+  "mutation_policy": "synthetic-tagged",
+  "record_type": "operational-shared-sandbox-run",
+  "release_gate_eligible": false,
+  "run_id": "rbac-prod-main-smoke-20260924-f895899",
+  "schema_version": 1,
+  "started_at": "2026-09-24T21:58:53.925313Z"
+}
