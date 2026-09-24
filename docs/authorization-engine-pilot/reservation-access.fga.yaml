@@ -1,0 +1,124 @@
+# Piloto sintético OpenFGA — acceso relacional hipotético a una reserva por hotel/miembro.
+#
+# QUÉ ES: un modelo de juguete que ejercita el patrón ReBAC (user -> hotel -> reservation,
+# más una relación de asignación directa) con datos 100% sintéticos (hotel-1, hotel-2,
+# res-1, res-2, anne/bob/carla/dave/owner1 son nombres inventados).
+#
+# QUÉ NO ES: no prueba paridad con el RBAC real del PMS (ver docs/design/RBAC_DESIGN.md),
+# no reemplaza ni ejercita PostgreSQL RLS (ver app/services/tenant_context.py), no se
+# conectó a ningún servicio ni dato real. Ver docs/decisions/authorization-engine-evaluation-adr.md
+# para el análisis completo y la recomendación de no migrar runtime.
+#
+# CÓMO CORRERLO: fga model test --tests reservation-access.fga.yaml
+# VALIDACIÓN: ejecutado localmente con OpenFGA CLI v0.8.1 (release 2026-09-24), tras
+# verificar el SHA-256 oficial del artefacto. Resultado: 6/6 tests y 6/6 checks pasan.
+# La CLI fue temporal; no es dependencia del producto ni de CI.
+
+model: |
+  # SINTETICO / NO PRODUCCION — ver docs/authorization-engine-pilot/README.md.
+  # No reemplaza RBAC ni RLS reales de Hotel Chipre PMS. admin no implica
+  # member a proposito (ver README): un admin sin membership no puede
+  # can_view bajo este modelo de juguete; no probado, dejado como limite
+  # conocido.
+  model
+    schema 1.1
+
+  type user
+
+  type hotel
+    relations
+      define member: [user]
+      define admin: [user]
+
+  type reservation
+    relations
+      define hotel: [hotel]
+      define assigned_agent: [user]
+      define can_view: member from hotel or assigned_agent
+      define can_manage: admin from hotel
+
+# Tuplas base: estado "normal" compartido por todos los tests salvo que un test
+# agregue las suyas propias (ver `tuples:` dentro de cada test más abajo).
+tuples:
+  - user: user:anne
+    relation: member
+    object: hotel:hotel-1
+  - user: user:owner1
+    relation: admin
+    object: hotel:hotel-1
+  - user: user:bob
+    relation: member
+    object: hotel:hotel-2
+  - user: hotel:hotel-1
+    relation: hotel
+    object: reservation:res-1
+  - user: hotel:hotel-2
+    relation: hotel
+    object: reservation:res-2
+
+tests:
+  - name: allow_correct_hotel_member
+    description: >
+      ALLOW — anne es miembro de hotel-1 y res-1 pertenece a hotel-1: debe poder verla.
+    check:
+      - user: user:anne
+        object: reservation:res-1
+        assertions:
+          can_view: true
+
+  - name: deny_wrong_hotel
+    description: >
+      DENY — bob es miembro de hotel-2, no de hotel-1: no puede ver una reserva de hotel-1
+      aunque sea miembro activo de otro hotel (caso "hotel equivocado").
+    check:
+      - user: user:bob
+        object: reservation:res-1
+        assertions:
+          can_view: false
+
+  - name: deny_wrong_role_for_action
+    description: >
+      DENY — anne es member (no admin) de hotel-1: puede ver la reserva pero no puede
+      administrarla (caso "rol/acción incorrectos").
+    check:
+      - user: user:anne
+        object: reservation:res-1
+        assertions:
+          can_manage: false
+
+  - name: deny_unassigned_resource
+    description: >
+      DENY — dave no tiene ninguna relación con hotel-1 ni con res-1 (ni membership ni
+      asignación directa): no puede ver la reserva (caso "recurso no asignado").
+    check:
+      - user: user:dave
+        object: reservation:res-1
+        assertions:
+          can_view: false
+
+  - name: allow_assigned_agent_before_revoke
+    description: >
+      ALLOW — carla no es miembro de hotel-1, pero tiene una asignación directa vigente
+      (assigned_agent) sobre res-1: puede verla mientras esa relación exista.
+    tuples:
+      - user: user:carla
+        relation: assigned_agent
+        object: reservation:res-1
+    check:
+      - user: user:carla
+        object: reservation:res-1
+        assertions:
+          can_view: true
+
+  - name: deny_assigned_agent_after_revoke
+    description: >
+      DENY — mismo escenario que el test anterior, pero sin la tupla `assigned_agent`
+      (OpenFGA test tuples son una foto del estado, no un diff: la ausencia de la tupla
+      ES la simulación de "borrar la relación"). Modela el caso "acceso luego de eliminar
+      relación": carla ya no está asignada a res-1 ni es miembro de hotel-1, y debe perder
+      el acceso inmediatamente, sin período de gracia ni caché.
+    check:
+      - user: user:carla
+        object: reservation:res-1
+        assertions:
+          can_view: false
