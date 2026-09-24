@@ -55,15 +55,18 @@ const jsonResponse = (status, payload) =>
     headers: { "Content-Type": "application/json" }
   });
 
-const stepUpRequired = (path, permissionCode = "reservation:cancel") =>
+const stepUpRequired = (path, permissionCode = "reservation:cancel", method = "POST") =>
   jsonResponse(428, {
     detail: {
       code: "STEP_UP_REQUIRED",
       permission_code: permissionCode,
-      method: "POST",
+      method,
       path
     }
   });
+
+const permissionAdminReadStepUpRequired = (path) =>
+  stepUpRequired(path, "permissions:manage", "GET");
 
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 
@@ -479,6 +482,144 @@ test("concurrent challenges serialize prompts and never share tickets", async ()
       ["/api/bookings/second/cancel", "ticket-for-second"]
     ]
   );
+});
+
+test("concurrent RBAC reads reuse one short read-only grant without weakening write step-up", async () => {
+  const requests = [];
+  const client = loadClient(async (url, init) => {
+    const parsedUrl = new URL(String(url));
+    const path = parsedUrl.pathname;
+    const method = init.method;
+    const ticket = new Headers(init.headers).get("X-Action-Step-Up-Ticket");
+    requests.push({ path, method, ticket });
+
+    if (path.startsWith("/api/permissions/") && method === "GET") {
+      return ticket === "permission-admin-read-grant"
+        ? jsonResponse(200, { path })
+        : permissionAdminReadStepUpRequired(path);
+    }
+    if (path === "/api/permissions/override" && method === "PUT") {
+      return ticket === "write-action-ticket"
+        ? jsonResponse(200, { updated: true })
+        : stepUpRequired(path, "permissions:manage", "PUT");
+    }
+    return jsonResponse(200, { ok: true });
+  }).client;
+  client.setClientSession(session);
+
+  const challenges = [];
+  client.setActionStepUpHandler(async (challenge) => {
+    challenges.push(challenge);
+    if (challenge.method === "GET") {
+      return {
+        ticket: "permission-admin-read-grant",
+        scope: "permission_admin_read",
+        expiresInSeconds: 120
+      };
+    }
+    return "write-action-ticket";
+  });
+
+  const readPaths = [
+    "/api/permissions/catalog",
+    "/api/permissions/matrix",
+    "/api/permissions/role-overrides",
+    "/api/permissions/visibility-windows",
+    "/api/permissions/user-overrides/20",
+    "/api/permissions/effective/preview?user_id=20"
+  ];
+  const readResults = await Promise.all(readPaths.map((path) => client.apiFetch(path)));
+  assert.equal(readResults.length, readPaths.length);
+  assert.deepEqual(challenges.map(({ method }) => method), ["GET"]);
+
+  await client.apiFetch("/api/users/");
+  const ordinaryRead = requests.find(({ path }) => path === "/api/users/");
+  assert.equal(ordinaryRead.ticket, null);
+
+  await client.apiFetch("/api/permissions/override", {
+    method: "PUT",
+    data: { role: "manager", permission_code: "reservation:create", allowed: false }
+  });
+  const writeRetries = requests.filter(
+    ({ path, method }) => path === "/api/permissions/override" && method === "PUT"
+  );
+  assert.deepEqual(writeRetries.map(({ ticket }) => ticket), [null, "write-action-ticket"]);
+  assert.deepEqual(challenges.map(({ method }) => method), ["GET", "PUT"]);
+  assert.equal(requests.some(({ method, ticket }) => method !== "GET" && ticket === "permission-admin-read-grant"), false);
+});
+
+test("an RBAC read grant is cleared when the active account or hotel changes", async (t) => {
+  const nextSessions = [
+    { name: "account change", session: { ...session, userId: "staff@example.test", accessToken: "staff-token" } },
+    { name: "hotel change", session: { ...session, hotelId: 8, accessToken: "other-hotel-token" } }
+  ];
+
+  for (const { name, session: nextSession } of nextSessions) {
+    await t.test(name, async () => {
+      const requests = [];
+      let issueCount = 0;
+      const client = loadClient(async (url, init) => {
+        const path = new URL(String(url)).pathname;
+        const headers = new Headers(init.headers);
+        const ticket = headers.get("X-Action-Step-Up-Ticket");
+        const hotelId = headers.get("X-Hotel-Id");
+        const userId = headers.get("X-User-Id");
+        requests.push({ path, ticket, hotelId, userId });
+        return ticket === `read-grant-${hotelId}`
+          ? jsonResponse(200, { ok: true })
+          : permissionAdminReadStepUpRequired(path);
+      }).client;
+      client.setClientSession(session);
+      client.setActionStepUpHandler(async (_challenge, requestSession) => {
+        issueCount += 1;
+        return {
+          ticket: `read-grant-${requestSession.hotelId}`,
+          scope: "permission_admin_read",
+          expiresInSeconds: 120
+        };
+      });
+
+      // Populate the cache for the original identity, then switch contexts.
+      await client.apiFetch("/api/permissions/catalog");
+      client.setClientSession(nextSession);
+      await client.apiFetch("/api/permissions/catalog");
+
+      const switchedRequest = requests.find(({ userId }) => userId === nextSession.userId);
+      assert.ok(switchedRequest);
+      assert.equal(switchedRequest.ticket, null);
+      assert.equal(issueCount, 2);
+    });
+  }
+});
+
+test("a rejected RBAC read grant is evicted without replaying the same prompt", async () => {
+  const requests = [];
+  let promptCount = 0;
+  const client = loadClient(async (url, init) => {
+    const path = new URL(String(url)).pathname;
+    const ticket = new Headers(init.headers).get("X-Action-Step-Up-Ticket");
+    requests.push(ticket);
+    return ticket === "fresh-read-grant"
+      ? jsonResponse(200, { ok: true })
+      : permissionAdminReadStepUpRequired(path);
+  }).client;
+  client.setClientSession(session);
+  client.setActionStepUpHandler(async () => {
+    promptCount += 1;
+    return {
+      ticket: promptCount === 1 ? "stale-read-grant" : "fresh-read-grant",
+      scope: "permission_admin_read",
+      expiresInSeconds: 120
+    };
+  });
+
+  await assert.rejects(client.apiFetch("/api/permissions/catalog"), (error) => error.status === 428);
+  assert.equal(promptCount, 1);
+  assert.deepEqual(requests, [null, "stale-read-grant"]);
+
+  await client.apiFetch("/api/permissions/catalog");
+  assert.equal(promptCount, 2);
+  assert.deepEqual(requests, [null, "stale-read-grant", null, "fresh-read-grant"]);
 });
 
 test("an aborted queued request does not open a stale step-up prompt", async () => {

@@ -14,7 +14,11 @@ from app.models.permission import HotelPermissionOverride, UserPermissionOverrid
 from app.models.permission import RolePermissionDefault
 from app.models.security_audit_log import SecurityAuditLog
 from app.models.user import User
-from app.services.action_step_up_service import create_action_step_up_ticket
+from app.services.action_step_up_service import (
+    create_action_step_up_ticket,
+    create_permission_admin_read_step_up_ticket,
+    is_permission_admin_read_action,
+)
 from app.services.permission_service import (
     PERMISSION_GUEST_PROHIBITION_MANAGE,
     PERMISSION_GUEST_PROHIBITION_READ,
@@ -34,7 +38,15 @@ from app.services.permission_service import (
 
 
 def _step_up_headers(path: str, *, method: str):
-    """Issue a synthetic, action-bound ticket for permission-admin tests."""
+    """Issue a synthetic RBAC-read grant or action-bound ticket."""
+    if is_permission_admin_read_action(method, path):
+        return {
+            "X-Action-Step-Up-Ticket": create_permission_admin_read_step_up_ticket(
+                user_id=10,
+                hotel_id=1,
+                token_version=0,
+            )
+        }
     return {
         "X-Action-Step-Up-Ticket": create_action_step_up_ticket(
             user_id=10,
@@ -144,9 +156,10 @@ def test_only_owner_can_use_administration_catalog_and_co_owner_is_denied():
     client, db, engine = _client()
     try:
         fastapi_app.dependency_overrides[get_auth_context] = _auth(1, "owner", 10)
+        catalog_path = "/api/permissions/catalog"
         owner = client.get(
-            "/api/permissions/catalog",
-            headers=_step_up_headers("/api/permissions/catalog", method="GET"),
+            catalog_path,
+            headers=_step_up_headers(catalog_path, method="GET"),
         )
         assert owner.status_code == 200
         assert any(row["code"] == PERMISSION_GUEST_READ for row in owner.json()["permissions"])
@@ -173,10 +186,11 @@ def test_owner_can_grant_and_revoke_user_override_then_restore_defaults():
         assert granted.json()["source"] == "user_override"
         assert granted.json()["version"] == 1
 
+        preview_path = "/api/permissions/effective/preview"
         preview = client.get(
-            "/api/permissions/effective/preview",
+            preview_path,
             params={"user_id": 20},
-            headers=_step_up_headers("/api/permissions/effective/preview", method="GET"),
+            headers=_step_up_headers(preview_path, method="GET"),
         )
         assert preview.status_code == 200
         assert preview.json()["details"][PERMISSION_RESERVATION_PROHIBITION_OVERRIDE]["allowed"] is True
@@ -309,10 +323,11 @@ def test_owner_can_restore_one_user_override_to_role_default_with_audit():
             hotel_id=1, user_id=20, permission_code=PERMISSION_GUEST_READ
         ).one_or_none() is None
 
+        preview_path = "/api/permissions/effective/preview"
         preview = client.get(
-            "/api/permissions/effective/preview",
+            preview_path,
             params={"user_id": 20},
-            headers=_step_up_headers("/api/permissions/effective/preview", method="GET"),
+            headers=_step_up_headers(preview_path, method="GET"),
         )
         assert preview.status_code == 200
         assert preview.json()["details"][PERMISSION_GUEST_READ]["source"] == "role_default"

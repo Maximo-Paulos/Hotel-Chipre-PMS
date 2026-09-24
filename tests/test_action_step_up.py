@@ -122,8 +122,36 @@ def step_up_client():
         "/api/test/permission-admin",
         dependencies=[Depends(require_permission_administrator)],
     )
-    def permission_admin_action():
+    def permission_admin_read():
+        return {"read": True}
+
+    @app.post(
+        "/api/test/permission-admin",
+        dependencies=[Depends(require_permission_administrator)],
+    )
+    def permission_admin_write():
         return {"executed": True}
+
+    @app.get(
+        "/api/permissions/catalog",
+        dependencies=[Depends(require_permission_administrator)],
+    )
+    def permission_catalog_read():
+        return {"catalog": True}
+
+    @app.get(
+        "/api/permissions/matrix",
+        dependencies=[Depends(require_permission_administrator)],
+    )
+    def permission_matrix_read():
+        return {"matrix": True}
+
+    @app.post(
+        "/api/permissions/catalog",
+        dependencies=[Depends(require_permission_administrator)],
+    )
+    def permission_catalog_write():
+        return {"updated": True}
 
     try:
         yield TestClient(app), db, secret, current
@@ -365,10 +393,81 @@ def test_require_any_keeps_a_valid_non_sensitive_alternative(step_up_client):
     assert response.status_code == 200
 
 
-def test_permission_administrator_also_requires_step_up(step_up_client):
-    client, _db, _secret, _current = step_up_client
+def test_permission_administrator_keeps_reads_owner_only_and_requires_step_up_for_writes(step_up_client):
+    client, _db, secret, current = step_up_client
 
-    response = client.get("/api/test/permission-admin")
+    read = client.get("/api/test/permission-admin")
+    assert read.status_code == 428
+    assert read.json()["detail"]["permission_code"] == PERMISSION_PERMISSION_MANAGE
 
-    assert response.status_code == 428
-    assert response.json()["detail"]["permission_code"] == PERMISSION_PERMISSION_MANAGE
+    action_ticket = _issue_ticket(client, secret, path="/api/test/permission-admin")
+    assert action_ticket.status_code == 200
+    read = client.get(
+        "/api/test/permission-admin",
+        headers={"X-Action-Step-Up-Ticket": action_ticket.json()["ticket"]},
+    )
+    assert read.status_code == 200
+    assert read.json() == {"read": True}
+
+    current["context"] = replace(current["context"], user_role="manager")
+    denied_read = client.get("/api/test/permission-admin")
+    assert denied_read.status_code == 403
+
+    current["context"] = _auth_context()
+    missing_ticket = client.post("/api/test/permission-admin")
+    assert missing_ticket.status_code == 428
+    assert missing_ticket.json()["detail"] == {
+        "code": "STEP_UP_REQUIRED",
+        "permission_code": PERMISSION_PERMISSION_MANAGE,
+        "method": "POST",
+        "path": "/api/test/permission-admin",
+    }
+
+
+def test_permission_admin_read_scope_is_reusable_only_for_owner_rbac_reads(step_up_client):
+    client, _db, secret, current = step_up_client
+    code = _code_at(secret)
+    issued = _issue_ticket(
+        client,
+        secret,
+        method="GET",
+        path="/api/permissions/catalog",
+        code=code,
+    )
+    assert issued.status_code == 200, issued.text
+    body = issued.json()
+    assert body["scope"] == "permission_admin_read"
+    assert body["expires_in"] == ACTION_STEP_UP_TICKET_TTL_SECONDS
+    headers = {"X-Action-Step-Up-Ticket": body["ticket"]}
+
+    assert client.get("/api/permissions/catalog", headers=headers).status_code == 200
+    assert client.get("/api/permissions/matrix", headers=headers).status_code == 200
+
+    write = client.post("/api/permissions/catalog", headers=headers)
+    assert write.status_code == 428
+
+    current["context"] = replace(current["context"], hotel_id=HOTEL_ID + 1)
+    cross_hotel = client.get("/api/permissions/matrix", headers=headers)
+    assert cross_hotel.status_code == 428
+
+    current["context"] = _auth_context()
+    current["context"] = replace(current["context"], user_id=USER_ID + 1)
+    cross_user = client.get("/api/permissions/matrix", headers=headers)
+    assert cross_user.status_code == 428
+
+    current["context"] = replace(_auth_context(), token_version=4)
+    stale_session = client.get("/api/permissions/matrix", headers=headers)
+    assert stale_session.status_code == 428
+
+    current["context"] = _auth_context()
+    out_of_scope = client.get("/api/test/permission-admin", headers=headers)
+    assert out_of_scope.status_code == 428
+
+    replayed = _issue_ticket(
+        client,
+        secret,
+        method="GET",
+        path="/api/permissions/matrix",
+        code=code,
+    )
+    assert replayed.status_code == 401

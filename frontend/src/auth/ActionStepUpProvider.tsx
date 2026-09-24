@@ -6,6 +6,7 @@ import {
   apiFetch,
   setActionStepUpHandler,
   type ActionStepUpChallenge,
+  type ActionStepUpTicket,
   type SessionLike
 } from "../api/client";
 import { useDialogA11y } from "../hooks/useDialogA11y";
@@ -15,12 +16,14 @@ type PendingStepUp = {
   id: number;
   challenge: ActionStepUpChallenge;
   session: SessionLike | null;
-  resolve: (ticket: string | null) => void;
+  resolve: (ticket: ActionStepUpTicket | null) => void;
   removeAbortListener?: () => void;
 };
 
 type ActionStepUpResponse = {
   ticket: string;
+  scope?: "action" | "permission_admin_read";
+  expires_in?: number;
 };
 
 const sameSessionSnapshot = (snapshot: SessionLike | null, current: SessionLike | null) => {
@@ -58,7 +61,7 @@ export function ActionStepUpProvider({ children }: { children: ReactNode }) {
   const submitControllerRef = useRef<AbortController | null>(null);
   currentSessionRef.current = session;
 
-  const settlePrompt = useCallback((ticket: string | null) => {
+  const settlePrompt = useCallback((ticket: ActionStepUpTicket | null) => {
     const pending = activePromptRef.current;
     if (!pending) return;
 
@@ -76,7 +79,7 @@ export function ActionStepUpProvider({ children }: { children: ReactNode }) {
 
   const enqueuePrompt = useCallback(
     (challenge: ActionStepUpChallenge, session: SessionLike | null, signal?: AbortSignal) =>
-      new Promise<string | null>((resolve) => {
+      new Promise<ActionStepUpTicket | null>((resolve) => {
         if (signal?.aborted || !sameSessionSnapshot(session, currentSessionRef.current)) {
           resolve(null);
           return;
@@ -166,7 +169,11 @@ export function ActionStepUpProvider({ children }: { children: ReactNode }) {
           settlePrompt(null);
           return;
         }
-        settlePrompt(result.ticket);
+        settlePrompt({
+          ticket: result.ticket,
+          scope: result.scope === "permission_admin_read" ? "permission_admin_read" : "action",
+          expiresInSeconds: Number.isFinite(result.expires_in) ? (result.expires_in as number) : 120
+        });
       }
     } catch (error) {
       if (!controller.signal.aborted && activePromptRef.current === pending) {

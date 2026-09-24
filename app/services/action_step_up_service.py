@@ -1,6 +1,7 @@
-"""Issue and validate short-lived, action-bound MFA step-up tickets."""
+"""Issue action-bound step-up tickets and a narrow MFA-backed RBAC read scope."""
 
 import hmac
+import re
 import secrets
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -15,6 +16,7 @@ from sqlalchemy.orm import Session
 from app.models.permission import Permission
 from app.models.action_step_up_ticket_use import ActionStepUpTicketUse
 from app.services.permission_service import (
+    PERMISSION_PERMISSION_MANAGE,
     canonical_permission_code,
     ensure_permission_matrix_seeded,
 )
@@ -23,6 +25,16 @@ from app.services.security import create_signed_token, decode_signed_token
 ACTION_STEP_UP_TICKET_TTL_SECONDS = 120
 _ACTION_STEP_UP_TICKET_TTL_MINUTES = ACTION_STEP_UP_TICKET_TTL_SECONDS // 60
 _ACTION_STEP_UP_PURPOSE = "action_step_up"
+_PERMISSION_ADMIN_READ_STEP_UP_PURPOSE = "permission_admin_read_step_up"
+_PERMISSION_ADMIN_READ_PATHS = frozenset(
+    {
+        "/api/permissions/catalog",
+        "/api/permissions/matrix",
+        "/api/permissions/role-overrides",
+        "/api/permissions/visibility-windows",
+        "/api/permissions/effective/preview",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -71,6 +83,79 @@ def create_action_step_up_ticket(
         },
         expires_minutes=_ACTION_STEP_UP_TICKET_TTL_MINUTES,
     )
+
+
+def is_permission_admin_read_action(method: str, path: str) -> bool:
+    """Return whether a method/path pair is a read-only RBAC administration route."""
+    if method.upper() not in {"GET", "HEAD"}:
+        return False
+    if path in _PERMISSION_ADMIN_READ_PATHS:
+        return True
+    return re.fullmatch(r"/api/permissions/user-overrides/\d+", path) is not None
+
+
+def create_permission_admin_read_step_up_ticket(
+    *,
+    user_id: int,
+    hotel_id: int,
+    token_version: int,
+) -> str:
+    """Issue a 120-second, read-only RBAC scope after a fresh TOTP check."""
+    return create_signed_token(
+        {
+            "purpose": _PERMISSION_ADMIN_READ_STEP_UP_PURPOSE,
+            "sub": str(user_id),
+            "hotel_id": str(hotel_id),
+            "token_version": str(token_version),
+            "permission_code": PERMISSION_PERMISSION_MANAGE,
+            "scope": "permission_admin_read",
+            "jti": secrets.token_hex(16),
+        },
+        expires_minutes=_ACTION_STEP_UP_TICKET_TTL_MINUTES,
+    )
+
+
+def permission_admin_read_step_up_ticket_matches(
+    ticket: str,
+    *,
+    user_id: int,
+    hotel_id: int,
+    token_version: int,
+    method: str,
+    path: str,
+) -> bool:
+    """Validate the reusable ticket only for owner-scoped RBAC reads."""
+    if not ticket or len(ticket) > 8192 or not is_permission_admin_read_action(method, path):
+        return False
+    try:
+        claims = decode_signed_token(ticket)
+    except HTTPException:
+        return False
+    if not isinstance(claims, dict):
+        return False
+    ticket_id = claims.get("jti")
+    if (
+        not isinstance(ticket_id, str)
+        or len(ticket_id) != 32
+        or any(character not in "0123456789abcdef" for character in ticket_id)
+    ):
+        return False
+
+    expected = {
+        "purpose": _PERMISSION_ADMIN_READ_STEP_UP_PURPOSE,
+        "sub": str(user_id),
+        "hotel_id": str(hotel_id),
+        "token_version": str(token_version),
+        "permission_code": PERMISSION_PERMISSION_MANAGE,
+        "scope": "permission_admin_read",
+    }
+    for name, expected_value in expected.items():
+        actual_value = claims.get(name)
+        if not isinstance(actual_value, str) or not hmac.compare_digest(
+            actual_value.encode("utf-8"), expected_value.encode("utf-8")
+        ):
+            return False
+    return True
 
 
 def action_step_up_ticket_matches(

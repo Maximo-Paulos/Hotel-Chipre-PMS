@@ -465,7 +465,7 @@ def require_permission_administrator(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(get_auth_context),
 ) -> AuthContext:
-    """Non-delegable invariant: only this hotel's owner administers RBAC."""
+    """Keep RBAC owner-only; require a short read scope or an action ticket."""
 
     if not context.is_verified:
         raise HTTPException(
@@ -477,8 +477,22 @@ def require_permission_administrator(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="No tenes permisos para esta accion",
         )
+    from app.services.action_step_up_service import permission_admin_read_step_up_ticket_matches
     from app.services.permission_service import PERMISSION_PERMISSION_MANAGE
 
+    if request.method.upper() in {"GET", "HEAD"}:
+        if context.user_id is not None and any(
+            permission_admin_read_step_up_ticket_matches(
+                ticket,
+                user_id=context.user_id,
+                hotel_id=context.hotel_id,
+                token_version=context.token_version,
+                method=request.method,
+                path=request.url.path,
+            )
+            for ticket in _action_step_up_tickets(request)
+        ):
+            return context
     _require_action_step_up(db, request, context, PERMISSION_PERMISSION_MANAGE)
     return context
 

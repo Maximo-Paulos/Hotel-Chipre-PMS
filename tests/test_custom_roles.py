@@ -185,10 +185,7 @@ def test_roles_api_contract_read_access_and_owner_only_mutations(role_api):
     assert item["base_role"] == "receptionist"
     assert item["version"] == 1
 
-    listed = client.get(
-        "/api/roles",
-        headers=_step_up_headers(state, "GET", "/api/roles"),
-    )
+    listed = client.get("/api/roles")
     assert listed.status_code == 200
     assert {row["code"] for row in listed.json()["roles"]} >= {
         "owner",

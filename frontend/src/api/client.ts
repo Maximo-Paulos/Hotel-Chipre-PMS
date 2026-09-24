@@ -9,15 +9,21 @@ export type SessionLike = {
 
 export type ActionStepUpChallenge = {
   permissionCode: string;
-  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+  method: "GET" | "HEAD" | "POST" | "PUT" | "PATCH" | "DELETE";
   path: string;
+};
+
+export type ActionStepUpTicket = {
+  ticket: string;
+  scope: "action" | "permission_admin_read";
+  expiresInSeconds: number;
 };
 
 type ActionStepUpHandler = (
   challenge: ActionStepUpChallenge,
   session: SessionLike | null,
   signal?: AbortSignal
-) => Promise<string | null>;
+) => Promise<string | ActionStepUpTicket | null>;
 
 export type AuthResponsePayload = {
   access_token: string;
@@ -116,6 +122,14 @@ export const buildAuthHeaders = (session?: SessionLike): Record<string, string> 
 };
 
 const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+const PERMISSION_ADMIN_READ_PATHS = new Set([
+  "/api/permissions/catalog",
+  "/api/permissions/matrix",
+  "/api/permissions/role-overrides",
+  "/api/permissions/visibility-windows",
+  "/api/permissions/effective/preview"
+]);
+const PERMISSION_ADMIN_USER_OVERRIDE_PATH = /^\/api\/permissions\/user-overrides\/\d+$/;
 
 let clientSession: SessionLike | null = null;
 let authResponseHandler: ((response: AuthResponsePayload) => void) | null = null;
@@ -124,6 +138,11 @@ let refreshInFlight: { session: SessionLike | null; promise: Promise<AuthRespons
 let unauthorizedHandled = false;
 let actionStepUpHandler: ActionStepUpHandler | null = null;
 let actionStepUpQueue: Promise<void> = Promise.resolve();
+let permissionAdminReadStepUpCache: {
+  ticket: string;
+  expiresAt: number;
+  session: SessionLike | null;
+} | null = null;
 
 const normalizedSessionUserId = (userId?: string | null) => userId?.trim().toLowerCase() ?? "";
 
@@ -143,6 +162,38 @@ const hasSameSession = (left?: SessionLike | null, right?: SessionLike | null) =
 
 const isCurrentSession = (session?: SessionLike | null) => hasSameSession(session, clientSession);
 
+const isPermissionAdminReadAction = (method: string, path: string) => {
+  const normalizedMethod = method.toUpperCase();
+  if (normalizedMethod !== "GET" && normalizedMethod !== "HEAD") return false;
+  const pathname = path.split(/[?#]/, 1)[0].replace(/\/+$/, "");
+  return (
+    PERMISSION_ADMIN_READ_PATHS.has(pathname) || PERMISSION_ADMIN_USER_OVERRIDE_PATH.test(pathname)
+  );
+};
+
+const clearPermissionAdminReadStepUpCache = (ticket?: string) => {
+  if (!ticket || permissionAdminReadStepUpCache?.ticket === ticket) permissionAdminReadStepUpCache = null;
+};
+
+const getPermissionAdminReadStepUpTicket = (method: string, path: string, session: SessionLike | null) => {
+  const cached = permissionAdminReadStepUpCache;
+  if (!cached) return null;
+  if (Date.now() >= cached.expiresAt || !isPermissionAdminReadAction(method, path)) {
+    if (Date.now() >= cached.expiresAt) permissionAdminReadStepUpCache = null;
+    return null;
+  }
+  if (!hasSameSessionIdentity(cached.session, session)) {
+    permissionAdminReadStepUpCache = null;
+    return null;
+  }
+  return cached.ticket;
+};
+
+const normalizeStepUpTicket = (value: string | ActionStepUpTicket): ActionStepUpTicket =>
+  typeof value === "string"
+    ? { ticket: value, scope: "action", expiresInSeconds: 0 }
+    : value;
+
 const isRefreshResponseForSession = (response: AuthResponsePayload, session: SessionLike) =>
   normalizedSessionUserId(response.user.email) === normalizedSessionUserId(session.userId) &&
   normalizeHotelId(response.hotel_id) === normalizeHotelId(session.hotelId);
@@ -151,6 +202,9 @@ const isSameRefreshContext = (left: SessionLike | null, right: SessionLike | nul
   left === null || right === null ? left === right : hasSameSession(left, right);
 
 export const setClientSession = (session?: SessionLike | null) => {
+  if (!session || !hasSameSessionIdentity(clientSession, session)) {
+    permissionAdminReadStepUpCache = null;
+  }
   clientSession = session ? { ...session } : null;
   if (clientSession?.accessToken) unauthorizedHandled = false;
 };
@@ -180,11 +234,35 @@ const requestActionStepUpTicket = (
   challenge: ActionStepUpChallenge,
   session: SessionLike | null,
   signal?: AbortSignal
-): Promise<string | null> => {
-  const queuedRequest = actionStepUpQueue.then(() => {
+): Promise<ActionStepUpTicket | null> => {
+  const queuedRequest = actionStepUpQueue.then(async () => {
     if (signal?.aborted || !isCurrentSession(session)) return null;
+    if (isPermissionAdminReadAction(challenge.method, challenge.path)) {
+      const cachedTicket = getPermissionAdminReadStepUpTicket(challenge.method, challenge.path, session);
+      if (cachedTicket) {
+        return {
+          ticket: cachedTicket,
+          scope: "permission_admin_read" as const,
+          expiresInSeconds: 0
+        };
+      }
+    }
     const handler = actionStepUpHandler;
-    return handler ? handler(challenge, session, signal) : null;
+    const issuedTicket = handler ? await handler(challenge, session, signal) : null;
+    if (!issuedTicket || !isCurrentSession(session)) return null;
+    const normalizedTicket = normalizeStepUpTicket(issuedTicket);
+    if (
+      normalizedTicket.scope === "permission_admin_read" &&
+      normalizedTicket.expiresInSeconds > 0 &&
+      isPermissionAdminReadAction(challenge.method, challenge.path)
+    ) {
+      permissionAdminReadStepUpCache = {
+        ticket: normalizedTicket.ticket,
+        expiresAt: Date.now() + Math.max(0, normalizedTicket.expiresInSeconds * 1000 - 5000),
+        session: session ? { ...session } : null
+      };
+    }
+    return normalizedTicket;
   });
   // Keep the queue alive even when a UI handler rejects unexpectedly. The
   // original protected request will surface its own 428 in that case.
@@ -201,6 +279,7 @@ const handleUnauthorized = (expectedSession: SessionLike | null) => {
   if (unauthorizedHandled || typeof window === "undefined" || !isCurrentSession(expectedSession)) return;
   unauthorizedHandled = true;
   clientSession = null;
+  permissionAdminReadStepUpCache = null;
   unauthorizedHandler?.();
   if (window.location.pathname !== "/login") {
     window.location.assign("/login?expired=1");
@@ -208,7 +287,7 @@ const handleUnauthorized = (expectedSession: SessionLike | null) => {
 };
 
 type RequestOptions = {
-  method?: "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
+  method?: "GET" | "HEAD" | "POST" | "PATCH" | "PUT" | "DELETE";
   data?: unknown;
   headers?: HeadersInit;
   signal?: AbortSignal;
@@ -276,7 +355,7 @@ const parseActionStepUpChallenge = (payload: unknown): ActionStepUpChallenge | n
   if (!detail || typeof detail !== "object") return null;
 
   const value = detail as Record<string, unknown>;
-  const methods = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
+  const methods = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"] as const;
   if (
     value.code !== "STEP_UP_REQUIRED" ||
     typeof value.permission_code !== "string" ||
@@ -375,7 +454,14 @@ async function requestWithRefresh<T>(
   const { method = "GET", data, headers, signal, session } = options;
   const requestSession = mergeSession(session);
   const fetchHeaders = requestHeaders(method, requestSession, headers);
+  const readStepUpTicket = getPermissionAdminReadStepUpTicket(method, path, requestSession);
+  const readStepUpTicketUsed = Boolean(
+    readStepUpTicket &&
+      (actionStepUpTicket === readStepUpTicket ||
+        (!actionStepUpTicket && fetchHeaders.get("X-Action-Step-Up-Ticket") === readStepUpTicket))
+  );
   if (actionStepUpTicket) fetchHeaders.set("X-Action-Step-Up-Ticket", actionStepUpTicket);
+  else if (readStepUpTicketUsed) fetchHeaders.set("X-Action-Step-Up-Ticket", readStepUpTicket as string);
   const response = await fetch(buildUrl(path), {
     method,
     headers: fetchHeaders,
@@ -389,6 +475,9 @@ async function requestWithRefresh<T>(
 
   if (!response.ok) {
     const error = makeApiError(response, payload);
+    if ((response.status === 428 || response.status === 403) && readStepUpTicketUsed) {
+      clearPermissionAdminReadStepUpCache(readStepUpTicket as string);
+    }
     const canRefresh =
       allowRefresh &&
       response.status === 401 &&
@@ -448,7 +537,7 @@ async function requestWithRefresh<T>(
       !isPublicAuthPath(path) &&
       !isActionStepUpPath(path)
     ) {
-      let ticket: string | null = null;
+      let ticket: ActionStepUpTicket | null = null;
       try {
         ticket = await requestActionStepUpTicket(challenge, requestSession, signal);
       } catch {
@@ -458,7 +547,7 @@ async function requestWithRefresh<T>(
       }
       if (!ticket || !isCurrentSession(requestSession)) throw error;
 
-      return requestWithRefresh(path, options, allowRefresh, false, ticket);
+      return requestWithRefresh(path, options, allowRefresh, false, ticket.ticket);
     }
 
     throw error;

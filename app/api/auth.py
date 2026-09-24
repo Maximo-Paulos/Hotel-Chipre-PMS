@@ -74,6 +74,8 @@ from app.dependencies.auth import AuthContext, get_auth_context, get_current_use
 from app.services.action_step_up_service import (
     ACTION_STEP_UP_TICKET_TTL_SECONDS,
     create_action_step_up_ticket as issue_action_step_up_ticket,
+    create_permission_admin_read_step_up_ticket,
+    is_permission_admin_read_action,
     permission_requires_step_up,
 )
 from app.config import get_settings, is_production_mode
@@ -441,7 +443,7 @@ def create_action_step_up_ticket(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(get_auth_context),
 ) -> ActionStepUpResponse:
-    """Exchange a fresh enrolled TOTP for a ticket bound to one protected action."""
+    """Exchange fresh TOTP for an action ticket or narrow RBAC read scope."""
     if context.user_id is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Autenticacion requerida")
     if not context.is_verified:
@@ -451,6 +453,7 @@ def create_action_step_up_ticket(
         )
 
     from app.services.permission_service import (
+        PERMISSION_PERMISSION_MANAGE,
         audit_permission_denied,
         canonical_permission_code,
         resolve,
@@ -506,20 +509,32 @@ def create_action_step_up_ticket(
             detail="Codigo MFA invalido o ya utilizado",
         )
 
-    ticket = issue_action_step_up_ticket(
-        user_id=context.user_id,
-        hotel_id=context.hotel_id,
-        token_version=context.token_version,
-        permission_code=permission_code,
-        method=payload.method,
-        path=payload.path,
-    )
+    if permission_code == PERMISSION_PERMISSION_MANAGE and is_permission_admin_read_action(
+        payload.method, payload.path
+    ):
+        ticket = create_permission_admin_read_step_up_ticket(
+            user_id=context.user_id,
+            hotel_id=context.hotel_id,
+            token_version=context.token_version,
+        )
+        scope = "permission_admin_read"
+    else:
+        ticket = issue_action_step_up_ticket(
+            user_id=context.user_id,
+            hotel_id=context.hotel_id,
+            token_version=context.token_version,
+            permission_code=permission_code,
+            method=payload.method,
+            path=payload.path,
+        )
+        scope = "action"
     _reset_mfa_attempts(db, "step_up", context.user_id)
     db.commit()
     return ActionStepUpResponse(
         ticket=ticket,
         permission_code=permission_code,
         expires_in=ACTION_STEP_UP_TICKET_TTL_SECONDS,
+        scope=scope,
     )
 
 

@@ -67,7 +67,7 @@ class MfaCodeRequest(BaseModel):
 class ActionStepUpRequest(BaseModel):
     code: str = Field(min_length=1, max_length=64)
     permission_code: str = Field(min_length=1, max_length=100)
-    method: Literal["GET", "POST", "PUT", "PATCH", "DELETE"]
+    method: Literal["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"]
     path: str = Field(min_length=6, max_length=2048)
 
     @field_validator("permission_code")
@@ -98,6 +98,7 @@ class ActionStepUpResponse(BaseModel):
     ticket: str
     permission_code: str
     expires_in: int
+    scope: Literal["action", "permission_admin_read"] = "action"
 
 
 class MfaDisableRequest(MfaCodeRequest):

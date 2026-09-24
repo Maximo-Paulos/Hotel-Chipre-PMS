@@ -14,7 +14,11 @@ from app.models.hotel_membership import HotelMembership
 from app.models.permission import HotelPermissionOverride, UserPermissionOverride
 from app.models.user import User
 from app.models.user_mfa import UserMfaSecret
-from app.services.action_step_up_service import create_action_step_up_ticket
+from app.services.action_step_up_service import (
+    create_action_step_up_ticket,
+    create_permission_admin_read_step_up_ticket,
+    is_permission_admin_read_action,
+)
 from app.services.mfa_service import encrypt_totp_secret
 from app.services.permission_service import (
     _CANONICAL_DEFINITIONS,
@@ -49,7 +53,14 @@ def _override_auth(hotel_id: int, role: str, user_id: int = 10):
 
 
 def _step_up_headers(path: str, *, method: str, hotel_id: int = 1, user_id: int = 10):
-    """Create an action-bound test ticket; MFA issuance is covered separately."""
+    """Create an RBAC-read scope or action-bound ticket for focused API tests."""
+    if is_permission_admin_read_action(method, path):
+        ticket = create_permission_admin_read_step_up_ticket(
+            user_id=user_id,
+            hotel_id=hotel_id,
+            token_version=0,
+        )
+        return {"X-Action-Step-Up-Ticket": ticket}
     ticket = create_action_step_up_ticket(
         user_id=user_id,
         hotel_id=hotel_id,
@@ -95,10 +106,8 @@ def test_permissions_matrix_available_to_permission_manager_only():
     client, db, engine = _client_with_db()
     fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner")
     try:
-        response = client.get(
-            "/api/permissions/matrix",
-            headers=_step_up_headers("/api/permissions/matrix", method="GET"),
-        )
+        path = "/api/permissions/matrix"
+        response = client.get(path, headers=_step_up_headers(path, method="GET"))
         assert response.status_code == 200
         assert response.json()["matrix"]["manager"][PERMISSION_RESERVATION_CREATE]["allowed"] is True
 
@@ -117,10 +126,8 @@ def test_permissions_matrix_exposes_only_canonical_rows_with_ui_metadata():
     client, db, engine = _client_with_db()
     fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner")
     try:
-        response = client.get(
-            "/api/permissions/matrix",
-            headers=_step_up_headers("/api/permissions/matrix", method="GET"),
-        )
+        path = "/api/permissions/matrix"
+        response = client.get(path, headers=_step_up_headers(path, method="GET"))
 
         assert response.status_code == 200
         matrix = response.json()["matrix"]
@@ -195,10 +202,9 @@ def test_permission_catalog_exposes_owner_only_normal_metadata_and_help_text():
     client, db, engine = _client_with_db()
     fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner")
     try:
-        response = client.get(
-            "/api/permissions/catalog",
-            headers=_step_up_headers("/api/permissions/catalog", method="GET"),
-        )
+        catalog_path = "/api/permissions/catalog"
+        read_headers = _step_up_headers(catalog_path, method="GET")
+        response = client.get(catalog_path, headers=read_headers)
         assert response.status_code == 200
         catalog = {row["code"]: row for row in response.json()["permissions"]}
         assert catalog
@@ -220,19 +226,54 @@ def test_permission_catalog_exposes_owner_only_normal_metadata_and_help_text():
             assert catalog[code]["delegable"] is True
             assert catalog[code]["help_es"]
 
-        matrix = client.get(
-            "/api/permissions/matrix",
-            headers=_step_up_headers("/api/permissions/matrix", method="GET"),
-        )
+        matrix_path = "/api/permissions/matrix"
+        matrix = client.get(matrix_path, headers=_step_up_headers(matrix_path, method="GET"))
         assert matrix.status_code == 200
         assert matrix.json()["matrix"]["manager"][PERMISSION_RESERVATION_CREATE]["help_es"]
 
-        profiles = client.get(
-            "/api/permissions/role-overrides",
-            headers=_step_up_headers("/api/permissions/role-overrides", method="GET"),
-        )
+        profiles_path = "/api/permissions/role-overrides"
+        profiles = client.get(profiles_path, headers=_step_up_headers(profiles_path, method="GET"))
         assert profiles.status_code == 200
         assert profiles.json()["matrix"]["manager"][PERMISSION_RESERVATION_CREATE]["help_es"]
+    finally:
+        fastapi_app.dependency_overrides.clear()
+        db.close()
+        engine.dispose()
+
+
+def test_permission_administration_reads_require_mfa_and_share_a_read_only_ticket():
+    client, db, engine = _client_with_db()
+    fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner")
+    db.add(User(id=20, email="employee@test.com", password_hash="synthetic", is_verified=True))
+    db.flush()
+    db.add(HotelMembership(hotel_id=1, user_id=20, role="receptionist", status="active"))
+    db.commit()
+    try:
+        paths = (
+            "/api/permissions/catalog",
+            "/api/permissions/matrix",
+            "/api/permissions/role-overrides",
+            "/api/permissions/visibility-windows",
+            "/api/permissions/user-overrides/20",
+            "/api/permissions/effective/preview?user_id=20",
+        )
+        assert client.get(paths[0]).status_code == 428
+        headers = _step_up_headers("/api/permissions/catalog", method="GET")
+        for path in paths:
+            response = client.get(path, headers=headers)
+            assert response.status_code == 200, f"{path}: {response.text}"
+
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "manager")
+        denied = client.get("/api/permissions/catalog", headers=headers)
+        assert denied.status_code == 403
+
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner")
+        write_with_read_ticket = client.put(
+            "/api/permissions/visibility-windows",
+            json={"role": "manager", "past_hours": 24, "future_hours": 48},
+            headers=headers,
+        )
+        assert write_with_read_ticket.status_code == 428
     finally:
         fastapi_app.dependency_overrides.clear()
         db.close()
@@ -302,9 +343,10 @@ def test_permission_override_reads_include_current_versions():
             )
             assert updated.status_code == 200, updated.text
 
+        role_profiles_path = "/api/permissions/role-overrides"
         role_profiles = client.get(
-            "/api/permissions/role-overrides",
-            headers=_step_up_headers("/api/permissions/role-overrides", method="GET"),
+            role_profiles_path,
+            headers=_step_up_headers(role_profiles_path, method="GET"),
         )
         assert role_profiles.status_code == 200, role_profiles.text
         permission_code = canonical_permission_code(PERMISSION_GUEST_EDIT)
