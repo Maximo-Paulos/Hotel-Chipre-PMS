@@ -24,7 +24,33 @@ _CREDENTIAL_ASSIGNMENT_RE = re.compile(
     r"(?i)(authorization|bearer|access[_ -]?token|refresh[_ -]?token|api[_ -]?key|secret|password)"
     r"(\s*[:=]\s*)([^,;\s}\"']+)"
 )
+# Auth schemes such as Digest may carry comma-delimited credentials; redact the
+# entire field value instead of only the first whitespace-delimited token.
+_AUTHORIZATION_HEADER_RE = re.compile(
+    r"""
+    ([\"']?authorization[\"']?\s*[:=]\s*)
+    (
+        \[(?:.*?)\]
+        | "(?:\\.|[^"\\])*"
+        | '(?:\\.|[^'\\])*'
+        | [^\r\n]+
+    )
+    """,
+    re.IGNORECASE | re.DOTALL | re.VERBOSE,
+)
+_AUTH_SCHEME_RE = re.compile(r"(?i)\b(Bearer|Basic)\s+([^\s,;\"'}\]]+)")
 _URL_CREDENTIAL_RE = re.compile(r"(?i)(://)([^/@\s:]+):([^/@\s]+)@")
+
+
+def _redact_authorization_header(match: re.Match[str]) -> str:
+    prefix, value = match.groups()
+    if value.startswith(('"', "'")) and value.endswith(value[0]):
+        redacted_value = f"{value[0]}[REDACTED]{value[0]}"
+    elif value.startswith("[") and value.endswith("]"):
+        redacted_value = '["[REDACTED]"]'
+    else:
+        redacted_value = "[REDACTED]"
+    return prefix + redacted_value
 
 
 def redact_integration_error(
@@ -37,6 +63,8 @@ def redact_integration_error(
     message = str(value or "").strip()
     if not message:
         return fallback
+    message = _AUTHORIZATION_HEADER_RE.sub(_redact_authorization_header, message)
+    message = _AUTH_SCHEME_RE.sub(r"\1 [REDACTED]", message)
     message = _CREDENTIAL_ASSIGNMENT_RE.sub(r"\1\2[REDACTED]", message)
     message = _URL_CREDENTIAL_RE.sub(r"\1[REDACTED]:[REDACTED]@", message)
     return message[:250] or fallback

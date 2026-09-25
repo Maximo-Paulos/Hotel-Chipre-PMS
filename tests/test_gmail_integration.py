@@ -39,6 +39,45 @@ def test_integration_error_redaction_hides_credentials_and_dsn_passwords():
     assert "[REDACTED]" in redacted
 
 
+@pytest.mark.parametrize(
+    ("message", "credential"),
+    [
+        (
+            "provider rejected request: Authorization: Bearer bearer-header-sentinel",
+            "bearer-header-sentinel",
+        ),
+        (
+            '{"error":"provider rejected request","headers":{"Authorization":"Bearer bearer-json-sentinel"}}',
+            "bearer-json-sentinel",
+        ),
+        (
+            "provider rejected request: Authorization=Basic basic-header-sentinel",
+            "basic-header-sentinel",
+        ),
+        (
+            'provider rejected request: Authorization: Digest username="hotel", '
+            'realm="provider", response="digest-response-sentinel"',
+            "digest-response-sentinel",
+        ),
+        (
+            '{"error":"provider rejected request","headers":{"Authorization":'
+            '["Bearer bearer-array-sentinel"]}}',
+            "bearer-array-sentinel",
+        ),
+        (
+            "provider rejected request: Bearer bearer-bare-sentinel",
+            "bearer-bare-sentinel",
+        ),
+    ],
+)
+def test_integration_error_redaction_hides_authorization_scheme_credentials(message, credential):
+    redacted = redact_integration_error(message)
+
+    assert credential not in redacted
+    assert "provider rejected request" in redacted
+    assert "[REDACTED]" in redacted
+
+
 class _Response:
     def __init__(self, ok: bool, payload: dict, text: str = ""):
         self.ok = ok
