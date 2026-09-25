@@ -484,9 +484,24 @@ class TestListSessionMovements:
 
 
 class TestSessionSummary:
-    @pytest.mark.xfail(reason=BRM17_MISSING_REASON + ": session summary endpoint is absent")
-    def test_get_session_summary_shows_totals_and_difference(self):
-        from app.api.cash_register import get_session_summary  # noqa: F401
+    def test_get_session_summary_shows_totals_and_difference(self, db: Session):
+        from app.api.cash_register import cash_session_summary
+
+        session = _open_cash_session(db, opening_balance=Decimal("500.00"))
+        _add_cash_movement(db, session, amount=Decimal("300.00"), movement_type=CashMovementTypeEnum.INCOME)
+        _add_cash_movement(db, session, amount=Decimal("100.00"), movement_type=CashMovementTypeEnum.EXPENSE)
+
+        result = cash_session_summary(session.id, db=db, context=_auth_context())
+
+        assert result["session_id"] == session.id
+        assert result["status"] == CashSessionStatusEnum.OPEN.value
+        assert result["opening_balance"] == Decimal("500.00")
+        assert result["income_total"] == Decimal("300.00")
+        assert result["expense_total"] == Decimal("100.00")
+        assert result["adjustment_total"] == Decimal("0.00")
+        assert result["confirmed_cash_total"] == Decimal("200.00")
+        assert result["expected_balance"] == Decimal("700.00")
+        assert result["movements_count"] == 2
 
     def test_close_report_shows_totals_and_difference(self, db: Session):
         session = _open_cash_session(db, opening_balance=Decimal("500.00"))
