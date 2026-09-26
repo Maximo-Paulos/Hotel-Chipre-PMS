@@ -22,9 +22,14 @@ from app.services.invitation_service import (
     normalize_email,
 )
 from app.services.membership_service import MembershipInvariantError, validate_membership_change
-from app.services.permission_service import HotelRoleNotFound, require_active_hotel_role
+from app.services.permission_service import (
+    HotelRoleNotFound,
+    clear_user_permission_grants_for_role_change,
+    require_active_hotel_role,
+)
 from app.services.security import hash_password
 from app.services.subscription_service import ensure_staff_within_limit
+from app.services.user_lookup_service import find_user_by_email
 
 router = APIRouter(prefix="/api/invitations", tags=["Invitations"])
 INVITABLE_ROLES = {"co_owner", "manager", "receptionist", "housekeeping"}
@@ -72,6 +77,7 @@ def _activate_invitation_for_user(
             HotelMembership.hotel_id == invitation.hotel_id,
             HotelMembership.user_id == user.id,
         )
+        .with_for_update()
         .first()
     )
     if membership is not None and membership.status == "revoked":
@@ -110,6 +116,14 @@ def _activate_invitation_for_user(
                 hotel_id=invitation.hotel_id,
                 next_role=invitation.role,
                 next_status="active",
+            )
+            clear_user_permission_grants_for_role_change(
+                db,
+                hotel_id=invitation.hotel_id,
+                target_user_id=user.id,
+                actor_user_id=user.id,
+                previous_role=membership.role,
+                next_role=invitation.role,
             )
             membership.role = invitation.role
             membership.status = "active"
@@ -217,7 +231,7 @@ def _accept_invitation(
             detail="El email no coincide con la invitación",
         )
 
-    user = db.query(User).filter(User.email.ilike(email)).first()
+    user = find_user_by_email(db, email)
     if invitation.user_id is not None and (user is None or invitation.user_id != user.id):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="La invitación ya está asociada a otra cuenta")
     membership = None
@@ -358,7 +372,7 @@ def _accept_invitation_with_google(
         )
 
     user_by_sub = db.query(User).filter(User.google_sub == google_sub).first()
-    user = user_by_sub or db.query(User).filter(User.email.ilike(email)).first()
+    user = user_by_sub or find_user_by_email(db, email)
     if invitation.user_id is not None and (user is None or invitation.user_id != user.id):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="La invitación ya está asociada a otra cuenta")
 

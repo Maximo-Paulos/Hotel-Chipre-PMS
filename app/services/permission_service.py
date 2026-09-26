@@ -84,6 +84,8 @@ PERMISSION_RESERVATION_READ = "reservation:read"
 PERMISSION_RESERVATION_CREATE = "reservation:create"
 PERMISSION_RESERVATION_UPDATE = "reservation:update"
 PERMISSION_RESERVATION_CANCEL = "reservation:cancel"
+PERMISSION_RESERVATION_DELETE = "reservation:delete"
+PERMISSION_RESERVATION_DEMO_SEED = "reservation:demo_seed"
 PERMISSION_RESERVATION_CHARGE = "reservation:charge"
 PERMISSION_RESERVATION_MOVE = "reservation:move"
 PERMISSION_RESERVATION_MOVE_CATEGORY = "reservation:move_category"
@@ -119,6 +121,7 @@ PERMISSION_HOTEL_SECURITY_MANAGE = "hotel_settings:security_manage"
 PERMISSION_COMPANY_MANAGE = "company:manage"
 PERMISSION_CASH_OPERATE = "cash:operate"
 PERMISSION_CASH_APPROVE_DIFFERENCE = "cash:approve_difference"
+PERMISSION_CASH_CUSTODY_RECEIVE = "cash:custody:receive"
 PERMISSION_OPERATIONAL_TASK_READ = "operations:tasks:view"
 PERMISSION_OPERATIONAL_TASK_REPORT = "operations:tasks:report"
 PERMISSION_OPERATIONAL_TASK_MANAGE = "operations:tasks:manage"
@@ -144,11 +147,19 @@ PERMISSION_SETTINGS_USERS_MANAGE = "settings:users:manage"
 PERMISSION_SETTINGS_INTEGRATIONS_VIEW = "settings:integrations:view"
 PERMISSION_SETTINGS_INTEGRATIONS_MANAGE = "settings:integrations:manage"
 PERMISSION_SETTINGS_SUBSCRIPTION_VIEW = "settings:subscription:view"
+PERMISSION_SETTINGS_SUBSCRIPTION_MANAGE = "settings:subscription:manage"
 PERMISSION_SETTINGS_SECURITY_VIEW = "settings:security:view"
 PERMISSION_SETTINGS_NOTIFICATIONS_VIEW = "settings:notifications:view"
+PERMISSION_SETTINGS_DAILY_REPORT_VIEW = "settings:notifications:daily_report:view"
+PERMISSION_SETTINGS_DAILY_REPORT_MANAGE = "settings:notifications:daily_report:manage"
 PERMISSION_SETTINGS_ASSISTANT_VIEW = "settings:assistant:view"
+PERMISSION_SETTINGS_ASSISTANT_ACTIONS_MANAGE = "settings:assistant:actions:manage"
 PERMISSION_SETTINGS_TESTS_VIEW = "settings:tests:view"
+PERMISSION_SETTINGS_TESTS_EXECUTE = "settings:tests:execute"
 PERMISSION_OPERATIONS_AUDIT_VIEW = "operations:audit:view"
+PERMISSION_TEMPORARY_GRANTS_VIEW = "permissions:temporary_grants:view"
+PERMISSION_TEMPORARY_GRANTS_MANAGE = "permissions:temporary_grants:manage"
+PERMISSION_COMMERCIAL_MANAGE = "commercial:manage"
 
 # WhatsApp CRM capabilities are intentionally split so reading a queue never
 # implies sending a message, changing assignments, or invoking another domain.
@@ -191,6 +202,15 @@ LEGACY_PERMISSION_ALIASES: dict[str, str] = {
     PERMISSION_STOCK_OPERATE: PERMISSION_STOCK_MOVE,
     PERMISSION_LAUNDRY_MANAGE_VENDORS: PERMISSION_LAUNDRY_VENDOR_MANAGE,
     PERMISSION_LAUNDRY_OPERATE_REMITOS: PERMISSION_LAUNDRY_REMITO_MANAGE,
+}
+
+# Some capabilities were split while keeping their historical permission codes
+# available for the older settings UI. Preserve an explicit historical denial
+# for the new, narrower capability, but never carry an old grant forward.
+LEGACY_PERMISSION_DENY_FALLBACKS: dict[str, tuple[str, ...]] = {
+    PERMISSION_SETTINGS_ASSISTANT_ACTIONS_MANAGE: (PERMISSION_SETTINGS_ASSISTANT_VIEW,),
+    PERMISSION_SETTINGS_DAILY_REPORT_VIEW: (PERMISSION_SETTINGS_NOTIFICATIONS_VIEW,),
+    PERMISSION_SETTINGS_DAILY_REPORT_MANAGE: (PERMISSION_SETTINGS_NOTIFICATIONS_VIEW,),
 }
 
 # Ordered from narrowest to widest. A room-move operation checks the minimum
@@ -254,6 +274,14 @@ _CANONICAL_DEFINITIONS: dict[str, tuple[str, str, str]] = {
     PERMISSION_RESERVATION_CANCEL: (
         "reservations", "Cancel reservations",
         "Permite cancelar reservas. No permite crearlas, editarlas ni moverlas.",
+    ),
+    PERMISSION_RESERVATION_DELETE: (
+        "reservations", "Delete eligible bookings",
+        "Permite eliminar lógicamente reservas que todavía no fueron marcadas como ingresadas o finalizadas. No reemplaza la cancelación ni borra el historial de reservas activas o concluidas.",
+    ),
+    PERMISSION_RESERVATION_DEMO_SEED: (
+        "reservations", "Seed demo bookings",
+        "Permite crear datos de reservas de demostración cuando DEMO_MODE está habilitado. No habilita el modo demo ni cambia datos fuera del hotel actual.",
     ),
     PERMISSION_RESERVATION_CHARGE: (
         "reservations", "Add reservation charges",
@@ -385,7 +413,11 @@ _CANONICAL_DEFINITIONS: dict[str, tuple[str, str, str]] = {
     ),
     PERMISSION_CASH_APPROVE_DIFFERENCE: (
         "cash", "Approve cash close differences",
-        "Permite aprobar diferencias al cerrar caja. No permite operar sesiones ni registrar movimientos por sí solo.",
+        "Permite aprobar diferencias al cerrar caja. Cada aprobación requiere MFA reciente y un ticket de un solo uso ligado a la sesión, el permiso y la ruta. No permite operar sesiones ni registrar movimientos por sí solo.",
+    ),
+    PERMISSION_CASH_CUSTODY_RECEIVE: (
+        "cash", "Confirm cash custody receipt",
+        "Permite al owner confirmar la recepción de una custodia de caja. Requiere MFA reciente y no permite aprobar otras diferencias ni operar sesiones.",
     ),
     PERMISSION_OPERATIONAL_TASK_READ: (
         "operations", "Read shared operational tasks",
@@ -410,6 +442,10 @@ _CANONICAL_DEFINITIONS: dict[str, tuple[str, str, str]] = {
     PERMISSION_REPORTS_FINANCIAL_VIEW: (
         "reports", "Read financial reports",
         "Permite consultar reportes financieros del hotel. No permite modificar cobros, caja ni reservas.",
+    ),
+    PERMISSION_COMMERCIAL_MANAGE: (
+        "commercial", "Manage commercial configuration",
+        "Permite crear y editar productos, planes tarifarios, políticas impositivas y cambiarias del hotel. Está limitado a owner y co-owner.",
     ),
     PERMISSION_APIKEY_MANAGE: (
         "security", "Manage public hotel API keys",
@@ -475,6 +511,10 @@ _CANONICAL_DEFINITIONS: dict[str, tuple[str, str, str]] = {
         "settings", "Read subscription and plan details",
         "Permite consultar el plan, la suscripción y los límites del hotel. No permite cambiar el plan ni aplicar ajustes de facturación.",
     ),
+    PERMISSION_SETTINGS_SUBSCRIPTION_MANAGE: (
+        "settings", "Manage hotel subscription",
+        "Permite cambiar el plan, iniciar una prueba y administrar ajustes de entitlements del hotel. Está limitado a owner y co-owner.",
+    ),
     PERMISSION_SETTINGS_SECURITY_VIEW: (
         "settings", "Read security settings",
         "Permite abrir la configuración de seguridad y consultar su estado. No permite modificar secretos, sesiones ni políticas.",
@@ -483,13 +523,37 @@ _CANONICAL_DEFINITIONS: dict[str, tuple[str, str, str]] = {
         "settings", "Read notifications",
         "Permite abrir y consultar las notificaciones del hotel. No permite cambiar preferencias ni enviar mensajes.",
     ),
+    PERMISSION_SETTINGS_DAILY_REPORT_VIEW: (
+        "settings", "Read daily report delivery schedule",
+        "Permite consultar destinatarios, canales y horario del reporte diario. Está limitado a owner y co-owner.",
+    ),
+    PERMISSION_SETTINGS_DAILY_REPORT_MANAGE: (
+        "settings", "Manage daily report delivery schedule",
+        "Permite cambiar destinatarios, canales y horario del reporte diario. Está limitado a owner y co-owner.",
+    ),
     PERMISSION_SETTINGS_ASSISTANT_VIEW: (
         "settings", "Read and use the operations assistant",
         "Permite abrir el asistente de operaciones y consultar sugerencias. No permite aplicar cambios críticos sin un flujo explícito y autorizado.",
     ),
+    PERMISSION_SETTINGS_ASSISTANT_ACTIONS_MANAGE: (
+        "settings", "Review and apply assistant actions",
+        "Permite aprobar, rechazar, revisar o aplicar borradores de acciones propuestos por el asistente. Está limitado a owner y co-owner.",
+    ),
     PERMISSION_SETTINGS_TESTS_VIEW: (
         "settings", "Read test tools and settings",
         "Permite abrir las herramientas de prueba del hotel y consultar sus resultados. No permite ejecutar efectos externos sin las protecciones correspondientes.",
+    ),
+    PERMISSION_SETTINGS_TESTS_EXECUTE: (
+        "settings", "Execute payment-link tests",
+        "Permite crear, actualizar y cancelar links de pago de prueba del hotel. Está limitado a owner y co-owner.",
+    ),
+    PERMISSION_TEMPORARY_GRANTS_VIEW: (
+        "security", "Read pending temporary action grants",
+        "Permite consultar las solicitudes temporales pendientes del hotel. Está limitado a owner y co-owner.",
+    ),
+    PERMISSION_TEMPORARY_GRANTS_MANAGE: (
+        "security", "Approve or deny temporary action grants",
+        "Permite aprobar o denegar solicitudes temporales de permisos. La aprobación además requiere MFA y el grant queda ligado a la acción y al recurso exactos.",
     ),
     PERMISSION_WHATSAPP_INBOX_VIEW: (
         "whatsapp", "Read the WhatsApp inbox",
@@ -561,6 +625,14 @@ def _permission_help_es(code: str) -> str:
     return _CANONICAL_DEFINITIONS[canonical_permission_code(code)][2]
 
 
+def _legacy_permission_deny(code: str, overrides: dict[str, bool]) -> str | None:
+    """Return a prior permission code only when it stores an explicit denial."""
+    for legacy_code in LEGACY_PERMISSION_DENY_FALLBACKS.get(code, ()):
+        if overrides.get(legacy_code) is False:
+            return legacy_code
+    return None
+
+
 def _role_permissions(*allowed_codes: str) -> dict[str, bool]:
     allowed = {canonical_permission_code(code) for code in allowed_codes}
     canonical = {code: code in allowed for code in _CANONICAL_DEFINITIONS}
@@ -592,6 +664,7 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
         PERMISSION_GUEST_EXPORT,
         PERMISSION_RESERVATION_READ, PERMISSION_RESERVATION_CREATE,
         PERMISSION_RESERVATION_UPDATE, PERMISSION_RESERVATION_CANCEL,
+        PERMISSION_RESERVATION_DELETE, PERMISSION_RESERVATION_DEMO_SEED,
         PERMISSION_RESERVATION_MOVE, PERMISSION_RESERVATION_MOVE_CATEGORY,
         PERMISSION_RESERVATION_MOVE_CAPACITY, PERMISSION_RESERVATION_PROHIBITION_OVERRIDE,
         PERMISSION_ROOM_READ, PERMISSION_ROOM_STATUS_UPDATE,
@@ -646,14 +719,36 @@ _OWNER_ONLY = frozenset(
         PERMISSION_HOTEL_PROPERTY_MANAGE,
         PERMISSION_HOTEL_SECURITY_MANAGE,
         PERMISSION_APIKEY_MANAGE,
+        PERMISSION_CASH_CUSTODY_RECEIVE,
     }
 )
+_STEP_UP_REQUIRED = _OWNER_ONLY | frozenset({PERMISSION_CASH_APPROVE_DIFFERENCE})
+_ROLE_SCOPES: dict[str, frozenset[str]] = {
+    PERMISSION_SETTINGS_USERS_VIEW: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
+    PERMISSION_SETTINGS_USERS_MANAGE: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
+    PERMISSION_SETTINGS_SUBSCRIPTION_VIEW: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
+    PERMISSION_SETTINGS_SUBSCRIPTION_MANAGE: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
+    PERMISSION_SETTINGS_SECURITY_VIEW: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
+    PERMISSION_SETTINGS_TESTS_VIEW: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
+    PERMISSION_SETTINGS_TESTS_EXECUTE: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
+    PERMISSION_SETTINGS_DAILY_REPORT_VIEW: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
+    PERMISSION_SETTINGS_DAILY_REPORT_MANAGE: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
+    PERMISSION_SETTINGS_ASSISTANT_ACTIONS_MANAGE: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
+    PERMISSION_TEMPORARY_GRANTS_VIEW: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
+    PERMISSION_TEMPORARY_GRANTS_MANAGE: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
+    PERMISSION_COMMERCIAL_MANAGE: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
+    PERMISSION_RESERVATION_DELETE: frozenset({ROLE_OWNER, ROLE_CO_OWNER, ROLE_MANAGER}),
+    PERMISSION_RESERVATION_DEMO_SEED: frozenset({ROLE_OWNER, ROLE_CO_OWNER, ROLE_MANAGER}),
+}
 
 
 def immutable_permission_decision(role: str | None, code: str) -> tuple[bool, str] | None:
     canonical = canonical_permission_code(code)
     if canonical in _OWNER_ONLY:
         return role == ROLE_OWNER, "owner_only"
+    scoped_roles = _ROLE_SCOPES.get(canonical)
+    if scoped_roles is not None and role not in scoped_roles:
+        return False, "role_scope"
     return None
 
 
@@ -766,7 +861,7 @@ def seed_default_permissions(db: Session) -> None:
                 "code": code,
                 "description": description,
                 "critical": code in _OWNER_ONLY,
-                "step_up_required": code in _OWNER_ONLY,
+                "step_up_required": code in _STEP_UP_REQUIRED,
                 "delegable": code not in _OWNER_ONLY,
             }
             for code, description in PERMISSION_DEFINITIONS.items()
@@ -777,7 +872,7 @@ def seed_default_permissions(db: Session) -> None:
     for code, description in PERMISSION_DEFINITIONS.items():
         rows[code].description = description
         rows[code].critical = code in _OWNER_ONLY
-        rows[code].step_up_required = code in _OWNER_ONLY
+        rows[code].step_up_required = code in _STEP_UP_REQUIRED
         rows[code].delegable = code not in _OWNER_ONLY
     db.flush()
     values = [
@@ -892,6 +987,14 @@ def get_effective_permission_details(
                 "lock_reason": None,
                 "version": user_override_versions[code],
             }
+        elif (legacy_code := _legacy_permission_deny(code, user_overrides)) is not None:
+            details[code] = {
+                "allowed": False,
+                "source": "legacy_user_deny",
+                "locked": False,
+                "lock_reason": None,
+                "legacy_permission_code": legacy_code,
+            }
         elif code in role_overrides:
             details[code] = {
                 "allowed": role_overrides[code],
@@ -899,6 +1002,14 @@ def get_effective_permission_details(
                 "locked": False,
                 "lock_reason": None,
                 "version": role_override_versions[code],
+            }
+        elif (legacy_code := _legacy_permission_deny(code, role_overrides)) is not None:
+            details[code] = {
+                "allowed": False,
+                "source": "legacy_role_deny",
+                "locked": False,
+                "lock_reason": None,
+                "legacy_permission_code": legacy_code,
             }
         elif code in defaults:
             details[code] = {
@@ -941,6 +1052,7 @@ def _audit(db: Session, *, hotel_id: int, actor_user_id: int | None, action: str
 def list_hotel_roles(db: Session, hotel_id: int) -> list[dict[str, object]]:
     """Return built-ins and this hotel's custom roles in the frontend contract."""
     result: list[dict[str, object]] = []
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     pending_invitation_counts = {
         role: int(count)
         for role, count in (
@@ -948,6 +1060,7 @@ def list_hotel_roles(db: Session, hotel_id: int) -> list[dict[str, object]]:
             .filter(
                 StaffInvitation.hotel_id == hotel_id,
                 StaffInvitation.status == "pending",
+                StaffInvitation.expires_at > now,
             )
             .group_by(StaffInvitation.role)
             .all()
@@ -1138,6 +1251,7 @@ def archive_custom_role(
             StaffInvitation.hotel_id == hotel_id,
             StaffInvitation.role == role_code,
             StaffInvitation.status == "pending",
+            StaffInvitation.expires_at > datetime.now(timezone.utc).replace(tzinfo=None),
         )
         .scalar()
         or 0
@@ -1350,7 +1464,12 @@ def set_override(
 
 
 def _active_membership(db: Session, hotel_id: int, user_id: int) -> HotelMembership | None:
-    return db.query(HotelMembership).filter_by(hotel_id=hotel_id, user_id=user_id, status="active").one_or_none()
+    return (
+        db.query(HotelMembership)
+        .filter_by(hotel_id=hotel_id, user_id=user_id, status="active")
+        .with_for_update()
+        .one_or_none()
+    )
 
 
 def set_user_override(
@@ -1559,6 +1678,65 @@ def restore_role_defaults(db: Session, hotel_id: int, role: str, actor_user_id: 
     return len(rows)
 
 
+def clear_user_permission_grants_for_role_change(
+    db: Session,
+    *,
+    hotel_id: int,
+    target_user_id: int,
+    actor_user_id: int | None,
+    previous_role: str,
+    next_role: str,
+) -> int:
+    """Remove per-user grants when a membership changes roles, retaining explicit denials."""
+    if previous_role == next_role:
+        return 0
+    rows = (
+        db.query(UserPermissionOverride)
+        .filter_by(hotel_id=hotel_id, user_id=target_user_id)
+        .filter(UserPermissionOverride.allowed.is_(True))
+        .order_by(UserPermissionOverride.permission_code.asc())
+        .with_for_update()
+        .all()
+    )
+    if not rows:
+        return 0
+
+    grants = [
+        {
+            "permission_code": row.permission_code,
+            "allowed": True,
+            "version": int(row.version),
+        }
+        for row in rows
+    ]
+    for row in rows:
+        db.delete(row)
+
+    preserved_denials = [
+        row.permission_code
+        for row in (
+            db.query(UserPermissionOverride)
+            .filter_by(hotel_id=hotel_id, user_id=target_user_id)
+            .filter(UserPermissionOverride.allowed.is_(False))
+            .order_by(UserPermissionOverride.permission_code.asc())
+            .all()
+        )
+    ]
+    _audit(
+        db,
+        hotel_id=hotel_id,
+        actor_user_id=actor_user_id,
+        action="permission.user_grants.cleared_by_role_change",
+        resource_type="user_permission_override",
+        resource_id=str(target_user_id),
+        before={"role": previous_role, "grants": grants},
+        after={"role": next_role, "grants": [], "preserved_denials": preserved_denials},
+    )
+    db.flush()
+    invalidate_effective_permission_cache(db, hotel_id, target_user_id)
+    return len(rows)
+
+
 def restore_user_defaults(db: Session, hotel_id: int, target_user_id: int, actor_user_id: int | None) -> int:
     membership = _active_membership(db, hotel_id, target_user_id)
     if membership is None:
@@ -1622,6 +1800,11 @@ def get_matrix(db: Session, hotel_id: int) -> dict[str, dict[str, dict[str, obje
                 "allowed": detail["allowed"],
                 "source": source,
                 "version": detail.get("version"),
+                **(
+                    {"legacy_permission_code": detail["legacy_permission_code"]}
+                    if "legacy_permission_code" in detail
+                    else {}
+                ),
                 "description": description,
                 "module": module,
                 "help_es": help_es,

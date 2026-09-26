@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm.exc import StaleDataError
 
 from app.database import get_db
-from app.dependencies.auth import AuthContext, require_permission, require_roles_and_permission
+from app.dependencies.auth import AuthContext, require_permission
 from app.services.permission_service import (
     HotelRoleInUse,
     HotelRoleNameConflict,
@@ -27,7 +27,7 @@ from app.services.permission_service import (
 
 router = APIRouter(prefix="/api/roles", tags=["Roles"])
 _MANAGE_ROLES = require_permission(PERMISSION_PERMISSION_MANAGE)
-_READ_ROLES = require_roles_and_permission(PERMISSION_SETTINGS_USERS_VIEW, "owner", "co_owner")
+_READ_ROLES = require_permission(PERMISSION_SETTINGS_USERS_VIEW)
 CustomRoleBase = Literal["manager", "receptionist", "housekeeping"]
 
 

@@ -23,6 +23,7 @@ export type PermissionDetail = {
   locked: boolean;
   lock_reason: string | null;
   version?: number | null;
+  legacy_permission_code?: string;
 };
 
 export type PermissionCell = {
@@ -34,6 +35,7 @@ export type PermissionCell = {
   locked?: boolean;
   lock_reason?: string | null;
   version?: number | null;
+  legacy_permission_code?: string | null;
 };
 
 export type PermissionMatrix = Record<string, Record<string, PermissionCell>>;

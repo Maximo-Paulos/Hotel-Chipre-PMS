@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import get_db
-from app.dependencies.auth import AuthContext, require_roles, require_roles_and_permission
+from app.dependencies.auth import AuthContext, require_permission
 from app.schemas.payment_link_test import PaymentLinkTestCreate, PaymentLinkTestRead
 from app.services.payment_link_test_service import (
     PaymentLinkTestError,
@@ -14,7 +14,7 @@ from app.services.payment_link_test_service import (
     refresh_mercadopago_payment_link_test_by_reference,
     validate_mercadopago_webhook_signature,
 )
-from app.services.permission_service import PERMISSION_SETTINGS_TESTS_VIEW
+from app.services.permission_service import PERMISSION_SETTINGS_TESTS_EXECUTE, PERMISSION_SETTINGS_TESTS_VIEW
 from app.services.external_effects_policy import (
     InboundProviderEventsDisabled,
     require_inbound_provider_events,
@@ -28,7 +28,7 @@ router = APIRouter(prefix="/api/payment-link-tests", tags=["Payment Link Tests"]
 @router.get("/", response_model=list[PaymentLinkTestRead])
 def list_tests(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles_and_permission(PERMISSION_SETTINGS_TESTS_VIEW, "owner", "co_owner")),
+    context: AuthContext = Depends(require_permission(PERMISSION_SETTINGS_TESTS_VIEW)),
 ):
     tests = list_payment_link_tests(db, context.hotel_id)
     db.commit()
@@ -39,7 +39,7 @@ def list_tests(
 def create_mercadopago_test(
     payload: PaymentLinkTestCreate,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner")),
+    context: AuthContext = Depends(require_permission(PERMISSION_SETTINGS_TESTS_EXECUTE)),
 ):
     try:
         test = create_mercadopago_payment_link_test(db, context.hotel_id, payload)
@@ -59,7 +59,7 @@ def create_mercadopago_test(
 def refresh_test(
     test_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner")),
+    context: AuthContext = Depends(require_permission(PERMISSION_SETTINGS_TESTS_EXECUTE)),
 ):
     try:
         test = refresh_mercadopago_payment_link_test(db, context.hotel_id, test_id)
@@ -79,7 +79,7 @@ def refresh_test(
 def cancel_test(
     test_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner")),
+    context: AuthContext = Depends(require_permission(PERMISSION_SETTINGS_TESTS_EXECUTE)),
 ):
     try:
         test = cancel_mercadopago_payment_link_test(db, context.hotel_id, test_id)

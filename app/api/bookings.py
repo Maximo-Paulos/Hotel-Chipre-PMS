@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.services.timezones import hotel_today
-from app.dependencies.auth import AuthContext, get_auth_context, require_permission, require_roles
+from app.dependencies.auth import AuthContext, get_auth_context, require_permission
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.audit_log import AuditActionEnum
 from app.models.room import Room, RoomCategory, RoomStatusEnum
@@ -34,6 +34,8 @@ from app.services import audit_log_service
 from app.services.permission_service import (
     PERMISSION_RESERVATION_CANCEL,
     PERMISSION_RESERVATION_CREATE,
+    PERMISSION_RESERVATION_DELETE,
+    PERMISSION_RESERVATION_DEMO_SEED,
     PERMISSION_RESERVATION_READ,
     PERMISSION_RESERVATION_UPDATE,
     PERMISSION_CHECKIN_PERFORM,
@@ -534,7 +536,7 @@ def update_booking(
 @router.post("/demo-seed")
 def seed_demo_bookings(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_DEMO_SEED)),
 ):
     """Quickly seed demo bookings (requires DEMO_MODE=true)."""
     _require_demo_mode()
@@ -601,7 +603,7 @@ def seed_demo_bookings(
 def delete_booking(
     booking_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner", "manager")),
+    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_DELETE)),
 ):
     booking = (
         db.query(Reservation)

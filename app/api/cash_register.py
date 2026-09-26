@@ -2,12 +2,12 @@ import csv
 from datetime import date as date_type, timedelta
 from io import StringIO
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies.auth import AuthContext, require_permission
+from app.dependencies.auth import AuthContext, authorize_permission, get_auth_context, require_permission
 from app.schemas.cash_register import (
     CashCloseReportRead,
     CashMovementCreate,
@@ -32,6 +32,7 @@ from app.services.cash_register_service import (
 )
 from app.services.permission_service import (
     PERMISSION_CASH_APPROVE_DIFFERENCE,
+    PERMISSION_CASH_CUSTODY_RECEIVE,
     PERMISSION_CASH_OPERATE,
     PERMISSION_CASH_VIEW,
 )
@@ -41,6 +42,18 @@ from app.services.csv_export_safety import spreadsheet_safe_row
 
 
 router = APIRouter(tags=["Cash Register"])
+
+
+def _require_cash_difference_approval_when_requested(
+    request: Request,
+    payload: CashSessionClose,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(get_auth_context),
+) -> AuthContext:
+    """Apply the separate approval capability only when closing requires it."""
+    if not payload.approve_difference:
+        return context
+    return authorize_permission(request, db, context, PERMISSION_CASH_APPROVE_DIFFERENCE)
 
 
 @router.get("/api/cash-register/daily-summary", response_model=CashDailySummaryRead)
@@ -271,29 +284,8 @@ def close_cash_session(
     payload: CashSessionClose,
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_CASH_OPERATE)),
+    _approval_context: AuthContext = Depends(_require_cash_difference_approval_when_requested),
 ):
-    if payload.approve_difference:
-        if not context.permissions or PERMISSION_CASH_APPROVE_DIFFERENCE not in context.permissions:
-            # Force the permission dependency through a local resolution so callers
-            # cannot approve a difference with operate-only access.
-            from app.services.permission_service import audit_permission_denied, resolve
-
-            if not resolve(
-                db,
-                context.hotel_id,
-                context.user_role,
-                PERMISSION_CASH_APPROVE_DIFFERENCE,
-                user_id=context.user_id,
-            ):
-                audit_permission_denied(
-                    db,
-                    hotel_id=context.hotel_id,
-                    user_id=context.user_id,
-                    role=context.user_role,
-                    permission_code=PERMISSION_CASH_APPROVE_DIFFERENCE,
-                )
-                raise HTTPException(status_code=403, detail="No tenes permisos para aprobar diferencias de caja")
-
     try:
         report = close_session(
             db,
@@ -303,7 +295,9 @@ def close_cash_session(
             counted_balance=payload.counted_balance,
             notes=payload.notes,
             approved_by_user_id=context.user_id if payload.approve_difference else None,
-            received_by_user_id=context.user_id if context.user_role == "owner" else None,
+            # Closing records the delivery but never confirms receipt. Custody
+            # confirmation is a separate owner-only, step-up protected action.
+            received_by_user_id=None,
         )
         db.commit()
         db.refresh(report)
@@ -330,20 +324,8 @@ def close_cash_session(
 def confirm_cash_custody_receipt(
     report_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_CASH_APPROVE_DIFFERENCE)),
+    context: AuthContext = Depends(require_permission(PERMISSION_CASH_CUSTODY_RECEIVE)),
 ):
-    if context.user_role != "owner":
-        from app.services.permission_service import audit_permission_denied
-
-        audit_permission_denied(
-            db,
-            hotel_id=context.hotel_id,
-            user_id=context.user_id,
-            role=context.user_role,
-            permission_code="cash.custody.receive.owner_only",
-        )
-        db.commit()
-        raise HTTPException(status_code=403, detail="Solo el dueño puede confirmar la recepción de custodia")
     try:
         report = confirm_cash_custody(
             db,

@@ -307,6 +307,46 @@ def _matching_specific_step_up_ticket(
     )
 
 
+def authorize_permission(
+    request: Request,
+    db: Session,
+    context: AuthContext,
+    permission: str,
+) -> AuthContext:
+    """Authorize a capability at runtime for payload-conditional actions.
+
+    Most routes should use ``require_permission`` as a FastAPI dependency. A
+    handler may call this helper only when the validated request payload makes
+    an additional capability conditionally necessary; it preserves the same
+    verification, audit, and action-bound step-up behavior as the dependency.
+    """
+
+    from app.services.permission_service import audit_permission_denied, resolve
+
+    permissions = context.permissions or set()
+    permissions.add(permission)
+    context.permissions = permissions
+    if not context.is_verified:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Verifica tu email para usar el sistema")
+    if not resolve(
+        db,
+        context.hotel_id,
+        context.user_role,
+        permission,
+        user_id=context.user_id,
+    ):
+        audit_permission_denied(
+            db,
+            hotel_id=context.hotel_id,
+            user_id=context.user_id,
+            role=context.user_role,
+            permission_code=permission,
+        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tenes permisos para esta accion")
+    _require_action_step_up(db, request, context, permission)
+    return context
+
+
 def require_permission(permission: str):
     """
     Dependency factory that enforces a permission via the configurable hotel
@@ -319,31 +359,7 @@ def require_permission(permission: str):
         db: Session = Depends(get_db),
         context: AuthContext = Depends(get_auth_context),
     ) -> AuthContext:
-        # Imported here to avoid a circular import at module load time.
-        from app.services.permission_service import audit_permission_denied, resolve
-
-        perms = context.permissions or set()
-        perms.add(permission)
-        context.permissions = perms
-        if not context.is_verified:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Verifica tu email para usar el sistema")
-        if not resolve(
-            db,
-            context.hotel_id,
-            context.user_role,
-            permission,
-            user_id=context.user_id,
-        ):
-            audit_permission_denied(
-                db,
-                hotel_id=context.hotel_id,
-                user_id=context.user_id,
-                role=context.user_role,
-                permission_code=permission,
-            )
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tenes permisos para esta accion")
-        _require_action_step_up(db, request, context, permission)
-        return context
+        return authorize_permission(request, db, context, permission)
 
     return dependency
 

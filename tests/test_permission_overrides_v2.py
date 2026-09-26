@@ -10,6 +10,7 @@ from app.dependencies.auth import AuthContext, get_auth_context
 from app.main import app as fastapi_app
 from app.models.hotel_config import HotelConfiguration
 from app.models.hotel_membership import HotelMembership
+from app.models.hotel_role import HotelRole
 from app.models.permission import HotelPermissionOverride, UserPermissionOverride
 from app.models.permission import RolePermissionDefault
 from app.models.security_audit_log import SecurityAuditLog
@@ -20,16 +21,26 @@ from app.services.action_step_up_service import (
     is_permission_admin_read_action,
 )
 from app.services.permission_service import (
+    PERMISSION_CASH_APPROVE_DIFFERENCE,
+    PERMISSION_CASH_CUSTODY_RECEIVE,
     PERMISSION_GUEST_PROHIBITION_MANAGE,
     PERMISSION_GUEST_PROHIBITION_READ,
     PERMISSION_GUEST_READ,
     PERMISSION_PERMISSION_MANAGE,
+    PERMISSION_SETTINGS_USERS_MANAGE,
+    PERMISSION_SETTINGS_ASSISTANT_ACTIONS_MANAGE,
+    PERMISSION_SETTINGS_ASSISTANT_VIEW,
+    PERMISSION_SETTINGS_DAILY_REPORT_MANAGE,
+    PERMISSION_SETTINGS_DAILY_REPORT_VIEW,
+    PERMISSION_SETTINGS_NOTIFICATIONS_VIEW,
     PERMISSION_RATES_UPDATE,
     PERMISSION_RESERVATION_PROHIBITION_OVERRIDE,
     PERMISSION_ROOM_STATUS_UPDATE,
     PERMISSION_STOCK_ADJUST,
     PERMISSION_STOCK_READ,
+    _ROLE_SCOPES,
     get_effective_permission_details,
+    get_matrix,
     resolve,
     set_role_override,
     set_user_override,
@@ -152,6 +163,258 @@ def test_resolution_precedence_is_invariant_user_role_default_deny(db):
     }
 
 
+def test_legacy_explicit_denials_survive_permission_splits(db):
+    db.add(HotelConfiguration(id=1, subscription_active=True))
+    db.add(User(id=20, email="co-owner@example.test", password_hash="synthetic", is_verified=True))
+    db.flush()
+    seed_default_permissions(db)
+    db.add(HotelMembership(hotel_id=1, user_id=20, role="co_owner", status="active"))
+    db.flush()
+    db.add_all(
+        [
+            UserPermissionOverride(
+                hotel_id=1,
+                user_id=20,
+                permission_code=PERMISSION_SETTINGS_ASSISTANT_VIEW,
+                allowed=False,
+            ),
+            HotelPermissionOverride(
+                hotel_id=1,
+                role="co_owner",
+                permission_code=PERMISSION_SETTINGS_NOTIFICATIONS_VIEW,
+                allowed=False,
+            ),
+        ]
+    )
+    db.flush()
+
+    details = get_effective_permission_details(db, 1, "co_owner", user_id=20)
+
+    assistant = details[PERMISSION_SETTINGS_ASSISTANT_ACTIONS_MANAGE]
+    assert assistant["allowed"] is False
+    assert assistant["source"] == "legacy_user_deny"
+    assert assistant["legacy_permission_code"] == PERMISSION_SETTINGS_ASSISTANT_VIEW
+
+    for code in (PERMISSION_SETTINGS_DAILY_REPORT_VIEW, PERMISSION_SETTINGS_DAILY_REPORT_MANAGE):
+        daily_report = details[code]
+        assert daily_report["allowed"] is False
+        assert daily_report["source"] == "legacy_role_deny"
+        assert daily_report["legacy_permission_code"] == PERMISSION_SETTINGS_NOTIFICATIONS_VIEW
+
+    # Authorization enforcement must consume the same effective decision as
+    # the administrative matrix; these legacy denials must fail closed at runtime.
+    assert not resolve(
+        db,
+        1,
+        "co_owner",
+        PERMISSION_SETTINGS_ASSISTANT_ACTIONS_MANAGE,
+        user_id=20,
+    )
+    for code in (PERMISSION_SETTINGS_DAILY_REPORT_VIEW, PERMISSION_SETTINGS_DAILY_REPORT_MANAGE):
+        assert not resolve(db, 1, "co_owner", code, user_id=20)
+
+    role_matrix = get_matrix(db, 1)
+    assert role_matrix["co_owner"][PERMISSION_SETTINGS_DAILY_REPORT_VIEW]["source"] == "legacy_role_deny"
+    assert role_matrix["co_owner"][PERMISSION_SETTINGS_DAILY_REPORT_VIEW]["legacy_permission_code"] == PERMISSION_SETTINGS_NOTIFICATIONS_VIEW
+
+
+def test_new_permission_decisions_win_and_legacy_grants_are_not_inherited(db):
+    db.add(HotelConfiguration(id=1, subscription_active=True))
+    db.add(User(id=10, email="owner@example.test", password_hash="synthetic", is_verified=True))
+    db.add(User(id=20, email="co-owner@example.test", password_hash="synthetic", is_verified=True))
+    db.flush()
+    seed_default_permissions(db)
+    db.add(HotelMembership(hotel_id=1, user_id=20, role="co_owner", status="active"))
+    db.flush()
+    db.add_all(
+        [
+            UserPermissionOverride(
+                hotel_id=1,
+                user_id=20,
+                permission_code=PERMISSION_SETTINGS_ASSISTANT_VIEW,
+                allowed=False,
+            ),
+            HotelPermissionOverride(
+                hotel_id=1,
+                role="co_owner",
+                permission_code=PERMISSION_SETTINGS_ASSISTANT_ACTIONS_MANAGE,
+                allowed=True,
+            ),
+            UserPermissionOverride(
+                hotel_id=1,
+                user_id=20,
+                permission_code=PERMISSION_SETTINGS_NOTIFICATIONS_VIEW,
+                allowed=True,
+            ),
+            HotelPermissionOverride(
+                hotel_id=1,
+                role="co_owner",
+                permission_code=PERMISSION_SETTINGS_NOTIFICATIONS_VIEW,
+                allowed=False,
+            ),
+            HotelPermissionOverride(
+                hotel_id=1,
+                role="manager",
+                permission_code=PERMISSION_SETTINGS_ASSISTANT_VIEW,
+                allowed=True,
+            ),
+        ]
+    )
+    db.flush()
+
+    details = get_effective_permission_details(db, 1, "co_owner", user_id=20)
+    assert details[PERMISSION_SETTINGS_ASSISTANT_ACTIONS_MANAGE]["allowed"] is False
+    assert details[PERMISSION_SETTINGS_ASSISTANT_ACTIONS_MANAGE]["source"] == "legacy_user_deny"
+    assert details[PERMISSION_SETTINGS_DAILY_REPORT_VIEW]["allowed"] is False
+    assert details[PERMISSION_SETTINGS_DAILY_REPORT_VIEW]["source"] == "legacy_role_deny"
+    assert not resolve(db, 1, "manager", PERMISSION_SETTINGS_ASSISTANT_ACTIONS_MANAGE)
+
+    db.add(
+        UserPermissionOverride(
+            hotel_id=1,
+            user_id=20,
+            permission_code=PERMISSION_SETTINGS_ASSISTANT_ACTIONS_MANAGE,
+            allowed=True,
+        )
+    )
+    db.add(
+        HotelPermissionOverride(
+            hotel_id=1,
+            role="co_owner",
+            permission_code=PERMISSION_SETTINGS_DAILY_REPORT_MANAGE,
+            allowed=True,
+        )
+    )
+    db.flush()
+
+    details = get_effective_permission_details(db, 1, "co_owner", user_id=20)
+    assert details[PERMISSION_SETTINGS_ASSISTANT_ACTIONS_MANAGE]["allowed"] is True
+    assert details[PERMISSION_SETTINGS_ASSISTANT_ACTIONS_MANAGE]["source"] == "user_override"
+    assert details[PERMISSION_SETTINGS_DAILY_REPORT_MANAGE]["allowed"] is True
+    assert details[PERMISSION_SETTINGS_DAILY_REPORT_MANAGE]["source"] == "role_override"
+
+
+def test_role_scoped_capabilities_cannot_be_granted_outside_their_builtin_roles(db):
+    db.add(HotelConfiguration(id=1, subscription_active=True))
+    db.add(User(id=10, email="owner@example.test", password_hash="synthetic", is_verified=True))
+    db.flush()
+    seed_default_permissions(db)
+    db.add(HotelMembership(hotel_id=1, user_id=10, role="owner", status="active"))
+    db.add(
+        HotelRole(
+            hotel_id=1,
+            code="cr_owner_ops",
+            name="Owner operations",
+            name_key="owner operations",
+            base_role="manager",
+            is_active=True,
+        )
+    )
+    db.add(
+        HotelPermissionOverride(
+            hotel_id=1,
+            role="manager",
+            permission_code=PERMISSION_SETTINGS_USERS_MANAGE,
+            allowed=True,
+        )
+    )
+    db.add(
+        HotelPermissionOverride(
+            hotel_id=1,
+            role="cr_owner_ops",
+            permission_code=PERMISSION_SETTINGS_USERS_MANAGE,
+            allowed=True,
+        )
+    )
+    db.flush()
+
+    assert resolve(db, 1, "owner", PERMISSION_SETTINGS_USERS_MANAGE, user_id=10)
+    assert not resolve(db, 1, "manager", PERMISSION_SETTINGS_USERS_MANAGE)
+    assert not resolve(db, 1, "cr_owner_ops", PERMISSION_SETTINGS_USERS_MANAGE)
+    assert get_effective_permission_details(db, 1, "cr_owner_ops")[PERMISSION_SETTINGS_USERS_MANAGE] == {
+        "allowed": False,
+        "source": "invariant",
+        "locked": True,
+        "lock_reason": "role_scope",
+    }
+
+    set_user_override(
+        db,
+        1,
+        10,
+        "owner",
+        PERMISSION_SETTINGS_USERS_MANAGE,
+        False,
+        actor_user_id=10,
+    )
+    assert not resolve(db, 1, "owner", PERMISSION_SETTINGS_USERS_MANAGE, user_id=10)
+
+
+def test_every_role_scoped_capability_rejects_out_of_scope_role_overrides(db):
+    db.add(HotelConfiguration(id=1, subscription_active=True))
+    db.add(
+        HotelRole(
+            hotel_id=1,
+            code="cr_scope_test",
+            name="Scope test",
+            name_key="scope test",
+            base_role="manager",
+            is_active=True,
+        )
+    )
+    seed_default_permissions(db)
+
+    candidate_roles = ("owner", "co_owner", "manager", "receptionist", "housekeeping", "cr_scope_test")
+    restricted_roles = ("manager", "receptionist", "housekeeping", "cr_scope_test")
+    overrides = [
+        HotelPermissionOverride(
+            hotel_id=1,
+            role=role,
+            permission_code=permission_code,
+            allowed=True,
+        )
+        for permission_code in _ROLE_SCOPES
+        for role in restricted_roles
+        if role not in _ROLE_SCOPES[permission_code]
+    ]
+    db.add_all(overrides)
+    db.flush()
+
+    for permission_code, allowed_roles in _ROLE_SCOPES.items():
+        for role in candidate_roles:
+            expected = role in allowed_roles
+            assert resolve(db, 1, role, permission_code) is expected
+            if not expected:
+                assert get_effective_permission_details(db, 1, role)[permission_code] == {
+                    "allowed": False,
+                    "source": "invariant",
+                    "locked": True,
+                    "lock_reason": "role_scope",
+                }
+
+
+def test_cash_difference_denial_does_not_revoke_independent_owner_custody_receipt(db):
+    db.add(HotelConfiguration(id=1, subscription_active=True))
+    db.add(User(id=10, email="owner@example.test", password_hash="synthetic", is_verified=True))
+    db.flush()
+    seed_default_permissions(db)
+    db.add(HotelMembership(hotel_id=1, user_id=10, role="owner", status="active"))
+    db.add(
+        HotelPermissionOverride(
+            hotel_id=1,
+            role="owner",
+            permission_code=PERMISSION_CASH_APPROVE_DIFFERENCE,
+            allowed=False,
+        )
+    )
+    db.flush()
+
+    details = get_effective_permission_details(db, 1, "owner", user_id=10)
+    assert details[PERMISSION_CASH_APPROVE_DIFFERENCE]["allowed"] is False
+    assert details[PERMISSION_CASH_CUSTODY_RECEIVE]["allowed"] is True
+    assert details[PERMISSION_CASH_CUSTODY_RECEIVE]["source"] == "invariant"
+
+
 def test_only_owner_can_use_administration_catalog_and_co_owner_is_denied():
     client, db, engine = _client()
     try:
@@ -218,6 +481,48 @@ def test_owner_can_grant_and_revoke_user_override_then_restore_defaults():
         details = json.loads(audit.details)
         assert details["before"] is None
         assert details["after"]["allowed"] is True
+    finally:
+        fastapi_app.dependency_overrides.clear()
+        db.close()
+        engine.dispose()
+
+
+def test_owner_cannot_change_or_restore_another_owners_user_overrides():
+    client, db, engine = _client()
+    fastapi_app.dependency_overrides[get_auth_context] = _auth(1, "owner", 10)
+    try:
+        other_owner = User(
+            id=40,
+            email="second-owner@example.test",
+            password_hash="synthetic",
+            role="owner",
+            is_verified=True,
+        )
+        db.add(other_owner)
+        db.flush()
+        db.add(HotelMembership(hotel_id=1, user_id=other_owner.id, role="owner", status="active"))
+        existing_override = UserPermissionOverride(
+            hotel_id=1,
+            user_id=other_owner.id,
+            permission_code=PERMISSION_RESERVATION_PROHIBITION_OVERRIDE,
+            allowed=True,
+            version=1,
+        )
+        db.add(existing_override)
+        db.commit()
+
+        path = f"/api/permissions/user-overrides/{other_owner.id}"
+        changed = client.put(
+            path,
+            json={"permission_code": PERMISSION_RESERVATION_PROHIBITION_OVERRIDE, "allowed": False},
+            headers=_step_up_headers(path, method="PUT"),
+        )
+        restored = client.delete(path, headers=_step_up_headers(path, method="DELETE"))
+
+        assert changed.status_code == 403
+        assert restored.status_code == 403
+        db.refresh(existing_override)
+        assert existing_override.allowed is True
     finally:
         fastapi_app.dependency_overrides.clear()
         db.close()

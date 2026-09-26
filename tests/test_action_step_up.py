@@ -10,6 +10,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.api.auth import router as auth_router
+from app.api.cash_register import router as cash_register_router
 from app.database import Base, get_db
 from app.dependencies.auth import (
     AuthContext,
@@ -26,6 +27,8 @@ from app.services.action_step_up_service import ACTION_STEP_UP_TICKET_TTL_SECOND
 from app.services.mfa_service import encrypt_totp_secret
 from app.services.permission_service import (
     PERMISSION_APIKEY_MANAGE,
+    PERMISSION_CASH_APPROVE_DIFFERENCE,
+    PERMISSION_CASH_CUSTODY_RECEIVE,
     PERMISSION_HOTEL_SECURITY_MANAGE,
     PERMISSION_PERMISSION_MANAGE,
     PERMISSION_RESERVATION_READ,
@@ -83,6 +86,7 @@ def step_up_client():
     current = {"context": _auth_context()}
     app = FastAPI()
     app.include_router(auth_router)
+    app.include_router(cash_register_router)
 
     def override_db():
         yield db
@@ -230,6 +234,68 @@ def test_sensitive_permission_requires_a_matching_ticket_before_handler(step_up_
     assert replayed.json()["detail"]["code"] == "STEP_UP_REQUIRED"
 
 
+def test_cash_difference_approval_requires_a_fresh_action_bound_mfa_ticket(step_up_client):
+    client, _db, secret, _current = step_up_client
+    opened = client.post("/api/cash-register/sessions", json={"opening_balance": "100.00"})
+    assert opened.status_code == 201, opened.text
+    path = f"/api/cash-register/sessions/{opened.json()['id']}/close"
+    payload = {"counted_balance": "99.00", "approve_difference": True}
+
+    missing_ticket = client.post(path, json=payload)
+    assert missing_ticket.status_code == 428
+    assert missing_ticket.json()["detail"] == {
+        "code": "STEP_UP_REQUIRED",
+        "permission_code": PERMISSION_CASH_APPROVE_DIFFERENCE,
+        "method": "POST",
+        "path": path,
+    }
+
+    issued = _issue_ticket(
+        client,
+        secret,
+        permission_code=PERMISSION_CASH_APPROVE_DIFFERENCE,
+        method="POST",
+        path=path,
+    )
+    assert issued.status_code == 200, issued.text
+    allowed = client.post(path, json=payload, headers={"X-Action-Step-Up-Ticket": issued.json()["ticket"]})
+    assert allowed.status_code == 200, allowed.text
+    assert allowed.json()["difference_approved"] is True
+
+    replayed = client.post(path, json=payload, headers={"X-Action-Step-Up-Ticket": issued.json()["ticket"]})
+    assert replayed.status_code == 428
+    assert replayed.json()["detail"]["code"] == "STEP_UP_REQUIRED"
+
+
+def test_cash_custody_confirmation_requires_a_fresh_action_bound_mfa_ticket(step_up_client):
+    client, _db, secret, _current = step_up_client
+    opened = client.post("/api/cash-register/sessions", json={"opening_balance": "100.00"})
+    assert opened.status_code == 201, opened.text
+    closed = client.post(
+        f"/api/cash-register/sessions/{opened.json()['id']}/close",
+        json={"counted_balance": "100.00"},
+    )
+    assert closed.status_code == 200, closed.text
+    assert closed.json()["custody_handoff"]["status"] == "pending"
+    path = f"/api/cash-register/close-reports/{closed.json()['id']}/custody/confirm"
+
+    missing_ticket = client.post(path)
+    assert missing_ticket.status_code == 428
+    assert missing_ticket.json()["detail"]["permission_code"] == PERMISSION_CASH_CUSTODY_RECEIVE
+
+    issued = _issue_ticket(
+        client,
+        secret,
+        permission_code=PERMISSION_CASH_CUSTODY_RECEIVE,
+        method="POST",
+        path=path,
+    )
+    assert issued.status_code == 200, issued.text
+    confirmed = client.post(path, headers={"X-Action-Step-Up-Ticket": issued.json()["ticket"]})
+    assert confirmed.status_code == 200, confirmed.text
+    assert confirmed.json()["custody_handoff"]["status"] == "confirmed"
+
+
 @pytest.mark.parametrize("mismatch", ["user", "hotel", "permission", "method", "path", "token_version"])
 def test_ticket_is_bound_to_user_hotel_permission_method_path_and_token_version(step_up_client, mismatch):
     client, _db, secret, current = step_up_client
@@ -269,7 +335,7 @@ def test_invalid_ticket_fails_closed_without_echoing_it(step_up_client):
     issued = _issue_ticket(client, secret)
     assert issued.status_code == 200
     ticket = issued.json()["ticket"]
-    tampered = ticket[:-1] + ("A" if ticket[-1] != "A" else "B")
+    tampered = ("A" if ticket[0] != "A" else "B") + ticket[1:]
 
     response = client.get(ACTION_PATH, headers={"X-Action-Step-Up-Ticket": tampered})
 

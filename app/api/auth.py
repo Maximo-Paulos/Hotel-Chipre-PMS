@@ -70,6 +70,7 @@ from app.services import onboarding_service
 from app.services.hotel_service import get_or_create_hotel_for_owner, get_memberships_for_user
 from app.services.security import create_access_token, hash_password, needs_rehash, verify_password
 from app.services.security import create_signed_token, decode_signed_token
+from app.services.user_lookup_service import find_user_by_email
 from app.dependencies.auth import AuthContext, get_auth_context, get_current_user
 from app.services.action_step_up_service import (
     ACTION_STEP_UP_TICKET_TTL_SECONDS,
@@ -568,7 +569,7 @@ def register(
         raise HTTPException(status_code=429, detail="Demasiados registros. Espera unos minutos.")
     db.commit()
 
-    existing = db.query(User).filter(User.email.ilike(payload.email)).first()
+    existing = find_user_by_email(db, payload.email)
     if existing:
         # Keep the observable response and provider latency aligned with a new
         # registration without changing the existing account in any way.
@@ -620,7 +621,7 @@ def request_verify(payload: RequestCode, request: Request, db: Session = Depends
         raise HTTPException(status_code=429, detail="Demasiados intentos de verificacion. Espera unos minutos.")
     db.commit()
 
-    user = db.query(User).filter(User.email.ilike(payload.email)).first()
+    user = find_user_by_email(db, payload.email)
     if not user or user.is_verified:
         reason = "not_found" if not user else "already_verified"
         LOGGER.info("request_verify no-op email=%s reason=%s", _mask_email(key), reason)
@@ -663,7 +664,7 @@ def login(
         raise HTTPException(status_code=429, detail="Demasiados intentos. Espera e intenta de nuevo.")
     db.commit()
 
-    user = db.query(User).filter(User.email.ilike(payload.email)).first()
+    user = find_user_by_email(db, payload.email)
     if (
         not user
         or not verify_password(payload.password, user.password_hash)
@@ -806,7 +807,7 @@ def google_login(
     }
     pending_google_identity: dict[str, str] | None = None
     if user is None:
-        user = db.query(User).filter(User.email.ilike(email)).first()
+        user = find_user_by_email(db, email)
         if user is None:
             if not _google_self_signup_enabled(settings):
                 raise HTTPException(status_code=403, detail="El alta con Google no esta habilitada")
@@ -1278,7 +1279,7 @@ def verify_email(
         raise HTTPException(status_code=429, detail="Demasiados intentos. Espera unos minutos.")
     db.commit()
 
-    user = db.query(User).filter(User.email.ilike(payload.email)).first()
+    user = find_user_by_email(db, payload.email)
     if not user or not token_store.verify(db, "email_verification", payload.email, payload.code):
         raise HTTPException(status_code=400, detail="Codigo invalido o expirado")
     code_guess_limiter.reset(f"email_verification:{key}", db=db)
@@ -1312,7 +1313,7 @@ def request_reset(payload: RequestCode, request: Request, db: Session = Depends(
     db.commit()
 
     response: dict = {"sent": True}
-    user = db.query(User).filter(User.email.ilike(payload.email)).first()
+    user = find_user_by_email(db, payload.email)
     if user and user.is_verified:
         code = _issue_email_token(db, payload.email, "password_reset")
         try:
@@ -1360,7 +1361,7 @@ def reset_password(
         raise HTTPException(status_code=429, detail="Demasiados intentos. Espera unos minutos.")
     db.commit()
 
-    user = db.query(User).filter(User.email.ilike(payload.email)).first()
+    user = find_user_by_email(db, payload.email)
     if not user or not token_store.verify(db, "password_reset", payload.email, payload.code):
         raise HTTPException(status_code=400, detail="Codigo invalido o expirado")
     code_guess_limiter.reset(f"password_reset:{key}", db=db)

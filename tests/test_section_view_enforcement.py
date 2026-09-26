@@ -77,7 +77,7 @@ def section_client():
         ("settings:integrations:view", "/api/integrations", {}),
         ("settings:subscription:view", "/api/subscription/plans", {}),
         ("settings:security:view", "/api/settings/security/overview", {}),
-        ("settings:notifications:view", "/api/notifications/daily-report-schedule", {}),
+        ("settings:notifications:daily_report:view", "/api/notifications/daily-report-schedule", {}),
         ("settings:assistant:view", "/api/gemma/chat/history", {}),
         ("settings:tests:view", "/api/payment-link-tests", {}),
     ),

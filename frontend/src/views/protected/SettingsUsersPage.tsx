@@ -147,6 +147,7 @@ export function SettingsUsersPage() {
 
   const handleRoleChange = async (userId: number, role: string) => {
     if (!activeAssignableRoles.some((item) => item.code === role)) return;
+    if (!window.confirm(t("hotelRoles.roleChangePermissionConfirm", { role: roleDisplayName(role) }))) return;
     try {
       await updateRoleMutation.mutateAsync({ userId, role });
     } catch {
@@ -276,6 +277,7 @@ export function SettingsUsersPage() {
                     : "La invitación quedó creada, pero el envío de email no está configurado. Compartí el enlace cuando el correo no esté disponible."
                 }
               </p>
+              <p className="text-xs opacity-80">{t("hotelRoles.latestInvitationLinkNotice")}</p>
               <div className="flex flex-wrap items-center gap-2">
                 {inviteResult.accept_url && (
                   <a className="font-semibold text-brand-700 hover:underline" href={inviteResult.accept_url} target="_blank" rel="noreferrer">
@@ -318,6 +320,11 @@ export function SettingsUsersPage() {
           <h2 className="text-sm font-semibold text-slate-800">Usuarios del hotel</h2>
           {usersQuery.isFetching && <span className="text-xs text-slate-500">Actualizando...</span>}
         </div>
+        {canManage && (
+          <p role="note" className="mt-2 text-xs text-slate-600">
+            {t("hotelRoles.roleChangePermissionNotice")}
+          </p>
+        )}
         <div className="mt-3 overflow-x-auto">
           <table className="min-w-full divide-y divide-slate-200 text-sm">
             <thead className="bg-slate-50">

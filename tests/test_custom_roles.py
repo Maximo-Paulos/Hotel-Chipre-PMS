@@ -19,7 +19,7 @@ from app.models.hotel_membership import HotelMembership
 from app.models.hotel_role import HotelRole
 from app.models.hotel_role_visibility_window import HotelRoleVisibilityWindow
 from app.models.invitation import StaffInvitation
-from app.models.permission import HotelPermissionOverride
+from app.models.permission import HotelPermissionOverride, UserPermissionOverride
 from app.models.user import User
 from app.services.permission_service import (
     HotelRoleNotFound,
@@ -330,6 +330,36 @@ def test_role_archive_refuses_active_members_and_pending_invites(role_api):
     )
     assert body_archived.status_code == 200, body_archived.text
     assert body_archived.json()["role"]["is_active"] is False
+
+
+def test_expired_pending_invitation_is_not_counted_or_blocking_role_archive(role_api):
+    client, db, state = role_api
+    role = _create_role(db)
+    db.add(
+        StaffInvitation(
+            hotel_id=1,
+            email="expired-invitee@example.test",
+            role=role.code,
+            inviter_email="owner@example.test",
+            token_hash="b" * 64,
+            status="pending",
+            expires_at=datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(seconds=1),
+        )
+    )
+    db.commit()
+
+    listed = client.get("/api/roles")
+    assert listed.status_code == 200, listed.text
+    catalog_role = next(row for row in listed.json()["roles"] if row["code"] == role.code)
+    assert catalog_role["pending_invitation_count"] == 0
+
+    delete_path = f"/api/roles/{role.code}"
+    archived = client.delete(
+        f"{delete_path}?expected_version=1",
+        headers=_step_up_headers(state, "DELETE", delete_path),
+    )
+    assert archived.status_code == 200, archived.text
+    assert archived.json()["role"]["is_active"] is False
 
 
 def test_custom_role_permission_precedence_invariants_and_tenant_isolation(role_api):
@@ -695,11 +725,22 @@ def test_custom_roles_can_be_assigned_and_invited_but_owner_transfer_stays_separ
         )
     )
     db.commit()
+    set_user_override(
+        db,
+        1,
+        member.id,
+        "receptionist",
+        PERMISSION_RESERVATION_CREATE,
+        True,
+        actor_user_id=7,
+    )
+    db.commit()
 
     changed = client.patch(f"/api/users/{member.id}/role", json={"role": role.code})
     assert changed.status_code == 200, changed.text
     assert changed.json()["role"] == role.code
     assert db.query(HotelMembership).filter_by(hotel_id=1, user_id=member.id).one().role == role.code
+    assert db.query(UserPermissionOverride).filter_by(hotel_id=1, user_id=member.id).count() == 0
 
     invite = client.post(
         "/api/users/invite",
@@ -740,3 +781,43 @@ def test_custom_roles_can_be_assigned_and_invited_but_owner_transfer_stays_separ
         json={"email": "owner-transfer@example.test", "role": "owner"},
     )
     assert invalid_owner.status_code == 400
+
+
+def test_reinviting_member_to_same_custom_role_preserves_user_grants(role_api):
+    client, db, _state = role_api
+    role = _create_role(db, base_role=ROLE_HOUSEKEEPING)
+    member = User(
+        id=9,
+        email="same-custom-role@example.test",
+        password_hash="test-hash",
+        role="housekeeping",
+        is_active=True,
+        is_verified=True,
+    )
+    db.add(member)
+    db.flush()
+    db.add(HotelMembership(hotel_id=1, user_id=member.id, role=role.code, status="active"))
+    db.commit()
+    grant = set_user_override(
+        db,
+        1,
+        member.id,
+        role.code,
+        PERMISSION_RESERVATION_CREATE,
+        True,
+        actor_user_id=7,
+    )
+    db.commit()
+
+    response = client.post("/api/users/invite", json={"email": member.email, "role": role.code})
+
+    assert response.status_code == 201, response.text
+    db.refresh(grant)
+    membership = db.query(HotelMembership).filter_by(hotel_id=1, user_id=member.id).one()
+    assert membership.role == role.code
+    assert db.query(UserPermissionOverride).filter_by(
+        hotel_id=1,
+        user_id=member.id,
+        permission_code=PERMISSION_RESERVATION_CREATE,
+        allowed=True,
+    ).one_or_none() is not None

@@ -9,7 +9,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies.auth import AuthContext, require_platform_admin, require_roles, require_roles_and_permission
+from app.dependencies.auth import AuthContext, require_permission, require_platform_admin
 from app.master_admin.security import audit_master_action
 from app.models.hotel_config import HotelConfiguration
 from app.models.room import Room
@@ -34,7 +34,10 @@ from app.services.subscription_service import (
     set_entitlement_override,
 )
 from app.services.room_service import active_rooms
-from app.services.permission_service import PERMISSION_SETTINGS_SUBSCRIPTION_VIEW
+from app.services.permission_service import (
+    PERMISSION_SETTINGS_SUBSCRIPTION_MANAGE,
+    PERMISSION_SETTINGS_SUBSCRIPTION_VIEW,
+)
 
 router = APIRouter(prefix="/api/subscription", tags=["Subscription"])
 admin_router = APIRouter(prefix="/api/admin/subscription", tags=["Subscription Admin"])
@@ -79,9 +82,7 @@ def _serialize_status_payload(db: Session, hotel_id: int) -> dict:
 @router.get("/status")
 def subscription_status(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(
-        require_roles_and_permission(PERMISSION_SETTINGS_SUBSCRIPTION_VIEW, "owner", "co_owner")
-    ),
+    context: AuthContext = Depends(require_permission(PERMISSION_SETTINGS_SUBSCRIPTION_VIEW)),
 ):
     try:
         return _serialize_status_payload(db, context.hotel_id)
@@ -106,9 +107,7 @@ def subscription_status(
 @router.get("/plans")
 def list_plans(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(
-        require_roles_and_permission(PERMISSION_SETTINGS_SUBSCRIPTION_VIEW, "owner", "co_owner")
-    ),
+    context: AuthContext = Depends(require_permission(PERMISSION_SETTINGS_SUBSCRIPTION_VIEW)),
 ):
     ensure_subscription(db, context.hotel_id)
     return plan_catalog()
@@ -119,7 +118,7 @@ def change_plan(
     plan_code: str | None = Body(default=None, embed=True),
     plan_code_query: str | None = None,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner")),
+    context: AuthContext = Depends(require_permission(PERMISSION_SETTINGS_SUBSCRIPTION_MANAGE)),
 ):
     selected_plan = plan_code or plan_code_query
     if not selected_plan:
@@ -134,7 +133,7 @@ def change_plan(
 def start_subscription_trial(
     payload: TrialRequest,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner")),
+    context: AuthContext = Depends(require_permission(PERMISSION_SETTINGS_SUBSCRIPTION_MANAGE)),
 ):
     start_trial(
         db,
@@ -149,9 +148,7 @@ def start_subscription_trial(
 @router.get("/entitlements", response_model=EntitlementsResponse)
 def get_entitlements(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(
-        require_roles_and_permission(PERMISSION_SETTINGS_SUBSCRIPTION_VIEW, "owner", "co_owner")
-    ),
+    context: AuthContext = Depends(require_permission(PERMISSION_SETTINGS_SUBSCRIPTION_VIEW)),
 ):
     return entitlements_payload(db, context.hotel_id)
 
@@ -160,7 +157,7 @@ def get_entitlements(
 def upsert_entitlement_override(
     override: EntitlementOverrideRequest,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner")),
+    context: AuthContext = Depends(require_permission(PERMISSION_SETTINGS_SUBSCRIPTION_MANAGE)),
 ):
     set_entitlement_override(db, context.hotel_id, override.code, override.value, override.value_type)
     db.commit()
@@ -171,7 +168,7 @@ def upsert_entitlement_override(
 def delete_override(
     code: str,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner")),
+    context: AuthContext = Depends(require_permission(PERMISSION_SETTINGS_SUBSCRIPTION_MANAGE)),
 ):
     delete_entitlement_override(db, context.hotel_id, code)
     db.commit()

@@ -2,6 +2,7 @@
 import json
 import time
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -21,6 +22,7 @@ from app.models.hotel_config import HotelConfiguration
 from app.models.hotel_membership import HotelMembership
 from app.models.security_audit_log import SecurityAuditLog
 from app.models.invitation import StaffInvitation
+from app.models.permission import UserPermissionOverride
 from app.models.audit_log import AuditLog
 from app.services.security import (
     create_access_token,
@@ -28,6 +30,7 @@ from app.services.security import (
     verify_password,
 )
 from app.services.invitation_service import hash_invitation_token, issue_invitation
+from app.services.user_lookup_service import find_user_by_email
 from app.services.user_session_service import create_session
 from app.models.user_session import UserSession
 from app.models.user_mfa import UserMfaSecret
@@ -36,8 +39,11 @@ from app.services.action_step_up_service import create_action_step_up_ticket
 from app.dependencies.auth import AuthContext, _authenticate_user
 from app.services.permission_service import (
     PERMISSION_HOTEL_PROPERTY_MANAGE,
+    PERMISSION_GUEST_READ,
     PERMISSION_REPORTS_FINANCIAL_VIEW,
     PERMISSION_REPORTS_OPERATIONAL_VIEW,
+    PERMISSION_RESERVATION_CREATE,
+    set_user_override,
 )
 
 
@@ -52,7 +58,7 @@ def get_auth_context_target():
 
 
 def _invitation_token(db, ctx, email, role="manager"):
-    user = db.query(User).filter(User.email.ilike(email)).first()
+    user = find_user_by_email(db, email)
     _invitation, token, _reused = issue_invitation(
         db,
         hotel_id=ctx["hotel_id"],
@@ -510,6 +516,47 @@ def test_google_invitation_requires_the_exact_verified_recipient_email(owner_ctx
     assert invitation.consumed_at is None
 
 
+def test_google_invitation_treats_underscores_as_literal_email_characters(owner_ctx, monkeypatch):
+    client, db, ctx = owner_ctx
+    email = "staff_manager@example.com"
+    near_match = User(
+        email="staffXmanager@example.com",
+        password_hash=hash_password("ExistingPassword123!"),
+        role="manager",
+        is_active=True,
+        is_verified=True,
+    )
+    db.add(near_match)
+    db.commit()
+    token = _invitation_token(db, ctx, email)
+    _enable_test_google(monkeypatch)
+
+    with patch(
+        "app.api.auth.google_id_token.verify_oauth2_token",
+        return_value=_google_claims(email, sub="literal-email-match-sub"),
+    ):
+        response = client.post(
+            "/api/invitations/accept/google",
+            json={"token": token, "id_token": "verified-google-id-token"},
+        )
+
+    assert response.status_code == 200, response.text
+    db.refresh(near_match)
+    assert near_match.google_sub is None
+    assert verify_password("ExistingPassword123!", near_match.password_hash)
+    invited_user = db.query(User).filter_by(email=email).one()
+    assert invited_user.id != near_match.id
+    assert invited_user.google_sub == "literal-email-match-sub"
+    membership = db.query(HotelMembership).filter_by(
+        hotel_id=ctx["hotel_id"], user_id=invited_user.id
+    ).one()
+    assert membership.status == "active"
+    invitation = db.query(StaffInvitation).filter_by(
+        token_hash=hash_invitation_token(token)
+    ).one()
+    assert invitation.status == "accepted"
+
+
 def test_google_invitation_rejects_an_owner_role_from_invalid_stored_state(owner_ctx, monkeypatch):
     client, db, ctx = owner_ctx
     email = "invalid-owner-invite@test.com"
@@ -758,6 +805,13 @@ def test_duplicate_invite_reuses_pending_record_and_audits_resend(owner_ctx):
     resend = client.post(f"/api/users/invitations/{invitation_id}/resend")
     assert resend.status_code == 200, resend.text
     assert resend.json()["invitation_id"] == invitation_id
+    assert resend.json()["accept_url"].endswith(f"#token={resend.json()['invite_token']}")
+    assert client.post(
+        "/api/invitations/preview", json={"token": second.json()["invite_token"]}
+    ).status_code == 400
+    assert client.post(
+        "/api/invitations/preview", json={"token": resend.json()["invite_token"]}
+    ).status_code == 200
 
     events = db.query(AuditLog).filter_by(table_name="staff_invitations", record_id=invitation_id).all()
     payloads = [json.loads(event.payload_after or "{}") for event in events]
@@ -774,6 +828,30 @@ def test_duplicate_invite_reuses_pending_record_and_audits_resend(owner_ctx):
         json.loads(event.payload_after or "{}").get("event") == "invitation.revoked"
         for event in db.query(AuditLog).filter_by(table_name="staff_invitations", record_id=invitation_id).all()
     )
+
+
+def test_invitation_email_explains_that_only_the_latest_link_works():
+    from app.api.users import _send_invitation_email
+
+    with patch(
+        "app.api.users.get_settings",
+        return_value=SimpleNamespace(FRONTEND_URL="https://app.example.test/"),
+    ), patch("app.api.users.mailer") as mocked_mailer:
+        mocked_mailer.configured = True
+        mocked_mailer.send.return_value = True
+        accept_url, delivery = _send_invitation_email(
+            email="invitee@example.test",
+            hotel_name="Hotel de prueba",
+            role="Gerencia",
+            inviter_email="owner@example.test",
+            token="synthetic-invite-token",
+        )
+
+    assert delivery == "sent"
+    assert accept_url == "https://app.example.test/invitations/accept#token=synthetic-invite-token"
+    email_body = mocked_mailer.send.call_args.args[2]
+    assert accept_url in email_body
+    assert "cada reenvío invalida los anteriores" in email_body
 
 
 def test_revoke_user_invalidates_jwt_version_and_all_server_sessions(owner_ctx):
@@ -845,6 +923,160 @@ def test_update_role_requires_owner(owner_ctx):
     fastapi_app.dependency_overrides[get_auth_context_target()] = override_auth_context_manager
     r_forbidden = client.patch(f"/api/users/{mgr.id}/role", json={"role": "owner"})
     assert r_forbidden.status_code == 403
+
+
+def test_update_role_cannot_reactivate_invited_or_revoked_memberships(owner_ctx):
+    client, db, ctx = owner_ctx
+    cases = ("invited", "revoked")
+    for membership_status in cases:
+        email = f"inactive-{membership_status}@test.com"
+        user = User(
+            email=email,
+            password_hash=hash_password("pw"),
+            role="manager",
+            is_verified=False,
+            is_active=False,
+        )
+        db.add(user)
+        db.flush()
+        membership = HotelMembership(
+            hotel_id=ctx["hotel_id"],
+            user_id=user.id,
+            role="manager",
+            status=membership_status,
+        )
+        db.add(membership)
+        db.commit()
+        if membership_status == "invited":
+            _invitation_token(db, ctx, email, role="manager")
+
+        response = client.patch(f"/api/users/{user.id}/role", json={"role": "housekeeping"})
+
+        assert response.status_code == 409, response.text
+        db.refresh(membership)
+        assert membership.role == "manager"
+        assert membership.status == membership_status
+        if membership_status == "invited":
+            pending = db.query(StaffInvitation).filter_by(
+                hotel_id=ctx["hotel_id"], email=email, status="pending"
+            ).one()
+            assert pending.role == "manager"
+
+
+def test_role_change_clears_user_grants_but_preserves_denials(owner_ctx):
+    client, db, ctx = owner_ctx
+    staff = User(
+        email="role-change-overrides@test.com",
+        password_hash=hash_password("StrongPassword123!"),
+        role="manager",
+        is_verified=True,
+        is_active=True,
+    )
+    db.add(staff)
+    db.flush()
+    membership = HotelMembership(
+        hotel_id=ctx["hotel_id"], user_id=staff.id, role="manager", status="active"
+    )
+    db.add(membership)
+    db.commit()
+
+    set_user_override(
+        db,
+        ctx["hotel_id"],
+        staff.id,
+        "manager",
+        PERMISSION_RESERVATION_CREATE,
+        True,
+        ctx["user_id"],
+    )
+    set_user_override(
+        db,
+        ctx["hotel_id"],
+        staff.id,
+        "manager",
+        PERMISSION_GUEST_READ,
+        False,
+        ctx["user_id"],
+    )
+    db.commit()
+
+    response = client.patch(f"/api/users/{staff.id}/role", json={"role": "housekeeping"})
+
+    assert response.status_code == 200, response.text
+    db.refresh(membership)
+    assert membership.role == "housekeeping"
+    rows = db.query(UserPermissionOverride).filter_by(
+        hotel_id=ctx["hotel_id"], user_id=staff.id
+    ).all()
+    assert [(row.permission_code, row.allowed) for row in rows] == [(PERMISSION_GUEST_READ, False)]
+
+    audit = db.query(SecurityAuditLog).filter_by(
+        hotel_id=ctx["hotel_id"],
+        user_id=ctx["user_id"],
+        action="permission.user_grants.cleared_by_role_change",
+    ).one()
+    details = json.loads(audit.details)
+    assert details["before"] == {
+        "role": "manager",
+        "grants": [{"permission_code": PERMISSION_RESERVATION_CREATE, "allowed": True, "version": 1}],
+    }
+    assert details["after"] == {
+        "role": "housekeeping",
+        "grants": [],
+        "preserved_denials": [PERMISSION_GUEST_READ],
+    }
+
+
+def test_inviting_existing_member_with_new_role_clears_carried_permission_grants(owner_ctx):
+    client, db, ctx = owner_ctx
+    staff = User(
+        email="reinvite-role-change@test.com",
+        password_hash=hash_password("StrongPassword123!"),
+        role="manager",
+        is_verified=True,
+        is_active=True,
+    )
+    db.add(staff)
+    db.flush()
+    membership = HotelMembership(
+        hotel_id=ctx["hotel_id"], user_id=staff.id, role="manager", status="active"
+    )
+    db.add(membership)
+    db.commit()
+
+    set_user_override(
+        db,
+        ctx["hotel_id"],
+        staff.id,
+        "manager",
+        PERMISSION_RESERVATION_CREATE,
+        True,
+        ctx["user_id"],
+    )
+    set_user_override(
+        db,
+        ctx["hotel_id"],
+        staff.id,
+        "manager",
+        PERMISSION_GUEST_READ,
+        False,
+        ctx["user_id"],
+    )
+    db.commit()
+
+    response = client.post(
+        "/api/users/invite",
+        json={"email": staff.email, "role": "housekeeping"},
+    )
+
+    assert response.status_code == 201, response.text
+    db.refresh(membership)
+    assert membership.role == "housekeeping"
+    assert membership.status == "invited"
+    rows = db.query(UserPermissionOverride).filter_by(
+        hotel_id=ctx["hotel_id"], user_id=staff.id
+    ).all()
+    assert [(row.permission_code, row.allowed) for row in rows] == [(PERMISSION_GUEST_READ, False)]
 
 
 def test_co_owner_cannot_grant_privileged_roles(owner_ctx):

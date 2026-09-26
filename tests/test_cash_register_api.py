@@ -149,12 +149,11 @@ def test_cash_register_api_difference_approval_requires_permission(client_with_d
         f"/api/cash-register/sessions/{session_id}/close",
         json={"counted_balance": "99.00", "approve_difference": True},
     )
-    assert close.status_code == 200, close.text
-    assert close.json()["difference"] == "-1.00"
-    assert close.json()["difference_approved"] is True
+    assert close.status_code == 428, close.text
+    assert close.json()["detail"]["code"] == "STEP_UP_REQUIRED"
 
     db.expire_all()
-    assert db.get(CashSession, session_id).status == CashSessionStatusEnum.CLOSED
+    assert db.get(CashSession, session_id).status == CashSessionStatusEnum.OPEN
 
 
 def test_manager_can_read_daily_cash_summary_without_cash_mutation_permission(client_with_db):
@@ -193,6 +192,8 @@ def test_cash_custody_receipt_is_owner_only(client_with_db):
         f"/api/cash-register/sessions/{session_id}/close",
         json={"counted_balance": "100.00"},
     )
+    assert closed.status_code == 200, closed.text
+    assert closed.json()["custody_handoff"]["status"] == "pending"
     report_id = closed.json()["id"]
 
     ctx["role"] = "manager"
@@ -202,8 +203,8 @@ def test_cash_custody_receipt_is_owner_only(client_with_db):
 
     ctx["role"] = "owner"
     confirmed = client.post(f"/api/cash-register/close-reports/{report_id}/custody/confirm")
-    assert confirmed.status_code == 200, confirmed.text
-    assert confirmed.json()["custody_handoff"]["status"] == "confirmed"
+    assert confirmed.status_code == 428, confirmed.text
+    assert confirmed.json()["detail"]["code"] == "STEP_UP_REQUIRED"
 
 
 def test_cash_register_api_cross_hotel_isolation(client_with_db):

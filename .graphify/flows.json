@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-09-24T21:37:40.108Z",
+  "generatedAt": "2026-09-25T20:21:46.652Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -169,6 +169,7 @@
         "services_permission_service_ensure_permission_matrix_seeded",
         "services_permission_service_get_custom_role",
         "services_permission_service_immutable_permission_decision",
+        "services_permission_service_legacy_permission_deny",
         "services_permission_service_canonical_permission_code",
         "services_permission_service_engine_key",
         "services_permission_service_seed_default_permissions",
@@ -182,13 +183,14 @@
         "services_permission_service_ensure_permission_matrix_seeded",
         "services_permission_service_get_custom_role",
         "services_permission_service_immutable_permission_decision",
+        "services_permission_service_legacy_permission_deny",
         "services_permission_service_canonical_permission_code",
         "services_permission_service_engine_key",
         "services_permission_service_seed_default_permissions",
         "services_permission_service_insert_if_missing"
       ],
       "depth": 4,
-      "nodeCount": 11,
+      "nodeCount": 12,
       "fileCount": 1,
       "files": [
         "app/services/permission_service.py"
@@ -208,6 +210,7 @@
         "services_permission_service_ensure_permission_matrix_seeded",
         "services_permission_service_get_custom_role",
         "services_permission_service_immutable_permission_decision",
+        "services_permission_service_legacy_permission_deny",
         "services_permission_service_canonical_permission_code",
         "services_permission_service_engine_key",
         "services_permission_service_seed_default_permissions",
@@ -220,13 +223,14 @@
         "services_permission_service_ensure_permission_matrix_seeded",
         "services_permission_service_get_custom_role",
         "services_permission_service_immutable_permission_decision",
+        "services_permission_service_legacy_permission_deny",
         "services_permission_service_canonical_permission_code",
         "services_permission_service_engine_key",
         "services_permission_service_seed_default_permissions",
         "services_permission_service_insert_if_missing"
       ],
       "depth": 4,
-      "nodeCount": 10,
+      "nodeCount": 11,
       "fileCount": 1,
       "files": [
         "app/services/permission_service.py"
@@ -377,6 +381,38 @@
       "warnings": []
     },
     {
+      "id": "flow:dependencies_auth_authorize_permission",
+      "name": "authorize_permission",
+      "entryPoint": "dependencies_auth_authorize_permission",
+      "entryPointId": "dependencies_auth_authorize_permission",
+      "path": [
+        "dependencies_auth_authorize_permission",
+        "dependencies_auth_require_action_step_up",
+        "dependencies_auth_matching_action_step_up_ticket",
+        "dependencies_auth_raise_step_up_required",
+        "dependencies_auth_step_up_ticket_action",
+        "dependencies_auth_action_step_up_tickets",
+        "dependencies_auth_matching_specific_step_up_ticket"
+      ],
+      "qualifiedPath": [
+        "dependencies_auth_authorize_permission",
+        "dependencies_auth_require_action_step_up",
+        "dependencies_auth_matching_action_step_up_ticket",
+        "dependencies_auth_raise_step_up_required",
+        "dependencies_auth_step_up_ticket_action",
+        "dependencies_auth_action_step_up_tickets",
+        "dependencies_auth_matching_specific_step_up_ticket"
+      ],
+      "depth": 3,
+      "nodeCount": 7,
+      "fileCount": 1,
+      "files": [
+        "app/dependencies/auth.py"
+      ],
+      "criticality": 0.43,
+      "warnings": []
+    },
+    {
       "id": "flow:api_auth_complete_mfa_login",
       "name": "complete_mfa_login",
       "entryPoint": "api_auth_complete_mfa_login",
@@ -453,6 +489,7 @@
         "services_permission_service_ensure_permission_matrix_seeded",
         "services_permission_service_get_custom_role",
         "services_permission_service_immutable_permission_decision",
+        "services_permission_service_legacy_permission_deny",
         "services_permission_service_active_role_codes",
         "services_permission_service_canonical_permission_code",
         "services_permission_service_permission_help_es",
@@ -468,6 +505,7 @@
         "services_permission_service_ensure_permission_matrix_seeded",
         "services_permission_service_get_custom_role",
         "services_permission_service_immutable_permission_decision",
+        "services_permission_service_legacy_permission_deny",
         "services_permission_service_active_role_codes",
         "services_permission_service_canonical_permission_code",
         "services_permission_service_permission_help_es",
@@ -476,7 +514,7 @@
         "services_permission_service_insert_if_missing"
       ],
       "depth": 3,
-      "nodeCount": 13,
+      "nodeCount": 14,
       "fileCount": 1,
       "files": [
         "app/services/permission_service.py"
@@ -697,20 +735,20 @@
       "entryPointId": "dependencies_auth_require_permission_administrator",
       "path": [
         "dependencies_auth_require_permission_administrator",
+        "dependencies_auth_action_step_up_tickets",
         "dependencies_auth_require_action_step_up",
         "dependencies_auth_matching_action_step_up_ticket",
         "dependencies_auth_raise_step_up_required",
         "dependencies_auth_step_up_ticket_action",
-        "dependencies_auth_action_step_up_tickets",
         "dependencies_auth_matching_specific_step_up_ticket"
       ],
       "qualifiedPath": [
         "dependencies_auth_require_permission_administrator",
+        "dependencies_auth_action_step_up_tickets",
         "dependencies_auth_require_action_step_up",
         "dependencies_auth_matching_action_step_up_ticket",
         "dependencies_auth_raise_step_up_required",
         "dependencies_auth_step_up_ticket_action",
-        "dependencies_auth_action_step_up_tickets",
         "dependencies_auth_matching_specific_step_up_ticket"
       ],
       "depth": 3,
@@ -1517,6 +1555,7 @@
         "services_permission_service_immutable_permission_decision",
         "services_permission_service_engine_key",
         "services_permission_service_get_custom_role",
+        "services_permission_service_legacy_permission_deny",
         "services_permission_service_insert_if_missing"
       ],
       "qualifiedPath": [
@@ -1529,10 +1568,11 @@
         "services_permission_service_immutable_permission_decision",
         "services_permission_service_engine_key",
         "services_permission_service_get_custom_role",
+        "services_permission_service_legacy_permission_deny",
         "services_permission_service_insert_if_missing"
       ],
       "depth": 2,
-      "nodeCount": 10,
+      "nodeCount": 11,
       "fileCount": 1,
       "files": [
         "app/services/permission_service.py"
@@ -2889,6 +2929,28 @@
       "warnings": []
     },
     {
+      "id": "flow:services_action_step_up_service_permission_admin_read_step_up_ticket_matches",
+      "name": "permission_admin_read_step_up_ticket_matches",
+      "entryPoint": "services_action_step_up_service_permission_admin_read_step_up_ticket_matches",
+      "entryPointId": "services_action_step_up_service_permission_admin_read_step_up_ticket_matches",
+      "path": [
+        "services_action_step_up_service_permission_admin_read_step_up_ticket_matches",
+        "services_action_step_up_service_is_permission_admin_read_action"
+      ],
+      "qualifiedPath": [
+        "services_action_step_up_service_permission_admin_read_step_up_ticket_matches",
+        "services_action_step_up_service_is_permission_admin_read_action"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/services/action_step_up_service.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
       "id": "flow:api_permissions_preview_effective_permissions",
       "name": "preview_effective_permissions",
       "entryPoint": "api_permissions_preview_effective_permissions",
@@ -4201,6 +4263,86 @@
       "warnings": []
     },
     {
+      "id": "flow:api_client_apifetch",
+      "name": "apiFetch",
+      "entryPoint": "api_client_apifetch",
+      "entryPointId": "api_client_apifetch",
+      "path": [
+        "api_client_apifetch",
+        "api_client_apierror",
+        "api_client_buildauthheaders",
+        "api_client_buildurl",
+        "api_client_formaterrordetail",
+        "api_client_handleunauthorized",
+        "api_client_requestwithrefresh",
+        "api_client_safejson",
+        "api_client_hasvalidsession",
+        "api_client_normalizehotelid",
+        "api_client_iscurrentsession",
+        "api_client_clearpermissionadminreadstepupcache",
+        "api_client_getpermissionadminreadstepupticket",
+        "api_client_hassamesessionidentity",
+        "api_client_isactionstepuppath",
+        "api_client_ispublicauthpath",
+        "api_client_isrefreshresponseforsession",
+        "api_client_isstepuptotprejection",
+        "api_client_makeapierror",
+        "api_client_mergesession",
+        "api_client_parseactionstepupchallenge",
+        "api_client_refreshsession",
+        "api_client_requestactionstepupticket",
+        "api_client_requestheaders",
+        "api_client_setclientsession",
+        "api_client_istokenexpired",
+        "api_client_hassamesession",
+        "api_client_ispermissionadminreadaction",
+        "api_client_normalizedsessionuserid",
+        "api_client_issamerefreshcontext",
+        "api_client_jwtexpms"
+      ],
+      "qualifiedPath": [
+        "api_client_apifetch",
+        "api_client_apierror",
+        "api_client_buildauthheaders",
+        "api_client_buildurl",
+        "api_client_formaterrordetail",
+        "api_client_handleunauthorized",
+        "api_client_requestwithrefresh",
+        "api_client_safejson",
+        "api_client_hasvalidsession",
+        "api_client_normalizehotelid",
+        "api_client_iscurrentsession",
+        "api_client_clearpermissionadminreadstepupcache",
+        "api_client_getpermissionadminreadstepupticket",
+        "api_client_hassamesessionidentity",
+        "api_client_isactionstepuppath",
+        "api_client_ispublicauthpath",
+        "api_client_isrefreshresponseforsession",
+        "api_client_isstepuptotprejection",
+        "api_client_makeapierror",
+        "api_client_mergesession",
+        "api_client_parseactionstepupchallenge",
+        "api_client_refreshsession",
+        "api_client_requestactionstepupticket",
+        "api_client_requestheaders",
+        "api_client_setclientsession",
+        "api_client_istokenexpired",
+        "api_client_hassamesession",
+        "api_client_ispermissionadminreadaction",
+        "api_client_normalizedsessionuserid",
+        "api_client_issamerefreshcontext",
+        "api_client_jwtexpms"
+      ],
+      "depth": 4,
+      "nodeCount": 31,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/api/client.ts"
+      ],
+      "criticality": 0.3432,
+      "warnings": []
+    },
+    {
       "id": "flow:services_gemma_orchestrator_gemmaorchestrator_archive_session",
       "name": ".archive_session",
       "entryPoint": "services_gemma_orchestrator_gemmaorchestrator_archive_session",
@@ -4246,80 +4388,6 @@
         "app/services/integration_service.py"
       ],
       "criticality": 0.3367,
-      "warnings": []
-    },
-    {
-      "id": "flow:api_client_apifetch",
-      "name": "apiFetch",
-      "entryPoint": "api_client_apifetch",
-      "entryPointId": "api_client_apifetch",
-      "path": [
-        "api_client_apifetch",
-        "api_client_apierror",
-        "api_client_buildauthheaders",
-        "api_client_buildurl",
-        "api_client_formaterrordetail",
-        "api_client_handleunauthorized",
-        "api_client_requestwithrefresh",
-        "api_client_safejson",
-        "api_client_hasvalidsession",
-        "api_client_normalizehotelid",
-        "api_client_iscurrentsession",
-        "api_client_hassamesessionidentity",
-        "api_client_isactionstepuppath",
-        "api_client_ispublicauthpath",
-        "api_client_isrefreshresponseforsession",
-        "api_client_isstepuptotprejection",
-        "api_client_makeapierror",
-        "api_client_mergesession",
-        "api_client_parseactionstepupchallenge",
-        "api_client_refreshsession",
-        "api_client_requestactionstepupticket",
-        "api_client_requestheaders",
-        "api_client_setclientsession",
-        "api_client_istokenexpired",
-        "api_client_hassamesession",
-        "api_client_normalizedsessionuserid",
-        "api_client_issamerefreshcontext",
-        "api_client_jwtexpms"
-      ],
-      "qualifiedPath": [
-        "api_client_apifetch",
-        "api_client_apierror",
-        "api_client_buildauthheaders",
-        "api_client_buildurl",
-        "api_client_formaterrordetail",
-        "api_client_handleunauthorized",
-        "api_client_requestwithrefresh",
-        "api_client_safejson",
-        "api_client_hasvalidsession",
-        "api_client_normalizehotelid",
-        "api_client_iscurrentsession",
-        "api_client_hassamesessionidentity",
-        "api_client_isactionstepuppath",
-        "api_client_ispublicauthpath",
-        "api_client_isrefreshresponseforsession",
-        "api_client_isstepuptotprejection",
-        "api_client_makeapierror",
-        "api_client_mergesession",
-        "api_client_parseactionstepupchallenge",
-        "api_client_refreshsession",
-        "api_client_requestactionstepupticket",
-        "api_client_requestheaders",
-        "api_client_setclientsession",
-        "api_client_istokenexpired",
-        "api_client_hassamesession",
-        "api_client_normalizedsessionuserid",
-        "api_client_issamerefreshcontext",
-        "api_client_jwtexpms"
-      ],
-      "depth": 4,
-      "nodeCount": 28,
-      "fileCount": 1,
-      "files": [
-        "frontend/src/api/client.ts"
-      ],
-      "criticality": 0.3329,
       "warnings": []
     },
     {

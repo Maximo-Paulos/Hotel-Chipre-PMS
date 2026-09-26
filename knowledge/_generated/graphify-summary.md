@@ -1,26 +1,26 @@
 # Resumen Graphify
 
-Generado: 2026-09-24T21:40:34.232616+00:00
-Commit: `cd0705c851d98db7852c14e74f7e9ba56acdc9e2`
+Generado: 2026-09-25T20:21:55.195211+00:00
+Commit: `1b6ca04597722a24f7cfe7a1d5b6e7ce82688d1e`
 
 `graphify summary .graphify/graph.json`:
 ```text
 Graphify First-Hop Summary
-Graph: 14068 nodes, 81089 edges, 525 communities, density 0.0008, average degree 11.5281, undirected
+Graph: 14242 nodes, 82216 edges, 530 communities, density 0.0008, average degree 11.5456, undirected
 
 Top hubs:
-  1. Reservation (degree 1469, community 0 Community 0, app/models/reservation.py)
-  2. ReservationStatusEnum (degree 1384, community 0 Community 0, app/models/reservation.py)
-  3. HotelConfiguration (degree 1380, community 0 Community 0, app/models/hotel_config.py)
-  4. Room (degree 1237, community 4 Community 4, app/models/room.py)
-  5. RoomCategory (degree 1103, community 9 Community 9, app/models/room.py)
+  1. Reservation (degree 1473, community 0 Community 0, app/models/reservation.py)
+  2. HotelConfiguration (degree 1391, community 0 Community 0, app/models/hotel_config.py)
+  3. ReservationStatusEnum (degree 1388, community 0 Community 0, app/models/reservation.py)
+  4. Room (degree 1241, community 4 Community 4, app/models/room.py)
+  5. RoomCategory (degree 1107, community 3 Community 3, app/models/room.py)
 
 Key communities:
-  1. Community 0 - Community 0: 755 nodes, 4123 internal edges, density 0.0145; top nodes: Reservation, ReservationStatusEnum, HotelConfiguration
-  2. Community 1 - Community 1: 546 nodes, 22939 internal edges, density 0.1542; top nodes: 958fce2 Merge pull request #31 from Maximo-Paulos/feature/mobile-first-operations, feat/tech0063-oltp-performance, feature/mobile-first-operations
-  3. Community 2 - Community 2: 511 nodes, 950 internal edges, density 0.0073; top nodes: database.py, config.py, main.py
-  4. Community 3 - Community 3: 432 nodes, 3371 internal edges, density 0.0362; top nodes: ReservationSourceEnum, CategoryPricing, DailyRate
-  5. Community 4 - Community 4: 430 nodes, 1196 internal edges, density 0.013; top nodes: Room, Guest, DocumentTypeEnum
+  1. Community 0 - Community 0: 697 nodes, 3847 internal edges, density 0.0159; top nodes: Reservation, HotelConfiguration, ReservationStatusEnum
+  2. Community 1 - Community 1: 570 nodes, 1172 internal edges, density 0.0072; top nodes: database.py, dc4b68a ojooooo, config.py
+  3. Community 2 - Community 2: 547 nodes, 22953 internal edges, density 0.1537; top nodes: 958fce2 Merge pull request #31 from Maximo-Paulos/feature/mobile-first-operations, feat/tech0063-oltp-performance, feature/mobile-first-operations
+  4. Community 3 - Community 3: 538 nodes, 4322 internal edges, density 0.0299; top nodes: RoomCategory, RoomStatusEnum, CategoryPricing
+  5. Community 4 - Community 4: 449 nodes, 1383 internal edges, density 0.0138; top nodes: Room, Guest, ReservationSourceEnum
 
 Next best action: Start with get_neighbors on "Reservation", then use query_graph for the user's specific question.
 ```

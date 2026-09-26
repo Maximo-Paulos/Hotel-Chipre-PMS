@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies.auth import AuthContext, require_all_permissions, require_roles_and_permission
+from app.dependencies.auth import AuthContext, require_all_permissions, require_permission
 from app.schemas.gemma_chat import (
     GemmaActionApplyDraftRequest,
     GemmaActionApplyDraftResponse,
@@ -31,7 +31,11 @@ from app.services.gemma_action_run_service import (
     review_action_run_draft,
 )
 from app.services.gemma_orchestrator import GemmaChatError, GemmaOrchestrator
-from app.services.permission_service import PERMISSION_REPORTS_FINANCIAL_VIEW, PERMISSION_SETTINGS_ASSISTANT_VIEW
+from app.services.permission_service import (
+    PERMISSION_REPORTS_FINANCIAL_VIEW,
+    PERMISSION_SETTINGS_ASSISTANT_ACTIONS_MANAGE,
+    PERMISSION_SETTINGS_ASSISTANT_VIEW,
+)
 
 
 router = APIRouter(prefix="/api/gemma/chat", tags=["Gemma Chat"])
@@ -179,9 +183,7 @@ def approve_chat_action(
     action_run_id: int,
     payload: GemmaActionApproveRequest,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(
-        require_roles_and_permission(PERMISSION_SETTINGS_ASSISTANT_VIEW, "owner", "co_owner")
-    ),
+    context: AuthContext = Depends(require_permission(PERMISSION_SETTINGS_ASSISTANT_ACTIONS_MANAGE)),
 ):
     try:
         result = approve_action_run(
@@ -206,9 +208,7 @@ def reject_chat_action(
     action_run_id: int,
     payload: GemmaActionRejectRequest,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(
-        require_roles_and_permission(PERMISSION_SETTINGS_ASSISTANT_VIEW, "owner", "co_owner")
-    ),
+    context: AuthContext = Depends(require_permission(PERMISSION_SETTINGS_ASSISTANT_ACTIONS_MANAGE)),
 ):
     try:
         result = reject_action_run(
@@ -232,9 +232,7 @@ def review_chat_action_draft(
     action_run_id: int,
     payload: GemmaActionReviewDraftRequest,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(
-        require_roles_and_permission(PERMISSION_SETTINGS_ASSISTANT_VIEW, "owner", "co_owner")
-    ),
+    context: AuthContext = Depends(require_permission(PERMISSION_SETTINGS_ASSISTANT_ACTIONS_MANAGE)),
 ):
     try:
         result = review_action_run_draft(
@@ -259,9 +257,7 @@ def apply_chat_action_draft(
     action_run_id: int,
     payload: GemmaActionApplyDraftRequest,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(
-        require_roles_and_permission(PERMISSION_SETTINGS_ASSISTANT_VIEW, "owner", "co_owner")
-    ),
+    context: AuthContext = Depends(require_permission(PERMISSION_SETTINGS_ASSISTANT_ACTIONS_MANAGE)),
 ):
     try:
         result = apply_action_run_draft(

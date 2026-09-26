@@ -8,6 +8,7 @@ from app.models.hotel_config import HotelConfiguration
 from app.models.hotel_membership import HotelMembership
 from app.models.subscription import SubscriptionPlan, HotelSubscription
 from app.config import get_settings
+from app.services.user_lookup_service import find_user_by_email
 from app.services.subscription_entitlements import PLAN_CATALOG, ensure_subscription_seed
 
 
@@ -65,9 +66,7 @@ def get_or_create_hotel_for_owner(db: Session, owner_email: str) -> HotelConfigu
 
 def _ensure_membership_and_subscription(db: Session, hotel_id: int, owner_email: str):
     """Create owner membership and starter subscription if missing."""
-    from app.models.user import User
-
-    owner = db.query(User).filter(User.email.ilike(owner_email)).first()
+    owner = find_user_by_email(db, owner_email)
     if owner:
         membership = (
             db.query(HotelMembership)

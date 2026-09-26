@@ -9971,7 +9971,7 @@
           "Auth"
         ],
         "summary": "Create Action Step Up Ticket",
-        "description": "Exchange a fresh enrolled TOTP for a ticket bound to one protected action.",
+        "description": "Exchange fresh TOTP for an action ticket or narrow RBAC read scope.",
         "operationId": "create_action_step_up_ticket_api_auth_step_up_post",
         "parameters": [
           {
@@ -35080,6 +35080,7 @@
             "type": "string",
             "enum": [
               "GET",
+              "HEAD",
               "POST",
               "PUT",
               "PATCH",
@@ -35116,6 +35117,15 @@
           "expires_in": {
             "type": "integer",
             "title": "Expires In"
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "action",
+              "permission_admin_read"
+            ],
+            "title": "Scope",
+            "default": "action"
           }
         },
         "type": "object",

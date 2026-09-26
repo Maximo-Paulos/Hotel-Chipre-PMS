@@ -24,6 +24,8 @@ from app.services.permission_service import (
     _CANONICAL_DEFINITIONS,
     LEGACY_PERMISSION_ALIASES,
     PERMISSION_APIKEY_MANAGE,
+    PERMISSION_CASH_APPROVE_DIFFERENCE,
+    PERMISSION_CASH_CUSTODY_RECEIVE,
     PERMISSION_GUEST_CREATE,
     PERMISSION_GUEST_EDIT,
     PERMISSION_HOTEL_PROPERTY_MANAGE,
@@ -134,8 +136,8 @@ def test_permissions_matrix_exposes_only_canonical_rows_with_ui_metadata():
         canonical_codes = set(_CANONICAL_DEFINITIONS)
         legacy_codes = set(LEGACY_PERMISSION_ALIASES)
 
-        # WhatsApp CRM adds eleven intentional canonical capabilities.
-        assert len(canonical_codes) == 83
+        # New role-only business actions are named capabilities in the catalog.
+        assert len(canonical_codes) == 94
         assert {code for code in canonical_codes if code.startswith("whatsapp:")} == {
             "whatsapp:inbox:view", "whatsapp:inbox:all", "whatsapp:message:send",
             "whatsapp:note:manage", "whatsapp:conversation:assign", "whatsapp:conversation:close",
@@ -170,7 +172,7 @@ def test_permissions_matrix_exposes_only_canonical_rows_with_ui_metadata():
         ("settings:integrations:view", "/api/integrations", None),
         ("settings:subscription:view", "/api/subscription/status", None),
         ("settings:security:view", "/api/settings/security/overview", None),
-        ("settings:notifications:view", "/api/notifications/daily-report-schedule", None),
+        ("settings:notifications:daily_report:view", "/api/notifications/daily-report-schedule", None),
         ("settings:assistant:view", "/api/gemma/chat/history", None),
         ("settings:tests:view", "/api/payment-link-tests", None),
     ],
@@ -215,10 +217,15 @@ def test_permission_catalog_exposes_owner_only_normal_metadata_and_help_text():
             PERMISSION_HOTEL_PROPERTY_MANAGE,
             PERMISSION_HOTEL_SECURITY_MANAGE,
             PERMISSION_APIKEY_MANAGE,
+            PERMISSION_CASH_CUSTODY_RECEIVE,
         ):
             assert catalog[code]["critical"] is True
             assert catalog[code]["step_up_required"] is True
             assert catalog[code]["delegable"] is False
+
+        assert catalog[PERMISSION_CASH_APPROVE_DIFFERENCE]["critical"] is False
+        assert catalog[PERMISSION_CASH_APPROVE_DIFFERENCE]["step_up_required"] is True
+        assert catalog[PERMISSION_CASH_APPROVE_DIFFERENCE]["delegable"] is True
 
         for code in (PERMISSION_GUEST_CREATE, PERMISSION_RESERVATION_CREATE, PERMISSION_ROOM_STATUS_UPDATE):
             assert catalog[code]["critical"] is False

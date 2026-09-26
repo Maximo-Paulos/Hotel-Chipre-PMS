@@ -12,8 +12,10 @@ from app.models.invitation import StaffInvitation
 from app.models.user import User
 from app.services.invitation_service import issue_invitation, normalize_email
 from app.services.membership_service import MembershipInvariantError, validate_membership_change
+from app.services.permission_service import clear_user_permission_grants_for_role_change
 from app.services.security import hash_password
 from app.services.subscription_service import ensure_staff_within_limit
+from app.services.user_lookup_service import find_user_by_email
 
 
 ROLE_ALIASES = {
@@ -110,6 +112,7 @@ def provision_staff_invitation(
     inviter_email: str,
     alias: str | None = None,
     alias_provided: bool = False,
+    permission_role: str | None = None,
 ) -> StaffInvitationProvision:
     """Create/update the user, hotel membership, and pending invitation.
 
@@ -126,7 +129,7 @@ def provision_staff_invitation(
         raise ValueError("Email del invitante requerido")
 
     ensure_staff_within_limit(db, hotel_id)
-    user = db.query(User).filter(User.email.ilike(normalized_email)).first()
+    user = find_user_by_email(db, normalized_email)
     if not user:
         user = User(
             email=normalized_email,
@@ -139,9 +142,10 @@ def provision_staff_invitation(
         db.flush()
 
     membership = (
-        db.query(HotelMembership)
-        .filter(HotelMembership.hotel_id == hotel_id, HotelMembership.user_id == user.id)
-        .first()
+            db.query(HotelMembership)
+            .filter(HotelMembership.hotel_id == hotel_id, HotelMembership.user_id == user.id)
+            .with_for_update()
+            .first()
     )
     membership_before = None
     if membership:
@@ -152,6 +156,14 @@ def provision_staff_invitation(
             "role": membership.role,
             "status": membership.status,
         }
+        clear_user_permission_grants_for_role_change(
+            db,
+            hotel_id=hotel_id,
+            target_user_id=user.id,
+            actor_user_id=inviter_user_id,
+            previous_role=membership.role,
+            next_role=permission_role or normalized_role,
+        )
         try:
             validate_membership_change(
                 db,

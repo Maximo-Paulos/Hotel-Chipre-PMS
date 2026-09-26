@@ -1,10 +1,11 @@
 ---
 scope: auth, roles, tenancy, secretos, pagos, webhooks y PII
 owner: security-auditor
-last_verified_commit: 42dd238
-canonical_sources: [app/config.py, app/api/auth.py, app/master_admin/, app/services/security.py]
+last_verified_commit: 1b6ca045
+working_tree_review: local RBAC diff, not deployed
+canonical_sources: [app/config.py, app/api/auth.py, app/dependencies/auth.py, app/services/permission_service.py, app/master_admin/, app/services/security.py]
 graphify_minimum: graphify affected-flows --files app/api/auth.py
-required_validation: security tests + review de autorización + logs redactados
+required_validation: security suite + independent authorization review + authenticated allow/deny before release
 ---
 # Context pack — Seguridad
 

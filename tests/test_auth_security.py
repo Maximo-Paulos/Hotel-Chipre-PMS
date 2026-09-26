@@ -37,6 +37,7 @@ from app.schemas.room import RoomCategoryCreate
 from app.services import onboarding_service
 from app.services.security import create_access_token, hash_password, needs_rehash, verify_password
 from app.services.mfa_service import MFA_ACTIVE, encrypt_totp_secret
+from app.services.user_lookup_service import find_user_by_email
 from app.services.user_session_service import create_session
 
 
@@ -725,6 +726,73 @@ def test_google_login_creates_new_user_when_email_unknown(client_and_db, monkeyp
     audit = db.query(SecurityAuditLog).filter_by(action="google_auth.linked").one()
     assert audit.hotel_id == body["hotel_id"]
     assert json.loads(audit.details) == {"account_state": "created", "provider": "google"}
+
+
+def test_native_login_does_not_treat_email_underscore_as_a_wildcard(client_and_db):
+    client, db, _session_factory = client_and_db
+    near_match = User(
+        email="staffXmanager@example.com",
+        password_hash=hash_password("ExistingPassword123!"),
+        role="manager",
+        is_active=True,
+        is_verified=True,
+    )
+    db.add(near_match)
+    db.commit()
+
+    response = client.post(
+        "/api/auth/login",
+        json={"email": "staff_manager@example.com", "password": "ExistingPassword123!"},
+    )
+
+    assert response.status_code == 401, response.text
+    assert response.cookies.get("user_session") is None
+    db.refresh(near_match)
+    assert near_match.google_sub is None
+    assert db.query(User).filter_by(email="staff_manager@example.com").count() == 0
+
+
+def test_email_lookup_keeps_case_folding_in_the_database_for_unicode(client_and_db):
+    _client, db, _session_factory = client_and_db
+    existing = User(
+        email="STAFFİ@example.com",
+        password_hash=hash_password("ExistingPassword123!"),
+        role="manager",
+        is_active=True,
+        is_verified=True,
+    )
+    db.add(existing)
+    db.commit()
+
+    assert find_user_by_email(db, "STAFFİ@example.com") is existing
+
+
+def test_google_login_treats_email_underscore_as_a_literal_character(client_and_db, monkeypatch):
+    client, db, _session_factory = client_and_db
+    near_match = User(
+        email="staffXmanager@example.com",
+        password_hash=hash_password("ExistingPassword123!"),
+        role="manager",
+        is_active=True,
+        is_verified=True,
+    )
+    db.add(near_match)
+    db.commit()
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "test-client-id.apps.googleusercontent.com")
+    get_settings.cache_clear()
+    claims = _fake_google_claims("staff_manager@example.com", sub="literal-google-email-sub")
+
+    with patch("app.api.auth.google_id_token.verify_oauth2_token", return_value=claims):
+        response = client.post("/api/auth/google", json={"id_token": "fake-jwt-from-google"})
+
+    assert response.status_code == 200, response.text
+    db.refresh(near_match)
+    assert near_match.google_sub is None
+    assert verify_password("ExistingPassword123!", near_match.password_hash)
+    created = db.query(User).filter_by(email="staff_manager@example.com").one()
+    assert created.id != near_match.id
+    assert created.google_sub == "literal-google-email-sub"
+    assert response.json()["user"]["email"] == "staff_manager@example.com"
 
 
 def test_google_login_relogin_with_same_sub_preserves_password(client_and_db, monkeypatch):

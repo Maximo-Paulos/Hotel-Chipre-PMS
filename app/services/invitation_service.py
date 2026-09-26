@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.models.invitation import StaffInvitation
 from app.services.domain_events import queue_domain_change
+from app.services.user_lookup_service import normalize_email
 from app.services.tenant_context import (
     set_invitation_token_hash_context,
     set_tenant_hotel_context,
@@ -25,10 +26,6 @@ def utcnow() -> datetime:
     """Return a naive UTC timestamp, matching the current SQLAlchemy models."""
 
     return datetime.now(timezone.utc).replace(tzinfo=None)
-
-
-def normalize_email(email: str) -> str:
-    return (email or "").strip().lower()
 
 
 def hash_invitation_token(token: str) -> str:

@@ -160,6 +160,10 @@ Los componentes open source comparados publican licencias permisivas; PyCasbin d
 
 Este piloto y este ADR quedan como referencia lista para usar el día que aparezca un caso ReBAC de producto real.
 
+### Seguimiento de producto — 2026-09-25
+
+Se mantiene la decisión de no migrar el motor de autorización. Como endurecimiento incremental del RBAC actual, un cambio de rol elimina las concesiones individuales (`UserPermissionOverride.allowed=true`) dentro de la transacción que cambia la membership; las denegaciones individuales se conservan. El cambio queda en `SecurityAuditLog` y la interfaz lo advierte antes de ejecutarlo. Esto evita que una concesión del puesto anterior sobreviva a una reasignación sin borrar restricciones deliberadas.
+
 ---
 
 ## 7. Criterio de reapertura
@@ -253,3 +257,40 @@ El análisis encontró además que los roles custom heredan los permisos efectiv
 El escáner automatizado de seguridad no pudo inicializar porque cambió el HEAD después de seleccionar el diff; no se generaron ni inventaron artefactos de escaneo. Hubo revisión independiente read-only de la implementación y los hallazgos encontrados se corrigieron y se cubrieron con pruebas; el último ajuste quedó validado por tests, sin una segunda revisión independiente.
 
 No se agregó dependencia de Casbin, OpenFGA, SpiceDB u OPA; se conserva la recomendación del ADR: no migrar el runtime hasta validar casos ReBAC de producto y completar la evidencia operativa/tenant. El merge de PR #91 no se recomienda sin corregir primero la regresión de CI y el aumento de instancias; la rama de consultas públicas se preserva hasta acordar acceso/retención de PII y correo. La selección de motor sigue sin requerir decisión de compra.
+
+---
+
+## 11. Consolidación de capabilities y autorización condicional (2026-09-25)
+
+Esta sección registra el estado del checkout posterior a §10. El cambio se desarrolló en `main` sobre `1b6ca04597722a24f7cfe7a1d5b6e7ce82688d1e`, que al inicio de la tarea coincidía con `origin/main`. **Al escribir esta sección, el diff sigue local, no está publicado ni desplegado.** Las afirmaciones de deploy y PostgreSQL de §10 corresponden al snapshot histórico que allí se describe; no validan este diff.
+
+### Qué se cambió y por qué
+
+- Los routers de `app/api` ya no llaman directamente a `require_roles()` ni a `require_roles_and_permission()`. La prueba AST `test_api_routes_use_capability_dependencies_instead_of_legacy_role_guards` lo hace un contrato de regresión. Esto cubre los módulos que antes carecían de una capability semánticamente equivalente y permite auditar cada acción desde el resolver común.
+- El catálogo pasa de 83 a **94 permisos canónicos**: se separan borrado lógico y demo-seed de reservas; recepción de custodia y aprobación de diferencias de caja; lectura/gestión de reportes diarios; acciones del asistente; ejecución de pruebas de links de pago; administración de suscripción; gestión comercial; y lectura/gestión de grants temporales.
+- Quince capabilities tienen alcance inmutable por rol. Las de usuarios, suscripción, seguridad, pruebas, reportes diarios, acciones del asistente, grants temporales y configuración comercial se limitan a owner/co-owner; borrado lógico y demo-seed de reservas se limitan a owner/co-owner/manager. Un override no puede elevar a un rol fuera de su alcance.
+- `authorize_permission()` comparte con `require_permission()` la verificación de usuario, resolución canónica, auditoría de denegación y step-up. `close_cash_session` invoca la capability adicional únicamente si el payload solicita aprobar una diferencia. Cerrar una caja deja siempre la recepción de custodia en `PENDING`; nunca registra automáticamente al owner como receptor. La confirmación posterior es una capability owner-only distinta y requiere un ticket MFA vigente ligado a la acción/ruta.
+- No se añadió una librería ni un servicio externo. No hay cambios de esquema ni migraciones en el diff. El arranque ya siembra metadatos y defaults faltantes del catálogo mediante `ensure_permission_matrix_seeded()`; no se presume una operación manual de base de datos.
+
+La precedencia efectiva continúa siendo: invariant de seguridad → override individual → override del hotel/rol → default del rol base → denegar. Para una capability fuera del alcance inmutable, la decisión de rol ocurre antes de considerar overrides. El tenant scope y PostgreSQL RLS siguen siendo defensas separadas.
+
+### Validación local
+
+- Backend: **2.136 passed, 21 skipped, 12 xfailed, 37 warnings**. Se usó SQLite en memoria. Se excluyeron deliberadamente `tests/integration/test_postgres_migrations.py` (puede borrar el esquema público) y `tests/test_rls_live_verification.py` (verificación contra Postgres real). No se ejecutaron tests de PostgreSQL aislado ni consultas directas a Supabase.
+- Regresión focal RBAC/caja/permisos: **123 passed**.
+- Frontend sin cambios de fuente: **44 tests**, `typecheck`, `lint` y build aprobados. Vite conserva un warning de chunk principal de aproximadamente 637 kB minificado.
+- `git diff --check` pasó. Ruff no está instalado en el entorno y no se ejecutó.
+- No se realizó QA autenticada de esta revisión en la nube; la carga histórica de la matriz no acredita el nuevo diff. No se pidió ni se usó otro TOTP. No se ejecutaron pagos, correos, webhooks ni sincronización OTA.
+
+### Riesgos y decisiones que siguen abiertos
+
+1. **Ciclo de vida de overrides individuales al cambiar de rol (P1, decisión del PO pendiente).** `app/api/users.py:update_role` cambia `HotelMembership.role`, pero los `UserPermissionOverride` no se eliminan ni se revalidan como conjunto. Los invariants nuevos impiden elevar capacidades de alcance restringido; los overrides de otras capabilities siguen al usuario. Las opciones son revocarlos, conservarlos con advertencia/revisión o exigir confirmación. No se cambió ese comportamiento sin respuesta del PO.
+2. **Revertir grupos de movimiento (decisión de producto).** En el `main` auditado, `revert_movement_group` usa `reservation:move`, cuyo default incluye owner, co-owner, manager y receptionist. Este diff no cambia esa ruta. Falta confirmar si revertir un lote debe seguir esa política o recibir una capability separada; la frase histórica de §10 que afirmaba que recepción estaba excluida no queda corroborada por el código actual y se corrige en la presentación.
+3. **Gate de identidad.** La matriz autenticada allow/deny por rol y el flujo owner/empleado siguen sin probarse contra el deploy del nuevo diff. No se presenta la suite SQLite como evidencia de producción ni release certification.
+4. **Revisión de custodia (corregido localmente).** Una revisión independiente encontró que el endpoint de cierre podía auto-confirmar custodia si el actor era owner, sin pasar por la acción explícita protegida con step-up. El cierre ahora fuerza `received_by_user_id=None`; la custodia queda pendiente y solo `confirm_cash_custody_receipt` la confirma. Se añadió una regresión en `tests/test_cash_register_api.py` y se reforzó `tests/test_action_step_up.py`. Tras el cambio, el conjunto focal pasó **61 pruebas (9 xfailed)** y la suite completa pasó **2.136, con 21 skipped, 12 xfailed y 37 warnings** (excluyendo los mismos dos módulos descritos arriba).
+
+El barrido previo de ramas encontró 13 worktrees no-main, 11 con material local modificado o no seguido. No se creó un worktree en esta fase y se preservaron las carpetas/ramas con estado local. La rama de consultas públicas sigue en pausa hasta acordar privacidad/retención/destino de PII; PR #91 sigue sin integrarse por sus cambios inseguros al gate y a QA. No hay una rama adicional de autorización con código seguro pendiente de incorporar a este diff.
+
+### Decisión
+
+Se mantiene la recomendación: consolidar el resolver actual y no migrar completamente a Casbin, OpenFGA, SpiceDB u OPA. Este diff reduce dispersión y suma granularidad con coste operativo marginal, pero no elimina la deuda de QA autenticada ni decide políticas de producto pendientes. El estado es `confirmed` para código/tests locales, `historical` para la evidencia de §10 y `needs-verification` para el deploy, la matriz autenticada por rol y el tratamiento de overrides tras un cambio de rol.

@@ -76,3 +76,16 @@ def test_migrated_route_keeps_legacy_role_contract(path, function, source_permis
     resolved = canonical_permission_code(canonical)
     catalog_roles = {role for role in ROLE_CODES if DEFAULT_MATRIX[role].get(resolved, False)}
     assert catalog_roles == legacy_roles
+
+
+def test_api_routes_use_capability_dependencies_instead_of_legacy_role_guards():
+    legacy_calls = []
+    for path in Path("app/api").rglob("*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8-sig"), filename=str(path))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name):
+                continue
+            if node.func.id in {"require_roles", "require_roles_and_permission"}:
+                legacy_calls.append(f"{path}:{node.lineno}:{node.func.id}")
+
+    assert not legacy_calls, "Migrar controles de rutas a capacidades: " + ", ".join(legacy_calls)

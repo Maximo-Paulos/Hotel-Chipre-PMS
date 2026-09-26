@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies.auth import AuthContext, require_permission, require_roles
+from app.dependencies.auth import AuthContext, require_permission
 from app.schemas.commercial import (
     FxPolicyCreate,
     FxPolicyRead,
@@ -37,7 +37,7 @@ from app.services.commercial_service import (
     update_sellable_product,
     update_tax_policy,
 )
-from app.services.permission_service import PERMISSION_REPORTS_FINANCIAL_VIEW
+from app.services.permission_service import PERMISSION_COMMERCIAL_MANAGE, PERMISSION_REPORTS_FINANCIAL_VIEW
 
 router = APIRouter(prefix="/api/commercial", tags=["Commercial Configuration"])
 
@@ -54,7 +54,7 @@ def get_sellable_products(
 def create_product(
     payload: SellableProductCreate,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner")),
+    context: AuthContext = Depends(require_permission(PERMISSION_COMMERCIAL_MANAGE)),
 ):
     try:
         product = create_sellable_product(db, hotel_id=context.hotel_id, payload=payload)
@@ -70,7 +70,7 @@ def patch_product(
     product_id: int,
     payload: SellableProductUpdate,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner")),
+    context: AuthContext = Depends(require_permission(PERMISSION_COMMERCIAL_MANAGE)),
 ):
     try:
         product = update_sellable_product(db, hotel_id=context.hotel_id, product_id=product_id, payload=payload)
@@ -93,7 +93,7 @@ def get_rate_plans(
 def create_plan(
     payload: RatePlanCreate,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner")),
+    context: AuthContext = Depends(require_permission(PERMISSION_COMMERCIAL_MANAGE)),
 ):
     try:
         rate_plan = create_rate_plan(db, hotel_id=context.hotel_id, payload=payload)
@@ -109,7 +109,7 @@ def patch_rate_plan(
     rate_plan_id: int,
     payload: RatePlanUpdate,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner")),
+    context: AuthContext = Depends(require_permission(PERMISSION_COMMERCIAL_MANAGE)),
 ):
     try:
         rate_plan = update_rate_plan(db, hotel_id=context.hotel_id, rate_plan_id=rate_plan_id, payload=payload)
@@ -132,7 +132,7 @@ def get_tax_policies(
 def create_policy(
     payload: TaxPolicyCreate,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner")),
+    context: AuthContext = Depends(require_permission(PERMISSION_COMMERCIAL_MANAGE)),
 ):
     try:
         policy = create_tax_policy(db, hotel_id=context.hotel_id, payload=payload)
@@ -148,7 +148,7 @@ def patch_tax_policy(
     policy_id: int,
     payload: TaxPolicyUpdate,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner")),
+    context: AuthContext = Depends(require_permission(PERMISSION_COMMERCIAL_MANAGE)),
 ):
     try:
         policy = update_tax_policy(db, hotel_id=context.hotel_id, policy_id=policy_id, payload=payload)
@@ -171,7 +171,7 @@ def get_fx_policies(
 def create_fx(
     payload: FxPolicyCreate,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner")),
+    context: AuthContext = Depends(require_permission(PERMISSION_COMMERCIAL_MANAGE)),
 ):
     try:
         policy = create_fx_policy(db, hotel_id=context.hotel_id, payload=payload)
@@ -187,7 +187,7 @@ def patch_fx_policy(
     policy_id: int,
     payload: FxPolicyUpdate,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner")),
+    context: AuthContext = Depends(require_permission(PERMISSION_COMMERCIAL_MANAGE)),
 ):
     try:
         policy = update_fx_policy(db, hotel_id=context.hotel_id, policy_id=policy_id, payload=payload)

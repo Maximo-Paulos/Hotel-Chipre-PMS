@@ -81,6 +81,8 @@ const sourceLabel: Record<string, string> = {
   override: "Override de rol",
   role_override: "Override de rol",
   user_override: "Override de usuario",
+  legacy_role_deny: "Denegación heredada del rol",
+  legacy_user_deny: "Denegación heredada del usuario",
   invariant: "Regla de seguridad",
   deny: "No otorgado"
 };
@@ -417,6 +419,9 @@ function UserOverridesPanel({
                             {roleCell?.allowed ? "Permitido" : "No otorgado"}
                           </span>
                           <span className="mt-1 block text-[11px] text-slate-400">{formatPermissionSource(roleCell?.source ?? "deny")}</span>
+                          {roleCell?.legacy_permission_code ? (
+                            <code className="mt-0.5 block text-[10px] text-slate-400">{roleCell.legacy_permission_code}</code>
+                          ) : null}
                         </td>
                         <td className="px-3 py-2 text-center align-top">
                           <div className="flex flex-col items-center gap-1.5">
@@ -432,6 +437,9 @@ function UserOverridesPanel({
                             <span className={`rounded-full px-2 py-0.5 text-[11px] ${userOverride ? "bg-brand-50 text-brand-700" : "bg-slate-100 text-slate-500"}`}>
                               {locked ? "Bloqueado" : formatPermissionSource(detail?.source ?? "deny")}
                             </span>
+                            {detail?.legacy_permission_code ? (
+                              <code className="text-[10px] text-slate-400">{detail.legacy_permission_code}</code>
+                            ) : null}
                             {userOverride && !locked ? (
                               <button
                                 type="button"

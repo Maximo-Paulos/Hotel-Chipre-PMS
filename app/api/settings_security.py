@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import get_db
-from app.dependencies.auth import AuthContext, require_roles, require_roles_and_permission
+from app.dependencies.auth import AuthContext, require_permission
 from app.models.hotel_membership import HotelMembership
 from app.models.security_audit_log import SecurityAuditLog
 from app.models.user import User
@@ -31,7 +31,6 @@ from app.services.permission_service import PERMISSION_SETTINGS_SECURITY_VIEW
 
 
 router = APIRouter(prefix="/api/settings/security", tags=["Settings Security"])
-_SECURITY_ROLES = ("owner", "co_owner")
 _AUDIT_TIMELINE_EXPORT_MAX_ROWS = 5_000
 _AUDIT_TIMELINE_CSV_FIELDS = (
     "source",
@@ -106,7 +105,7 @@ def _attach_actor_names(db: Session, hotel_id: int, items: list[dict]) -> list[d
 @router.get("/overview", response_model=SecurityOverviewRead)
 def security_overview(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles_and_permission(PERMISSION_SETTINGS_SECURITY_VIEW, *_SECURITY_ROLES)),
+    context: AuthContext = Depends(require_permission(PERMISSION_SETTINGS_SECURITY_VIEW)),
 ):
     user = _current_user(db, context)
     since = datetime.now(timezone.utc) - timedelta(hours=24)
@@ -141,7 +140,7 @@ def security_overview(
 def recent_security_events(
     limit: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles_and_permission(PERMISSION_SETTINGS_SECURITY_VIEW, *_SECURITY_ROLES)),
+    context: AuthContext = Depends(require_permission(PERMISSION_SETTINGS_SECURITY_VIEW)),
 ):
     rows = (
         db.query(SecurityAuditLog)
@@ -183,7 +182,7 @@ def audit_timeline(
     from_date: date | None = Query(default=None, alias="from"),
     to_date: date | None = Query(default=None, alias="to"),
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles_and_permission(PERMISSION_SETTINGS_SECURITY_VIEW, *_SECURITY_ROLES)),
+    context: AuthContext = Depends(require_permission(PERMISSION_SETTINGS_SECURITY_VIEW)),
 ):
     _validate_audit_timeline_range(from_date, to_date)
 
@@ -215,7 +214,7 @@ def export_audit_timeline(
     from_date: date | None = Query(default=None, alias="from"),
     to_date: date | None = Query(default=None, alias="to"),
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles_and_permission(PERMISSION_SETTINGS_SECURITY_VIEW, *_SECURITY_ROLES)),
+    context: AuthContext = Depends(require_permission(PERMISSION_SETTINGS_SECURITY_VIEW)),
 ):
     """Export the redacted unified timeline, capped at 5,000 rows per request."""
 
@@ -239,7 +238,7 @@ def export_audit_timeline(
 @router.post("/revoke-all", response_model=RevokeAllSessionsResponse)
 def revoke_current_user_sessions(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles(*_SECURITY_ROLES)),
+    context: AuthContext = Depends(require_permission(PERMISSION_SETTINGS_SECURITY_VIEW)),
 ):
     """Invalidate every access token previously issued to the caller."""
 

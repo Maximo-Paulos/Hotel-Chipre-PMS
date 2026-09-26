@@ -10,7 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies.auth import AuthContext, require_permission, require_roles_and_permission
+from app.dependencies.auth import AuthContext, require_permission
 from app.models.audit_log import AuditActionEnum
 from app.models.user import User
 from app.models.hotel_membership import HotelMembership
@@ -24,6 +24,7 @@ from app.services.permission_service import (
     PERMISSION_SETTINGS_USERS_MANAGE,
     PERMISSION_SETTINGS_USERS_VIEW,
     ROLE_CODES,
+    clear_user_permission_grants_for_role_change,
     require_active_hotel_role,
 )
 from app.services.invitation_service import (
@@ -48,9 +49,10 @@ from app.services.staff_invitation_service import (
     provision_staff_invitation,
     set_membership_alias,
 )
+from app.services.user_lookup_service import find_user_by_email
 
 router = APIRouter(prefix="/api/users", tags=["Users"])
-_MANAGE_STAFF = require_roles_and_permission(PERMISSION_SETTINGS_USERS_MANAGE, "owner", "co_owner")
+_MANAGE_STAFF = require_permission(PERMISSION_SETTINGS_USERS_MANAGE)
 
 
 def _assert_assignable_role(
@@ -113,7 +115,7 @@ def _membership_user_info(user: User, role: str) -> UserInfo:
 @router.get("/", response_model=list[UserInfo])
 def list_users(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles_and_permission(PERMISSION_SETTINGS_USERS_VIEW, "owner", "co_owner")),
+    context: AuthContext = Depends(require_permission(PERMISSION_SETTINGS_USERS_VIEW)),
 ):
     memberships = (
         db.query(HotelMembership)
@@ -178,6 +180,7 @@ def _send_invitation_email(
         f"Hola,\n\n"
         f"Te invitaron al hotel '{hotel_name}' con el rol {role}.\n"
         f"Ingresá con Google o con tu cuenta aquí: {accept_url}\n\n"
+        "Si recibiste más de un correo, usá el enlace del más reciente: cada reenvío invalida los anteriores.\n\n"
         f"Invitó: {inviter_email}\n"
         f"Si no esperabas este correo, podés ignorarlo."
     )
@@ -224,7 +227,7 @@ def invite_user(
     # The invitation provisioner also updates an existing membership. Apply
     # the same hierarchy guard as the explicit role-change endpoint before it
     # can demote/re-invite a peer co-owner through the email path.
-    existing_user = db.query(User).filter(User.email.ilike(email)).first()
+    existing_user = find_user_by_email(db, email)
     if existing_user is not None:
         existing_membership = (
             db.query(HotelMembership)
@@ -252,6 +255,7 @@ def invite_user(
             inviter_email=context.user_email or "",
             alias=payload.alias,
             alias_provided="alias" in payload.model_fields_set,
+            permission_role=role,
         )
     except StaffAliasConflict as exc:
         db.rollback()
@@ -496,6 +500,7 @@ def revoke_user(
     membership = (
         db.query(HotelMembership)
         .filter(HotelMembership.hotel_id == context.hotel_id, HotelMembership.user_id == user_id)
+        .with_for_update()
         .first()
     )
     if not membership:
@@ -581,10 +586,16 @@ def update_role(
     membership = (
         db.query(HotelMembership)
         .filter(HotelMembership.hotel_id == context.hotel_id, HotelMembership.user_id == user_id)
+        .with_for_update()
         .first()
     )
     if not membership:
         raise HTTPException(status_code=404, detail="Usuario no encontrado en este hotel")
+    if membership.status != "active":
+        raise HTTPException(
+            status_code=409,
+            detail="Solo se puede cambiar el rol de una membresía activa; reenviá o revocá la invitación según corresponda",
+        )
     if membership.user_id == context.user_id:
         raise HTTPException(status_code=400, detail="No puedes cambiar tu propio rol")
     _assert_manageable_membership(context.user_role, membership, action="modificar")
@@ -596,6 +607,14 @@ def update_role(
             hotel_id=context.hotel_id,
             next_role=payload.role,
             next_status="active",
+        )
+        clear_user_permission_grants_for_role_change(
+            db,
+            hotel_id=context.hotel_id,
+            target_user_id=membership.user_id,
+            actor_user_id=context.user_id,
+            previous_role=membership.role,
+            next_role=payload.role,
         )
         membership.role = payload.role
         membership.status = "active"

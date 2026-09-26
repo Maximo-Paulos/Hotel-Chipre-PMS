@@ -9,7 +9,6 @@ from app.dependencies.auth import (
     get_auth_context,
     require_permission,
     require_permission_administrator,
-    require_roles,
 )
 from app.models.hotel_membership import HotelMembership
 from app.models.hotel_role import HotelRole
@@ -24,6 +23,8 @@ from app.schemas.permission import (
 from app.services.permission_service import (
     PERMISSION_DEFINITIONS,
     PERMISSION_PERMISSION_MANAGE,
+    PERMISSION_TEMPORARY_GRANTS_MANAGE,
+    PERMISSION_TEMPORARY_GRANTS_VIEW,
     ROLE_CODES,
     canonical_permission_code,
     get_effective_permission_details,
@@ -112,12 +113,17 @@ def _validate_code(code: str) -> str:
     return canonical_permission_code(code)
 
 
-def _target_membership_or_404(db: Session, hotel_id: int, user_id: int) -> HotelMembership:
-    membership = db.query(HotelMembership).filter_by(
+def _target_membership_or_404(
+    db: Session, hotel_id: int, user_id: int, *, lock: bool = False
+) -> HotelMembership:
+    query = db.query(HotelMembership).filter_by(
         hotel_id=hotel_id,
         user_id=user_id,
         status="active",
-    ).one_or_none()
+    )
+    if lock:
+        query = query.with_for_update()
+    membership = query.one_or_none()
     if membership is None:
         # Deliberately identical for an unknown user and another hotel's user.
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
@@ -328,8 +334,7 @@ def restore_role_permission_override(
         ..., ge=1, description="Version actual del override que se va a restaurar"
     ),
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner")),
-    _permission_context: AuthContext = Depends(require_permission(PERMISSION_PERMISSION_MANAGE)),
+    context: AuthContext = Depends(require_permission(PERMISSION_PERMISSION_MANAGE)),
 ):
     _validate_role(db, context.hotel_id, role)
     code = _validate_code(permission_code)
@@ -407,7 +412,14 @@ def update_user_override(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="No puedes modificar tus propios permisos",
         )
-    membership = _target_membership_or_404(db, context.hotel_id, user_id)
+    membership = _target_membership_or_404(db, context.hotel_id, user_id, lock=True)
+    _assert_manageable_membership(
+        db,
+        context.hotel_id,
+        context.user_role,
+        membership,
+        action="modificar permisos de",
+    )
     code = _validate_code(payload.permission_code)
     try:
         override = set_user_override(
@@ -427,7 +439,11 @@ def update_user_override(
     except StaleDataError as exc:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="El permiso fue modificado por otra solicitud") from exc
+    except LookupError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except ValueError as exc:
+        db.rollback()
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
     db.refresh(override)
     publish_permission_invalidation(context.hotel_id)
@@ -454,15 +470,14 @@ def restore_user_permission_override(
         ..., ge=1, description="Version actual del override que se va a restaurar"
     ),
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner")),
-    _permission_context: AuthContext = Depends(require_permission(PERMISSION_PERMISSION_MANAGE)),
+    context: AuthContext = Depends(require_permission(PERMISSION_PERMISSION_MANAGE)),
 ):
     if user_id == context.user_id:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="No puedes modificar tus propios permisos",
         )
-    membership = _target_membership_or_404(db, context.hotel_id, user_id)
+    membership = _target_membership_or_404(db, context.hotel_id, user_id, lock=True)
     _assert_manageable_membership(
         db,
         context.hotel_id,
@@ -511,9 +526,23 @@ def restore_user_permission_defaults(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="No puedes modificar tus propios permisos",
         )
-    _target_membership_or_404(db, context.hotel_id, user_id)
-    restored = restore_user_defaults(db, context.hotel_id, user_id, context.user_id)
-    db.commit()
+    membership = _target_membership_or_404(db, context.hotel_id, user_id, lock=True)
+    _assert_manageable_membership(
+        db,
+        context.hotel_id,
+        context.user_role,
+        membership,
+        action="restaurar permisos de",
+    )
+    try:
+        restored = restore_user_defaults(db, context.hotel_id, user_id, context.user_id)
+        db.commit()
+    except LookupError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
     publish_permission_invalidation(context.hotel_id)
     return {"hotel_id": context.hotel_id, "user_id": user_id, "restored": restored}
 
@@ -576,7 +605,7 @@ def create_temporary_action_grant(
 @router.get("/temporary-grants/pending")
 def read_pending_temporary_action_grants(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner")),
+    context: AuthContext = Depends(require_permission(PERMISSION_TEMPORARY_GRANTS_VIEW)),
 ):
     grants = list_pending_grants_for_hotel(db, context.hotel_id)
     return {
@@ -590,7 +619,7 @@ def approve_temporary_action_grant(
     payload: TemporaryActionGrantApproveRequest,
     grant_id: int = Path(gt=0),
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner")),
+    context: AuthContext = Depends(require_permission(PERMISSION_TEMPORARY_GRANTS_MANAGE)),
 ):
     try:
         grant, token = approve_grant(
@@ -611,7 +640,7 @@ def approve_temporary_action_grant(
 def deny_temporary_action_grant(
     grant_id: int = Path(gt=0),
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_roles("owner", "co_owner")),
+    context: AuthContext = Depends(require_permission(PERMISSION_TEMPORARY_GRANTS_MANAGE)),
 ):
     try:
         grant = deny_grant(db, grant_id, _temporary_grant_actor(context))

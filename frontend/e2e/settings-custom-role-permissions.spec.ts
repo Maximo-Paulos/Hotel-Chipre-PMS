@@ -3,6 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 const builtinRoles = ["owner", "co_owner", "manager", "receptionist", "housekeeping"];
 const customRoleCode = "night-auditor";
 const permissionCode = "guest:read";
+const assistantActionsPermissionCode = "settings:assistant:actions:manage";
 
 const roleCatalog = {
   roles: [
@@ -61,6 +62,15 @@ const matrixForRoles = Object.fromEntries(
         help_es: "Permiso crítico.",
         locked: true,
         lock_reason: "owner_only"
+      },
+      [assistantActionsPermissionCode]: {
+        allowed: role === "owner" || role === "co_owner",
+        source: role === "owner" || role === "co_owner" ? "role_default" : "invariant",
+        description: "Revisar acciones del asistente",
+        module: "settings",
+        help_es: "Revisar y aplicar acciones sugeridas por el asistente.",
+        locked: role !== "owner" && role !== "co_owner",
+        lock_reason: role === "owner" || role === "co_owner" ? null : "role_scope"
       }
     }
   ])
@@ -87,6 +97,15 @@ const profilesForRoles = Object.fromEntries(
         description: "Administrar permisos",
         module: "permissions",
         help_es: "Permiso crítico."
+      },
+      [assistantActionsPermissionCode]: {
+        allowed: role === "owner" || role === "co_owner",
+        source: role === "owner" || role === "co_owner" ? "role_default" : "invariant",
+        locked: role !== "owner" && role !== "co_owner",
+        lock_reason: role === "owner" || role === "co_owner" ? null : "role_scope",
+        description: "Revisar acciones del asistente",
+        module: "settings",
+        help_es: "Revisar y aplicar acciones sugeridas por el asistente."
       }
     }
   ])
@@ -109,7 +128,7 @@ const authResponse = {
   }
 };
 
-async function installMocks(page: Page, options: { rolesFailure?: boolean; overrideStatus?: number } = {}) {
+async function installMocks(page: Page, options: { rolesFailure?: boolean; overrideStatus?: number; legacyUserDeny?: boolean } = {}) {
   let loggedIn = false;
   const writes: Array<{ path: string; method: string; payload: unknown }> = [];
 
@@ -161,6 +180,7 @@ async function installMocks(page: Page, options: { rolesFailure?: boolean; overr
         hotel_id: 1,
         permissions: [
           { code: permissionCode, module: "guests", description: "Consultar huéspedes", help_es: "Permite consultar huéspedes.", legacy_aliases: [], locked: false, lock_reason: null, critical: false, step_up_required: false, delegable: true },
+          { code: assistantActionsPermissionCode, module: "settings", description: "Revisar acciones del asistente", help_es: "Revisar y aplicar acciones sugeridas por el asistente.", legacy_aliases: [], locked: false, lock_reason: null, critical: false, step_up_required: false, delegable: true },
           { code: "permissions:manage", module: "permissions", description: "Administrar permisos", help_es: "Permiso crítico.", legacy_aliases: [], locked: true, lock_reason: "owner_only", critical: true, step_up_required: true, delegable: false }
         ]
       });
@@ -178,7 +198,16 @@ async function installMocks(page: Page, options: { rolesFailure?: boolean; overr
     if (userOverridesMatch && method === "GET") {
       const userId = Number(userOverridesMatch[1]);
       const role = userId === 2 ? "co_owner" : "old-auditor";
-      await json({ hotel_id: 1, user_id: userId, role, details: profilesForRoles[role] ?? {} });
+      const details = { ...(profilesForRoles[role] ?? {}) };
+      if (options.legacyUserDeny && userId === 2) {
+        details[assistantActionsPermissionCode] = {
+          ...details[assistantActionsPermissionCode],
+          allowed: false,
+          source: "legacy_user_deny",
+          legacy_permission_code: "settings:assistant:view"
+        };
+      }
+      await json({ hotel_id: 1, user_id: userId, role, details });
       return;
     }
     if (pathname.endsWith("/api/permissions/visibility-windows") && method === "GET") {
@@ -305,6 +334,17 @@ test("blocks user overrides for protected built-ins and archived custom roles", 
   await userPicker.selectOption("3");
   await expect(page.getByRole("status").filter({ hasText: "archivado" })).toBeVisible();
   await expect(userToggle).toBeDisabled();
+});
+
+test("explains when a new capability remains denied by an older user override", async ({ page }) => {
+  await installMocks(page, { legacyUserDeny: true });
+  await openPermissions(page);
+
+  const permissionRow = page
+    .getByTestId(`user-permission-toggle-${assistantActionsPermissionCode}`)
+    .locator("xpath=ancestor::tr");
+  await expect(permissionRow).toContainText("Denegación heredada del usuario");
+  await expect(permissionRow).toContainText("settings:assistant:view");
 });
 
 test("denies matrix editing when the hotel role catalog fails to load", async ({ page }) => {
