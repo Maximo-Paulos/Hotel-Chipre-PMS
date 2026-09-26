@@ -156,8 +156,9 @@ test("owner can log out mid-onboarding, resume without losing progress, and conf
   // Reload and confirm the per-date, per-category, per-payment-method prices
   // were actually persisted server-side (not just an optimistic UI toast).
   await page.reload();
-  await expect(page.getByLabel(`Precio base ${isoDate(from)}`)).toHaveValue("80000", { timeout: 15_000 });
-  await expect(page.getByLabel(`Efectivo ${isoDate(from)}`)).toHaveValue("76000");
-  await expect(page.getByLabel(`Transferencia ${isoDate(from)}`)).toHaveValue("78000");
-  await expect(page.getByLabel(`Mercado Pago ${isoDate(from)}`)).toHaveValue("82000");
+  const rateEditorGrid = page.getByTestId("rate-editor-grid");
+  await expect(rateEditorGrid.getByLabel(`Precio base ${isoDate(from)}`)).toHaveValue("80000", { timeout: 15_000 });
+  await expect(rateEditorGrid.getByLabel(`Efectivo ${isoDate(from)}`)).toHaveValue("76000");
+  await expect(rateEditorGrid.getByLabel(`Transferencia ${isoDate(from)}`)).toHaveValue("78000");
+  await expect(rateEditorGrid.getByLabel(`Mercado Pago ${isoDate(from)}`)).toHaveValue("82000");
 });

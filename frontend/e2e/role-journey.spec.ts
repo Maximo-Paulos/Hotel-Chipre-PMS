@@ -284,7 +284,10 @@ test("permissions screen shows the catalog help text in an InfoTip", async ({ pa
   const permission = catalog.permissions.find((item) => item.help_es.trim());
   expect(permission).toBeDefined();
 
-  const permissionRow = page.getByRole("row").filter({
+  // The page also renders an effective-permissions table for the signed-in
+  // user, which can contain the same permission code. Scope this lookup to
+  // the role matrix under test.
+  const permissionRow = page.getByTestId("permissions-matrix").getByRole("row").filter({
     has: page.getByText(permission!.code, { exact: true })
   });
   await expect(permissionRow).toHaveCount(1);
