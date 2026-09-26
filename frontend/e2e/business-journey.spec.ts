@@ -1,6 +1,7 @@
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 
 import { navigateFromShell } from "./support/sidebar";
+import { completeStepUpPrompt, loginAsStepUpOwner } from "./support/step-up-owner";
 
 const credentials = {
   email: process.env.E2E_OWNER_EMAIL || "owner@e2e.com",
@@ -50,14 +51,14 @@ async function syntheticProofBuffer(page: Page, seed: number) {
   }, seed), "base64");
 }
 
-test("owner completes the core reservation journey through the UI", async ({ page }) => {
+test("owner completes the core reservation journey through the UI", async ({ page }, testInfo) => {
   const suffix = Date.now().toString();
   const categoryName = `Journey ${suffix}`;
   const categoryCode = `J${suffix.slice(-6)}`;
   const roomNumber = `J${suffix.slice(-5)}`;
   const guestLastName = `Journey ${suffix}`;
 
-  await login(page);
+  const ownerSession = await loginAsStepUpOwner(page, "cash-business", testInfo.project.name);
 
   // Closing a cash session always opens a new successor session
   // (see close_session() in app/services/cash_register_service.py), so a
@@ -251,7 +252,9 @@ test("owner completes the core reservation journey through the UI", async ({ pag
   await expect(page.getByText(/Caja sucesora: .* abierta con saldo \$0/)).toBeVisible();
   await expect(page.getByText(/Custodia: pendiente de recepción del dueño\./)).toBeVisible();
   await page.getByRole("button", { name: "Confirmar recepción de custodia", exact: true }).click();
+  const custodyTotpStep = await completeStepUpPrompt(page, ownerSession.lastTotpStep, ownerSession.auth.user.email);
   await expect(page.getByText("Recepción de custodia confirmada.", { exact: true })).toBeVisible();
+  expect(custodyTotpStep).toBeGreaterThan(ownerSession.lastTotpStep);
   await expect(page.getByText(/Custodia: recepción confirmada\./)).toBeVisible();
 });
 

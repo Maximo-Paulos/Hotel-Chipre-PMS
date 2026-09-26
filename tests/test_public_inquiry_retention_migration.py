@@ -117,7 +117,7 @@ def test_known_nonproduction_without_pg_cron_still_hardens_marketing_leads(monke
     assert "CREATE EXTENSION IF NOT EXISTS pg_cron" not in sql
 
 
-def test_marketing_lead_retention_uses_last_update_as_privacy_notice_states(monkeypatch):
+def test_retention_uses_expected_timestamps_and_daily_schedule(monkeypatch):
     class FakeResult:
         @staticmethod
         def scalar():
@@ -157,7 +157,12 @@ def test_marketing_lead_retention_uses_last_update_as_privacy_notice_states(monk
     retention_function = next(
         statement
         for statement in fake_op.statements
-        if "DELETE FROM public.marketing_leads" in statement
+        if "DELETE FROM public.public_inquiries" in statement
     )
+    assert "WHERE created_at < utc_now - INTERVAL '90 days'" in retention_function
     assert "WHERE updated_at < now_utc - INTERVAL '90 days'" in retention_function
     assert "WHERE created_at < now_utc - INTERVAL '90 days'" not in retention_function
+
+    scheduled_job = next(statement for statement in fake_op.statements if "cron.schedule(" in statement)
+    assert f"'{_MIGRATION._JOB_NAME}'" in scheduled_job
+    assert "'0 4 * * *'" in scheduled_job

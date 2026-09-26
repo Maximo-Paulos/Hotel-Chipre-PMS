@@ -196,16 +196,15 @@ def upsert_seed_data() -> None:
         membership.role = "owner"
         membership.status = "active"
 
-        # Keep the normal owner fixture MFA-free for broad UI journeys. These
-        # separate synthetic owners exercise the MFA-required RBAC reads and
-        # cash-difference approval flows without sharing replay counters across
-        # Playwright projects that run concurrently.
+        # Keep the normal owner fixture MFA-free for broad UI journeys. Give
+        # each MFA-sensitive E2E flow and Playwright project a separate owner
+        # so concurrent workers cannot race the same TOTP replay counter.
         step_up_password = os.environ.get("E2E_STEP_UP_OWNER_PASSWORD", "E2eStepUp1234!")
         step_up_secret = os.environ.get(
             "E2E_STEP_UP_OWNER_TOTP_SECRET",
             "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP",
         )
-        for purpose in ("cash", "rbac"):
+        for purpose in ("cash", "cash-business", "rbac", "rbac-info"):
             for project_name in _step_up_test_projects():
                 step_up_email = f"owner-stepup-{purpose}+{project_name}@e2e.com"
                 step_up_user = db.query(User).filter(User.email.ilike(step_up_email)).first()

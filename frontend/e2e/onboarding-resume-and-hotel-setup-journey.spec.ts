@@ -138,13 +138,12 @@ test("owner can log out mid-onboarding, resume without losing progress, and conf
   const isoDate = (d: Date) => d.toISOString().slice(0, 10);
 
   const rateForm = page.getByTestId("rate-editor");
-  const rateGrid = page.getByTestId("rate-editor-grid");
   await rateForm.locator('input[type="date"]').first().fill(isoDate(from));
   await rateForm.locator('input[type="date"]').nth(1).fill(isoDate(to));
-  await rateGrid.getByLabel("Precio base *", { exact: true }).fill("80000");
-  await rateGrid.getByLabel("Efectivo", { exact: true }).fill("76000");
-  await rateGrid.getByLabel("Transferencia", { exact: true }).fill("78000");
-  await rateGrid.getByLabel("Mercado Pago", { exact: true }).fill("82000");
+  await rateForm.getByLabel("Precio base *", { exact: true }).fill("80000");
+  await rateForm.getByLabel("Efectivo", { exact: true }).fill("76000");
+  await rateForm.getByLabel("Transferencia", { exact: true }).fill("78000");
+  await rateForm.getByLabel("Mercado Pago", { exact: true }).fill("82000");
   await page.getByTestId("rate-editor-save").click();
   const savedSummary = page.getByText(/Tarifas guardadas: \d+ creadas, \d+ actualizadas\./);
   await expect(savedSummary).toBeVisible();

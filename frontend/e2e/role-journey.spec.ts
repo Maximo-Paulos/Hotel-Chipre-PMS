@@ -271,7 +271,7 @@ test("owner can grant receptionist rates read without granting rate edits", asyn
 });
 
 test("permissions screen shows the catalog help text in an InfoTip", async ({ page }, testInfo) => {
-  const ownerSession = await loginAsStepUpOwner(page, "rbac", testInfo.project.name);
+  const ownerSession = await loginAsStepUpOwner(page, "rbac-info", testInfo.project.name);
   const catalogResponsePromise = page.waitForResponse(
     (response) => new URL(response.url()).pathname === "/api/permissions/catalog" && response.ok()
   );
@@ -279,12 +279,19 @@ test("permissions screen shows the catalog help text in an InfoTip", async ({ pa
   await completeStepUpPrompt(page, ownerSession.lastTotpStep, ownerSession.auth.user.email);
   const catalogResponse = await catalogResponsePromise;
   const catalog = (await catalogResponse.json()) as {
-    permissions: Array<{ description: string; help_es: string }>;
+    permissions: Array<{ code: string; description: string; help_es: string }>;
   };
   const permission = catalog.permissions.find((item) => item.help_es.trim());
   expect(permission).toBeDefined();
 
-  const infoButton = page.getByRole("button", { name: `Más información sobre ${permission!.description}` }).first();
+  const permissionRow = page.getByRole("row").filter({
+    has: page.getByText(permission!.code, { exact: true })
+  });
+  await expect(permissionRow).toHaveCount(1);
+  const infoButton = permissionRow.getByRole("button", {
+    name: `Más información sobre ${permission!.description}`,
+    exact: true
+  });
   await expect(infoButton).toBeVisible();
   await infoButton.click();
   await expect(page.getByRole("tooltip")).toContainText(permission!.help_es);

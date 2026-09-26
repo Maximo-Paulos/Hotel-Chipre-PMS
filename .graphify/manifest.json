@@ -1552,8 +1552,8 @@
     "hash": "898e2282ec17bf808e708770ada7811a"
   },
   "scripts/seed_e2e_backend.py": {
-    "mtime": 1790406637409.4312,
-    "hash": "8cb324cd886010329726ac88b402b023"
+    "mtime": 1790415352988.7532,
+    "hash": "91e957af5be1c8334619e613e374571f"
   },
   "scripts/serve_e2e_backend.py": {
     "mtime": 1784484410234.3025,
@@ -2220,8 +2220,8 @@
     "hash": "644a01aee4eeac42b8bf6cbe8c17e6a4"
   },
   "README.md": {
-    "mtime": 1790407408464.1038,
-    "hash": "81de3f83ab9b59fb51272a5ac0ce4a70"
+    "mtime": 1790412790997.9202,
+    "hash": "cfff207e0395948d6fde3ff974c143f5"
   },
   "app/AGENTS.md": {
     "mtime": 1783103274874.3015,
@@ -2256,8 +2256,8 @@
     "hash": "d44cfe18dec64c8aae68668e41619cff"
   },
   "docs/DEPLOY_GUIDE.md": {
-    "mtime": 1790407408464.3804,
-    "hash": "1b124a89930cb83098776e93617bb17b"
+    "mtime": 1790412790998.3105,
+    "hash": "406f3fd9f9c47a1b9900199b6fd8f683"
   },
   "docs/INCIDENT_PLAYBOOK.md": {
     "mtime": 1783103274893.8015,
@@ -2772,28 +2772,28 @@
     "hash": "84364af62f8c6b7d15983dd02b1a18bf"
   },
   "knowledge/_generated/README.md": {
-    "mtime": 1790412565533.312,
-    "hash": "f2bc6ff8ec68f24bc60f3a674da46826"
+    "mtime": 1790415585468.381,
+    "hash": "15d5a4f0f0ee4a04db52da5e1a0a8d85"
   },
   "knowledge/_generated/api-surface.md": {
-    "mtime": 1790412564994.1912,
-    "hash": "3087c37421046c88751abd053646b21f"
+    "mtime": 1790415584951.155,
+    "hash": "dcb8d016c3909f3084e9e49512388a70"
   },
   "knowledge/_generated/cloud-surfaces.md": {
-    "mtime": 1790412565522.0498,
-    "hash": "5f5eb709564bb1d02eb078bb5aa6d89b"
+    "mtime": 1790415585458.7297,
+    "hash": "3c09333f4d9464169904e99658c16051"
   },
   "knowledge/_generated/frontend-routes.md": {
-    "mtime": 1790412565006.697,
-    "hash": "52440f5d956dca58aa01f871a7aceed0"
+    "mtime": 1790415584961.7039,
+    "hash": "7cea653633fdda084e56936b29ee63f9"
   },
   "knowledge/_generated/graphify-summary.md": {
-    "mtime": 1790412565510.6064,
-    "hash": "1cb0cf39f0afb650540cf3d2283e109f"
+    "mtime": 1790415585448.49,
+    "hash": "167efa1de336336c840bb57f8a6a5d94"
   },
   "knowledge/_generated/migration-head.md": {
-    "mtime": 1790412565171.8623,
-    "hash": "387322822bd5f875d2e5029a4d84dee3"
+    "mtime": 1790415585117.2554,
+    "hash": "1cc8dd380713e4409917a901effcec1b"
   },
   "qa/evidence/README.md": {
     "mtime": 1787360058523.809,
@@ -3336,8 +3336,8 @@
     "hash": "6c6ac15ede5f33ded16c944491cd73d7"
   },
   "frontend/e2e/business-journey.spec.ts": {
-    "mtime": 1790406525383.4392,
-    "hash": "6ec3e0b36be8d593a95f5b62538eb6aa"
+    "mtime": 1790415352986.1848,
+    "hash": "0024821d5102557bae271c19a59671ac"
   },
   "alembic/versions/20260724_allocation_enum_values.py": {
     "mtime": 1787360058488.641,
@@ -3480,8 +3480,8 @@
     "hash": "e0ae8b141515e93f7a89adf07fd11713"
   },
   "frontend/e2e/role-journey.spec.ts": {
-    "mtime": 1790407519742.7776,
-    "hash": "fd2991786f7760844a6f2eb5033fd3e2"
+    "mtime": 1790415414356.5654,
+    "hash": "fb4630b7f17ad144e721d0df48f75be6"
   },
   "frontend/e2e/auth-onboarding-journey.spec.ts": {
     "mtime": 1790286208534.278,
@@ -3516,8 +3516,8 @@
     "hash": "3151da4a6272ba4fe04060e9f5453829"
   },
   "frontend/e2e/zz-cash-control-journey.spec.ts": {
-    "mtime": 1790407051909.1323,
-    "hash": "6a8fb877ce334cf917e930d0539a42b2"
+    "mtime": 1790415414356.1372,
+    "hash": "8d824344382a0685741c9f167b98ff55"
   },
   "alembic/versions/20260724_billing_adjustment_enum_values.py": {
     "mtime": 1787360058488.6877,
@@ -3596,8 +3596,8 @@
     "hash": "9d4af4542bca6653210e6a73e5ed53e2"
   },
   "frontend/e2e/onboarding-resume-and-hotel-setup-journey.spec.ts": {
-    "mtime": 1790406525384.3325,
-    "hash": "d94f24778652b6526df51f11960b3ef5"
+    "mtime": 1790414770185.7615,
+    "hash": "e90aa4327a190496407ac43b8ad0d67f"
   },
   "frontend/e2e/support/email-outbox.ts": {
     "mtime": 1787360058509.2014,
@@ -4776,8 +4776,8 @@
     "hash": "103cd72a9cd0e6bdcc3c00637707e021"
   },
   "frontend/src/views/public/PrivacyPage.tsx": {
-    "mtime": 1790400698765.687,
-    "hash": "3eb0be7cb8d384eff481700975027e5a"
+    "mtime": 1790415414356.9014,
+    "hash": "24e904d0a1134763eaa2aeb52202c6d4"
   },
   "frontend/src/views/public/TermsPage.tsx": {
     "mtime": 1790400698767.8242,
@@ -5784,16 +5784,16 @@
     "hash": "052433c10f83059a0c9ac2cdfccc133d"
   },
   "tests/test_public_inquiry_retention_migration.py": {
-    "mtime": 1790412179910.238,
-    "hash": "e13192aaf7e577dfac6fbb6e71431ac8"
+    "mtime": 1790415414357.188,
+    "hash": "be1b4fbe7f21daac3752eaff19606014"
   },
   "frontend/public/brand/social-share.svg": {
     "mtime": 1790395445675.6816,
     "hash": "72670491ddb06242d095dfdfd30f5306"
   },
   "frontend/e2e/support/step-up-owner.ts": {
-    "mtime": 1790407231381.555,
-    "hash": "26be963f93a47b38ec8a15684eb54a4f"
+    "mtime": 1790415352986.8672,
+    "hash": "9b44d20b83267d8369c4e55c3dd272da"
   },
   "frontend/e2e/support/totp.ts": {
     "mtime": 1790406637406.9175,

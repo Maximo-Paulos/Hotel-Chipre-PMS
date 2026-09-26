@@ -25,6 +25,9 @@ function parseMoney(text: string) {
 }
 
 test("owner controls manual cash movements, approves an arqueo difference and confirms custody", async ({ page }, testInfo) => {
+  // Login, difference approval, and custody receipt each consume a distinct
+  // TOTP step; allow two code-window boundaries plus the UI journey.
+  test.setTimeout(120_000);
   const ownerSession = await loginAsStepUpOwner(page, "cash", testInfo.project.name);
   // The "Abrir caja" button starts enabled optimistically and only flips to
   // "Ya hay una caja abierta" once GET /api/cash-register/sessions resolves
@@ -80,8 +83,10 @@ test("owner controls manual cash movements, approves an arqueo difference and co
   await expect(page.getByText("Diferencia aprobada.", { exact: true })).toBeVisible();
   await expect(page.getByText("Custodia: pendiente de recepción del dueño.", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Confirmar recepción de custodia", exact: true }).click();
+  const custodyTotpStep = await completeStepUpPrompt(page, lastTotpStep, ownerSession.auth.user.email);
   await expect(page.getByText("Recepción de custodia confirmada.", { exact: true })).toBeVisible();
   expect(lastTotpStep).toBeGreaterThan(ownerSession.lastTotpStep);
+  expect(custodyTotpStep).toBeGreaterThan(lastTotpStep);
   await expect(page.getByText(/Caja sucesora: .* abierta con saldo \$0/)).toBeVisible();
 });
 

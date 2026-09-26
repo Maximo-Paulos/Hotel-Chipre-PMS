@@ -98,9 +98,10 @@ export function PrivacyPage() {
             para responder la consulta o gestionar el aviso de apertura que solicitaste.
             Procesamos la IP de conexión y el correo para limitar envíos abusivos; las
             claves de rate limit se borran en el ciclo diario siguiente. Las consultas
-            de contacto se eliminan automáticamente al superar 90 días desde su recepción;
-            los leads de acceso temprano, al superar 90 días desde su última actualización,
-            salvo que una obligación legal exija conservarlos por más tiempo.
+            de contacto se eliminan automáticamente en el primer ciclo diario posterior a
+            cumplir 90 días desde su recepción; los leads de acceso temprano, en el primer
+            ciclo diario posterior a cumplir 90 días desde su última actualización, salvo
+            que una obligación legal exija conservarlos por más tiempo.
           </p>
         </Section>
 
@@ -144,9 +145,10 @@ export function PrivacyPage() {
               Registros de auditoría y seguridad: <strong>24 meses</strong>.
             </li>
             <li>
-              Consultas de contacto y leads de acceso temprano: <strong>90 días</strong>
-              {" "}desde su recepción o última actualización, mediante borrado automático,
-              salvo obligación legal aplicable.
+              Consultas de contacto y leads de acceso temprano: se purgan en el primer ciclo
+              diario posterior a cumplir <strong>90 días</strong> desde su recepción o última
+              actualización, respectivamente, mediante borrado automático, salvo obligación
+              legal aplicable.
             </li>
             <li>
               Datos que debamos conservar por obligación legal (por ejemplo, fiscal): el

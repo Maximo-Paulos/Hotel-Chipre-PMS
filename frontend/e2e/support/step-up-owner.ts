@@ -5,6 +5,8 @@ import { nextTotpAfter } from "./totp";
 const backendURL = (process.env.E2E_BACKEND_URL || "http://127.0.0.1:8040").replace(/\/$/, "");
 const lastUsedTotpStepByUser = new Map<string, number>();
 
+type StepUpOwnerPurpose = "cash" | "cash-business" | "rbac" | "rbac-info";
+
 export type StepUpOwnerAuth = {
   hotel_id: number;
   access_token: string;
@@ -18,7 +20,7 @@ export type StepUpChallenge = {
   path: string;
 };
 
-export function stepUpOwnerCredentials(purpose: "cash" | "rbac", projectName: string) {
+export function stepUpOwnerCredentials(purpose: StepUpOwnerPurpose, projectName: string) {
   return {
     email: `owner-stepup-${purpose}+${projectName}@e2e.com`,
     password: process.env.E2E_STEP_UP_OWNER_PASSWORD || "E2eStepUp1234!"
@@ -27,7 +29,7 @@ export function stepUpOwnerCredentials(purpose: "cash" | "rbac", projectName: st
 
 export async function loginAsStepUpOwner(
   page: Page,
-  purpose: "cash" | "rbac",
+  purpose: StepUpOwnerPurpose,
   projectName: string
 ): Promise<{ auth: StepUpOwnerAuth; lastTotpStep: number }> {
   const credentials = stepUpOwnerCredentials(purpose, projectName);
