@@ -1,6 +1,12 @@
-import { expect, test, type APIRequestContext, type Locator, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 import { revealCollapsedNavLink } from "./support/sidebar";
+import {
+  completeStepUpPrompt,
+  issueStepUpTicket,
+  loginAsStepUpOwner,
+  stepUpAuthHeaders
+} from "./support/step-up-owner";
 
 const backendURL = (process.env.E2E_BACKEND_URL || "http://127.0.0.1:8040").replace(/\/$/, "");
 
@@ -58,37 +64,6 @@ async function login(page: Page, persona: Persona) {
     housekeeping: "Limpieza"
   };
   await expect(page.getByTestId("session-role")).toHaveText(roleLabel[persona.label]);
-}
-
-type ApiSession = {
-  hotelId: number;
-  userId: string;
-  accessToken: string;
-  csrfToken?: string;
-};
-
-async function readApiSession(
-  request: APIRequestContext,
-  credentials: { email: string; password: string }
-): Promise<ApiSession> {
-  // Use a fresh API login only for owner-authorized setup/cleanup. The browser
-  // session remains the user journey under test, and no secrets are logged.
-  // The isolated `request` fixture keeps this login out of the browser's
-  // cookie jar; page.request would overwrite the UI session cookies.
-  const response = await request.post(`${backendURL}/api/auth/login`, { data: credentials });
-  expect(response.ok()).toBeTruthy();
-  const payload = (await response.json()) as {
-    hotel_id: number;
-    user: { email: string };
-    access_token: string;
-    csrf_token?: string;
-  };
-  return {
-    hotelId: payload.hotel_id,
-    userId: payload.user.email,
-    accessToken: payload.access_token,
-    csrfToken: payload.csrf_token
-  };
 }
 
 async function operationalNavigation(page: Page): Promise<Locator> {
@@ -244,29 +219,23 @@ test("owner receives the financial report", async ({ page }) => {
   await expect(page.getByTestId("financial-report")).toBeVisible();
 });
 
-test("owner can grant receptionist rates read without granting rate edits", async ({ page, request }) => {
-  const owner: Persona = {
-    label: "owner",
-    email: process.env.E2E_OWNER_EMAIL || "owner@e2e.com",
-    password: process.env.E2E_OWNER_PASSWORD || "E2ePass1234!",
-    landingPath: "/dashboard",
-    allowedPath: "/reportes",
-    allowedHeading: /^Reportes$/,
-    forbiddenNavPaths: []
-  };
+test("owner can grant receptionist rates read without granting rate edits", async ({ page, request }, testInfo) => {
+  // Login, grant, and cleanup each consume a distinct TOTP counter. Cleanup
+  // can wait for the next valid 30-second counter after the action ticket.
+  test.setTimeout(90_000);
   const receptionist = personas.find((persona) => persona.label === "receptionist")!;
 
-  await login(page, owner);
-  const ownerSession = await readApiSession(request, owner);
-  const headers = {
-    "X-Hotel-Id": String(ownerSession.hotelId),
-    "X-User-Id": ownerSession.userId,
-    Authorization: `Bearer ${ownerSession.accessToken}`,
-    "X-CSRF-Token": String(ownerSession.csrfToken || ""),
-    "Content-Type": "application/json"
-  };
+  const ownerSession = await loginAsStepUpOwner(page, "rbac", testInfo.project.name);
+  let lastTotpStep = ownerSession.lastTotpStep;
+  const headers = stepUpAuthHeaders(ownerSession.auth);
+  const grantTicket = await issueStepUpTicket(request, ownerSession.auth, {
+    permissionCode: "permissions:manage",
+    method: "PUT",
+    path: "/api/permissions/override"
+  }, lastTotpStep);
+  lastTotpStep = grantTicket.lastTotpStep;
   const grantResponse = await request.put(`${backendURL}/api/permissions/override`, {
-    headers,
+    headers: { ...headers, "X-Action-Step-Up-Ticket": grantTicket.ticket },
     data: { role: "receptionist", permission_code: "rates:read", allowed: true }
   });
   expect(grantResponse.ok()).toBeTruthy();
@@ -285,9 +254,14 @@ test("owner can grant receptionist rates read without granting rate edits", asyn
     await expect(page.getByTestId("rate-editor-save")).toBeDisabled();
     await expect(page.getByTestId("rate-editor-grid").locator("input").first()).toBeDisabled();
   } finally {
+    const restoreTicket = await issueStepUpTicket(request, ownerSession.auth, {
+      permissionCode: "permissions:manage",
+      method: "DELETE",
+      path: "/api/permissions/role-overrides/receptionist/rates:read"
+    }, lastTotpStep);
     const restoreResponse = await request.delete(
-      `${backendURL}/api/permissions/role-overrides/receptionist/${encodeURIComponent("rates:read")}?expected_version=${grant.version}`,
-      { headers }
+      `${backendURL}/api/permissions/role-overrides/receptionist/rates:read?expected_version=${grant.version}`,
+      { headers: { ...headers, "X-Action-Step-Up-Ticket": restoreTicket.ticket } }
     );
     expect(restoreResponse.ok()).toBeTruthy();
   }
@@ -296,22 +270,13 @@ test("owner can grant receptionist rates read without granting rate edits", asyn
   await expect(page).toHaveURL(/\/dashboard$/);
 });
 
-test("permissions screen shows the catalog help text in an InfoTip", async ({ page }) => {
-  const owner: Persona = {
-    label: "owner",
-    email: process.env.E2E_OWNER_EMAIL || "owner@e2e.com",
-    password: process.env.E2E_OWNER_PASSWORD || "E2ePass1234!",
-    landingPath: "/dashboard",
-    allowedPath: "/reportes",
-    allowedHeading: /^Reportes$/,
-    forbiddenNavPaths: []
-  };
-
-  await login(page, owner);
+test("permissions screen shows the catalog help text in an InfoTip", async ({ page }, testInfo) => {
+  const ownerSession = await loginAsStepUpOwner(page, "rbac", testInfo.project.name);
   const catalogResponsePromise = page.waitForResponse(
     (response) => new URL(response.url()).pathname === "/api/permissions/catalog" && response.ok()
   );
   await page.goto("/settings/permissions");
+  await completeStepUpPrompt(page, ownerSession.lastTotpStep, ownerSession.auth.user.email);
   const catalogResponse = await catalogResponsePromise;
   const catalog = (await catalogResponse.json()) as {
     permissions: Array<{ description: string; help_es: string }>;

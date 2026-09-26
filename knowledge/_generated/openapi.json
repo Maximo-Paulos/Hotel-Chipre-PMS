@@ -11287,7 +11287,15 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AuthResponse"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/AuthResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/MfaChallengeResponse"
+                    }
+                  ],
+                  "title": "Response Accept Invitation Api Invitations Accept Post"
                 }
               }
             }
@@ -11349,6 +11357,56 @@
               }
             }
           }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/AuthResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/MfaChallengeResponse"
+                    }
+                  ],
+                  "title": "Response Accept Invitation Legacy Path Api Invitations  Token  Accept Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/invitations/accept/mfa": {
+      "post": {
+        "tags": [
+          "Invitations"
+        ],
+        "summary": "Complete Invitation Mfa Acceptance",
+        "description": "Complete a separately scoped MFA proof and consume exactly its invitation.",
+        "operationId": "complete_invitation_mfa_acceptance_api_invitations_accept_mfa_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvitationMfaAcceptPayload"
+              }
+            }
+          },
+          "required": true
         },
         "responses": {
           "200": {
@@ -15245,6 +15303,47 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/LeadCreateResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/public/inquiries": {
+      "post": {
+        "tags": [
+          "Public Inquiries"
+        ],
+        "summary": "Submit Public Inquiry",
+        "operationId": "submit_public_inquiry_api_public_inquiries_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublicInquiryCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicInquiryAccepted"
                 }
               }
             }
@@ -35040,7 +35139,7 @@
             "anyOf": [
               {
                 "type": "string",
-                "minLength": 12
+                "maxLength": 256
               },
               {
                 "type": "null"
@@ -35053,6 +35152,18 @@
             "maxLength": 512,
             "minLength": 1,
             "title": "Token"
+          },
+          "current_password": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 256
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Password"
           }
         },
         "type": "object",
@@ -44595,6 +44706,34 @@
         ],
         "title": "IntegrationStatusResponse"
       },
+      "InvitationMfaAcceptPayload": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Token"
+          },
+          "mfa_token": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Mfa Token"
+          },
+          "code": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "token",
+          "mfa_token",
+          "code"
+        ],
+        "title": "InvitationMfaAcceptPayload"
+      },
       "InvitationTokenPayload": {
         "properties": {
           "token": {
@@ -48739,13 +48878,25 @@
             "anyOf": [
               {
                 "type": "string",
-                "minLength": 12
+                "maxLength": 256
               },
               {
                 "type": "null"
               }
             ],
             "title": "Password"
+          },
+          "current_password": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 256
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Password"
           }
         },
         "type": "object",
@@ -51107,6 +51258,93 @@
           "max_occupancy"
         ],
         "title": "PublicCategoryRead"
+      },
+      "PublicInquiryAccepted": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "default": "accepted"
+          }
+        },
+        "type": "object",
+        "title": "PublicInquiryAccepted"
+      },
+      "PublicInquiryCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email"
+          },
+          "company_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Name"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
+          "message": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Message"
+          },
+          "source_path": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Source Path",
+            "default": "/contacto"
+          },
+          "privacy_consent": {
+            "type": "boolean",
+            "title": "Privacy Consent"
+          },
+          "website": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Website"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "email",
+          "message",
+          "privacy_consent"
+        ],
+        "title": "PublicInquiryCreate"
       },
       "PublicPaymentLinkCreate": {
         "properties": {

@@ -18,7 +18,7 @@ test("owner can invite reception and revoke every current session from the secur
 
   await page.goto("/settings/users");
   await expect(page.getByRole("heading", { name: "Usuarios y roles", exact: true })).toBeVisible();
-  const invitationRole = page.getByLabel("Rol de invitación");
+  const invitationRole = page.getByLabel("Rol para invitar");
   await expect(invitationRole.locator('option[value="receptionist"]')).toHaveText("Recepción");
 
   await page.goto("/settings/security");

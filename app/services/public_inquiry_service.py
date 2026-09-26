@@ -138,6 +138,10 @@ def create_public_inquiry(
         db.commit()
         raise PublicInquiryRateLimitError
 
+    # Persist the consumed budgets and release their transaction locks before
+    # creating PII records or making any provider call.
+    db.commit()
+
     # Return the same public response for honeypot submissions, but persist
     # nothing. Run the limiter first so repeatedly probing the form is bounded.
     if (payload.website or "").strip():

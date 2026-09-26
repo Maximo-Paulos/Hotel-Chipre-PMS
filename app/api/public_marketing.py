@@ -50,6 +50,7 @@ def create_lead(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Demasiados intentos. Probá de nuevo en unos minutos.",
         )
+    db.commit()
 
     marketing_service.record_lead(
         db,

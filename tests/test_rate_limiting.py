@@ -1,5 +1,6 @@
 ﻿# -*- coding: utf-8 -*-
 from concurrent.futures import ThreadPoolExecutor
+from types import SimpleNamespace
 from threading import Barrier
 
 import pytest
@@ -95,14 +96,14 @@ def authed_client(client_with_db):
         fastapi_app.dependency_overrides.clear()
 
 
-def test_request_reset_rate_limited(client_with_db):
+def test_request_reset_rate_limited(client_with_db, monkeypatch):
     client, db = client_with_db
     email = "reset@test.com"
     user = User(email=email, password_hash=hash_password("pw"), role="owner", is_verified=True, is_active=True)
     db.add(user)
     db.commit()
 
-    reset_request_limiter.limit = 2
+    monkeypatch.setattr(reset_request_limiter, "limit", 2)
     reset_request_limiter.reset(email, db=db)
     db.commit()
     try:
@@ -118,14 +119,14 @@ def test_request_reset_rate_limited(client_with_db):
     assert r3.status_code == 429
 
 
-def test_request_verify_rate_limited(client_with_db):
+def test_request_verify_rate_limited(client_with_db, monkeypatch):
     client, db = client_with_db
     email = "verify@test.com"
     user = User(email=email, password_hash=hash_password("pw"), role="owner", is_verified=False, is_active=True)
     db.add(user)
     db.commit()
 
-    verify_request_limiter.limit = 2
+    monkeypatch.setattr(verify_request_limiter, "limit", 2)
     verify_request_limiter.reset(email, db=db)
     db.commit()
     try:
@@ -141,7 +142,7 @@ def test_request_verify_rate_limited(client_with_db):
     assert r3.status_code == 429
 
 
-def test_verify_email_code_guessing_is_rate_limited(client_with_db):
+def test_verify_email_code_guessing_is_rate_limited(client_with_db, monkeypatch):
     """Guessing the 6-digit verification code must itself be throttled, not
     just requests for a new code."""
     client, db = client_with_db
@@ -150,7 +151,7 @@ def test_verify_email_code_guessing_is_rate_limited(client_with_db):
     db.add(user)
     db.commit()
 
-    code_guess_limiter.limit = 3
+    monkeypatch.setattr(code_guess_limiter, "limit", 3)
     code_guess_limiter.reset("email_verification:" + email, db=db)
     db.commit()
     try:
@@ -166,7 +167,7 @@ def test_verify_email_code_guessing_is_rate_limited(client_with_db):
     assert responses[3].status_code == 429
 
 
-def test_reset_password_code_guessing_is_rate_limited_and_shared_with_validate(client_with_db):
+def test_reset_password_code_guessing_is_rate_limited_and_shared_with_validate(client_with_db, monkeypatch):
     """validate-reset (no-op check) and reset-password (consumes the code)
     guess the same password_reset code, so they must share one attempt
     budget - otherwise validate-reset alone lets an attacker brute force
@@ -177,7 +178,7 @@ def test_reset_password_code_guessing_is_rate_limited_and_shared_with_validate(c
     db.add(user)
     db.commit()
 
-    code_guess_limiter.limit = 3
+    monkeypatch.setattr(code_guess_limiter, "limit", 3)
     code_guess_limiter.reset("password_reset:" + email, db=db)
     db.commit()
     try:
@@ -201,13 +202,13 @@ def test_reset_password_code_guessing_is_rate_limited_and_shared_with_validate(c
     assert r4.status_code == 429
 
 
-def test_register_is_rate_limited_by_source(client_with_db):
+def test_register_is_rate_limited_by_source(client_with_db, monkeypatch):
     """Registration had no throttle at all: an attacker could farm unlimited
     accounts / spam verification emails to arbitrary distinct addresses from
     a single source with no cap."""
     client, db = client_with_db
 
-    register_limiter.limit = 3
+    monkeypatch.setattr(register_limiter, "limit", 3)
     register_limiter.reset("testclient", db=db)
     db.commit()
     try:
@@ -226,10 +227,10 @@ def test_register_is_rate_limited_by_source(client_with_db):
     assert responses[3].status_code == 429
 
 
-def test_invite_rate_limited(authed_client):
+def test_invite_rate_limited(authed_client, monkeypatch):
     client, db, ctx = authed_client
     invite_key = f"user:{ctx['user_id']}"
-    invite_limiter.limit = 1
+    monkeypatch.setattr(invite_limiter, "limit", 1)
     invite_limiter.reset(invite_key, db=db)
     db.commit()
 
@@ -244,12 +245,10 @@ def test_invite_rate_limited(authed_client):
     assert r2.status_code == 429
 
 
-def test_invitation_preview_and_acceptance_are_rate_limited(client_with_db):
+def test_invitation_preview_and_acceptance_are_rate_limited(client_with_db, monkeypatch):
     client, db = client_with_db
-    preview_limit = invitation_preview_limiter.limit
-    accept_limit = invitation_accept_limiter.limit
-    invitation_preview_limiter.limit = 1
-    invitation_accept_limiter.limit = 1
+    monkeypatch.setattr(invitation_preview_limiter, "limit", 1)
+    monkeypatch.setattr(invitation_accept_limiter, "limit", 1)
     invitation_preview_limiter.reset("testclient", db=db)
     invitation_accept_limiter.reset("testclient", db=db)
     db.commit()
@@ -281,8 +280,6 @@ def test_invitation_preview_and_acceptance_are_rate_limited(client_with_db):
         invitation_preview_limiter.reset("testclient", db=db)
         invitation_accept_limiter.reset("testclient", db=db)
         db.commit()
-        invitation_preview_limiter.limit = preview_limit
-        invitation_accept_limiter.limit = accept_limit
 
     # A garbage token is invalid, not an authentication failure -- the new
     # persisted-invitation lookup (TECH-0031) reports "not found" as 400,
@@ -317,7 +314,7 @@ def test_concurrent_db_requests_record_each_attempt_before_deciding(tmp_path):
         with ThreadPoolExecutor(max_workers=request_count) as executor:
             results = list(executor.map(lambda _unused: allow_request(), range(request_count)))
 
-        assert sum(results) <= limiter.limit
+        assert sum(results) == limiter.limit
 
         with SessionLocal() as session:
             recorded_attempts = (
@@ -332,3 +329,47 @@ def test_concurrent_db_requests_record_each_attempt_before_deciding(tmp_path):
     finally:
         Base.metadata.drop_all(bind=engine, tables=[RateLimitEvent.__table__])
         engine.dispose()
+
+
+def test_postgres_rate_limiter_serializes_and_does_not_store_denials(monkeypatch):
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(bind=engine, tables=[RateLimitEvent.__table__])
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    limiter = SimpleRateLimiter("postgres-lock-test", limit=2)
+    observed_locks: list[tuple[str, int]] = []
+
+    with SessionLocal() as session:
+        get_bind = session.get_bind
+
+        def postgres_limiter_bind(*args, **kwargs):
+            # The limiter asks for the dialect without a mapper/clause; ORM
+            # statements still use the real SQLite bind for this unit test.
+            if not args and not kwargs:
+                return SimpleNamespace(dialect=SimpleNamespace(name="postgresql"))
+            return get_bind(*args, **kwargs)
+
+        monkeypatch.setattr(session, "get_bind", postgres_limiter_bind)
+        execute = session.execute
+
+        def intercept_lock(statement, params=None, **kwargs):
+            sql = str(statement)
+            if "pg_advisory_xact_lock" in sql:
+                observed_locks.append((sql, int(params["lock_id"])))
+                return None
+            return execute(statement, params=params, **kwargs)
+
+        monkeypatch.setattr(session, "execute", intercept_lock)
+        assert limiter.allow("hotel-and-email-hash", db=session)
+        assert limiter.allow("hotel-and-email-hash", db=session)
+        assert not limiter.allow("hotel-and-email-hash", db=session)
+        session.commit()
+        assert session.query(RateLimitEvent).filter_by(scope="postgres-lock-test").count() == 2
+        limiter.reset("hotel-and-email-hash", db=session)
+        session.commit()
+        assert session.query(RateLimitEvent).filter_by(scope="postgres-lock-test").count() == 0
+
+    assert len(observed_locks) == 4
+    assert all("pg_advisory_xact_lock(:lock_id)" in sql for sql, _lock_id in observed_locks)
+    assert len({lock_id for _sql, lock_id in observed_locks}) == 1
+    Base.metadata.drop_all(bind=engine, tables=[RateLimitEvent.__table__])
+    engine.dispose()

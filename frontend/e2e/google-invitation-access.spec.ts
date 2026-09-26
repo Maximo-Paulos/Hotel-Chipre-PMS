@@ -272,6 +272,13 @@ test("owner can invite with an alias, share an undelivered link, and edit the te
         { user_id: 8, email: staffEmail, role: "manager", status: "active", alias: staffAlias }
       ] });
     }
+    if (method === "GET" && path === "/api/roles") {
+      return json({ roles: [
+        { code: "manager", name: "Gerencia", kind: "builtin", base_role: "manager", is_active: true },
+        { code: "receptionist", name: "Recepción", kind: "builtin", base_role: "receptionist", is_active: true },
+        { code: "housekeeping", name: "Limpieza", kind: "builtin", base_role: "housekeeping", is_active: true }
+      ] });
+    }
     if (method === "POST" && path === "/api/users/invite") {
       return json({
         user: { id: 9, email: "new-staff@example.test", role: "receptionist", is_verified: false, is_active: false, password_login_enabled: false, permissions: [] },
@@ -297,6 +304,7 @@ test("owner can invite with an alias, share an undelivered link, and edit the te
   await page.getByRole("link", { name: "Usuarios", exact: true }).click();
 
   await expect(page.getByRole("heading", { name: "Usuarios y roles" })).toBeVisible();
+  await expect(page.getByLabel("Rol para invitar").locator('option[value="receptionist"]')).toHaveText("Recepción");
   await expect(page.getByText(staffEmail)).toBeVisible();
   await expect(page.getByText("Turno noche")).toBeVisible();
 

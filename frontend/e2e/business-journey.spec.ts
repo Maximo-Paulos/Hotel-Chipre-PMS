@@ -249,6 +249,9 @@ test("owner completes the core reservation journey through the UI", async ({ pag
   await closeCashForm.getByRole("button", { name: "Cerrar caja", exact: true }).click();
   await expect(page.getByText("Caja cerrada.", { exact: true })).toBeVisible();
   await expect(page.getByText(/Caja sucesora: .* abierta con saldo \$0/)).toBeVisible();
+  await expect(page.getByText(/Custodia: pendiente de recepción del dueño\./)).toBeVisible();
+  await page.getByRole("button", { name: "Confirmar recepción de custodia", exact: true }).click();
+  await expect(page.getByText("Recepción de custodia confirmada.", { exact: true })).toBeVisible();
   await expect(page.getByText(/Custodia: recepción confirmada\./)).toBeVisible();
 });
 

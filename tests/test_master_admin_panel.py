@@ -277,6 +277,63 @@ def test_master_login_bootstraps_env_account(master_client, monkeypatch):
         db.close()
 
 
+def test_master_bootstrap_wrong_pin_does_not_create_account(master_client, monkeypatch):
+    client, SessionLocal = master_client
+    monkeypatch.setenv("MASTER_ADMIN_EMAIL", "bootstrap-no-create@example.com")
+    monkeypatch.setenv("MASTER_ADMIN_PASSWORD", "Bootstrap123!")
+    monkeypatch.setenv("MASTER_ADMIN_PIN", "654321")
+    get_settings.cache_clear()
+
+    response = client.post(
+        "/api/master-admin/auth/login",
+        json={"email": "bootstrap-no-create@example.com", "password": "Bootstrap123!", "pin": "000000"},
+    )
+    assert response.status_code == 401, response.text
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.email == "bootstrap-no-create@example.com").first()
+        assert user is None
+    finally:
+        db.close()
+
+
+def test_master_bootstrap_wrong_pin_does_not_mutate_existing_admin(master_client, monkeypatch):
+    client, SessionLocal = master_client
+    monkeypatch.setenv("MASTER_ADMIN_EMAIL", "bootstrap-existing-admin@example.com")
+    monkeypatch.setenv("MASTER_ADMIN_PASSWORD", "Bootstrap123!")
+    monkeypatch.setenv("MASTER_ADMIN_PIN", "654321")
+    get_settings.cache_clear()
+
+    db = SessionLocal()
+    try:
+        admin = User(
+            email="bootstrap-existing-admin@example.com",
+            password_hash=hash_password("OriginalAdminPass123!"),
+            is_active=False,
+            is_verified=False,
+            role="platform_admin",
+        )
+        db.add(admin)
+        db.commit()
+        original = (admin.email, admin.password_hash, admin.is_active, admin.is_verified, admin.role)
+    finally:
+        db.close()
+
+    response = client.post(
+        "/api/master-admin/auth/login",
+        json={"email": "bootstrap-existing-admin@example.com", "password": "Bootstrap123!", "pin": "000000"},
+    )
+    assert response.status_code == 401, response.text
+
+    db = SessionLocal()
+    try:
+        admin = db.query(User).filter(User.email == "bootstrap-existing-admin@example.com").one()
+        assert (admin.email, admin.password_hash, admin.is_active, admin.is_verified, admin.role) == original
+    finally:
+        db.close()
+
+
 def test_master_audit_redacts_sensitive_metadata_on_storage_and_read(master_client, monkeypatch):
     client, SessionLocal = master_client
     monkeypatch.setenv("MASTER_ADMIN_PIN", "654321")

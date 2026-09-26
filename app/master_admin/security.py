@@ -322,6 +322,7 @@ def authenticate_master_login(db: Session, email: str, password: str, pin: str) 
     if not login_limiter.allow(f"master:{normalized}", db=db):
         db.commit()
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Demasiados intentos. Espera unos minutos.")
+    db.commit()
 
     user = db.query(User).filter(User.email.ilike(email)).first()
     bootstrap_master = _bootstrap_master_credentials_match(email, password)
@@ -337,6 +338,29 @@ def authenticate_master_login(db: Session, email: str, password: str, pin: str) 
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Credenciales invalidas",
             )
+    else:
+        if not user:
+            register_login_failure(db, normalized, "user_not_found")
+            db.commit()
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Credenciales invalidas")
+
+        _authorize_user_for_master_panel(user)
+
+        if not verify_password(password, user.password_hash):
+            register_login_failure(db, normalized, "bad_password")
+            db.commit()
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Credenciales invalidas")
+
+    # Do not create or mutate the bootstrap account until every bootstrap
+    # factor, including the PIN, has been validated. The failure path commits
+    # lockout state, so any earlier User changes would otherwise persist on a
+    # rejected login.
+    if not _pin_matches(pin):
+        register_login_failure(db, normalized, "bad_pin")
+        db.commit()
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="PIN invalido")
+
+    if bootstrap_master:
         if not user:
             user = User(
                 email=_normalize_identifier(email),
@@ -352,23 +376,6 @@ def authenticate_master_login(db: Session, email: str, password: str, pin: str) 
         user.is_active = True
         user.is_verified = True
         user.role = "platform_admin"
-    else:
-        if not user:
-            register_login_failure(db, normalized, "user_not_found")
-            db.commit()
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Credenciales invalidas")
-
-        _authorize_user_for_master_panel(user)
-
-        if not verify_password(password, user.password_hash):
-            register_login_failure(db, normalized, "bad_password")
-            db.commit()
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Credenciales invalidas")
-
-    if not _pin_matches(pin):
-        register_login_failure(db, normalized, "bad_pin")
-        db.commit()
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="PIN invalido")
 
     reset_login_lockout(db, normalized)
     login_limiter.reset(f"master:{normalized}", db=db)

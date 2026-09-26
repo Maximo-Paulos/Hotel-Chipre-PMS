@@ -438,6 +438,9 @@ def _accept_invitation(
             if not login_limiter.allow(login_key, db=db):
                 db.commit()
                 raise HTTPException(status_code=429, detail="Demasiados intentos. Espera e intenta de nuevo.")
+            # Charge and release the serialized rate-limit bucket before the
+            # deliberately expensive password verification.
+            db.commit()
             if not verify_password(current_password, user.password_hash):
                 db.commit()
                 raise HTTPException(status_code=401, detail="Credenciales invalidas")

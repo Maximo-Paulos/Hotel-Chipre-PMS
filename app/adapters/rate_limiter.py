@@ -7,8 +7,10 @@ fallback for utility code that does not pass a session.
 """
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
+import hashlib
 from threading import Lock
 
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.models.rate_limit_event import RateLimitEvent
@@ -42,6 +44,10 @@ class SimpleRateLimiter:
     def reset(self, key: str, db: Session | None = None) -> None:
         normalized_key = self._normalize_key(key)
         if db is not None:
+            if db.get_bind().dialect.name == "postgresql":
+                # Serialize a successful-auth reset with concurrent attempts
+                # against the same bucket, just like allow().
+                self._acquire_postgres_bucket_lock(normalized_key, db)
             db.query(RateLimitEvent).filter(
                 RateLimitEvent.scope == self.scope,
                 RateLimitEvent.subject_key == normalized_key,
@@ -53,18 +59,52 @@ class SimpleRateLimiter:
             if normalized_key in self._buckets:
                 self._buckets.pop(normalized_key, None)
 
+    def _acquire_postgres_bucket_lock(self, key: str, db: Session) -> None:
+        lock_id = int.from_bytes(
+            hashlib.sha256(f"{self.scope}\0{key}".encode("utf-8")).digest()[:8],
+            byteorder="big",
+            signed=True,
+        )
+        db.execute(text("SELECT pg_advisory_xact_lock(:lock_id)"), {"lock_id": lock_id})
+
     def _allow_db(self, key: str, db: Session, limit: int) -> bool:
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         cutoff = now - self.window
+        postgres_transaction_lock = db.get_bind().dialect.name == "postgresql"
+        if postgres_transaction_lock:
+            # A row count alone is not atomic under PostgreSQL READ COMMITTED:
+            # concurrent transactions can each miss the other's uncommitted
+            # insert and all be admitted. Serialize each scope/key bucket for
+            # this transaction before counting. Hash collisions only cause
+            # harmless extra serialization; the full key still scopes rows.
+            self._acquire_postgres_bucket_lock(key, db)
         db.query(RateLimitEvent).filter(
             RateLimitEvent.scope == self.scope,
             RateLimitEvent.subject_key == key,
             RateLimitEvent.created_at < cutoff,
         ).delete(synchronize_session=False)
+
+        if postgres_transaction_lock:
+            # Under the bucket lock, count before inserting so requests already
+            # over the limit do not grow the event table during an abuse burst.
+            active_count = (
+                db.query(RateLimitEvent)
+                .filter(
+                    RateLimitEvent.scope == self.scope,
+                    RateLimitEvent.subject_key == key,
+                    RateLimitEvent.created_at >= cutoff,
+                )
+                .count()
+            )
+            if active_count >= limit:
+                return False
+            db.add(RateLimitEvent(scope=self.scope, subject_key=key))
+            db.flush()
+            return True
+
         db.add(RateLimitEvent(scope=self.scope, subject_key=key))
         db.flush()
-        # Insert-first narrows the race window; under READ COMMITTED, perfectly
-        # simultaneous transactions can still miss each other's uncommitted rows.
+        # SQLite serializes writers while this transaction is active.
         active_count = (
             db.query(RateLimitEvent)
             .filter(

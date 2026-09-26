@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { completeStepUpPrompt, loginAsStepUpOwner } from "./support/step-up-owner";
+
 const credentials = {
   email: process.env.E2E_OWNER_EMAIL || "owner@e2e.com",
   password: process.env.E2E_OWNER_PASSWORD || "E2ePass1234!"
@@ -22,8 +24,8 @@ function parseMoney(text: string) {
   return Number(text.replace(/[^0-9,.-]/g, "").replace(/\./g, "").replace(",", "."));
 }
 
-test("owner controls manual cash movements, approves an arqueo difference and confirms custody", async ({ page }) => {
-  await login(page);
+test("owner controls manual cash movements, approves an arqueo difference and confirms custody", async ({ page }, testInfo) => {
+  const ownerSession = await loginAsStepUpOwner(page, "cash", testInfo.project.name);
   // The "Abrir caja" button starts enabled optimistically and only flips to
   // "Ya hay una caja abierta" once GET /api/cash-register/sessions resolves
   // (CashRegisterPage derives openSession from an initially-empty sessions
@@ -74,8 +76,12 @@ test("owner controls manual cash movements, approves an arqueo difference and co
   await expect(page.getByText(/Estado: pendiente de aprobación/, { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "Aprobar diferencia", exact: true }).last().click();
+  const lastTotpStep = await completeStepUpPrompt(page, ownerSession.lastTotpStep, ownerSession.auth.user.email);
   await expect(page.getByText("Diferencia aprobada.", { exact: true })).toBeVisible();
-  await expect(page.getByText("Custodia: recepción confirmada.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Custodia: pendiente de recepción del dueño.", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Confirmar recepción de custodia", exact: true }).click();
+  await expect(page.getByText("Recepción de custodia confirmada.", { exact: true })).toBeVisible();
+  expect(lastTotpStep).toBeGreaterThan(ownerSession.lastTotpStep);
   await expect(page.getByText(/Caja sucesora: .* abierta con saldo \$0/)).toBeVisible();
 });
 

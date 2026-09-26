@@ -100,6 +100,15 @@ def _role_credentials(env: MutableMapping[str, str] | None = None) -> dict[str, 
     }
 
 
+def _step_up_test_projects() -> tuple[str, ...]:
+    return (
+        "chromium",
+        "webkit-iphone-15-business",
+        "webkit-iphone-se-business",
+        "webkit-iphone-15-pro-max-business",
+    )
+
+
 def run_migrations() -> None:
     prepare_e2e_environment()
     print("Running local E2E database migrations", file=sys.stderr, flush=True)
@@ -186,6 +195,47 @@ def upsert_seed_data() -> None:
             db.add(membership)
         membership.role = "owner"
         membership.status = "active"
+
+        # Keep the normal owner fixture MFA-free for broad UI journeys. These
+        # separate synthetic owners exercise the MFA-required RBAC reads and
+        # cash-difference approval flows without sharing replay counters across
+        # Playwright projects that run concurrently.
+        step_up_password = os.environ.get("E2E_STEP_UP_OWNER_PASSWORD", "E2eStepUp1234!")
+        step_up_secret = os.environ.get(
+            "E2E_STEP_UP_OWNER_TOTP_SECRET",
+            "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP",
+        )
+        for purpose in ("cash", "rbac"):
+            for project_name in _step_up_test_projects():
+                step_up_email = f"owner-stepup-{purpose}+{project_name}@e2e.com"
+                step_up_user = db.query(User).filter(User.email.ilike(step_up_email)).first()
+                if step_up_user is None:
+                    step_up_user = User(email=step_up_email)
+                    db.add(step_up_user)
+                step_up_user.password_hash = hash_password(step_up_password)
+                step_up_user.is_active = True
+                step_up_user.is_verified = True
+                step_up_user.role = "owner"
+                db.flush()
+
+                step_up_membership = (
+                    db.query(HotelMembership)
+                    .filter(HotelMembership.hotel_id == 1, HotelMembership.user_id == step_up_user.id)
+                    .first()
+                )
+                if step_up_membership is None:
+                    step_up_membership = HotelMembership(hotel_id=1, user_id=step_up_user.id)
+                    db.add(step_up_membership)
+                step_up_membership.role = "owner"
+                step_up_membership.status = "active"
+
+                step_up_mfa = db.query(UserMfaSecret).filter(UserMfaSecret.user_id == step_up_user.id).first()
+                if step_up_mfa is None:
+                    step_up_mfa = UserMfaSecret(user_id=step_up_user.id, encrypted_secret="")
+                    db.add(step_up_mfa)
+                step_up_mfa.encrypted_secret = encrypt_totp_secret(step_up_secret)
+                step_up_mfa.status = MFA_ACTIVE
+                step_up_mfa.confirmed_at = step_up_mfa.confirmed_at or now
 
         staff_members = [{"name": "Owner E2E", "email": owner_email, "role": "owner"}]
         for role, (email, password) in role_credentials.items():

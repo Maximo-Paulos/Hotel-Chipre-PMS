@@ -67,6 +67,8 @@ process.env.E2E_EMAIL_OUTBOX_PATH = emailOutboxPath;
 // codes from the same value.
 const masterAdminTotpSecret = process.env.E2E_MASTER_ADMIN_TOTP_SECRET || "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP";
 process.env.E2E_MASTER_ADMIN_TOTP_SECRET = masterAdminTotpSecret;
+const stepUpOwnerTotpSecret = process.env.E2E_STEP_UP_OWNER_TOTP_SECRET || masterAdminTotpSecret;
+process.env.E2E_STEP_UP_OWNER_TOTP_SECRET = stepUpOwnerTotpSecret;
 
 export default defineConfig({
   testDir: "./e2e",
@@ -207,7 +209,9 @@ export default defineConfig({
         E2E_RECEPTIONIST_EMAIL: process.env.E2E_RECEPTIONIST_EMAIL || "receptionist@e2e.com",
         E2E_RECEPTIONIST_PASSWORD: process.env.E2E_RECEPTIONIST_PASSWORD || "E2eReception1234!",
         E2E_HOUSEKEEPING_EMAIL: process.env.E2E_HOUSEKEEPING_EMAIL || "housekeeping@e2e.com",
-        E2E_HOUSEKEEPING_PASSWORD: process.env.E2E_HOUSEKEEPING_PASSWORD || "E2eHousekeeping1234!"
+        E2E_HOUSEKEEPING_PASSWORD: process.env.E2E_HOUSEKEEPING_PASSWORD || "E2eHousekeeping1234!",
+        E2E_STEP_UP_OWNER_PASSWORD: process.env.E2E_STEP_UP_OWNER_PASSWORD || "E2eStepUp1234!",
+        E2E_STEP_UP_OWNER_TOTP_SECRET: stepUpOwnerTotpSecret
       }
     },
     {
