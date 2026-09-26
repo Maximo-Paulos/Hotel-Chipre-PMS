@@ -57,8 +57,8 @@ export function TermsPage() {
             </li>
             <li>
               Podés acceder con correo y contraseña, con &laquo;Continuar con
-              Google&raquo; o con &laquo;Continuar con Apple&raquo;. Si usás el mismo
-              correo en distintos métodos, todos quedan vinculados a la misma cuenta.
+              Google&raquo;. Si usás el mismo correo en ambos métodos, ambos quedan
+              vinculados a la misma cuenta.
             </li>
             <li>
               Recomendamos activar el segundo factor de autenticación (MFA) en las cuentas

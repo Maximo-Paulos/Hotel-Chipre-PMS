@@ -145,7 +145,7 @@ export function PrivacyPage() {
             </li>
             <li>
               Consultas de contacto y leads de acceso temprano: <strong>90 días</strong>
-              desde su recepción o última actualización, mediante borrado automático,
+              {" "}desde su recepción o última actualización, mediante borrado automático,
               salvo obligación legal aplicable.
             </li>
             <li>
