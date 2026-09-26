@@ -27,6 +27,10 @@ class PublicInquiryRateLimitError(RuntimeError):
     """Raised when one public source exceeds its inquiry budget."""
 
 
+class PublicInquiryUnavailableError(RuntimeError):
+    """Raised when inquiries cannot be routed to a configured recipient."""
+
+
 def _digest_key(value: str, secret: str) -> str:
     return hmac.new(secret.encode("utf-8"), value.encode("utf-8"), hashlib.sha256).hexdigest()
 
@@ -113,6 +117,10 @@ def create_public_inquiry(
     db: Session, payload: PublicInquiryCreate, request: Request
 ) -> PublicInquiry | None:
     settings = app_config.get_settings()
+    recipient = str(getattr(settings, "PUBLIC_INQUIRY_RECIPIENT_EMAIL", "") or "").strip()
+    if not recipient:
+        raise PublicInquiryUnavailableError
+
     rate_limit = max(1, int(getattr(settings, "PUBLIC_INQUIRY_RATE_LIMIT", 5)))
     global_rate_limit = max(1, int(getattr(settings, "PUBLIC_INQUIRY_GLOBAL_RATE_LIMIT", 100)))
     hash_secret = str(getattr(settings, "JWT_SECRET", "") or "change-me")
@@ -150,6 +158,5 @@ def create_public_inquiry(
     db.commit()
     db.refresh(inquiry)
 
-    recipient = str(getattr(settings, "PUBLIC_INQUIRY_RECIPIENT_EMAIL", "") or "").strip()
     _notify_inquiry(db, inquiry, recipient)
     return inquiry

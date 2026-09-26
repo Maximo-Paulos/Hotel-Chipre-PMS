@@ -58,7 +58,9 @@ export function ContactPage() {
       }
       navigate("/gracias", { replace: true });
     } catch (requestError) {
-      if (requestError instanceof ApiError && requestError.status === 429) {
+      if (requestError instanceof ApiError && requestError.status === 503) {
+        setError("El formulario no está disponible temporalmente y tu consulta no se guardó. Intentá nuevamente más tarde.");
+      } else if (requestError instanceof ApiError && requestError.status === 429) {
         setError("Recibimos demasiadas consultas seguidas. Intentá nuevamente más tarde.");
       } else {
         setError("No pudimos enviar tu consulta. Revisá los datos e intentá nuevamente.");

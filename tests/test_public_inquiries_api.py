@@ -338,7 +338,7 @@ def test_public_inquiry_collapses_newlines_in_single_line_email_fields(inquiry_c
     assert "\nEmail: forged@example.com\n" not in sent[0]
 
 
-def test_public_inquiry_does_not_attempt_email_without_recipient(inquiry_client):
+def test_public_inquiry_is_not_stored_when_notification_recipient_is_unconfigured(inquiry_client):
     client, db, monkeypatch = inquiry_client
     settings = _configured_settings()
     settings.PUBLIC_INQUIRY_RECIPIENT_EMAIL = ""
@@ -350,5 +350,6 @@ def test_public_inquiry_does_not_attempt_email_without_recipient(inquiry_client)
 
     response = client.post("/api/public/inquiries", json=_payload())
 
-    assert response.status_code == 201, response.text
-    assert _inquiry_rows(db)[0]["notification_status"] == "not_configured"
+    assert response.status_code == 503, response.text
+    assert _inquiry_rows(db) == []
+    assert db.query(RateLimitEvent).count() == 0

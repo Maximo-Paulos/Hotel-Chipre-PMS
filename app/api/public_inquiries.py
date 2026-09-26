@@ -6,6 +6,7 @@ from app.database import get_db
 from app.schemas.public_inquiry import PublicInquiryAccepted, PublicInquiryCreate
 from app.services.public_inquiry_service import (
     PublicInquiryRateLimitError,
+    PublicInquiryUnavailableError,
     create_public_inquiry,
 )
 
@@ -20,6 +21,11 @@ def submit_public_inquiry(
 ):
     try:
         create_public_inquiry(db, payload, request)
+    except PublicInquiryUnavailableError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="El formulario de contacto no está disponible temporalmente. Intentá nuevamente más tarde.",
+        ) from exc
     except PublicInquiryRateLimitError as exc:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
