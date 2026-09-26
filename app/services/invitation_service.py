@@ -114,19 +114,27 @@ def is_expired(invitation: StaffInvitation, *, now: datetime | None = None) -> b
     return invitation.expires_at <= (now or utcnow())
 
 
-def consume_invitation(db: Session, invitation: StaffInvitation) -> bool:
+def consume_invitation(
+    db: Session,
+    invitation: StaffInvitation,
+    *,
+    expected_token_hash: str | None = None,
+) -> bool:
     """Atomically transition a pending invitation to accepted exactly once."""
 
     now = utcnow()
+    predicates = [
+        StaffInvitation.id == invitation.id,
+        StaffInvitation.status == "pending",
+        StaffInvitation.consumed_at.is_(None),
+        StaffInvitation.revoked_at.is_(None),
+        StaffInvitation.expires_at > now,
+    ]
+    if expected_token_hash is not None:
+        predicates.append(StaffInvitation.token_hash == expected_token_hash)
     consumed = db.execute(
         update(StaffInvitation)
-        .where(
-            StaffInvitation.id == invitation.id,
-            StaffInvitation.status == "pending",
-            StaffInvitation.consumed_at.is_(None),
-            StaffInvitation.revoked_at.is_(None),
-            StaffInvitation.expires_at > now,
-        )
+        .where(*predicates)
         .values(status="accepted", consumed_at=now, updated_at=now)
     )
     if consumed.rowcount != 1:

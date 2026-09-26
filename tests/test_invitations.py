@@ -26,14 +26,18 @@ from app.models.permission import UserPermissionOverride
 from app.models.audit_log import AuditLog
 from app.services.security import (
     create_access_token,
+    create_signed_token,
+    decode_signed_token,
     hash_password,
     verify_password,
 )
-from app.services.invitation_service import hash_invitation_token, issue_invitation
+from app.services.invitation_service import consume_invitation, hash_invitation_token, issue_invitation
 from app.services.user_lookup_service import find_user_by_email
 from app.services.user_session_service import create_session
 from app.models.user_session import UserSession
 from app.models.user_mfa import UserMfaSecret
+from app.models.rate_limit_event import RateLimitEvent
+from app.adapters.rate_limiter import login_limiter
 from app.services.mfa_service import MFA_ACTIVE, encrypt_totp_secret
 from app.services.action_step_up_service import create_action_step_up_ticket
 from app.dependencies.auth import AuthContext, _authenticate_user
@@ -191,6 +195,25 @@ def test_invite_returns_token_and_accepts(owner_ctx):
     assert replay.status_code == 400, replay.text
 
 
+def test_atomic_invitation_consumption_rejects_a_rotated_token_hash(owner_ctx):
+    _client, db, ctx = owner_ctx
+    email = "rotated-token-atomicity@test.com"
+    old_token = _invitation_token(db, ctx, email)
+    invitation = db.query(StaffInvitation).filter_by(
+        token_hash=hash_invitation_token(old_token)
+    ).one()
+    old_hash = invitation.token_hash
+    new_token = _invitation_token(db, ctx, email)
+    assert new_token != old_token
+    db.refresh(invitation)
+
+    assert invitation.token_hash == hash_invitation_token(new_token)
+    assert consume_invitation(db, invitation, expected_token_hash=old_hash) is False
+    db.refresh(invitation)
+    assert invitation.status == "pending"
+    assert invitation.consumed_at is None
+
+
 def test_existing_user_invitation_requires_matching_authenticated_user(owner_ctx):
     client, db, ctx = owner_ctx
     victim = User(
@@ -215,12 +238,12 @@ def test_existing_user_invitation_requires_matching_authenticated_user(owner_ctx
     for headers in ({}, {"Authorization": f"Bearer {create_access_token(other_user.id)}"}):
         response = client.post(
             "/api/invitations/accept",
-            json={"token": token, "email": victim.email, "password": "attacker-password"},
+            json={"token": token, "email": victim.email},
             headers=headers,
         )
 
         assert response.status_code == 409, response.text
-        assert "Inicia sesión" in response.json()["detail"]
+        assert "contraseña actual" in response.json()["detail"]
         db.refresh(victim)
         assert victim.password_hash == original_hash
         assert victim.is_verified is True
@@ -303,6 +326,436 @@ def test_revoked_membership_cannot_be_reactivated_by_replaying_old_accept_token(
     assert "revocado" in response.json()["detail"].lower()
     db.refresh(membership)
     assert membership.status == "revoked"
+
+
+def test_owner_can_reactivate_revoked_member_only_through_a_fresh_invitation(owner_ctx):
+    client, db, ctx = owner_ctx
+    email = "reactivated-member@test.com"
+    first_invite = client.post(
+        "/api/users/invite",
+        json={"email": email, "role": "manager"},
+    )
+    assert first_invite.status_code == 201, first_invite.text
+
+    first_accept = client.post(
+        "/api/invitations/accept",
+        json={
+            "token": first_invite.json()["invite_token"],
+            "email": email,
+            "password": "original-password-123",
+        },
+    )
+    assert first_accept.status_code == 200, first_accept.text
+    user = db.query(User).filter_by(email=email).one()
+    original_password_hash = user.password_hash
+    membership = db.query(HotelMembership).filter_by(hotel_id=ctx["hotel_id"], user_id=user.id).one()
+    assert membership.status == "active"
+
+    revoked = client.delete(f"/api/users/{user.id}")
+    assert revoked.status_code == 204, revoked.text
+    db.refresh(membership)
+    assert membership.status == "revoked"
+
+    fresh_invite = client.post(
+        "/api/users/invite",
+        json={"email": email, "role": "manager"},
+    )
+    assert fresh_invite.status_code == 201, fresh_invite.text
+    db.refresh(membership)
+    assert membership.status == "invited"
+    assert first_invite.json()["invite_token"] != fresh_invite.json()["invite_token"]
+
+    accepted = client.post(
+        "/api/invitations/accept",
+        json={
+            "token": fresh_invite.json()["invite_token"],
+            "email": email,
+            "current_password": "original-password-123",
+        },
+    )
+
+    assert accepted.status_code == 200, accepted.text
+    db.refresh(membership)
+    db.refresh(user)
+    assert membership.status == "active"
+    assert accepted.json()["user"]["id"] == user.id
+    assert user.password_hash == original_password_hash
+
+
+def test_reinvitation_with_wrong_existing_password_keeps_invitation_pending(owner_ctx):
+    client, db, ctx = owner_ctx
+    email = "wrong-password-reinvite@test.com"
+    user = User(
+        email=email,
+        password_hash=hash_password("original-password-123"),
+        role="manager",
+        is_active=True,
+        is_verified=True,
+    )
+    db.add(user)
+    db.flush()
+    membership = HotelMembership(
+        hotel_id=ctx["hotel_id"],
+        user_id=user.id,
+        role="manager",
+        status="revoked",
+    )
+    db.add(membership)
+    db.commit()
+    original_hash = user.password_hash
+
+    invite = client.post("/api/users/invite", json={"email": email, "role": "manager"})
+    assert invite.status_code == 201, invite.text
+    response = client.post(
+        "/api/invitations/accept",
+        json={
+            "token": invite.json()["invite_token"],
+            "email": email,
+            "current_password": "incorrect-password",
+        },
+    )
+
+    assert response.status_code == 401, response.text
+    db.refresh(membership)
+    db.refresh(user)
+    invitation = db.query(StaffInvitation).filter_by(token_hash=hash_invitation_token(invite.json()["invite_token"])).one()
+    assert invitation.status == "pending"
+    assert membership.status == "invited"
+    assert user.password_hash == original_hash
+
+
+def test_reinvitation_accepts_an_existing_legacy_password_shorter_than_twelve(owner_ctx):
+    client, db, ctx = owner_ctx
+    email = "legacy-short-password@test.com"
+    user = User(
+        email=email,
+        password_hash=hash_password("short-old"),
+        role="manager",
+        is_active=True,
+        is_verified=True,
+    )
+    db.add(user)
+    db.flush()
+    db.add(HotelMembership(hotel_id=ctx["hotel_id"], user_id=user.id, role="manager", status="revoked"))
+    db.commit()
+    original_hash = user.password_hash
+    invite = client.post("/api/users/invite", json={"email": email, "role": "manager"})
+    assert invite.status_code == 201, invite.text
+
+    accepted = client.post(
+        "/api/invitations/accept",
+        json={
+            "token": invite.json()["invite_token"],
+            "email": email,
+            "current_password": "short-old",
+        },
+    )
+
+    assert accepted.status_code == 200, accepted.text
+    db.refresh(user)
+    assert user.password_hash == original_hash
+
+
+def test_google_only_account_cannot_accept_existing_membership_with_password(owner_ctx):
+    client, db, ctx = owner_ctx
+    email = "google-only-reinvite@test.com"
+    user = User(
+        email=email,
+        password_hash=hash_password("not-a-real-local-login"),
+        google_sub="google-only-provider-sub",
+        password_login_enabled=False,
+        role="manager",
+        is_active=True,
+        is_verified=True,
+    )
+    db.add(user)
+    db.flush()
+    db.add(HotelMembership(hotel_id=ctx["hotel_id"], user_id=user.id, role="manager", status="revoked"))
+    db.commit()
+    invite = client.post("/api/users/invite", json={"email": email, "role": "manager"})
+    assert invite.status_code == 201, invite.text
+
+    rejected = client.post(
+        "/api/invitations/accept",
+        json={
+            "token": invite.json()["invite_token"],
+            "email": email,
+            "current_password": "not-a-real-local-login",
+        },
+    )
+
+    assert rejected.status_code == 409, rejected.text
+    assert "Google" in rejected.json()["detail"]
+    invitation = db.query(StaffInvitation).filter_by(
+        token_hash=hash_invitation_token(invite.json()["invite_token"])
+    ).one()
+    assert invitation.status == "pending"
+
+
+def test_used_mfa_factor_stays_consumed_if_invitation_activation_fails(owner_ctx):
+    client, db, ctx = owner_ctx
+    email = "activation-failure-mfa@test.com"
+    secret = pyotp.random_base32()
+    user = User(
+        email=email,
+        password_hash=hash_password("original-password-123"),
+        role="manager",
+        is_active=True,
+        is_verified=True,
+    )
+    db.add(user)
+    db.flush()
+    membership = HotelMembership(
+        hotel_id=ctx["hotel_id"], user_id=user.id, role="manager", status="revoked"
+    )
+    mfa_secret = UserMfaSecret(
+        user_id=user.id,
+        encrypted_secret=encrypt_totp_secret(secret),
+        status=MFA_ACTIVE,
+    )
+    db.add_all([membership, mfa_secret])
+    db.commit()
+    invite = client.post("/api/users/invite", json={"email": email, "role": "manager"})
+    challenge = client.post(
+        "/api/invitations/accept",
+        json={
+            "token": invite.json()["invite_token"],
+            "email": email,
+            "current_password": "original-password-123",
+        },
+    )
+    assert invite.status_code == 201, invite.text
+    assert challenge.status_code == 200, challenge.text
+    code = pyotp.TOTP(secret).now()
+    mfa_payload = {
+        "token": invite.json()["invite_token"],
+        "mfa_token": challenge.json()["mfa_token"],
+        "code": code,
+    }
+
+    with patch(
+        "app.api.invitations._activate_invitation_for_user",
+        side_effect=HTTPException(status_code=409, detail="Simulated activation conflict"),
+    ):
+        failed_activation = client.post("/api/invitations/accept/mfa", json=mfa_payload)
+    assert failed_activation.status_code == 409, failed_activation.text
+    db.refresh(mfa_secret)
+    assert mfa_secret.last_used_step is not None
+
+    replay = client.post("/api/invitations/accept/mfa", json=mfa_payload)
+    assert replay.status_code == 401, replay.text
+    db.refresh(membership)
+    assert membership.status == "invited"
+
+
+def test_reinvitation_password_guesses_share_the_normal_login_limit(owner_ctx, monkeypatch):
+    client, db, ctx = owner_ctx
+    email = "limited-password-reinvite@test.com"
+    user = User(
+        email=email,
+        password_hash=hash_password("original-password-123"),
+        role="manager",
+        is_active=True,
+        is_verified=True,
+    )
+    db.add(user)
+    db.flush()
+    db.add(HotelMembership(hotel_id=ctx["hotel_id"], user_id=user.id, role="manager", status="revoked"))
+    db.commit()
+    invite = client.post("/api/users/invite", json={"email": email, "role": "manager"})
+    assert invite.status_code == 201, invite.text
+
+    login_limiter.reset(email, db=db)
+    db.commit()
+    monkeypatch.setattr(get_settings(), "LOGIN_RATE_LIMIT", 1)
+    payload = {
+        "token": invite.json()["invite_token"],
+        "email": email,
+        "current_password": "incorrect-password",
+    }
+    first = client.post("/api/invitations/accept", json=payload)
+    second = client.post(
+        "/api/auth/login",
+        json={"email": f"  {email}  ", "password": "incorrect-password"},
+    )
+
+    assert first.status_code == 401, first.text
+    assert second.status_code == 429, second.text
+    assert db.query(RateLimitEvent).filter_by(scope="login", subject_key=email).count() >= 2
+
+
+def test_invitation_mfa_challenge_is_invalidated_when_owner_reissues_link(owner_ctx):
+    client, db, ctx = owner_ctx
+    email = "rotated-mfa-invite@test.com"
+    user = User(
+        email=email,
+        password_hash=hash_password("original-password-123"),
+        role="manager",
+        is_active=True,
+        is_verified=True,
+    )
+    db.add(user)
+    db.flush()
+    db.add(HotelMembership(hotel_id=ctx["hotel_id"], user_id=user.id, role="manager", status="revoked"))
+    db.add(UserMfaSecret(
+        user_id=user.id,
+        encrypted_secret=encrypt_totp_secret(pyotp.random_base32()),
+        status=MFA_ACTIVE,
+    ))
+    db.commit()
+
+    first_invite = client.post("/api/users/invite", json={"email": email, "role": "manager"})
+    first_challenge = client.post(
+        "/api/invitations/accept",
+        json={
+            "token": first_invite.json()["invite_token"],
+            "email": email,
+            "current_password": "original-password-123",
+        },
+    )
+    assert first_invite.status_code == 201, first_invite.text
+    assert first_challenge.status_code == 200, first_challenge.text
+    assert first_challenge.json()["requires_mfa"] is True
+
+    replacement_invite = client.post("/api/users/invite", json={"email": email, "role": "manager"})
+    assert replacement_invite.status_code == 201, replacement_invite.text
+    assert replacement_invite.json()["invite_token"] != first_invite.json()["invite_token"]
+    stale = client.post(
+        "/api/invitations/accept/mfa",
+        json={
+            "token": replacement_invite.json()["invite_token"],
+            "mfa_token": first_challenge.json()["mfa_token"],
+            "code": "123456",
+        },
+    )
+    assert stale.status_code == 409, stale.text
+
+    current_challenge = client.post(
+        "/api/invitations/accept",
+        json={
+            "token": replacement_invite.json()["invite_token"],
+            "email": email,
+            "current_password": "original-password-123",
+        },
+    )
+    assert current_challenge.status_code == 200, current_challenge.text
+    with patch("app.api.auth.mfa_service.consume_mfa_code", return_value=True):
+        accepted = client.post(
+            "/api/invitations/accept/mfa",
+            json={
+                "token": replacement_invite.json()["invite_token"],
+                "mfa_token": current_challenge.json()["mfa_token"],
+                "code": "123456",
+            },
+        )
+    assert accepted.status_code == 200, accepted.text
+    membership = db.query(HotelMembership).filter_by(hotel_id=ctx["hotel_id"], user_id=user.id).one()
+    assert membership.status == "active"
+
+
+def test_reinvitation_with_password_requires_mfa_before_consuming_invitation(owner_ctx):
+    client, db, ctx = owner_ctx
+    email = "mfa-password-reinvite@test.com"
+    user = User(
+        email=email,
+        password_hash=hash_password("original-password-123"),
+        role="manager",
+        is_active=True,
+        is_verified=True,
+    )
+    db.add(user)
+    db.flush()
+    membership = HotelMembership(
+        hotel_id=ctx["hotel_id"],
+        user_id=user.id,
+        role="manager",
+        status="revoked",
+    )
+    db.add(membership)
+    db.add(UserMfaSecret(
+        user_id=user.id,
+        encrypted_secret=encrypt_totp_secret(pyotp.random_base32()),
+        status=MFA_ACTIVE,
+    ))
+    db.commit()
+
+    invite = client.post("/api/users/invite", json={"email": email, "role": "manager"})
+    assert invite.status_code == 201, invite.text
+    response = client.post(
+        "/api/invitations/accept",
+        json={
+            "token": invite.json()["invite_token"],
+            "email": email,
+            "current_password": "original-password-123",
+        },
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["requires_mfa"] is True
+    password_challenge_audit = db.query(SecurityAuditLog).filter_by(
+        hotel_id=ctx["hotel_id"], action="auth.mfa_challenge"
+    ).one()
+    assert json.loads(password_challenge_audit.details) == {"method": "password", "scope": "invitation_acceptance"}
+    db.refresh(membership)
+    invitation = db.query(StaffInvitation).filter_by(token_hash=hash_invitation_token(invite.json()["invite_token"])).one()
+    assert invitation.status == "pending"
+    assert membership.status == "invited"
+
+    # Invitation challenges cannot be upgraded into unrestricted login sessions.
+    wrong_endpoint = client.post(
+        "/api/auth/login/mfa",
+        json={"mfa_token": response.json()["mfa_token"], "code": "123456"},
+    )
+    assert wrong_endpoint.status_code == 401, wrong_endpoint.text
+    login_challenge = create_signed_token(
+        {"purpose": "mfa_login", "user_id": user.id, "token_version": user.token_version}
+    )
+    reverse_wrong_endpoint = client.post(
+        "/api/invitations/accept/mfa",
+        json={"token": invite.json()["invite_token"], "mfa_token": login_challenge, "code": "123456"},
+    )
+    assert reverse_wrong_endpoint.status_code == 401, reverse_wrong_endpoint.text
+
+    with patch("app.api.auth.mfa_service.consume_mfa_code", return_value=False):
+        rejected = client.post(
+            "/api/invitations/accept/mfa",
+            json={"token": invite.json()["invite_token"], "mfa_token": response.json()["mfa_token"], "code": "000000"},
+        )
+    assert rejected.status_code == 401, rejected.text
+    shared_mfa_budget = db.query(RateLimitEvent).filter_by(
+        scope="mfa_code_guess", subject_key=f"login:{user.id}"
+    ).count()
+    assert shared_mfa_budget == 1
+
+    # A normal-login challenge consumes the same account-level budget.
+    with patch("app.api.auth.mfa_service.consume_mfa_code", return_value=False):
+        normal_login_rejected = client.post(
+            "/api/auth/login/mfa",
+            json={"mfa_token": login_challenge, "code": "000000"},
+        )
+    assert normal_login_rejected.status_code == 401, normal_login_rejected.text
+    assert db.query(RateLimitEvent).filter_by(
+        scope="mfa_code_guess", subject_key=f"login:{user.id}"
+    ).count() == 2
+
+    db.refresh(invitation)
+    db.refresh(membership)
+    assert invitation.status == "pending"
+    assert membership.status == "invited"
+
+    with patch("app.api.auth.mfa_service.consume_mfa_code", return_value=True):
+        completed = client.post(
+            "/api/invitations/accept/mfa",
+            json={"token": invite.json()["invite_token"], "mfa_token": response.json()["mfa_token"], "code": "123456"},
+        )
+    assert completed.status_code == 200, completed.text
+    assert completed.json()["hotel_id"] == ctx["hotel_id"]
+    assert db.query(RateLimitEvent).filter_by(
+        scope="mfa_code_guess", subject_key=f"login:{user.id}"
+    ).count() == 0
+    db.refresh(invitation)
+    db.refresh(membership)
+    assert invitation.status == "accepted"
+    assert membership.status == "active"
 
 
 def test_invitation_creates_and_activates_user_when_email_is_new(owner_ctx):
@@ -635,6 +1088,14 @@ def test_google_invitation_waits_for_mfa_before_consuming_token(owner_ctx, monke
 
     assert response.status_code == 200, response.text
     assert response.json()["requires_mfa"] is True
+    challenge_claims = decode_signed_token(response.json()["mfa_token"])
+    assert challenge_claims["purpose"] == "invitation_accept_mfa"
+    assert "token_hash" not in str(challenge_claims)
+    assert "fingerprint" in challenge_claims["invitation"]
+    challenge_audit = db.query(SecurityAuditLog).filter_by(
+        hotel_id=ctx["hotel_id"], action="google_auth.mfa_challenge"
+    ).one()
+    assert json.loads(challenge_audit.details) == {"method": "google", "scope": "invitation_acceptance"}
     invitation = db.query(StaffInvitation).filter_by(token_hash=hash_invitation_token(token)).one()
     assert invitation.status == "pending"
     assert invitation.consumed_at is None
@@ -651,8 +1112,8 @@ def test_google_invitation_waits_for_mfa_before_consuming_token(owner_ctx, monke
 
     with patch("app.api.auth.mfa_service.consume_mfa_code", return_value=True):
         completed_mfa = client.post(
-            "/api/auth/login/mfa",
-            json={"mfa_token": response.json()["mfa_token"], "code": "123456"},
+            "/api/invitations/accept/mfa",
+            json={"token": token, "mfa_token": response.json()["mfa_token"], "code": "123456"},
         )
     assert completed_mfa.status_code == 200, completed_mfa.text
     db.refresh(user)
@@ -663,21 +1124,17 @@ def test_google_invitation_waits_for_mfa_before_consuming_token(owner_ctx, monke
     assert user.password_login_enabled is True
     assert user.token_version == 1
     assert old_session.revoked_at is not None
-    accepted = client.post(
-        "/api/invitations/accept",
-        headers={"Authorization": f"Bearer {completed_mfa.json()['access_token']}"},
-        json={"token": token, "email": email},
-    )
-    assert accepted.status_code == 200, accepted.text
-    assert accepted.json()["hotel_id"] == ctx["hotel_id"]
+    assert completed_mfa.json()["hotel_id"] == ctx["hotel_id"]
     db.refresh(invitation)
     assert invitation.status == "accepted"
     accepted_membership = db.query(HotelMembership).filter_by(
         hotel_id=ctx["hotel_id"], user_id=user.id
     ).one()
     assert accepted_membership.status == "active"
-    audit = db.query(SecurityAuditLog).filter_by(action="google_auth.linked").one()
-    assert json.loads(audit.details) == {"account_state": "linked_after_mfa", "provider": "google"}
+    audit = db.query(SecurityAuditLog).filter_by(
+        hotel_id=ctx["hotel_id"], action="google_auth.linked"
+    ).one()
+    assert json.loads(audit.details) == {"account_state": "linked_after_mfa_invitation", "provider": "google"}
 
 
 def test_invitation_accept_rejects_password_under_twelve_characters(owner_ctx):
@@ -691,7 +1148,7 @@ def test_invitation_accept_rejects_password_under_twelve_characters(owner_ctx):
     )
 
     assert response.status_code == 422, response.text
-    assert "12 characters" in response.json()["detail"][0]["msg"]
+    assert "12 caracteres" in response.json()["detail"]
     assert db.query(User).filter(User.email == email).first() is None
 
 
@@ -728,6 +1185,7 @@ def test_invitation_routes_keep_static_flow_and_legacy_acceptance_compatibility(
 
     assert "/api/invitations/preview" in invitation_paths
     assert "/api/invitations/accept" in invitation_paths
+    assert "/api/invitations/accept/mfa" in invitation_paths
     assert "/api/invitations/accept/google" in invitation_paths
     assert "/api/invitations/{token}/accept" in invitation_paths
     assert "/api/invitations/{token}/accept/google" in invitation_paths

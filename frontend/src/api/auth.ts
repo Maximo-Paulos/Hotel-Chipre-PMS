@@ -122,11 +122,27 @@ export const getInvitationInfo = (token: string) =>
     data: { token }
   });
 
-export const acceptInvitation = (token: string, email: string, password?: string, session?: SessionLike) =>
-  apiFetch<AuthResponse>("/api/invitations/accept", {
+export const acceptInvitation = (
+  token: string,
+  email: string,
+  credentials?: { password?: string; currentPassword?: string },
+  session?: SessionLike
+) =>
+  apiFetch<AuthResult>("/api/invitations/accept", {
     method: "POST",
-    data: password ? { token, email, password } : { token, email },
+    data: {
+      token,
+      email,
+      ...(credentials?.password ? { password: credentials.password } : {}),
+      ...(credentials?.currentPassword ? { current_password: credentials.currentPassword } : {})
+    },
     session
+  });
+
+export const completeMfaInvitationAcceptance = (token: string, mfaToken: string, code: string) =>
+  apiFetch<AuthResponse>("/api/invitations/accept/mfa", {
+    method: "POST",
+    data: { token, mfa_token: mfaToken, code }
   });
 
 export const acceptInvitationWithGoogle = (token: string, idToken: string) =>

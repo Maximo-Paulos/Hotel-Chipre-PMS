@@ -5,7 +5,7 @@ import { ApiError } from "../../api/client";
 import {
   acceptInvitation,
   acceptInvitationWithGoogle,
-  completeMfaLogin,
+  completeMfaInvitationAcceptance,
   getInvitationInfo,
   isMfaChallenge,
   type AuthResponse
@@ -58,6 +58,7 @@ export function AcceptInvitationPage() {
 
   const [invitation, setInvitation] = useState<InvitationInfo | null>(null);
   const [isLoadingInfo, setIsLoadingInfo] = useState(true);
+  const [currentPassword, setCurrentPassword] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [mfaCode, setMfaCode] = useState("");
@@ -103,11 +104,12 @@ export function AcceptInvitationPage() {
     if (!response.hotel_id) {
       throw new ApiError(500, "La respuesta de invitación no devolvió un hotel válido.");
     }
+    attemptedSessionAccept.current = token;
     const role = normalizeRole(response.user.role);
     login(sessionFromAuthResponse(response));
     setInfo("Invitación aceptada. Redirigiendo...");
     navigate(defaultPathForRole(role), { replace: true });
-  }, [login, navigate]);
+  }, [login, navigate, token]);
 
   const acceptForCurrentSession = useCallback(async () => {
     if (!token || !invitation?.email) return;
@@ -115,7 +117,14 @@ export function AcceptInvitationPage() {
     setError(null);
     setInfo(null);
     try {
-      await finishAcceptance(await acceptInvitation(token, invitation.email, undefined, session));
+      const result = await acceptInvitation(token, invitation.email, undefined, session);
+      if (isMfaChallenge(result)) {
+        setMfaToken(result.mfa_token);
+        setMfaCode("");
+        setInfo("La invitación seguirá pendiente hasta que confirmes tu código de seguridad.");
+        return;
+      }
+      await finishAcceptance(result);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "No se pudo aceptar la invitación");
     } finally {
@@ -160,15 +169,41 @@ export function AcceptInvitationPage() {
     setError(null);
     setInfo(null);
     try {
-      const authenticated = await completeMfaLogin(mfaToken, mfaCode.trim());
-      // Install the MFA-issued session before retrying acceptance. The
-      // invitation token stays in the URL and is not persisted elsewhere.
-      const authenticatedSession = sessionFromAuthResponse(authenticated);
-      login(authenticatedSession);
-      attemptedSessionAccept.current = token;
-      await finishAcceptance(await acceptInvitation(token, invitation.email, undefined, authenticatedSession));
+      const authenticated = await completeMfaInvitationAcceptance(token, mfaToken, mfaCode.trim());
+      // The signed MFA challenge is bound to the pending invitation, which is
+      // consumed by the backend only after this second factor succeeds.
+      await finishAcceptance(authenticated);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "No se pudo verificar el código");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const submitCurrentPassword = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError(null);
+    setInfo(null);
+    if (!token || !invitation?.email) {
+      setError("Token de invitación inválido.");
+      return;
+    }
+    if (!currentPassword) {
+      setError("Ingresá la contraseña actual de tu cuenta.");
+      return;
+    }
+    setLoading(true);
+    try {
+      const result = await acceptInvitation(token, invitation.email, { currentPassword });
+      if (isMfaChallenge(result)) {
+        setMfaToken(result.mfa_token);
+        setMfaCode("");
+        setInfo("La invitación seguirá pendiente hasta que confirmes tu código de seguridad.");
+        return;
+      }
+      await finishAcceptance(result);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "No se pudo verificar tu contraseña");
     } finally {
       setLoading(false);
     }
@@ -183,7 +218,7 @@ export function AcceptInvitationPage() {
       return;
     }
     if (password.length < 12) {
-      setError("La contraseña debe tener al menos 12 caracteres.");
+      setError("La contraseña nueva debe tener al menos 12 caracteres.");
       return;
     }
     if (password !== confirm) {
@@ -192,7 +227,14 @@ export function AcceptInvitationPage() {
     }
     setLoading(true);
     try {
-      await finishAcceptance(await acceptInvitation(token, invitation.email, password));
+      const result = await acceptInvitation(token, invitation.email, { password });
+      if (isMfaChallenge(result)) {
+        setMfaToken(result.mfa_token);
+        setMfaCode("");
+        setInfo("La invitación seguirá pendiente hasta que confirmes tu código de seguridad.");
+        return;
+      }
+      await finishAcceptance(result);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "No se pudo aceptar la invitación");
     } finally {
@@ -211,7 +253,7 @@ export function AcceptInvitationPage() {
       <Seo title="Aceptar invitación | Hotels-PMS" description="Activa tu acceso al hotel invitado." noindex />
       <main className="w-full max-w-md rounded-2xl bg-white p-6 shadow-lg ring-1 ring-slate-100 sm:p-8">
         <h1 className="text-balance text-2xl font-semibold tracking-tight text-slate-900">Aceptar invitación</h1>
-        <p className="mt-2 text-sm text-slate-600">Ingresá con Google o creá una contraseña para activar tu acceso al hotel.</p>
+        <p className="mt-2 text-sm text-slate-600">Ingresá con Google, verificá tu cuenta existente o creá una nueva contraseña si es tu primer acceso.</p>
 
         {isLoadingInfo ? (
           <p className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600" role="status">
@@ -297,12 +339,40 @@ export function AcceptInvitationPage() {
 
                 {!hasSession && (
                   <>
+                    <section className="mt-5 rounded-lg border border-slate-200 p-3">
+                      <h2 className="text-sm font-semibold text-slate-800">Ya tenés una cuenta</h2>
+                      <p className="mt-1 text-xs text-slate-600">Ingresá tu contraseña actual; no se modifica.</p>
+                      <form className="mt-3 space-y-3" onSubmit={submitCurrentPassword}>
+                        <label className="block text-sm font-medium text-slate-700" htmlFor="invitation-current-password">
+                          Contraseña actual
+                        </label>
+                        <PasswordInput
+                          id="invitation-current-password"
+                          value={currentPassword}
+                          onChange={setCurrentPassword}
+                          placeholder="Tu contraseña actual"
+                          required
+                          autoComplete="current-password"
+                        />
+                        <button
+                          className="w-full rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-sm font-semibold text-brand-800 hover:bg-brand-100 disabled:opacity-60"
+                          disabled={loading || !token}
+                          type="submit"
+                        >
+                          {loading ? "Verificando..." : "Verificar y aceptar"}
+                        </button>
+                      </form>
+                    </section>
+
                     <div className="relative my-4 flex items-center">
                       <div className="flex-grow border-t border-slate-200" />
-                      <span className="mx-3 text-xs uppercase text-slate-400">o creá una contraseña</span>
+                      <span className="mx-3 text-xs uppercase text-slate-400">primer acceso</span>
                       <div className="flex-grow border-t border-slate-200" />
                     </div>
                     <form className="space-y-4" onSubmit={submitPassword}>
+                      <label className="block text-sm font-medium text-slate-700" htmlFor="invitation-password">
+                        Contraseña nueva
+                      </label>
                       <PasswordInput
                         id="invitation-password"
                         value={password}
@@ -330,7 +400,7 @@ export function AcceptInvitationPage() {
                         disabled={loading || !token}
                         type="submit"
                       >
-                        {loading ? "Activando..." : "Crear contraseña y aceptar"}
+                        {loading ? "Verificando..." : "Continuar y aceptar"}
                       </button>
                     </form>
                   </>

@@ -609,7 +609,7 @@ def register(
 
 @router.post("/request-verify")
 def request_verify(payload: RequestCode, request: Request, db: Session = Depends(get_db)):
-    key = payload.email.lower()
+    key = payload.email.strip().lower()
     source = _request_source(request)
     if not verify_request_limiter.allow(key, db=db):
         db.commit()
