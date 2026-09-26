@@ -14,17 +14,17 @@ export const FALLBACK_PLANS: SubscriptionPlan[] = [
   {
     code: "starter",
     name: "Starter",
-    price_month: 0,
+    price_month: null,
     room_limit: 15,
     description: "Ideal para hostels y B&B que empiezan a digitalizarse.",
     features: ["Dashboard básico", "Hasta 15 habitaciones", "Exportes manuales CSV"],
-    badge: "Gratis",
+    badge: "Inicial",
     mock: true
   },
   {
     code: "pro",
     name: "Pro",
-    price_month: 49,
+    price_month: null,
     room_limit: 40,
     description: "Para hoteles boutique que quieren operar sin fricción.",
     features: ["Check-in rápido", "Hasta 8 usuarios", "Reportes diarios", "Soporte priorizado"],
@@ -35,7 +35,7 @@ export const FALLBACK_PLANS: SubscriptionPlan[] = [
   {
     code: "ultra",
     name: "Ultra",
-    price_month: 99,
+    price_month: null,
     room_limit: 80,
     description: "Hoteles con más volumen y necesidad de control fino.",
     features: ["Integración OTA", "Hasta 20 usuarios", "Roles avanzados", "SLA 99.5%"],

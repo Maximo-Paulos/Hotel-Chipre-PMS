@@ -304,16 +304,20 @@ def is_test_mode() -> bool:
 
 
 def is_production_mode(settings: Settings | None = None) -> bool:
-    runtime_settings = settings or get_settings()
-    env = _normalized_env_value(runtime_settings.APP_ENV or os.getenv("ENVIRONMENT") or os.getenv("APP_ENV"))
+    if settings is None:
+        env = os.getenv("APP_ENV") or os.getenv("ENVIRONMENT") or get_settings().APP_ENV
+    else:
+        env = settings.APP_ENV or os.getenv("APP_ENV") or os.getenv("ENVIRONMENT")
+    env = _normalized_env_value(env)
     return env in {"prod", "production"}
 
 
 def is_preview_qa_mode(settings: Settings | None = None) -> bool:
-    runtime_settings = settings or get_settings()
-    env = _normalized_env_value(
-        runtime_settings.APP_ENV or os.getenv("ENVIRONMENT") or os.getenv("APP_ENV")
-    )
+    if settings is None:
+        env = os.getenv("APP_ENV") or os.getenv("ENVIRONMENT") or get_settings().APP_ENV
+    else:
+        env = settings.APP_ENV or os.getenv("APP_ENV") or os.getenv("ENVIRONMENT")
+    env = _normalized_env_value(env)
     return env in {"preview", "qa", "staging"}
 
 

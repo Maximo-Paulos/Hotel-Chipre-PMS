@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-09-26T11:35:02.561Z",
+  "generatedAt": "2026-09-26T20:43:03.733Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -2049,6 +2049,50 @@
       "warnings": []
     },
     {
+      "id": "flow:master_admin_privacy_retention_retentionholdcreate_validate_case_reference",
+      "name": ".validate_case_reference",
+      "entryPoint": "master_admin_privacy_retention_retentionholdcreate_validate_case_reference",
+      "entryPointId": "master_admin_privacy_retention_retentionholdcreate_validate_case_reference",
+      "path": [
+        "master_admin_privacy_retention_retentionholdcreate_validate_case_reference",
+        "master_admin_privacy_retention_validate_case_reference"
+      ],
+      "qualifiedPath": [
+        "master_admin_privacy_retention_retentionholdcreate_validate_case_reference",
+        "master_admin_privacy_retention_validate_case_reference"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/master_admin/privacy_retention.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
+      "id": "flow:master_admin_privacy_retention_retentionholdrelease_validate_case_reference",
+      "name": ".validate_case_reference",
+      "entryPoint": "master_admin_privacy_retention_retentionholdrelease_validate_case_reference",
+      "entryPointId": "master_admin_privacy_retention_retentionholdrelease_validate_case_reference",
+      "path": [
+        "master_admin_privacy_retention_retentionholdrelease_validate_case_reference",
+        "master_admin_privacy_retention_validate_case_reference"
+      ],
+      "qualifiedPath": [
+        "master_admin_privacy_retention_retentionholdrelease_validate_case_reference",
+        "master_admin_privacy_retention_validate_case_reference"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/master_admin/privacy_retention.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
       "id": "flow:public_loginpage_loginpage",
       "name": "LoginPage",
       "entryPoint": "public_loginpage_loginpage",
@@ -2378,6 +2422,32 @@
       "fileCount": 1,
       "files": [
         "app/master_admin/security.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
+      "id": "flow:master_admin_privacy_retention_create_retention_hold",
+      "name": "create_retention_hold",
+      "entryPoint": "master_admin_privacy_retention_create_retention_hold",
+      "entryPointId": "master_admin_privacy_retention_create_retention_hold",
+      "path": [
+        "master_admin_privacy_retention_create_retention_hold",
+        "master_admin_privacy_retention_effective",
+        "master_admin_privacy_retention_lock_hold_table_for_write",
+        "master_admin_privacy_retention_target_model"
+      ],
+      "qualifiedPath": [
+        "master_admin_privacy_retention_create_retention_hold",
+        "master_admin_privacy_retention_effective",
+        "master_admin_privacy_retention_lock_hold_table_for_write",
+        "master_admin_privacy_retention_target_model"
+      ],
+      "depth": 1,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/master_admin/privacy_retention.py"
       ],
       "criticality": 0.41,
       "warnings": []
@@ -3269,6 +3339,28 @@
       "warnings": []
     },
     {
+      "id": "flow:master_admin_privacy_retention_release_retention_hold",
+      "name": "release_retention_hold",
+      "entryPoint": "master_admin_privacy_retention_release_retention_hold",
+      "entryPointId": "master_admin_privacy_retention_release_retention_hold",
+      "path": [
+        "master_admin_privacy_retention_release_retention_hold",
+        "master_admin_privacy_retention_lock_hold_table_for_write"
+      ],
+      "qualifiedPath": [
+        "master_admin_privacy_retention_release_retention_hold",
+        "master_admin_privacy_retention_lock_hold_table_for_write"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/master_admin/privacy_retention.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
       "id": "flow:app_main_request_telemetry",
       "name": "request_telemetry",
       "entryPoint": "app_main_request_telemetry",
@@ -3528,6 +3620,34 @@
       "fileCount": 1,
       "files": [
         "app/master_admin/stripe.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
+      "id": "flow:master_admin_privacy_retention_search_retention_targets",
+      "name": "search_retention_targets",
+      "entryPoint": "master_admin_privacy_retention_search_retention_targets",
+      "entryPointId": "master_admin_privacy_retention_search_retention_targets",
+      "path": [
+        "master_admin_privacy_retention_search_retention_targets",
+        "master_admin_privacy_retention_as_utc",
+        "master_admin_privacy_retention_mask_email",
+        "master_admin_privacy_retention_retentiontargetread",
+        "master_admin_privacy_retention_target_model"
+      ],
+      "qualifiedPath": [
+        "master_admin_privacy_retention_search_retention_targets",
+        "master_admin_privacy_retention_as_utc",
+        "master_admin_privacy_retention_mask_email",
+        "master_admin_privacy_retention_retentiontargetread",
+        "master_admin_privacy_retention_target_model"
+      ],
+      "depth": 1,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "app/master_admin/privacy_retention.py"
       ],
       "criticality": 0.41,
       "warnings": []
@@ -4179,6 +4299,36 @@
       "warnings": []
     },
     {
+      "id": "flow:services_ota_service_otaintegrationservice_validate_webhook_secret",
+      "name": ".validate_webhook_secret",
+      "entryPoint": "services_ota_service_otaintegrationservice_validate_webhook_secret",
+      "entryPointId": "services_ota_service_otaintegrationservice_validate_webhook_secret",
+      "path": [
+        "services_ota_service_otaintegrationservice_validate_webhook_secret",
+        "services_ota_service_otaintegrationservice_resolve_webhook_credential",
+        "services_ota_service_otaautherror",
+        "services_ota_service_otaintegrationservice_extract_external_property_id",
+        "services_ota_service_otaintegrationservice_hash_secret",
+        "services_ota_service_otaintegrationservice_normalize_secret"
+      ],
+      "qualifiedPath": [
+        "services_ota_service_otaintegrationservice_validate_webhook_secret",
+        "services_ota_service_otaintegrationservice_resolve_webhook_credential",
+        "services_ota_service_otaautherror",
+        "services_ota_service_otaintegrationservice_extract_external_property_id",
+        "services_ota_service_otaintegrationservice_hash_secret",
+        "services_ota_service_otaintegrationservice_normalize_secret"
+      ],
+      "depth": 3,
+      "nodeCount": 6,
+      "fileCount": 1,
+      "files": [
+        "app/services/ota_service.py"
+      ],
+      "criticality": 0.3883,
+      "warnings": []
+    },
+    {
       "id": "flow:services_permission_service_set_visibility_window",
       "name": "set_visibility_window",
       "entryPoint": "services_permission_service_set_visibility_window",
@@ -4421,6 +4571,30 @@
       "warnings": []
     },
     {
+      "id": "flow:api_subscription_delete_override",
+      "name": "delete_override",
+      "entryPoint": "api_subscription_delete_override",
+      "entryPointId": "api_subscription_delete_override",
+      "path": [
+        "api_subscription_delete_override",
+        "api_subscription_master_admin_hotel_id",
+        "api_subscription_require_master_admin_write"
+      ],
+      "qualifiedPath": [
+        "api_subscription_delete_override",
+        "api_subscription_master_admin_hotel_id",
+        "api_subscription_require_master_admin_write"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/api/subscription.py"
+      ],
+      "criticality": 0.3267,
+      "warnings": []
+    },
+    {
       "id": "flow:services_mfa_service_enroll_user",
       "name": "enroll_user",
       "entryPoint": "services_mfa_service_enroll_user",
@@ -4440,6 +4614,30 @@
       "fileCount": 1,
       "files": [
         "app/services/mfa_service.py"
+      ],
+      "criticality": 0.3267,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_subscription_upsert_entitlement_override",
+      "name": "upsert_entitlement_override",
+      "entryPoint": "api_subscription_upsert_entitlement_override",
+      "entryPointId": "api_subscription_upsert_entitlement_override",
+      "path": [
+        "api_subscription_upsert_entitlement_override",
+        "api_subscription_master_admin_hotel_id",
+        "api_subscription_require_master_admin_write"
+      ],
+      "qualifiedPath": [
+        "api_subscription_upsert_entitlement_override",
+        "api_subscription_master_admin_hotel_id",
+        "api_subscription_require_master_admin_write"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/api/subscription.py"
       ],
       "criticality": 0.3267,
       "warnings": []
@@ -4614,6 +4812,32 @@
         "app/api/integrations.py"
       ],
       "criticality": 0.3129,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_subscription_admin_comped_override",
+      "name": "admin_comped_override",
+      "entryPoint": "api_subscription_admin_comped_override",
+      "entryPointId": "api_subscription_admin_comped_override",
+      "path": [
+        "api_subscription_admin_comped_override",
+        "api_subscription_require_master_admin_write",
+        "api_subscription_serialize_status_payload",
+        "api_subscription_remaining_trial_days"
+      ],
+      "qualifiedPath": [
+        "api_subscription_admin_comped_override",
+        "api_subscription_require_master_admin_write",
+        "api_subscription_serialize_status_payload",
+        "api_subscription_remaining_trial_days"
+      ],
+      "depth": 2,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/api/subscription.py"
+      ],
+      "criticality": 0.295,
       "warnings": []
     },
     {
@@ -5082,6 +5306,72 @@
       "fileCount": 1,
       "files": [
         "app/services/analytics_warehouse.py"
+      ],
+      "criticality": 0.285,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_analytics_export_analytics_csv",
+      "name": "export_analytics_csv",
+      "entryPoint": "api_analytics_export_analytics_csv",
+      "entryPointId": "api_analytics_export_analytics_csv",
+      "path": [
+        "api_analytics_export_analytics_csv",
+        "api_analytics_authorize_sensitive_company_export"
+      ],
+      "qualifiedPath": [
+        "api_analytics_export_analytics_csv",
+        "api_analytics_authorize_sensitive_company_export"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/analytics.py"
+      ],
+      "criticality": 0.285,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_analytics_export_analytics_png",
+      "name": "export_analytics_png",
+      "entryPoint": "api_analytics_export_analytics_png",
+      "entryPointId": "api_analytics_export_analytics_png",
+      "path": [
+        "api_analytics_export_analytics_png",
+        "api_analytics_authorize_sensitive_company_export"
+      ],
+      "qualifiedPath": [
+        "api_analytics_export_analytics_png",
+        "api_analytics_authorize_sensitive_company_export"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/analytics.py"
+      ],
+      "criticality": 0.285,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_analytics_export_analytics_xlsx",
+      "name": "export_analytics_xlsx",
+      "entryPoint": "api_analytics_export_analytics_xlsx",
+      "entryPointId": "api_analytics_export_analytics_xlsx",
+      "path": [
+        "api_analytics_export_analytics_xlsx",
+        "api_analytics_authorize_sensitive_company_export"
+      ],
+      "qualifiedPath": [
+        "api_analytics_export_analytics_xlsx",
+        "api_analytics_authorize_sensitive_company_export"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/analytics.py"
       ],
       "criticality": 0.285,
       "warnings": []
@@ -6234,6 +6524,34 @@
       "warnings": []
     },
     {
+      "id": "flow:api_subscription_change_plan",
+      "name": "change_plan",
+      "entryPoint": "api_subscription_change_plan",
+      "entryPointId": "api_subscription_change_plan",
+      "path": [
+        "api_subscription_change_plan",
+        "api_subscription_master_admin_hotel_id",
+        "api_subscription_require_master_admin_write",
+        "api_subscription_serialize_status_payload",
+        "api_subscription_remaining_trial_days"
+      ],
+      "qualifiedPath": [
+        "api_subscription_change_plan",
+        "api_subscription_master_admin_hotel_id",
+        "api_subscription_require_master_admin_write",
+        "api_subscription_serialize_status_payload",
+        "api_subscription_remaining_trial_days"
+      ],
+      "depth": 2,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "app/api/subscription.py"
+      ],
+      "criticality": 0.27,
+      "warnings": []
+    },
+    {
       "id": "flow:services_cash_register_service_close_session",
       "name": "close_session",
       "entryPoint": "services_cash_register_service_close_session",
@@ -6781,30 +7099,6 @@
       "fileCount": 1,
       "files": [
         "app/services/ota/adapters/booking.py"
-      ],
-      "criticality": 0.2533,
-      "warnings": []
-    },
-    {
-      "id": "flow:api_subscription_admin_comped_override",
-      "name": "admin_comped_override",
-      "entryPoint": "api_subscription_admin_comped_override",
-      "entryPointId": "api_subscription_admin_comped_override",
-      "path": [
-        "api_subscription_admin_comped_override",
-        "api_subscription_serialize_status_payload",
-        "api_subscription_remaining_trial_days"
-      ],
-      "qualifiedPath": [
-        "api_subscription_admin_comped_override",
-        "api_subscription_serialize_status_payload",
-        "api_subscription_remaining_trial_days"
-      ],
-      "depth": 2,
-      "nodeCount": 3,
-      "fileCount": 1,
-      "files": [
-        "app/api/subscription.py"
       ],
       "criticality": 0.2533,
       "warnings": []
@@ -10095,6 +10389,34 @@
       "warnings": []
     },
     {
+      "id": "flow:versions_20260926_legal_retention_holds_downgrade",
+      "name": "downgrade",
+      "entryPoint": "versions_20260926_legal_retention_holds_downgrade",
+      "entryPointId": "versions_20260926_legal_retention_holds_downgrade",
+      "path": [
+        "versions_20260926_legal_retention_holds_downgrade",
+        "versions_20260926_legal_retention_holds_cron_is_required",
+        "versions_20260926_legal_retention_holds_downgrade_sqlite",
+        "versions_20260926_legal_retention_holds_install_purge_function",
+        "versions_20260926_legal_retention_holds_reschedule_purge_job"
+      ],
+      "qualifiedPath": [
+        "versions_20260926_legal_retention_holds_downgrade",
+        "versions_20260926_legal_retention_holds_cron_is_required",
+        "versions_20260926_legal_retention_holds_downgrade_sqlite",
+        "versions_20260926_legal_retention_holds_install_purge_function",
+        "versions_20260926_legal_retention_holds_reschedule_purge_job"
+      ],
+      "depth": 1,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20260926_legal_retention_holds.py"
+      ],
+      "criticality": 0.21,
+      "warnings": []
+    },
+    {
       "id": "flow:services_subscription_service_ensure_room_within_limit",
       "name": "ensure_room_within_limit",
       "entryPoint": "services_subscription_service_ensure_room_within_limit",
@@ -10433,6 +10755,36 @@
       "warnings": []
     },
     {
+      "id": "flow:versions_20260926_legal_retention_holds_upgrade",
+      "name": "upgrade",
+      "entryPoint": "versions_20260926_legal_retention_holds_upgrade",
+      "entryPointId": "versions_20260926_legal_retention_holds_upgrade",
+      "path": [
+        "versions_20260926_legal_retention_holds_upgrade",
+        "versions_20260926_legal_retention_holds_create_and_secure_retention_holds",
+        "versions_20260926_legal_retention_holds_cron_is_required",
+        "versions_20260926_legal_retention_holds_install_purge_function",
+        "versions_20260926_legal_retention_holds_reschedule_purge_job",
+        "versions_20260926_legal_retention_holds_upgrade_sqlite"
+      ],
+      "qualifiedPath": [
+        "versions_20260926_legal_retention_holds_upgrade",
+        "versions_20260926_legal_retention_holds_create_and_secure_retention_holds",
+        "versions_20260926_legal_retention_holds_cron_is_required",
+        "versions_20260926_legal_retention_holds_install_purge_function",
+        "versions_20260926_legal_retention_holds_reschedule_purge_job",
+        "versions_20260926_legal_retention_holds_upgrade_sqlite"
+      ],
+      "depth": 1,
+      "nodeCount": 6,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20260926_legal_retention_holds.py"
+      ],
+      "criticality": 0.2017,
+      "warnings": []
+    },
+    {
       "id": "flow:ota_orchestrator_otaorchestratorservice_verify_connection",
       "name": ".verify_connection",
       "entryPoint": "ota_orchestrator_otaorchestratorservice_verify_connection",
@@ -10670,6 +11022,7 @@
         "services_subscription_entitlements_legacy_status_for_v2",
         "services_subscription_entitlements_as_utc",
         "services_subscription_entitlements_end_trial",
+        "services_subscription_entitlements_legacy_subscription_allows_trial",
         "services_subscription_entitlements_actor_payload",
         "services_subscription_entitlements_suspend_subscription",
         "services_subscription_entitlements_upsert_subscription",
@@ -10688,13 +11041,14 @@
         "services_subscription_entitlements_legacy_status_for_v2",
         "services_subscription_entitlements_as_utc",
         "services_subscription_entitlements_end_trial",
+        "services_subscription_entitlements_legacy_subscription_allows_trial",
         "services_subscription_entitlements_actor_payload",
         "services_subscription_entitlements_suspend_subscription",
         "services_subscription_entitlements_upsert_subscription",
         "services_subscription_entitlements_apply_plan"
       ],
       "depth": 5,
-      "nodeCount": 16,
+      "nodeCount": 17,
       "fileCount": 1,
       "files": [
         "app/services/subscription_entitlements.py"
@@ -10715,6 +11069,7 @@
         "services_subscription_entitlements_end_trial",
         "services_subscription_entitlements_ensure_subscription_seed",
         "services_subscription_entitlements_is_enforcement_enabled",
+        "services_subscription_entitlements_legacy_subscription_allows_trial",
         "services_subscription_entitlements_now",
         "services_subscription_entitlements_plan_defaults",
         "services_subscription_entitlements_actor_payload",
@@ -10733,6 +11088,7 @@
         "services_subscription_entitlements_end_trial",
         "services_subscription_entitlements_ensure_subscription_seed",
         "services_subscription_entitlements_is_enforcement_enabled",
+        "services_subscription_entitlements_legacy_subscription_allows_trial",
         "services_subscription_entitlements_now",
         "services_subscription_entitlements_plan_defaults",
         "services_subscription_entitlements_actor_payload",
@@ -10744,7 +11100,7 @@
         "services_subscription_entitlements_apply_plan"
       ],
       "depth": 5,
-      "nodeCount": 16,
+      "nodeCount": 17,
       "fileCount": 1,
       "files": [
         "app/services/subscription_entitlements.py"
@@ -12535,44 +12891,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_subscription_entitlements_start_trial",
-      "name": "start_trial",
-      "entryPoint": "services_subscription_entitlements_start_trial",
-      "entryPointId": "services_subscription_entitlements_start_trial",
-      "path": [
-        "services_subscription_entitlements_start_trial",
-        "services_subscription_entitlements_actor_payload",
-        "services_subscription_entitlements_now",
-        "services_subscription_entitlements_plan_defaults",
-        "services_subscription_entitlements_record_event",
-        "services_subscription_entitlements_sync_legacy_tables",
-        "services_subscription_entitlements_upsert_subscription",
-        "services_subscription_entitlements_apply_plan",
-        "services_subscription_entitlements_ensure_subscription_seed",
-        "services_subscription_entitlements_legacy_status_for_v2"
-      ],
-      "qualifiedPath": [
-        "services_subscription_entitlements_start_trial",
-        "services_subscription_entitlements_actor_payload",
-        "services_subscription_entitlements_now",
-        "services_subscription_entitlements_plan_defaults",
-        "services_subscription_entitlements_record_event",
-        "services_subscription_entitlements_sync_legacy_tables",
-        "services_subscription_entitlements_upsert_subscription",
-        "services_subscription_entitlements_apply_plan",
-        "services_subscription_entitlements_ensure_subscription_seed",
-        "services_subscription_entitlements_legacy_status_for_v2"
-      ],
-      "depth": 3,
-      "nodeCount": 10,
-      "fileCount": 1,
-      "files": [
-        "app/services/subscription_entitlements.py"
-      ],
-      "criticality": 0.18,
-      "warnings": []
-    },
-    {
       "id": "flow:services_analytics_facts_touch_reservation_fact_window",
       "name": "touch_reservation_fact_window",
       "entryPoint": "services_analytics_facts_touch_reservation_fact_window",
@@ -13310,30 +13628,6 @@
       "fileCount": 1,
       "files": [
         "app/services/onboarding_service.py"
-      ],
-      "criticality": 0.17,
-      "warnings": []
-    },
-    {
-      "id": "flow:api_subscription_change_plan",
-      "name": "change_plan",
-      "entryPoint": "api_subscription_change_plan",
-      "entryPointId": "api_subscription_change_plan",
-      "path": [
-        "api_subscription_change_plan",
-        "api_subscription_serialize_status_payload",
-        "api_subscription_remaining_trial_days"
-      ],
-      "qualifiedPath": [
-        "api_subscription_change_plan",
-        "api_subscription_serialize_status_payload",
-        "api_subscription_remaining_trial_days"
-      ],
-      "depth": 2,
-      "nodeCount": 3,
-      "fileCount": 1,
-      "files": [
-        "app/api/subscription.py"
       ],
       "criticality": 0.17,
       "warnings": []
@@ -15694,6 +15988,46 @@
       "fileCount": 1,
       "files": [
         "app/api/subscription.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_subscription_entitlements_start_trial",
+      "name": "start_trial",
+      "entryPoint": "services_subscription_entitlements_start_trial",
+      "entryPointId": "services_subscription_entitlements_start_trial",
+      "path": [
+        "services_subscription_entitlements_start_trial",
+        "services_subscription_entitlements_actor_payload",
+        "services_subscription_entitlements_apply_plan",
+        "services_subscription_entitlements_ensure_subscription_seed",
+        "services_subscription_entitlements_legacy_subscription_allows_trial",
+        "services_subscription_entitlements_now",
+        "services_subscription_entitlements_plan_defaults",
+        "services_subscription_entitlements_record_event",
+        "services_subscription_entitlements_sync_legacy_tables",
+        "services_subscription_entitlements_upsert_subscription",
+        "services_subscription_entitlements_legacy_status_for_v2"
+      ],
+      "qualifiedPath": [
+        "services_subscription_entitlements_start_trial",
+        "services_subscription_entitlements_actor_payload",
+        "services_subscription_entitlements_apply_plan",
+        "services_subscription_entitlements_ensure_subscription_seed",
+        "services_subscription_entitlements_legacy_subscription_allows_trial",
+        "services_subscription_entitlements_now",
+        "services_subscription_entitlements_plan_defaults",
+        "services_subscription_entitlements_record_event",
+        "services_subscription_entitlements_sync_legacy_tables",
+        "services_subscription_entitlements_upsert_subscription",
+        "services_subscription_entitlements_legacy_status_for_v2"
+      ],
+      "depth": 2,
+      "nodeCount": 11,
+      "fileCount": 1,
+      "files": [
+        "app/services/subscription_entitlements.py"
       ],
       "criticality": 0.17,
       "warnings": []
@@ -22591,6 +22925,28 @@
       "warnings": []
     },
     {
+      "id": "flow:services_payment_proof_service_recover_failed_transfer_proof_commit",
+      "name": "recover_failed_transfer_proof_commit",
+      "entryPoint": "services_payment_proof_service_recover_failed_transfer_proof_commit",
+      "entryPointId": "services_payment_proof_service_recover_failed_transfer_proof_commit",
+      "path": [
+        "services_payment_proof_service_recover_failed_transfer_proof_commit",
+        "services_payment_proof_service_delete_uncommitted_object"
+      ],
+      "qualifiedPath": [
+        "services_payment_proof_service_recover_failed_transfer_proof_commit",
+        "services_payment_proof_service_delete_uncommitted_object"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/services/payment_proof_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:api_integrations_refresh",
       "name": "refresh",
       "entryPoint": "api_integrations_refresh",
@@ -23836,6 +24192,7 @@
       "path": [
         "services_payment_proof_service_submit_transfer_proof",
         "services_payment_proof_service_decode_image",
+        "services_payment_proof_service_delete_uncommitted_object",
         "services_payment_proof_service_paymentprooferror",
         "services_payment_proof_service_reservation",
         "services_payment_proof_service_safe_filename"
@@ -23843,12 +24200,13 @@
       "qualifiedPath": [
         "services_payment_proof_service_submit_transfer_proof",
         "services_payment_proof_service_decode_image",
+        "services_payment_proof_service_delete_uncommitted_object",
         "services_payment_proof_service_paymentprooferror",
         "services_payment_proof_service_reservation",
         "services_payment_proof_service_safe_filename"
       ],
       "depth": 1,
-      "nodeCount": 5,
+      "nodeCount": 6,
       "fileCount": 1,
       "files": [
         "app/services/payment_proof_service.py"

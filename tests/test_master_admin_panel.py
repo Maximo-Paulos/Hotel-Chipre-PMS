@@ -478,6 +478,14 @@ def test_master_admin_mfa_is_mandatory_and_cannot_be_bypassed(master_client, mon
     assert csrf_token
     headers = {"X-CSRF-Token": csrf_token}
 
+    protected_override = client.post(
+        "/api/subscription/entitlements/override",
+        headers={**headers, "X-Hotel-Id": "1"},
+        json={"code": "reports.advanced", "value": True},
+    )
+    assert protected_override.status_code == 403, protected_override.text
+    assert "MFA obligatorio" in protected_override.json()["detail"]
+
     reauth_rejected = client.post(
         "/api/master-admin/mfa/enroll",
         headers=headers,
@@ -584,6 +592,83 @@ def test_master_admin_mfa_is_mandatory_and_cannot_be_bypassed(master_client, mon
     assert "master_admin_mfa_enroll" in actions
     assert "master_admin_mfa_confirm" in actions
     assert "master_admin_mfa_disable" in actions
+
+
+def test_subscription_admin_mutations_require_master_mfa_and_csrf(master_client, monkeypatch):
+    client, SessionLocal = master_client
+    monkeypatch.setenv("MASTER_ADMIN_PIN", "654321")
+    get_settings.cache_clear()
+    db = SessionLocal()
+    try:
+        admin = _seed_platform_admin(db)
+        _seed_hotel(db, hotel_id=37, name="Synthetic Subscription Hotel")
+        db.commit()
+        admin_id = admin.id
+    finally:
+        db.close()
+
+    login = _complete_master_login(client, SessionLocal)
+    csrf = login.json()["csrf_token"]
+    hotel_headers = {"X-Hotel-Id": "37"}
+
+    missing_csrf = client.post(
+        "/api/subscription/entitlements/override",
+        headers=hotel_headers,
+        json={"code": "reports.advanced", "value": True},
+    )
+    assert missing_csrf.status_code == 403, missing_csrf.text
+    assert missing_csrf.json()["detail"] == "CSRF invalido"
+
+    headers = {**hotel_headers, "X-CSRF-Token": csrf}
+    changed = client.post(
+        "/api/subscription/entitlements/override",
+        headers=headers,
+        json={"code": "reports.advanced", "value": True},
+    )
+    assert changed.status_code == 200, changed.text
+
+    blocked_plan = client.post(
+        "/api/subscription/plan",
+        headers=headers,
+        json={"plan_code": "ultra"},
+    )
+    assert blocked_plan.status_code == 409, blocked_plan.text
+
+    comped = client.post(
+        "/api/admin/subscription/comped-override",
+        headers={"X-CSRF-Token": csrf},
+        json={
+            "hotel_id": 37,
+            "plan_code": "pro",
+            "reason": "Synthetic support grant",
+            "valid_until": (datetime.now(timezone.utc) + timedelta(days=30)).isoformat(),
+        },
+    )
+    assert comped.status_code == 200, comped.text
+    assert comped.json()["status"] == "comped"
+
+    deleted = client.delete(
+        "/api/subscription/entitlements/override/reports.advanced",
+        headers=headers,
+    )
+    assert deleted.status_code == 200, deleted.text
+
+    db = SessionLocal()
+    try:
+        actions = {
+            event.action
+            for event in db.query(MasterAdminAuditEvent)
+            .filter(MasterAdminAuditEvent.actor_user_id == admin_id, MasterAdminAuditEvent.target_id == "37")
+            .all()
+        }
+        assert {
+            "subscription_entitlement_override_set",
+            "subscription_entitlement_override_deleted",
+            "subscription_plan_activation_blocked",
+            "comped_override_grant",
+        }.issubset(actions)
+    finally:
+        db.close()
 
 
 def test_master_login_cookie_works_on_underscore_alias(master_client, monkeypatch):
@@ -1082,3 +1167,20 @@ def test_master_stripe_webhook_retry_of_same_event_is_idempotent_not_500(master_
         assert count == 1
     finally:
         db.close()
+
+
+def test_master_stripe_webhook_rejects_oversized_body_before_signature_verification(master_client, monkeypatch):
+    client, _SessionLocal = master_client
+    monkeypatch.setattr("app.master_admin.router.require_inbound_provider_events", lambda _provider: None)
+
+    def fail_if_signature_is_checked(*_args, **_kwargs):
+        raise AssertionError("oversized bodies must be rejected before signature verification")
+
+    monkeypatch.setattr("app.master_admin.router.verify_stripe_signature", fail_if_signature_is_checked)
+    response = client.post(
+        "/api/master-admin/stripe/webhook",
+        content=b"x" * (4 * 1024 * 1024 + 1),
+        headers={"Content-Type": "application/json"},
+    )
+
+    assert response.status_code == 413

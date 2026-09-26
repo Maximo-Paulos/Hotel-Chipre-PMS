@@ -78,6 +78,32 @@ def test_seed_and_reset_allowed_when_demo_enabled(client: TestClient, monkeypatc
     assert reset.json()["status"] == "reset_empty"
 
 
+@pytest.mark.parametrize("testing_value", ["false", "0", "no", "off", "False"])
+def test_false_testing_values_do_not_bypass_demo_guard(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, testing_value: str
+):
+    monkeypatch.delenv("DEMO_MODE", raising=False)
+    monkeypatch.setenv("TESTING", testing_value)
+
+    response = client.post("/api/reset")
+
+    assert response.status_code == 403, response.text
+
+
+def test_demo_reset_is_unavailable_in_production_even_if_flags_are_enabled(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.delenv("APP_ENV", raising=False)
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.setenv("DEMO_MODE", "true")
+    monkeypatch.setenv("TESTING", "true")
+    get_settings.cache_clear()
+
+    response = client.post("/api/reset")
+
+    assert response.status_code == 404, response.text
+
+
 def test_demo_routes_hidden_from_openapi_by_default(client: TestClient, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.delenv("DEMO_MODE", raising=False)
     paths = client.app.openapi()["paths"]

@@ -4,11 +4,10 @@ Exposed only when the DEMO_MODE environment flag is enabled.
 """
 from __future__ import annotations
 
-import os
-
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.config import is_demo_mode, is_production_mode, is_testing_mode
 import app.models  # noqa: F401 - ensures all models are registered on Base.metadata
 from app.database import Base, get_db
 
@@ -17,9 +16,11 @@ router = APIRouter(prefix="/api", tags=["Demo"])
 
 def _require_demo_mode() -> None:
     """Guard endpoints so they only run in explicit demo mode or tests."""
-    if os.getenv("TESTING", ""):
+    if is_production_mode():
+        raise HTTPException(status_code=404)
+    if is_testing_mode():
         return
-    if os.getenv("DEMO_MODE", "").lower() not in {"1", "true", "yes", "on"}:
+    if not is_demo_mode():
         raise HTTPException(
             status_code=403,
             detail="Demo mode is disabled. Set DEMO_MODE=true to use this endpoint.",

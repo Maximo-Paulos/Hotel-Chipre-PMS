@@ -247,6 +247,23 @@ def test_invalid_data_blocks_advancement(client: TestClient):
     assert "Stripe" in invalid_subscription.json()["detail"]
 
 
+def test_onboarding_cannot_activate_paid_plan_without_checkout(client: TestClient):
+    headers = _register_owner(client, "subscription-without-checkout@test.com")
+
+    response = client.post(
+        "/api/onboarding/subscription-choice",
+        json={"plan_code": "ultra", "start_trial": False},
+        headers=headers,
+    )
+
+    assert response.status_code == 400, response.text
+    assert "pago" in response.json()["detail"].lower()
+
+    status = client.get("/api/subscription/status", headers=headers)
+    assert status.status_code == 200, status.text
+    assert status.json()["plan"] != "ultra"
+
+
 def test_complete_nine_step_flow_works(client: TestClient):
     headers = _register_owner(client, "wizard-complete@test.com")
     _complete_onboarding_setup(client, headers, "wizard-complete@test.com")

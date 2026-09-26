@@ -2,11 +2,7 @@ import React, { useMemo, useState } from "react";
 
 import { ApiError } from "../../api/client";
 import { CheckoutStub } from "../../components/CheckoutStub";
-import {
-  changeSubscriptionPlan,
-  startTrial,
-  type SubscriptionPlan
-} from "../../api/subscription";
+import { startTrial, type SubscriptionPlan } from "../../api/subscription";
 import { useSubscriptionPlans, useSubscriptionStatus } from "../../hooks/useSubscription";
 import { useSession } from "../../state/session";
 
@@ -55,27 +51,7 @@ export default function SettingsSubscriptionPage() {
   const isComped = status === "comped";
   const isTrialing = status === "trialing";
   const isOperational = Boolean(status && WRITE_ENABLED_STATUSES.includes(status));
-  const showTrialButton = !isTrialing && !isComped && !updating;
-
-  const handleChange = async (planCode: string) => {
-    if (writeBlocked && !isSuspended) {
-      setError("Suscripción en modo solo lectura. Reactivá el plan para habilitar cambios.");
-      return;
-    }
-    setError(null);
-    setToast(null);
-    setUpdating(true);
-    try {
-      await changeSubscriptionPlan(planCode, session);
-      await Promise.all([statusQuery.refetch(), plansQuery.refetch()]);
-      setToast("Plan actualizado correctamente.");
-    } catch (err) {
-      const msg = err instanceof ApiError ? err.message : "No se pudo actualizar el plan.";
-      setError(msg);
-    } finally {
-      setUpdating(false);
-    }
-  };
+  const showTrialButton = Boolean(subscription?.trial_available) && !updating;
 
   const handleStartTrial = async (planCode: string) => {
     setError(null);
@@ -282,7 +258,7 @@ export default function SettingsSubscriptionPage() {
           <div className="grid gap-3 md:grid-cols-2">
             {availablePlans.map((plan) => {
               const isCurrent = plan.code === subscription?.plan;
-              const canStartTrial = showTrialButton && plan.code !== "starter";
+              const canStartTrial = showTrialButton && plan.code === "pro";
               return (
                 <div
                   key={plan.code}
@@ -294,7 +270,9 @@ export default function SettingsSubscriptionPage() {
                     <div>
                       <p className="text-sm font-semibold text-slate-900">{plan.name}</p>
                       <p className="text-xs text-slate-600">Hasta {plan.room_limit} habitaciones</p>
-                      {plan.price_month != null && <p className="text-xs text-slate-500">${plan.price_month} / mes</p>}
+                      <p className="text-xs text-slate-500">
+                        {plan.price_month != null ? `$${plan.price_month} / mes` : "Precio a definir"}
+                      </p>
                       {plan.features && (
                         <ul className="mt-1 space-y-1 text-xs text-slate-600">
                           {plan.features.slice(0, 3).map((feature) => (
@@ -306,13 +284,13 @@ export default function SettingsSubscriptionPage() {
                     <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
-                        disabled={isCurrent || updating || (writeBlocked && !isSuspended)}
-                        onClick={() => handleChange(plan.code)}
+                        disabled={isCurrent || updating}
+                        onClick={() => handleOpenCheckout(plan)}
                         className={`rounded-lg px-3 py-2 text-xs font-semibold ${
                           isCurrent ? "bg-slate-100 text-slate-600" : "bg-brand-600 text-white hover:bg-brand-700"
                         } disabled:cursor-not-allowed disabled:opacity-60`}
                       >
-                        {writeBlocked && !isSuspended ? "Bloqueado" : isCurrent ? "Plan actual" : "Elegir plan"}
+                        {isCurrent ? "Plan actual" : "Ver checkout demo"}
                       </button>
                       {canStartTrial && (
                         <button
@@ -324,13 +302,6 @@ export default function SettingsSubscriptionPage() {
                           Iniciar prueba gratis
                         </button>
                       )}
-                      <button
-                        type="button"
-                        onClick={() => handleOpenCheckout(plan)}
-                        className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:border-brand-300 hover:text-brand-700"
-                      >
-                        Checkout demo
-                      </button>
                     </div>
                   </div>
                 </div>

@@ -78,8 +78,8 @@ const defaultOtaForm: OTAChannelsPayload = {
 };
 
 const defaultSubscriptionForm: SubscriptionChoicePayload = {
-  plan_code: "starter",
-  start_trial: false
+  plan_code: "pro",
+  start_trial: true
 };
 
 const inputClassName =
@@ -182,7 +182,11 @@ export function OnboardingWizard() {
         plan_code: String(status.subscription_choice.plan_code ?? defaultSubscriptionForm.plan_code),
         start_trial: Boolean(status.subscription_choice.start_trial)
       });
-    } else if (status.current_subscription && subscriptionForm.plan_code === defaultSubscriptionForm.plan_code) {
+    } else if (
+      status.current_subscription &&
+      status.current_subscription.trial_available !== true &&
+      subscriptionForm.plan_code === defaultSubscriptionForm.plan_code
+    ) {
       setSubscriptionForm({
         plan_code: String(status.current_subscription.plan ?? defaultSubscriptionForm.plan_code),
         start_trial: false
@@ -1023,6 +1027,9 @@ function SubscriptionStep({
   stripeEnabled: boolean;
 }) {
   const selectedStarterWithStripe = stripeEnabled && form.plan_code === "starter";
+  const currentPlanCode = String(currentSubscription?.plan ?? "");
+  const trialAvailable = currentSubscription?.trial_available === true;
+  const selectionUnavailable = !form.start_trial && form.plan_code !== currentPlanCode;
 
   return (
     <StepCard title="Elección de suscripción" status={status}>
@@ -1036,39 +1043,61 @@ function SubscriptionStep({
         {plans.map((plan) => (
           <label
             key={plan.code}
-            className={`cursor-pointer rounded-lg border p-4 ${
+            className={`rounded-lg border p-4 ${
               form.plan_code === plan.code ? "border-brand-500 bg-brand-50" : "border-slate-200"
-            }`}
+            } ${plan.code === "pro" && trialAvailable ? "cursor-pointer" : plan.code === currentPlanCode ? "cursor-pointer" : "cursor-not-allowed opacity-70"}`}
           >
             <input
               type="radio"
               name="subscription-plan"
               className="sr-only"
+              disabled={!(plan.code === "pro" && trialAvailable) && plan.code !== currentPlanCode}
               checked={form.plan_code === plan.code}
-              onChange={() => setForm({ ...form, plan_code: plan.code })}
+              onChange={() =>
+                setForm(
+                  plan.code === "pro" && trialAvailable
+                    ? { plan_code: "pro", start_trial: true }
+                    : { plan_code: plan.code, start_trial: false }
+                )
+              }
             />
             <p className="text-sm font-semibold text-slate-900">{plan.name}</p>
             <p className="text-xs text-slate-600">
               {plan.room_limit} habitaciones · {plan.staff_limit ?? "-"} staff
             </p>
-            {plan.price_month != null && <p className="mt-1 text-xs text-slate-500">${plan.price_month} / mes</p>}
+            <p className="mt-1 text-xs text-slate-500">
+              {plan.price_month != null ? `$${plan.price_month} / mes` : "Precio a definir"}
+            </p>
+            <p className="mt-2 text-xs text-slate-500">
+              {plan.code === "pro" && trialAvailable
+                ? "Prueba única de 14 días"
+                : plan.code === currentPlanCode
+                  ? "Plan vigente; este paso no lo modifica"
+                  : "Checkout todavía no disponible"}
+            </p>
           </label>
         ))}
       </div>
-      <label className="mt-4 flex items-center gap-2 text-sm text-slate-700">
-        <input
-          type="checkbox"
-          checked={form.start_trial}
-          onChange={(event) => setForm({ ...form, start_trial: event.target.checked })}
-        />
-        Iniciar prueba gratis del plan seleccionado
-      </label>
+      <p className="mt-4 rounded-lg bg-sky-50 px-4 py-3 text-sm text-sky-900">
+        El plan Pro ofrece una prueba gratuita única de 14 días. Los planes pagos no se activan aquí: elegir un plan no
+        genera un cobro ni cambia la suscripción sin checkout confirmado.
+      </p>
+      {!trialAvailable && currentPlanCode !== "pro" && (
+        <p className="mt-3 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          La prueba ya fue utilizada y el checkout de pago aún no está disponible. Podés conservar el plan vigente;
+          no se activará otro plan desde este paso.
+        </p>
+      )}
       {selectedStarterWithStripe && (
         <p className="mt-3 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">
           Stripe requiere plan Pro o Ultra. Cambiá el plan o desactivá Stripe en el paso anterior.
         </p>
       )}
-      <StepActions onSave={onSave} loading={loading} disabled={selectedStarterWithStripe} />
+      <StepActions
+        onSave={onSave}
+        loading={loading}
+        disabled={selectedStarterWithStripe || selectionUnavailable || (form.start_trial && !trialAvailable)}
+      />
     </StepCard>
   );
 }

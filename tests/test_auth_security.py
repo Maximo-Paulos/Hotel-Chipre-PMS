@@ -652,10 +652,15 @@ def test_self_registration_cannot_grant_platform_admin_role(client_and_db, fixed
 
     forged_admin_action = client.post(
         "/api/admin/subscription/comped-override",
-        json={"hotel_id": 1, "plan_code": "ultra", "reason": "self-escalated"},
+        json={
+            "hotel_id": 1,
+            "plan_code": "ultra",
+            "reason": "self-escalated",
+            "valid_until": "2099-01-01T00:00:00+00:00",
+        },
         headers={"Authorization": f"Bearer {token}"},
     )
-    assert forged_admin_action.status_code == 403, forged_admin_action.text
+    assert forged_admin_action.status_code == 401, forged_admin_action.text
 
 
 def _fake_google_claims(

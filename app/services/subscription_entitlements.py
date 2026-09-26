@@ -20,9 +20,9 @@ from app.models.subscription_v2 import Subscription, SubscriptionAdjustment, Sub
 
 # Minimal catalog for the new plans
 PLAN_CATALOG: Dict[str, Dict[str, Any]] = {
-    "starter": {"name": "Starter", "room_limit": 15, "staff_limit": 3, "price_month": 0},
-    "pro": {"name": "Pro", "room_limit": 40, "staff_limit": 8, "price_month": 49},
-    "ultra": {"name": "Ultra", "room_limit": 80, "staff_limit": 20, "price_month": 99},
+    "starter": {"name": "Starter", "room_limit": 15, "staff_limit": 3, "price_month": None},
+    "pro": {"name": "Pro", "room_limit": 40, "staff_limit": 8, "price_month": None},
+    "ultra": {"name": "Ultra", "room_limit": 80, "staff_limit": 20, "price_month": None},
 }
 
 # Feature-level entitlements stay alongside the canonical plan catalog so
@@ -165,6 +165,13 @@ def _record_event(db: Session, sub: Subscription, event_type: str, payload: Dict
 
 def _actor_payload(actor: Dict[str, Any] | None) -> Dict[str, Any]:
     return actor or {}
+
+
+def _legacy_subscription_allows_trial(db: Session, hotel_id: int) -> bool:
+    legacy = db.query(HotelSubscription).filter(HotelSubscription.hotel_id == hotel_id).first()
+    if legacy is None:
+        return True
+    return bool(legacy.status == "active" and legacy.plan and legacy.plan.code == "starter")
 
 
 def _normalize_adjustment_reason(reason: str | None) -> str:
@@ -343,10 +350,52 @@ def start_trial(db: Session, hotel_id: int, plan_code: str = "pro", actor: Dict[
     if plan_code not in PLAN_CATALOG:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plan no encontrado")
 
-    sub = _upsert_subscription(db, hotel_id, plan_code, "trialing")
+    # Lock the tenant row first so simultaneous requests cannot both pass the
+    # one-trial check before a subscription row exists.
+    hotel = (
+        db.query(HotelConfiguration)
+        .filter(HotelConfiguration.id == hotel_id)
+        .with_for_update()
+        .first()
+    )
+    if hotel is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Hotel no encontrado")
+
+    sub = (
+        db.query(Subscription)
+        .filter(Subscription.hotel_id == hotel_id)
+        .with_for_update()
+        .first()
+    )
+    if not _legacy_subscription_allows_trial(db, hotel_id):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="La suscripción existente no es elegible para una prueba gratuita.",
+        )
+    if sub is None:
+        sub, _ = ensure_subscription_seed(db, hotel_id, plan_code="starter", status_value="active")
+
+    trial_already_started = (
+        sub.trial_started_at is not None
+        or sub.trial_end_at is not None
+        or db.query(SubscriptionEvent.id)
+        .filter(
+            SubscriptionEvent.hotel_id == hotel_id,
+            SubscriptionEvent.event_type == "trial_started",
+        )
+        .first()
+        is not None
+    )
+    if trial_already_started or sub.plan != "starter" or sub.status != "active":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="La prueba gratuita ya fue utilizada o la suscripción no es elegible.",
+        )
+
+    _apply_plan(sub, plan_code)
+    sub.status = "trialing"
     now = _now()
-    if sub.trial_started_at is None:
-        sub.trial_started_at = now
+    sub.trial_started_at = now
     sub.trial_end_at = now + timedelta(days=TRIAL_DURATION_DAYS)
     sub.current_period_end = sub.trial_end_at
     sub.grace_until = None
@@ -506,6 +555,15 @@ def get_subscription_snapshot(db: Session, hotel_id: int) -> Dict[str, Any]:
             "current_period_end": None,
             "trial_started_at": None,
             "trial_end_at": None,
+            "trial_available": not (
+                db.query(SubscriptionEvent.id)
+                .filter(
+                    SubscriptionEvent.hotel_id == hotel_id,
+                    SubscriptionEvent.event_type == "trial_started",
+                )
+                .first()
+                is not None
+            ) and _legacy_subscription_allows_trial(db, hotel_id),
             "grace_until": None,
             "enforcement_enabled": enforcement_enabled,
             "dirty": False,
@@ -515,6 +573,23 @@ def get_subscription_snapshot(db: Session, hotel_id: int) -> Dict[str, Any]:
 
     defaults = _plan_defaults(sub.plan)
     dirty = seeded
+    trial_event_exists = (
+        db.query(SubscriptionEvent.id)
+        .filter(
+            SubscriptionEvent.hotel_id == hotel_id,
+            SubscriptionEvent.event_type == "trial_started",
+        )
+        .first()
+        is not None
+    )
+    trial_available = (
+        not trial_event_exists
+        and sub.trial_started_at is None
+        and sub.trial_end_at is None
+        and sub.plan == "starter"
+        and sub.status == "active"
+        and _legacy_subscription_allows_trial(db, hotel_id)
+    )
     trial_end_at = _as_utc(sub.trial_end_at)
     if sub.status == "trialing" and trial_end_at and trial_end_at <= _now():
         end_trial(db, hotel_id, reason="trial_expired")
@@ -538,6 +613,7 @@ def get_subscription_snapshot(db: Session, hotel_id: int) -> Dict[str, Any]:
         "current_period_end": sub.current_period_end,
         "trial_started_at": _as_utc(sub.trial_started_at),
         "trial_end_at": _as_utc(sub.trial_end_at),
+        "trial_available": trial_available,
         "grace_until": _as_utc(sub.grace_until),
         "enforcement_enabled": enforcement_enabled,
         "dirty": dirty,

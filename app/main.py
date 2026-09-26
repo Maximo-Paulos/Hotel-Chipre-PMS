@@ -94,19 +94,6 @@ from app.api import (
 import app.master_admin.models  # noqa: F401
 from app.master_admin.router import router as master_admin_router
 
-def _is_demo_mode_enabled() -> bool:
-    """Check whether demo-only utilities should be exposed."""
-    return os.getenv("DEMO_MODE", "").lower() in {"1", "true", "yes", "on"}
-
-
-def _require_demo_mode():
-    if not _is_demo_mode_enabled():
-        raise HTTPException(
-            status_code=403,
-            detail="Demo mode is disabled. Set DEMO_MODE=true to use this endpoint.",
-        )
-
-
 def _seed_permission_matrix_once() -> None:
     """Seed the permission matrix once at boot (per worker process).
 
@@ -355,7 +342,7 @@ app.include_router(subscription.router)
 app.include_router(subscription.admin_router)
 app.include_router(users.router)
 app.include_router(roles.router)
-if is_demo_mode() or not is_production_mode():
+if not is_production_mode():
     app.include_router(demo.router, include_in_schema=is_demo_mode())
 app.include_router(auth.router)
 app.include_router(invitations.router)

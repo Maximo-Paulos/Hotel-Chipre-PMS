@@ -34,6 +34,6 @@ class TrialRequest(BaseModel):
 class CompedOverrideRequest(BaseModel):
     hotel_id: int = Field(..., gt=0)
     plan_code: str = Field(default="ultra", examples=["starter", "pro", "ultra"])
-    reason: str | None = Field(default=None, max_length=250)
-    valid_until: datetime | None = Field(default=None, description="Vigencia opcional del override.")
+    reason: str = Field(..., min_length=1, max_length=250)
+    valid_until: datetime = Field(..., description="Vigencia obligatoria del override comped.")
     idempotency_key: str | None = Field(default=None, min_length=1, max_length=100)

@@ -1,6 +1,28 @@
 import pytest
 
-from app.config import Settings, get_settings, validate_runtime_security
+from app.config import (
+    Settings,
+    get_settings,
+    is_preview_qa_mode,
+    is_production_mode,
+    validate_runtime_security,
+)
+
+
+def test_runtime_mode_uses_environment_fallback_when_app_env_is_unset(monkeypatch):
+    monkeypatch.delenv("APP_ENV", raising=False)
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    get_settings.cache_clear()
+
+    assert is_production_mode()
+
+
+def test_preview_mode_uses_environment_fallback_when_app_env_is_unset(monkeypatch):
+    monkeypatch.delenv("APP_ENV", raising=False)
+    monkeypatch.setenv("ENVIRONMENT", "preview")
+    get_settings.cache_clear()
+
+    assert is_preview_qa_mode()
 
 
 def test_validate_runtime_security_rejects_default_production_secrets():

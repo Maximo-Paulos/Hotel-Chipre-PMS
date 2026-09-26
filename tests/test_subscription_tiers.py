@@ -4,6 +4,7 @@ import json
 from datetime import datetime, timedelta, timezone
 
 import pytest
+from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event
@@ -17,7 +18,7 @@ from app.database import Base, get_db
 from app.master_admin.models import MasterAdminAuditEvent
 from app.models.hotel_config import HotelConfiguration
 from app.models.hotel_membership import HotelMembership
-from app.models.subscription import HotelSubscription
+from app.models.subscription import HotelSubscription, SubscriptionPlan
 from app.models.subscription_v2 import Subscription, SubscriptionAdjustment, SubscriptionEvent
 from app.models.user import User
 from app.services.security import create_access_token, hash_password
@@ -133,6 +134,7 @@ def test_subscription_catalog_has_updated_tier_limits():
     assert plans["pro"]["staff_limit"] == 8
     assert plans["ultra"]["room_limit"] == 80
     assert plans["ultra"]["staff_limit"] == 20
+    assert all(plan["price_month"] is None for plan in plans.values())
 
 
 def test_trial_auto_suspends_after_fourteen_days(client):
@@ -141,6 +143,7 @@ def test_trial_auto_suspends_after_fourteen_days(client):
     try:
         _ensure_hotel(db, hotel_id=1)
         subscription = start_trial(db, hotel_id=1, plan_code="pro", actor={"source": "test"})
+        assert get_subscription_snapshot(db, 1)["trial_available"] is False
         subscription.trial_end_at = datetime.now(timezone.utc) - timedelta(minutes=1)
         db.flush()
 
@@ -151,68 +154,6 @@ def test_trial_auto_suspends_after_fourteen_days(client):
         assert "trial_started" in event_types
         assert "trial_ended" in event_types
         assert "subscription_suspended" in event_types
-    finally:
-        db.close()
-
-
-def test_comped_override_records_audit_event(client):
-    test_client, SessionLocal = client
-    db = SessionLocal()
-    try:
-        _ensure_hotel(db, hotel_id=7)
-        admin_headers = _auth_headers(db, hotel_id=999, membership_role=None, user_role="platform_admin")
-        db.commit()
-    finally:
-        db.close()
-
-    response = test_client.post(
-        "/api/admin/subscription/comped-override",
-        json={"hotel_id": 7, "plan_code": "ultra", "reason": "pilot-comp"},
-        headers=admin_headers,
-    )
-
-    assert response.status_code == 200, response.text
-    payload = response.json()
-    assert payload["status"] == "comped"
-    assert payload["plan"] == "ultra"
-
-    db = SessionLocal()
-    try:
-        admin_user = db.query(User).filter(User.email == "platform_admin-global-999@test.com").one()
-        latest_event = (
-            db.query(SubscriptionEvent)
-            .filter(SubscriptionEvent.hotel_id == 7)
-            .order_by(SubscriptionEvent.id.desc())
-            .first()
-        )
-        assert latest_event is not None
-        assert latest_event.event_type == "comped_granted"
-        assert "pilot-comp" in (latest_event.payload or "")
-
-        audit_event = (
-            db.query(MasterAdminAuditEvent)
-            .filter(MasterAdminAuditEvent.action == "comped_override_grant")
-            .one()
-        )
-        assert audit_event.actor_user_id == admin_user.id
-        assert audit_event.outcome == "success"
-        assert audit_event.target_type == "hotel"
-        assert audit_event.target_id == "7"
-        assert audit_event.request_path == "/api/admin/subscription/comped-override"
-        assert audit_event.request_method == "POST"
-        assert json.loads(audit_event.metadata_json or "{}") == {
-            "hotel_id": 7,
-            "plan_code": "ultra",
-            "reason": "pilot-comp",
-        }
-        adjustment = db.query(SubscriptionAdjustment).filter_by(hotel_id=7).one()
-        assert adjustment.adjustment_type == "override"
-        assert adjustment.plan_code == "ultra"
-        assert adjustment.reason == "pilot-comp"
-        assert adjustment.actor_user_id == admin_user.id
-        assert adjustment.actor_role == "platform_admin"
-        assert adjustment.valid_until is None
-        assert adjustment.idempotency_key
     finally:
         db.close()
 
@@ -274,7 +215,30 @@ def test_subscription_adjustment_preserves_history_when_hotel_delete_is_attempte
         db.close()
 
 
-def test_comped_override_rejects_unknown_hotel_without_subscription_state(client):
+def test_trial_does_not_replace_existing_legacy_paid_plan(client):
+    _, SessionLocal = client
+    db = SessionLocal()
+    try:
+        _ensure_hotel(db, hotel_id=75)
+        pro = SubscriptionPlan(code="pro", name="Pro", room_limit=40)
+        db.add(pro)
+        db.flush()
+        legacy = HotelSubscription(hotel_id=75, plan_id=pro.id, status="active")
+        db.add(legacy)
+        db.flush()
+
+        with pytest.raises(HTTPException) as raised:
+            start_trial(db, hotel_id=75, plan_code="pro", actor={"source": "test"})
+
+        assert raised.value.status_code == 409
+        assert db.query(Subscription).filter_by(hotel_id=75).count() == 0
+        assert db.get(HotelSubscription, legacy.id).plan_id == pro.id
+        assert db.get(HotelSubscription, legacy.id).status == "active"
+    finally:
+        db.close()
+
+
+def test_comped_override_requires_master_admin_session_before_disclosing_hotel_state(client):
     test_client, SessionLocal = client
     db = SessionLocal()
     try:
@@ -285,12 +249,17 @@ def test_comped_override_rejects_unknown_hotel_without_subscription_state(client
 
     response = test_client.post(
         "/api/admin/subscription/comped-override",
-        json={"hotel_id": 99999, "plan_code": "ultra", "reason": "unknown-hotel"},
+        json={
+            "hotel_id": 99999,
+            "plan_code": "ultra",
+            "reason": "unknown-hotel",
+            "valid_until": "2099-01-01T00:00:00+00:00",
+        },
         headers=admin_headers,
     )
 
-    assert response.status_code == 404, response.text
-    assert response.json()["detail"] == "Hotel no encontrado"
+    assert response.status_code == 401, response.text
+    assert response.json()["detail"] == "Sesion master requerida"
 
     db = SessionLocal()
     try:
@@ -309,6 +278,7 @@ def test_role_gating_for_trial_and_comped_override(client):
         owner_headers = _auth_headers(db, hotel_id=3, membership_role="owner", user_role="owner")
         manager_headers = _auth_headers(db, hotel_id=3, membership_role="manager", user_role="manager")
         owner_no_admin_headers = _auth_headers(db, hotel_id=3, membership_role="owner", user_role="owner")
+        platform_admin_headers = _auth_headers(db, hotel_id=3, membership_role="owner", user_role="platform_admin")
         db.commit()
     finally:
         db.close()
@@ -318,20 +288,88 @@ def test_role_gating_for_trial_and_comped_override(client):
         json={"plan_code": "pro"},
         headers=owner_headers,
     )
+    owner_ultra_trial = test_client.post(
+        "/api/subscription/trial",
+        json={"plan_code": "ultra"},
+        headers=owner_headers,
+    )
+    owner_repeated_trial = test_client.post(
+        "/api/subscription/trial",
+        json={"plan_code": "pro"},
+        headers=owner_headers,
+    )
     manager_trial = test_client.post(
         "/api/subscription/trial",
         json={"plan_code": "pro"},
         headers=manager_headers,
     )
+    owner_plan_change = test_client.post(
+        "/api/subscription/plan",
+        json={"plan_code": "ultra"},
+        headers=owner_headers,
+    )
+    owner_entitlement_override = test_client.post(
+        "/api/subscription/entitlements/override",
+        json={"code": "reports.advanced", "value": True},
+        headers=owner_headers,
+    )
+    owner_entitlement_delete = test_client.delete(
+        "/api/subscription/entitlements/override/rooms.max_active",
+        headers=owner_headers,
+    )
     owner_admin_override = test_client.post(
         "/api/admin/subscription/comped-override",
-        json={"hotel_id": 3, "plan_code": "pro", "reason": "should-fail"},
+        json={
+            "hotel_id": 3,
+            "plan_code": "pro",
+            "reason": "should-fail",
+            "valid_until": "2099-01-01T00:00:00+00:00",
+        },
         headers=owner_no_admin_headers,
+    )
+    admin_plan_change = test_client.post(
+        "/api/subscription/plan",
+        json={"plan_code": "ultra"},
+        headers=platform_admin_headers,
+    )
+    admin_entitlement_override = test_client.post(
+        "/api/subscription/entitlements/override",
+        json={"code": "reports.advanced", "value": True},
+        headers=platform_admin_headers,
+    )
+    owner_trial_after_admin_plan_change = test_client.post(
+        "/api/subscription/trial",
+        json={"plan_code": "pro"},
+        headers=owner_headers,
     )
 
     assert owner_trial.status_code == 200, owner_trial.text
+    assert owner_trial.json()["trial_available"] is False
+    assert owner_ultra_trial.status_code == 400, owner_ultra_trial.text
+    assert owner_repeated_trial.status_code == 409, owner_repeated_trial.text
     assert manager_trial.status_code == 403, manager_trial.text
-    assert owner_admin_override.status_code == 403, owner_admin_override.text
+    assert owner_plan_change.status_code == 401, owner_plan_change.text
+    assert owner_entitlement_override.status_code == 401, owner_entitlement_override.text
+    assert owner_entitlement_delete.status_code == 401, owner_entitlement_delete.text
+    assert owner_admin_override.status_code == 401, owner_admin_override.text
+    assert admin_plan_change.status_code == 401, admin_plan_change.text
+    assert admin_entitlement_override.status_code == 401, admin_entitlement_override.text
+    assert owner_trial_after_admin_plan_change.status_code == 409, owner_trial_after_admin_plan_change.text
+
+    db = SessionLocal()
+    try:
+        assert db.query(SubscriptionEvent).filter_by(hotel_id=3, event_type="trial_started").count() == 1
+        admin_actions = {
+            row.action
+            for row in db.query(MasterAdminAuditEvent).filter(MasterAdminAuditEvent.target_id == "3").all()
+        }
+        assert "subscription_plan_activation_blocked" not in admin_actions
+        assert "subscription_entitlement_override_set" not in admin_actions
+        subscription = db.query(Subscription).filter_by(hotel_id=3).one()
+        assert subscription.plan == "pro"
+        assert subscription.status == "trialing"
+    finally:
+        db.close()
 
 
 def test_manual_transitions_emit_events(client):

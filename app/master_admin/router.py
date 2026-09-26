@@ -18,6 +18,7 @@ from app.services import mfa_service
 from app.services.security import verify_password
 from app.services.subscription_entitlements import get_subscription_snapshot
 from app.services import marketing_service
+from app.api.webhook_payloads import read_bounded_body
 from app.schemas.marketing import (
     MasterLeadListPayload,
     MasterPricingPlanListPayload,
@@ -69,6 +70,7 @@ from app.services.external_effects_policy import (
 )
 
 router = APIRouter(prefix="/api/master-admin", tags=["Master Admin"])
+STRIPE_WEBHOOK_MAX_BODY_BYTES = 4 * 1024 * 1024
 
 
 def _serialize_user(user: User) -> MasterAdminUserPayload:
@@ -566,7 +568,7 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=str(exc),
         ) from exc
-    body = await request.body()
+    body = await read_bounded_body(request, max_bytes=STRIPE_WEBHOOK_MAX_BODY_BYTES)
     signature = request.headers.get("Stripe-Signature")
     verify_stripe_signature(db, body, signature)
 

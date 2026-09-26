@@ -29,7 +29,6 @@ from app.schemas.onboarding import (
 )
 from app.schemas.room import RoomCategoryCreate
 from app.services.subscription_entitlements import (
-    change_subscription_plan,
     get_subscription_snapshot,
     start_trial,
 )
@@ -154,6 +153,7 @@ def _current_subscription_context(db: Session, hotel_id: int) -> dict:
         "room_limit": snapshot["room_limit"],
         "staff_limit": snapshot["staff_limit"],
         "can_write": snapshot["can_write"],
+        "trial_available": snapshot.get("trial_available", False),
     }
 
 
@@ -437,12 +437,16 @@ def set_subscription_choice(db: Session, payload: SubscriptionChoicePayload, hot
     if stripe_enabled and payload.plan_code not in {"pro", "ultra"}:
         raise OnboardingError("Stripe solo está disponible para planes Pro o Ultra")
 
+    current_subscription = get_subscription_snapshot(db, hid)
     if payload.start_trial:
-        if payload.plan_code == "starter":
-            raise OnboardingError("La prueba gratis solo está disponible para planes pagos")
-        start_trial(db, hid, plan_code=payload.plan_code, actor={"source": "onboarding"})
-    else:
-        change_subscription_plan(db, hid, payload.plan_code)
+        if payload.plan_code != "pro":
+            raise OnboardingError("La prueba gratuita de 14 días está disponible para el plan Pro")
+        start_trial(db, hid, plan_code="pro", actor={"source": "onboarding"})
+    elif (
+        payload.plan_code != current_subscription["plan"]
+        or current_subscription["status"] not in {"active", "trialing", "comped"}
+    ):
+        raise OnboardingError("La activación o el cambio a un plan pago requiere checkout y confirmación de pago")
 
     choice_payload = payload.model_dump()
     state.set_subscription_choice(choice_payload)

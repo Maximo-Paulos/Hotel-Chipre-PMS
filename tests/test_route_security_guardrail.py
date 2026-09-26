@@ -124,9 +124,9 @@ def _route_has_webhook_signature_gate(route: APIRoute) -> bool:
 
 
 def _route_has_master_admin_session_gate(route: APIRoute) -> bool:
-    return route.path.startswith("/api/master-admin/") and _endpoint_source_mentions(
+    return _endpoint_source_mentions(
         route.endpoint,
-        {"require_master_admin"},
+        {"require_master_admin", "_require_master_admin_write"},
     )
 
 

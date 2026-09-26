@@ -737,6 +737,7 @@
       "frontend/src/views/public/TermsPage.tsx",
       "frontend/src/views/public/ThankYouPage.tsx",
       "frontend/src/views/public/VerifyEmailPage.tsx",
+      "frontend/subscription-trial-fail-closed.test.mjs",
       "frontend/vite.config.mjs",
       "reset.py",
       "scripts/agent_ops/build_shared_sandbox_bootstrap_sql.py",
@@ -1324,10 +1325,10 @@
     ],
     "video": []
   },
-  "total_files": 1315,
-  "total_words": 1890997,
+  "total_files": 1316,
+  "total_words": 1892309,
   "needs_graph": true,
-  "warning": "Large corpus: 1315 files · ~1,890,997 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
+  "warning": "Large corpus: 1316 files · ~1,892,309 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
   "skipped_sensitive": [
     "alembic/versions/20260408_security_tokens.py",
     "alembic/versions/20260725_user_token_version.py",
@@ -1347,13 +1348,8 @@
   "graphifyignore_patterns": 69,
   "git": {
     "source_owner": "git",
-    "source_hash": "616a398f1ae1a203b2c6b98c0e7bc8c7d1151c2a",
+    "source_hash": "d82558fce8658c9081835d5e1e4e48330c128b5f",
     "branches": [
-      "codex/production-render-qa",
-      "codex/public-site-inquiries",
-      "docs/auditoria-pms-20260908",
-      "feature/operational-audit-cash-daily",
-      "feature/secure-auth-marketing-release-20260926",
       "main"
     ],
     "max_commits": 200,
@@ -1365,9 +1361,9 @@
     "source": "cli",
     "root": ".",
     "git_root": ".",
-    "head": "616a398f1ae1a203b2c6b98c0e7bc8c7d1151c2a",
+    "head": "d82558fce8658c9081835d5e1e4e48330c128b5f",
     "candidate_count": null,
-    "included_count": 1315,
+    "included_count": 1316,
     "excluded_untracked_count": 0,
     "excluded_ignored_count": 0,
     "excluded_sensitive_count": 14,

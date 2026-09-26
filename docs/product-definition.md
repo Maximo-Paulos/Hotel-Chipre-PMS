@@ -112,14 +112,15 @@ Direction is low → medium → high. Numeric values deferred.
 | Multi-hotel per account | 1 hotel | 1 hotel | Multiple hotels (post-launch; not a launch priority) |
 | Advanced operational capabilities (future) | Limited | Partial | Full — TODO(owner) to define |
 | Monthly price | TODO(owner) | TODO(owner) | TODO(owner) |
-| Trial available? | Yes (see §4.3) | Yes (see §4.3) | Yes (see §4.3) |
+| Trial path | Enter through one 14-day Pro trial per hotel | Trial tier | No direct trial; checkout required |
 
 Not tier-differentiated: OTAs, MercadoPago, PayPal, manual reservation loading (all included everywhere — see §4.1).
 
 ### 4.3 Trial
 - **Trial enabled.** Duration: **14 days**.
 - Trial runs on the main product with reasonable limits — **no separate implementation** distinct from the standard tiers.
-- TODO(owner): which tier the trial grants access to (default assumption: full `pro` for 14 days) and post-trial transition behavior (downgrade to `starter` paid? suspend? churn?).
+- The trial grants `pro`, starts from the onboarding flow, and is available once per hotel. A durable `trial_started` event prevents a second trial if subscription plan state later changes.
+- TODO(owner): post-trial transition behavior (downgrade to `starter` paid? suspend? churn?). Until checkout and payment confirmation exist, no paid plan may be activated from hotel self-service or the manual plan endpoint.
 
 ### 4.4 Free forever
 - **No free-forever tier.** `starter` is paid from day one.
@@ -145,8 +146,8 @@ For the owner's own hotel (and any internally comped cases):
 ### 4.8 Open items
 - Exact numeric `room_limit` / `staff_limit` per tier.
 - Confirm Despegar inclusion in the launch common-OTA set (§4.1).
-- Concrete monthly prices per tier.
-- Trial grant tier + post-trial behavior.
+- Concrete monthly prices per tier (the app must show “Precio a definir” until approved).
+- Post-trial behavior.
 - Upgrade / downgrade rules (prorated? immediate? end-of-period?).
 - Definition of the "advanced operational capabilities" differentiator for `ultra`.
 - Admin-override / comped subscription mechanism (§4.6) — architect design.
