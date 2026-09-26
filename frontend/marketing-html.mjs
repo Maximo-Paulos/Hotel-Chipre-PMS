@@ -62,13 +62,26 @@ export const MARKETING_ROUTES = [
     file: "privacy.html",
     title: "Política de Privacidad | Hotels-PMS",
     description: "Cómo Hotels-PMS recolecta, usa y protege los datos personales de usuarios y huéspedes."
+  },
+  {
+    path: "/contacto",
+    file: "contacto.html",
+    title: "Contacto | Consultas sobre Hotels-PMS",
+    description:
+      "Enviá una consulta sobre Hotels-PMS y contanos qué necesitás ordenar en la operación de tu hotel."
   }
 ];
 
 const replaceTag = (html, pattern, replacement) =>
   pattern.test(html) ? html.replace(pattern, replacement) : html;
 
-export function renderRouteHtml(indexHtml, route) {
+export function renderRouteHtml(
+  indexHtml,
+  route,
+  {
+    allowIndexing = String(process.env.VITE_ALLOW_INDEXING ?? "").trim().toLowerCase() === "true"
+  } = {}
+) {
   const url = `${SITE_URL}${route.path}`;
   let html = indexHtml;
   html = replaceTag(html, /<title>[\s\S]*?<\/title>/, `<title>${route.title}</title>`);
@@ -96,6 +109,11 @@ export function renderRouteHtml(indexHtml, route) {
     html,
     /<meta property="og:image" content="[^"]*" \/>/,
     `<meta property="og:image" content="${OG_IMAGE}" />`
+  );
+  html = replaceTag(
+    html,
+    /<meta name="robots" content="[^"]*" \/>/,
+    `<meta name="robots" content="${allowIndexing ? "index, follow" : "noindex, nofollow"}" />`
   );
   html = replaceTag(
     html,

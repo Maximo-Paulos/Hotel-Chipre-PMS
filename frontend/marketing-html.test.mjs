@@ -40,6 +40,13 @@ test("the og:image is absolute, because unfurlers do not resolve relative paths"
   assert.ok(html.includes('content="https://hotels-pms.com/brand/og-default.png"'));
 });
 
+test("static marketing metadata follows the same indexing flag as the React pages", () => {
+  const route = MARKETING_ROUTES.find(({ path }) => path === "/contacto");
+  assert.ok(route, "contact route is statically rendered");
+  assert.match(renderRouteHtml(indexHtml, route, { allowIndexing: false }), /<meta name="robots" content="noindex, nofollow" \/>/);
+  assert.match(renderRouteHtml(indexHtml, route, { allowIndexing: true }), /<meta name="robots" content="index, follow" \/>/);
+});
+
 test("the pre-hydration script no longer overwrites a baked marketing title", () => {
   // It must bail before touching the document unless the page is noindexed.
   assert.match(indexHtml, /if \(!shouldNoindex\) return;/);

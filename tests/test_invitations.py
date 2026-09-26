@@ -1288,6 +1288,57 @@ def test_duplicate_invite_reuses_pending_record_and_audits_resend(owner_ctx):
     )
 
 
+def test_resend_rejects_old_accept_link_and_accepts_latest_link(owner_ctx):
+    client, db, _ctx = owner_ctx
+    email = "latest-link-accept@test.com"
+    first = client.post("/api/users/invite", json={"email": email, "role": "manager"})
+    assert first.status_code == 201, first.text
+
+    resent = client.post(f"/api/users/invitations/{first.json()['invitation_id']}/resend")
+    assert resent.status_code == 200, resent.text
+    assert resent.json()["invite_token"] != first.json()["invite_token"]
+
+    stale_accept = client.post(
+        "/api/invitations/accept",
+        json={
+            "token": first.json()["invite_token"],
+            "email": email,
+            "password": "NewUserPassword123!",
+        },
+    )
+    assert stale_accept.status_code == 400, stale_accept.text
+
+    invitation = db.get(StaffInvitation, first.json()["invitation_id"])
+    user = db.query(User).filter_by(email=email).one()
+    membership = db.query(HotelMembership).filter_by(
+        hotel_id=invitation.hotel_id,
+        user_id=user.id,
+    ).one()
+    assert invitation.status == "pending"
+    assert invitation.consumed_at is None
+    assert user.is_active is False
+    assert user.is_verified is False
+    assert membership.status == "invited"
+
+    latest_accept = client.post(
+        "/api/invitations/accept",
+        json={
+            "token": resent.json()["invite_token"],
+            "email": email,
+            "password": "NewUserPassword123!",
+        },
+    )
+    assert latest_accept.status_code == 200, latest_accept.text
+    db.refresh(invitation)
+    db.refresh(user)
+    db.refresh(membership)
+    assert invitation.status == "accepted"
+    assert invitation.consumed_at is not None
+    assert user.is_active is True
+    assert user.is_verified is True
+    assert membership.status == "active"
+
+
 def test_invitation_email_explains_that_only_the_latest_link_works():
     from app.api.users import _send_invitation_email
 
