@@ -116,7 +116,7 @@ def upgrade() -> None:
             GET DIAGNOSTICS deleted_inquiries = ROW_COUNT;
 
             DELETE FROM public.marketing_leads
-            WHERE created_at < now_utc - INTERVAL '90 days';
+            WHERE updated_at < now_utc - INTERVAL '90 days';
             GET DIAGNOSTICS deleted_marketing_leads = ROW_COUNT;
 
             DELETE FROM public.rate_limit_events

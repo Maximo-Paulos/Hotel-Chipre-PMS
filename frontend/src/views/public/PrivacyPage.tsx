@@ -98,9 +98,9 @@ export function PrivacyPage() {
             para responder la consulta o gestionar el aviso de apertura que solicitaste.
             Procesamos la IP de conexión y el correo para limitar envíos abusivos; las
             claves de rate limit se borran en el ciclo diario siguiente. Las consultas
-            y los leads de acceso temprano se eliminan automáticamente cuando superan
-            90 días desde su recepción o actualización, salvo que una obligación legal
-            exija conservarlos por más tiempo.
+            de contacto se eliminan automáticamente al superar 90 días desde su recepción;
+            los leads de acceso temprano, al superar 90 días desde su última actualización,
+            salvo que una obligación legal exija conservarlos por más tiempo.
           </p>
         </Section>
 

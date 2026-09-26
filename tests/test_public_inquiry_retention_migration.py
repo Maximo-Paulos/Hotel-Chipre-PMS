@@ -117,7 +117,7 @@ def test_known_nonproduction_without_pg_cron_still_hardens_marketing_leads(monke
     assert "CREATE EXTENSION IF NOT EXISTS pg_cron" not in sql
 
 
-def test_marketing_lead_retention_uses_creation_age_not_last_update(monkeypatch):
+def test_marketing_lead_retention_uses_last_update_as_privacy_notice_states(monkeypatch):
     class FakeResult:
         @staticmethod
         def scalar():
@@ -159,5 +159,5 @@ def test_marketing_lead_retention_uses_creation_age_not_last_update(monkeypatch)
         for statement in fake_op.statements
         if "DELETE FROM public.marketing_leads" in statement
     )
-    assert "WHERE created_at < now_utc - INTERVAL '90 days'" in retention_function
-    assert "WHERE updated_at < now_utc - INTERVAL '90 days'" not in retention_function
+    assert "WHERE updated_at < now_utc - INTERVAL '90 days'" in retention_function
+    assert "WHERE created_at < now_utc - INTERVAL '90 days'" not in retention_function
