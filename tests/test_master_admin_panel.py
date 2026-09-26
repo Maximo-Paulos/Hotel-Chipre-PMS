@@ -6,6 +6,7 @@ import json
 import time
 from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass
+from urllib.parse import urlsplit
 import pytest
 import pyotp
 from fastapi.testclient import TestClient
@@ -82,7 +83,9 @@ def master_client(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(main_module, "init_db", lambda: db_module.init_db("sqlite:///:memory:"))
     main_module.app.dependency_overrides[get_db] = override_get_db
 
-    with TestClient(main_module.app) as client:
+    frontend_url = urlsplit(get_settings().FRONTEND_URL)
+    frontend_origin = f"{frontend_url.scheme}://{frontend_url.netloc}"
+    with TestClient(main_module.app, headers={"Origin": frontend_origin}) as client:
         yield client, SessionLocal
 
     main_module.app.dependency_overrides.clear()
@@ -456,6 +459,121 @@ def test_master_login_sets_cookie_and_hydrates_me(master_client, monkeypatch):
     assert payload["csrf_token"]
 
 
+def test_master_admin_rejects_untrusted_origin_for_reads_and_writes(master_client, monkeypatch):
+    client, SessionLocal = master_client
+    monkeypatch.setenv("MASTER_ADMIN_PIN", "654321")
+    get_settings.cache_clear()
+
+    db = SessionLocal()
+    try:
+        _seed_platform_admin(db)
+        db.commit()
+    finally:
+        db.close()
+
+    _complete_master_login(client, SessionLocal)
+    csrf_token = client.cookies.get("master_admin_csrf")
+    assert csrf_token
+
+    untrusted_origin = "https://hotels-pms.com"
+    me = client.get("/api/master-admin/auth/me", headers={"Origin": untrusted_origin})
+    assert me.status_code == 403
+
+    logout = client.post(
+        "/api/master-admin/auth/logout",
+        headers={"Origin": untrusted_origin, "X-CSRF-Token": csrf_token},
+    )
+    assert logout.status_code == 403
+
+
+def test_master_admin_rejects_malformed_origin_without_server_error(master_client, monkeypatch):
+    client, SessionLocal = master_client
+    monkeypatch.setenv("MASTER_ADMIN_PIN", "654321")
+    get_settings.cache_clear()
+
+    db = SessionLocal()
+    try:
+        _seed_platform_admin(db)
+        db.commit()
+    finally:
+        db.close()
+
+    _complete_master_login(client, SessionLocal)
+    me = client.get("/api/master-admin/auth/me", headers={"Origin": "https://[broken"})
+    assert me.status_code == 403
+
+
+@pytest.mark.parametrize(
+    ("frontend_url", "origin"),
+    [
+        ("http://localhost:5173", "http://localhost:5173"),
+        ("https://app.hotels-pms.com", "https://app.hotels-pms.com"),
+    ],
+)
+def test_master_admin_accepts_configured_local_and_deployed_frontend_origins(
+    master_client, monkeypatch, frontend_url, origin
+):
+    client, SessionLocal = master_client
+    monkeypatch.setenv("MASTER_ADMIN_PIN", "654321")
+    monkeypatch.setenv("FRONTEND_URL", frontend_url)
+    get_settings.cache_clear()
+
+    db = SessionLocal()
+    try:
+        _seed_platform_admin(db)
+        db.commit()
+    finally:
+        db.close()
+
+    _complete_master_login(client, SessionLocal)
+    me = client.get("/api/master-admin/auth/me", headers={"Origin": origin})
+    assert me.status_code == 200, me.text
+
+
+def test_master_admin_allows_read_only_request_without_origin(master_client, monkeypatch):
+    client, SessionLocal = master_client
+    monkeypatch.setenv("MASTER_ADMIN_PIN", "654321")
+    get_settings.cache_clear()
+
+    db = SessionLocal()
+    try:
+        _seed_platform_admin(db)
+        db.commit()
+    finally:
+        db.close()
+
+    _complete_master_login(client, SessionLocal)
+    with TestClient(main_module.app) as no_origin_read_client:
+        no_origin_read_client.cookies.update(client.cookies)
+        me = no_origin_read_client.get("/api/master-admin/auth/me")
+    assert me.status_code == 200, me.text
+
+
+def test_master_admin_write_requires_origin_even_with_valid_csrf(master_client, monkeypatch):
+    client, SessionLocal = master_client
+    monkeypatch.setenv("MASTER_ADMIN_PIN", "654321")
+    get_settings.cache_clear()
+
+    db = SessionLocal()
+    try:
+        _seed_platform_admin(db)
+        db.commit()
+    finally:
+        db.close()
+
+    _complete_master_login(client, SessionLocal)
+    csrf_token = client.cookies.get("master_admin_csrf")
+    assert csrf_token
+
+    with TestClient(main_module.app) as no_origin_client:
+        no_origin_client.cookies.update(client.cookies)
+        response = no_origin_client.post(
+            "/api/master-admin/auth/logout",
+            headers={"X-CSRF-Token": csrf_token},
+        )
+    assert response.status_code == 403
+
+
 def test_master_admin_mfa_is_mandatory_and_cannot_be_bypassed(master_client, monkeypatch):
     client, SessionLocal = master_client
     monkeypatch.setenv("MASTER_ADMIN_PIN", "654321")
@@ -685,6 +803,12 @@ def test_master_login_cookie_works_on_underscore_alias(master_client, monkeypatc
 
     response = _complete_master_login(client, SessionLocal)
     assert "Path=/api/" in response.headers.get("set-cookie", "")
+
+    untrusted_alias = client.get(
+        "/api/master_admin/auth/me",
+        headers={"Origin": "https://hotels-pms.com"},
+    )
+    assert untrusted_alias.status_code == 403
 
     me = client.get("/api/master_admin/auth/me")
     assert me.status_code == 200, me.text

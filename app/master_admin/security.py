@@ -7,6 +7,7 @@ import secrets
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any
+from urllib.parse import urlsplit
 
 from fastapi import HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
@@ -64,6 +65,46 @@ def _normalize_identifier(value: str) -> str:
 
 def _normalize_pin(value: str) -> str:
     return "".join(ch for ch in (value or "").strip() if ch.isdigit())
+
+
+def _normalize_http_origin(value: str | None, *, allow_path: bool = False) -> str | None:
+    if not value:
+        return None
+    try:
+        parts = urlsplit(value.strip())
+    except ValueError:
+        return None
+    scheme = parts.scheme.lower()
+    if scheme not in {"http", "https"} or not parts.hostname:
+        return None
+    if parts.username is not None or parts.password is not None or parts.query or parts.fragment:
+        return None
+    if not allow_path and parts.path:
+        return None
+    try:
+        port = parts.port
+    except ValueError:
+        return None
+
+    host = parts.hostname.lower()
+    if ":" in host and not host.startswith("["):
+        host = f"[{host}]"
+    default_port = 443 if scheme == "https" else 80
+    authority = host if port is None or port == default_port else f"{host}:{port}"
+    return f"{scheme}://{authority}"
+
+
+def _require_master_admin_origin(request: Request, *, write: bool) -> None:
+    supplied_origin = request.headers.get("origin")
+    if supplied_origin is None:
+        if write:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Origen no autorizado")
+        return
+
+    configured_origin = _normalize_http_origin(get_settings().FRONTEND_URL, allow_path=True)
+    request_origin = _normalize_http_origin(supplied_origin)
+    if not configured_origin or request_origin != configured_origin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Origen no autorizado")
 
 
 def _bootstrap_master_credentials_match(email: str, password: str) -> bool:
@@ -487,6 +528,10 @@ def require_master_admin(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="MFA obligatorio para Master Admin: configura TOTP antes de operar",
         )
+
+    # The credentialed API is shared by the public site and the app origin.
+    # A master-admin session is only valid from the configured application UI.
+    _require_master_admin_origin(request, write=write)
 
     expected_csrf = request.cookies.get(CSRF_COOKIE_NAME)
     if write:
