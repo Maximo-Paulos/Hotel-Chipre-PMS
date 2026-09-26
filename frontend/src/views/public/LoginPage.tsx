@@ -5,13 +5,11 @@ import { useTranslation } from "react-i18next";
 import { ApiError } from "../../api/client";
 import { Seo } from "../../components/Seo";
 import { GoogleSignInButton } from "../../components/GoogleSignInButton";
-import { AppleSignInButton } from "../../components/AppleSignInButton";
 import { PasswordInput } from "../../components/PasswordInput";
 import {
   completeMfaLogin,
   isMfaChallenge,
   login as loginApi,
-  loginWithApple,
   loginWithGoogle,
   type AuthResponse,
   type AuthResult
@@ -167,25 +165,6 @@ export function LoginPage() {
     }
   };
 
-  const handleAppleCredential = async (
-    idToken: string,
-    nonce: string,
-    user?: { name?: { firstName?: string; lastName?: string } }
-  ) => {
-    setLoading(true);
-    setError(null);
-    setShowPasswordHelp(false);
-    try {
-      const res = await loginWithApple(idToken, nonce, user);
-      await handleAuthResult(res);
-    } catch (err) {
-      if (err instanceof ApiError) setError(err.message);
-      else setError(t("login.errors.signInApple"));
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleMfaSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!mfaChallenge) return;
@@ -312,9 +291,6 @@ export function LoginPage() {
             <div className="flex-grow border-t border-slate-200" />
           </div>
           <GoogleSignInButton onCredential={handleGoogleCredential} />
-          <div className="mt-3">
-            <AppleSignInButton disabled={loading} onCredential={handleAppleCredential} />
-          </div>
         </div>
         </div>
         )}

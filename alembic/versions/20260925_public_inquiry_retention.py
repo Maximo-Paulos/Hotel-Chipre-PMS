@@ -33,10 +33,38 @@ def _pg_cron_migration_enabled(available: bool, runtime_env: str) -> bool:
     raise RuntimeError("pg_cron is required to enforce public-form retention in production")
 
 
+def _secure_marketing_leads() -> None:
+    """Keep early-access lead data behind the trusted application database role."""
+    op.execute("ALTER TABLE public.marketing_leads ENABLE ROW LEVEL SECURITY")
+    op.execute("REVOKE ALL PRIVILEGES ON TABLE public.marketing_leads FROM PUBLIC")
+    op.execute("REVOKE ALL PRIVILEGES ON SEQUENCE public.marketing_leads_id_seq FROM PUBLIC")
+    op.execute(
+        """
+        DO $$
+        DECLARE target_role text;
+        BEGIN
+            FOREACH target_role IN ARRAY ARRAY['anon', 'authenticated', 'service_role'] LOOP
+                IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = target_role) THEN
+                    EXECUTE format(
+                        'REVOKE ALL PRIVILEGES ON TABLE public.marketing_leads FROM %I',
+                        target_role
+                    );
+                    EXECUTE format(
+                        'REVOKE ALL PRIVILEGES ON SEQUENCE public.marketing_leads_id_seq FROM %I',
+                        target_role
+                    );
+                END IF;
+            END LOOP;
+        END $$
+        """
+    )
+
+
 def upgrade() -> None:
     if op.get_bind().dialect.name != "postgresql":
         return
 
+    cron_enabled = True
     # Local/preview PostgreSQL installations may not package pg_cron. These
     # environments contain synthetic data and may continue without the job;
     # the production deployment must fail closed if its retention guarantee
@@ -51,8 +79,13 @@ def upgrade() -> None:
         # Require an explicit known non-production value before skipping the
         # retention job when pg_cron is unavailable.
         runtime_env = os.getenv("APP_ENV", "").strip().lower()
-        if not _pg_cron_migration_enabled(bool(available), runtime_env):
-            return
+        cron_enabled = _pg_cron_migration_enabled(bool(available), runtime_env)
+
+    # Table access hardening is independent of the optional non-production
+    # scheduler and must apply even when pg_cron is unavailable.
+    _secure_marketing_leads()
+    if not cron_enabled:
+        return
 
     # pg_cron runs inside the existing Supabase Postgres instance, so this
     # does not add a Render service or a paid scheduler. Fail the deployment
@@ -83,7 +116,7 @@ def upgrade() -> None:
             GET DIAGNOSTICS deleted_inquiries = ROW_COUNT;
 
             DELETE FROM public.marketing_leads
-            WHERE updated_at < now_utc - INTERVAL '90 days';
+            WHERE created_at < now_utc - INTERVAL '90 days';
             GET DIAGNOSTICS deleted_marketing_leads = ROW_COUNT;
 
             DELETE FROM public.rate_limit_events
@@ -131,11 +164,13 @@ def upgrade() -> None:
         DO $$
         DECLARE existing_job record;
         BEGIN
-            FOR existing_job IN
-                SELECT jobid FROM cron.job WHERE jobname = '{_JOB_NAME}'
-            LOOP
-                PERFORM cron.unschedule(existing_job.jobid);
-            END LOOP;
+            IF pg_catalog.to_regclass('cron.job') IS NOT NULL THEN
+                FOR existing_job IN
+                    SELECT jobid FROM cron.job WHERE jobname = '{_JOB_NAME}'
+                LOOP
+                    PERFORM cron.unschedule(existing_job.jobid);
+                END LOOP;
+            END IF;
         END $$
         """
     )
@@ -159,13 +194,17 @@ def downgrade() -> None:
         DO $$
         DECLARE existing_job record;
         BEGIN
-            FOR existing_job IN
-                SELECT jobid FROM cron.job WHERE jobname = '{_JOB_NAME}'
-            LOOP
-                PERFORM cron.unschedule(existing_job.jobid);
-            END LOOP;
+            IF pg_catalog.to_regclass('cron.job') IS NOT NULL THEN
+                FOR existing_job IN
+                    SELECT jobid FROM cron.job WHERE jobname = '{_JOB_NAME}'
+                LOOP
+                    PERFORM cron.unschedule(existing_job.jobid);
+                END LOOP;
+            END IF;
         END $$
         """
     )
     op.execute(f"DROP FUNCTION IF EXISTS {_FUNCTION}")
     op.execute("DROP SCHEMA IF EXISTS hotel_chipre_private")
+    # Deliberately keep marketing_leads access restricted after rollback; a
+    # downgrade must not silently re-expose contact data to public API roles.
