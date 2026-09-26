@@ -58,7 +58,7 @@ Toma `DATABASE_URL` del compose. Para SQLite local: `DATABASE_URL=sqlite:///./de
 - JWT: header `Authorization: Bearer <token>`. Claves en `.env`: `JWT_SECRET`, `JWT_EXPIRES_MINUTES`, `JWT_ALGORITHM`.
 - Rate limit de login (in-memory): `LOGIN_RATE_LIMIT` intentos por ventana de 15 min.
 - Email transaccional: `EMAIL_PROVIDER`, `RESEND_API_KEY`, `SYSTEM_EMAIL_FROM`, `SYSTEM_EMAIL_REPLY_TO`.
-- Consultas públicas: `PUBLIC_INQUIRY_RECIPIENT_EMAIL` configura el destinatario comercial y `PUBLIC_INQUIRY_RATE_LIMIT` limita envíos por origen/email. Si no se configura el destinatario, la consulta se conserva sin notificación.
+- Formularios públicos: `PUBLIC_INQUIRY_RECIPIENT_EMAIL` configura el destinatario comercial; `PUBLIC_INQUIRY_RATE_LIMIT` limita por IP confiable del edge/email y `PUBLIC_INQUIRY_GLOBAL_RATE_LIMIT` conserva un tope aun si falta ese encabezado. Las consultas de contacto y los leads de acceso temprano se eliminan automáticamente al superar 90 días; las claves de rate limit se purgan en el ciclo diario. El job usa Supabase Postgres Cron (pg_cron), sin agregar un servicio pago. Si falta el destinatario o el envío externo está deshabilitado, la consulta nueva se conserva sin notificación; no habilitar el formulario de contacto a tráfico real hasta validar la recepción comercial.
 - Opcional dev: `DEV_EMAIL_OUTBOX_PATH` para guardar códigos de verificación/reset en local.
 - Add `X-User-Id` for auditing; values are free-form.
 

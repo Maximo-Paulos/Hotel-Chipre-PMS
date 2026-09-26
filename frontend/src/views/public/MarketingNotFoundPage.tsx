@@ -7,8 +7,8 @@ export function MarketingNotFoundPage() {
   return (
     <MarketingShell>
       <Seo
-        title="Página no encontrada | Hotel Chipre PMS"
-        description="La página que buscás no existe o fue movida. Volvé al inicio de Hotel Chipre PMS."
+        title="Página no encontrada | Hotels-PMS"
+        description="La página que buscás no existe o fue movida. Volvé al inicio de Hotels-PMS."
         canonicalPath="/404"
         noindex
       />

@@ -4,7 +4,7 @@ import { Seo } from "../../components/Seo";
 import { MarketingShell } from "../../components/marketing/MarketingShell";
 import { ALLOW_INDEXING } from "../../config/publicUrls";
 
-const ULTIMA_ACTUALIZACION = "22 de agosto de 2026";
+const ULTIMA_ACTUALIZACION = "26 de septiembre de 2026";
 
 export function PrivacyPage() {
   return (
@@ -64,10 +64,10 @@ export function PrivacyPage() {
           <ul className="ml-5 list-disc space-y-1">
             <li>Datos de registro: nombre, correo electrónico y contraseña (con hash).</li>
             <li>
-              Si iniciás sesión con &laquo;Continuar con Google&raquo; o &laquo;Continuar
-              con Apple&raquo;: el identificador único que nos entrega ese proveedor
-              (`google_sub` / `apple_sub`) y los datos básicos de perfil que autoricés
-              (nombre, correo).
+              Si iniciás sesión con &laquo;Continuar con Google&raquo;, almacenamos el
+              identificador único que nos entrega ese proveedor (`google_sub`) y los
+              datos básicos de perfil que autoricés (nombre, correo). También podés
+              acceder con tu cuenta propia de email y contraseña.
             </li>
             <li>
               Datos de uso y sesión: dirección IP, tipo de dispositivo, registros de
@@ -88,19 +88,23 @@ export function PrivacyPage() {
           </p>
         </Section>
 
-        <Section title="Datos de consultas comerciales">
+        <Section title="5. Formularios de contacto y acceso temprano">
           <p>
             Si completás el formulario de contacto, recolectamos tu nombre, correo
             electrónico, empresa y teléfono cuando los brindes, además del mensaje,
-            la ruta desde la que se envió y la constancia de consentimiento. Usamos
-            esos datos para recibir, conservar y responder la consulta, y para intentar
-            notificar al destinatario comercial configurado. Conservamos la consulta
-            durante el tiempo necesario para gestionarla y cumplir obligaciones
-            aplicables.
+            la ruta desde la que se envió y la constancia de consentimiento. Si pedís
+            acceso temprano, guardamos tu correo y el nombre del hotel si lo indicás,
+            junto con el origen técnico de la solicitud. Usamos cada dato únicamente
+            para responder la consulta o gestionar el aviso de apertura que solicitaste.
+            Procesamos la IP de conexión y el correo para limitar envíos abusivos; las
+            claves de rate limit se borran en el ciclo diario siguiente. Las consultas
+            y los leads de acceso temprano se eliminan automáticamente cuando superan
+            90 días desde su recepción o actualización, salvo que una obligación legal
+            exija conservarlos por más tiempo.
           </p>
         </Section>
 
-        <Section title="5. Encargados y proveedores que usamos">
+        <Section title="6. Encargados y proveedores que usamos">
           <p>
             Para operar el Servicio, compartimos datos con proveedores que actúan como
             encargados de tratamiento, bajo instrucciones nuestras y acuerdos de
@@ -125,7 +129,7 @@ export function PrivacyPage() {
           </p>
         </Section>
 
-        <Section title="6. Plazos de conservación">
+        <Section title="7. Plazos de conservación">
           <ul className="ml-5 list-disc space-y-1">
             <li>
               Datos de cuenta: mientras la cuenta esté activa. Al cerrarla, quedan
@@ -140,13 +144,18 @@ export function PrivacyPage() {
               Registros de auditoría y seguridad: <strong>24 meses</strong>.
             </li>
             <li>
+              Consultas de contacto y leads de acceso temprano: <strong>90 días</strong>
+              desde su recepción o última actualización, mediante borrado automático,
+              salvo obligación legal aplicable.
+            </li>
+            <li>
               Datos que debamos conservar por obligación legal (por ejemplo, fiscal): el
               plazo que exija esa norma.
             </li>
           </ul>
         </Section>
 
-        <Section title="7. Tus derechos">
+        <Section title="8. Tus derechos">
           <p>
             Podés pedirnos acceso, rectificación, actualización o supresión de tus datos
             de cuenta, así como oponerte a un tratamiento puntual, escribiendo a{" "}
@@ -165,7 +174,7 @@ export function PrivacyPage() {
           </p>
         </Section>
 
-        <Section title="8. Seguridad de la información">
+        <Section title="9. Seguridad de la información">
           <p>
             Aplicamos medidas técnicas y organizativas razonables (cifrado en tránsito,
             contraseñas con hash, controles de acceso por rol) para proteger los datos
@@ -178,7 +187,7 @@ export function PrivacyPage() {
           </p>
         </Section>
 
-        <Section title="9. Cookies y almacenamiento local">
+        <Section title="10. Cookies y almacenamiento local">
           <p>
             Usamos almacenamiento local del navegador únicamente para mantener tu sesión
             iniciada y tus preferencias del Servicio. No usamos cookies de publicidad ni
@@ -186,14 +195,14 @@ export function PrivacyPage() {
           </p>
         </Section>
 
-        <Section title="10. Menores de edad">
+        <Section title="11. Menores de edad">
           <p>
             El Servicio no está dirigido a menores de 18 años y no recolectamos a
             sabiendas datos de menores como titulares de cuenta.
           </p>
         </Section>
 
-        <Section title="11. Cambios en esta política">
+        <Section title="12. Cambios en esta política">
           <p>
             Podemos actualizar esta política. Si el cambio es sustancial, te avisaremos
             con al menos 30 días de anticipación por correo o desde el propio sistema,
@@ -205,7 +214,7 @@ export function PrivacyPage() {
           </p>
         </Section>
 
-        <Section title="12. Contacto">
+        <Section title="13. Contacto">
           <p>
             Privacidad:{" "}
             <a className="text-brand-700 underline" href="mailto:privacy@hotels-pms.com">

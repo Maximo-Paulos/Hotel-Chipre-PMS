@@ -5,6 +5,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const baseURL = process.env.E2E_BASE_URL || "http://127.0.0.1:5173";
+const publicSiteBaseURL = new URL(baseURL);
+publicSiteBaseURL.hostname = "localhost";
 const frontendPort = new URL(baseURL).port || "5173";
 const backendURL = process.env.E2E_BACKEND_URL || "http://127.0.0.1:8040";
 const reuseExistingServer = process.env.E2E_REUSE_SERVER === "true";
@@ -91,11 +93,23 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
-      testIgnore: ["**/responsive-smoke.spec.ts", "**/preview-host-routing.spec.ts"],
+      testIgnore: ["**/responsive-smoke.spec.ts", "**/preview-host-routing.spec.ts", "**/public-site.spec.ts"],
       // The isolated E2E backend uses one SQLite database. Keep mutating
       // journeys deterministic while read-only page smoke tests run beside it.
       workers: 1,
       use: { ...devices["Desktop Chrome"] }
+    },
+    {
+      name: "public-site",
+      testMatch: "**/public-site.spec.ts",
+      workers: 1,
+      use: {
+        ...devices["Desktop Chrome"],
+        baseURL: publicSiteBaseURL.toString(),
+        // Keep the browser hostname distinct from the app hostname while
+        // routing localhost to the Vite server bound to 127.0.0.1.
+        launchOptions: { args: ["--host-resolver-rules=MAP localhost 127.0.0.1"] }
+      }
     },
     {
       name: "preview-host-routing",

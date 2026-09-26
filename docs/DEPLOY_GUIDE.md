@@ -90,10 +90,17 @@ Variables de entorno:
 - `SYSTEM_EMAIL_REPLY_TO=hotelxpms@gmail.com`
 - `PUBLIC_INQUIRY_RECIPIENT_EMAIL=<destinatario comercial verificado>`
 - `PUBLIC_INQUIRY_RATE_LIMIT=5`
+- `PUBLIC_INQUIRY_GLOBAL_RATE_LIMIT=100`
 - `ANALYTICS_EXPORTS_DIR=/var/exports/analytics`
 - Transfer-proof bytes are stored in the private `payment_proof_blobs` table; expose them only through the authenticated, tenant-scoped proof endpoint.
 - `AI_ENABLED=false` until the hotel-specific IA provider is configured
 - `GEMMA_ENABLED=false`
+
+Retención y seguridad de consultas públicas:
+- La migración `20260828_public_inquiries` habilita RLS y revoca el acceso de `PUBLIC`, `anon`, `authenticated` y `service_role` a la tabla y su secuencia. No hay una API pública de lectura.
+- La migración `20260925_public_inquiry_retention` programa en Supabase el borrado diario de consultas y leads de acceso temprano no actualizados en más de 90 días, más claves de rate limiter de más de 15 minutos. Los leads ya vencidos se eliminan en el primer ciclo. En PostgreSQL local/preview sin `pg_cron`, continúa con un aviso solo si `APP_ENV` está configurado explícitamente como `development`, `test`, `qa` o `preview`; si falta o es desconocido, falla cerrada. No agrega un servicio Cron de Render ni una dependencia paga.
+- Verificar en Supabase Cron que exista `hotel-chipre-public-form-retention` con ejecución diaria y revisar `cron.job_run_details` tras el primer ciclo. El log de la función contiene únicamente conteos, nunca campos de contacto.
+- Antes de aceptar tráfico real, confirmar que hay destinatario comercial y proveedor de email operativo. Con `PUBLIC_INQUIRY_RECIPIENT_EMAIL` vacío o los efectos externos deshabilitados, el formulario persiste la consulta pero no la notifica.
 
 Variables de capacidad y warehouse:
 - `REDIS_URL`, `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND`: provistas por el

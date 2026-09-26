@@ -24,8 +24,8 @@ export function ThankYouPage() {
   return (
     <MarketingShell>
       <Seo
-        title="Consulta recibida | Hotel Chipre PMS"
-        description="Tu consulta sobre Hotel Chipre PMS fue recibida correctamente."
+        title="Consulta recibida | Hotels-PMS"
+        description="Tu consulta sobre Hotels-PMS fue recibida correctamente."
         canonicalPath="/gracias"
         noindex
         breadcrumbLabel="Gracias"

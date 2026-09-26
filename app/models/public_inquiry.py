@@ -31,8 +31,14 @@ class PublicInquiry(Base):
     phone = Column(String(50), nullable=True)
     message = Column(Text, nullable=False)
     source_path = Column(String(200), nullable=False, default="/contacto")
+    # These legacy-compatible columns are TIMESTAMP WITHOUT TIME ZONE; store
+    # naive UTC consistently so the retention cutoff is deterministic.
     privacy_consent_at = Column(DateTime, nullable=False)
-    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(
+        DateTime,
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+    )
     notification_status = Column(
         Enum(
             PublicInquiryNotificationStatus,

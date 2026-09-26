@@ -108,7 +108,7 @@ jobs:
       - name: Run E2E journeys
         env:
           E2E_PYTHON: python
-        run: npx playwright test --project=chromium --project=mobile-chromium --project=preview-host-routing
+        run: npx playwright test --project=chromium --project=public-site --project=mobile-chromium --project=preview-host-routing
 
       - name: Upload Playwright report
         if: ${{ failure() }}

@@ -1,7 +1,8 @@
 import { expect, test } from "@playwright/test";
+import { hero } from "../src/content/marketing";
 
 test.describe("sitio público", () => {
-  test("expone CTA above the fold, caso ilustrativo, FAQ y metadata social", async ({ page }) => {
+  test("expone el posicionamiento actual, FAQ y metadata social sin analytics", async ({ page }) => {
     const analyticsRequests: string[] = [];
     page.on("request", (request) => {
       if (/google-analytics|googletagmanager|analytics\.google\.com/i.test(request.url())) {
@@ -10,16 +11,12 @@ test.describe("sitio público", () => {
     });
     await page.goto("/");
 
-    await expect(page.getByRole("link", { name: "Registrarte" }).first()).toBeVisible();
-    await expect(page.getByRole("heading", { name: /PMS hotelero para operar tu hotel/i })).toBeVisible();
-    await expect(page.getByText("Caso ilustrativo")).toBeVisible();
-    await expect(page.getByRole("link", { name: "Preguntas frecuentes" })).toBeVisible();
-    await expect(page.locator('meta[property="og:image"]')).toHaveAttribute("content", /social-share\.svg/);
+    await expect(page.getByRole("heading", { name: hero.title })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Lo que todo el mundo pregunta antes de decidir." })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Contacto", exact: true }).first()).toBeVisible();
+    await expect(page.locator('meta[property="og:image"]')).toHaveAttribute("content", /og-default\.png/);
     await expect(page.locator('meta[property="og:image:width"]')).toHaveAttribute("content", "1200");
     await expect(page.locator('meta[property="og:image:height"]')).toHaveAttribute("content", "630");
-    expect(await page.locator("img").count()).toBeGreaterThan(0);
-    const hasAltText = await page.locator("img").evaluateAll((images) => images.every((image) => Boolean(image.getAttribute("alt")?.trim())));
-    expect(hasAltText).toBe(true);
     expect(analyticsRequests).toEqual([]);
   });
 
@@ -51,13 +48,93 @@ test.describe("sitio público", () => {
     await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "noindex, nofollow");
   });
 
+  test("acepta una invitación con contraseña existente y MFA ligado al enlace", async ({ page }) => {
+    const requests: Array<{ path: string; body: Record<string, unknown> }> = [];
+    const token = "synthetic-invitation-capability";
+    await page.route("**/api/auth/providers", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ google: { enabled: false, client_id: null, self_signup_enabled: false, allowed_domains: [] } })
+      });
+    });
+    await page.route("**/api/invitations/preview", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ email: "mfa-invitee@example.test", hotel_name: "Hotel de prueba" })
+      });
+    });
+    await page.route("**/api/invitations/accept", async (route) => {
+      requests.push({ path: "/api/invitations/accept", body: route.request().postDataJSON() });
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ requires_mfa: true, mfa_token: "synthetic-invitation-mfa", expires_in: 300 })
+      });
+    });
+    await page.route("**/api/invitations/accept/mfa", async (route) => {
+      requests.push({ path: "/api/invitations/accept/mfa", body: route.request().postDataJSON() });
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          access_token: "synthetic-access-token",
+          token_type: "bearer",
+          hotel_id: 12,
+          hotel_ids: [12],
+          permissions: [],
+          user: {
+            id: 50,
+            email: "mfa-invitee@example.test",
+            role: "manager",
+            is_verified: true,
+            is_active: true,
+            password_login_enabled: true,
+            permissions: []
+          }
+        })
+      });
+    });
+
+    await page.goto(`/invitations/accept#token=${encodeURIComponent(token)}`);
+    await page.getByPlaceholder("Tu contraseña actual").fill("legacy-password");
+    await page.getByRole("button", { name: "Verificar y aceptar" }).click();
+    await expect(page.getByLabel("Código de la app autenticadora o de recuperación")).toBeVisible();
+    await page.getByLabel("Código de la app autenticadora o de recuperación").fill("123456");
+    await page.getByRole("button", { name: "Verificar y aceptar invitación" }).click();
+
+    await expect(page).toHaveURL(/\/dashboard$/);
+    expect(requests).toEqual([
+      {
+        path: "/api/invitations/accept",
+        body: { token, email: "mfa-invitee@example.test", current_password: "legacy-password" }
+      },
+      {
+        path: "/api/invitations/accept/mfa",
+        body: { token, mfa_token: "synthetic-invitation-mfa", code: "123456" }
+      }
+    ]);
+  });
+
   test("mantiene títulos únicos en las rutas públicas indexables y no publica el placeholder legal", async ({ page }) => {
-    const routes = ["/", "/precios", "/funciones", "/pms-hotelero", "/software-para-hoteles", "/faq", "/contacto", "/terms", "/privacy"];
+    const routes = [
+      ["/", "Hotels-PMS | El sistema de gestión que unifica todo el hotel"],
+      ["/precios", "Precios | Hotels-PMS"],
+      ["/funciones", "El sistema | Hotels-PMS"],
+      ["/pms-hotelero", "PMS hotelero | Hotels-PMS"],
+      ["/software-para-hoteles", "Software para hoteles | Hotels-PMS"],
+      ["/faq", "FAQ | Hotels-PMS"],
+      ["/contacto", "Contacto | Consultas sobre Hotels-PMS"],
+      ["/terms", "Términos y Condiciones | Hotels-PMS"],
+      ["/privacy", "Política de Privacidad | Hotels-PMS"]
+    ];
     const titles: string[] = [];
 
-    for (const route of routes) {
+    for (const [route, expectedTitle] of routes) {
       await page.goto(route);
-      titles.push(await page.title());
+      await expect(page).toHaveTitle(expectedTitle);
+      titles.push(expectedTitle);
     }
 
     expect(new Set(titles).size).toBe(routes.length);

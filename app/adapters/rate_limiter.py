@@ -100,6 +100,7 @@ invitation_preview_limiter = SimpleRateLimiter("invitation_preview", limit=30, w
 invitation_accept_limiter = SimpleRateLimiter("invitation_accept", limit=10, window_seconds=15 * 60)
 public_inquiry_source_limiter = SimpleRateLimiter("public_inquiry_source", limit=5, window_seconds=15 * 60)
 public_inquiry_email_limiter = SimpleRateLimiter("public_inquiry_email", limit=5, window_seconds=15 * 60)
+public_inquiry_global_limiter = SimpleRateLimiter("public_inquiry_global", limit=100, window_seconds=15 * 60)
 
 # Throttles guesses of the 6-digit one-time codes themselves (as opposed to
 # how often a new code can be requested). Without this, /verify-email,

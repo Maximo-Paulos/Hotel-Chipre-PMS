@@ -59,7 +59,7 @@ export function ContactPage() {
       navigate("/gracias", { replace: true });
     } catch (requestError) {
       if (requestError instanceof ApiError && requestError.status === 429) {
-        setError("Recibimos demasiadas consultas desde este origen. Intentá nuevamente más tarde.");
+        setError("Recibimos demasiadas consultas seguidas. Intentá nuevamente más tarde.");
       } else {
         setError("No pudimos enviar tu consulta. Revisá los datos e intentá nuevamente.");
       }
@@ -71,8 +71,8 @@ export function ContactPage() {
   return (
     <MarketingShell>
       <Seo
-        title="Contacto | Consultas sobre Hotel Chipre PMS"
-        description="Enviá una consulta sobre Hotel Chipre PMS y contanos qué necesitás ordenar en la operación de tu hotel."
+        title="Contacto | Consultas sobre Hotels-PMS"
+        description="Enviá una consulta sobre Hotels-PMS y contanos qué necesitás ordenar en la operación de tu hotel."
         canonicalPath="/contacto"
         noindex={!ALLOW_INDEXING}
         breadcrumbLabel="Contacto"
@@ -93,7 +93,7 @@ export function ContactPage() {
               <div>
                 <h2 className="font-semibold text-slate-950">Tus datos quedan asociados a esta consulta</h2>
                 <p className="mt-1 text-sm leading-6 text-slate-600">
-                  Usamos la información para responderte y gestionar el contacto comercial. Consultá la{" "}
+                  Usamos la información para responderte y gestionar el contacto comercial. La consulta se elimina automáticamente en el ciclo diario posterior a 90 días. Consultá la{" "}
                   <Link to="/privacy" className="text-brand-700 underline underline-offset-2">Política de Privacidad</Link>.
                 </p>
               </div>
@@ -141,7 +141,7 @@ export function ContactPage() {
             <MarketingIcon name="arrow-right" size={18} />
             {isSubmitting ? "Enviando consulta…" : "Enviar consulta"}
           </button>
-          <p className="mt-3 text-center text-xs leading-5 text-slate-500">Al enviar, la consulta se registra y se intenta notificar al destinatario comercial configurado.</p>
+          <p className="mt-3 text-center text-xs leading-5 text-slate-500">Al enviar, la consulta se elimina automáticamente en el ciclo diario posterior a 90 días y se intenta notificar al destinatario comercial configurado.</p>
         </form>
       </section>
     </MarketingShell>

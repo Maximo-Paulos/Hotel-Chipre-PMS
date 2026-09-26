@@ -109,6 +109,7 @@ class Settings(BaseSettings):
     SYSTEM_EMAIL_REPLY_TO: str = "hotelxpms@gmail.com"
     PUBLIC_INQUIRY_RECIPIENT_EMAIL: str = ""
     PUBLIC_INQUIRY_RATE_LIMIT: int = 5
+    PUBLIC_INQUIRY_GLOBAL_RATE_LIMIT: int = Field(default=100, ge=1, le=10_000)
     DEV_EMAIL_OUTBOX_PATH: str = ""
     GMAIL_CLIENT_ID: str = Field(default="", validation_alias=AliasChoices("GMAIL_CLIENT_ID", "GOOGLE_OAUTH_CLIENT_ID"))
     GMAIL_CLIENT_SECRET: str = Field(default="", validation_alias=AliasChoices("GMAIL_CLIENT_SECRET", "GOOGLE_OAUTH_CLIENT_SECRET"))

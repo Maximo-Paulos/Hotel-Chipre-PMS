@@ -1,7 +1,7 @@
 """store public marketing inquiries and notification state
 
 Revision ID: 20260828_public_inquiries
-Revises: 20260821_apple_sign_in
+Revises: 20260924_action_stepup_single_use
 """
 from typing import Sequence, Union
 
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 revision: str = "20260828_public_inquiries"
-down_revision: Union[str, None] = "20260821_apple_sign_in"
+down_revision: Union[str, None] = "20260924_action_stepup_single_use"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -41,6 +41,30 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("ix_public_inquiries_created_at", "public_inquiries", ["created_at"], unique=False)
+    if op.get_bind().dialect.name == "postgresql":
+        op.execute('ALTER TABLE public.public_inquiries ENABLE ROW LEVEL SECURITY')
+        op.execute('REVOKE ALL PRIVILEGES ON TABLE public.public_inquiries FROM PUBLIC')
+        op.execute('REVOKE ALL PRIVILEGES ON SEQUENCE public.public_inquiries_id_seq FROM PUBLIC')
+        op.execute(
+            """
+            DO $$
+            DECLARE target_role text;
+            BEGIN
+                FOREACH target_role IN ARRAY ARRAY['anon', 'authenticated', 'service_role'] LOOP
+                    IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = target_role) THEN
+                        EXECUTE format(
+                            'REVOKE ALL PRIVILEGES ON TABLE public.public_inquiries FROM %I',
+                            target_role
+                        );
+                        EXECUTE format(
+                            'REVOKE ALL PRIVILEGES ON SEQUENCE public.public_inquiries_id_seq FROM %I',
+                            target_role
+                        );
+                    END IF;
+                END LOOP;
+            END $$
+            """
+        )
 
 
 def downgrade() -> None:
