@@ -48,3 +48,9 @@ def test_an_unrelated_origin_is_still_refused():
     response = client.get("/health", headers={"Origin": "https://not-ours.example"})
 
     assert response.headers.get("access-control-allow-origin") is None
+
+
+def test_an_arbitrary_vercel_preview_is_not_implicitly_trusted():
+    response = client.get("/health", headers={"Origin": "https://untrusted-preview-74291.vercel.app"})
+
+    assert response.headers.get("access-control-allow-origin") is None

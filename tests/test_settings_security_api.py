@@ -1,7 +1,7 @@
 """Security settings API is tenant-scoped, redacted and revokes real JWTs."""
 
 import csv
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from io import StringIO
 
 import pytest
@@ -17,6 +17,7 @@ from app.models.analytics import HotelAuditEvent
 from app.models.audit_log import AuditActionEnum, AuditLog
 from app.models.hotel_config import HotelConfiguration
 from app.models.hotel_membership import HotelMembership
+from app.models.invitation import StaffInvitation
 from app.models.security_audit_log import SecurityAuditLog
 from app.models.user import User
 from app.services.security import create_access_token, hash_password
@@ -53,12 +54,20 @@ def security_client():
         is_verified=True,
         is_active=True,
     )
+    expired_invitee = User(
+        email="expired-security@example.test",
+        password_hash=hash_password("Demo123!pass"),
+        role="manager",
+        is_verified=True,
+        is_active=True,
+    )
     db.add_all(
         [
             HotelConfiguration(id=1, hotel_name="One", subscription_active=True),
             HotelConfiguration(id=2, hotel_name="Two", subscription_active=True),
             owner,
             manager,
+            expired_invitee,
         ]
     )
     db.flush()
@@ -66,6 +75,67 @@ def security_client():
         [
             HotelMembership(hotel_id=1, user_id=owner.id, role="owner", status="active"),
             HotelMembership(hotel_id=1, user_id=manager.id, role="manager", status="invited"),
+            HotelMembership(hotel_id=1, user_id=expired_invitee.id, role="manager", status="invited"),
+        ]
+    )
+    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+    db.add_all(
+        [
+            StaffInvitation(
+                hotel_id=1,
+                user_id=manager.id,
+                email=manager.email,
+                role="manager",
+                inviter_user_id=owner.id,
+                inviter_email=owner.email,
+                token_hash="a" * 64,
+                status="pending",
+                expires_at=now_utc + timedelta(days=1),
+            ),
+            StaffInvitation(
+                hotel_id=1,
+                user_id=None,
+                email="expired-invitation@example.test",
+                role="manager",
+                inviter_user_id=owner.id,
+                inviter_email=owner.email,
+                token_hash="b" * 64,
+                status="pending",
+                expires_at=now_utc - timedelta(days=1),
+            ),
+            StaffInvitation(
+                hotel_id=1,
+                user_id=None,
+                email="accepted-invitation@example.test",
+                role="manager",
+                inviter_user_id=owner.id,
+                inviter_email=owner.email,
+                token_hash="d" * 64,
+                status="accepted",
+                expires_at=now_utc + timedelta(days=1),
+            ),
+            StaffInvitation(
+                hotel_id=1,
+                user_id=None,
+                email="revoked-invitation@example.test",
+                role="manager",
+                inviter_user_id=owner.id,
+                inviter_email=owner.email,
+                token_hash="e" * 64,
+                status="revoked",
+                expires_at=now_utc + timedelta(days=1),
+            ),
+            StaffInvitation(
+                hotel_id=2,
+                user_id=None,
+                email="other-hotel@example.test",
+                role="manager",
+                inviter_user_id=None,
+                inviter_email="other-owner@example.test",
+                token_hash="c" * 64,
+                status="pending",
+                expires_at=now_utc + timedelta(days=1),
+            ),
         ]
     )
     db.add_all(

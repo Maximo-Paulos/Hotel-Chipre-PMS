@@ -10,6 +10,7 @@ from sqlalchemy.pool import StaticPool
 
 import app.models  # noqa: F401
 from app.adapters.rate_limiter import lead_capture_limiter
+from app.api import public_marketing
 from app.database import Base, get_db
 from app.main import app as fastapi_app
 from app.models.marketing import MarketingLead, MarketingPricingPlan
@@ -123,25 +124,41 @@ class TestLeadCapture:
         assert lead.ip_hash and len(lead.ip_hash) == 64
         assert "testclient" not in lead.ip_hash
 
-    def test_repeat_email_is_idempotent_and_enriches(self, client_with_db):
+    def test_repeat_email_is_idempotent_without_mutating_existing_personal_data(self, client_with_db):
         client, db = client_with_db
         client.post(
             "/api/public/leads",
-            json={"email": "a@b.com", "hotel_name": "Hotel Río", "source": "hero"},
+            json={
+                "email": "a@b.com",
+                "name": "Synthetic Original",
+                "hotel_name": "Hotel Río",
+                "source": "hero",
+            },
         )
+        lead = db.query(MarketingLead).one()
+        first_updated_at = lead.updated_at
+        first_ip_hash = lead.ip_hash
         second = client.post(
-            "/api/public/leads", json={"email": "a@b.com", "city": "Bariloche", "source": "final"}
+            "/api/public/leads",
+            json={
+                "email": "a@b.com",
+                "name": "Synthetic Attacker",
+                "hotel_name": "Different Hotel",
+                "city": "Bariloche",
+                "source": "final",
+            },
         )
 
         # Same answer either way: an anonymous caller must not learn whether an
         # address is already on the list.
         assert second.status_code == 200
         lead = db.query(MarketingLead).one()
-        assert lead.city == "Bariloche"
-        # The earlier answer survives a later submission that omitted it.
+        assert lead.name == "Synthetic Original"
         assert lead.hotel_name == "Hotel Río"
-        # First touch wins, so attribution is not rewritten by a later visit.
+        assert lead.city is None
         assert lead.source == "hero"
+        assert lead.updated_at == first_updated_at
+        assert lead.ip_hash == first_ip_hash
 
     def test_honeypot_is_silently_dropped(self, client_with_db):
         client, db = client_with_db
@@ -171,6 +188,23 @@ class TestLeadCapture:
 
         assert codes == [200, 200, 200, 429, 429]
         assert db.query(MarketingLead).count() == 3
+
+    def test_global_budget_caps_submissions_across_all_sources(self, client_with_db, monkeypatch):
+        client, db = client_with_db
+        lead_capture_limiter.limit = 10
+        monkeypatch.setattr(
+            public_marketing,
+            "get_settings",
+            lambda: type("Settings", (), {"PUBLIC_MARKETING_GLOBAL_RATE_LIMIT": 2})(),
+        )
+
+        responses = [
+            client.post("/api/public/leads", json={"email": f"global-{index}@example.com"})
+            for index in range(3)
+        ]
+
+        assert [response.status_code for response in responses] == [200, 200, 429]
+        assert db.query(MarketingLead).count() == 2
 
     def test_caps_utm_payload(self, client_with_db):
         client, db = client_with_db

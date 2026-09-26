@@ -12,7 +12,8 @@ const navItems = [
   { to: "/adminpmsmaster/leads", label: "Interesados" },
   { to: "/adminpmsmaster/email", label: "System Email" },
   { to: "/adminpmsmaster/stripe", label: "Stripe Owner" },
-  { to: "/adminpmsmaster/audit", label: "Audit Log" }
+  { to: "/adminpmsmaster/audit", label: "Audit Log" },
+  { to: "/adminpmsmaster/privacy-retention", label: "Retenciones legales" }
 ];
 
 export function MasterAdminRoot() {

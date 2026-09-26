@@ -18,6 +18,7 @@ from app.models.analytics import AnalyticsExportFormatEnum, AnalyticsExportJob, 
 from app.schemas.analytics_api import AnalyticsExportJobRead, AnalyticsExportRequest
 from app.services.object_storage import ObjectStorageError, get_object_storage
 from app.services.stored_object_service import register_uploaded_object
+from app.services.csv_export_safety import spreadsheet_safe_value
 from app.services.analytics_service import (
     _analytics_window,
     build_category_detail_payload,
@@ -132,7 +133,7 @@ def _flatten_payload_rows(payload: dict[str, Any]) -> list[list[str]]:
 def _rows_to_csv_bytes(rows: list[list[str]]) -> bytes:
     buffer = io.StringIO()
     writer = csv.writer(buffer, lineterminator="\n")
-    writer.writerows(rows)
+    writer.writerows([[spreadsheet_safe_value(value) for value in row] for row in rows])
     return buffer.getvalue().encode("utf-8-sig")
 
 

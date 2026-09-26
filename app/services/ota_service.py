@@ -145,6 +145,11 @@ class OTAIntegrationService:
         return credential
 
     @staticmethod
+    def validate_webhook_secret(db: Session, hotel_id: int, provider: str, webhook_secret: str) -> None:
+        """Authenticate the path credential before a webhook body is read."""
+        OTAIntegrationService._resolve_webhook_credential(db, hotel_id, provider, webhook_secret, {})
+
+    @staticmethod
     def generate_webhook_secret() -> str:
         return secrets.token_urlsafe(32)
 

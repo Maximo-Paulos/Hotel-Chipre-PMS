@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import get_db
+from app.api.webhook_payloads import read_bounded_body
 from app.models.whatsapp_crm import WhatsAppProviderRoute
 from app.services.external_effects_policy import InboundProviderEventsDisabled, require_inbound_provider_events
 from app.services.tenant_context import set_tenant_hotel_context
@@ -69,7 +70,7 @@ async def receive_webhook(request: Request, db: Session = Depends(get_db)):
     secret = _app_secret()
     if not secret:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Webhook de WhatsApp no configurado")
-    raw_body = await request.body()
+    raw_body = await read_bounded_body(request, max_bytes=4 * 1024 * 1024)
     signature = request.headers.get("X-Hub-Signature-256", "")
     expected = "sha256=" + hmac.new(secret.encode(), raw_body, hashlib.sha256).hexdigest()
     if not hmac.compare_digest(signature, expected):

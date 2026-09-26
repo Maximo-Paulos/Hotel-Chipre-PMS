@@ -81,4 +81,7 @@ class MarketingLead(Base):
     created_at = Column(DateTime(timezone=True), nullable=False, default=_utcnow)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow)
 
-    __table_args__ = (Index("ix_marketing_leads_created_at", "created_at"),)
+    __table_args__ = (
+        Index("ix_marketing_leads_created_at", "created_at"),
+        Index("ix_marketing_leads_updated_at", "updated_at"),
+    )

@@ -151,28 +151,21 @@ def hash_source(value: str) -> str:
 
 
 def record_lead(db: Session, *, email: str, source_key: str, **fields: Any) -> MarketingLead:
-    """Idempotent by email.
+    """Create once per email without letting anonymous repeats edit a lead.
 
-    A repeat submission enriches the existing row instead of raising, so the
-    endpoint never tells an anonymous caller whether an address is already on
-    the list.
+    A repeat submission receives the same public response but cannot overwrite
+    another person's contact details or restart the retention clock.
     """
     normalized = email.strip().lower()
     lead = db.query(MarketingLead).filter(MarketingLead.email == normalized).one_or_none()
-    is_new = lead is None
-    if is_new:
-        lead = MarketingLead(email=normalized)
-        db.add(lead)
+    if lead is not None:
+        return lead
+
+    lead = MarketingLead(email=normalized)
+    db.add(lead)
 
     utm = fields.pop("utm", None)
-    # First touch wins: a later submission from another section of the site
-    # carries its own default source and would otherwise erase where the
-    # person actually came from.
-    if not is_new:
-        fields.pop("source", None)
     for key, value in fields.items():
-        # Only overwrite with something: a later bare-email submission should
-        # not wipe the hotel name someone typed the first time.
         if value not in (None, "") and hasattr(lead, key):
             setattr(lead, key, value)
     if utm:

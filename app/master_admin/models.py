@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, JSON, String, Text
+from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
 
 from app.database import Base
@@ -65,6 +65,36 @@ class MasterAdminAuthLockout(Base):
 
     __table_args__ = (
         Index("ix_master_admin_lockouts_login_identifier", "login_identifier"),
+    )
+
+
+class PrivacyRetentionHold(Base):
+    """Current legal-retention exception for one public lead or inquiry.
+
+    Changes are recorded atomically in MasterAdminAuditEvent. This row stores
+    only a resource identifier and case metadata, never the underlying PII.
+    """
+
+    __tablename__ = "privacy_retention_holds"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    resource_type = Column(String(40), nullable=False)
+    record_id = Column(Integer, nullable=False)
+    reason_code = Column(String(40), nullable=False)
+    case_reference = Column(String(120), nullable=False)
+    hold_until = Column(DateTime(timezone=True), nullable=True)
+    placed_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    placed_at = Column(DateTime(timezone=True), nullable=False, default=_utcnow)
+    released_at = Column(DateTime(timezone=True), nullable=True)
+    released_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    release_reason_code = Column(String(40), nullable=True)
+    release_reference = Column(String(120), nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("resource_type", "record_id", name="uq_privacy_retention_holds_resource_record"),
+        CheckConstraint("resource_type IN ('marketing_lead', 'public_inquiry')", name="ck_privacy_retention_holds_resource_type"),
+        CheckConstraint("record_id > 0", name="ck_privacy_retention_holds_record_id_positive"),
+        Index("ix_privacy_retention_holds_lookup", "resource_type", "record_id", "released_at"),
     )
 
 
@@ -149,4 +179,3 @@ class MasterStripeWebhookEvent(Base):
     __table_args__ = (
         Index("ix_master_stripe_webhook_events_event_type", "event_type"),
     )
-

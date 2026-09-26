@@ -61,6 +61,7 @@ from .security import (
     reset_master_admin_mfa_attempts,
     set_master_session_cookies,
 )
+from .privacy_retention import router as privacy_retention_router
 from .stripe import clear_stripe_settings, get_stripe_status, save_stripe_settings, verify_stripe_signature
 from app.services.external_effects_policy import (
     InboundProviderEventsDisabled,
@@ -629,3 +630,6 @@ def audit_events(request: Request, db: Session = Depends(get_db)):
             for event in events
         ]
     }
+
+
+router.include_router(privacy_retention_router)

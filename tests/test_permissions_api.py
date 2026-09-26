@@ -137,7 +137,8 @@ def test_permissions_matrix_exposes_only_canonical_rows_with_ui_metadata():
         legacy_codes = set(LEGACY_PERMISSION_ALIASES)
 
         # New role-only business actions are named capabilities in the catalog.
-        assert len(canonical_codes) == 94
+        assert len(canonical_codes) == 96
+        assert {"payment:proof:view", "payment:proof:review"} <= canonical_codes
         assert {code for code in canonical_codes if code.startswith("whatsapp:")} == {
             "whatsapp:inbox:view", "whatsapp:inbox:all", "whatsapp:message:send",
             "whatsapp:note:manage", "whatsapp:conversation:assign", "whatsapp:conversation:close",
@@ -151,6 +152,10 @@ def test_permissions_matrix_exposes_only_canonical_rows_with_ui_metadata():
             for code, cell in cells.items():
                 assert cell["module"] == _CANONICAL_DEFINITIONS[code][0]
                 assert cell["help_es"] == _CANONICAL_DEFINITIONS[code][2]
+        for role in ("owner", "co_owner", "manager"):
+            assert matrix[role]["payment:proof:review"]["allowed"] is True
+        for role in ("receptionist", "housekeeping"):
+            assert matrix[role]["payment:proof:review"]["allowed"] is False
     finally:
         fastapi_app.dependency_overrides.clear()
         db.close()

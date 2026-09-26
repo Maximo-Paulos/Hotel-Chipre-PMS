@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
+import json
 
 from app.config import get_settings
 from app.database import get_db
@@ -15,6 +16,7 @@ from app.services.payment_link_test_service import (
     validate_mercadopago_webhook_signature,
 )
 from app.services.permission_service import PERMISSION_SETTINGS_TESTS_EXECUTE, PERMISSION_SETTINGS_TESTS_VIEW
+from app.api.webhook_payloads import read_bounded_body
 from app.services.external_effects_policy import (
     InboundProviderEventsDisabled,
     require_inbound_provider_events,
@@ -110,8 +112,9 @@ async def mercadopago_webhook(
     hotel_id = request.query_params.get("hotel_id")
     payload = {}
     try:
-        payload = await request.json()
-    except Exception:
+        raw_body = await read_bounded_body(request, max_bytes=1024 * 1024)
+        payload = json.loads(raw_body.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
         payload = {}
 
     if not external_reference and isinstance(payload, dict):

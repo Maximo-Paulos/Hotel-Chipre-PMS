@@ -13,6 +13,7 @@ from app.config import get_settings
 from app.database import get_db
 from app.dependencies.auth import AuthContext, require_permission
 from app.models.hotel_membership import HotelMembership
+from app.models.invitation import StaffInvitation
 from app.models.security_audit_log import SecurityAuditLog
 from app.models.user import User
 from app.schemas.settings_security import (
@@ -108,10 +109,17 @@ def security_overview(
     context: AuthContext = Depends(require_permission(PERMISSION_SETTINGS_SECURITY_VIEW)),
 ):
     user = _current_user(db, context)
-    since = datetime.now(timezone.utc) - timedelta(hours=24)
+    now = datetime.now(timezone.utc)
+    since = now - timedelta(hours=24)
+    now_utc = now.replace(tzinfo=None)
     membership_scope = db.query(HotelMembership).filter(
         HotelMembership.hotel_id == context.hotel_id
     )
+    pending_invitation_count = db.query(StaffInvitation).filter(
+        StaffInvitation.hotel_id == context.hotel_id,
+        StaffInvitation.status == "pending",
+        StaffInvitation.expires_at > now_utc,
+    ).count()
     event_scope = db.query(SecurityAuditLog).filter(
         SecurityAuditLog.hotel_id == context.hotel_id,
         SecurityAuditLog.created_at >= since,
@@ -121,7 +129,7 @@ def security_overview(
         hotel_id=context.hotel_id,
         session_timeout_minutes=int(getattr(settings, "JWT_EXPIRES_MINUTES", 60)),
         active_members=membership_scope.filter(HotelMembership.status == "active").count(),
-        pending_invitations=membership_scope.filter(HotelMembership.status == "invited").count(),
+        pending_invitations=pending_invitation_count,
         security_events_24h=event_scope.count(),
         permission_denials_24h=event_scope.filter(
             SecurityAuditLog.action == "permission.denied"

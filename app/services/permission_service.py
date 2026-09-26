@@ -128,6 +128,8 @@ PERMISSION_OPERATIONAL_TASK_MANAGE = "operations:tasks:manage"
 PERMISSION_SHIFT_HANDOFF_MANAGE = "operations:handoff:manage"
 PERMISSION_REPORTS_OPERATIONAL_VIEW = "reports:operational:view"
 PERMISSION_REPORTS_FINANCIAL_VIEW = "reports:financial:view"
+PERMISSION_PAYMENT_PROOF_VIEW = "payment:proof:view"
+PERMISSION_PAYMENT_PROOF_REVIEW = "payment:proof:review"
 PERMISSION_APIKEY_MANAGE = "apikey:manage"
 
 # Section visibility and management permissions used by the next frontend
@@ -443,6 +445,14 @@ _CANONICAL_DEFINITIONS: dict[str, tuple[str, str, str]] = {
         "reports", "Read financial reports",
         "Permite consultar reportes financieros del hotel. No permite modificar cobros, caja ni reservas.",
     ),
+    PERMISSION_PAYMENT_PROOF_VIEW: (
+        "payments", "Read transfer payment proofs",
+        "Permite consultar comprobantes de transferencia. No permite aprobarlos ni rechazarlos.",
+    ),
+    PERMISSION_PAYMENT_PROOF_REVIEW: (
+        "payments", "Review transfer payment proofs",
+        "Permite aprobar o rechazar comprobantes de transferencia y registrar el pago correspondiente.",
+    ),
     PERMISSION_COMMERCIAL_MANAGE: (
         "commercial", "Manage commercial configuration",
         "Permite crear y editar productos, planes tarifarios, políticas impositivas y cambiarias del hotel. Está limitado a owner y co-owner.",
@@ -677,6 +687,7 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
         PERMISSION_RATES_UPDATE, PERMISSION_PROMOTIONS_READ,
         PERMISSION_PROMOTIONS_MANAGE, PERMISSION_REPORTS_OPERATIONAL_VIEW,
         PERMISSION_COMPANY_MANAGE, PERMISSION_COMPANY_VIEW,
+        PERMISSION_PAYMENT_PROOF_VIEW, PERMISSION_PAYMENT_PROOF_REVIEW,
         PERMISSION_DASHBOARD_VIEW, PERMISSION_OCCUPANCY_VIEW,
         PERMISSION_WAITLIST_VIEW, PERMISSION_WAITLIST_MANAGE,
         PERMISSION_CASH_VIEW,

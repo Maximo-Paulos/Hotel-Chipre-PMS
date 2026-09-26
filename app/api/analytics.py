@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies.auth import AuthContext, require_all_permissions, require_permission
+from app.dependencies.auth import AuthContext, authorize_permission, require_all_permissions, require_permission
 from app.schemas.analytics import AnalyticsResponseEnvelopeRead, AnalyticsStarterSummaryRead
 from app.schemas.analytics_api import (
     AnalyticsAIConfigRead,
@@ -64,6 +64,7 @@ from app.services.permission_service import (
     PERMISSION_ANALYTICS_ADVANCED_VIEW,
     PERMISSION_ANALYTICS_AI_VIEW,
     PERMISSION_ANALYTICS_VIEW,
+    PERMISSION_COMPANY_VIEW,
     PERMISSION_REPORTS_FINANCIAL_VIEW,
     PERMISSION_REPORTS_OPERATIONAL_VIEW,
     resolve,
@@ -71,6 +72,18 @@ from app.services.permission_service import (
 
 
 router = APIRouter(prefix="/api/analytics", tags=["Analytics"])
+
+
+def _authorize_sensitive_company_export(
+    request: Request,
+    db: Session,
+    context: AuthContext,
+    payload: AnalyticsExportRequest,
+) -> None:
+    if payload.entity_code != "company":
+        return
+    authorize_permission(request, db, context, PERMISSION_COMPANY_VIEW)
+    authorize_permission(request, db, context, PERMISSION_ANALYTICS_ADVANCED_VIEW)
 
 
 def _common_filters(
@@ -259,6 +272,7 @@ def analytics_segments(
 @router.get("/companies/{company_id}", response_model=AnalyticsResponseEnvelopeRead)
 def analytics_company_detail(
     company_id: int,
+    request: Request,
     date_from: date | None = Query(default=None),
     date_to: date | None = Query(default=None),
     currency_display: str = Query(default="ARS"),
@@ -269,6 +283,7 @@ def analytics_company_detail(
         require_all_permissions(PERMISSION_REPORTS_FINANCIAL_VIEW, PERMISSION_ANALYTICS_ADVANCED_VIEW)
     ),
 ):
+    authorize_permission(request, db, context, PERMISSION_COMPANY_VIEW)
     require_analytics_plan(db, context.hotel_id, "pro")
     window = _analytics_window(
         db,
@@ -366,9 +381,11 @@ def analytics_operations(
 @router.post("/exports/png")
 def export_analytics_png(
     payload: AnalyticsExportRequest,
+    request: Request,
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
 ):
+    _authorize_sensitive_company_export(request, db, context, payload)
     require_analytics_plan(db, context.hotel_id, "pro")
     content = render_export_png(db, hotel_id=context.hotel_id, request=payload)
     filename = f"analytics-{context.hotel_id}-{payload.entity_code}.png"
@@ -382,9 +399,11 @@ def export_analytics_png(
 @router.post("/exports/csv")
 def export_analytics_csv(
     payload: AnalyticsExportRequest,
+    request: Request,
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
 ):
+    _authorize_sensitive_company_export(request, db, context, payload)
     require_analytics_plan(db, context.hotel_id, "pro")
     content = render_export_csv(db, hotel_id=context.hotel_id, request=payload)
     filename = f"analytics-{context.hotel_id}-{payload.entity_code}.csv"
@@ -398,10 +417,12 @@ def export_analytics_csv(
 @router.post("/exports/xlsx", response_model=AnalyticsExportJobRead, status_code=201)
 def export_analytics_xlsx(
     payload: AnalyticsExportRequest,
+    request: Request,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
 ):
+    _authorize_sensitive_company_export(request, db, context, payload)
     require_analytics_plan(db, context.hotel_id, "ultra")
     job = create_xlsx_export_job(db, hotel_id=context.hotel_id, user_id=context.user_id or 0, request=payload)
     db.commit()
@@ -417,24 +438,16 @@ def list_analytics_exports(
     ),
 ):
     require_analytics_plan(db, context.hotel_id, "ultra")
-    return list_export_jobs(db, hotel_id=context.hotel_id)
+    jobs = list_export_jobs(db, hotel_id=context.hotel_id)
+    if not resolve(db, context.hotel_id, context.user_role, PERMISSION_COMPANY_VIEW, user_id=context.user_id):
+        return [job for job in jobs if job.entity_code != "company"]
+    return jobs
 
 
 @router.get("/exports/{job_id}", response_model=AnalyticsExportJobRead)
 def get_analytics_export(
     job_id: int,
-    db: Session = Depends(get_db),
-    context: AuthContext = Depends(
-        require_all_permissions(PERMISSION_REPORTS_FINANCIAL_VIEW, PERMISSION_ANALYTICS_ADVANCED_VIEW)
-    ),
-):
-    require_analytics_plan(db, context.hotel_id, "ultra")
-    return get_export_job_read(db, hotel_id=context.hotel_id, job_id=job_id)
-
-
-@router.get("/exports/{job_id}/download")
-def download_analytics_export(
-    job_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     context: AuthContext = Depends(
         require_all_permissions(PERMISSION_REPORTS_FINANCIAL_VIEW, PERMISSION_ANALYTICS_ADVANCED_VIEW)
@@ -442,6 +455,24 @@ def download_analytics_export(
 ):
     require_analytics_plan(db, context.hotel_id, "ultra")
     job = get_export_job_or_404(db, hotel_id=context.hotel_id, job_id=job_id)
+    if job.entity_code == "company":
+        authorize_permission(request, db, context, PERMISSION_COMPANY_VIEW)
+    return get_export_job_read(db, hotel_id=context.hotel_id, job_id=job_id)
+
+
+@router.get("/exports/{job_id}/download")
+def download_analytics_export(
+    job_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(
+        require_all_permissions(PERMISSION_REPORTS_FINANCIAL_VIEW, PERMISSION_ANALYTICS_ADVANCED_VIEW)
+    ),
+):
+    require_analytics_plan(db, context.hotel_id, "ultra")
+    job = get_export_job_or_404(db, hotel_id=context.hotel_id, job_id=job_id)
+    if job.entity_code == "company":
+        authorize_permission(request, db, context, PERMISSION_COMPANY_VIEW)
     if expire_export_job_if_needed(db, job):
         db.commit()
         raise HTTPException(status_code=410, detail="Export vencido")

@@ -684,6 +684,7 @@ def cleanup_expired_exports(self, database_url: Optional[str] = None):
         db = SessionLocal()
 
         expired_ids: list[int] = []
+        deleted_objects = 0
         try:
             now = datetime.now(timezone.utc)
             from app.models.hotel_config import HotelConfiguration
@@ -693,7 +694,7 @@ def cleanup_expired_exports(self, database_url: Optional[str] = None):
                 set_tenant_hotel_context(db, hotel_id)
                 jobs = (
                     db.query(AnalyticsExportJob)
-                    .filter(AnalyticsExportJob.status != AnalyticsExportStatusEnum.EXPIRED)
+                    .filter(AnalyticsExportJob.file_path.isnot(None))
                     .all()
                 )
                 for job in jobs:
@@ -706,17 +707,25 @@ def cleanup_expired_exports(self, database_url: Optional[str] = None):
                         expires_at = expires_at.astimezone(timezone.utc)
                     if expires_at > now:
                         continue
-                    job.status = AnalyticsExportStatusEnum.EXPIRED
-                    expired_ids.append(job.id)
-                    if job.file_path:
-                        try:
-                            delete_export_file(job)
-                        except ObjectStorageError:
-                            logger.warning(
-                                "analytics.cleanup_expired_exports could not delete %s", job.file_path
-                            )
+                    if job.status != AnalyticsExportStatusEnum.EXPIRED:
+                        job.status = AnalyticsExportStatusEnum.EXPIRED
+                        expired_ids.append(job.id)
+                    try:
+                        delete_export_file(job)
+                        job.file_path = None
+                        deleted_objects += 1
+                    except ObjectStorageError as exc:
+                        logger.warning(
+                            "analytics.cleanup_expired_exports could not delete job_id=%s error_type=%s",
+                            job.id,
+                            type(exc).__name__,
+                        )
                 db.commit()
-            return {"expired": len(expired_ids), "expired_ids": expired_ids}
+            return {
+                "expired": len(expired_ids),
+                "expired_ids": expired_ids,
+                "deleted_objects": deleted_objects,
+            }
         finally:
             db.close()
     except Exception as exc:

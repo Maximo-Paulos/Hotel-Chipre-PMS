@@ -8,7 +8,8 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 
-from app.adapters.rate_limiter import lead_capture_limiter
+from app.adapters.rate_limiter import lead_capture_global_limiter, lead_capture_limiter
+from app.config import get_settings
 from app.database import get_db
 from app.schemas.marketing import (
     LeadCreateRequest,
@@ -49,6 +50,12 @@ def create_lead(
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Demasiados intentos. Probá de nuevo en unos minutos.",
+        )
+    global_limit = int(get_settings().PUBLIC_MARKETING_GLOBAL_RATE_LIMIT)
+    if not lead_capture_global_limiter.allow("all", db=db, limit=global_limit):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="El formulario alcanzó temporalmente su capacidad. Probá de nuevo más tarde.",
         )
     db.commit()
 

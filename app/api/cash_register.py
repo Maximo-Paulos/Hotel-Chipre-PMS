@@ -118,6 +118,11 @@ def export_cash_ledger_csv(
             )
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
+        if report.get("entries_truncated"):
+            raise HTTPException(
+                status_code=413,
+                detail="La jornada excede el máximo de movimientos del informe; acotá el período antes de exportar.",
+            )
         reports.append(report)
         currencies.update(
             str(entry.get("currency_code") or "").upper()

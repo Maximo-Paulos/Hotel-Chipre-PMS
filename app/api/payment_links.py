@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from sqlalchemy.orm import Session
+import json
 
 from app.config import get_settings
 from app.database import get_db
@@ -19,6 +20,7 @@ from app.services.external_effects_policy import (
     require_inbound_provider_events,
 )
 from app.services.permission_service import PERMISSION_CASH_OPERATE
+from app.api.webhook_payloads import read_bounded_body
 
 router = APIRouter(tags=["Payment Links"])
 
@@ -93,8 +95,9 @@ async def _mercadopago_webhook_impl(request: Request, db: Session) -> dict:
 
     payload = {}
     try:
-        payload = await request.json()
-    except Exception:
+        raw_body = await read_bounded_body(request, max_bytes=1024 * 1024)
+        payload = json.loads(raw_body.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
         payload = {}
 
     data = payload.get("data") if isinstance(payload, dict) else {}

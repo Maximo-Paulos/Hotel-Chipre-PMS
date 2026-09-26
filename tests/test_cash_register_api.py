@@ -183,6 +183,24 @@ def test_cash_csv_treats_formula_prefixed_actor_alias_as_text(client_with_db, mo
     assert "'@SUM(1+1)" in response.text
 
 
+def test_cash_csv_refuses_to_return_a_silently_truncated_report(client_with_db, monkeypatch):
+    client, _db, _ctx = client_with_db
+    monkeypatch.setattr(
+        "app.api.cash_register.get_daily_summary",
+        lambda *args, **kwargs: {
+            "report_date": "2026-09-04",
+            "hotel_id": 1,
+            "entries": [{"currency_code": "ARS"}],
+            "entries_truncated": True,
+        },
+    )
+
+    response = client.get("/api/cash-register/export.csv?date=2026-09-04")
+
+    assert response.status_code == 413
+    assert "excede el máximo" in response.json()["detail"]
+
+
 def test_cash_custody_receipt_is_owner_only(client_with_db):
     client, _db, ctx = client_with_db
 

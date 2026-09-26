@@ -5,19 +5,21 @@ from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies.auth import AuthContext, require_permission
+from app.dependencies.auth import AuthContext, require_any_permission, require_permission
 from app.schemas.payment_proof import PaymentProofCreate, PaymentProofRead, PaymentProofReject
 from app.services.payment_proof_service import (
     PaymentProofError,
     approve_transfer_proof,
     get_transfer_proof_bytes,
     list_transfer_proofs,
+    recover_failed_transfer_proof_commit,
     reject_transfer_proof,
     submit_transfer_proof,
 )
 from app.services.permission_service import (
     PERMISSION_CASH_OPERATE,
-    PERMISSION_REPORTS_FINANCIAL_VIEW,
+    PERMISSION_PAYMENT_PROOF_REVIEW,
+    PERMISSION_PAYMENT_PROOF_VIEW,
 )
 
 
@@ -41,7 +43,20 @@ def submit_proof(
             original_filename=payload.original_filename,
             submitted_by_user_id=context.user_id,
         )
-        db.commit()
+        try:
+            db.commit()
+        except Exception as exc:
+            recovered, resolved = recover_failed_transfer_proof_commit(db, proof)
+            if recovered is not None:
+                proof = recovered
+            else:
+                message = (
+                    "No se pudo confirmar el guardado del comprobante; verificá el estado antes de volver a subirlo."
+                    if not resolved
+                    else "No se pudo guardar el comprobante."
+                )
+                raise HTTPException(status_code=503, detail=message) from exc
+        proof.__dict__.pop("_uncommitted_object_key", None)
         db.refresh(proof)
         return proof
     except PaymentProofError as exc:
@@ -54,7 +69,11 @@ def submit_proof(
 def list_proofs(
     reservation_id: int | None = None,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_CASH_OPERATE)),
+    context: AuthContext = Depends(
+        require_any_permission(
+            PERMISSION_CASH_OPERATE, PERMISSION_PAYMENT_PROOF_VIEW, PERMISSION_PAYMENT_PROOF_REVIEW
+        )
+    ),
 ):
     return list_transfer_proofs(db, hotel_id=context.hotel_id, reservation_id=reservation_id)
 
@@ -63,7 +82,11 @@ def list_proofs(
 def get_proof_image(
     proof_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_CASH_OPERATE)),
+    context: AuthContext = Depends(
+        require_any_permission(
+            PERMISSION_CASH_OPERATE, PERMISSION_PAYMENT_PROOF_VIEW, PERMISSION_PAYMENT_PROOF_REVIEW
+        )
+    ),
 ):
     try:
         content, content_type, filename = get_transfer_proof_bytes(
@@ -83,7 +106,7 @@ def get_proof_image(
 def approve_proof(
     proof_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
+    context: AuthContext = Depends(require_permission(PERMISSION_PAYMENT_PROOF_REVIEW)),
 ):
     try:
         proof = approve_transfer_proof(
@@ -105,7 +128,7 @@ def reject_proof(
     proof_id: int,
     payload: PaymentProofReject,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
+    context: AuthContext = Depends(require_permission(PERMISSION_PAYMENT_PROOF_REVIEW)),
 ):
     try:
         proof = reject_transfer_proof(

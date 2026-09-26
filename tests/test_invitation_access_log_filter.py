@@ -32,6 +32,24 @@ def test_uvicorn_access_log_filter_redacts_invitation_capabilities(method, reque
     assert "/api/invitations/[REDACTED]" in rendered
 
 
+@pytest.mark.parametrize("provider", ["booking", "expedia", "despegar"])
+def test_uvicorn_access_log_filter_redacts_ota_webhook_secrets(provider):
+    secret = "sensitive-ota-webhook-secret"
+    record = logging.LogRecord(
+        name="uvicorn.access",
+        level=logging.INFO,
+        pathname="",
+        lineno=0,
+        msg='%s - "%s %s HTTP/%s" %d',
+        args=("127.0.0.1", "POST", f"/api/webhooks/{provider}/42/{secret}", "1.1", 200),
+        exc_info=None,
+    )
+
+    assert _InvitationAccessLogFilter().filter(record) is True
+    assert secret not in record.getMessage()
+    assert f"/api/webhooks/{provider}/42/[REDACTED]" in record.getMessage()
+
+
 @pytest.mark.parametrize(
     ("method", "request_target", "expected"),
     [

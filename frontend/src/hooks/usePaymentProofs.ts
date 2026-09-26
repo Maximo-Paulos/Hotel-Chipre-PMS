@@ -16,12 +16,12 @@ import { useGuardedMutation } from "./useGuardedMutation";
 
 const proofsKey = (hotelId: number | null, reservationId?: number) => ["payment-proofs", hotelId, reservationId];
 
-export function usePaymentProofs(reservationId?: number) {
+export function usePaymentProofs(reservationId?: number, enabled = true) {
   const { session } = useSession();
   return useQuery<PaymentProof[]>({
     queryKey: proofsKey(session.hotelId, reservationId),
     queryFn: () => listPaymentProofs(reservationId!, session),
-    enabled: Boolean(reservationId) && hasValidSession(session),
+    enabled: enabled && Boolean(reservationId) && hasValidSession(session),
     staleTime: 10 * 1000
   });
 }

@@ -27,6 +27,8 @@ from app.services.permission_service import (
     PERMISSION_GUEST_VIEW,
     PERMISSION_OCCUPANCY_VIEW,
     PERMISSION_OPERATIONS_AUDIT_VIEW,
+    PERMISSION_PAYMENT_PROOF_REVIEW,
+    PERMISSION_PAYMENT_PROOF_VIEW,
     PERMISSION_REPORTS_FINANCIAL_VIEW,
     PERMISSION_REPORTS_OPERATIONAL_VIEW,
     PERMISSION_ROOM_CLEANING_STATUS,
@@ -269,3 +271,15 @@ def test_new_section_permissions_match_current_frontend_role_gates_exactly():
             role for role in ROLE_CODES if DEFAULT_MATRIX[role].get(permission_code, False)
         }
         assert default_roles == expected_roles, permission_code
+
+
+def test_payment_proof_permissions_keep_read_and_review_separate():
+    assert DEFAULT_MATRIX["owner"][PERMISSION_PAYMENT_PROOF_VIEW] is True
+    assert DEFAULT_MATRIX["owner"][PERMISSION_PAYMENT_PROOF_REVIEW] is True
+    assert DEFAULT_MATRIX["co_owner"][PERMISSION_PAYMENT_PROOF_VIEW] is True
+    assert DEFAULT_MATRIX["co_owner"][PERMISSION_PAYMENT_PROOF_REVIEW] is True
+    assert DEFAULT_MATRIX["manager"][PERMISSION_PAYMENT_PROOF_VIEW] is True
+    assert DEFAULT_MATRIX["manager"][PERMISSION_PAYMENT_PROOF_REVIEW] is True
+    assert DEFAULT_MATRIX["manager"][PERMISSION_REPORTS_FINANCIAL_VIEW] is False
+    assert DEFAULT_MATRIX["receptionist"][PERMISSION_PAYMENT_PROOF_VIEW] is False
+    assert DEFAULT_MATRIX["receptionist"][PERMISSION_PAYMENT_PROOF_REVIEW] is False

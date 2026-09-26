@@ -16,6 +16,7 @@ from app.models.operations import BillingAdjustment, BillingAdjustmentTypeEnum
 from app.models.payment_proof import PaymentProof, PaymentProofBlob, PaymentProofStatusEnum
 from app.models.payment_surcharge import PaymentSurcharge, PaymentSurchargeTypeEnum
 from app.models.reservation import Reservation, ReservationStatusEnum
+from app.models.stored_object import StoredObject
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.transaction import PaymentMethodEnum, TransactionStatusEnum
 from app.models.user import User
@@ -25,8 +26,11 @@ from app.services.payment_proof_service import (
     approve_transfer_proof,
     get_transfer_proof_bytes,
     reject_transfer_proof,
+    recover_failed_transfer_proof_commit,
     submit_transfer_proof,
 )
+from app.services.object_storage import ObjectStorageError, get_object_storage
+from sqlalchemy.exc import IntegrityError
 from app.services.reservation_service import create_reservation
 
 
@@ -125,6 +129,90 @@ def test_submit_transfer_proof_validates_image_and_stores_metadata(db):
             original_filename="duplicate.png",
             submitted_by_user_id=10,
         )
+
+
+def test_concurrent_metadata_conflict_deletes_the_uncommitted_upload(db, monkeypatch):
+    reservation = _reservation(db, 1, "PROOF-RACE")
+    import app.services.payment_proof_service as proof_service
+
+    uploaded_keys = []
+    register = proof_service.register_uploaded_object
+
+    def capture_upload(*args, **kwargs):
+        uploaded_keys.append(kwargs["object_key"])
+        return register(*args, **kwargs)
+
+    monkeypatch.setattr(proof_service, "register_uploaded_object", capture_upload)
+    original_flush = db.flush
+
+    def fail_proof_insert(*args, **kwargs):
+        if any(isinstance(row, PaymentProof) for row in db.new):
+            raise IntegrityError("payment_proof insert", {}, RuntimeError("duplicate hash"))
+        return original_flush(*args, **kwargs)
+
+    monkeypatch.setattr(db, "flush", fail_proof_insert)
+    with pytest.raises(PaymentProofError, match="No se pudo guardar"):
+        submit_transfer_proof(
+            db,
+            hotel_id=1,
+            reservation_id=reservation.id,
+            amount=Decimal("30.00"),
+            image_base64=_image_base64(),
+            original_filename="race.png",
+            submitted_by_user_id=10,
+        )
+
+    monkeypatch.setattr(db, "flush", original_flush)
+    assert uploaded_keys
+    with pytest.raises(ObjectStorageError):
+        get_object_storage().get_bytes(uploaded_keys[0])
+    assert db.query(PaymentProof).count() == 0
+    assert db.query(StoredObject).filter_by(object_key=uploaded_keys[0]).count() == 0
+
+
+def test_failed_commit_after_upload_rolls_back_metadata_and_deletes_object(db):
+    reservation = _reservation(db, 1, "PROOF-COMMIT-ROLLBACK")
+    proof = submit_transfer_proof(
+        db,
+        hotel_id=1,
+        reservation_id=reservation.id,
+        amount=Decimal("30.00"),
+        image_base64=_image_base64(),
+        original_filename="commit.png",
+        submitted_by_user_id=10,
+    )
+    object_key = proof._uncommitted_object_key
+
+    recovered, resolved = recover_failed_transfer_proof_commit(db, proof)
+
+    assert resolved is True
+    assert recovered is None
+    with pytest.raises(ObjectStorageError):
+        get_object_storage().get_bytes(object_key)
+    assert db.query(PaymentProof).count() == 0
+    assert db.query(StoredObject).filter_by(object_key=object_key).count() == 0
+
+
+def test_ambiguous_commit_that_persisted_proof_keeps_its_object(db):
+    reservation = _reservation(db, 1, "PROOF-COMMIT-RESOLVED")
+    proof = submit_transfer_proof(
+        db,
+        hotel_id=1,
+        reservation_id=reservation.id,
+        amount=Decimal("30.00"),
+        image_base64=_image_base64(),
+        original_filename="commit.png",
+        submitted_by_user_id=10,
+    )
+    object_key = proof._uncommitted_object_key
+    db.commit()
+
+    recovered, resolved = recover_failed_transfer_proof_commit(db, proof)
+
+    assert resolved is True
+    assert recovered is not None
+    assert recovered.id == proof.id
+    assert get_object_storage().get_bytes(object_key)
 
 
 def test_submit_transfer_proof_reencodes_and_removes_exif(db):

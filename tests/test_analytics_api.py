@@ -29,6 +29,7 @@ from app.models.analytics import (
 from app.models.company import Company
 from app.models.hotel_config import HotelConfiguration
 from app.models.hotel_membership import HotelMembership
+from app.models.permission import Permission, UserPermissionOverride
 from app.models.reservation import (
     Reservation,
     ReservationChannelCodeEnum,
@@ -43,6 +44,7 @@ from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.user import User
 from app.services.analytics_facts import refresh_fact_reservation_daily, refresh_fact_room_occupancy_daily
 from app.services.security import create_access_token, hash_password
+from app.services.permission_service import PERMISSION_COMPANY_VIEW
 
 
 def assert_freshness_metadata(payload: dict) -> None:
@@ -537,6 +539,85 @@ def test_analytics_exports_png_csv_xlsx(api_client):
     assert job_count_after >= job_count_before
 
 
+def test_company_exports_require_sensitive_company_view_permission(api_client):
+    client, SessionLocal, headers, plan_state = api_client
+    _seed_analytics_data(SessionLocal)
+    with SessionLocal() as db:
+        company = db.query(Company).filter_by(hotel_id=1, display_name="Acme").one()
+        owner = db.query(User).filter_by(email="owner@test.com").one()
+        permission = db.query(Permission).filter_by(code=PERMISSION_COMPANY_VIEW).one_or_none()
+        if permission is None:
+            db.add(Permission(code=PERMISSION_COMPANY_VIEW, description="view company profile"))
+            db.flush()
+        db.add(
+            UserPermissionOverride(
+                hotel_id=1,
+                user_id=owner.id,
+                permission_code=PERMISSION_COMPANY_VIEW,
+                allowed=False,
+                updated_by_user_id=owner.id,
+            )
+        )
+        company_id = company.id
+        db.commit()
+
+    plan_state["plan"] = "ultra"
+    company_request = {"entity_code": "company", "company_id": company_id}
+    png = client.post("/api/analytics/exports/png", json=company_request, headers=headers)
+    csv = client.post("/api/analytics/exports/csv", json=company_request, headers=headers)
+    xlsx = client.post("/api/analytics/exports/xlsx", json=company_request, headers=headers)
+    assert png.status_code == 403, png.text
+    assert csv.status_code == 403, csv.text
+    assert xlsx.status_code == 403, xlsx.text
+    detail = client.get(f"/api/analytics/companies/{company_id}", headers=headers)
+    assert detail.status_code == 403, detail.text
+
+    home = client.post(
+        "/api/analytics/exports/png",
+        json={"entity_code": "home"},
+        headers=headers,
+    )
+    assert home.status_code == 200, home.text
+    with SessionLocal() as db:
+        assert db.query(AnalyticsExportJob).filter_by(hotel_id=1).count() == 0
+
+
+def test_company_exports_remain_available_with_company_and_advanced_analytics_access(api_client):
+    client, SessionLocal, headers, plan_state = api_client
+    _seed_analytics_data(SessionLocal)
+    with SessionLocal() as db:
+        company_id = db.query(Company).filter_by(hotel_id=1, display_name="Acme").one().id
+
+    plan_state["plan"] = "pro"
+    company_request = {"entity_code": "company", "company_id": company_id}
+    assert client.post("/api/analytics/exports/png", json=company_request, headers=headers).status_code == 200
+    assert client.post("/api/analytics/exports/csv", json=company_request, headers=headers).status_code == 200
+
+    plan_state["plan"] = "ultra"
+    xlsx = client.post("/api/analytics/exports/xlsx", json=company_request, headers=headers)
+    assert xlsx.status_code == 201, xlsx.text
+    job_id = xlsx.json()["id"]
+
+    with SessionLocal() as db:
+        owner = db.query(User).filter_by(email="owner@test.com").one()
+        db.add(
+            UserPermissionOverride(
+                hotel_id=1,
+                user_id=owner.id,
+                permission_code=PERMISSION_COMPANY_VIEW,
+                allowed=False,
+                updated_by_user_id=owner.id,
+            )
+        )
+        db.commit()
+
+    assert client.get(f"/api/analytics/exports/{job_id}", headers=headers).status_code == 403
+    assert client.get(f"/api/analytics/exports/{job_id}/download", headers=headers).status_code == 403
+    listed = client.get("/api/analytics/exports", headers=headers)
+    assert listed.status_code == 200, listed.text
+    assert all(item["entity_code"] != "company" for item in listed.json())
+
+
 def test_analytics_insights_status_and_payloads(api_client, monkeypatch: pytest.MonkeyPatch):
     client, SessionLocal, headers, plan_state = api_client
     _seed_analytics_data(SessionLocal)
@@ -717,16 +798,21 @@ def test_cleanup_expired_exports_task(api_client, monkeypatch: pytest.MonkeyPatc
         db.commit()
         object_key = job.file_path
     assert object_key
+    expired_download = client.get(f"/api/analytics/exports/{job_id}/download", headers=headers)
+    assert expired_download.status_code == 410
+    with SessionLocal() as db:
+        assert db.get(AnalyticsExportJob, job_id).status == AnalyticsExportStatusEnum.EXPIRED
     # Sanity check: the export bytes actually exist in object storage before cleanup runs.
     get_object_storage().get_bytes(object_key)
 
     result = analytics_tasks_module.cleanup_expired_exports.run(database_url="sqlite:///:memory:")
-    assert result["expired"] >= 1
+    assert result["deleted_objects"] >= 1
 
     with SessionLocal() as db:
         job = db.query(AnalyticsExportJob).filter(AnalyticsExportJob.id == job_id).first()
         assert job is not None
         assert job.status == AnalyticsExportStatusEnum.EXPIRED
+        assert job.file_path is None
 
     # cleanup_expired_exports must also delete the object-storage file, not just
     # flip the job status.

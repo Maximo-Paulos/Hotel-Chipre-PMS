@@ -1,8 +1,8 @@
 # Inventario OpenAPI
 
-Generado: 2026-09-26T09:43:27.795025+00:00
-Commit: `222ef845ffdb80074016a5fbd97343735708822e`
+Generado: 2026-09-26T17:17:09.490525+00:00
+Commit: `616a398f1ae1a203b2c6b98c0e7bc8c7d1151c2a`
 
-Contrato generado desde `app.main:app`: **405 paths**, **479 operaciones**.
+Contrato generado desde `app.main:app`: **408 paths**, **483 operaciones**.
 
 El contrato completo está en [openapi.json](openapi.json). No editarlo a mano.

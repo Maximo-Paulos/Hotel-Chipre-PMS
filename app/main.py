@@ -198,7 +198,7 @@ _CSP = (
 
 
 class _InvitationAccessLogFilter(logging.Filter):
-    """Keep invitation capabilities out of Uvicorn's request-target logs."""
+    """Keep invitation and OTA webhook capabilities out of access logs."""
 
     _STATIC_ROUTES = {
         ("POST", "/api/invitations/preview"),
@@ -216,10 +216,19 @@ class _InvitationAccessLogFilter(logging.Filter):
             return True
 
         path = request_target.partition("?")[0]
-        if path != "/api/invitations" and not path.startswith("/api/invitations/"):
-            return True
-
-        safe_target = path if (method, path) in self._STATIC_ROUTES else "/api/invitations/[REDACTED]"
+        if path == "/api/invitations" or path.startswith("/api/invitations/"):
+            safe_target = path if (method, path) in self._STATIC_ROUTES else "/api/invitations/[REDACTED]"
+        else:
+            segments = path.split("/")
+            if (
+                len(segments) == 6
+                and segments[1:3] == ["api", "webhooks"]
+                and segments[3] in {"booking", "expedia", "despegar"}
+                and segments[4].isdigit()
+            ):
+                safe_target = f"/api/webhooks/{segments[3]}/{segments[4]}/[REDACTED]"
+            else:
+                return True
         record.args = (*args[:2], safe_target, *args[3:])
         return True
 
@@ -230,10 +239,18 @@ if not any(isinstance(item, _InvitationAccessLogFilter) for item in _uvicorn_acc
 
 
 def _safe_request_path_for_logging(path: str) -> str:
-    """Hide invitation capabilities from application logs for legacy/malformed paths."""
+    """Hide invitation/OTA capabilities from application logs."""
     segments = path.split("/")
     if len(segments) >= 4 and segments[1:3] == ["api", "invitations"]:
         segments[3] = "[REDACTED]"
+        return "/".join(segments)
+    if (
+        len(segments) == 6
+        and segments[1:3] == ["api", "webhooks"]
+        and segments[3] in {"booking", "expedia", "despegar"}
+        and segments[4].isdigit()
+    ):
+        segments[5] = "[REDACTED]"
         return "/".join(segments)
     return path
 
@@ -298,7 +315,6 @@ _first_party_origins = [
 _runtime_settings = get_settings()
 _extra = _runtime_settings.CORS_ORIGINS
 _extra_entries = [o.strip() for o in _extra.split(",") if o.strip()]
-_wildcard = any(entry == "*" for entry in _extra_entries)
 _extra_origins = [entry for entry in _extra_entries if entry != "*"]
 _production = is_production_mode(_runtime_settings)
 allowed_origins = list(
@@ -306,7 +322,10 @@ allowed_origins = list(
         ([] if _production else _base_origins) + _first_party_origins + _extra_origins
     )
 )
-_allow_origin_regex = None if _production else (r".*" if _wildcard else r"https://.*\.vercel\.app")
+# Preview domains are deployment-specific and credentialed CORS must not trust
+# every vercel.app tenant. Add an exact preview origin to CORS_ORIGINS when one
+# is intentionally used; production and non-production share that allowlist.
+_allow_origin_regex = None
 
 app.add_middleware(
     CORSMiddleware,

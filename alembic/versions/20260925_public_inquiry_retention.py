@@ -91,7 +91,11 @@ def upgrade() -> None:
     # does not add a Render service or a paid scheduler. Fail the deployment
     # migration if the extension is unavailable instead of silently leaving
     # personal data without its approved deletion schedule.
-    op.execute("CREATE EXTENSION IF NOT EXISTS pg_cron")
+    # Supabase's supported installation places pg_cron in pg_catalog and
+    # grants the database owner access to the scheduler schema/tables.
+    op.execute("CREATE EXTENSION IF NOT EXISTS pg_cron WITH SCHEMA pg_catalog")
+    op.execute("GRANT USAGE ON SCHEMA cron TO postgres")
+    op.execute("GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA cron TO postgres")
     op.execute("CREATE SCHEMA IF NOT EXISTS hotel_chipre_private")
     op.execute("REVOKE ALL PRIVILEGES ON SCHEMA hotel_chipre_private FROM PUBLIC")
     op.execute(

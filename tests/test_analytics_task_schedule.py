@@ -29,6 +29,7 @@ def test_derived_analytics_has_incremental_and_nightly_schedules():
     assert schedule["analytics-derived-facts-nightly-reconciliation"]["task"] == (
         "analytics.reconcile_all_derived_facts_nightly"
     )
+    assert schedule["analytics-cleanup-expired-exports"]["task"] == "analytics.cleanup_expired_exports"
 
 
 def test_sandbox_has_no_scheduled_network_tasks():

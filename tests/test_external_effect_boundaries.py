@@ -147,3 +147,31 @@ async def test_ota_callback_stops_before_json_parse():
     with pytest.raises(HTTPException) as raised:
         await _guarded_json_payload("booking", ExplodingRequest())
     assert raised.value.status_code == 503
+
+
+@pytest.mark.asyncio
+async def test_ota_callback_authenticates_path_secret_before_reading_body(monkeypatch):
+    from app.api import ota_webhooks
+    from app.services.ota_service import OTAAuthError
+
+    class NoReadRequest:
+        headers = {}
+
+        async def stream(self):
+            raise AssertionError("unauthorized OTA body must not be consumed")
+
+    monkeypatch.setattr(ota_webhooks, "require_inbound_provider_events", lambda _provider: None)
+
+    def reject_secret(*_args, **_kwargs):
+        raise OTAAuthError("not authorized")
+
+    monkeypatch.setattr(ota_webhooks.OTAIntegrationService, "validate_webhook_secret", reject_secret)
+    with pytest.raises(HTTPException) as raised:
+        await ota_webhooks._guarded_json_payload(
+            "booking",
+            NoReadRequest(),
+            db=object(),
+            hotel_id=42,
+            webhook_secret="invalid",
+        )
+    assert raised.value.status_code == 401

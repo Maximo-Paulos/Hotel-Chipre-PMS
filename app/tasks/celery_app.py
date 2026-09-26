@@ -68,6 +68,10 @@ def build_beat_schedule(runtime_settings: Settings) -> dict:
             "task": "analytics.reconcile_all_derived_facts_nightly",
             "schedule": crontab(hour=2, minute=30),
         },
+        "analytics-cleanup-expired-exports": {
+            "task": "analytics.cleanup_expired_exports",
+            "schedule": crontab(hour=4, minute=30),
+        },
         "operational-morning-reports": {
             "task": "reports.send_morning_reports",
             "schedule": crontab(hour=8, minute=0),

@@ -1083,7 +1083,11 @@ export function ReservationsPage() {
   const paymentLinksQuery = usePaymentLinks(editing?.id || undefined);
   const paymentLinkCreate = usePaymentLinkCreate(editing?.id || undefined);
   const paymentLinkCancel = usePaymentLinkCancel(editing?.id || undefined);
-  const paymentProofsQuery = usePaymentProofs(editing?.id || undefined);
+  const canReadPaymentProofs =
+    hasPermission("payment:proof:view") ||
+    hasPermission("payment:proof:review") ||
+    hasPermission("cash:operate");
+  const paymentProofsQuery = usePaymentProofs(editing?.id || undefined, canReadPaymentProofs);
   const paymentProofMutations = usePaymentProofMutations(editing?.id || undefined);
   // Closing mid-save would drop the in-flight payment/link result, so the
   // close controls are disabled (not silently ignored) until it settles.
@@ -1103,7 +1107,7 @@ export function ReservationsPage() {
     setCommunicationRecipient(detailsGuest?.email ?? "");
   }, [detailsReservationId, detailsGuest?.email]);
   const editingCurrencyCode = normalizeCurrencyCode(paymentSummary?.currency_code ?? editing?.currency_code);
-  const canApprovePaymentProof = ["owner", "co_owner", "manager"].includes(session.baseRole ?? "");
+  const canApprovePaymentProof = hasPermission("payment:proof:review");
   // Security fix: reads baseRole -- not the "Cambiar vista" preview role --
   // so this only hides the manual tarifa override for the real authenticated
   // role. The backend (POST /api/reservations) enforces this independently

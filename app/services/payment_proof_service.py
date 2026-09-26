@@ -4,6 +4,7 @@ from __future__ import annotations
 import base64
 import binascii
 import hashlib
+import logging
 import re
 import secrets
 import warnings
@@ -33,6 +34,15 @@ class PaymentProofError(ValueError):
 
 MAX_PROOF_BYTES = 5 * 1024 * 1024
 ALLOWED_FORMATS = {"JPEG": "image/jpeg", "PNG": "image/png", "WEBP": "image/webp"}
+LOGGER = logging.getLogger(__name__)
+
+
+def _delete_uncommitted_object(object_key: str) -> None:
+    try:
+        get_object_storage().delete(object_key)
+    except Exception as exc:
+        # The key is an opaque storage identifier; log only the failure class.
+        LOGGER.error("payment_proof.orphan_cleanup_failed error_type=%s", type(exc).__name__)
 
 
 def _decode_image(image_base64: str) -> tuple[bytes, str, str]:
@@ -130,15 +140,20 @@ def submit_transfer_proof(
     object_key = f"payment-proofs/{hotel_id}/{secrets.token_urlsafe(24)}.{extension}"
     # Upload bytes to object storage before touching the DB -- a failed
     # upload must not leave a metadata row with nothing behind it.
-    register_uploaded_object(
-        db,
-        hotel_id=hotel_id,
-        purpose="payment_proof",
-        object_key=object_key,
-        data=content,
-        content_type=content_type,
-        created_by_user_id=submitted_by_user_id,
-    )
+    try:
+        register_uploaded_object(
+            db,
+            hotel_id=hotel_id,
+            purpose="payment_proof",
+            object_key=object_key,
+            data=content,
+            content_type=content_type,
+            created_by_user_id=submitted_by_user_id,
+        )
+    except Exception:
+        db.rollback()
+        _delete_uncommitted_object(object_key)
+        raise
 
     proof = PaymentProof(
         hotel_id=hotel_id,
@@ -178,11 +193,68 @@ def submit_transfer_proof(
             payload_after={"status": proof.status, "amount": str(proof.amount), "sha256_hex": proof.sha256_hex},
         )
         db.flush()
-    except IntegrityError as exc:
-        # A concurrent duplicate hash can win between the pre-check and the
-        # INSERT. The transaction rollback removes both metadata and blob.
-        raise PaymentProofError("Este comprobante ya fue presentado") from exc
+    except Exception as exc:
+        # Any metadata/audit failure must compensate the object write, not only
+        # a uniqueness conflict. A concurrent duplicate gets the clearer
+        # domain response after the transaction has been rolled back.
+        try:
+            db.rollback()
+        finally:
+            _delete_uncommitted_object(object_key)
+        if isinstance(exc, IntegrityError):
+            duplicate = (
+                db.query(PaymentProof)
+                .filter(PaymentProof.hotel_id == hotel_id, PaymentProof.sha256_hex == digest)
+                .first()
+            )
+            if duplicate is not None:
+                raise PaymentProofError("Este comprobante ya fue presentado") from exc
+        raise PaymentProofError("No se pudo guardar el comprobante") from exc
+    # The route still owns the transaction boundary. If its commit fails, it
+    # uses this opaque key to resolve the outcome without deleting a blob that
+    # may already belong to a committed proof.
+    proof._uncommitted_object_key = object_key
     return proof
+
+
+def recover_failed_transfer_proof_commit(db: Session, proof: PaymentProof) -> tuple[PaymentProof | None, bool]:
+    """Resolve a commit exception without destroying a possibly committed proof.
+
+    The bool is true only when the database conclusively confirms either the
+    commit or rollback. On an unavailable database, preserve the object and
+    report an uncertain outcome rather than risk deleting valid evidence.
+    """
+    object_key = getattr(proof, "_uncommitted_object_key", None)
+    if not object_key:
+        return None, False
+
+    db.rollback()
+    try:
+        persisted = (
+            db.query(PaymentProof)
+            .filter(
+                PaymentProof.id == proof.id,
+                PaymentProof.hotel_id == proof.hotel_id,
+                PaymentProof.sha256_hex == proof.sha256_hex,
+            )
+            .one_or_none()
+        )
+        if persisted is not None:
+            blob = (
+                db.query(PaymentProofBlob)
+                .filter(PaymentProofBlob.proof_id == persisted.id, PaymentProofBlob.object_key == object_key)
+                .one_or_none()
+            )
+            proof.__dict__.pop("_uncommitted_object_key", None)
+            return (persisted, True) if blob is not None else (None, False)
+    except Exception as exc:
+        db.rollback()
+        LOGGER.error("payment_proof.commit_outcome_unknown error_type=%s", type(exc).__name__)
+        return None, False
+
+    _delete_uncommitted_object(object_key)
+    proof.__dict__.pop("_uncommitted_object_key", None)
+    return None, True
 
 
 def list_transfer_proofs(db: Session, *, hotel_id: int, reservation_id: int | None = None) -> list[PaymentProof]:

@@ -174,6 +174,8 @@ def two_hotel_client():
     }
 
     auth_state = {"hotel_id": HOTEL_A, "role": "owner", "user_id": HOTEL_A}
+    ids["_test_db"] = db
+    ids["_test_auth_state"] = auth_state
 
     def override_get_db():
         try:

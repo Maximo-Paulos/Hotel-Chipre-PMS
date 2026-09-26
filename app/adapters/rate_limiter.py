@@ -135,6 +135,7 @@ reset_request_source_limiter = SimpleRateLimiter(
     "password_reset_source", limit=5, window_seconds=15 * 60
 )
 lead_capture_limiter = SimpleRateLimiter("marketing_lead", limit=5, window_seconds=15 * 60)
+lead_capture_global_limiter = SimpleRateLimiter("marketing_lead_global", limit=100, window_seconds=15 * 60)
 invite_limiter = SimpleRateLimiter("invite_user", limit=5, window_seconds=60 * 60)
 invitation_preview_limiter = SimpleRateLimiter("invitation_preview", limit=30, window_seconds=15 * 60)
 invitation_accept_limiter = SimpleRateLimiter("invitation_accept", limit=10, window_seconds=15 * 60)

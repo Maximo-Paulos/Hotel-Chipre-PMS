@@ -141,6 +141,9 @@ const RoomStateEventsPage = lazy(() =>
 const MasterAdminAuditPage = lazy(() =>
   import("./master_admin/pages/AuditPage").then((m) => ({ default: m.MasterAdminAuditPage }))
 );
+const MasterAdminPrivacyRetentionPage = lazy(() =>
+  import("./master_admin/pages/PrivacyRetentionPage").then((m) => ({ default: m.MasterAdminPrivacyRetentionPage }))
+);
 const MasterAdminBillingPage = lazy(() =>
   import("./master_admin/pages/BillingPage").then((m) => ({ default: m.MasterAdminBillingPage }))
 );
@@ -279,7 +282,8 @@ const appRoutes = APP_HOST
               { path: "leads", element: <MasterAdminLeadsPage /> },
               { path: "email", element: <MasterAdminEmailPage /> },
               { path: "stripe", element: <MasterAdminStripePage /> },
-              { path: "audit", element: <MasterAdminAuditPage /> }
+              { path: "audit", element: <MasterAdminAuditPage /> },
+              { path: "privacy-retention", element: <MasterAdminPrivacyRetentionPage /> }
             ]
           }
         ]

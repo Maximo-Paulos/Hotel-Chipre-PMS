@@ -32276,6 +32276,207 @@
         }
       }
     },
+    "/api/master-admin/privacy-retention/holds": {
+      "get": {
+        "tags": [
+          "Master Admin",
+          "Master Admin"
+        ],
+        "summary": "List Retention Holds",
+        "operationId": "list_retention_holds_api_master_admin_privacy_retention_holds_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100000,
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RetentionHoldRead"
+                  },
+                  "title": "Response List Retention Holds Api Master Admin Privacy Retention Holds Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Master Admin",
+          "Master Admin"
+        ],
+        "summary": "Create Retention Hold",
+        "operationId": "create_retention_hold_api_master_admin_privacy_retention_holds_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetentionHoldCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetentionHoldRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/master-admin/privacy-retention/targets/search": {
+      "post": {
+        "tags": [
+          "Master Admin",
+          "Master Admin"
+        ],
+        "summary": "Search Retention Targets",
+        "operationId": "search_retention_targets_api_master_admin_privacy_retention_targets_search_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetentionTargetSearch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RetentionTargetRead"
+                  },
+                  "type": "array",
+                  "title": "Response Search Retention Targets Api Master Admin Privacy Retention Targets Search Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/master-admin/privacy-retention/holds/{hold_id}/release": {
+      "post": {
+        "tags": [
+          "Master Admin",
+          "Master Admin"
+        ],
+        "summary": "Release Retention Hold",
+        "operationId": "release_retention_hold_api_master_admin_privacy_retention_holds__hold_id__release_post",
+        "parameters": [
+          {
+            "name": "hold_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Hold Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetentionHoldRelease"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetentionHoldRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health/live": {
       "get": {
         "tags": [
@@ -55794,6 +55995,274 @@
           "new_password"
         ],
         "title": "ResetPasswordRequest"
+      },
+      "RetentionHoldCreate": {
+        "properties": {
+          "resource_type": {
+            "type": "string",
+            "enum": [
+              "marketing_lead",
+              "public_inquiry"
+            ],
+            "title": "Resource Type"
+          },
+          "record_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Record Id"
+          },
+          "reason_code": {
+            "type": "string",
+            "enum": [
+              "litigation",
+              "regulatory",
+              "contractual",
+              "other"
+            ],
+            "title": "Reason Code"
+          },
+          "case_reference": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Case Reference"
+          },
+          "hold_until": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hold Until"
+          }
+        },
+        "type": "object",
+        "required": [
+          "resource_type",
+          "record_id",
+          "reason_code",
+          "case_reference"
+        ],
+        "title": "RetentionHoldCreate"
+      },
+      "RetentionHoldRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "resource_type": {
+            "type": "string",
+            "enum": [
+              "marketing_lead",
+              "public_inquiry"
+            ],
+            "title": "Resource Type"
+          },
+          "record_id": {
+            "type": "integer",
+            "title": "Record Id"
+          },
+          "reason_code": {
+            "type": "string",
+            "title": "Reason Code"
+          },
+          "case_reference": {
+            "type": "string",
+            "title": "Case Reference"
+          },
+          "hold_until": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hold Until"
+          },
+          "placed_by_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Placed By User Id"
+          },
+          "placed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Placed At"
+          },
+          "released_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Released At"
+          },
+          "released_by_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Released By User Id"
+          },
+          "release_reason_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release Reason Code"
+          },
+          "release_reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release Reference"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "resource_type",
+          "record_id",
+          "reason_code",
+          "case_reference",
+          "hold_until",
+          "placed_by_user_id",
+          "placed_at",
+          "released_at",
+          "released_by_user_id",
+          "release_reason_code",
+          "release_reference"
+        ],
+        "title": "RetentionHoldRead"
+      },
+      "RetentionHoldRelease": {
+        "properties": {
+          "reason_code": {
+            "type": "string",
+            "enum": [
+              "litigation_concluded",
+              "obligation_ended",
+              "entered_in_error",
+              "other"
+            ],
+            "title": "Reason Code"
+          },
+          "case_reference": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Case Reference"
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Password"
+          },
+          "mfa_code": {
+            "type": "string",
+            "maxLength": 6,
+            "minLength": 6,
+            "pattern": "^[0-9]{6}$",
+            "title": "Mfa Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reason_code",
+          "case_reference",
+          "password",
+          "mfa_code"
+        ],
+        "title": "RetentionHoldRelease"
+      },
+      "RetentionTargetRead": {
+        "properties": {
+          "resource_type": {
+            "type": "string",
+            "enum": [
+              "marketing_lead",
+              "public_inquiry"
+            ],
+            "title": "Resource Type"
+          },
+          "record_id": {
+            "type": "integer",
+            "title": "Record Id"
+          },
+          "masked_email": {
+            "type": "string",
+            "title": "Masked Email"
+          },
+          "retention_anchor_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Retention Anchor At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "resource_type",
+          "record_id",
+          "masked_email",
+          "retention_anchor_at"
+        ],
+        "title": "RetentionTargetRead"
+      },
+      "RetentionTargetSearch": {
+        "properties": {
+          "resource_type": {
+            "type": "string",
+            "enum": [
+              "marketing_lead",
+              "public_inquiry"
+            ],
+            "title": "Resource Type"
+          },
+          "query": {
+            "type": "string",
+            "maxLength": 320,
+            "minLength": 1,
+            "title": "Query"
+          }
+        },
+        "type": "object",
+        "required": [
+          "resource_type",
+          "query"
+        ],
+        "title": "RetentionTargetSearch"
       },
       "RevokeAllSessionsResponse": {
         "properties": {
