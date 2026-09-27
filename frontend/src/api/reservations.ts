@@ -327,6 +327,7 @@ export type ReservationNoShowPayload = {
 };
 
 export type ReservationRoomMovePayload = {
+  client_version: number;
   to_room_id: number;
   reason_code: string;
   notes?: string | null;
@@ -522,6 +523,7 @@ export type OccupancyGridRoom = {
 
 export type OccupancyGridReservation = {
   id: number;
+  version: number;
   room_id: number | null;
   confirmation_code: string;
   check_in_date: string;

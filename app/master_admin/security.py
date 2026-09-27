@@ -12,10 +12,15 @@ from urllib.parse import urlsplit
 from fastapi import HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 
-from app.adapters.rate_limiter import SimpleRateLimiter, mfa_code_guess_limiter
+from app.adapters.rate_limiter import SimpleRateLimiter
 from app.config import get_settings, is_preview_qa_mode, is_production_mode
 from app.models.user import User
 from app.services import mfa_service
+from app.services.mfa_attempt_service import (
+    check_mfa_attempt,
+    mfa_attempt_key,
+    reset_mfa_attempts,
+)
 from app.services.security import create_signed_token, decode_signed_token, hash_password, verify_password
 from app.services.tenant_context import set_master_admin_context
 from .models import MasterAdminAuditEvent, MasterAdminAuthLockout, MasterAdminSession
@@ -437,18 +442,16 @@ def create_master_admin_mfa_challenge(user: User) -> str:
 
 
 def _master_admin_mfa_attempt_key(action: str, user_id: int) -> str:
-    return f"master_admin:{action}:{user_id}"
+    return mfa_attempt_key(action, user_id)
 
 
 def allow_master_admin_mfa_attempt(db: Session, action: str, user_id: int) -> None:
-    if not mfa_code_guess_limiter.allow(_master_admin_mfa_attempt_key(action, user_id), db=db):
-        db.commit()
+    if not check_mfa_attempt(db, action, user_id):
         raise HTTPException(status_code=429, detail="Demasiados intentos. Espera unos minutos.")
-    db.commit()
 
 
 def reset_master_admin_mfa_attempts(db: Session, action: str, user_id: int) -> None:
-    mfa_code_guess_limiter.reset(_master_admin_mfa_attempt_key(action, user_id), db=db)
+    reset_mfa_attempts(db, action, user_id)
 
 
 def authenticate_master_mfa_login(db: Session, mfa_token: str, code: str) -> User:

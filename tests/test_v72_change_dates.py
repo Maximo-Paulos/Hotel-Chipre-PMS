@@ -16,6 +16,7 @@ KEY DIVERGENCE (recorded as xfail below):
 from datetime import date, timedelta
 
 import pytest
+from sqlalchemy import update
 
 from app.models.guest import Guest
 from app.models.reservation import Reservation, ReservationSourceEnum, ReservationStatusEnum
@@ -23,8 +24,10 @@ from app.models.room import Room
 from app.services.reservation_operations_service import (
     ReservationDateChangeResult,
     ReservationOperationsError,
+    _extension_conflicts,
     change_reservation_dates,
     extend_reservation_stay,
+    reservation_has_payment_or_deposit,
 )
 from app.services.reservation_service import ReservationError
 
@@ -347,6 +350,49 @@ def test_extend_stay_blocked_when_room_occupied(db, sample_guest, sample_rooms):
     assert result.conflicts
     assert result.conflicts[0]["reason"] == "future_reservation_has_payment_or_deposit"
     assert res1.check_out_date == date(2027, 10, 5)
+
+
+def test_extension_conflict_refreshes_payment_state_before_auto_reallocation(db, sample_guest, sample_rooms):
+    extension = _reservation(
+        db,
+        code="EXT-STALE-PAYMENT-BASE",
+        guest=sample_guest,
+        room=sample_rooms[2],
+        check_in=date(2027, 10, 1),
+        check_out=date(2027, 10, 5),
+    )
+    conflict = _reservation(
+        db,
+        code="EXT-STALE-PAYMENT-CONFLICT",
+        guest=sample_guest,
+        room=sample_rooms[2],
+        check_in=date(2027, 10, 5),
+        check_out=date(2027, 10, 10),
+    )
+    db.flush()
+
+    db.execute(
+        update(Reservation)
+        .where(Reservation.id == conflict.id)
+        .values(status=ReservationStatusEnum.FULLY_PAID, amount_paid=500.0)
+        .execution_options(synchronize_session=False)
+    )
+    assert conflict.status == ReservationStatusEnum.PENDING
+
+    conflicts = _extension_conflicts(
+        db,
+        reservation=extension,
+        hotel_id=sample_guest.hotel_id,
+        new_checkout_date=date(2027, 10, 8),
+    )
+
+    assert conflicts == [conflict]
+    assert conflict.status == ReservationStatusEnum.FULLY_PAID
+    assert reservation_has_payment_or_deposit(
+        db,
+        hotel_id=sample_guest.hotel_id,
+        reservation=conflict,
+    ) is True
 
 
 def test_extend_stay_blocked_for_zero_or_negative_days(db, sample_guest, sample_rooms):

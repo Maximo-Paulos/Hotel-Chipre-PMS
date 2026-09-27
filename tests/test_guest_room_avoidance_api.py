@@ -103,7 +103,7 @@ def _client():
 def _move(client: TestClient, reservation: Reservation, room: Room, reason_code: str, notes: str | None = None):
     return client.post(
         f"/api/reservations/{reservation.id}/room-move",
-        json={"to_room_id": room.id, "reason_code": reason_code, "notes": notes},
+        json={"client_version": reservation.version, "to_room_id": room.id, "reason_code": reason_code, "notes": notes},
     )
 
 

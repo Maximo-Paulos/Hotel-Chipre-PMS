@@ -9,7 +9,7 @@ from app.models.payment import Payment, PaymentLink, PaymentWebhookEvent
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.room import RoomCategory
 from app.models.transaction import Transaction, TransactionStatusEnum
-from app.services.payment_link_service import balance_due_from_transactions
+from app.services.payment_link_service import balance_due_from_transactions, cancel_link
 from app.services.payment_webhook_service import PaymentWebhookError, ingest_webhook
 from app.config import get_settings
 
@@ -286,6 +286,68 @@ def test_minimal_mercadopago_notification_is_verified_by_provider_fetcher(db):
 
     assert result["status"] == "ok"
     assert db.query(Payment).one().external_payment_id == "mp-payment-fetched"
+
+
+@pytest.mark.parametrize(
+    ("amount", "expected_link_status"),
+    [("40.00", "cancelled"), ("100.00", "completed")],
+)
+def test_verified_late_success_is_recorded_without_reopening_cancelled_link(
+    db, amount: str, expected_link_status: str
+):
+    reservation = _reservation(db)
+    link = _link(db, reservation)
+    cancel_link(db, 1, link.id, reason="reservation cancelled")
+    fetched = {
+        "id": "mp-payment-after-cancel",
+        "status": "approved",
+        "transaction_amount": amount,
+        "currency_id": "ARS",
+    }
+
+    result = ingest_webhook(
+        db,
+        hotel_id=1,
+        provider="mercado_pago",
+        webhook_id=f"mp-hook-after-cancel-{amount}",
+        payload={"type": "payment", "data": {"id": "mp-payment-after-cancel"}},
+        payment_link_id=link.id,
+        provider_fetcher=lambda _db, _hotel_id, _payment_id: fetched,
+    )
+
+    assert result["status"] == "ok"
+    payment = db.query(Payment).one()
+    assert payment.status == "completed"
+    assert db.query(Transaction).one().status == TransactionStatusEnum.COMPLETED
+    db.refresh(link)
+    assert link.collected_amount == Decimal(amount)
+    assert link.status == expected_link_status
+    assert link.payable is False
+    assert link.cancelled_at is not None
+
+
+def test_cancelled_payment_link_rejects_unverified_success_event(db):
+    reservation = _reservation(db)
+    link = _link(db, reservation)
+    cancel_link(db, 1, link.id, reason="reservation cancelled")
+
+    with pytest.raises(PaymentWebhookError, match="requiere verificar"):
+        ingest_webhook(
+            db,
+            hotel_id=1,
+            provider="mercado_pago",
+            webhook_id="mp-hook-unverified-after-cancel",
+            payload={
+                "payment_id": "mp-unverified-after-cancel",
+                "status": "approved",
+                "amount": "100.00",
+                "currency": "ARS",
+            },
+            payment_link_id=link.id,
+        )
+
+    assert db.query(Payment).count() == 0
+    assert db.query(PaymentWebhookEvent).count() == 0
 
 
 def test_mercadopago_notification_rejects_different_collector_account(db):

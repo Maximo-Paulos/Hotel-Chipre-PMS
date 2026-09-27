@@ -46,7 +46,9 @@ docker compose run --rm backend alembic upgrade head
 ```
 Toma `DATABASE_URL` del compose. Para SQLite local: `DATABASE_URL=sqlite:///./dev.db alembic upgrade head`.
 
-4) Seed/reset demo (opcional, solo si `DEMO_MODE=true`)  
+4) Seed/reset demo (opcional, solo en desarrollo local)
+
+   - Requiere `APP_ENV=development`, `DEMO_MODE=true` y una base local: SQLite, o PostgreSQL en `localhost`/`127.0.0.1`/`::1`/`db` llamada `hotel_pms`. Las bases alojadas no se aceptan para este borrado global.
    - Poblar datos demo: `curl -X POST http://localhost:8000/api/seed`
    - Reset vacío (sin seed): `curl -X POST http://localhost:8000/api/reset`
 

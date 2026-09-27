@@ -752,6 +752,7 @@
       "manualReviewCloseFailed": "Could not close the manual review",
       "roomMoveFieldsRequired": "Choose a destination room and state the reason for the change.",
       "roomMoveFailed": "Could not change the room",
+      "roomMoveVersionUnavailable": "Could not validate this reservation version. Reload and try again.",
       "roomMoveOriginDispositionRequired": "Choose the origin room status and justify it when it is not sent to cleaning.",
       "noShowFailed": "Could not register the no-show",
       "chargeFailed": "Could not add the charge.",

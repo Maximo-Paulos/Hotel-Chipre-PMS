@@ -10,6 +10,11 @@ from sqlalchemy.orm import Session
 from app.config import is_demo_environment_allowed, is_demo_mode, is_testing_mode
 import app.models  # noqa: F401 - ensures all models are registered on Base.metadata
 from app.database import Base, get_db
+from app.services.demo_reset_safety import (
+    DemoResetSafetyError,
+    assert_demo_database_target_is_safe,
+    assert_demo_reset_is_safe,
+)
 
 router = APIRouter(prefix="/api", tags=["Demo"])
 
@@ -37,6 +42,11 @@ def seed_demo(db: Session = Depends(get_db)):
     from app.scripts.seed_demo import seed as run_seed_demo
 
     _require_demo_mode()
+    try:
+        assert_demo_database_target_is_safe(db.get_bind().url)
+    except DemoResetSafetyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=404) from exc
     already_seeded = db.query(Room).count() > 0
     run_seed_demo(db)
     status = "already_seeded" if already_seeded else "seeded"
@@ -51,8 +61,13 @@ def reset_demo(db: Session = Depends(get_db)):
     """
 
     _require_demo_mode()
-    db.commit()  # ensure no pending transactions before DDL
     engine = db.get_bind()
+    try:
+        assert_demo_reset_is_safe(engine.url)
+    except DemoResetSafetyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=404) from exc
+    db.commit()  # ensure no pending transactions before DDL
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
     return {"status": "reset_empty"}

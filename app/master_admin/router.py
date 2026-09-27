@@ -164,6 +164,7 @@ def enroll_mfa(
         write=True,
         allow_mfa_setup=True,
     )
+    allow_master_admin_mfa_attempt(db, "master_admin_enroll_reauth", context.user.id)
     if not verify_password(payload.password, context.user.password_hash):
         audit_master_action(
             db,
@@ -175,6 +176,7 @@ def enroll_mfa(
         )
         db.commit()
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Reautenticacion invalida")
+    reset_master_admin_mfa_attempts(db, "master_admin_enroll_reauth", context.user.id)
 
     try:
         _mfa_secret, secret = mfa_service.enroll_user(db, context.user.id)
@@ -255,6 +257,7 @@ def disable_mfa(
     context = require_master_admin(request=request, db=db, csrf_header=request.headers.get("X-CSRF-Token"), write=True)
     if not mfa_service.get_active_mfa_secret(db, context.user.id):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="MFA no esta activo")
+    allow_master_admin_mfa_attempt(db, "master_admin_disable_reauth", context.user.id)
     if not verify_password(payload.password, context.user.password_hash):
         audit_master_action(
             db,
@@ -267,6 +270,7 @@ def disable_mfa(
         db.commit()
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Reautenticacion invalida")
 
+    reset_master_admin_mfa_attempts(db, "master_admin_disable_reauth", context.user.id)
     allow_master_admin_mfa_attempt(db, "disable", context.user.id)
     try:
         valid = mfa_service.consume_mfa_code(db, context.user.id, payload.code)

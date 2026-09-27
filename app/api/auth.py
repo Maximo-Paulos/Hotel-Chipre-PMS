@@ -19,7 +19,6 @@ from app.adapters.memory_tokens import token_store
 from app.adapters.rate_limiter import (
     code_guess_limiter,
     login_limiter,
-    mfa_code_guess_limiter,
     register_limiter,
     reset_request_limiter,
     reset_request_source_limiter,
@@ -68,6 +67,11 @@ from app.services.email_service import (
 )
 from app.master_admin.email_provider import MasterEmailConnectionError
 from app.services import onboarding_service
+from app.services.mfa_attempt_service import (
+    check_mfa_attempt,
+    mfa_attempt_key,
+    reset_mfa_attempts,
+)
 from app.services.hotel_service import get_or_create_hotel_for_owner, get_memberships_for_user
 from app.services.security import create_access_token, hash_password, needs_rehash, verify_password
 from app.services.security import create_signed_token, decode_signed_token
@@ -425,18 +429,32 @@ def auth_providers() -> AuthProvidersResponse:
 
 
 def _mfa_attempt_key(action: str, user_id: int) -> str:
-    return f"{action}:{user_id}"
+    return mfa_attempt_key(action, user_id)
+
+
+def _has_fresh_linked_google_proof(user: User, id_token: str | None) -> bool:
+    if not id_token or not user.google_sub:
+        return False
+    try:
+        require_google_login()
+    except GoogleLoginDisabled as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    claims, _email, google_sub = _verify_google_claims(id_token, get_settings())
+    try:
+        issued_at = datetime.fromtimestamp(float(claims.get("iat")), tz=timezone.utc)
+    except (TypeError, ValueError, OverflowError):
+        return False
+    token_age = (datetime.now(timezone.utc) - issued_at).total_seconds()
+    return google_sub == user.google_sub and -30 <= token_age <= 5 * 60
 
 
 def _allow_mfa_attempt(db: Session, action: str, user_id: int) -> None:
-    if not mfa_code_guess_limiter.allow(_mfa_attempt_key(action, user_id), db=db):
-        db.commit()
+    if not check_mfa_attempt(db, action, user_id):
         raise HTTPException(status_code=429, detail="Demasiados intentos. Espera unos minutos.")
-    db.commit()
 
 
 def _reset_mfa_attempts(db: Session, action: str, user_id: int) -> None:
-    mfa_code_guess_limiter.reset(_mfa_attempt_key(action, user_id), db=db)
+    reset_mfa_attempts(db, action, user_id)
 
 
 @router.post("/step-up", response_model=ActionStepUpResponse)
@@ -1387,38 +1405,25 @@ def enroll_mfa(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    if mfa_service.get_active_mfa_secret(db, user.id):
+        # Do this before password proof so the endpoint cannot be used as a
+        # password oracle once the account already has MFA enabled.
+        raise HTTPException(status_code=409, detail="MFA ya esta activo")
+    _allow_mfa_attempt(db, "enroll_reauth", user.id)
     reauthenticated = bool(
         user.password_login_enabled
         and payload.current_password
         and verify_password(payload.current_password, user.password_hash)
     )
-    if not reauthenticated and payload.google_id_token and user.google_sub:
-        try:
-            require_google_login()
-        except GoogleLoginDisabled as exc:
-            raise HTTPException(status_code=503, detail=str(exc)) from exc
-        claims, _email, google_sub = _verify_google_claims(
-            payload.google_id_token, get_settings()
-        )
-        try:
-            issued_at = datetime.fromtimestamp(float(claims.get("iat")), tz=timezone.utc)
-        except (TypeError, ValueError, OverflowError):
-            issued_at = None
-        token_age = (
-            (datetime.now(timezone.utc) - issued_at).total_seconds()
-            if issued_at is not None
-            else float("inf")
-        )
-        reauthenticated = (
-            google_sub == user.google_sub
-            and -30 <= token_age <= 5 * 60
-        )
+    if not reauthenticated:
+        reauthenticated = _has_fresh_linked_google_proof(user, payload.google_id_token)
     if not reauthenticated:
         raise HTTPException(
             status_code=401,
             detail="Reautenticación requerida para configurar MFA",
         )
 
+    _reset_mfa_attempts(db, "enroll_reauth", user.id)
     try:
         _mfa_secret, secret = mfa_service.enroll_user(db, user.id)
     except ValueError as exc:
@@ -1464,9 +1469,18 @@ def disable_mfa(
 ):
     if not mfa_service.get_active_mfa_secret(db, user.id):
         raise HTTPException(status_code=400, detail="MFA no esta activo")
-    if not verify_password(payload.password, user.password_hash):
+    _allow_mfa_attempt(db, "disable_reauth", user.id)
+    reauthenticated = bool(
+        user.password_login_enabled
+        and payload.password
+        and verify_password(payload.password, user.password_hash)
+    )
+    if not reauthenticated:
+        reauthenticated = _has_fresh_linked_google_proof(user, payload.google_id_token)
+    if not reauthenticated:
         raise HTTPException(status_code=401, detail="Reautenticacion invalida")
 
+    _reset_mfa_attempts(db, "disable_reauth", user.id)
     _allow_mfa_attempt(db, "disable", user.id)
     try:
         valid = mfa_service.consume_mfa_code(db, user.id, payload.code)

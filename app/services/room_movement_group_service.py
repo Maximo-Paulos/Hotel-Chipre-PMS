@@ -161,6 +161,7 @@ def create_grouped_room_move(
 
     reservation.room_id = to_room.id
     reservation.category_id = to_room.category_id
+    reservation.version = (reservation.version or 0) + 1
     reservation.allocation_locked = True
     reservation.requires_manual_review = False
     reservation.allocation_status = "assigned"
@@ -206,7 +207,13 @@ def revert_group(
     group_id: int,
     reverted_by_user_id: int | None = None,
 ) -> dict:
-    group = get_group(db, hotel_id=hotel_id, group_id=group_id)
+    group = (
+        db.query(RoomMovementGroup)
+        .filter(RoomMovementGroup.id == group_id, RoomMovementGroup.hotel_id == hotel_id)
+        .populate_existing()
+        .with_for_update()
+        .first()
+    )
     if group is None:
         raise RoomMovementGroupError("Movement group not found")
     if group.is_reverted:
@@ -232,11 +239,19 @@ def revert_group(
         reservation = (
             db.query(Reservation)
             .filter(Reservation.id == event.reservation_id, Reservation.hotel_id == hotel_id)
+            .populate_existing()
+            .with_for_update()
             .first()
         )
         if reservation is None:
             raise RoomMovementGroupError("Linked reservation no longer exists")
-        from_room = db.query(Room).filter(Room.id == event.from_room_id, Room.hotel_id == hotel_id).first()
+        from_room = (
+            db.query(Room)
+            .filter(Room.id == event.from_room_id, Room.hotel_id == hotel_id)
+            .populate_existing()
+            .with_for_update()
+            .first()
+        )
         if from_room is None:
             raise RoomMovementGroupError("Original room no longer exists")
 
@@ -273,6 +288,7 @@ def revert_group(
 
         reservation.room_id = from_room.id
         reservation.category_id = from_room.category_id
+        reservation.version = (reservation.version or 0) + 1
         reservation.allocation_locked = True
         reservation.requires_manual_review = False
         reverted.append(
@@ -335,5 +351,7 @@ def _active_reservation_conflicts_for_room(
             Reservation.check_out_date > check_in,
         )
         .order_by(Reservation.check_in_date.asc(), Reservation.id.asc())
+        .populate_existing()
+        .with_for_update()
         .all()
     )

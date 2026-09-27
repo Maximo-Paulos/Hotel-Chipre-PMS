@@ -365,7 +365,7 @@ def test_room_move_requires_reason_code_and_accepts_valid_reason(reservation_api
 
     valid = client.post(
         f"/api/reservations/{reservation.id}/room-move",
-        json={"to_room_id": room_b.id, "reason_code": "guest_request"},
+        json={"client_version": reservation.version, "to_room_id": room_b.id, "reason_code": "guest_request"},
     )
     assert valid.status_code == 200, valid.text
     db.refresh(reservation)
@@ -401,7 +401,7 @@ def test_room_move_allows_receptionist_within_the_same_category(reservation_api_
 
     response = client.post(
         f"/api/reservations/{reservation.id}/room-move",
-        json={"to_room_id": room_b.id, "reason_code": "guest_request"},
+        json={"client_version": reservation.version, "to_room_id": room_b.id, "reason_code": "guest_request"},
     )
     assert response.status_code == 200, response.text
     db.refresh(reservation)
@@ -461,7 +461,7 @@ def test_room_move_endpoint_rejects_capacity_overflow_and_returns_delta_on_repri
 
     overflow = client.post(
         f"/api/reservations/{reservation.id}/room-move",
-        json={"to_room_id": single_room.id, "reason_code": "guest_request"},
+        json={"client_version": reservation.version, "to_room_id": single_room.id, "reason_code": "guest_request"},
     )
     assert overflow.status_code == 400, overflow.text
     db.refresh(reservation)
@@ -469,7 +469,7 @@ def test_room_move_endpoint_rejects_capacity_overflow_and_returns_delta_on_repri
 
     reprice = client.post(
         f"/api/reservations/{reservation.id}/room-move",
-        json={"to_room_id": superior_room.id, "reason_code": "upgrade", "price_action": "reprice"},
+        json={"client_version": reservation.version, "to_room_id": superior_room.id, "reason_code": "upgrade", "price_action": "reprice"},
     )
     assert reprice.status_code == 200, reprice.text
     body = reprice.json()

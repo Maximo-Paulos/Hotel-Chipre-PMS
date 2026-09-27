@@ -453,6 +453,7 @@ def test_move_reservation_room_moves_occupancy_fact_rows_immediately(db, hotel_c
         reservation=reservation,
         to_room_id=new_room_id,
         hotel_id=hotel_config.id,
+        client_version=reservation.version,
         actor_role="owner",
         reason_code="guest_request",
         price_action="keep",

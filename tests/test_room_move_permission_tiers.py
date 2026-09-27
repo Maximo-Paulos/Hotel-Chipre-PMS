@@ -134,8 +134,32 @@ def _seed_move_shapes(db: Session, *, guests: int = 1):
 def _move(client: TestClient, reservation: Reservation, destination: Room):
     return client.post(
         f"/api/reservations/{reservation.id}/room-move",
-        json={"to_room_id": destination.id, "reason_code": "guest_request"},
+        json={"client_version": reservation.version, "to_room_id": destination.id, "reason_code": "guest_request"},
     )
+
+
+def test_room_move_rejects_a_stale_reservation_version(room_move_api_client):
+    client, db, _role_state = room_move_api_client
+    reservation, rooms, *_ = _seed_move_shapes(db)
+    stale_version = reservation.version
+    reservation.notes = "changed by another operator"
+    reservation.version += 1
+    db.commit()
+
+    response = client.post(
+        f"/api/reservations/{reservation.id}/room-move",
+        json={
+            "client_version": stale_version,
+            "to_room_id": rooms["same_category"].id,
+            "reason_code": "guest_request",
+        },
+    )
+
+    assert response.status_code == 409, response.text
+    db.refresh(reservation)
+    assert reservation.room_id == rooms["same"].id
+    assert reservation.notes == "changed by another operator"
+    assert reservation.version == stale_version + 1
 
 
 def test_room_move_tier_classifier_uses_category_identity_then_capacity():
@@ -186,6 +210,7 @@ def test_manager_can_move_each_shape(room_move_api_client, destination_key, monk
     assert response.status_code == 200, response.text
     db.refresh(reservation)
     assert reservation.room_id == rooms[destination_key].id
+    assert reservation.version == 1
 
 
 @pytest.mark.parametrize("role", ("owner", "co_owner", "manager"))

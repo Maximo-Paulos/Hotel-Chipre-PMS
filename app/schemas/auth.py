@@ -109,7 +109,8 @@ class ActionStepUpResponse(BaseModel):
 
 
 class MfaDisableRequest(MfaCodeRequest):
-    password: str = Field(min_length=1)
+    password: str | None = Field(default=None, min_length=1, max_length=256)
+    google_id_token: str | None = Field(default=None, min_length=1, max_length=8192)
 
 
 class GoogleAuthRequest(BaseModel):

@@ -21,6 +21,7 @@ from app.schemas.booking import BookingCreate, BookingRead, BookingUpdate
 from app.schemas.reservation import ReservationCreate, ReservationUpdate
 from app.services.reservation_service import (
     ReservationError,
+    ReservationVersionConflict,
     check_room_availability,
     create_reservation,
     find_available_rooms,
@@ -462,6 +463,8 @@ def update_booking(
             Reservation.hotel_id == context.hotel_id,
             Reservation.deleted_at.is_(None),
         )
+        .populate_existing()
+        .with_for_update()
         .first()
     )
     if not booking:
@@ -501,14 +504,18 @@ def update_booking(
         ("check_in_date" in data and data["check_in_date"] != booking.check_in_date)
         or ("check_out_date" in data and data["check_out_date"] != booking.check_out_date)
     )
+    occupancy_changed = (
+        ("num_adults" in data and data["num_adults"] != booking.num_adults)
+        or ("num_children" in data and data["num_children"] != booking.num_children)
+    )
     if (
-        dates_changed
+        (dates_changed or occupancy_changed)
         and reservation_has_payment_or_deposit(db, hotel_id=context.hotel_id, reservation=booking)
         and not _is_manager_context(context)
     ):
         raise HTTPException(
             status_code=403,
-            detail="Modificar fechas de una reserva con pagos requiere gerente, dueño o codueño.",
+            detail="Modificar fechas u ocupación de una reserva con pagos requiere gerente, dueño o codueño.",
         )
 
     # Route legacy metadata-only edits through the canonical service so version
@@ -526,6 +533,9 @@ def update_booking(
                 client_version=payload.client_version,
                 preserve_unclassified_price=True,
             )
+        except ReservationVersionConflict as exc:
+            db.rollback()
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
         except ReservationError as exc:
             db.rollback()
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -630,10 +640,6 @@ def update_booking(
 
     new_num_adults = data.get("num_adults", booking.num_adults)
     new_num_children = data.get("num_children", booking.num_children)
-    occupancy_changed = (
-        new_num_adults != booking.num_adults
-        or new_num_children != booking.num_children
-    )
     if category_changed or occupancy_changed:
         try:
             _validate_reservation_occupancy(category, new_num_adults, new_num_children)
@@ -686,6 +692,9 @@ def update_booking(
     except RestrictionOverridePermissionError as exc:
         db.rollback()
         raise HTTPException(status_code=403, detail="No tenés permisos para esta acción") from exc
+    except ReservationVersionConflict as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except ReservationError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(exc)) from exc

@@ -284,8 +284,7 @@ def ingest_webhook(
         raise PaymentWebhookError("El proveedor del evento no coincide con el link de pago")
     if link.execution_mode != "provider" or not link.external_checkout_url:
         raise PaymentWebhookError("El artefacto local_only no acepta pagos de proveedor")
-    if link.status in {"cancelled", "expired"}:
-        raise PaymentWebhookError("El link de pago ya no acepta eventos de cobro")
+    closed_link_status = link.status if link.status in {"cancelled", "expired"} else None
 
     event_reference = _payload_value(
         payload,
@@ -347,6 +346,13 @@ def ingest_webhook(
     if currency != str(link.currency or "ARS").strip().upper():
         raise PaymentWebhookError("La moneda del evento no coincide con el link de pago")
     status = _normalize_status(provider, str(_payload_value(payload, "status", "data.status") or "pending"))
+    if closed_link_status is not None:
+        # Cancelling a PMS link cannot revoke a provider checkout that is
+        # already open. Reconcile a verified successful charge so the hotel's
+        # ledger does not lose real money, but never trust an unverified event
+        # or reopen the cancelled link for additional payments.
+        if not must_verify_with_provider or status != "completed":
+            raise PaymentWebhookError("El link cerrado requiere verificar un pago ya completado con el proveedor")
 
     payment = (
         db.query(Payment)
@@ -358,7 +364,7 @@ def ingest_webhook(
         .first()
     )
     if payment is None:
-        if not link.payable:
+        if not link.payable and closed_link_status is None:
             raise PaymentWebhookError("El link de pago no esta habilitado para nuevos cobros")
         outstanding = max(
             Decimal("0.00"),
@@ -420,6 +426,9 @@ def ingest_webhook(
             _ensure_completed_transaction(db, payment, provider, payload)
 
         refresh_link_collection(db, link)
+        if closed_link_status is not None and link.status != "completed":
+            link.status = closed_link_status
+            link.payable = False
         event.processed = True
         event.processed_at = datetime.now(timezone.utc)
         db.flush()

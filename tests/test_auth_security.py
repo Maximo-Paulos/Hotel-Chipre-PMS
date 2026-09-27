@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import pyotp
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -1558,12 +1559,176 @@ def _enroll_and_confirm_mfa(
     return auth, secret, recovery_codes
 
 
+def test_mfa_guess_budgets_are_shared_across_factor_actions():
+    from app.master_admin.security import _master_admin_mfa_attempt_key
+
+    code_actions = ("login", "step_up", "enroll", "disable", "regenerate")
+    reauth_actions = (
+        "enroll_reauth",
+        "disable_reauth",
+        "primary_owner_transfer_reauth",
+        "master_admin_enroll_reauth",
+        "master_admin_disable_reauth",
+        "privacy_retention_release_reauth",
+    )
+
+    assert {auth_api._mfa_attempt_key(action, 42) for action in code_actions} == {"totp:42"}
+    assert {auth_api._mfa_attempt_key(action, 42) for action in reauth_actions} == {"reauth:42"}
+    assert _master_admin_mfa_attempt_key("login", 42) == "totp:42"
+    assert _master_admin_mfa_attempt_key("privacy_retention_release_reauth", 42) == "reauth:42"
+
+
+def test_app_and_master_admin_mfa_flows_share_the_persistent_attempt_budgets(
+    client_and_db, monkeypatch
+):
+    from app.adapters.rate_limiter import mfa_code_guess_limiter
+    from app.master_admin.security import allow_master_admin_mfa_attempt
+
+    _client, db, _session_factory = client_and_db
+    user_id = 842_001
+    monkeypatch.setattr(mfa_code_guess_limiter, "limit", 1)
+    keys = (f"totp:{user_id}", f"reauth:{user_id}")
+    for key in keys:
+        mfa_code_guess_limiter.reset(key, db=db)
+    db.commit()
+
+    try:
+        auth_api._allow_mfa_attempt(db, "login", user_id)
+        with pytest.raises(HTTPException) as totp_limit:
+            allow_master_admin_mfa_attempt(db, "enroll", user_id)
+        assert totp_limit.value.status_code == 429
+
+        auth_api._allow_mfa_attempt(db, "disable_reauth", user_id)
+        with pytest.raises(HTTPException) as reauth_limit:
+            allow_master_admin_mfa_attempt(db, "master_admin_disable_reauth", user_id)
+        assert reauth_limit.value.status_code == 429
+    finally:
+        for key in keys:
+            mfa_code_guess_limiter.reset(key, db=db)
+        db.commit()
+
+
+def test_shared_mfa_budget_migrates_recent_legacy_action_attempts(
+    client_and_db, monkeypatch
+):
+    from app.adapters.rate_limiter import mfa_code_guess_limiter
+    from app.models.rate_limit_event import RateLimitEvent
+
+    _client, db, _session_factory = client_and_db
+    user_id = 842_002
+    monkeypatch.setattr(mfa_code_guess_limiter, "limit", 2)
+    db.add_all(
+        [
+            RateLimitEvent(scope="mfa_code_guess", subject_key=f"login:{user_id}"),
+            RateLimitEvent(scope="mfa_code_guess", subject_key=f"enroll:{user_id}"),
+        ]
+    )
+    db.commit()
+
+    try:
+        with pytest.raises(HTTPException) as blocked:
+            auth_api._allow_mfa_attempt(db, "regenerate", user_id)
+
+        assert blocked.value.status_code == 429
+        assert db.query(RateLimitEvent).filter_by(
+            scope="mfa_code_guess", subject_key=f"login:{user_id}"
+        ).count() == 0
+        assert db.query(RateLimitEvent).filter_by(
+            scope="mfa_code_guess", subject_key=f"enroll:{user_id}"
+        ).count() == 0
+        assert db.query(RateLimitEvent).filter_by(
+            scope="mfa_code_guess", subject_key=f"totp:{user_id}"
+        ).count() >= 2
+    finally:
+        mfa_code_guess_limiter.reset(f"totp:{user_id}", db=db)
+        db.commit()
+
+
+def test_mfa_enrollment_rejects_active_factor_before_password_verification(
+    client_and_db, fixed_code_patch, monkeypatch
+):
+    client, db, _session_factory = client_and_db
+    auth, _secret, _recovery_codes = _enroll_and_confirm_mfa(
+        client, db, "mfa-active-enroll@example.com", monkeypatch
+    )
+    limited_actions: list[str] = []
+    monkeypatch.setattr(
+        auth_api,
+        "_allow_mfa_attempt",
+        lambda _db, action, _user_id: limited_actions.append(action),
+    )
+
+    response = client.post(
+        "/api/auth/mfa/enroll",
+        headers=_auth_headers(auth),
+        json={"current_password": "incorrect-password"},
+    )
+
+    assert response.status_code == 409, response.text
+    assert response.json()["detail"] == "MFA ya esta activo"
+    assert limited_actions == []
+
+
+def test_google_only_account_can_disable_mfa_with_fresh_linked_google_proof(
+    client_and_db, fixed_code_patch, monkeypatch
+):
+    client, db, _session_factory = client_and_db
+    email = "google-only-mfa-disable@example.com"
+    auth, secret, _recovery_codes = _enroll_and_confirm_mfa(client, db, email, monkeypatch)
+    user = db.query(User).filter_by(email=email).one()
+    user.google_sub = "google-subject-mfa-disable"
+    user.password_login_enabled = False
+    db.commit()
+    monkeypatch.setattr(auth_api, "require_google_login", lambda: None)
+    monkeypatch.setattr(
+        auth_api,
+        "_verify_google_claims",
+        lambda _token, _settings: (
+            {"iat": int(time.time())},
+            email,
+            "google-subject-mfa-disable",
+        ),
+    )
+    headers = _auth_headers(auth)
+    code = _next_totp_code(secret)
+
+    stale_password = client.post(
+        "/api/auth/mfa/disable",
+        headers=headers,
+        json={"password": "Demo123!pass", "code": code},
+    )
+    assert stale_password.status_code == 401, stale_password.text
+    assert db.query(UserMfaSecret).filter_by(user_id=user.id).one().status == MFA_ACTIVE
+
+    disabled = client.post(
+        "/api/auth/mfa/disable",
+        headers=headers,
+        json={"google_id_token": "fresh-linked-google-proof", "code": code},
+    )
+
+    assert disabled.status_code == 200, disabled.text
+    assert disabled.json() == {"disabled": True}
+    assert db.query(UserMfaSecret).filter_by(user_id=user.id).count() == 0
+
+
 def test_mfa_enrollment_requires_current_password_for_password_account(
     client_and_db, fixed_code_patch, monkeypatch
 ):
     client, db, _session_factory = client_and_db
     auth = _verified_auth(client, "mfa-reauth@example.com", monkeypatch)
     headers = _auth_headers(auth)
+    limited_actions: list[str] = []
+    reset_actions: list[str] = []
+    monkeypatch.setattr(
+        auth_api,
+        "_allow_mfa_attempt",
+        lambda _db, action, _user_id: limited_actions.append(action),
+    )
+    monkeypatch.setattr(
+        auth_api,
+        "_reset_mfa_attempts",
+        lambda _db, action, _user_id: reset_actions.append(action),
+    )
 
     missing = client.post("/api/auth/mfa/enroll", headers=headers, json={})
     wrong = client.post(
@@ -1582,6 +1747,8 @@ def test_mfa_enrollment_requires_current_password_for_password_account(
     )
     assert allowed.status_code == 200, allowed.text
     assert db.query(UserMfaSecret).filter_by(user_id=user.id).count() == 1
+    assert limited_actions == ["enroll_reauth"] * 3
+    assert reset_actions == ["enroll_reauth"]
 
 
 @pytest.mark.parametrize(("token_age", "expected_status"), [(0, 200), (301, 401)])
@@ -1818,6 +1985,18 @@ def test_disable_mfa_requires_current_password_and_a_valid_factor(client_and_db,
     auth, secret, _recovery_codes = _enroll_and_confirm_mfa(client, db, "totp-disable@example.com", monkeypatch)
     headers = _auth_headers(auth)
     code = _next_totp_code(secret)
+    limited_actions: list[str] = []
+    reset_actions: list[str] = []
+    monkeypatch.setattr(
+        auth_api,
+        "_allow_mfa_attempt",
+        lambda _db, action, _user_id: limited_actions.append(action),
+    )
+    monkeypatch.setattr(
+        auth_api,
+        "_reset_mfa_attempts",
+        lambda _db, action, _user_id: reset_actions.append(action),
+    )
 
     wrong_password = client.post(
         "/api/auth/mfa/disable",
@@ -1836,6 +2015,8 @@ def test_disable_mfa_requires_current_password_and_a_valid_factor(client_and_db,
     assert disabled.json() == {"disabled": True}
     assert db.query(UserMfaSecret).count() == 0
     assert db.query(UserMfaRecoveryCode).count() == 0
+    assert limited_actions == ["disable_reauth", "disable_reauth", "disable"]
+    assert reset_actions == ["disable_reauth", "disable"]
     audit = db.query(SecurityAuditLog).filter_by(action="mfa.disabled").one()
     assert audit.hotel_id == auth["hotel_id"]
     assert json.loads(audit.details) == {"factor": "totp"}

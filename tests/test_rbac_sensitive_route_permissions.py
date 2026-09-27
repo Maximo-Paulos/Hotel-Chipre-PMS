@@ -31,6 +31,7 @@ from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.stock import StockItem
 from app.models.transaction import Transaction
 from app.models.user import User
+from app.schemas.reservation import ReservationUpdate
 from app.services.permission_service import set_role_override, set_user_override
 
 
@@ -233,6 +234,31 @@ def test_primary_reservation_patch_requires_version_and_skips_noop_audits():
         _close(db, engine)
 
 
+def test_reservation_update_rechecks_version_from_database_not_stale_orm_object():
+    _client_app, db, engine, _auth, reservation, _stock_item = _client()
+    try:
+        original_version = reservation.version
+        db.query(Reservation).filter(Reservation.id == reservation.id).update(
+            {Reservation.version: Reservation.version + 1},
+            synchronize_session=False,
+        )
+
+        with pytest.raises(reservation_service.ReservationVersionConflict):
+            reservation_service.update_reservation_fields(
+                db,
+                reservation,
+                ReservationUpdate(notes="must not persist"),
+                hotel_id=1,
+                client_version=original_version,
+            )
+
+        db.refresh(reservation)
+        assert reservation.version == original_version + 1
+        assert reservation.notes is None
+    finally:
+        _close(db, engine)
+
+
 def test_reservation_extension_requires_update_charge_and_cash_permissions_independently():
     client, db, engine, _auth, reservation, _stock_item = _client()
     try:
@@ -273,6 +299,9 @@ def test_reservation_extension_requires_update_charge_and_cash_permissions_indep
 
         assert allowed.status_code == 200, allowed.text
         assert allowed.json()["payment_link"]["reservation_id"] == reservation.id
+        assert db.query(AuditLog).filter_by(
+            table_name="reservations", record_id=reservation.id
+        ).count() >= 1
     finally:
         _close(db, engine)
 
@@ -922,6 +951,29 @@ def test_generic_reservation_edit_requires_manager_for_paid_date_change(route):
         _close(db, engine)
 
 
+@pytest.mark.parametrize("route", ["/api/bookings", "/api/reservations"])
+def test_generic_reservation_edit_requires_manager_for_paid_occupancy_change(route):
+    client, db, engine, _auth, reservation, _stock_item = _client()
+    try:
+        reservation.status = ReservationStatusEnum.FULLY_PAID
+        reservation.amount_paid = reservation.total_amount
+        db.commit()
+
+        payload = {"num_adults": 2, "client_version": reservation.version}
+        response = (
+            _patch_legacy_booking(client, reservation, payload)
+            if route == "/api/bookings"
+            else client.patch(f"{route}/{reservation.id}", json=payload)
+        )
+
+        assert response.status_code == 403, response.text
+        db.refresh(reservation)
+        assert reservation.num_adults == 1
+        assert reservation.total_amount == Decimal("200.00")
+    finally:
+        _close(db, engine)
+
+
 def test_legacy_booking_create_and_update_respect_inactive_subscription():
     client, db, engine, auth, reservation, _stock_item = _client()
     try:
@@ -958,7 +1010,7 @@ def test_legacy_booking_create_and_update_respect_inactive_subscription():
         _close(db, engine)
 
 
-@pytest.mark.parametrize("protected_change", ["room", "paid_dates"])
+@pytest.mark.parametrize("protected_change", ["room", "paid_dates", "paid_occupancy"])
 def test_manual_ota_duplicate_update_respects_reservation_action_lanes(protected_change):
     client, db, engine, _auth, reservation, _stock_item = _client()
     try:
@@ -972,7 +1024,7 @@ def test_manual_ota_duplicate_update_respects_reservation_action_lanes(protected
         db.add(target_room)
         reservation.source_provider_code = "booking"
         reservation.external_id = "OTA-RBAC-1"
-        if protected_change == "paid_dates":
+        if protected_change in {"paid_dates", "paid_occupancy"}:
             reservation.status = ReservationStatusEnum.FULLY_PAID
             reservation.amount_paid = reservation.total_amount
         db.flush()
@@ -1002,6 +1054,8 @@ def test_manual_ota_duplicate_update_respects_reservation_action_lanes(protected
             "channel": "booking",
             "external_id": "OTA-RBAC-1",
         }
+        if protected_change == "paid_occupancy":
+            payload["num_adults"] = 2
 
         response = client.post("/api/reservations/manual-ota", json=payload)
 
@@ -1009,6 +1063,7 @@ def test_manual_ota_duplicate_update_respects_reservation_action_lanes(protected
         db.refresh(reservation)
         assert reservation.room_id == original_room_id
         assert (reservation.check_in_date, reservation.check_out_date) == original_dates
+        assert reservation.num_adults == 1
     finally:
         _close(db, engine)
 
@@ -1054,7 +1109,7 @@ def test_reservation_date_change_extension_and_room_move_respect_inactive_subscr
         )
         room_move = client.post(
             f"/api/reservations/{reservation.id}/room-move",
-            json={"to_room_id": target_room.id, "reason_code": "guest_request"},
+            json={"client_version": reservation.version, "to_room_id": target_room.id, "reason_code": "guest_request"},
         )
 
         assert date_change.status_code == extension.status_code == room_move.status_code == 402

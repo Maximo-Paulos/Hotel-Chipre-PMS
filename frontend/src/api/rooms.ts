@@ -35,6 +35,7 @@ export type RoomDeleteBlockingReservation = {
   status: string;
   /** Source category used by the reservation room-move permission classifier. */
   category_id: number;
+  version: number;
 };
 
 export type RoomDeleteBlockedDetail = {

@@ -70,6 +70,7 @@ def test_revert_movement_group_marks_reservations_protected():
     fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "manager", user_id=10)
     try:
         reservation, from_room, to_room, group = _seed_group(db, hotel_id=1)
+        version_before_revert = reservation.version
         db.commit()
 
         response = client.post(f"/api/room-movement-groups/{group.id}/revert")
@@ -81,6 +82,7 @@ def test_revert_movement_group_marks_reservations_protected():
         assert body["is_reverted"] is True
         assert reservation.room_id == from_room.id
         assert reservation.category_id == from_room.category_id
+        assert reservation.version == version_before_revert + 1
         assert reservation.allocation_locked is True
         assert group.reverted_by_user_id == 10
         audit = db.query(SecurityAuditLog).filter(SecurityAuditLog.hotel_id == 1).one()

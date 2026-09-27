@@ -148,7 +148,7 @@ def test_neo4j_off_create_and_move_reservation_still_write_postgres(graph_api_cl
 
     move_response = client.post(
         f"/api/reservations/{reservation_id}/room-move",
-        json={"to_room_id": room_two_id, "reason_code": "guest_request", "notes": "quiet room"},
+        json={"client_version": create_response.json()["version"], "to_room_id": room_two_id, "reason_code": "guest_request", "notes": "quiet room"},
     )
     assert move_response.status_code == 200, move_response.text
     assert move_response.json()["reservation"]["room_id"] == room_two_id

@@ -18,6 +18,7 @@ from app.models.invitation import StaffInvitation
 from app.schemas.auth import UserInfo
 from app.services.security import verify_password
 from app.services import mfa_service
+from app.services.mfa_attempt_service import check_mfa_attempt, reset_mfa_attempts
 from app.services.permission_service import (
     HotelRoleNotFound,
     PERMISSION_HOTEL_PROPERTY_MANAGE,
@@ -767,13 +768,19 @@ def transfer_primary_owner_endpoint(
     current_user = db.get(User, context.user_id)
     if current_user is None or not current_user.is_active:
         raise HTTPException(status_code=401, detail="Usuario no valido")
+    if not check_mfa_attempt(db, "primary_owner_transfer_reauth", current_user.id):
+        raise HTTPException(status_code=429, detail="Demasiados intentos. Espera unos minutos.")
     if not verify_password(payload.password, current_user.password_hash):
         raise HTTPException(status_code=401, detail="Reautenticacion invalida")
+    reset_mfa_attempts(db, "primary_owner_transfer_reauth", current_user.id)
 
     if mfa_service.get_active_mfa_secret(db, current_user.id):
+        if not check_mfa_attempt(db, "primary_owner_transfer", current_user.id):
+            raise HTTPException(status_code=429, detail="Demasiados intentos. Espera unos minutos.")
         if not payload.mfa_code or not mfa_service.consume_mfa_code(db, current_user.id, payload.mfa_code):
             db.rollback()
             raise HTTPException(status_code=403, detail="Se requiere un codigo MFA valido")
+        reset_mfa_attempts(db, "primary_owner_transfer", current_user.id)
 
     try:
         target = transfer_primary_owner(

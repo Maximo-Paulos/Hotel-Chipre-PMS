@@ -54,6 +54,11 @@ class ReservationError(Exception):
     pass
 
 
+class ReservationVersionConflict(ReservationError):
+    """A reservation changed after the caller last read its version."""
+    pass
+
+
 @dataclass(slots=True)
 class _ReservationGuestProjection:
     id: int
@@ -1685,6 +1690,7 @@ def get_occupancy_grid(
         .join(Guest, Guest.id == Reservation.guest_id)
         .with_entities(
             Reservation.id,
+            Reservation.version,
             Reservation.room_id,
             Reservation.confirmation_code,
             Reservation.check_in_date,
@@ -1726,6 +1732,7 @@ def get_occupancy_grid(
         )
         item = {
             "id": row.id,
+            "version": row.version,
             "room_id": row.room_id,
             "confirmation_code": row.confirmation_code,
             "check_in_date": row.check_in_date,
@@ -1765,12 +1772,58 @@ def get_occupancy_grid(
     return {"rooms": rooms, "reservations": reservations, "unassigned": unassigned, "blocks": blocks}
 
 
-def get_reservation_by_id(db: Session, reservation_id: int, hotel_id: int) -> Reservation | None:
-    return (
-        active_reservations(db, hotel_id)
-        .filter(Reservation.id == reservation_id)
-        .first()
-    )
+def get_reservation_by_id(
+    db: Session,
+    reservation_id: int,
+    hotel_id: int,
+    *,
+    for_update: bool = False,
+) -> Reservation | None:
+    query = active_reservations(db, hotel_id).filter(Reservation.id == reservation_id)
+    if for_update:
+        # Refresh an identity already present in this Session before using it
+        # to validate or mutate the reservation. PostgreSQL holds this row
+        # lock until the request transaction commits or rolls back.
+        query = query.populate_existing().with_for_update()
+    return query.first()
+
+
+def lock_reservation_version(
+    db: Session,
+    reservation: Reservation,
+    *,
+    hotel_id: int,
+    client_version: int | None,
+) -> None:
+    """Lock the tenant-scoped row and compare the client's version to storage.
+
+    Comparing only the ORM object's version is a check-then-write race: two
+    transactions can both load N and both pass before either writes N+1. The
+    row lock serializes those requests and this scalar query reads the version
+    from the database instead of trusting the identity-map snapshot.
+    """
+    if client_version is None:
+        raise ReservationError("client_version is required for this reservation mutation")
+
+    with db.no_autoflush:
+        current_version = (
+            db.query(Reservation.version)
+            .filter(
+                Reservation.id == reservation.id,
+                Reservation.hotel_id == hotel_id,
+                Reservation.deleted_at.is_(None),
+            )
+            .with_for_update()
+            .scalar()
+        )
+
+    if current_version is None:
+        raise ReservationError("Reservation not found in the active hotel")
+    if reservation.version != current_version or current_version != client_version:
+        raise ReservationVersionConflict(
+            f"Reservation was modified concurrently (expected version {client_version}, "
+            f"got {current_version}). Reload and retry."
+        )
 
 
 def update_reservation_fields(
@@ -1788,14 +1841,14 @@ def update_reservation_fields(
     recalculate_explicit_price: bool = False,
     preserve_unclassified_price: bool = False,
 ) -> Reservation:
-    # Optimistic locking — reject stale writes (v72 security-audit §6)
-    if client_version is not None and reservation.version != client_version:
-        raise ReservationError(
-            f"Reservation was modified concurrently (expected version {client_version}, "
-            f"got {reservation.version}). Reload and retry."
-        )
-
     hotel_id = _resolve_hotel_id(hotel_id, room=reservation.room if hasattr(reservation, "room") else None)
+    if client_version is not None:
+        lock_reservation_version(
+            db,
+            reservation,
+            hotel_id=hotel_id,
+            client_version=client_version,
+        )
 
     # Reject-before-mutate: revalidate the guest restriction before touching
     # any other field, so a blocked update never partially persists (e.g.
@@ -2021,16 +2074,6 @@ def update_reservation_fields(
     return reservation
 
 
-def assert_reservation_version(reservation: Reservation, client_version: int | None) -> None:
-    if client_version is None:
-        raise ReservationError("client_version is required for this reservation mutation")
-    if reservation.version != client_version:
-        raise ReservationError(
-            f"Reservation was modified concurrently (expected version {client_version}, "
-            f"got {reservation.version}). Reload and retry."
-        )
-
-
 def mark_reservation_no_show(
     db: Session,
     reservation: Reservation,
@@ -2043,7 +2086,12 @@ def mark_reservation_no_show(
     """Mark a reservation no-show without creating any automatic charge."""
     if reservation.hotel_id != hotel_id:
         raise ReservationError("Reservation does not belong to the active hotel")
-    assert_reservation_version(reservation, client_version)
+    lock_reservation_version(
+        db,
+        reservation,
+        hotel_id=hotel_id,
+        client_version=client_version,
+    )
     if reservation.status in (
         ReservationStatusEnum.CHECKED_IN,
         ReservationStatusEnum.CHECKED_OUT,

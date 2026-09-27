@@ -81,6 +81,7 @@ services:
       - cassandra
       - neo4j
     environment:
+      APP_ENV: development
       DATABASE_URL: postgresql+psycopg2://pms:pms@db:5432/hotel_pms
       DEMO_MODE: "true"
       REDIS_URL: redis://redis:6379/0

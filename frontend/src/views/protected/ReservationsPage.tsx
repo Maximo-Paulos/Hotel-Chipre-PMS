@@ -1432,6 +1432,10 @@ export function ReservationsPage() {
       showToast("error", t("page.errors.roomMoveFieldsRequired"));
       return;
     }
+    if (detailsReservation.version == null) {
+      showToast("error", t("page.errors.roomMoveVersionUnavailable"));
+      return;
+    }
     if (detailsReservation.status === "checked_in" && (!roomMoveForm.origin_room_disposition || (roomMoveForm.origin_room_disposition !== "cleaning" && !roomMoveForm.origin_room_disposition_note.trim()))) {
       showToast("error", t("page.errors.roomMoveOriginDispositionRequired"));
       return;
@@ -1440,6 +1444,7 @@ export function ReservationsPage() {
       await roomMoveMutation.mutateAsync({
         reservationId: detailsReservation.id,
         payload: {
+          client_version: detailsReservation.version,
           to_room_id: Number(roomMoveForm.to_room_id),
           reason_code: roomMoveForm.reason_code.trim(),
           notes: roomMoveForm.notes.trim() || null,

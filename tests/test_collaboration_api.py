@@ -251,3 +251,11 @@ def test_collaboration_reservation_patch_requires_move_and_manager_lanes(
     db.refresh(reservation)
     assert date_change.status_code == 403, date_change.text
     assert reservation.check_out_date == date.today() + timedelta(days=2)
+
+    occupancy_change = client.patch(
+        f"/api/collaboration/resources/reservation/{reservation.id}",
+        json={"base_revision": revision, "changes": {"num_adults": 2}},
+    )
+    db.refresh(reservation)
+    assert occupancy_change.status_code == 403, occupancy_change.text
+    assert reservation.num_adults == 1

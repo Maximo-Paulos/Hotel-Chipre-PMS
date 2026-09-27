@@ -550,6 +550,29 @@ def test_invalid_totp_and_owner_without_mfa_reject_approval(temporary_grant_clie
     assert db.get(TemporaryActionGrant, requested_without_mfa["id"]).status == TemporaryActionGrantStatusEnum.PENDING
 
 
+def test_grant_approval_uses_the_shared_account_totp_attempt_budget(
+    temporary_grant_client, monkeypatch
+):
+    from app.adapters.rate_limiter import mfa_code_guess_limiter
+    from app.api import auth as auth_api
+
+    client, db, mfa_secret, override_auth = temporary_grant_client
+    requested = _request(client, db)
+    monkeypatch.setattr(mfa_code_guess_limiter, "limit", 1)
+    mfa_code_guess_limiter.reset("totp:2", db=db)
+    db.commit()
+
+    auth_api._allow_mfa_attempt(db, "login", 2)
+    fastapi_app.dependency_overrides[get_auth_context] = override_auth(2, "owner")
+    blocked = client.post(
+        f"/api/permissions/temporary-grants/{requested['id']}/approve",
+        json={"totp_code": pyotp.TOTP(mfa_secret).now()},
+    )
+
+    assert blocked.status_code == 429, blocked.text
+    assert db.get(TemporaryActionGrant, requested["id"]).status == TemporaryActionGrantStatusEnum.PENDING
+
+
 def test_request_rejects_other_actions_and_resources(temporary_grant_client):
     client, db, _mfa_secret, _override_auth = temporary_grant_client
     invalid_action = client.post(

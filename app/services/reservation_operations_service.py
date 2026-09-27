@@ -58,7 +58,7 @@ from app.services.reservation_service import (
     calculate_reservation_pricing,
     compute_reservation_pricing,
     create_reservation,
-    assert_reservation_version,
+    lock_reservation_version,
     manual_override_total_for_nights,
     transition_reservation_status,
     update_reservation_fields,
@@ -386,6 +386,8 @@ def _extension_conflicts(
             Reservation.check_out_date > reservation.check_out_date,
         )
         .order_by(Reservation.check_in_date.asc(), Reservation.id.asc())
+        .populate_existing()
+        .with_for_update()
         .all()
     )
 
@@ -614,7 +616,12 @@ def change_reservation_dates(
 ) -> ReservationDateChangeResult:
     if reservation.hotel_id != hotel_id:
         raise ReservationOperationsError("La reserva no pertenece al hotel activo")
-    assert_reservation_version(reservation, client_version)
+    lock_reservation_version(
+        db,
+        reservation,
+        hotel_id=hotel_id,
+        client_version=client_version,
+    )
     if check_out_date <= check_in_date:
         raise ReservationOperationsError("Check-out must be after check-in")
     if check_in_date < hotel_today(db, hotel_id):
@@ -795,7 +802,12 @@ def extend_reservation_stay(
 ) -> ReservationExtensionResult:
     if reservation.hotel_id != hotel_id:
         raise ReservationOperationsError("La reserva no pertenece al hotel activo")
-    assert_reservation_version(reservation, client_version)
+    lock_reservation_version(
+        db,
+        reservation,
+        hotel_id=hotel_id,
+        client_version=client_version,
+    )
     if reservation.status not in (ReservationStatusEnum.CHECKED_IN, ReservationStatusEnum.FULLY_PAID):
         raise ReservationOperationsError("Solo se pueden extender reservas checked-in o fully-paid")
     if new_checkout_date <= reservation.check_out_date:
@@ -893,6 +905,7 @@ def move_reservation_room(
     reservation: Reservation,
     to_room_id: int,
     hotel_id: int,
+    client_version: int,
     moved_by_user_id: Optional[int] = None,
     actor_role: str,
     reason_code: Optional[str] = None,
@@ -902,6 +915,12 @@ def move_reservation_room(
     origin_room_disposition: str | None = None,
     origin_room_disposition_note: str | None = None,
 ) -> RoomMoveResult:
+    lock_reservation_version(
+        db,
+        reservation,
+        hotel_id=hotel_id,
+        client_version=client_version,
+    )
     if price_action not in ("keep", "reprice"):
         raise ReservationOperationsError("price_action debe ser 'keep' o 'reprice'")
     if reason_code is None or not reason_code.strip():
@@ -976,6 +995,7 @@ def move_reservation_room(
     status_value = reservation.status.value if hasattr(reservation.status, "value") else str(reservation.status)
     reservation.room_id = room.id
     reservation.category_id = room.category_id
+    reservation.version = (reservation.version or 0) + 1
     if price_action == "reprice":
         _apply_pricing_result_to_reservation(reservation, pricing)
     if move_type == RoomMoveTypeEnum.MANUAL_MOVE:

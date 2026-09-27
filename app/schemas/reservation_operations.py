@@ -28,6 +28,7 @@ class OriginRoomDispositionEnum(str, enum.Enum):
 
 
 class RoomMoveRequest(BaseModel):
+    client_version: int = Field(..., ge=0)
     to_room_id: int
     reason_code: str = Field(..., min_length=1)
     notes: Optional[str] = None

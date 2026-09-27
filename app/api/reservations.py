@@ -50,6 +50,7 @@ from app.services.reservation_service import (
     list_reservations as list_reservations_service,
     get_occupancy_grid,
     get_reservation_by_id,
+    ReservationVersionConflict,
     mark_reservation_no_show,
     update_reservation_fields,
     register_company_settlement,
@@ -347,14 +348,18 @@ def create_or_update_manual_ota(
             data.check_in_date != existing.check_in_date
             or data.check_out_date != existing.check_out_date
         )
+        occupancy_changed = (
+            data.num_adults != existing.num_adults
+            or data.num_children != existing.num_children
+        )
         if (
-            dates_changed
+            (dates_changed or occupancy_changed)
             and reservation_has_payment_or_deposit(db, hotel_id=context.hotel_id, reservation=existing)
             and not _is_manager_context(context)
         ):
             raise HTTPException(
                 status_code=403,
-                detail="Modificar fechas de una reserva con pagos requiere gerente, dueño o codueño.",
+                detail="Modificar fechas u ocupación de una reserva con pagos requiere gerente, dueño o codueño.",
             )
     before = audit_log_service.model_snapshot(existing)
     try:
@@ -552,7 +557,7 @@ def register_settlement(
     ),
 ):
     """Register the deferred corporate collection (v72 §3.5): settled."""
-    reservation = get_reservation_by_id(db, reservation_id, context.hotel_id)
+    reservation = get_reservation_by_id(db, reservation_id, context.hotel_id, for_update=True)
     if not reservation:
         raise HTTPException(status_code=404, detail="Reservation not found")
     try:
@@ -911,7 +916,7 @@ def mark_no_show(
     context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_CANCEL)),
 ):
     """Mark a reservation as no-show without automatic charge."""
-    r = get_reservation_by_id(db, reservation_id, context.hotel_id)
+    r = get_reservation_by_id(db, reservation_id, context.hotel_id, for_update=True)
     if not r:
         raise HTTPException(status_code=404, detail="Reservation not found")
     before = audit_log_service.model_snapshot(r)
@@ -939,6 +944,8 @@ def mark_no_show(
         return _to_read(r)
     except ReservationError as e:
         db.rollback()
+        if isinstance(e, ReservationVersionConflict):
+            raise HTTPException(status_code=409, detail=str(e)) from e
         raise HTTPException(status_code=400, detail=str(e))
 
 
@@ -966,7 +973,7 @@ def change_dates(
             PERMISSION_RESERVATION_MOVE,
             acceptable_permissions=RESERVATION_MOVE_TIER_PERMISSIONS[1:],
         )
-    r = get_reservation_by_id(db, reservation_id, context.hotel_id)
+    r = get_reservation_by_id(db, reservation_id, context.hotel_id, for_update=True)
     if not r:
         raise HTTPException(status_code=404, detail="Reservation not found")
     before = audit_log_service.model_snapshot(r)
@@ -1008,6 +1015,9 @@ def change_dates(
             recreated=result.recreated,
             status_transitioned=result.status_transitioned,
         )
+    except ReservationVersionConflict as e:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(e)) from e
     except ReservationOperationsError as e:
         db.rollback()
         status_code = 403 if "requiere gerente" in str(e) else 400
@@ -1029,7 +1039,7 @@ def modify_reservation(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
             detail="Suscripción inactiva. Reactivá el plan para gestionar reservas.",
         )
-    r = get_reservation_by_id(db, reservation_id, context.hotel_id)
+    r = get_reservation_by_id(db, reservation_id, context.hotel_id, for_update=True)
     if not r:
         raise HTTPException(status_code=404, detail="Reservation not found")
     submitted_data = data.model_dump(exclude_unset=True)
@@ -1053,14 +1063,18 @@ def modify_reservation(
         "check_in_date" in effective_data
         or "check_out_date" in effective_data
     )
+    occupancy_changed = (
+        "num_adults" in effective_data
+        or "num_children" in effective_data
+    )
     if (
-        dates_changed
+        (dates_changed or occupancy_changed)
         and reservation_has_payment_or_deposit(db, hotel_id=context.hotel_id, reservation=r)
         and not _is_manager_context(context)
     ):
         raise HTTPException(
             status_code=403,
-            detail="Modificar fechas de una reserva con pagos requiere gerente, dueño o codueño.",
+            detail="Modificar fechas u ocupación de una reserva con pagos requiere gerente, dueño o codueño.",
         )
     metadata_fields = {"arrival_time_hint", "reservation_comment"}
     terminal_mutation_fields = set(effective_data) - metadata_fields
@@ -1125,6 +1139,9 @@ def modify_reservation(
             )
         return _to_read(r)
     except ReservationError as e:
+        db.rollback()
+        if isinstance(e, ReservationVersionConflict):
+            raise HTTPException(status_code=409, detail=str(e)) from e
         raise HTTPException(status_code=400, detail=str(e))
     except GuestProhibitedError as e:
         db.rollback()
@@ -1157,7 +1174,7 @@ def extend_stay(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
             detail="Suscripción inactiva. Reactivá el plan para gestionar reservas.",
         )
-    r = get_reservation_by_id(db, reservation_id, context.hotel_id)
+    r = get_reservation_by_id(db, reservation_id, context.hotel_id, for_update=True)
     if not r:
         raise HTTPException(status_code=404, detail="Reservation not found")
     before = audit_log_service.model_snapshot(r)
@@ -1178,8 +1195,6 @@ def extend_stay(
         if not result.success:
             db.rollback()
             raise HTTPException(status_code=409, detail={"message": "Extension conflict could not be resolved", "conflicts": result.conflicts or []})
-        db.commit()
-        db.refresh(r)
         audit_log_service.safe_create_audit_log(
             db,
             hotel_id=context.hotel_id,
@@ -1190,6 +1205,8 @@ def extend_stay(
             payload_before=before,
             payload_after=audit_log_service.model_snapshot(r),
         )
+        db.commit()
+        db.refresh(r)
         response = ReservationExtensionResponse(
             reservation=_to_read(r),
             extension_amount=result.extension_amount,
@@ -1202,6 +1219,9 @@ def extend_stay(
             trigger_type="reservation_date_change",
         )
         return response
+    except ReservationVersionConflict as e:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(e)) from e
     except ReservationOperationsError as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
@@ -1235,7 +1255,7 @@ def room_move(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"reason_code debe ser uno de: {allowed}",
         ) from exc
-    reservation = get_reservation_by_id(db, reservation_id, context.hotel_id)
+    reservation = get_reservation_by_id(db, reservation_id, context.hotel_id, for_update=True)
     if not reservation:
         raise HTTPException(status_code=404, detail="Reservation not found")
     before = audit_log_service.model_snapshot(reservation)
@@ -1245,6 +1265,7 @@ def room_move(
             reservation=reservation,
             to_room_id=payload.to_room_id,
             hotel_id=context.hotel_id,
+            client_version=payload.client_version,
             moved_by_user_id=context.user_id,
             actor_role=context.user_role,
             reason_code=manual_reason_code.value,
@@ -1292,6 +1313,9 @@ def room_move(
             origin_room_status_before=result.origin_room_status_before,
             origin_room_status_after=result.origin_room_status_after,
         )
+    except ReservationVersionConflict as e:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(e)) from e
     except RoomMovePermissionError as e:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))

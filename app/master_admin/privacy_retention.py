@@ -321,10 +321,7 @@ def release_retention_hold(
     )
     if not mfa_service.get_active_mfa_secret(db, context.user.id):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="MFA no está activo")
-    # Spend the same persistent attempt budget for password and TOTP guesses.
-    # Otherwise a stolen privileged session could brute-force the reauth
-    # password before the code-specific limiter is reached.
-    allow_master_admin_mfa_attempt(db, "privacy_retention_release", context.user.id)
+    allow_master_admin_mfa_attempt(db, "privacy_retention_release_reauth", context.user.id)
     if not verify_password(payload.password, context.user.password_hash):
         audit_master_action(
             db,
@@ -338,7 +335,9 @@ def release_retention_hold(
         )
         db.commit()
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Reautenticación inválida")
+    reset_master_admin_mfa_attempts(db, "privacy_retention_release_reauth", context.user.id)
 
+    allow_master_admin_mfa_attempt(db, "privacy_retention_release", context.user.id)
     try:
         valid_mfa = mfa_service.consume_mfa_code(db, context.user.id, payload.mfa_code)
     except mfa_service.MfaSecretUnavailableError as exc:

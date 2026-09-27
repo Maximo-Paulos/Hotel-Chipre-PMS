@@ -19,6 +19,7 @@ from app.models.temporary_action_grant import (
     TemporaryActionGrantStatusEnum,
 )
 from app.services.mfa_service import consume_mfa_code
+from app.services.mfa_attempt_service import check_mfa_attempt, reset_mfa_attempts
 from app.services.permission_service import (
     PERMISSION_DEFINITIONS,
     PERMISSION_RESERVATION_CANCEL,
@@ -58,6 +59,10 @@ class TemporaryGrantStateError(TemporaryGrantError):
 
 class TemporaryGrantMfaError(TemporaryGrantError):
     """Approval requires an active MFA factor and a valid one-time code."""
+
+
+class TemporaryGrantRateLimitError(TemporaryGrantError):
+    """The approver exceeded the shared account MFA attempt budget."""
 
 
 def _utcnow() -> datetime:
@@ -214,8 +219,11 @@ def approve_grant(
     _require_approver(db, approver)
     if grant.status != TemporaryActionGrantStatusEnum.PENDING:
         raise TemporaryGrantStateError("El grant no esta pendiente")
+    if not check_mfa_attempt(db, "temporary_grant_approval", approver.user_id):
+        raise TemporaryGrantRateLimitError("Demasiados intentos. Espera unos minutos.")
     if not consume_mfa_code(db, approver.user_id, (totp_code or "").strip()):
         raise TemporaryGrantMfaError("El aprobador requiere MFA activo y un codigo valido")
+    reset_mfa_attempts(db, "temporary_grant_approval", approver.user_id)
 
     now = _utcnow()
     plaintext_token = secrets.token_urlsafe(32)

@@ -51,6 +51,7 @@ from app.services.temporary_action_grant_service import (
     TemporaryGrantError,
     TemporaryGrantMfaError,
     TemporaryGrantNotFoundError,
+    TemporaryGrantRateLimitError,
     TemporaryGrantStateError,
     approve_grant,
     deny_grant,
@@ -92,6 +93,8 @@ def _raise_temporary_grant_http_error(exc: TemporaryGrantError) -> None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     if isinstance(exc, TemporaryGrantMfaError):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    if isinstance(exc, TemporaryGrantRateLimitError):
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=str(exc)) from exc
     if isinstance(exc, TemporaryGrantAuthorizationError):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
     raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc

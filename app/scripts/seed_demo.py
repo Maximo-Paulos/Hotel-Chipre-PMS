@@ -23,10 +23,12 @@ from app.models import (
     OnboardingState,
     User,
 )
+from app.services.demo_reset_safety import assert_demo_database_target_is_safe, assert_demo_reset_is_safe
 from app.services.security import hash_password
 
 
 def seed(db: Session):
+    assert_demo_database_target_is_safe(db.get_bind().url)
     # Hotel configuration
     config = db.get(HotelConfiguration, 1)
     if not config:
@@ -145,6 +147,7 @@ def seed(db: Session):
 
 
 def main():
+    assert_demo_reset_is_safe()
     init_db()
     SessionFactory = get_session_factory()
     with SessionFactory() as db:

@@ -246,6 +246,7 @@ def test_room_delete_lists_only_active_blocking_reservations_and_allows_delete_a
         source_room_id = source_room.id
         target_room_id = target_room.id
         active_reservation_id = active_reservation.id
+        active_reservation_version = active_reservation.version
 
     deactivation = client.patch(f"/api/rooms/{source_room_id}", json={"is_active": False})
     assert deactivation.status_code == 400, deactivation.text
@@ -264,12 +265,13 @@ def test_room_delete_lists_only_active_blocking_reservations_and_allows_delete_a
             "check_out_date": "2027-01-12",
             "status": ReservationStatusEnum.PENDING.value,
             "category_id": category.id,
+            "version": active_reservation_version,
         }
     ]
 
     moved = client.post(
         f"/api/reservations/{active_reservation_id}/room-move",
-        json={"to_room_id": target_room_id, "reason_code": "operational"},
+        json={"client_version": active_reservation_version, "to_room_id": target_room_id, "reason_code": "operational"},
     )
     assert moved.status_code == 200, moved.text
 

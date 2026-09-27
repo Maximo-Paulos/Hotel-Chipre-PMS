@@ -2,11 +2,13 @@
 Developer reset helper: drops dev.db and recreates tables.
 Usage: python -m app.scripts.dev_reset
 """
-from app.database import init_db, Base
+from app.database import Base, init_db
 import app.models  # noqa: F401
+from app.services.demo_reset_safety import assert_demo_reset_is_safe
 
 
 def reset(db_url: str | None = None):
+    assert_demo_reset_is_safe(db_url)
     # Recreate database
     engine = init_db(db_url)
     Base.metadata.drop_all(bind=engine)

@@ -73,6 +73,7 @@ export function OccupancyPlanningPage() {
       moveReservationRoom(
         reservationId,
         {
+          client_version: draggedReservation!.version,
           to_room_id: toRoomId,
           reason_code: moveReason,
           notes: moveNotes || null,
@@ -100,7 +101,7 @@ export function OccupancyPlanningPage() {
   });
 
   const handleConfirmMove = async () => {
-    if (!pendingMove || !moveReason || moveMutation.isPending) return;
+    if (!pendingMove || !draggedReservation || !moveReason || moveMutation.isPending) return;
     if (draggedReservation?.status === "checked_in" && (!originRoomDisposition || (originRoomDisposition !== "cleaning" && !originRoomDispositionNote.trim()))) return;
     try {
       await moveMutation.mutateAsync(pendingMove);

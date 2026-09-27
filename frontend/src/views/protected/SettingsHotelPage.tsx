@@ -234,10 +234,10 @@ export function SettingsHotelPage() {
   const moveBlockingReservationMutation = useGuardedMutation<
     unknown,
     unknown,
-    { reservationId: number; toRoomId: number }
+    { reservationId: number; reservationVersion: number; toRoomId: number }
   >({
-    mutationFn: ({ reservationId, toRoomId }) =>
-      moveReservationRoom(reservationId, { to_room_id: toRoomId, reason_code: "operational" }, session),
+    mutationFn: ({ reservationId, reservationVersion, toRoomId }) =>
+      moveReservationRoom(reservationId, { client_version: reservationVersion, to_room_id: toRoomId, reason_code: "operational" }, session),
     onMutate: ({ reservationId }) => {
       setMovingReservationId(reservationId);
       setError(null);
@@ -755,6 +755,7 @@ export function SettingsHotelPage() {
                                             }
                                             void moveBlockingReservationMutation.mutateAsync({
                                               reservationId: reservation.id,
+                                              reservationVersion: reservation.version,
                                               toRoomId: selectedDestination.id
                                             }).catch(() => undefined);
                                           }}

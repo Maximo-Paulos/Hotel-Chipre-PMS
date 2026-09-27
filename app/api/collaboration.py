@@ -272,8 +272,12 @@ def patch_collaborative_resource(
                     ("check_in_date" in changes and changes["check_in_date"] != resource.check_in_date)
                     or ("check_out_date" in changes and changes["check_out_date"] != resource.check_out_date)
                 )
+                occupancy_changed = (
+                    ("num_adults" in changes and changes["num_adults"] != resource.num_adults)
+                    or ("num_children" in changes and changes["num_children"] != resource.num_children)
+                )
                 if (
-                    dates_changed
+                    (dates_changed or occupancy_changed)
                     and reservation_has_payment_or_deposit(
                         db, hotel_id=context.hotel_id, reservation=resource
                     )
@@ -281,7 +285,7 @@ def patch_collaborative_resource(
                 ):
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
-                        detail="Modificar fechas de una reserva con pagos requiere gerente, dueño o codueño.",
+                        detail="Modificar fechas u ocupación de una reserva con pagos requiere gerente, dueño o codueño.",
                     )
             before_editable_values = editable_resource_values(canonical_type, resource)
             apply_resource_changes(

@@ -722,7 +722,7 @@ def test_reinvitation_with_password_requires_mfa_before_consuming_invitation(own
         )
     assert rejected.status_code == 401, rejected.text
     shared_mfa_budget = db.query(RateLimitEvent).filter_by(
-        scope="mfa_code_guess", subject_key=f"login:{user.id}"
+        scope="mfa_code_guess", subject_key=f"totp:{user.id}"
     ).count()
     assert shared_mfa_budget == 1
 
@@ -734,7 +734,7 @@ def test_reinvitation_with_password_requires_mfa_before_consuming_invitation(own
         )
     assert normal_login_rejected.status_code == 401, normal_login_rejected.text
     assert db.query(RateLimitEvent).filter_by(
-        scope="mfa_code_guess", subject_key=f"login:{user.id}"
+        scope="mfa_code_guess", subject_key=f"totp:{user.id}"
     ).count() == 2
 
     db.refresh(invitation)
@@ -750,7 +750,7 @@ def test_reinvitation_with_password_requires_mfa_before_consuming_invitation(own
     assert completed.status_code == 200, completed.text
     assert completed.json()["hotel_id"] == ctx["hotel_id"]
     assert db.query(RateLimitEvent).filter_by(
-        scope="mfa_code_guess", subject_key=f"login:{user.id}"
+        scope="mfa_code_guess", subject_key=f"totp:{user.id}"
     ).count() == 0
     db.refresh(invitation)
     db.refresh(membership)

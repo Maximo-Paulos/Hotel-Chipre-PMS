@@ -752,6 +752,7 @@
       "manualReviewCloseFailed": "No se pudo cerrar la revisión manual",
       "roomMoveFieldsRequired": "Elegí una habitación destino e indicá el motivo del cambio.",
       "roomMoveFailed": "No se pudo cambiar la habitación",
+      "roomMoveVersionUnavailable": "No se pudo validar la versión de la reserva. Recargá e intentá nuevamente.",
       "roomMoveOriginDispositionRequired": "Elegí el estado de la habitación origen y justificá si no va a limpieza.",
       "noShowFailed": "No se pudo registrar el no-show",
       "chargeFailed": "No se pudo cargar el consumo.",

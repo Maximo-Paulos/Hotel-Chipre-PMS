@@ -638,6 +638,7 @@ def delete_room(
                         # the current room category) to apply the exact room
                         # move permission tier before requesting a move.
                         "category_id": reservation.category_id,
+                        "version": reservation.version,
                     }
                     for reservation in blocking_reservations
                 ],
