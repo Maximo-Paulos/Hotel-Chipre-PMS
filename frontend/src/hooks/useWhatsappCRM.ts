@@ -10,14 +10,20 @@ import {
 import { hasValidSession } from "../api/client";
 import { useSession } from "../state/session";
 
+export function useWhatsAppChannel() {
+  const { session } = useSession();
+  const enabled = hasValidSession(session);
+  return useQuery({
+    queryKey: ["whatsapp", "channel", session.hotelId],
+    queryFn: () => fetchWhatsAppChannel(session), enabled, retry: false,
+  });
+}
+
 export function useWhatsAppCRM() {
   const { session } = useSession();
   const queryClient = useQueryClient();
   const enabled = hasValidSession(session);
-  const channel = useQuery({
-    queryKey: ["whatsapp", "channel", session.hotelId],
-    queryFn: () => fetchWhatsAppChannel(session), enabled, retry: false,
-  });
+  const channel = useWhatsAppChannel();
   const conversations = useQuery({
     queryKey: ["whatsapp", "conversations", session.hotelId],
     queryFn: () => fetchWhatsAppConversations(session), enabled, refetchInterval: enabled ? 15_000 : false,

@@ -1,13 +1,13 @@
 import { useState } from "react";
 
 import { completeWhatsAppChannel } from "../../api/whatsapp";
-import { useWhatsAppCRM } from "../../hooks/useWhatsappCRM";
+import { useWhatsAppChannel } from "../../hooks/useWhatsappCRM";
 import { useSession } from "../../state/session";
 
 /** Human-readable onboarding state; provider credentials never enter the browser. */
 export function SettingsWhatsAppPage() {
   const { session } = useSession();
-  const { channel } = useWhatsAppCRM();
+  const channel = useWhatsAppChannel();
   const [wabaId, setWabaId] = useState("");
   const [phoneNumberId, setPhoneNumberId] = useState("");
   const [displayName, setDisplayName] = useState("");

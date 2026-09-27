@@ -10,11 +10,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies.auth import AuthContext, get_auth_context, require_permission
+from app.dependencies.auth import AuthContext, require_any_permission, require_permission
 from app.models.whatsapp_crm import WhatsAppChannel, WhatsAppConversationStatusEnum
 from app.schemas.whatsapp_crm import (
     WhatsAppAssignmentUpdate,
     WhatsAppChannelComplete,
+    WhatsAppChannelStatusResponse,
     WhatsAppConversationListResponse,
     WhatsAppConversationRead,
     WhatsAppConversationStatusUpdate,
@@ -23,6 +24,7 @@ from app.schemas.whatsapp_crm import (
     WhatsAppNoteCreate,
 )
 from app.services.permission_service import (
+    PERMISSION_SETTINGS_INTEGRATIONS_VIEW,
     PERMISSION_WHATSAPP_ASSIGN,
     PERMISSION_WHATSAPP_CLOSE,
     PERMISSION_WHATSAPP_INBOX_ALL,
@@ -51,10 +53,15 @@ def _require_plan(db: Session, hotel_id: int) -> None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="WhatsApp CRM requiere un plan Pro o Ultra")
 
 
-@router.get("/channel")
+@router.get("/channel", response_model=WhatsAppChannelStatusResponse)
 def channel_status(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(get_auth_context),
+    context: AuthContext = Depends(
+        require_any_permission(
+            PERMISSION_WHATSAPP_INBOX_VIEW,
+            PERMISSION_SETTINGS_INTEGRATIONS_VIEW,
+        )
+    ),
 ):
     _require_plan(db, context.hotel_id)
     channel = db.query(WhatsAppChannel).filter(WhatsAppChannel.hotel_id == context.hotel_id).one_or_none()

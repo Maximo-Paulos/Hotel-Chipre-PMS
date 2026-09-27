@@ -4,7 +4,10 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from app.models.whatsapp_crm import WhatsAppConversationStatusEnum
+from app.models.whatsapp_crm import (
+    WhatsAppChannelStatusEnum,
+    WhatsAppConversationStatusEnum,
+)
 
 
 class WhatsAppContactRead(BaseModel):
@@ -76,3 +79,17 @@ class WhatsAppChannelComplete(BaseModel):
     display_phone_number: str | None = Field(default=None, max_length=40)
     display_name: str | None = Field(default=None, max_length=160)
     integration_connection_id: int | None = None
+
+
+class WhatsAppChannelSummaryRead(BaseModel):
+    id: int
+    status: WhatsAppChannelStatusEnum
+    display_phone_number: str | None = None
+    display_name: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class WhatsAppChannelStatusResponse(BaseModel):
+    status: WhatsAppChannelStatusEnum
+    channel: WhatsAppChannelSummaryRead | None = None

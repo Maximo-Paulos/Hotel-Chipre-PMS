@@ -14,6 +14,16 @@ from app.models.hotel_membership import HotelMembership
 from app.models.permission import HotelPermissionOverride, UserPermissionOverride
 from app.models.user import User
 from app.models.user_mfa import UserMfaSecret
+from app.models.whatsapp_crm import (
+    WhatsAppChannel,
+    WhatsAppChannelStatusEnum,
+    WhatsAppContact,
+    WhatsAppConversation,
+    WhatsAppConversationStatusEnum,
+    WhatsAppMessage,
+    WhatsAppMessageDirectionEnum,
+    WhatsAppMessageStatusEnum,
+)
 from app.services.action_step_up_service import (
     create_action_step_up_ticket,
     create_permission_admin_read_step_up_ticket,
@@ -34,7 +44,9 @@ from app.services.permission_service import (
     PERMISSION_RESERVATION_CREATE,
     PERMISSION_PERMISSION_MANAGE,
     PERMISSION_ROOM_STATUS_UPDATE,
+    PERMISSION_SETTINGS_INTEGRATIONS_VIEW,
     PERMISSION_STOCK_ADJUST,
+    PERMISSION_WHATSAPP_INBOX_VIEW,
     canonical_permission_code,
     ensure_permission_matrix_seeded,
 )
@@ -102,6 +114,17 @@ def _client_with_db():
     fastapi_app.dependency_overrides[get_db] = override_get_db
     client = TestClient(fastapi_app)
     return client, db, engine
+
+
+def _enable_whatsapp_plan_for_api_test(monkeypatch):
+    from app.api import whatsapp_crm as whatsapp_crm_api
+
+    monkeypatch.setattr(
+        whatsapp_crm_api, "get_subscription_snapshot", lambda *_args: {"plan": "pro"}
+    )
+    monkeypatch.setattr(
+        whatsapp_crm_api, "plan_has_feature", lambda *_args: True
+    )
 
 
 def test_permissions_matrix_available_to_permission_manager_only():
@@ -796,6 +819,126 @@ def test_permission_override_restore_requires_action_bound_step_up(
             assert row is not None
             assert row.allowed is False
             assert row.version == 1
+    finally:
+        fastapi_app.dependency_overrides.clear()
+        db.close()
+        engine.dispose()
+
+
+def test_whatsapp_channel_status_requires_inbox_or_integration_view_permission(monkeypatch):
+    client, db, engine = _client_with_db()
+    _enable_whatsapp_plan_for_api_test(monkeypatch)
+    try:
+        db.add_all(
+            [
+                HotelPermissionOverride(
+                    hotel_id=1,
+                    role="manager",
+                    permission_code=PERMISSION_WHATSAPP_INBOX_VIEW,
+                    allowed=False,
+                ),
+                HotelPermissionOverride(
+                    hotel_id=1,
+                    role="manager",
+                    permission_code=PERMISSION_SETTINGS_INTEGRATIONS_VIEW,
+                    allowed=False,
+                ),
+            ]
+        )
+        db.commit()
+
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "manager")
+        denied = client.get("/api/whatsapp/channel")
+        assert denied.status_code == 403
+
+        # The inbox and settings pages both use this endpoint, but have distinct
+        # read permissions. Either one should preserve the shared status view.
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "receptionist")
+        inbox_reader = client.get("/api/whatsapp/channel")
+        assert inbox_reader.status_code == 200, inbox_reader.text
+        assert inbox_reader.json() == {"status": "ready", "channel": None}
+
+        db.add(
+            HotelPermissionOverride(
+                hotel_id=1,
+                role="owner",
+                permission_code=PERMISSION_WHATSAPP_INBOX_VIEW,
+                allowed=False,
+            )
+        )
+        db.commit()
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner")
+        integration_reader = client.get("/api/whatsapp/channel")
+        assert integration_reader.status_code == 200, integration_reader.text
+        assert integration_reader.json() == {"status": "ready", "channel": None}
+    finally:
+        fastapi_app.dependency_overrides.clear()
+        db.close()
+        engine.dispose()
+
+
+def test_whatsapp_channel_status_serializes_only_the_ui_summary(monkeypatch):
+    client, db, engine = _client_with_db()
+    _enable_whatsapp_plan_for_api_test(monkeypatch)
+    try:
+        channel = WhatsAppChannel(
+            hotel_id=1,
+            waba_id="synthetic-waba-id",
+            phone_number_id="synthetic-phone-id",
+            display_phone_number="+5491100000000",
+            display_name="Synthetic Channel",
+            status=WhatsAppChannelStatusEnum.ACTIVE,
+            last_error_code="SYNTHETIC_ERR",
+            last_error="Synthetic integration diagnostic",
+        )
+        db.add(channel)
+        db.flush()
+        contact = WhatsAppContact(
+            hotel_id=1,
+            channel_id=channel.id,
+            normalized_phone="5491100000001",
+            display_name="Synthetic Guest",
+        )
+        db.add(contact)
+        db.flush()
+        conversation = WhatsAppConversation(
+            hotel_id=1,
+            channel_id=channel.id,
+            contact_id=contact.id,
+            status=WhatsAppConversationStatusEnum.NEW,
+        )
+        db.add(conversation)
+        db.flush()
+        db.add(
+            WhatsAppMessage(
+                hotel_id=1,
+                conversation_id=conversation.id,
+                direction=WhatsAppMessageDirectionEnum.INBOUND,
+                status=WhatsAppMessageStatusEnum.RECEIVED,
+                message_type="text",
+                text="SYNTHETIC_PRIVATE_MESSAGE",
+            )
+        )
+        db.commit()
+
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "receptionist")
+        response = client.get("/api/whatsapp/channel")
+
+        assert response.status_code == 200, response.text
+        assert response.json() == {
+            "status": "active",
+            "channel": {
+                "id": channel.id,
+                "status": "active",
+                "display_phone_number": "+5491100000000",
+                "display_name": "Synthetic Channel",
+            },
+        }
+        assert "synthetic-waba-id" not in response.text
+        assert "synthetic-phone-id" not in response.text
+        assert "Synthetic integration diagnostic" not in response.text
+        assert "SYNTHETIC_PRIVATE_MESSAGE" not in response.text
+        assert "Synthetic Guest" not in response.text
     finally:
         fastapi_app.dependency_overrides.clear()
         db.close()
