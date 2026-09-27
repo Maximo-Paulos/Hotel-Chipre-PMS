@@ -452,8 +452,8 @@
     "hash": "7089292d7dd6eb14f4fad5f1e9c612a5"
   },
   "app/master_admin/security.py": {
-    "mtime": 1790419183328.437,
-    "hash": "577aae72509d2f601ecfabbe99736e91"
+    "mtime": 1790466457610.6545,
+    "hash": "0fc80dc879fbbef16277ca89c388a295"
   },
   "app/master_admin/stripe.py": {
     "mtime": 1787360058495.0437,
@@ -1816,8 +1816,8 @@
     "hash": "faef5712014e865983d6a999d88480b7"
   },
   "tests/test_master_admin_panel.py": {
-    "mtime": 1790453317682.6252,
-    "hash": "4797e06a7c29e3951e92fb56d5c2c9aa"
+    "mtime": 1790466457611.1963,
+    "hash": "6c978708fe8c0d3bf4dda5e46efa7de2"
   },
   "tests/test_mercadopago_webhook_signature.py": {
     "mtime": 1787360058534.274,
@@ -3236,8 +3236,8 @@
     "hash": "8e2277e0fc399686b86f61f02ef68f93"
   },
   ".graphify/GRAPH_REPORT.md": {
-    "mtime": 1790403414643.3108,
-    "hash": "3deb3593d731673b8a34201946a601f4"
+    "mtime": 1790455135372.4993,
+    "hash": "da3b996e94c9c07a6a2b4929e34731d8"
   },
   "scripts/agent_ops/manage_qa_baseline_lease.py": {
     "mtime": 1784517879747.6167,
@@ -5838,5 +5838,9 @@
   "frontend/subscription-trial-fail-closed.test.mjs": {
     "mtime": 1790453749203.8103,
     "hash": "d662c591fad6bb40c61d5866e3453474"
+  },
+  "alembic/versions/20260927_revoke_public_rls_auto_enable.py": {
+    "mtime": 1790463529655.1858,
+    "hash": "5639bc5777af96d6fe793ae6dfc2da10"
   }
 }

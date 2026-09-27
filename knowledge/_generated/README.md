@@ -1,6 +1,6 @@
 # Artefactos generados
 
-Generado: 2026-09-26T17:17:10.148219+00:00
-Commit: `616a398f1ae1a203b2c6b98c0e7bc8c7d1151c2a`
+Generado: 2026-09-27T00:08:35.631295+00:00
+Commit: `9d05e2c49d8734fb84c6ebee3eab012e1e317425`
 
 Estos archivos se regeneran con `.venv/bin/python scripts/knowledge/generate_inventories.py`. Las notas curadas deben enlazarlos en vez de copiar listados completos.

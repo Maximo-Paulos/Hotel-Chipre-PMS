@@ -8521,38 +8521,6 @@
               ],
               "title": "Plan Code Query"
             }
-          },
-          {
-            "name": "x-hotel-id",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Hotel-Id"
-            }
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
           }
         ],
         "requestBody": {
@@ -8731,49 +8699,15 @@
         ],
         "summary": "Upsert Entitlement Override",
         "operationId": "upsert_entitlement_override_api_subscription_entitlements_override_post",
-        "parameters": [
-          {
-            "name": "x-hotel-id",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Hotel-Id"
-            }
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/EntitlementOverrideRequest"
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "200": {
@@ -8815,38 +8749,6 @@
               "type": "string",
               "title": "Code"
             }
-          },
-          {
-            "name": "x-hotel-id",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Hotel-Id"
-            }
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
           }
         ],
         "responses": {
@@ -8880,49 +8782,15 @@
         ],
         "summary": "Admin Comped Override",
         "operationId": "admin_comped_override_api_admin_subscription_comped_override_post",
-        "parameters": [
-          {
-            "name": "x-hotel-id",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Hotel-Id"
-            }
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/CompedOverrideRequest"
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "200": {
@@ -40526,29 +40394,16 @@
             ]
           },
           "reason": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 250
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "type": "string",
+            "maxLength": 250,
+            "minLength": 1,
             "title": "Reason"
           },
           "valid_until": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "type": "string",
+            "format": "date-time",
             "title": "Valid Until",
-            "description": "Vigencia opcional del override."
+            "description": "Vigencia obligatoria del override comped."
           },
           "idempotency_key": {
             "anyOf": [
@@ -40566,7 +40421,9 @@
         },
         "type": "object",
         "required": [
-          "hotel_id"
+          "hotel_id",
+          "reason",
+          "valid_until"
         ],
         "title": "CompedOverrideRequest"
       },
